@@ -126,6 +126,196 @@ def is_git_repo(path: Path) -> bool:
     return run_command_bool(["git", "-C", str(path), "rev-parse", "--git-dir"], timeout=5)
 
 
+def is_worktree(path: Path) -> bool:
+    """
+    Check if the path is a git worktree (not the main repository).
+
+    Worktrees have a `.git` file (not directory) containing a gitdir pointer.
+    """
+    git_path = path / ".git"
+    return git_path.is_file()  # Worktrees have .git as file, main repo has .git as dir
+
+
+def get_worktree_main_repo(worktree_path: Path) -> Path | None:
+    """
+    Get the main repository path for a worktree.
+
+    Parses the `.git` file to find the gitdir pointer and resolves
+    back to the main repo location.
+
+    Returns None if not a worktree or cannot determine main repo.
+    """
+    git_file = worktree_path / ".git"
+
+    if not git_file.is_file():
+        return None
+
+    try:
+        content = git_file.read_text().strip()
+        # Format: "gitdir: /path/to/main-repo/.git/worktrees/<name>"
+        if content.startswith("gitdir:"):
+            gitdir = content[7:].strip()
+            gitdir_path = Path(gitdir)
+
+            # Navigate from .git/worktrees/<name> up to repo root
+            # gitdir_path = /repo/.git/worktrees/feature
+            # We need /repo
+            if "worktrees" in gitdir_path.parts:
+                # Find the .git directory (parent of worktrees)
+                git_dir = gitdir_path
+                while git_dir.name != ".git" and git_dir != git_dir.parent:
+                    git_dir = git_dir.parent
+                if git_dir.name == ".git":
+                    return git_dir.parent
+    except (OSError, ValueError):
+        pass
+
+    return None
+
+
+def get_workspace_mount_path(workspace: Path) -> tuple[Path, bool]:
+    """
+    Determine the optimal path to mount for Docker sandbox.
+
+    For worktrees: returns the common parent containing both repo and worktrees folder.
+    For regular repos: returns the workspace path as-is.
+
+    This ensures git worktrees have access to the main repo's .git folder.
+    The gitdir pointer in worktrees uses absolute paths, so Docker must mount
+    the common parent to make those paths resolve correctly inside the container.
+
+    Returns:
+        Tuple of (mount_path, is_expanded) where is_expanded=True if we expanded
+        the mount scope beyond the original workspace (for user awareness).
+
+    Note: Docker sandbox uses "mirrored mounting" - the path inside the container
+    matches the host path, so absolute gitdir pointers will resolve correctly.
+    """
+    if not is_worktree(workspace):
+        return workspace, False
+
+    main_repo = get_worktree_main_repo(workspace)
+    if main_repo is None:
+        return workspace, False
+
+    # Find common parent of worktree and main repo
+    # Worktree: /parent/repo-worktrees/feature
+    # Main repo: /parent/repo
+    # Common parent: /parent
+
+    workspace_resolved = workspace.resolve()
+    main_repo_resolved = main_repo.resolve()
+
+    worktree_parts = workspace_resolved.parts
+    repo_parts = main_repo_resolved.parts
+
+    # Find common ancestor path
+    common_parts = []
+    for w_part, r_part in zip(worktree_parts, repo_parts):
+        if w_part == r_part:
+            common_parts.append(w_part)
+        else:
+            break
+
+    if not common_parts:
+        # No common ancestor - shouldn't happen, but fall back safely
+        return workspace, False
+
+    common_parent = Path(*common_parts)
+
+    # Safety checks: don't mount system directories
+    # Use resolved paths for proper symlink handling (cross-platform)
+    try:
+        resolved_parent = common_parent.resolve()
+    except OSError:
+        # Can't resolve path - fall back to safe option
+        return workspace, False
+
+    # System directories that should NEVER be mounted as common parent
+    # Cross-platform: covers Linux, macOS, and WSL2
+    blocked_roots = {
+        # Root filesystem
+        Path("/"),
+        # User home parents (mounting all of /home or /Users is too broad)
+        Path("/home"),
+        Path("/Users"),
+        # System directories (Linux + macOS)
+        Path("/bin"),
+        Path("/boot"),
+        Path("/dev"),
+        Path("/etc"),
+        Path("/lib"),
+        Path("/lib64"),
+        Path("/opt"),
+        Path("/proc"),
+        Path("/root"),
+        Path("/run"),
+        Path("/sbin"),
+        Path("/srv"),
+        Path("/sys"),
+        Path("/usr"),
+        # Temp directories (sensitive, often contain secrets)
+        Path("/tmp"),
+        Path("/var"),
+        # macOS specific
+        Path("/System"),
+        Path("/Library"),
+        Path("/Applications"),
+        Path("/Volumes"),
+        Path("/private"),
+        # WSL2 specific
+        Path("/mnt"),
+    }
+
+    # Check if resolved path IS or IS UNDER a blocked root
+    for blocked in blocked_roots:
+        if resolved_parent == blocked:
+            return workspace, False
+
+        # Skip root "/" for is_relative_to check - all paths are under root!
+        # We already checked exact match above.
+        if blocked == Path("/"):
+            continue
+
+        # Use is_relative_to for "is under" check (Python 3.9+)
+        try:
+            if resolved_parent.is_relative_to(blocked):
+                # Exception: allow paths under /home/<user>/... or /Users/<user>/...
+                # (i.e., actual user workspaces, not the parent directories themselves)
+                if blocked in (Path("/home"), Path("/Users")):
+                    # /home/user/projects is OK (depth 4+)
+                    # /home/user is too broad (depth 3)
+                    if len(resolved_parent.parts) >= 4:
+                        continue  # Allow: /home/user/projects or deeper
+
+                # WSL2 exception: /mnt/<drive>/... where <drive> is single letter
+                # This specifically targets Windows filesystem mounts, NOT arbitrary
+                # Linux mount points like /mnt/nfs, /mnt/usb, /mnt/wsl, etc.
+                if blocked == Path("/mnt"):
+                    parts = resolved_parent.parts
+                    # Validate: /mnt/<single-letter>/<something>/<something>
+                    # parts[0]="/", parts[1]="mnt", parts[2]=drive, parts[3+]=path
+                    if len(parts) >= 5:  # Conservative: require depth 5+
+                        drive = parts[2] if len(parts) > 2 else ""
+                        # WSL2 drives are single letters (c, d, e, etc.)
+                        if len(drive) == 1 and drive.isalpha():
+                            continue  # Allow: /mnt/c/Users/dev/projects
+
+                return workspace, False
+        except (ValueError, AttributeError):
+            # is_relative_to raises ValueError if not relative
+            # AttributeError on Python < 3.9 (fallback below)
+            pass
+
+    # Fallback depth check for edge cases not caught above
+    # Require at least 3 path components: /, parent, child
+    # This catches unusual paths not in the blocklist
+    if len(resolved_parent.parts) < 3:
+        return workspace, False
+
+    return common_parent, True
+
+
 def get_current_branch(path: Path) -> str | None:
     """Get the current branch name."""
     return run_command(["git", "-C", str(path), "branch", "--show-current"], timeout=5)

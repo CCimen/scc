@@ -156,8 +156,19 @@ def main_callback(
         raise typer.Exit()
 
     # If no command provided and not showing version, invoke start
+    # NOTE: Must pass ALL defaults explicitly - ctx.invoke() doesn't resolve
+    # typer.Argument/Option defaults, it passes raw ArgumentInfo/OptionInfo objects
     if ctx.invoked_subcommand is None:
-        ctx.invoke(start)
+        ctx.invoke(
+            start,
+            workspace=None,
+            team=None,
+            session_name=None,
+            continue_session=False,
+            resume=False,
+            worktree_name=None,
+            fresh=False,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,9 +306,29 @@ def start(
             # Not a git repo or filesystem error - continue without branch
             pass
 
+    # Handle worktree mounting - expand mount scope to include main repo
+    # Git worktrees use absolute paths in .git file that point to main repo
+    mount_path = workspace_path
+    if workspace_path:
+        mount_path, is_expanded = git.get_workspace_mount_path(workspace_path)
+        if is_expanded:
+            console.print()
+            console.print(
+                create_info_panel(
+                    "Worktree Detected",
+                    f"Mounting parent directory for worktree support:\n{mount_path}",
+                    "Both worktree and main repo will be accessible",
+                )
+            )
+            console.print()
+
+    # Prepare sandbox volume for credential persistence
+    # This fixes a Docker Desktop bug where credentials.json permissions are wrong
+    docker.prepare_sandbox_volume_for_credentials()
+
     # Get or create container (re-use pattern)
     docker_cmd, is_resume = docker.get_or_create_container(
-        workspace=workspace_path,
+        workspace=mount_path,
         branch=current_branch,
         profile=team,
         force_new=fresh,
@@ -815,6 +846,104 @@ def list_cmd():
     console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")
 
 
+@app.command(name="stop")
+@handle_errors
+def stop_cmd(
+    container: str = typer.Argument(
+        None,
+        help="Container name or ID to stop (omit to stop all running)",
+    ),
+    all_containers: bool = typer.Option(
+        False, "--all", "-a", help="Stop all running Claude Code sandboxes"
+    ),
+):
+    """Stop running Docker sandbox(es).
+
+    Examples:
+        scc stop                         # Stop all running sandboxes
+        scc stop claude-sandbox-2025...  # Stop specific container
+        scc stop --all                   # Stop all (explicit)
+    """
+    with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner="dots"):
+        # List Docker Desktop sandbox containers (image: docker/sandbox-templates:claude-code)
+        running = docker.list_running_sandboxes()
+
+    if not running:
+        console.print(
+            create_info_panel(
+                "No Running Sandboxes",
+                "No Claude Code sandboxes are currently running.",
+                "Start one with: scc -w /path/to/project",
+            )
+        )
+        return
+
+    # If specific container requested
+    if container and not all_containers:
+        # Find matching container
+        match = None
+        for c in running:
+            if c.name == container or c.id.startswith(container):
+                match = c
+                break
+
+        if not match:
+            console.print(
+                create_warning_panel(
+                    "Container Not Found",
+                    f"No running container matches: {container}",
+                    "Run 'scc list' to see available containers",
+                )
+            )
+            raise typer.Exit(1)
+
+        # Stop the specific container
+        with Status(f"[cyan]Stopping {match.name}...[/cyan]", console=console):
+            success = docker.stop_container(match.id)
+
+        if success:
+            console.print(
+                create_success_panel("Container Stopped", {"Name": match.name})
+            )
+        else:
+            console.print(
+                create_warning_panel(
+                    "Stop Failed",
+                    f"Could not stop container: {match.name}",
+                )
+            )
+            raise typer.Exit(1)
+        return
+
+    # Stop all running containers
+    console.print(f"[cyan]Stopping {len(running)} container(s)...[/cyan]")
+
+    stopped = []
+    failed = []
+    for c in running:
+        with Status(f"[cyan]Stopping {c.name}...[/cyan]", console=console):
+            if docker.stop_container(c.id):
+                stopped.append(c.name)
+            else:
+                failed.append(c.name)
+
+    if stopped:
+        console.print(
+            create_success_panel(
+                "Containers Stopped",
+                {"Stopped": str(len(stopped)), "Names": ", ".join(stopped)},
+            )
+        )
+
+    if failed:
+        console.print(
+            create_warning_panel(
+                "Some Failed",
+                f"Could not stop: {', '.join(failed)}",
+            )
+        )
+
+
 @app.command(name="setup")
 @handle_errors
 def setup_cmd(
@@ -920,6 +1049,187 @@ def update_cmd():
                 {"Version": info.current},
             )
         )
+
+
+@app.command(name="statusline")
+@handle_errors
+def statusline_cmd(
+    install: bool = typer.Option(
+        False, "--install", "-i", help="Install the SCC status line script"
+    ),
+    uninstall: bool = typer.Option(
+        False, "--uninstall", help="Remove the status line configuration"
+    ),
+    show: bool = typer.Option(
+        False, "--show", "-s", help="Show current status line config"
+    ),
+):
+    """Configure Claude Code status line to show git worktree info.
+
+    The status line displays: Model | Git branch/worktree | Context usage | Cost
+
+    Examples:
+        scc statusline --install    # Install the SCC status line
+        scc statusline --show       # Show current configuration
+        scc statusline --uninstall  # Remove status line config
+    """
+    import importlib.resources
+    import json
+    import stat
+
+    claude_dir = Path.home() / ".claude"
+    script_path = claude_dir / "scc-statusline.sh"
+    settings_path = claude_dir / "settings.json"
+
+    if show:
+        # Show current configuration from Docker sandbox volume
+        with Status(
+            "[cyan]Reading Docker sandbox settings...[/cyan]",
+            console=console,
+            spinner="dots",
+        ):
+            settings = docker.get_sandbox_settings()
+
+        if settings and "statusLine" in settings:
+            console.print(
+                create_info_panel(
+                    "Status Line Configuration (Docker Sandbox)",
+                    f"Script: {settings['statusLine'].get('command', 'Not set')}",
+                    "Run 'scc statusline --uninstall' to remove",
+                )
+            )
+        elif settings:
+            console.print(
+                create_info_panel(
+                    "No Status Line",
+                    "Status line is not configured in Docker sandbox.",
+                    "Run 'scc statusline --install' to set it up",
+                )
+            )
+        else:
+            console.print(
+                create_info_panel(
+                    "No Configuration",
+                    "Docker sandbox settings.json does not exist yet.",
+                    "Run 'scc statusline --install' to create it",
+                )
+            )
+        return
+
+    if uninstall:
+        # Remove status line configuration from Docker sandbox
+        with Status(
+            "[cyan]Removing statusline from Docker sandbox...[/cyan]",
+            console=console,
+            spinner="dots",
+        ):
+            # Get existing settings
+            existing_settings = docker.get_sandbox_settings()
+
+            if existing_settings and "statusLine" in existing_settings:
+                del existing_settings["statusLine"]
+                # Write updated settings back
+                docker.inject_file_to_sandbox_volume(
+                    "settings.json", json.dumps(existing_settings, indent=2)
+                )
+                console.print(
+                    create_success_panel(
+                        "Status Line Removed (Docker Sandbox)",
+                        {"Settings": "Updated"},
+                    )
+                )
+            else:
+                console.print(
+                    create_info_panel(
+                        "Nothing to Remove",
+                        "Status line was not configured in Docker sandbox.",
+                    )
+                )
+        return
+
+    if install:
+        # SCC philosophy: Everything stays in Docker sandbox, not on host
+        # Inject statusline script and settings into Docker sandbox volume
+
+        # Get the status line script from package resources
+        try:
+            template_files = importlib.resources.files("sundsvalls_claude.templates")
+            script_content = (template_files / "statusline.sh").read_text()
+        except (FileNotFoundError, TypeError):
+            # Fallback: read from relative path during development
+            dev_path = Path(__file__).parent / "templates" / "statusline.sh"
+            if dev_path.exists():
+                script_content = dev_path.read_text()
+            else:
+                console.print(
+                    create_warning_panel(
+                        "Template Not Found",
+                        "Could not find statusline.sh template.",
+                    )
+                )
+                raise typer.Exit(1)
+
+        with Status(
+            "[cyan]Injecting statusline into Docker sandbox...[/cyan]",
+            console=console,
+            spinner="dots",
+        ):
+            # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
+            script_ok = docker.inject_file_to_sandbox_volume(
+                "scc-statusline.sh", script_content
+            )
+
+            # Get existing settings from Docker volume (if any)
+            existing_settings = docker.get_sandbox_settings() or {}
+
+            # Add statusline config (path inside container)
+            existing_settings["statusLine"] = {
+                "type": "command",
+                "command": "/mnt/claude-data/scc-statusline.sh",
+                "padding": 0,
+            }
+
+            # Inject settings into Docker volume
+            settings_ok = docker.inject_file_to_sandbox_volume(
+                "settings.json", json.dumps(existing_settings, indent=2)
+            )
+
+        if script_ok and settings_ok:
+            console.print(
+                create_success_panel(
+                    "Status Line Installed (Docker Sandbox)",
+                    {
+                        "Script": "/mnt/claude-data/scc-statusline.sh",
+                        "Settings": "/mnt/claude-data/settings.json",
+                    },
+                )
+            )
+            console.print()
+            console.print(
+                "[dim]The status line shows: "
+                "[bold]Model[/bold] | [cyan]🌿 branch[/cyan] or [magenta]⎇ worktree[/magenta]:branch | "
+                "[green]Ctx %[/green] | [yellow]$cost[/yellow][/dim]"
+            )
+            console.print("[dim]Restart Claude Code sandbox to see the changes.[/dim]")
+        else:
+            console.print(
+                create_warning_panel(
+                    "Installation Failed",
+                    "Could not inject statusline into Docker sandbox volume.",
+                    "Ensure Docker Desktop is running",
+                )
+            )
+            raise typer.Exit(1)
+        return
+
+    # No flags - show help
+    console.print(
+        create_info_panel(
+            "Status Line",
+            "Configure a custom status line for Claude Code.",
+            "Use --install to set up, --show to view, --uninstall to remove",
+        )
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

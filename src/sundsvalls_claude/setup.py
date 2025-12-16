@@ -5,6 +5,7 @@ Provides a minimal, user-friendly onboarding experience:
 - Prerequisite validation
 - Workspace configuration
 - Team profile selection (optional)
+- Status line configuration (optional)
 
 Philosophy: "Get started in under 60 seconds"
 - Minimal questions
@@ -12,6 +13,9 @@ Philosophy: "Get started in under 60 seconds"
 - Clear guidance
 """
 
+import importlib.resources
+import json
+import stat
 from pathlib import Path
 
 from rich import box
@@ -149,7 +153,8 @@ def prompt_team_selection(console: Console) -> str | None:
     table.add_column("Team", style="cyan", min_width=15)
     table.add_column("Description", style="dim")
 
-    team_list = list(profiles.keys())
+    # Filter out "base" from profiles list since it's always shown as [0] option
+    team_list = [name for name in profiles.keys() if name.lower() != "base"]
 
     for i, team_name in enumerate(team_list, 1):
         team_info = profiles[team_name]
@@ -174,6 +179,83 @@ def prompt_team_selection(console: Console) -> str | None:
         return None
 
     return team_list[choice - 1]
+
+
+def install_statusline(console: Console) -> bool:
+    """
+    Install the SCC status line into Docker sandbox volume.
+
+    SCC philosophy: Everything stays in Docker, not on host.
+    Returns True if installation successful.
+    """
+    from . import docker
+
+    # Get the status line script from package resources
+    try:
+        template_files = importlib.resources.files("sundsvalls_claude.templates")
+        script_content = (template_files / "statusline.sh").read_text()
+    except (FileNotFoundError, TypeError):
+        # Fallback: read from relative path during development
+        dev_path = Path(__file__).parent / "templates" / "statusline.sh"
+        if dev_path.exists():
+            script_content = dev_path.read_text()
+        else:
+            console.print("  [dim]Could not find statusline template, skipping.[/dim]")
+            return False
+
+    # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
+    script_ok = docker.inject_file_to_sandbox_volume("scc-statusline.sh", script_content)
+
+    # Get existing settings from Docker volume (if any)
+    existing_settings = docker.get_sandbox_settings() or {}
+
+    # Add statusline config (path inside container)
+    existing_settings["statusLine"] = {
+        "type": "command",
+        "command": "/mnt/claude-data/scc-statusline.sh",
+        "padding": 0,
+    }
+
+    # Inject settings into Docker volume
+    settings_ok = docker.inject_file_to_sandbox_volume(
+        "settings.json", json.dumps(existing_settings, indent=2)
+    )
+
+    return script_ok and settings_ok
+
+
+def prompt_statusline_setup(console: Console) -> bool:
+    """
+    Prompt user to install the SCC status line.
+
+    Returns True if status line was installed.
+    """
+    console.print()
+    console.print("[bold cyan]Status line configuration (optional)[/bold cyan]")
+    console.print()
+    console.print(
+        "[dim]The status line shows useful info in Claude Code:[/dim]"
+    )
+    console.print(
+        "  [dim]→ [bold]Model[/bold] | [cyan]🌿 branch[/cyan] or "
+        "[magenta]⎇ worktree[/magenta]:branch | [green]Ctx %[/green] | "
+        "[yellow]$cost[/yellow][/dim]"
+    )
+    console.print()
+
+    if Confirm.ask(
+        "  [cyan]Install the SCC status line?[/cyan]",
+        default=True,
+    ):
+        if install_statusline(console):
+            console.print("  [green]✓ Status line installed[/green]")
+            return True
+        else:
+            console.print("  [yellow]! Could not install status line[/yellow]")
+            return False
+
+    console.print("  [dim]Skipped. Run 'scc statusline --install' later if needed.[/dim]")
+    return False
 
 
 def save_configuration(
@@ -206,7 +288,12 @@ def save_configuration(
     console.print(f"  [green]  Configuration saved to {config.CONFIG_FILE}[/green]")
 
 
-def show_completion(console: Console, workspace_base: Path, team: str | None) -> None:
+def show_completion(
+    console: Console,
+    workspace_base: Path,
+    team: str | None,
+    statusline_installed: bool = False,
+) -> None:
     """
     Display setup completion message with next steps.
     """
@@ -217,6 +304,8 @@ def show_completion(console: Console, workspace_base: Path, team: str | None) ->
     info_lines.append(f"[cyan]Workspace:[/cyan] {workspace_base}")
     info_lines.append(f"[cyan]Team:[/cyan] {team or 'base'}")
     info_lines.append(f"[cyan]Config:[/cyan] {config.CONFIG_DIR}")
+    if statusline_installed:
+        info_lines.append("[cyan]Status line:[/cyan] [green]Enabled[/green]")
 
     # Create panel
     panel = Panel(
@@ -273,11 +362,14 @@ def run_setup(console: Console, skip_prereqs: bool = False) -> bool:
     # Team selection (optional)
     team = prompt_team_selection(console)
 
+    # Status line setup (optional)
+    statusline_installed = prompt_statusline_setup(console)
+
     # Save configuration
     save_configuration(console, workspace_base, team)
 
     # Show completion
-    show_completion(console, workspace_base, team)
+    show_completion(console, workspace_base, team, statusline_installed)
 
     return True
 
@@ -287,6 +379,7 @@ def run_quick_setup(console: Console, workspace_base: Path | None = None) -> boo
     Run minimal setup with defaults.
 
     Used when user wants to skip interactive prompts.
+    Includes status line installation by default.
     """
     console.print("[bold cyan]Running quick setup with defaults...[/bold cyan]")
     console.print()
@@ -298,11 +391,16 @@ def run_quick_setup(console: Console, workspace_base: Path | None = None) -> boo
     # Ensure workspace exists
     workspace_base.mkdir(parents=True, exist_ok=True)
 
+    # Install status line by default (part of smart defaults)
+    statusline_ok = install_statusline(console)
+
     # Save minimal configuration
     save_configuration(console, workspace_base, default_team=None)
 
-    console.print(f"  [green]  Workspace: {workspace_base}[/green]")
-    console.print(f"  [green]  Config: {config.CONFIG_DIR}[/green]")
+    console.print(f"  [green]✓ Workspace: {workspace_base}[/green]")
+    console.print(f"  [green]✓ Config: {config.CONFIG_DIR}[/green]")
+    if statusline_ok:
+        console.print("  [green]✓ Status line: Enabled[/green]")
     console.print()
     console.print("[dim]Run [bold]scc[/bold] to start Claude Code.[/dim]")
     console.print()

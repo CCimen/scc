@@ -175,52 +175,35 @@ def build_labels(
 
 def build_command(
     workspace: Path | None = None,
-    container_name: str | None = None,
-    session_name: str | None = None,
     continue_session: bool = False,
     resume: bool = False,
-    env_vars: dict[str, str] | None = None,
-    labels: dict[str, str] | None = None,
 ) -> list[str]:
     """
     Build the docker sandbox run command.
 
+    Docker sandbox run structure: docker sandbox run [sandbox-flags] claude [claude-args]
+
+    Note: Docker sandbox is ephemeral - it doesn't support --name, --label,
+    or -e flags. Volume mounts and credentials are handled automatically.
+
     Args:
-        workspace: Path to mount as workspace
-        container_name: Name for the container (for re-use)
-        session_name: Claude session name
+        workspace: Path to mount as workspace (-w flag)
         continue_session: Pass -c flag to Claude
         resume: Pass --resume flag to Claude
-        env_vars: Environment variables to set
-        labels: Docker labels to apply
 
     Returns:
         Command as list of strings
     """
     cmd = ["docker", "sandbox", "run"]
 
-    # Add container name if provided
-    if container_name:
-        cmd.extend(["--name", container_name])
-
-    # Add workspace mount
+    # Add workspace mount (sandbox flag, goes before 'claude')
     if workspace:
         cmd.extend(["-w", str(workspace)])
-
-    # Add labels
-    if labels:
-        for key, value in labels.items():
-            cmd.extend(["--label", f"{key}={value}"])
-
-    # Add environment variables
-    if env_vars:
-        for key, value in env_vars.items():
-            cmd.extend(["-e", f"{key}={value}"])
 
     # Add the claude agent
     cmd.append("claude")
 
-    # Add session flags (passed to Claude Code)
+    # Add Claude-specific flags (go after 'claude')
     if continue_session:
         cmd.append("-c")
     elif resume:
@@ -234,17 +217,92 @@ def build_start_command(container_name: str) -> list[str]:
     return ["docker", "start", "-ai", container_name]
 
 
-def run(cmd: list[str]) -> int:
+def _ensure_credentials_symlink() -> bool:
+    """
+    Ensure the credentials.json symlink exists in a running sandbox.
+
+    Docker Desktop's sandbox has a bug where credentials.json is not symlinked
+    from ~/.claude/ to /mnt/claude-data/, causing credentials to not persist.
+    This function creates the symlink if missing.
+
+    Returns:
+        True if symlink exists or was created successfully
+    """
+    import time
+
+    # Find the running sandbox container
+    sandboxes = list_running_sandboxes()
+    if not sandboxes:
+        return False
+
+    container_id = sandboxes[0].id
+
+    # Wait a moment for container to fully initialize
+    time.sleep(2)
+
+    try:
+        # Create symlink if it doesn't exist (idempotent)
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "sh",
+                "-c",
+                # Check if symlink exists, create if not
+                "[ -L /home/agent/.claude/credentials.json ] || "
+                "ln -sf /mnt/claude-data/credentials.json /home/agent/.claude/credentials.json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+def run(cmd: list[str], ensure_credentials: bool = True) -> int:
     """
     Execute the Docker command.
 
     On Unix: Uses os.execvp to replace current process (most efficient)
     On Windows: Uses subprocess.run
 
+    Args:
+        cmd: Command to execute
+        ensure_credentials: If True, spawn background process to ensure
+            credentials.json symlink exists (workaround for Docker Desktop bug)
+
     Raises:
         SandboxLaunchError: If Docker command fails to start
     """
     try:
+        # On Unix, fork a background process to fix credentials symlink
+        # This must happen BEFORE execvp since execvp replaces the process
+        if os.name != "nt" and ensure_credentials:
+            pid = os.fork()
+            if pid == 0:
+                # Child process: wait and ensure symlink
+                try:
+                    import time
+                    import sys
+
+                    # Detach from terminal
+                    os.setsid()
+
+                    # Wait for sandbox to start
+                    time.sleep(3)
+
+                    # Ensure symlink exists
+                    _ensure_credentials_symlink()
+
+                    # Exit child process silently
+                    sys.exit(0)
+                except Exception:
+                    sys.exit(1)
+            # Parent continues to execvp
+
         # Use execvp to replace current process (Unix)
         if os.name != "nt":
             os.execvp(cmd[0], cmd)
@@ -351,20 +409,24 @@ def list_scc_containers() -> list[ContainerInfo]:
         return []
 
 
-def list_running_sandboxes() -> list[dict[str, str]]:
+def list_running_sandboxes() -> list[ContainerInfo]:
     """
-    List running Claude Code sandboxes.
+    List running Claude Code sandboxes (created by Docker Desktop).
 
-    Returns list of dicts with id, name, status keys.
-    (Kept for backward compatibility)
+    Docker sandbox containers are identified by:
+    - Image: docker/sandbox-templates:claude-code
+    - Name pattern: claude-sandbox-*
+
+    Returns list of ContainerInfo objects.
     """
     try:
+        # Filter by the Docker sandbox image
         result = subprocess.run(
             [
                 "docker",
                 "ps",
                 "--filter",
-                "ancestor=claude",
+                "ancestor=docker/sandbox-templates:claude-code",
                 "--format",
                 "{{.ID}}\t{{.Names}}\t{{.Status}}",
             ],
@@ -382,16 +444,135 @@ def list_running_sandboxes() -> list[dict[str, str]]:
                 parts = line.split("\t")
                 if len(parts) >= 3:
                     sandboxes.append(
-                        {
-                            "id": parts[0],
-                            "name": parts[1],
-                            "status": parts[2],
-                        }
+                        ContainerInfo(
+                            id=parts[0],
+                            name=parts[1],
+                            status=parts[2],
+                        )
                     )
 
         return sandboxes
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
+
+
+def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
+    """
+    Inject a file into the Docker sandbox persistent volume.
+
+    Uses a temporary alpine container to write to the docker-claude-sandbox-data volume.
+    Files are written to /data/ which maps to /mnt/claude-data/ in the sandbox.
+
+    Args:
+        filename: Name of file to create (e.g., "settings.json", "scc-statusline.sh")
+        content: Content to write
+
+    Returns:
+        True if successful
+    """
+    try:
+        # Escape content for shell (replace single quotes)
+        escaped_content = content.replace("'", "'\"'\"'")
+
+        # Use alpine to write to the persistent volume
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                "docker-claude-sandbox-data:/data",
+                "alpine",
+                "sh",
+                "-c",
+                f"printf '%s' '{escaped_content}' > /data/{filename} && chmod +x /data/{filename}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+def get_sandbox_settings() -> dict | None:
+    """
+    Read current settings from the Docker sandbox volume.
+
+    Returns:
+        Settings dict or None if not found
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                "docker-claude-sandbox-data:/data",
+                "alpine",
+                "cat",
+                "/data/settings.json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            import json
+
+            return json.loads(result.stdout)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return None
+
+
+def prepare_sandbox_volume_for_credentials() -> bool:
+    """
+    Prepare the Docker sandbox volume for credential persistence.
+
+    The Docker sandbox volume has a permissions issue where files are created as
+    root:root, but the sandbox runs as agent (uid=1000). This function:
+    1. Creates credentials.json if it doesn't exist (owned by uid 1000)
+    2. Fixes directory permissions so agent user can write
+    3. Ensures existing files are writable by agent
+
+    This works around a Docker Desktop sandbox bug where the credentials.json
+    symlink is not created and permissions are not set correctly.
+
+    Returns:
+        True if preparation successful
+    """
+    try:
+        # Fix permissions on the volume directory and create credentials.json
+        # The agent user in the sandbox has uid=1000
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                "docker-claude-sandbox-data:/data",
+                "alpine",
+                "sh",
+                "-c",
+                # Fix directory permissions, create credentials.json, set ownership
+                "chmod 777 /data && "
+                "touch /data/credentials.json && "
+                "chown 1000:1000 /data/credentials.json && "
+                "chmod 666 /data/credentials.json && "
+                "chown 1000:1000 /data/settings.json 2>/dev/null; "
+                "chmod 666 /data/settings.json 2>/dev/null; "
+                "echo 'Volume prepared for credentials'",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 def get_or_create_container(
@@ -403,42 +584,28 @@ def get_or_create_container(
     env_vars: dict[str, str] | None = None,
 ) -> tuple[list[str], bool]:
     """
-    Get existing container or create new one.
+    Build a Docker sandbox run command.
 
-    This is the main entry point for container re-use pattern.
+    Note: Docker sandboxes are ephemeral by design - they don't support container
+    re-use patterns like traditional `docker run`. Each invocation creates a new
+    sandbox instance. The branch, profile, force_new, and env_vars parameters are
+    kept for API compatibility but are not used.
 
     Args:
-        workspace: Path to workspace
-        branch: Git branch name (optional, for container naming)
-        profile: Team profile being used
-        force_new: Force creation of new container (--fresh flag)
+        workspace: Path to workspace (-w flag for sandbox)
+        branch: Git branch name (unused - sandboxes don't support naming)
+        profile: Team profile (unused - sandboxes don't support labels)
+        force_new: Force new container (unused - sandboxes are always new)
         continue_session: Pass -c flag to Claude
-        env_vars: Environment variables
+        env_vars: Environment variables (unused - sandboxes handle auth)
 
     Returns:
         Tuple of (command_to_run, is_resume)
-        - is_resume=True means we're resuming existing container
-        - is_resume=False means we're creating new container
+        - is_resume is always False for sandboxes (no resume support)
     """
-    container_name = generate_container_name(workspace, branch)
-
-    # Check if we should resume existing container
-    if not force_new and container_exists(container_name):
-        # Resume existing container
-        cmd = build_start_command(container_name)
-        return cmd, True
-
-    # Remove old container if it exists and we're forcing new
-    if force_new and container_exists(container_name):
-        remove_container(container_name, force=True)
-
-    # Create new container
-    labels = build_labels(profile=profile, workspace=workspace, branch=branch)
+    # Docker sandbox doesn't support container re-use - always create new
     cmd = build_command(
         workspace=workspace,
-        container_name=container_name,
         continue_session=continue_session,
-        env_vars=env_vars,
-        labels=labels,
     )
     return cmd, False
