@@ -42,7 +42,7 @@ scc start ~/projects/api-service --team java-wso2
 scc doctor
 ```
 
-This starts (or resumes) a Docker container with your repo mounted. Claude Code runs inside the container and connects to the Claude API.
+This runs Claude Code in a Docker sandbox with your repo mounted. You log in once; credentials persist across sessions.
 
 ## Common workflows
 
@@ -55,11 +55,8 @@ scc
 # Direct mode with team profile
 scc start ~/projects/my-repo --team python-fastapi
 
-# Resume previous session (containers persist)
-scc start ~/projects/my-repo
-
-# Force fresh container
-scc start ~/projects/my-repo --fresh
+# Continue last Claude conversation
+scc start ~/projects/my-repo --continue
 ```
 
 ### Parallel development with worktrees
@@ -95,7 +92,7 @@ scc teams --sync
 # List recent sessions
 scc sessions
 
-# List running containers
+# List running sandboxes
 scc list
 ```
 
@@ -104,16 +101,19 @@ scc list
 | Command | Description |
 |---------|-------------|
 | `scc` | Interactive mode with wizard |
-| `scc start <path>` | Start or resume Claude Code in workspace |
+| `scc start <path>` | Start Claude Code in a sandbox |
+| `scc stop` | Stop running sandbox(es) |
 | `scc doctor` | Check prerequisites and system health |
 | `scc teams` | List, view, or sync team profiles |
 | `scc sessions` | List recent sessions |
-| `scc list` | List managed Docker containers |
+| `scc list` | List running Docker sandboxes |
 | `scc worktree <repo> <name>` | Create git worktree for parallel work |
 | `scc worktrees <repo>` | List worktrees for a repository |
 | `scc cleanup <repo> <name>` | Remove a worktree |
 | `scc config` | View or edit configuration |
 | `scc setup` | Run setup wizard |
+| `scc update` | Check for CLI updates |
+| `scc statusline` | Configure status line with git info |
 
 Run `scc <command> --help` for detailed options.
 
@@ -156,23 +156,20 @@ Run inside WSL2, not Windows. Keep projects in the Linux filesystem (`~/projects
 | "Docker not reachable" | Start Docker Desktop |
 | "Docker version too old" | Update to Docker Desktop 4.50+ |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
-| Stale container state | Use `scc start --fresh` to force new container |
 | Permission denied on Linux | Add user to docker group: `sudo usermod -aG docker $USER` |
 
 Run `scc doctor` to diagnose most issues.
 
 ## Cleanup
 
-Containers persist for session continuity. To clean up:
-
 ```bash
-# Remove all stopped scc containers
-docker container prune --filter "label=scc.workspace"
+# Stop all running sandboxes
+scc stop
 
-# Or remove a specific container
-docker rm scc-<workspace>-<branch>
+# Stop a specific sandbox
+scc stop claude-sandbox-2025...
 
-# List scc containers to find names
+# List running sandboxes
 scc list
 ```
 
