@@ -420,8 +420,7 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
     if result.all_ok:
         console.print()
         console.print(
-            "  [bold green]All prerequisites met![/bold green] "
-            "[dim]Ready to run Claude Code.[/dim]"
+            "  [bold green]All prerequisites met![/bold green] [dim]Ready to run Claude Code.[/dim]"
         )
     else:
         console.print()

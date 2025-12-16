@@ -285,8 +285,8 @@ def run(cmd: list[str], ensure_credentials: bool = True) -> int:
             if pid == 0:
                 # Child process: wait and ensure symlink
                 try:
-                    import time
                     import sys
+                    import time
 
                     # Detach from terminal
                     os.setsid()

@@ -15,7 +15,6 @@ Philosophy: "Get started in under 60 seconds"
 
 import importlib.resources
 import json
-import stat
 from pathlib import Path
 
 from rich import box
@@ -233,9 +232,7 @@ def prompt_statusline_setup(console: Console) -> bool:
     console.print()
     console.print("[bold cyan]Status line configuration (optional)[/bold cyan]")
     console.print()
-    console.print(
-        "[dim]The status line shows useful info in Claude Code:[/dim]"
-    )
+    console.print("[dim]The status line shows useful info in Claude Code:[/dim]")
     console.print(
         "  [dim]→ [bold]Model[/bold] | [cyan]🌿 branch[/cyan] or "
         "[magenta]⎇ worktree[/magenta]:branch | [green]Ctx %[/green] | "

@@ -34,7 +34,6 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
@@ -60,16 +59,10 @@ include = [
     "/tests",
 ]
 
-# Include templates in package data
-[tool.hatch.build.targets.wheel.force-include]
-"src/scc_cli/templates" = "scc_cli/templates"
-
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 

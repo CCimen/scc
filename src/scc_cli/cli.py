@@ -902,9 +902,7 @@ def stop_cmd(
             success = docker.stop_container(match.id)
 
         if success:
-            console.print(
-                create_success_panel("Container Stopped", {"Name": match.name})
-            )
+            console.print(create_success_panel("Container Stopped", {"Name": match.name}))
         else:
             console.print(
                 create_warning_panel(
@@ -1060,9 +1058,7 @@ def statusline_cmd(
     uninstall: bool = typer.Option(
         False, "--uninstall", help="Remove the status line configuration"
     ),
-    show: bool = typer.Option(
-        False, "--show", "-s", help="Show current status line config"
-    ),
+    show: bool = typer.Option(False, "--show", "-s", help="Show current status line config"),
 ):
     """Configure Claude Code status line to show git worktree info.
 
@@ -1075,11 +1071,8 @@ def statusline_cmd(
     """
     import importlib.resources
     import json
-    import stat
 
-    claude_dir = Path.home() / ".claude"
-    script_path = claude_dir / "scc-statusline.sh"
-    settings_path = claude_dir / "settings.json"
+    claude_dir = Path.home() / ".claude"  # noqa: F841
 
     if show:
         # Show current configuration from Docker sandbox volume
@@ -1175,9 +1168,7 @@ def statusline_cmd(
             spinner="dots",
         ):
             # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
-            script_ok = docker.inject_file_to_sandbox_volume(
-                "scc-statusline.sh", script_content
-            )
+            script_ok = docker.inject_file_to_sandbox_volume("scc-statusline.sh", script_content)
 
             # Get existing settings from Docker volume (if any)
             existing_settings = docker.get_sandbox_settings() or {}

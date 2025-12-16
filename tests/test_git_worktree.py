@@ -1,8 +1,7 @@
 """Tests for git worktree detection and mounting functions."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestIsWorktree:
@@ -110,8 +109,10 @@ class TestGetWorkspaceMountPath:
         # Mock is_worktree to return True
         # Mock get_worktree_main_repo to return the fake main repo
         # Mock Path.resolve to return the same path (simulate resolved paths)
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Common parent should be /Users/dev/projects (depth 4, allowed)
             assert mount_path == fake_base
@@ -177,8 +178,10 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "myproject-worktrees" / "feature"
         fake_main_repo = fake_base / "myproject"
 
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Common parent should be /mnt/c/Users/dev/projects (depth 6, allowed)
             assert mount_path == fake_base
@@ -194,8 +197,10 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back to original path - /mnt/c is too broad (depth 3)
             assert mount_path == fake_worktree
@@ -211,8 +216,10 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back - /mnt/c/dev is depth 4, we require >= 5
             assert mount_path == fake_worktree
@@ -228,8 +235,10 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back - "nfs" is not a single-letter drive
             assert mount_path == fake_worktree
@@ -244,8 +253,10 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back - "wsl" is not a single-letter drive
             assert mount_path == fake_worktree
@@ -272,9 +283,11 @@ class TestGetWorkspaceMountPath:
         def mock_resolve(self):
             return self
 
-        with patch('scc_cli.git.is_worktree', return_value=True), \
-             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo), \
-             patch.object(Path, 'resolve', mock_resolve):
+        with (
+            patch("scc_cli.git.is_worktree", return_value=True),
+            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch.object(Path, "resolve", mock_resolve),
+        ):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Common parent should be /home/user/projects (depth 4, allowed)
             assert mount_path == fake_base

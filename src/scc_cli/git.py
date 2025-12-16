@@ -911,9 +911,7 @@ def _run_install_cmd(
 ) -> bool:
     """Run an install command and warn on failure. Returns True if successful."""
     try:
-        result = subprocess.run(
-            cmd, cwd=path, capture_output=True, text=True, timeout=timeout
-        )
+        result = subprocess.run(cmd, cwd=path, capture_output=True, text=True, timeout=timeout)
         if result.returncode != 0 and console:
             error_detail = result.stderr.strip() if result.stderr else ""
             message = f"'{' '.join(cmd)}' failed with exit code {result.returncode}"
@@ -969,9 +967,7 @@ def install_dependencies(path: Path, console: Console | None = None) -> None:
         elif shutil.which("uv"):
             _run_install_cmd(["uv", "pip", "install", "-e", "."], path, console, timeout=300)
     elif (path / "requirements.txt").exists():
-        _run_install_cmd(
-            ["pip", "install", "-r", "requirements.txt"], path, console, timeout=300
-        )
+        _run_install_cmd(["pip", "install", "-r", "requirements.txt"], path, console, timeout=300)
 
     # Java/Maven
     if (path / "pom.xml").exists():
