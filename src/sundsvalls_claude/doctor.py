@@ -11,15 +11,13 @@ Philosophy: "Fast feedback, clear guidance"
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 from pathlib import Path
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich import box
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Classes
@@ -33,9 +31,9 @@ class CheckResult:
     name: str
     passed: bool
     message: str
-    version: Optional[str] = None
-    fix_hint: Optional[str] = None
-    fix_url: Optional[str] = None
+    version: str | None = None
+    fix_hint: str | None = None
+    fix_url: str | None = None
     severity: str = "error"  # "error", "warning", "info"
 
 
@@ -44,13 +42,13 @@ class DoctorResult:
     """Complete health check results."""
 
     git_ok: bool = False
-    git_version: Optional[str] = None
+    git_version: str | None = None
     docker_ok: bool = False
-    docker_version: Optional[str] = None
+    docker_version: str | None = None
     sandbox_ok: bool = False
     wsl2_detected: bool = False
     windows_path_warning: bool = False
-    checks: List[CheckResult] = field(default_factory=list)
+    checks: list[CheckResult] = field(default_factory=list)
 
     @property
     def all_ok(self) -> bool:
@@ -190,29 +188,35 @@ def check_docker_running() -> CheckResult:
         )
 
 
-def check_wsl2() -> Tuple[CheckResult, bool]:
+def check_wsl2() -> tuple[CheckResult, bool]:
     """Check WSL2 environment and return (result, is_wsl2)."""
     from . import platform as platform_module
 
     is_wsl2 = platform_module.is_wsl2()
 
     if is_wsl2:
-        return CheckResult(
+        return (
+            CheckResult(
+                name="WSL2 Environment",
+                passed=True,
+                message="Running in WSL2 (recommended for Windows)",
+                severity="info",
+            ),
+            True,
+        )
+
+    return (
+        CheckResult(
             name="WSL2 Environment",
             passed=True,
-            message="Running in WSL2 (recommended for Windows)",
+            message="Not running in WSL2",
             severity="info",
-        ), True
-
-    return CheckResult(
-        name="WSL2 Environment",
-        passed=True,
-        message="Not running in WSL2",
-        severity="info",
-    ), False
+        ),
+        False,
+    )
 
 
-def check_workspace_path(workspace: Optional[Path] = None) -> CheckResult:
+def check_workspace_path(workspace: Path | None = None) -> CheckResult:
     """Check if workspace path is optimal (not on Windows mount in WSL2)."""
     from . import platform as platform_module
 
@@ -288,7 +292,7 @@ def check_config_directory() -> CheckResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def run_doctor(workspace: Optional[Path] = None) -> DoctorResult:
+def run_doctor(workspace: Path | None = None) -> DoctorResult:
     """
     Run all health checks and return comprehensive results.
 

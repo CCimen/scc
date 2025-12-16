@@ -7,24 +7,23 @@ Container re-use pattern:
 - Docker labels store metadata (profile, workspace, branch, created timestamp)
 """
 
-import subprocess
-import shutil
+import datetime
 import hashlib
-import re
 import os
-from pathlib import Path
-from typing import Optional, Dict, List
+import re
+import shutil
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from .errors import (
+    ContainerNotFoundError,
     DockerNotFoundError,
     DockerVersionError,
-    SandboxNotAvailableError,
     SandboxLaunchError,
-    ContainerNotFoundError,
-    ToolError,
+    SandboxNotAvailableError,
 )
-
+from .subprocess_utils import run_command, run_command_bool
 
 # Minimum Docker Desktop version required for sandbox feature
 MIN_DOCKER_VERSION = "4.50.0"
@@ -40,10 +39,10 @@ class ContainerInfo:
     id: str
     name: str
     status: str
-    profile: Optional[str] = None
-    workspace: Optional[str] = None
-    branch: Optional[str] = None
-    created: Optional[str] = None
+    profile: str | None = None
+    workspace: str | None = None
+    branch: str | None = None
+    created: str | None = None
 
 
 def _check_docker_installed() -> bool:
@@ -90,36 +89,15 @@ def check_docker_sandbox() -> bool:
     """Check if Docker sandbox feature is available (Docker Desktop 4.50+)."""
     if not _check_docker_installed():
         return False
-
-    try:
-        result = subprocess.run(
-            ["docker", "sandbox", "--help"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+    return run_command_bool(["docker", "sandbox", "--help"], timeout=10)
 
 
-def get_docker_version() -> Optional[str]:
+def get_docker_version() -> str | None:
     """Get Docker version string."""
-    try:
-        result = subprocess.run(
-            ["docker", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-    return None
+    return run_command(["docker", "--version"], timeout=5)
 
 
-def generate_container_name(workspace: Path, branch: Optional[str] = None) -> str:
+def generate_container_name(workspace: Path, branch: str | None = None) -> str:
     """
     Generate deterministic container name from workspace and branch.
 
@@ -142,58 +120,44 @@ def generate_container_name(workspace: Path, branch: Optional[str] = None) -> st
 
 def container_exists(container_name: str) -> bool:
     """Check if a container with the given name exists (running or stopped)."""
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                f"name=^{container_name}$",
-                "--format",
-                "{{.Names}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return container_name in result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+    output = run_command(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"name=^{container_name}$",
+            "--format",
+            "{{.Names}}",
+        ],
+        timeout=10,
+    )
+    return output is not None and container_name in output
 
 
-def get_container_status(container_name: str) -> Optional[str]:
+def get_container_status(container_name: str) -> str | None:
     """Get the status of a container (running, exited, etc.)."""
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                f"name=^{container_name}$",
-                "--format",
-                "{{.Status}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-    return None
+    output = run_command(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"name=^{container_name}$",
+            "--format",
+            "{{.Status}}",
+        ],
+        timeout=10,
+    )
+    return output if output else None
 
 
 def build_labels(
-    profile: Optional[str] = None,
-    workspace: Optional[Path] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, str]:
+    profile: str | None = None,
+    workspace: Path | None = None,
+    branch: str | None = None,
+) -> dict[str, str]:
     """Build Docker labels for container metadata."""
-    import datetime
-
     labels = {
         f"{LABEL_PREFIX}.managed": "true",
         f"{LABEL_PREFIX}.created": datetime.datetime.now().isoformat(),
@@ -210,14 +174,14 @@ def build_labels(
 
 
 def build_command(
-    workspace: Optional[Path] = None,
-    container_name: Optional[str] = None,
-    session_name: Optional[str] = None,
+    workspace: Path | None = None,
+    container_name: str | None = None,
+    session_name: str | None = None,
     continue_session: bool = False,
     resume: bool = False,
-    env_vars: Optional[Dict[str, str]] = None,
-    labels: Optional[Dict[str, str]] = None,
-) -> List[str]:
+    env_vars: dict[str, str] | None = None,
+    labels: dict[str, str] | None = None,
+) -> list[str]:
     """
     Build the docker sandbox run command.
 
@@ -265,12 +229,12 @@ def build_command(
     return cmd
 
 
-def build_start_command(container_name: str) -> List[str]:
+def build_start_command(container_name: str) -> list[str]:
     """Build command to resume an existing container."""
     return ["docker", "start", "-ai", container_name]
 
 
-def run(cmd: List[str]) -> int:
+def run(cmd: list[str]) -> int:
     """
     Execute the Docker command.
 
@@ -306,12 +270,12 @@ def run(cmd: List[str]) -> int:
         )
 
 
-def run_detached(cmd: List[str]) -> subprocess.Popen:
+def run_detached(cmd: list[str]) -> subprocess.Popen:
     """Run Docker command in background (for multiple worktrees)."""
     return subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
 
@@ -333,36 +297,19 @@ def start_container(container_name: str) -> int:
 
 def stop_container(container_id: str) -> bool:
     """Stop a running container."""
-    try:
-        result = subprocess.run(
-            ["docker", "stop", container_id],
-            capture_output=True,
-            timeout=30,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+    return run_command_bool(["docker", "stop", container_id], timeout=30)
 
 
 def remove_container(container_name: str, force: bool = False) -> bool:
     """Remove a container."""
-    try:
-        cmd = ["docker", "rm"]
-        if force:
-            cmd.append("-f")
-        cmd.append(container_name)
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=30,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+    cmd = ["docker", "rm"]
+    if force:
+        cmd.append("-f")
+    cmd.append(container_name)
+    return run_command_bool(cmd, timeout=30)
 
 
-def list_scc_containers() -> List[ContainerInfo]:
+def list_scc_containers() -> list[ContainerInfo]:
     """List all SCC-managed containers (running and stopped)."""
     try:
         result = subprocess.run(
@@ -373,7 +320,7 @@ def list_scc_containers() -> List[ContainerInfo]:
                 "--filter",
                 f"label={LABEL_PREFIX}.managed=true",
                 "--format",
-                "{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Label \"scc.profile\"}}\t{{.Label \"scc.workspace\"}}\t{{.Label \"scc.branch\"}}",
+                '{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Label "scc.profile"}}\t{{.Label "scc.workspace"}}\t{{.Label "scc.branch"}}',
             ],
             capture_output=True,
             text=True,
@@ -404,7 +351,7 @@ def list_scc_containers() -> List[ContainerInfo]:
         return []
 
 
-def list_running_sandboxes() -> List[Dict[str, str]]:
+def list_running_sandboxes() -> list[dict[str, str]]:
     """
     List running Claude Code sandboxes.
 
@@ -449,12 +396,12 @@ def list_running_sandboxes() -> List[Dict[str, str]]:
 
 def get_or_create_container(
     workspace: Path,
-    branch: Optional[str] = None,
-    profile: Optional[str] = None,
+    branch: str | None = None,
+    profile: str | None = None,
     force_new: bool = False,
     continue_session: bool = False,
-    env_vars: Optional[Dict[str, str]] = None,
-) -> tuple[List[str], bool]:
+    env_vars: dict[str, str] | None = None,
+) -> tuple[list[str], bool]:
     """
     Get existing container or create new one.
 

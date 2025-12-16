@@ -8,34 +8,39 @@ UI Philosophy:
 - Interactive flows with visual "speed bumps" for dangerous ops
 """
 
-import subprocess
+import re
 import shutil
-from pathlib import Path
-from typing import Optional, List
+import subprocess
 from dataclasses import dataclass
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.tree import Tree
-from rich.text import Text
-from rich.prompt import Prompt, Confirm
+from pathlib import Path
+
 from rich import box
+from rich.console import Console
+from rich.prompt import Confirm, Prompt
+from rich.table import Table
+from rich.text import Text
+from rich.tree import Tree
 
 from .errors import (
+    CloneError,
     GitNotFoundError,
     NotAGitRepoError,
-    CloneError,
-    WorktreeExistsError,
     WorktreeCreationError,
-    GitWorktreeError,
+    WorktreeExistsError,
 )
-
+from .panels import (
+    create_error_panel,
+    create_info_panel,
+    create_success_panel,
+    create_warning_panel,
+)
+from .subprocess_utils import run_command, run_command_bool, run_command_lines
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants
 # ═══════════════════════════════════════════════════════════════════════════════
 
-PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"]
+PROTECTED_BRANCHES = ("main", "master", "develop", "production", "staging")
 BRANCH_PREFIX = "claude/"
 
 
@@ -43,9 +48,11 @@ BRANCH_PREFIX = "claude/"
 # Data Classes
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class WorktreeInfo:
     """Information about a git worktree."""
+
     path: str
     branch: str
     status: str = ""
@@ -56,6 +63,13 @@ class WorktreeInfo:
 # ═══════════════════════════════════════════════════════════════════════════════
 # UI Helpers - Aesthetic Components
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Panel functions imported from .panels module:
+# - create_info_panel
+# - create_warning_panel
+# - create_success_panel
+# - create_error_panel
+
 
 def _render_branch_badge(branch: str, is_protected: bool = False, is_current: bool = False) -> Text:
     """Render a styled branch name badge."""
@@ -76,77 +90,14 @@ def _render_path_truncated(path: str, max_width: int = 50) -> Text:
     if len(path) <= max_width:
         return Text(path, style="dim")
     # Truncate from left, keep the meaningful part
-    truncated = "…" + path[-(max_width - 1):]
+    truncated = "..." + path[-(max_width - 1) :]
     return Text(truncated, style="dim")
-
-
-def _create_info_panel(title: str, content: str, subtitle: str = "") -> Panel:
-    """Create an info panel with cyan styling."""
-    body = Text()
-    body.append(content)
-    if subtitle:
-        body.append("\n")
-        body.append(subtitle, style="dim")
-    return Panel(
-        body,
-        title=f"[bold cyan]{title}[/bold cyan]",
-        border_style="cyan",
-        padding=(0, 1),
-    )
-
-
-def _create_warning_panel(title: str, message: str, hint: str = "") -> Panel:
-    """Create a warning panel with yellow styling."""
-    body = Text()
-    body.append(message, style="bold")
-    if hint:
-        body.append("\n\n")
-        body.append("→ ", style="dim")
-        body.append(hint, style="yellow")
-    return Panel(
-        body,
-        title=f"[bold yellow]⚠ {title}[/bold yellow]",
-        border_style="yellow",
-        padding=(0, 1),
-    )
-
-
-def _create_success_panel(title: str, items: dict) -> Panel:
-    """Create a success panel with key-value summary."""
-    grid = Table.grid(padding=(0, 2))
-    grid.add_column(style="dim", no_wrap=True)
-    grid.add_column(style="white")
-
-    for key, value in items.items():
-        grid.add_row(f"{key}:", str(value))
-
-    return Panel(
-        grid,
-        title=f"[bold green]✓ {title}[/bold green]",
-        border_style="green",
-        padding=(0, 1),
-    )
-
-
-def _create_error_panel(title: str, message: str, hint: str = "") -> Panel:
-    """Create an error panel with red styling."""
-    body = Text()
-    body.append(message, style="bold")
-    if hint:
-        body.append("\n\n")
-        body.append("→ Fix: ", style="green")
-        body.append(hint)
-    return Panel(
-        body,
-        title=f"[bold red]✖ {title}[/bold red]",
-        border_style="red",
-        padding=(0, 1),
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Git Detection & Basic Operations
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def check_git_available() -> None:
     """
@@ -164,86 +115,45 @@ def check_git_installed() -> bool:
     return shutil.which("git") is not None
 
 
-def get_git_version() -> Optional[str]:
+def get_git_version() -> str | None:
     """Get Git version string for display."""
-    try:
-        result = subprocess.run(
-            ["git", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            # Returns something like "git version 2.40.0"
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-    return None
+    # Returns something like "git version 2.40.0"
+    return run_command(["git", "--version"], timeout=5)
 
 
 def is_git_repo(path: Path) -> bool:
     """Check if path is inside a git repository."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "rev-parse", "--git-dir"],
-            capture_output=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+    return run_command_bool(["git", "-C", str(path), "rev-parse", "--git-dir"], timeout=5)
 
 
-def get_current_branch(path: Path) -> Optional[str]:
+def get_current_branch(path: Path) -> str | None:
     """Get the current branch name."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "branch", "--show-current"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-    return None
+    return run_command(["git", "-C", str(path), "branch", "--show-current"], timeout=5)
 
 
 def get_default_branch(path: Path) -> str:
     """Get the default branch (main or master)."""
-    try:
-        # Try to get from remote HEAD
-        result = subprocess.run(
-            ["git", "-C", str(path), "symbolic-ref", "refs/remotes/origin/HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip().split("/")[-1]
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    # Try to get from remote HEAD
+    output = run_command(
+        ["git", "-C", str(path), "symbolic-ref", "refs/remotes/origin/HEAD"],
+        timeout=5,
+    )
+    if output:
+        return output.split("/")[-1]
 
     # Fallback: check if main or master exists
     for branch in ["main", "master"]:
-        try:
-            result = subprocess.run(
-                ["git", "-C", str(path), "rev-parse", "--verify", branch],
-                capture_output=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                return branch
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        if run_command_bool(
+            ["git", "-C", str(path), "rev-parse", "--verify", branch],
+            timeout=5,
+        ):
+            return branch
 
     return "main"
 
 
 def sanitize_branch_name(name: str) -> str:
     """Sanitize a name for use as a branch name."""
-    import re
     # Convert to lowercase, replace spaces with hyphens
     safe = name.lower().replace(" ", "-")
     # Remove invalid characters
@@ -255,25 +165,20 @@ def sanitize_branch_name(name: str) -> str:
     return safe
 
 
-def get_uncommitted_files(path: Path) -> List[str]:
+def get_uncommitted_files(path: Path) -> list[str]:
     """Get list of uncommitted files in a repository."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return [line[3:] for line in result.stdout.strip().split("\n") if line]
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-    return []
+    lines = run_command_lines(
+        ["git", "-C", str(path), "status", "--porcelain"],
+        timeout=5,
+    )
+    # Each line is "XY filename" where XY is 2-char status code
+    return [line[3:] for line in lines if len(line) > 3]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Branch Safety - Interactive UI
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def check_branch_safety(path: Path, console: Console) -> bool:
     """
@@ -291,12 +196,12 @@ def check_branch_safety(path: Path, console: Console) -> bool:
         console.print()
 
         # Visual speed bump - warning panel
-        warning = _create_warning_panel(
+        warning = create_warning_panel(
             "Protected Branch",
             f"You are on branch '{current}'\n\n"
             "For safety, Claude Code work should happen on a feature branch.\n"
             "Direct pushes to protected branches are blocked by git hooks.",
-            "Create a feature branch for isolated, safe development"
+            "Create a feature branch for isolated, safe development",
         )
         console.print(warning)
         console.print()
@@ -339,20 +244,27 @@ def check_branch_safety(path: Path, console: Console) -> bool:
                         capture_output=True,
                         timeout=10,
                     )
-                except subprocess.CalledProcessError as e:
+                except subprocess.CalledProcessError:
                     console.print()
-                    console.print(_create_error_panel(
-                        "Branch Creation Failed",
-                        f"Could not create branch '{branch_name}'",
-                        "Check if the branch already exists or if there are uncommitted changes"
-                    ))
+                    console.print(
+                        create_error_panel(
+                            "Branch Creation Failed",
+                            f"Could not create branch '{branch_name}'",
+                            "Check if the branch already exists or if there are uncommitted changes",
+                        )
+                    )
                     return False
 
             console.print()
-            console.print(_create_success_panel("Branch Created", {
-                "Branch": branch_name,
-                "Base": current,
-            }))
+            console.print(
+                create_success_panel(
+                    "Branch Created",
+                    {
+                        "Branch": branch_name,
+                        "Base": current,
+                    },
+                )
+            )
             return True
 
         elif choice in ["2", "continue"]:
@@ -373,11 +285,12 @@ def check_branch_safety(path: Path, console: Console) -> bool:
 # Worktree Operations - Beautiful UI
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def create_worktree(
     repo_path: Path,
     name: str,
-    base_branch: Optional[str] = None,
-    console: Optional[Console] = None,
+    base_branch: str | None = None,
+    console: Console | None = None,
 ) -> Path:
     """
     Create a new git worktree with visual progress feedback.
@@ -419,17 +332,22 @@ def create_worktree(
         base_branch = get_default_branch(repo_path)
 
     console.print()
-    console.print(_create_info_panel(
-        "Creating Worktree",
-        f"Feature: {safe_name}",
-        f"Location: {worktree_path}"
-    ))
+    console.print(
+        create_info_panel(
+            "Creating Worktree", f"Feature: {safe_name}", f"Location: {worktree_path}"
+        )
+    )
     console.print()
 
     # Multi-step progress
     steps = [
         ("Fetching latest changes", lambda: _fetch_branch(repo_path, base_branch)),
-        ("Creating worktree", lambda: _create_worktree_dir(repo_path, worktree_path, branch_name, base_branch, worktree_base)),
+        (
+            "Creating worktree",
+            lambda: _create_worktree_dir(
+                repo_path, worktree_path, branch_name, base_branch, worktree_base
+            ),
+        ),
         ("Installing dependencies", lambda: install_dependencies(worktree_path, console)),
     ]
 
@@ -440,29 +358,46 @@ def create_worktree(
             except subprocess.CalledProcessError as e:
                 raise WorktreeCreationError(
                     name=safe_name,
-                    command=" ".join(e.cmd) if hasattr(e, 'cmd') else None,
+                    command=" ".join(e.cmd) if hasattr(e, "cmd") else None,
                     stderr=e.stderr.decode() if e.stderr else None,
                 )
         console.print(f"  [green]✓[/green] {step_name}")
 
     console.print()
-    console.print(_create_success_panel("Worktree Ready", {
-        "Path": str(worktree_path),
-        "Branch": branch_name,
-        "Base": base_branch,
-        "Next": f"cd {worktree_path}",
-    }))
+    console.print(
+        create_success_panel(
+            "Worktree Ready",
+            {
+                "Path": str(worktree_path),
+                "Branch": branch_name,
+                "Base": base_branch,
+                "Next": f"cd {worktree_path}",
+            },
+        )
+    )
 
     return worktree_path
 
 
 def _fetch_branch(repo_path: Path, branch: str) -> None:
-    """Fetch a branch from origin."""
-    subprocess.run(
+    """
+    Fetch a branch from origin.
+
+    Raises:
+        WorktreeCreationError: If fetch fails (network error, branch not found, etc.)
+    """
+    result = subprocess.run(
         ["git", "-C", str(repo_path), "fetch", "origin", branch],
         capture_output=True,
+        text=True,
         timeout=30,
     )
+    if result.returncode != 0:
+        error_msg = result.stderr.strip() if result.stderr else "Unknown fetch error"
+        raise WorktreeCreationError(
+            worktree_name=branch,
+            debug_context=f"Failed to fetch branch '{branch}': {error_msg}",
+        )
 
 
 def _create_worktree_dir(
@@ -478,9 +413,13 @@ def _create_worktree_dir(
     try:
         subprocess.run(
             [
-                "git", "-C", str(repo_path),
-                "worktree", "add",
-                "-b", branch_name,
+                "git",
+                "-C",
+                str(repo_path),
+                "worktree",
+                "add",
+                "-b",
+                branch_name,
                 str(worktree_path),
                 f"origin/{base_branch}",
             ],
@@ -492,9 +431,13 @@ def _create_worktree_dir(
         # Try without origin/ prefix
         subprocess.run(
             [
-                "git", "-C", str(repo_path),
-                "worktree", "add",
-                "-b", branch_name,
+                "git",
+                "-C",
+                str(repo_path),
+                "worktree",
+                "add",
+                "-b",
+                branch_name,
                 str(worktree_path),
                 base_branch,
             ],
@@ -504,7 +447,7 @@ def _create_worktree_dir(
         )
 
 
-def list_worktrees(repo_path: Path, console: Optional[Console] = None) -> List[WorktreeInfo]:
+def list_worktrees(repo_path: Path, console: Console | None = None) -> list[WorktreeInfo]:
     """
     List all worktrees for a repository with beautiful table display.
 
@@ -523,7 +466,7 @@ def list_worktrees(repo_path: Path, console: Optional[Console] = None) -> List[W
     return worktrees
 
 
-def render_worktrees(worktrees: List[WorktreeInfo], console: Console) -> None:
+def render_worktrees(worktrees: list[WorktreeInfo], console: Console) -> None:
     """
     Public interface to render worktrees with beautiful formatting.
 
@@ -532,7 +475,7 @@ def render_worktrees(worktrees: List[WorktreeInfo], console: Console) -> None:
     _render_worktrees_table(worktrees, console)
 
 
-def _get_worktrees_data(repo_path: Path) -> List[WorktreeInfo]:
+def _get_worktrees_data(repo_path: Path) -> list[WorktreeInfo]:
     """Get raw worktree data from git."""
     try:
         result = subprocess.run(
@@ -551,11 +494,13 @@ def _get_worktrees_data(repo_path: Path) -> List[WorktreeInfo]:
         for line in result.stdout.split("\n"):
             if line.startswith("worktree "):
                 if current:
-                    worktrees.append(WorktreeInfo(
-                        path=current.get("path", ""),
-                        branch=current.get("branch", ""),
-                        status=current.get("status", ""),
-                    ))
+                    worktrees.append(
+                        WorktreeInfo(
+                            path=current.get("path", ""),
+                            branch=current.get("branch", ""),
+                            status=current.get("status", ""),
+                        )
+                    )
                 current = {"path": line[9:], "branch": "", "status": ""}
             elif line.startswith("branch "):
                 current["branch"] = line[7:].replace("refs/heads/", "")
@@ -565,11 +510,13 @@ def _get_worktrees_data(repo_path: Path) -> List[WorktreeInfo]:
                 current["status"] = "detached"
 
         if current:
-            worktrees.append(WorktreeInfo(
-                path=current.get("path", ""),
-                branch=current.get("branch", ""),
-                status=current.get("status", ""),
-            ))
+            worktrees.append(
+                WorktreeInfo(
+                    path=current.get("path", ""),
+                    branch=current.get("branch", ""),
+                    status=current.get("status", ""),
+                )
+            )
 
         return worktrees
 
@@ -577,15 +524,17 @@ def _get_worktrees_data(repo_path: Path) -> List[WorktreeInfo]:
         return []
 
 
-def _render_worktrees_table(worktrees: List[WorktreeInfo], console: Console) -> None:
+def _render_worktrees_table(worktrees: list[WorktreeInfo], console: Console) -> None:
     """Render worktrees in a responsive table."""
     if not worktrees:
         console.print()
-        console.print(_create_warning_panel(
-            "No Worktrees",
-            "No git worktrees found for this repository.",
-            "Create one with: scc worktree <repo> <feature-name>"
-        ))
+        console.print(
+            create_warning_panel(
+                "No Worktrees",
+                "No git worktrees found for this repository.",
+                "Create one with: scc worktree <repo> <feature-name>",
+            )
+        )
         return
 
     console.print()
@@ -615,7 +564,7 @@ def _render_worktrees_table(worktrees: List[WorktreeInfo], console: Console) -> 
 
     for idx, wt in enumerate(worktrees, 1):
         # Style the branch name
-        branch_text = wt.branch or Text("detached", style="yellow")
+        wt.branch or Text("detached", style="yellow")
         is_protected = wt.branch in PROTECTED_BRANCHES
 
         if is_protected:
@@ -672,19 +621,19 @@ def cleanup_worktree(
 
     if not worktree_path.exists():
         console.print()
-        console.print(_create_warning_panel(
-            "Worktree Not Found",
-            f"No worktree found at: {worktree_path}",
-            "Use 'scc worktrees <repo>' to list available worktrees"
-        ))
+        console.print(
+            create_warning_panel(
+                "Worktree Not Found",
+                f"No worktree found at: {worktree_path}",
+                "Use 'scc worktrees <repo>' to list available worktrees",
+            )
+        )
         return False
 
     console.print()
-    console.print(_create_info_panel(
-        "Cleanup Worktree",
-        f"Worktree: {safe_name}",
-        f"Path: {worktree_path}"
-    ))
+    console.print(
+        create_info_panel("Cleanup Worktree", f"Worktree: {safe_name}", f"Path: {worktree_path}")
+    )
     console.print()
 
     # Check for uncommitted changes - show evidence
@@ -715,7 +664,8 @@ def cleanup_worktree(
         try:
             force_flag = ["--force"] if force else []
             subprocess.run(
-                ["git", "-C", str(repo_path), "worktree", "remove", str(worktree_path)] + force_flag,
+                ["git", "-C", str(repo_path), "worktree", "remove", str(worktree_path)]
+                + force_flag,
                 check=True,
                 capture_output=True,
                 timeout=30,
@@ -729,10 +679,11 @@ def cleanup_worktree(
                 timeout=10,
             )
 
-    console.print(f"  [green]✓[/green] Worktree removed")
+    console.print("  [green]✓[/green] Worktree removed")
 
     # Ask about branch deletion
     console.print()
+    branch_deleted = False
     if Confirm.ask(f"[cyan]Also delete branch '{branch_name}'?[/cyan]", default=False):
         with console.status("[cyan]Deleting branch...[/cyan]", spinner="dots"):
             subprocess.run(
@@ -740,13 +691,19 @@ def cleanup_worktree(
                 capture_output=True,
                 timeout=10,
             )
-        console.print(f"  [green]✓[/green] Branch deleted")
+        console.print("  [green]✓[/green] Branch deleted")
+        branch_deleted = True
 
     console.print()
-    console.print(_create_success_panel("Cleanup Complete", {
-        "Removed": str(worktree_path),
-        "Branch": "deleted" if Confirm else "kept",
-    }))
+    console.print(
+        create_success_panel(
+            "Cleanup Complete",
+            {
+                "Removed": str(worktree_path),
+                "Branch": "deleted" if branch_deleted else "kept",
+            },
+        )
+    )
 
     return True
 
@@ -755,12 +712,52 @@ def cleanup_worktree(
 # Dependency Installation
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def install_dependencies(path: Path, console: Optional[Console] = None) -> None:
+
+def _run_install_cmd(
+    cmd: list[str],
+    path: Path,
+    console: Console | None,
+    timeout: int = 300,
+) -> bool:
+    """Run an install command and warn on failure. Returns True if successful."""
+    try:
+        result = subprocess.run(
+            cmd, cwd=path, capture_output=True, text=True, timeout=timeout
+        )
+        if result.returncode != 0 and console:
+            error_detail = result.stderr.strip() if result.stderr else ""
+            message = f"'{' '.join(cmd)}' failed with exit code {result.returncode}"
+            if error_detail:
+                message += f": {error_detail[:100]}"  # Truncate long errors
+            console.print(
+                create_warning_panel(
+                    "Dependency Install Warning",
+                    message,
+                    "You may need to install dependencies manually",
+                )
+            )
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        if console:
+            console.print(
+                create_warning_panel(
+                    "Dependency Install Timeout",
+                    f"'{' '.join(cmd)}' timed out after {timeout}s",
+                    "You may need to install dependencies manually",
+                )
+            )
+        return False
+
+
+def install_dependencies(path: Path, console: Console | None = None) -> None:
     """
     Detect and install project dependencies.
 
     Supports: Node.js (npm/yarn/pnpm/bun), Python (pip/poetry/uv),
     Java (Maven/Gradle)
+
+    Warns user if any install fails rather than silently ignoring.
     """
     # Node.js
     if (path / "package.json").exists():
@@ -773,32 +770,35 @@ def install_dependencies(path: Path, console: Optional[Console] = None) -> None:
         else:
             cmd = ["npm", "install"]
 
-        subprocess.run(cmd, cwd=path, capture_output=True, timeout=300)
+        _run_install_cmd(cmd, path, console, timeout=300)
 
     # Python
     if (path / "pyproject.toml").exists():
         if shutil.which("poetry"):
-            subprocess.run(["poetry", "install"], cwd=path, capture_output=True, timeout=300)
+            _run_install_cmd(["poetry", "install"], path, console, timeout=300)
         elif shutil.which("uv"):
-            subprocess.run(["uv", "pip", "install", "-e", "."], cwd=path, capture_output=True, timeout=300)
+            _run_install_cmd(["uv", "pip", "install", "-e", "."], path, console, timeout=300)
     elif (path / "requirements.txt").exists():
-        subprocess.run(["pip", "install", "-r", "requirements.txt"], cwd=path, capture_output=True, timeout=300)
+        _run_install_cmd(
+            ["pip", "install", "-r", "requirements.txt"], path, console, timeout=300
+        )
 
     # Java/Maven
     if (path / "pom.xml").exists():
-        subprocess.run(["mvn", "dependency:resolve"], cwd=path, capture_output=True, timeout=600)
+        _run_install_cmd(["mvn", "dependency:resolve"], path, console, timeout=600)
 
     # Java/Gradle
     if (path / "build.gradle").exists() or (path / "build.gradle.kts").exists():
         gradle_cmd = "./gradlew" if (path / "gradlew").exists() else "gradle"
-        subprocess.run([gradle_cmd, "dependencies"], cwd=path, capture_output=True, timeout=600)
+        _run_install_cmd([gradle_cmd, "dependencies"], path, console, timeout=600)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Repository Cloning
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def clone_repo(url: str, base_path: str, console: Optional[Console] = None) -> str:
+
+def clone_repo(url: str, base_path: str, console: Console | None = None) -> str:
     """
     Clone a repository with progress feedback.
 
@@ -832,11 +832,7 @@ def clone_repo(url: str, base_path: str, console: Optional[Console] = None) -> s
         return str(target)
 
     console.print()
-    console.print(_create_info_panel(
-        "Cloning Repository",
-        url,
-        f"Target: {target}"
-    ))
+    console.print(create_info_panel("Cloning Repository", url, f"Target: {target}"))
     console.print()
 
     with console.status("[cyan]Cloning...[/cyan]", spinner="dots"):
@@ -854,12 +850,17 @@ def clone_repo(url: str, base_path: str, console: Optional[Console] = None) -> s
                 stderr=e.stderr.decode() if e.stderr else None,
             )
 
-    console.print(f"  [green]✓[/green] Repository cloned")
+    console.print("  [green]✓[/green] Repository cloned")
     console.print()
-    console.print(_create_success_panel("Clone Complete", {
-        "Repository": name,
-        "Path": str(target),
-    }))
+    console.print(
+        create_success_panel(
+            "Clone Complete",
+            {
+                "Repository": name,
+                "Path": str(target),
+            },
+        )
+    )
 
     return str(target)
 
@@ -868,13 +869,14 @@ def clone_repo(url: str, base_path: str, console: Optional[Console] = None) -> s
 # Git Hooks Installation
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def install_hooks(console: Console) -> None:
     """Install global git hooks for branch protection."""
 
     hooks_dir = Path.home() / ".config" / "git" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
-    pre_push_content = '''#!/bin/bash
+    pre_push_content = """#!/bin/bash
 # Sundsvalls kommun - Pre-push hook
 # Prevents direct pushes to protected branches
 
@@ -909,16 +911,18 @@ while read local_ref local_sha remote_ref remote_sha; do
 done
 
 exit 0
-'''
+"""
 
     pre_push_path = hooks_dir / "pre-push"
 
     console.print()
-    console.print(_create_info_panel(
-        "Installing Git Hooks",
-        "Branch protection hooks will be installed globally",
-        f"Location: {hooks_dir}"
-    ))
+    console.print(
+        create_info_panel(
+            "Installing Git Hooks",
+            "Branch protection hooks will be installed globally",
+            f"Location: {hooks_dir}",
+        )
+    )
     console.print()
 
     with console.status("[cyan]Installing hooks...[/cyan]", spinner="dots"):
@@ -931,9 +935,14 @@ exit 0
             capture_output=True,
         )
 
-    console.print(f"  [green]✓[/green] Pre-push hook installed")
+    console.print("  [green]✓[/green] Pre-push hook installed")
     console.print()
-    console.print(_create_success_panel("Hooks Installed", {
-        "Location": str(hooks_dir),
-        "Protected branches": "main, master, develop, production, staging",
-    }))
+    console.print(
+        create_success_panel(
+            "Hooks Installed",
+            {
+                "Location": str(hooks_dir),
+                "Protected branches": "main, master, develop, production, staging",
+            },
+        )
+    )

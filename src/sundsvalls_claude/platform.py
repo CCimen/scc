@@ -13,9 +13,8 @@ WSL2 Considerations:
 
 import os
 import sys
-from pathlib import Path
-from typing import Optional, Tuple
 from enum import Enum
+from pathlib import Path
 
 
 class Platform(Enum):
@@ -64,7 +63,7 @@ def is_wsl2() -> bool:
         return False
 
     try:
-        with open("/proc/version", "r") as f:
+        with open("/proc/version") as f:
             version_info = f.read().lower()
             return "microsoft" in version_info or "wsl" in version_info
     except (FileNotFoundError, PermissionError, OSError):
@@ -81,7 +80,7 @@ def is_wsl1() -> bool:
         return False
 
     try:
-        with open("/proc/version", "r") as f:
+        with open("/proc/version") as f:
             version_info = f.read().lower()
             # WSL2 typically has "wsl2" in the version
             return "wsl2" not in version_info and "microsoft" in version_info
@@ -179,7 +178,7 @@ def get_recommended_workspace_base() -> Path:
         return Path.home() / "projects"
 
 
-def check_path_performance(path: Path) -> Tuple[bool, Optional[str]]:
+def check_path_performance(path: Path) -> tuple[bool, str | None]:
     """
     Check if a path has optimal performance characteristics.
 
@@ -260,7 +259,7 @@ def supports_colors() -> bool:
     return False
 
 
-def get_terminal_size() -> Tuple[int, int]:
+def get_terminal_size() -> tuple[int, int]:
     """
     Get terminal size (columns, rows).
 

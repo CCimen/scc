@@ -15,7 +15,6 @@ Exit codes:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -24,7 +23,7 @@ class SCCError(Exception):
 
     user_message: str
     suggested_action: str = ""
-    debug_context: Optional[str] = None
+    debug_context: str | None = None
     exit_code: int = 1
 
     def __str__(self) -> str:
@@ -78,9 +77,7 @@ class DockerVersionError(PrerequisiteError):
 class SandboxNotAvailableError(PrerequisiteError):
     """Docker sandbox feature is not available."""
 
-    user_message: str = field(
-        default="Docker sandbox feature is not available"
-    )
+    user_message: str = field(default="Docker sandbox feature is not available")
     suggested_action: str = field(
         default="Ensure Docker Desktop is version 4.50+ and sandbox feature is enabled"
     )
@@ -99,8 +96,8 @@ class ToolError(SCCError):
     """External tool (Docker/Git) command failed."""
 
     exit_code: int = field(default=4, init=False)
-    command: Optional[str] = None
-    stderr: Optional[str] = None
+    command: str | None = None
+    stderr: str | None = None
 
     def __post_init__(self):
         if self.command or self.stderr:
@@ -139,9 +136,7 @@ class NotAGitRepoError(WorkspaceError):
 
     path: str = ""
     user_message: str = field(default="")
-    suggested_action: str = field(
-        default="Initialize git with 'git init' or clone a repository"
-    )
+    suggested_action: str = field(default="Initialize git with 'git init' or clone a repository")
 
     def __post_init__(self):
         super().__post_init__()
@@ -155,9 +150,7 @@ class CloneError(WorkspaceError):
 
     url: str = ""
     user_message: str = field(default="")
-    suggested_action: str = field(
-        default="Check the repository URL and your network connection"
-    )
+    suggested_action: str = field(default="Check the repository URL and your network connection")
 
     def __post_init__(self):
         super().__post_init__()
@@ -247,9 +240,7 @@ class ConfigError(SCCError):
 
     exit_code: int = field(default=2, init=False)
     user_message: str = field(default="Configuration error")
-    suggested_action: str = field(
-        default="Run 'scc config --show' to view current configuration"
-    )
+    suggested_action: str = field(default="Run 'scc config --show' to view current configuration")
 
 
 @dataclass

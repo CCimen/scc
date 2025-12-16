@@ -13,19 +13,15 @@ Philosophy: "Get started in under 60 seconds"
 """
 
 from pathlib import Path
-from typing import Optional
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
-from rich.text import Text
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich import box
 
-from . import config
-from . import doctor
+from . import config, doctor
 from . import platform as platform_module
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Welcome Screen
@@ -111,7 +107,7 @@ def prompt_workspace_base(console: Console) -> Path:
     if not workspace_path.exists():
         console.print()
         if Confirm.ask(
-            f"  [yellow]Directory doesn't exist. Create it?[/yellow]",
+            "  [yellow]Directory doesn't exist. Create it?[/yellow]",
             default=True,
         ):
             workspace_path.mkdir(parents=True, exist_ok=True)
@@ -122,7 +118,7 @@ def prompt_workspace_base(console: Console) -> Path:
     return workspace_path
 
 
-def prompt_team_selection(console: Console) -> Optional[str]:
+def prompt_team_selection(console: Console) -> str | None:
     """
     Prompt user to select a team profile (optional).
 
@@ -183,7 +179,7 @@ def prompt_team_selection(console: Console) -> Optional[str]:
 def save_configuration(
     console: Console,
     workspace_base: Path,
-    default_team: Optional[str] = None,
+    default_team: str | None = None,
 ) -> None:
     """
     Save the setup configuration.
@@ -210,7 +206,7 @@ def save_configuration(
     console.print(f"  [green]  Configuration saved to {config.CONFIG_FILE}[/green]")
 
 
-def show_completion(console: Console, workspace_base: Path, team: Optional[str]) -> None:
+def show_completion(console: Console, workspace_base: Path, team: str | None) -> None:
     """
     Display setup completion message with next steps.
     """
@@ -286,7 +282,7 @@ def run_setup(console: Console, skip_prereqs: bool = False) -> bool:
     return True
 
 
-def run_quick_setup(console: Console, workspace_base: Optional[Path] = None) -> bool:
+def run_quick_setup(console: Console, workspace_base: Path | None = None) -> bool:
     """
     Run minimal setup with defaults.
 

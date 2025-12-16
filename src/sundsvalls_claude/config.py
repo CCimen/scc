@@ -5,10 +5,10 @@ Configuration management.
 import json
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
-from rich.console import Console
 
+from rich.console import Console
 
 CONFIG_DIR = Path.home() / ".config" / "sundsvalls-claude"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -68,42 +68,42 @@ def get_config_file() -> Path:
 
 def load_config() -> dict:
     """Load configuration from file, or return defaults."""
-    
+
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE) as f:
                 user_config = json.load(f)
-            
+
             # Merge with defaults
             config = DEFAULT_CONFIG.copy()
             deep_merge(config, user_config)
             return config
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
-    
+
     return DEFAULT_CONFIG.copy()
 
 
 def save_config(config: dict):
     """Save configuration to file."""
-    
+
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
 
 
 def init_config(console: Console):
     """Initialize configuration directory and files."""
-    
+
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     if not CONFIG_FILE.exists():
         save_config(DEFAULT_CONFIG)
         console.print(f"[green]✓ Created config file: {CONFIG_FILE}[/green]")
     else:
         console.print(f"[green]✓ Config file exists: {CONFIG_FILE}[/green]")
-    
+
     # Create sessions file
     if not SESSIONS_FILE.exists():
         with open(SESSIONS_FILE, "w") as f:
@@ -113,65 +113,66 @@ def init_config(console: Console):
 
 def open_in_editor():
     """Open config file in default editor."""
-    
+
     editor = os.environ.get("EDITOR", "nano")
-    
+
     # Ensure config exists
     if not CONFIG_FILE.exists():
         save_config(DEFAULT_CONFIG)
-    
+
     subprocess.run([editor, str(CONFIG_FILE)])
 
 
 def deep_merge(base: dict, override: dict) -> dict:
     """Deep merge override into base."""
-    
+
     for key, value in override.items():
         if key in base and isinstance(base[key], dict) and isinstance(value, dict):
             deep_merge(base[key], value)
         else:
             base[key] = value
-    
+
     return base
 
 
-def get_team_config(team: str) -> Optional[dict]:
+def get_team_config(team: str) -> dict | None:
     """Get configuration for a specific team."""
-    
+
     config = load_config()
     return config.get("profiles", {}).get(team)
 
 
-def add_recent_workspace(workspace: str, team: Optional[str] = None):
+def add_recent_workspace(workspace: str, team: str | None = None):
     """Add a workspace to recent list."""
-    
+
     try:
         if SESSIONS_FILE.exists():
             with open(SESSIONS_FILE) as f:
                 data = json.load(f)
         else:
             data = {"sessions": []}
-        
-        from datetime import datetime
-        
+
         # Remove existing entry for this workspace
         data["sessions"] = [s for s in data["sessions"] if s.get("workspace") != workspace]
-        
+
         # Add new entry at the start
-        data["sessions"].insert(0, {
-            "workspace": workspace,
-            "team": team,
-            "last_used": datetime.now().isoformat(),
-            "name": Path(workspace).name,
-        })
-        
+        data["sessions"].insert(
+            0,
+            {
+                "workspace": workspace,
+                "team": team,
+                "last_used": datetime.now().isoformat(),
+                "name": Path(workspace).name,
+            },
+        )
+
         # Keep only last 20
         data["sessions"] = data["sessions"][:20]
-        
+
         with open(SESSIONS_FILE, "w") as f:
             json.dump(data, f, indent=2)
-    
-    except (IOError, json.JSONDecodeError):
+
+    except (OSError, json.JSONDecodeError):
         pass
 
 
@@ -183,7 +184,7 @@ def get_recent_workspaces(limit: int = 10) -> list:
             with open(SESSIONS_FILE) as f:
                 data = json.load(f)
             return data.get("sessions", [])[:limit]
-    except (IOError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError):
         pass
 
     return []

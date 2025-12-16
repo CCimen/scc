@@ -6,26 +6,38 @@ A command-line tool for safely running Claude Code in Docker sandboxes
 with team-specific configurations and worktree management.
 """
 
+from functools import wraps
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_installed_version
+from pathlib import Path
+
 import typer
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
-from rich.table import Table
-from rich.text import Text
+from rich.prompt import Confirm, Prompt
 from rich.status import Status
-from rich import box
-from typing import Optional
-from pathlib import Path
-import sys
+from rich.table import Table
 
-from . import config, docker, git, teams, sessions, ui, doctor, setup
+from . import config, docker, doctor, git, sessions, setup, teams, ui
 from . import platform as platform_module
 from .errors import (
-    SCCError,
-    PrerequisiteError,
-    WorkspaceNotFoundError,
     NotAGitRepoError,
+    SCCError,
+    WorkspaceNotFoundError,
 )
+from .panels import create_info_panel, create_success_panel, create_warning_panel
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Display Constants
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maximum length for displaying file paths before truncation
+MAX_DISPLAY_PATH_LENGTH = 50
+# Characters to keep when truncating (MAX - 3 for "...")
+PATH_TRUNCATE_LENGTH = 47
+# Terminal width threshold for wide mode tables
+WIDE_MODE_THRESHOLD = 110
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -54,51 +66,10 @@ state = AppState()
 # UI Helpers (Consistent Aesthetic)
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-def _create_info_panel(title: str, content: str, subtitle: str = "") -> Panel:
-    """Create an info panel with cyan styling."""
-    body = Text()
-    body.append(content)
-    if subtitle:
-        body.append("\n")
-        body.append(subtitle, style="dim")
-    return Panel(
-        body,
-        title=f"[bold cyan]{title}[/bold cyan]",
-        border_style="cyan",
-        padding=(0, 1),
-    )
-
-
-def _create_success_panel(title: str, items: dict) -> Panel:
-    """Create a success panel with key-value summary."""
-    grid = Table.grid(padding=(0, 2))
-    grid.add_column(style="dim", no_wrap=True)
-    grid.add_column(style="white")
-    for key, value in items.items():
-        grid.add_row(f"{key}:", str(value))
-    return Panel(
-        grid,
-        title=f"[bold green]{title}[/bold green]",
-        border_style="green",
-        padding=(0, 1),
-    )
-
-
-def _create_warning_panel(title: str, message: str, hint: str = "") -> Panel:
-    """Create a warning panel with yellow styling."""
-    body = Text()
-    body.append(message, style="bold")
-    if hint:
-        body.append("\n\n")
-        body.append("", style="dim")
-        body.append(hint, style="yellow")
-    return Panel(
-        body,
-        title=f"[bold yellow]{title}[/bold yellow]",
-        border_style="yellow",
-        padding=(0, 1),
-    )
+# Panel functions imported from .panels module:
+# - create_info_panel
+# - create_success_panel
+# - create_warning_panel
 
 
 def _render_responsive_table(
@@ -109,7 +80,7 @@ def _render_responsive_table(
 ) -> None:
     """Render a table that adapts to terminal width."""
     width = console.width
-    wide_mode = width >= 110
+    wide_mode = width >= WIDE_MODE_THRESHOLD
 
     table = Table(
         title=f"[bold cyan]{title}[/bold cyan]",
@@ -171,9 +142,13 @@ def main_callback(
     state.debug = debug
 
     if version:
+        try:
+            pkg_version = get_installed_version("sundsvalls-claude")
+        except PackageNotFoundError:
+            pkg_version = "unknown"
         console.print(
             Panel(
-                "[cyan]sundsvalls-claude[/cyan] [dim]v1.0.0[/dim]\n"
+                f"[cyan]sundsvalls-claude[/cyan] [dim]v{pkg_version}[/dim]\n"
                 "[dim]Safe development environment manager for Claude Code[/dim]",
                 border_style="cyan",
             )
@@ -192,7 +167,6 @@ def main_callback(
 
 def handle_errors(func):
     """Decorator to catch SCCError and render beautifully."""
-    from functools import wraps
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -213,7 +187,7 @@ def handle_errors(func):
                 console.print_exception()
             else:
                 console.print(
-                    _create_warning_panel(
+                    create_warning_panel(
                         "Unexpected Error",
                         str(e),
                         "Run with --debug for full traceback",
@@ -232,22 +206,12 @@ def handle_errors(func):
 @app.command()
 @handle_errors
 def start(
-    workspace: Optional[str] = typer.Argument(
-        None, help="Path to workspace (optional)"
-    ),
-    team: Optional[str] = typer.Option(
-        None, "-t", "--team", help="Team profile to use"
-    ),
-    session_name: Optional[str] = typer.Option(
-        None, "-s", "--session", help="Session name"
-    ),
-    continue_session: bool = typer.Option(
-        False, "-c", "--continue", help="Continue last session"
-    ),
-    resume: bool = typer.Option(
-        False, "-r", "--resume", help="Show session picker"
-    ),
-    worktree_name: Optional[str] = typer.Option(
+    workspace: str | None = typer.Argument(None, help="Path to workspace (optional)"),
+    team: str | None = typer.Option(None, "-t", "--team", help="Team profile to use"),
+    session_name: str | None = typer.Option(None, "-s", "--session", help="Session name"),
+    continue_session: bool = typer.Option(False, "-c", "--continue", help="Continue last session"),
+    resume: bool = typer.Option(False, "-r", "--resume", help="Show session picker"),
+    worktree_name: str | None = typer.Option(
         None, "-w", "--worktree", help="Create worktree with this name"
     ),
     fresh: bool = typer.Option(
@@ -289,7 +253,7 @@ def start(
         if not is_optimal and warning:
             console.print()
             console.print(
-                _create_warning_panel(
+                create_warning_panel(
                     "Performance Warning",
                     "Your workspace is on the Windows filesystem.",
                     "For better performance, move to ~/projects inside WSL.",
@@ -303,7 +267,7 @@ def start(
     if worktree_name and workspace_path:
         workspace_path = git.create_worktree(workspace_path, worktree_name)
         console.print(
-            _create_success_panel(
+            create_success_panel(
                 "Worktree Created",
                 {
                     "Path": str(workspace_path),
@@ -318,9 +282,7 @@ def start(
 
     # Load team profile
     if team:
-        with Status(
-            f"[cyan]Loading {team} profile...[/cyan]", console=console, spinner="dots"
-        ):
+        with Status(f"[cyan]Loading {team} profile...[/cyan]", console=console, spinner="dots"):
             team_config = teams.fetch_team_config(team, cfg)
             teams.apply_team_config(workspace_path, team_config)
 
@@ -329,7 +291,8 @@ def start(
     if workspace_path:
         try:
             current_branch = git.get_current_branch(workspace_path)
-        except Exception:
+        except (NotAGitRepoError, OSError):
+            # Not a git repo or filesystem error - continue without branch
             pass
 
     # Get or create container (re-use pattern)
@@ -378,10 +341,10 @@ def start(
 
 
 def _show_launch_panel(
-    workspace: Optional[Path],
-    team: Optional[str],
-    session_name: Optional[str],
-    branch: Optional[str],
+    workspace: Path | None,
+    team: str | None,
+    session_name: str | None,
+    branch: str | None,
     is_resume: bool,
 ) -> None:
     """Display beautiful launch info panel."""
@@ -392,8 +355,8 @@ def _show_launch_panel(
     if workspace:
         # Shorten path for display
         display_path = str(workspace)
-        if len(display_path) > 50:
-            display_path = "..." + display_path[-47:]
+        if len(display_path) > MAX_DISPLAY_PATH_LENGTH:
+            display_path = "..." + display_path[-PATH_TRUNCATE_LENGTH:]
         grid.add_row("Workspace:", display_path)
 
     grid.add_row("Team:", team or "base")
@@ -477,7 +440,7 @@ def interactive_start(cfg: dict) -> tuple:
 def worktree_cmd(
     workspace: str = typer.Argument(..., help="Path to the main repository"),
     name: str = typer.Argument(..., help="Name for the worktree/feature"),
-    base_branch: Optional[str] = typer.Option(
+    base_branch: str | None = typer.Option(
         None, "-b", "--base", help="Base branch (default: current)"
     ),
     start_claude: bool = typer.Option(
@@ -496,7 +459,7 @@ def worktree_cmd(
     worktree_path = git.create_worktree(workspace_path, name, base_branch)
 
     console.print(
-        _create_success_panel(
+        create_success_panel(
             "Worktree Created",
             {
                 "Path": str(worktree_path),
@@ -508,9 +471,7 @@ def worktree_cmd(
 
     if start_claude:
         console.print()
-        if Confirm.ask(
-            "[cyan]Start Claude Code in this worktree?[/cyan]", default=True
-        ):
+        if Confirm.ask("[cyan]Start Claude Code in this worktree?[/cyan]", default=True):
             docker.check_docker_available()
             docker_cmd, _ = docker.get_or_create_container(
                 workspace=worktree_path,
@@ -534,7 +495,7 @@ def worktrees_cmd(
 
     if not worktree_list:
         console.print(
-            _create_warning_panel(
+            create_warning_panel(
                 "No Worktrees",
                 "No worktrees found for this repository.",
                 "Create one with: scc worktree <repo> <name>",
@@ -563,7 +524,7 @@ def cleanup_cmd(
 
     if result:
         console.print(
-            _create_success_panel(
+            create_success_panel(
                 "Worktree Removed",
                 {
                     "Name": name,
@@ -576,7 +537,7 @@ def cleanup_cmd(
 @app.command(name="teams")
 @handle_errors
 def teams_cmd(
-    team_name: Optional[str] = typer.Argument(None, help="Team name to show details"),
+    team_name: str | None = typer.Argument(None, help="Team name to show details"),
     sync: bool = typer.Option(False, "--sync", "-s", help="Sync team configs from GitHub"),
 ):
     """List available team profiles or show team details."""
@@ -597,7 +558,7 @@ def teams_cmd(
 
     if not available_teams:
         console.print(
-            _create_warning_panel(
+            create_warning_panel(
                 "No Teams",
                 "No team profiles configured.",
                 "Run 'scc setup' to initialize configuration",
@@ -634,7 +595,7 @@ def _show_team_details(cfg: dict, team_name: str) -> None:
 
     if not details:
         console.print(
-            _create_warning_panel(
+            create_warning_panel(
                 "Team Not Found",
                 f"No team profile named '{team_name}'.",
                 "Run 'scc teams' to see available profiles",
@@ -685,7 +646,7 @@ def _show_team_details(cfg: dict, team_name: str) -> None:
     console.print(f"[dim]Use: scc start -t {team_name} to use this profile[/dim]")
 
 
-def _sync_teams(cfg: dict, team_name: Optional[str]) -> None:
+def _sync_teams(cfg: dict, team_name: str | None) -> None:
     """Sync team configurations from GitHub."""
     org_config = cfg.get("organization", {})
     github_org = org_config.get("github_org")
@@ -693,7 +654,7 @@ def _sync_teams(cfg: dict, team_name: Optional[str]) -> None:
 
     if not github_org or not config_repo:
         console.print(
-            _create_warning_panel(
+            create_warning_panel(
                 "Sync Not Configured",
                 "No GitHub organization or config repository set.",
                 "Configure organization.github_org and organization.config_repo in config",
@@ -712,14 +673,14 @@ def _sync_teams(cfg: dict, team_name: Optional[str]) -> None:
 
         if success:
             console.print(
-                _create_success_panel(
+                create_success_panel(
                     "Team Synced",
                     {"Team": team_name, "Source": f"{github_org}/{config_repo}"},
                 )
             )
         else:
             console.print(
-                _create_warning_panel(
+                create_warning_panel(
                     "Sync Failed",
                     f"Could not sync team '{team_name}'.",
                     f"Check if profiles/{team_name} exists in {github_org}/{config_repo}",
@@ -744,7 +705,7 @@ def _sync_teams(cfg: dict, team_name: Optional[str]) -> None:
 
         if synced:
             console.print(
-                _create_success_panel(
+                create_success_panel(
                     "Teams Synced",
                     {
                         "Synced": ", ".join(synced),
@@ -755,7 +716,7 @@ def _sync_teams(cfg: dict, team_name: Optional[str]) -> None:
 
         if failed:
             console.print(
-                _create_warning_panel(
+                create_warning_panel(
                     "Some Syncs Failed",
                     f"Could not sync: {', '.join(failed)}",
                     "These teams may not exist in the remote repository",
@@ -773,7 +734,7 @@ def sessions_cmd(
 
     if not recent:
         console.print(
-            _create_warning_panel(
+            create_warning_panel(
                 "No Sessions",
                 "No recent sessions found.",
                 "Start a session with: scc start <workspace>",
@@ -788,9 +749,7 @@ def sessions_cmd(
         ws = s.get("workspace", "-")
         if len(ws) > 40:
             ws = "..." + ws[-37:]
-        rows.append(
-            [s.get("name", "-"), ws, s.get("last_used", "-"), s.get("team", "-")]
-        )
+        rows.append([s.get("name", "-"), ws, s.get("last_used", "-"), s.get("team", "-")])
 
     _render_responsive_table(
         title="Recent Sessions",
@@ -810,14 +769,12 @@ def sessions_cmd(
 @handle_errors
 def list_cmd():
     """List all SCC-managed Docker containers."""
-    with Status(
-        "[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"
-    ):
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
         containers = docker.list_scc_containers()
 
     if not containers:
         console.print(
-            _create_warning_panel(
+            create_warning_panel(
                 "No Containers",
                 "No SCC-managed containers found.",
                 "Start a session with: scc start <workspace>",
@@ -885,7 +842,7 @@ def config_cmd(
     if show:
         cfg = config.load_config()
         console.print(
-            _create_info_panel(
+            create_info_panel(
                 "Configuration",
                 "Current settings loaded from ~/.config/sundsvalls-claude/",
             )
@@ -896,7 +853,7 @@ def config_cmd(
         config.open_in_editor()
     else:
         console.print(
-            _create_info_panel(
+            create_info_panel(
                 "Configuration Help",
                 "Use --show to view current settings\nUse --edit to modify in your editor",
                 "Config location: ~/.config/sundsvalls-claude/config.json",
@@ -907,15 +864,13 @@ def config_cmd(
 @app.command(name="doctor")
 @handle_errors
 def doctor_cmd(
-    workspace: Optional[str] = typer.Argument(None, help="Optional workspace to check"),
+    workspace: str | None = typer.Argument(None, help="Optional workspace to check"),
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick status only"),
 ):
     """Check prerequisites and system health."""
     workspace_path = Path(workspace).expanduser().resolve() if workspace else None
 
-    with Status(
-        "[cyan]Running health checks...[/cyan]", console=console, spinner="dots"
-    ):
+    with Status("[cyan]Running health checks...[/cyan]", console=console, spinner="dots"):
         result = doctor.run_doctor(workspace_path)
 
     if quick:
@@ -926,6 +881,45 @@ def doctor_cmd(
     # Return proper exit code
     if not result.all_ok:
         raise typer.Exit(3)  # Prerequisites failed
+
+
+@app.command(name="update")
+@handle_errors
+def update_cmd():
+    """Check for updates to sundsvalls-claude CLI."""
+    from . import update as update_module
+
+    with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner="dots"):
+        info = update_module.check_for_updates()
+
+    console.print()
+
+    if info.latest is None:
+        console.print(
+            create_warning_panel(
+                "Check Failed",
+                "Could not reach PyPI to check for updates.",
+                "Check your internet connection",
+            )
+        )
+        raise typer.Exit(1)
+
+    if info.update_available:
+        cmd = update_module.get_update_command(info.install_method)
+        console.print(
+            create_info_panel(
+                "Update Available",
+                f"Current: {info.current}\nLatest:  {info.latest}",
+                f"Run: {cmd}",
+            )
+        )
+    else:
+        console.print(
+            create_success_panel(
+                "Up to Date",
+                {"Version": info.current},
+            )
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

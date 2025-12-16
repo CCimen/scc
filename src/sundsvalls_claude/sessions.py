@@ -10,13 +10,11 @@ Container Linking:
 """
 
 import json
-from pathlib import Path
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import List, Optional
-from dataclasses import dataclass, asdict
+from pathlib import Path
 
 from . import config
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Classes
@@ -28,12 +26,12 @@ class SessionRecord:
     """A recorded Claude Code session with container linking."""
 
     workspace: str
-    team: Optional[str] = None
-    name: Optional[str] = None
-    container_name: Optional[str] = None
-    branch: Optional[str] = None
-    last_used: Optional[str] = None
-    created_at: Optional[str] = None
+    team: str | None = None
+    name: str | None = None
+    container_name: str | None = None
+    branch: str | None = None
+    last_used: str | None = None
+    created_at: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -58,7 +56,7 @@ class SessionRecord:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def list_recent(limit: int = 10) -> List[dict]:
+def list_recent(limit: int = 10) -> list[dict]:
     """
     List recent sessions with container and relative time info.
 
@@ -83,14 +81,16 @@ def list_recent(limit: int = 10) -> List[dict]:
             except ValueError:
                 pass
 
-        result.append({
-            "name": s.get("name") or _generate_session_name(s),
-            "workspace": s.get("workspace", ""),
-            "team": s.get("team"),
-            "last_used": last_used,
-            "container_name": s.get("container_name"),
-            "branch": s.get("branch"),
-        })
+        result.append(
+            {
+                "name": s.get("name") or _generate_session_name(s),
+                "workspace": s.get("workspace", ""),
+                "team": s.get("team"),
+                "last_used": last_used,
+                "container_name": s.get("container_name"),
+                "branch": s.get("branch"),
+            }
+        )
 
     return result
 
@@ -105,10 +105,10 @@ def _generate_session_name(session: dict) -> str:
 
 def record_session(
     workspace: str,
-    team: Optional[str] = None,
-    session_name: Optional[str] = None,
-    container_name: Optional[str] = None,
-    branch: Optional[str] = None,
+    team: str | None = None,
+    session_name: str | None = None,
+    container_name: str | None = None,
+    branch: str | None = None,
 ) -> SessionRecord:
     """
     Record a new session or update an existing one.
@@ -132,7 +132,9 @@ def record_session(
         container_name=container_name,
         branch=branch,
         last_used=now,
-        created_at=sessions[existing_idx].get("created_at", now) if existing_idx is not None else now,
+        created_at=(
+            sessions[existing_idx].get("created_at", now) if existing_idx is not None else now
+        ),
     )
 
     if existing_idx is not None:
@@ -149,7 +151,7 @@ def record_session(
 def update_session_container(
     workspace: str,
     container_name: str,
-    branch: Optional[str] = None,
+    branch: str | None = None,
 ) -> None:
     """
     Update the container name for an existing session.
@@ -168,7 +170,7 @@ def update_session_container(
     _save_sessions(sessions)
 
 
-def find_session_by_container(container_name: str) -> Optional[dict]:
+def find_session_by_container(container_name: str) -> dict | None:
     """
     Find a session by its container name.
 
@@ -183,8 +185,8 @@ def find_session_by_container(container_name: str) -> Optional[dict]:
 
 def find_session_by_workspace(
     workspace: str,
-    branch: Optional[str] = None,
-) -> Optional[dict]:
+    branch: str | None = None,
+) -> dict | None:
     """
     Find a session by workspace and optionally branch.
 
@@ -204,8 +206,8 @@ def find_session_by_workspace(
 
 def get_container_for_workspace(
     workspace: str,
-    branch: Optional[str] = None,
-) -> Optional[str]:
+    branch: str | None = None,
+) -> str | None:
     """
     Get the container name for a workspace (and optionally branch).
 
@@ -234,7 +236,7 @@ def clear_history() -> int:
     return count
 
 
-def remove_session(workspace: str, branch: Optional[str] = None) -> bool:
+def remove_session(workspace: str, branch: str | None = None) -> bool:
     """
     Remove a specific session from history.
 
@@ -250,7 +252,8 @@ def remove_session(workspace: str, branch: Optional[str] = None) -> bool:
 
     if branch:
         sessions = [
-            s for s in sessions
+            s
+            for s in sessions
             if not (s.get("workspace") == workspace and s.get("branch") == branch)
         ]
     else:
@@ -269,10 +272,7 @@ def prune_orphaned_sessions() -> int:
     sessions = _load_sessions()
     original_count = len(sessions)
 
-    valid_sessions = [
-        s for s in sessions
-        if Path(s.get("workspace", "")).expanduser().exists()
-    ]
+    valid_sessions = [s for s in sessions if Path(s.get("workspace", "")).expanduser().exists()]
 
     _save_sessions(valid_sessions)
     return original_count - len(valid_sessions)
@@ -289,7 +289,7 @@ def get_claude_sessions_dir() -> Path:
     return Path.home() / ".claude"
 
 
-def get_claude_recent_sessions() -> List[dict]:
+def get_claude_recent_sessions() -> list[dict]:
     """
     Try to get recent sessions from Claude Code's own storage.
 
@@ -304,7 +304,7 @@ def get_claude_recent_sessions() -> List[dict]:
             with open(sessions_file) as f:
                 data = json.load(f)
             return data.get("sessions", [])
-        except (IOError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     return []
@@ -315,7 +315,7 @@ def get_claude_recent_sessions() -> List[dict]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _load_sessions() -> List[dict]:
+def _load_sessions() -> list[dict]:
     """Load sessions from the config file."""
     sessions_file = config.SESSIONS_FILE
 
@@ -324,13 +324,13 @@ def _load_sessions() -> List[dict]:
             with open(sessions_file) as f:
                 data = json.load(f)
             return data.get("sessions", [])
-        except (IOError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     return []
 
 
-def _save_sessions(sessions: List[dict]) -> None:
+def _save_sessions(sessions: list[dict]) -> None:
     """Save sessions to the config file."""
     sessions_file = config.SESSIONS_FILE
 
