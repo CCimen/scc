@@ -1,6 +1,6 @@
 """Tests for config module."""
 
-from sundsvalls_claude.config import deep_merge
+from scc_cli.config import deep_merge
 
 
 class TestDeepMerge:
@@ -60,7 +60,7 @@ class TestLoadSaveConfig:
 
     def test_save_and_load_config(self, temp_config_dir):
         """Config should round-trip through save/load."""
-        from sundsvalls_claude import config
+        from scc_cli import config
 
         test_config = {"version": "1.0.0", "custom": {"key": "value"}}
         config.save_config(test_config)
@@ -70,7 +70,7 @@ class TestLoadSaveConfig:
 
     def test_load_config_returns_defaults_when_missing(self, temp_config_dir):
         """load_config should return defaults when file doesn't exist."""
-        from sundsvalls_claude import config
+        from scc_cli import config
 
         loaded = config.load_config()
         assert "version" in loaded
@@ -78,7 +78,7 @@ class TestLoadSaveConfig:
 
     def test_load_config_handles_malformed_json(self, temp_config_dir):
         """load_config should return defaults for malformed JSON."""
-        from sundsvalls_claude import config
+        from scc_cli import config
 
         # Write invalid JSON
         config_file = temp_config_dir / "config.json"

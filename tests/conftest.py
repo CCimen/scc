@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for sundsvalls-claude tests."""
+"""Shared pytest fixtures for SCC tests."""
 
 import os
 import tempfile
@@ -57,12 +57,12 @@ def temp_git_repo(temp_dir):
 @pytest.fixture
 def temp_config_dir(temp_dir, monkeypatch):
     """Create a temporary config directory and patch config paths."""
-    config_dir = temp_dir / ".config" / "sundsvalls-claude"
+    config_dir = temp_dir / ".config" / "scc-cli"
     config_dir.mkdir(parents=True)
 
-    monkeypatch.setattr("sundsvalls_claude.config.CONFIG_DIR", config_dir)
-    monkeypatch.setattr("sundsvalls_claude.config.CONFIG_FILE", config_dir / "config.json")
-    monkeypatch.setattr("sundsvalls_claude.config.SESSIONS_FILE", config_dir / "sessions.json")
+    monkeypatch.setattr("scc_cli.config.CONFIG_DIR", config_dir)
+    monkeypatch.setattr("scc_cli.config.CONFIG_FILE", config_dir / "config.json")
+    monkeypatch.setattr("scc_cli.config.SESSIONS_FILE", config_dir / "sessions.json")
 
     yield config_dir
 
@@ -135,7 +135,7 @@ def clean_env(monkeypatch):
     """Clean environment variables for testing."""
     # Remove any SCC-related environment variables
     for key in list(os.environ.keys()):
-        if key.startswith("SCC_") or key.startswith("SUNDSVALLS_"):
+        if key.startswith("SCC_"):
             monkeypatch.delenv(key, raising=False)
     yield
 
@@ -156,6 +156,6 @@ def cli_runner():
 @pytest.fixture
 def app():
     """Get the CLI app for testing."""
-    from sundsvalls_claude.cli import app
+    from scc_cli.cli import app
 
     return app

@@ -1,9 +1,9 @@
-class SundsvallsClaude < Formula
+class SccCli < Formula
   include Language::Python::Virtualenv
 
   desc "Safely run Claude Code with team configurations and worktree management"
-  homepage "https://github.com/sundsvalls/claude-code-cli"
-  url "https://github.com/sundsvalls/claude-code-cli/archive/refs/tags/v1.0.0.tar.gz"
+  homepage "https://github.com/CCimen/scc"
+  url "https://github.com/CCimen/scc/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
 
@@ -24,6 +24,6 @@ class SundsvallsClaude < Formula
   end
 
   test do
-    assert_match "Sundsvalls", shell_output("#{bin}/scc --help")
+    assert_match "SCC", shell_output("#{bin}/scc --help")
   end
 end

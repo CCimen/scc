@@ -90,14 +90,14 @@ Why: Generic Python exceptions produce confusing output for non-developers. The 
 
 ### First-run detection over mandatory setup
 
-The CLI checks `~/.config/sundsvalls-claude/config.json` for `setup_completed: true`. If missing, it runs a minimal wizard. No separate install step required.
+The CLI checks `~/.config/scc-cli/config.json` for `setup_completed: true`. If missing, it runs a minimal wizard. No separate install step required.
 
 Why: Reduces friction. Developers can `pip install` and immediately run `scc` without reading documentation.
 
 ## Module structure
 
 ```
-src/sundsvalls_claude/
+src/scc_cli/
     cli.py          Entry point. Typer commands and error handling.
     config.py       Load/save configuration. Merge user config with defaults.
     docker.py       Build docker commands. Container existence checks.
@@ -136,7 +136,7 @@ Note: Session is recorded before `execvp()` because the CLI process is replaced 
 ## File locations
 
 ```
-~/.config/sundsvalls-claude/
+~/.config/scc-cli/
     config.json         User configuration
     sessions.json       Recent sessions with container links
 
@@ -153,7 +153,7 @@ From highest to lowest:
 
 1. Project local: `.claude/settings.local.json` (not committed)
 2. Project shared: `.claude/settings.json` (committed)
-3. Team profile: from `~/.config/sundsvalls-claude/` or GitHub
+3. Team profile: from `~/.config/scc-cli/` or GitHub
 4. Base profile: organization defaults
 5. Claude Code defaults
 

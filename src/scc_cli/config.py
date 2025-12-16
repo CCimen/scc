@@ -10,7 +10,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-CONFIG_DIR = Path.home() / ".config" / "sundsvalls-claude"
+CONFIG_DIR = Path.home() / ".config" / "scc-cli"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 SESSIONS_FILE = CONFIG_DIR / "sessions.json"
 
@@ -18,9 +18,9 @@ SESSIONS_FILE = CONFIG_DIR / "sessions.json"
 DEFAULT_CONFIG = {
     "version": "1.0.0",
     "organization": {
-        "name": "Sundsvalls kommun",
-        "github_org": "sundsvalls",
-        "config_repo": "claude-code-base",
+        "name": "SCC",
+        "github_org": "CCimen",
+        "config_repo": "scc",
     },
     "workspace_base": "~/projects",
     "profiles": {

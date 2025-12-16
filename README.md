@@ -1,6 +1,6 @@
-# Sundsvalls Claude CLI
+# SCC - Sandboxed Claude CLI
 
-A CLI for running Claude Code in Docker sandboxes with team-based configuration and git worktree support. Built for Sundsvalls kommun to standardize AI-assisted development across teams.
+Run Claude Code in Docker sandboxes with team-based configuration and git worktree support.
 
 ## Why this exists
 
@@ -20,13 +20,13 @@ Run `scc doctor` to verify your setup.
 ## Installation
 
 ```bash
-pip install sundsvalls-claude
+pip install scc-cli
 ```
 
 Or with pipx for isolation:
 
 ```bash
-pipx install sundsvalls-claude
+pipx install scc-cli
 ```
 
 ## Quick start
@@ -119,7 +119,7 @@ Run `scc <command> --help` for detailed options.
 
 ## Configuration
 
-Config lives in `~/.config/sundsvalls-claude/config.json`:
+Config lives in `~/.config/scc-cli/config.json`:
 
 ```json
 {

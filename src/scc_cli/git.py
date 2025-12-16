@@ -1067,7 +1067,7 @@ def install_hooks(console: Console) -> None:
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
     pre_push_content = """#!/bin/bash
-# Sundsvalls kommun - Pre-push hook
+# SCC - Pre-push hook
 # Prevents direct pushes to protected branches
 
 PROTECTED_BRANCHES="main master develop production staging"

@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sundsvalls-claude"
+name = "scc-cli"
 version = "1.0.0"
-description = "Safely run Claude Code with team configurations and worktree management"
+description = "Run Claude Code in Docker sandboxes with team configs and git worktree support"
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "Sundsvalls kommun", email = "it@sundsvall.se" }
+    { name = "Cagri Cimen", email = "cagricimeenn@gmail.com" }
 ]
 keywords = ["claude", "ai", "cli", "docker", "git", "worktree"]
 classifiers = [
@@ -40,17 +40,16 @@ dev = [
 ]
 
 [project.scripts]
-sundsvalls-claude = "sundsvalls_claude.cli:main"
-scc = "sundsvalls_claude.cli:main"
+scc = "scc_cli.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/sundsvalls/claude-code-cli"
-Documentation = "https://github.com/sundsvalls/claude-code-cli#readme"
-Repository = "https://github.com/sundsvalls/claude-code-cli"
-Issues = "https://github.com/sundsvalls/claude-code-cli/issues"
+Homepage = "https://github.com/CCimen/scc"
+Documentation = "https://github.com/CCimen/scc#readme"
+Repository = "https://github.com/CCimen/scc"
+Issues = "https://github.com/CCimen/scc/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sundsvalls_claude"]
+packages = ["src/scc_cli"]
 
 [tool.hatch.build.targets.wheel.sources]
 "src" = ""
@@ -63,7 +62,7 @@ include = [
 
 # Include templates in package data
 [tool.hatch.build.targets.wheel.force-include]
-"src/sundsvalls_claude/templates" = "sundsvalls_claude/templates"
+"src/scc_cli/templates" = "scc_cli/templates"
 
 [tool.black]
 line-length = 100
@@ -82,4 +81,4 @@ disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=sundsvalls_claude"
+addopts = "-v --cov=scc_cli"

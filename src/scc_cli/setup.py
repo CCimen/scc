@@ -1,5 +1,5 @@
 """
-First-run setup wizard for Sundsvalls Claude Code.
+First-run setup wizard for SCC - Sandboxed Claude CLI.
 
 Provides a minimal, user-friendly onboarding experience:
 - Prerequisite validation
@@ -35,7 +35,7 @@ from . import platform as platform_module
 WELCOME_BANNER = """
 [cyan]╔═══════════════════════════════════════════════════════════╗[/cyan]
 [cyan]║[/cyan]                                                           [cyan]║[/cyan]
-[cyan]║[/cyan]   [bold white]Welcome to Sundsvalls Claude Code[/bold white]                     [cyan]║[/cyan]
+[cyan]║[/cyan]   [bold white]Welcome to SCC - Sandboxed Claude CLI[/bold white]                [cyan]║[/cyan]
 [cyan]║[/cyan]                                                           [cyan]║[/cyan]
 [cyan]║[/cyan]   [dim]Safe development environment for AI-assisted coding[/dim]   [cyan]║[/cyan]
 [cyan]║[/cyan]                                                           [cyan]║[/cyan]
@@ -45,7 +45,7 @@ WELCOME_BANNER = """
 
 WELCOME_BANNER_SIMPLE = """
 [cyan]┌─────────────────────────────────────────────────────────┐[/cyan]
-[cyan]│[/cyan]  [bold white]Welcome to Sundsvalls Claude Code[/bold white]                    [cyan]│[/cyan]
+[cyan]│[/cyan]  [bold white]Welcome to SCC - Sandboxed Claude CLI[/bold white]               [cyan]│[/cyan]
 [cyan]│[/cyan]  [dim]Safe development environment for AI-assisted coding[/dim]  [cyan]│[/cyan]
 [cyan]└─────────────────────────────────────────────────────────┘[/cyan]
 """
@@ -192,7 +192,7 @@ def install_statusline(console: Console) -> bool:
 
     # Get the status line script from package resources
     try:
-        template_files = importlib.resources.files("sundsvalls_claude.templates")
+        template_files = importlib.resources.files("scc_cli.templates")
         script_content = (template_files / "statusline.sh").read_text()
     except (FileNotFoundError, TypeError):
         # Fallback: read from relative path during development

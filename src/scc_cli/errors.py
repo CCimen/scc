@@ -1,5 +1,5 @@
 """
-Typed exceptions for Sundsvalls Claude CLI.
+Typed exceptions for SCC - Sandboxed Claude CLI.
 
 Error handling philosophy: "One message, one action"
 - Each error has a clear user_message (what went wrong)
@@ -230,7 +230,7 @@ class InternalError(SCCError):
 
     exit_code: int = field(default=5, init=False)
     suggested_action: str = field(
-        default="Please report this issue at https://github.com/sundsvalls/claude-code-cli/issues"
+        default="Please report this issue at https://github.com/CCimen/scc/issues"
     )
 
 

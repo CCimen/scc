@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sundsvalls Kommun - Claude Code CLI
+SCC - Sandboxed Claude CLI
 
 A command-line tool for safely running Claude Code in Docker sandboxes
 with team-specific configurations and worktree management.
@@ -45,7 +45,7 @@ WIDE_MODE_THRESHOLD = 110
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = typer.Typer(
-    name="sundsvalls-claude",
+    name="scc-cli",
     help="Safely run Claude Code with team configurations and worktree management.",
     no_args_is_help=False,
     rich_markup_mode="rich",
@@ -135,7 +135,7 @@ def main_callback(
     ),
 ):
     """
-    [bold cyan]Sundsvalls Kommun[/bold cyan] - Claude Code Environment Manager
+    [bold cyan]SCC[/bold cyan] - Sandboxed Claude CLI
 
     Safely run Claude Code in Docker sandboxes with team configurations.
     """
@@ -143,12 +143,12 @@ def main_callback(
 
     if version:
         try:
-            pkg_version = get_installed_version("sundsvalls-claude")
+            pkg_version = get_installed_version("scc-cli")
         except PackageNotFoundError:
             pkg_version = "unknown"
         console.print(
             Panel(
-                f"[cyan]sundsvalls-claude[/cyan] [dim]v{pkg_version}[/dim]\n"
+                f"[cyan]scc-cli[/cyan] [dim]v{pkg_version}[/dim]\n"
                 "[dim]Safe development environment manager for Claude Code[/dim]",
                 border_style="cyan",
             )
@@ -973,7 +973,7 @@ def config_cmd(
         console.print(
             create_info_panel(
                 "Configuration",
-                "Current settings loaded from ~/.config/sundsvalls-claude/",
+                "Current settings loaded from ~/.config/scc-cli/",
             )
         )
         console.print()
@@ -985,7 +985,7 @@ def config_cmd(
             create_info_panel(
                 "Configuration Help",
                 "Use --show to view current settings\nUse --edit to modify in your editor",
-                "Config location: ~/.config/sundsvalls-claude/config.json",
+                "Config location: ~/.config/scc-cli/config.json",
             )
         )
 
@@ -1015,7 +1015,7 @@ def doctor_cmd(
 @app.command(name="update")
 @handle_errors
 def update_cmd():
-    """Check for updates to sundsvalls-claude CLI."""
+    """Check for updates to scc-cli CLI."""
     from . import update as update_module
 
     with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner="dots"):
@@ -1153,7 +1153,7 @@ def statusline_cmd(
 
         # Get the status line script from package resources
         try:
-            template_files = importlib.resources.files("sundsvalls_claude.templates")
+            template_files = importlib.resources.files("scc_cli.templates")
             script_content = (template_files / "statusline.sh").read_text()
         except (FileNotFoundError, TypeError):
             # Fallback: read from relative path during development

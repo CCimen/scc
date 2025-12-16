@@ -1,4 +1,4 @@
-"""Update checking for sundsvalls-claude CLI (stdlib only)."""
+"""Update checking for scc-cli CLI (stdlib only)."""
 
 import json
 import os
@@ -12,7 +12,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_installed_version
 
 # Package name on PyPI
-PACKAGE_NAME = "sundsvalls-claude"
+PACKAGE_NAME = "scc-cli"
 
 # PyPI JSON API endpoint
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"

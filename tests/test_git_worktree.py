@@ -10,7 +10,7 @@ class TestIsWorktree:
 
     def test_regular_repo_not_worktree(self, tmp_path):
         """Regular repos have .git as directory, not file."""
-        from sundsvalls_claude.git import is_worktree
+        from scc_cli.git import is_worktree
 
         # Create a mock .git directory (regular repo)
         git_dir = tmp_path / ".git"
@@ -20,7 +20,7 @@ class TestIsWorktree:
 
     def test_worktree_has_git_file(self, tmp_path):
         """Worktrees have .git as file containing gitdir pointer."""
-        from sundsvalls_claude.git import is_worktree
+        from scc_cli.git import is_worktree
 
         # Create a mock .git file (worktree)
         git_file = tmp_path / ".git"
@@ -30,7 +30,7 @@ class TestIsWorktree:
 
     def test_no_git_at_all(self, tmp_path):
         """Non-git directories are not worktrees."""
-        from sundsvalls_claude.git import is_worktree
+        from scc_cli.git import is_worktree
 
         # Empty directory
         assert is_worktree(tmp_path) is False
@@ -41,7 +41,7 @@ class TestGetWorktreeMainRepo:
 
     def test_parses_absolute_gitdir(self, tmp_path):
         """Correctly parses absolute gitdir path."""
-        from sundsvalls_claude.git import get_worktree_main_repo
+        from scc_cli.git import get_worktree_main_repo
 
         # Create worktree .git file
         git_file = tmp_path / ".git"
@@ -53,7 +53,7 @@ class TestGetWorktreeMainRepo:
 
     def test_returns_none_for_regular_repo(self, tmp_path):
         """Returns None when .git is a directory."""
-        from sundsvalls_claude.git import get_worktree_main_repo
+        from scc_cli.git import get_worktree_main_repo
 
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
@@ -62,13 +62,13 @@ class TestGetWorktreeMainRepo:
 
     def test_returns_none_for_non_git(self, tmp_path):
         """Returns None when no .git exists."""
-        from sundsvalls_claude.git import get_worktree_main_repo
+        from scc_cli.git import get_worktree_main_repo
 
         assert get_worktree_main_repo(tmp_path) is None
 
     def test_returns_none_for_malformed_git_file(self, tmp_path):
         """Returns None when .git file doesn't have gitdir."""
-        from sundsvalls_claude.git import get_worktree_main_repo
+        from scc_cli.git import get_worktree_main_repo
 
         git_file = tmp_path / ".git"
         git_file.write_text("invalid content")
@@ -81,7 +81,7 @@ class TestGetWorkspaceMountPath:
 
     def test_regular_repo_unchanged(self, tmp_path):
         """Regular repos return unchanged path."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Create regular repo
         git_dir = tmp_path / ".git"
@@ -97,7 +97,7 @@ class TestGetWorkspaceMountPath:
         Uses mocking to simulate a realistic user workspace structure
         since pytest temp dirs are in system paths that get blocked.
         """
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Simulate paths like a real user workspace:
         # /Users/dev/projects/myproject                  (main repo)
@@ -110,8 +110,8 @@ class TestGetWorkspaceMountPath:
         # Mock is_worktree to return True
         # Mock get_worktree_main_repo to return the fake main repo
         # Mock Path.resolve to return the same path (simulate resolved paths)
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Common parent should be /Users/dev/projects (depth 4, allowed)
             assert mount_path == fake_base
@@ -119,7 +119,7 @@ class TestGetWorkspaceMountPath:
 
     def test_safety_rejects_root_mount(self, tmp_path):
         """Doesn't mount system root directories."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Simulate a worktree whose common parent would be /
         worktree = tmp_path / "worktree"
@@ -135,7 +135,7 @@ class TestGetWorkspaceMountPath:
 
     def test_safety_rejects_home_mount(self, tmp_path):
         """Doesn't mount /home or /Users."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Create a worktree pointing to main repo at totally different location
         worktree = tmp_path / "worktree"
@@ -151,7 +151,7 @@ class TestGetWorkspaceMountPath:
 
     def test_non_git_unchanged(self, tmp_path):
         """Non-git directories return unchanged."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         mount_path, is_expanded = get_workspace_mount_path(tmp_path)
         assert mount_path == tmp_path
@@ -167,7 +167,7 @@ class TestGetWorkspaceMountPath:
         - Must have single-letter drive (a-z)
         - Must have depth >= 5 (conservative for safety)
         """
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Simulate WSL2 paths:
         # /mnt/c/Users/dev/projects/myproject                  (main repo)
@@ -177,8 +177,8 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "myproject-worktrees" / "feature"
         fake_main_repo = fake_base / "myproject"
 
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Common parent should be /mnt/c/Users/dev/projects (depth 6, allowed)
             assert mount_path == fake_base
@@ -186,7 +186,7 @@ class TestGetWorkspaceMountPath:
 
     def test_safety_rejects_shallow_mnt_path(self):
         """Doesn't mount shallow WSL2 paths like /mnt/c or /mnt/c/repo."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Simulate a worktree whose common parent would be too shallow under /mnt
         # /mnt/c/repo and /mnt/c/worktrees would have common parent /mnt/c (depth 3)
@@ -194,8 +194,8 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back to original path - /mnt/c is too broad (depth 3)
             assert mount_path == fake_worktree
@@ -203,7 +203,7 @@ class TestGetWorkspaceMountPath:
 
     def test_safety_rejects_depth4_mnt_path(self):
         """Doesn't mount depth-4 WSL2 paths like /mnt/c/dev (conservative)."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # /mnt/c/dev (depth 4) is still blocked - we require depth 5+
         # This prevents mounting too broadly on the Windows filesystem
@@ -211,8 +211,8 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back - /mnt/c/dev is depth 4, we require >= 5
             assert mount_path == fake_worktree
@@ -220,7 +220,7 @@ class TestGetWorkspaceMountPath:
 
     def test_safety_rejects_non_drive_mnt_paths(self):
         """Doesn't allow /mnt/<non-drive> paths like /mnt/nfs, /mnt/wsl."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # /mnt/nfs/... - "nfs" is not a single-letter drive
         # This blocks Linux mount points that happen to be deep
@@ -228,8 +228,8 @@ class TestGetWorkspaceMountPath:
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back - "nfs" is not a single-letter drive
             assert mount_path == fake_worktree
@@ -237,15 +237,15 @@ class TestGetWorkspaceMountPath:
 
     def test_safety_rejects_wsl_internal_paths(self):
         """Doesn't allow /mnt/wsl/... or /mnt/wslg/... internal paths."""
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # /mnt/wsl/distro/... - WSL internal paths should be blocked
         fake_base = Path("/mnt/wsl/distro/home/user")
         fake_worktree = fake_base / "worktrees" / "feature"
         fake_main_repo = fake_base / "repo"
 
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo):
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Should fall back - "wsl" is not a single-letter drive
             assert mount_path == fake_worktree
@@ -258,7 +258,7 @@ class TestGetWorkspaceMountPath:
         need to mock Path.resolve() to simulate Linux behavior where /home
         is a real directory.
         """
-        from sundsvalls_claude.git import get_workspace_mount_path
+        from scc_cli.git import get_workspace_mount_path
 
         # Simulate Linux paths:
         # /home/user/projects/myproject                  (main repo)
@@ -272,8 +272,8 @@ class TestGetWorkspaceMountPath:
         def mock_resolve(self):
             return self
 
-        with patch('sundsvalls_claude.git.is_worktree', return_value=True), \
-             patch('sundsvalls_claude.git.get_worktree_main_repo', return_value=fake_main_repo), \
+        with patch('scc_cli.git.is_worktree', return_value=True), \
+             patch('scc_cli.git.get_worktree_main_repo', return_value=fake_main_repo), \
              patch.object(Path, 'resolve', mock_resolve):
             mount_path, is_expanded = get_workspace_mount_path(fake_worktree)
             # Common parent should be /home/user/projects (depth 4, allowed)

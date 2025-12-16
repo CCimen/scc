@@ -5,7 +5,7 @@ import urllib.error
 from importlib.metadata import PackageNotFoundError
 from unittest.mock import MagicMock, patch
 
-from sundsvalls_claude.update import (
+from scc_cli.update import (
     PACKAGE_NAME,
     _compare_versions,
     _detect_install_method,
@@ -150,7 +150,7 @@ class TestDetectInstallMethod:
         """Pipx environment should be detected from sys.prefix."""
         with (
             patch("importlib.metadata.distribution", side_effect=Exception()),
-            patch("sys.prefix", "/home/user/.local/pipx/venvs/sundsvalls-claude"),
+            patch("sys.prefix", "/home/user/.local/pipx/venvs/scc-cli"),
             patch.dict("os.environ", {}, clear=True),
             patch("shutil.which", return_value=None),
         ):
@@ -265,13 +265,13 @@ class TestGetCurrentVersion:
     def test_returns_installed_version(self):
         """Should return the installed version."""
         # Patch where it's imported, not where it's defined
-        with patch("sundsvalls_claude.update.get_installed_version", return_value="1.2.3"):
+        with patch("scc_cli.update.get_installed_version", return_value="1.2.3"):
             result = _get_current_version()
             assert result == "1.2.3"
 
     def test_returns_fallback_on_error(self):
         """Should return 0.0.0 when package not found."""
-        with patch("sundsvalls_claude.update.get_installed_version", side_effect=PackageNotFoundError()):
+        with patch("scc_cli.update.get_installed_version", side_effect=PackageNotFoundError()):
             result = _get_current_version()
             assert result == "0.0.0"
 
@@ -282,9 +282,9 @@ class TestCheckForUpdates:
     def test_update_available(self):
         """Should detect when update is available."""
         with (
-            patch("sundsvalls_claude.update._get_current_version", return_value="1.0.0"),
-            patch("sundsvalls_claude.update._fetch_latest_from_pypi", return_value="2.0.0"),
-            patch("sundsvalls_claude.update._detect_install_method", return_value="pip"),
+            patch("scc_cli.update._get_current_version", return_value="1.0.0"),
+            patch("scc_cli.update._fetch_latest_from_pypi", return_value="2.0.0"),
+            patch("scc_cli.update._detect_install_method", return_value="pip"),
         ):
             result = check_for_updates()
             assert result.current == "1.0.0"
@@ -295,9 +295,9 @@ class TestCheckForUpdates:
     def test_no_update_available(self):
         """Should detect when no update is available."""
         with (
-            patch("sundsvalls_claude.update._get_current_version", return_value="2.0.0"),
-            patch("sundsvalls_claude.update._fetch_latest_from_pypi", return_value="2.0.0"),
-            patch("sundsvalls_claude.update._detect_install_method", return_value="pip"),
+            patch("scc_cli.update._get_current_version", return_value="2.0.0"),
+            patch("scc_cli.update._fetch_latest_from_pypi", return_value="2.0.0"),
+            patch("scc_cli.update._detect_install_method", return_value="pip"),
         ):
             result = check_for_updates()
             assert result.update_available is False
@@ -305,9 +305,9 @@ class TestCheckForUpdates:
     def test_network_failure_graceful(self):
         """Network failure should result in update_available=False."""
         with (
-            patch("sundsvalls_claude.update._get_current_version", return_value="1.0.0"),
-            patch("sundsvalls_claude.update._fetch_latest_from_pypi", return_value=None),
-            patch("sundsvalls_claude.update._detect_install_method", return_value="pip"),
+            patch("scc_cli.update._get_current_version", return_value="1.0.0"),
+            patch("scc_cli.update._fetch_latest_from_pypi", return_value=None),
+            patch("scc_cli.update._detect_install_method", return_value="pip"),
         ):
             result = check_for_updates()
             assert result.latest is None
@@ -316,9 +316,9 @@ class TestCheckForUpdates:
     def test_prerelease_update_detection(self):
         """Pre-release installed, final available should show update - CRITICAL."""
         with (
-            patch("sundsvalls_claude.update._get_current_version", return_value="1.0.0rc1"),
-            patch("sundsvalls_claude.update._fetch_latest_from_pypi", return_value="1.0.0"),
-            patch("sundsvalls_claude.update._detect_install_method", return_value="pip"),
+            patch("scc_cli.update._get_current_version", return_value="1.0.0rc1"),
+            patch("scc_cli.update._fetch_latest_from_pypi", return_value="1.0.0"),
+            patch("scc_cli.update._detect_install_method", return_value="pip"),
         ):
             result = check_for_updates()
             assert result.update_available is True

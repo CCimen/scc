@@ -295,66 +295,66 @@ def get_config_dir() -> Path:
     """
     Get the platform-appropriate configuration directory.
 
-    - macOS: ~/Library/Application Support/sundsvalls-claude
-    - Linux/WSL2: ~/.config/sundsvalls-claude
-    - Windows: %APPDATA%\\sundsvalls-claude
+    - macOS: ~/Library/Application Support/scc-cli
+    - Linux/WSL2: ~/.config/scc-cli
+    - Windows: %APPDATA%\\scc-cli
     """
     if is_macos():
-        return Path.home() / "Library" / "Application Support" / "sundsvalls-claude"
+        return Path.home() / "Library" / "Application Support" / "scc-cli"
     elif is_windows():
         appdata = os.environ.get("APPDATA")
         if appdata:
-            return Path(appdata) / "sundsvalls-claude"
-        return Path.home() / "AppData" / "Roaming" / "sundsvalls-claude"
+            return Path(appdata) / "scc-cli"
+        return Path.home() / "AppData" / "Roaming" / "scc-cli"
     else:
         # Linux, WSL2
         xdg_config = os.environ.get("XDG_CONFIG_HOME")
         if xdg_config:
-            return Path(xdg_config) / "sundsvalls-claude"
-        return Path.home() / ".config" / "sundsvalls-claude"
+            return Path(xdg_config) / "scc-cli"
+        return Path.home() / ".config" / "scc-cli"
 
 
 def get_cache_dir() -> Path:
     """
     Get the platform-appropriate cache directory.
 
-    - macOS: ~/Library/Caches/sundsvalls-claude
-    - Linux/WSL2: ~/.cache/sundsvalls-claude
-    - Windows: %LOCALAPPDATA%\\sundsvalls-claude\\cache
+    - macOS: ~/Library/Caches/scc-cli
+    - Linux/WSL2: ~/.cache/scc-cli
+    - Windows: %LOCALAPPDATA%\\scc-cli\\cache
     """
     if is_macos():
-        return Path.home() / "Library" / "Caches" / "sundsvalls-claude"
+        return Path.home() / "Library" / "Caches" / "scc-cli"
     elif is_windows():
         localappdata = os.environ.get("LOCALAPPDATA")
         if localappdata:
-            return Path(localappdata) / "sundsvalls-claude" / "cache"
-        return Path.home() / "AppData" / "Local" / "sundsvalls-claude" / "cache"
+            return Path(localappdata) / "scc-cli" / "cache"
+        return Path.home() / "AppData" / "Local" / "scc-cli" / "cache"
     else:
         # Linux, WSL2
         xdg_cache = os.environ.get("XDG_CACHE_HOME")
         if xdg_cache:
-            return Path(xdg_cache) / "sundsvalls-claude"
-        return Path.home() / ".cache" / "sundsvalls-claude"
+            return Path(xdg_cache) / "scc-cli"
+        return Path.home() / ".cache" / "scc-cli"
 
 
 def get_data_dir() -> Path:
     """
     Get the platform-appropriate data directory.
 
-    - macOS: ~/Library/Application Support/sundsvalls-claude
-    - Linux/WSL2: ~/.local/share/sundsvalls-claude
-    - Windows: %LOCALAPPDATA%\\sundsvalls-claude\\data
+    - macOS: ~/Library/Application Support/scc-cli
+    - Linux/WSL2: ~/.local/share/scc-cli
+    - Windows: %LOCALAPPDATA%\\scc-cli\\data
     """
     if is_macos():
-        return Path.home() / "Library" / "Application Support" / "sundsvalls-claude"
+        return Path.home() / "Library" / "Application Support" / "scc-cli"
     elif is_windows():
         localappdata = os.environ.get("LOCALAPPDATA")
         if localappdata:
-            return Path(localappdata) / "sundsvalls-claude" / "data"
-        return Path.home() / "AppData" / "Local" / "sundsvalls-claude" / "data"
+            return Path(localappdata) / "scc-cli" / "data"
+        return Path.home() / "AppData" / "Local" / "scc-cli" / "data"
     else:
         # Linux, WSL2
         xdg_data = os.environ.get("XDG_DATA_HOME")
         if xdg_data:
-            return Path(xdg_data) / "sundsvalls-claude"
-        return Path.home() / ".local" / "share" / "sundsvalls-claude"
+            return Path(xdg_data) / "scc-cli"
+        return Path.home() / ".local" / "share" / "scc-cli"

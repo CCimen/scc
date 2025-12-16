@@ -3,7 +3,7 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from sundsvalls_claude.subprocess_utils import (
+from scc_cli.subprocess_utils import (
     run_command,
     run_command_bool,
     run_command_lines,
