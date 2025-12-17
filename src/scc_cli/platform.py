@@ -57,7 +57,8 @@ def is_wsl2() -> bool:
     """
     Detect if running in WSL2 environment.
 
-    Checks /proc/version for Microsoft kernel signature.
+    WSL2 has 'wsl2' in /proc/version (e.g., 'microsoft-standard-WSL2').
+    WSL1 only has 'Microsoft' without 'wsl2' marker.
     """
     if sys.platform != "linux":
         return False
@@ -65,7 +66,8 @@ def is_wsl2() -> bool:
     try:
         with open("/proc/version") as f:
             version_info = f.read().lower()
-            return "microsoft" in version_info or "wsl" in version_info
+            # WSL2 specifically contains 'wsl2' in the kernel version
+            return "wsl2" in version_info
     except (FileNotFoundError, PermissionError, OSError):
         return False
 
@@ -74,16 +76,16 @@ def is_wsl1() -> bool:
     """
     Detect if running in WSL1 (legacy) environment.
 
-    WSL1 has "Microsoft" but not "WSL2" in /proc/version.
+    WSL1 has 'Microsoft' in /proc/version but NOT 'wsl2'.
     """
-    if not is_wsl2():
+    if sys.platform != "linux":
         return False
 
     try:
         with open("/proc/version") as f:
             version_info = f.read().lower()
-            # WSL2 typically has "wsl2" in the version
-            return "wsl2" not in version_info and "microsoft" in version_info
+            # WSL1 has 'microsoft' but NOT 'wsl2'
+            return "microsoft" in version_info and "wsl2" not in version_info
     except (FileNotFoundError, PermissionError, OSError):
         return False
 
