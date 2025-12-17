@@ -1,0 +1,71 @@
+name: Branch CI
+
+# Fast feedback CI for feature branches + PR gate before merge to main
+# Triggers:
+#   1. Push to feature/fix/hotfix branches → immediate feedback
+#   2. Pull request to main → merge gate (all checks must pass)
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'fix/**'
+      - 'hotfix/**'
+      - 'refactor/**'
+      - 'chore/**'
+  pull_request:
+    branches:
+      - main
+
+# Cancel in-progress runs on new pushes to same branch/PR
+# Uses PR number when available, otherwise branch ref (handles both push and PR events correctly)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege permissions
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check linting (ruff check)
+        uses: astral-sh/ruff-action@v3
+
+      - name: Check formatting (ruff format)
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check --diff"
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Run in parallel with lint for faster feedback
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --extra dev --locked
+
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short
