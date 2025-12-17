@@ -37,7 +37,9 @@ class TestPromptOrgUrl:
             result = setup.prompt_org_url(mock_console)
         assert result == "https://example.org/config.json"
         # Should have shown error message for HTTP
-        mock_console.print.assert_any_call("[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]")
+        mock_console.print.assert_any_call(
+            "[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]"
+        )
 
     def test_returns_none_for_standalone(self):
         """Should return None when user chooses standalone mode."""

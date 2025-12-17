@@ -94,9 +94,7 @@ class TestPathConstants:
 class TestMigration:
     """Tests for config migration from scc-cli to scc."""
 
-    def test_migrate_when_only_legacy_exists(
-        self, temp_home, legacy_config_dir, new_config_dir
-    ):
+    def test_migrate_when_only_legacy_exists(self, temp_home, legacy_config_dir, new_config_dir):
         """Should migrate from legacy to new when only legacy exists."""
         import importlib
 
@@ -119,9 +117,7 @@ class TestMigration:
         migrated = json.loads((new_config_dir / "config.json").read_text())
         assert migrated["selected_profile"] == "platform"
 
-    def test_migrate_preserves_legacy_directory(
-        self, temp_home, legacy_config_dir, new_config_dir
-    ):
+    def test_migrate_preserves_legacy_directory(self, temp_home, legacy_config_dir, new_config_dir):
         """Migration should preserve legacy directory (not delete it)."""
         import importlib
 
@@ -139,9 +135,7 @@ class TestMigration:
         assert legacy_config_dir.exists()
         assert (legacy_config_dir / "config.json").exists()
 
-    def test_migrate_skips_when_new_exists(
-        self, temp_home, legacy_config_dir, new_config_dir
-    ):
+    def test_migrate_skips_when_new_exists(self, temp_home, legacy_config_dir, new_config_dir):
         """Should skip migration if new config dir already exists."""
         import importlib
 
@@ -365,9 +359,7 @@ class TestSaveUserConfig:
 class TestProfileSelection:
     """Tests for get_selected_profile and set_selected_profile."""
 
-    def test_get_selected_profile_returns_none_by_default(
-        self, temp_home, new_config_dir
-    ):
+    def test_get_selected_profile_returns_none_by_default(self, temp_home, new_config_dir):
         """Should return None when no profile is selected."""
         import importlib
 
@@ -414,9 +406,7 @@ class TestProfileSelection:
         result = config.get_selected_profile()
         assert result == "api"
 
-    def test_set_selected_profile_preserves_other_config(
-        self, temp_home, new_config_dir
-    ):
+    def test_set_selected_profile_preserves_other_config(self, temp_home, new_config_dir):
         """Setting profile should not overwrite other config."""
         import importlib
 
@@ -448,9 +438,7 @@ class TestProfileSelection:
 class TestStandaloneMode:
     """Tests for is_standalone_mode function."""
 
-    def test_is_standalone_mode_returns_false_by_default(
-        self, temp_home, new_config_dir
-    ):
+    def test_is_standalone_mode_returns_false_by_default(self, temp_home, new_config_dir):
         """Should return False when not explicitly set."""
         import importlib
 
@@ -481,9 +469,7 @@ class TestStandaloneMode:
 
         assert result is True
 
-    def test_is_standalone_mode_returns_false_when_org_source_set(
-        self, temp_home, new_config_dir
-    ):
+    def test_is_standalone_mode_returns_false_when_org_source_set(self, temp_home, new_config_dir):
         """Should return False when organization_source is configured."""
         import importlib
 

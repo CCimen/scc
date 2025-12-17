@@ -15,12 +15,9 @@ Test coverage targets:
 
 import os
 import subprocess
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -257,7 +254,7 @@ class TestShellInjectionPrevention:
                 stderr="",
             )
             with patch("shutil.which", return_value="/bin/echo"):
-                result = resolve_auth(f"command:{malicious_cmd}")
+                resolve_auth(f"command:{malicious_cmd}")
 
             # The pipe should be treated as a literal argument, not shell operator
             # With shell=False, this is safe

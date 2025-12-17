@@ -19,7 +19,7 @@ from rich.prompt import Confirm, Prompt
 from rich.status import Status
 from rich.table import Table
 
-from . import config, deps, docker, doctor, git, profiles, remote, sessions, setup, teams, ui
+from . import config, deps, docker, doctor, git, sessions, setup, teams, ui
 from . import platform as platform_module
 from .errors import (
     NotAGitRepoError,
@@ -231,12 +231,8 @@ def start(
     install_deps: bool = typer.Option(
         False, "--install-deps", help="Install dependencies before starting"
     ),
-    offline: bool = typer.Option(
-        False, "--offline", help="Use cached config only (error if none)"
-    ),
-    standalone: bool = typer.Option(
-        False, "--standalone", help="Run without organization config"
-    ),
+    offline: bool = typer.Option(False, "--offline", help="Use cached config only (error if none)"),
+    standalone: bool = typer.Option(False, "--standalone", help="Run without organization config"),
 ):
     """
     Start Claude Code in a Docker sandbox.
@@ -804,7 +800,9 @@ def _sync_teams(cfg: dict, team_name: str | None) -> None:
 @handle_errors
 def sessions_cmd(
     limit: int = typer.Option(10, "-n", "--limit", help="Number of sessions to show"),
-    select: bool = typer.Option(False, "--select", "-s", help="Interactive picker to select a session"),
+    select: bool = typer.Option(
+        False, "--select", "-s", help="Interactive picker to select a session"
+    ),
 ):
     """List recent Claude Code sessions."""
     recent = sessions.list_recent(limit)
@@ -1001,10 +999,14 @@ def stop_cmd(
 def setup_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick setup with defaults"),
     reset: bool = typer.Option(False, "--reset", help="Reset configuration"),
-    org_url: str | None = typer.Option(None, "--org-url", help="Organization config URL (for non-interactive)"),
+    org_url: str | None = typer.Option(
+        None, "--org-url", help="Organization config URL (for non-interactive)"
+    ),
     team: str | None = typer.Option(None, "--team", "-t", help="Team profile to select"),
     auth: str | None = typer.Option(None, "--auth", help="Auth spec (env:VAR or command:CMD)"),
-    standalone: bool = typer.Option(False, "--standalone", help="Standalone mode (no organization)"),
+    standalone: bool = typer.Option(
+        False, "--standalone", help="Standalone mode (no organization)"
+    ),
 ):
     """Run initial setup wizard.
 
@@ -1164,9 +1166,7 @@ def doctor_cmd(
 @app.command(name="update")
 @handle_errors
 def update_cmd(
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Force check even if recently checked"
-    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Force check even if recently checked"),
 ):
     """Check for updates to scc-cli CLI and organization config."""
     from . import update as update_module

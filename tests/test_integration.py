@@ -12,8 +12,7 @@ Tests are organized by workflow, not by module, to catch integration issues.
 import json
 import subprocess
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -205,21 +204,21 @@ class TestStartWorkflow:
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)
-            ),
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
             patch(
                 "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
             ) as mock_get_container,
-            patch("scc_cli.cli.docker.run") as mock_run,
+            patch("scc_cli.cli.docker.run"),
         ):
-            result = runner.invoke(app, ["start", str(git_workspace)])
+            runner.invoke(app, ["start", str(git_workspace)])
 
         # Docker should be called
         mock_get_container.assert_called_once()
 
-    def test_start_with_team_resolves_profile(self, full_config_environment, git_workspace, sample_org_config):
+    def test_start_with_team_resolves_profile(
+        self, full_config_environment, git_workspace, sample_org_config
+    ):
         """Start with --team should resolve profile from org config."""
         config_dir = full_config_environment["config_dir"]
         config_file = config_dir / "config.json"
@@ -241,13 +240,9 @@ class TestStartWorkflow:
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="feature-x"),
-            patch(
-                "scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)
-            ),
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
-            ),
+            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
             patch("scc_cli.cli.docker.run"),
         ):
             mock_load_config.return_value = {
@@ -309,7 +304,7 @@ class TestSessionWorkflow:
     def test_continue_session_auto_selects_recent(self, full_config_environment, git_workspace):
         """--continue without workspace should use most recent session."""
         config_dir = full_config_environment["config_dir"]
-        sessions_file = config_dir / "sessions.json"
+        config_dir / "sessions.json"
 
         with (
             patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
@@ -318,13 +313,9 @@ class TestSessionWorkflow:
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)
-            ),
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
-            ),
+            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
             patch("scc_cli.cli.docker.run"),
         ):
             mock_recent.return_value = {
@@ -395,7 +386,7 @@ class TestTeamsWorkflow:
                 {"name": "platform", "description": "Platform team"},
             ]
 
-            result = runner.invoke(app, ["teams", "--sync"])
+            runner.invoke(app, ["teams", "--sync"])
 
         # Should have called load_org_config with force_refresh=True
         if mock_remote.called:
@@ -417,7 +408,7 @@ class TestDoctorWorkflow:
             patch("scc_cli.cli.doctor.run_doctor") as mock_doctor,
         ):
             mock_doctor.return_value = None
-            result = runner.invoke(app, ["doctor"])
+            runner.invoke(app, ["doctor"])
 
         # Should have called the doctor check
         mock_doctor.assert_called()
@@ -441,9 +432,7 @@ class TestWorktreeWorkflow:
             worktree_path = git_workspace.parent / "claude" / "feature-x"
             mock_create.return_value = worktree_path
 
-            result = runner.invoke(
-                app, ["worktree", str(git_workspace), "feature-x", "--no-start"]
-            )
+            runner.invoke(app, ["worktree", str(git_workspace), "feature-x", "--no-start"])
 
         mock_create.assert_called_once()
 
@@ -460,7 +449,7 @@ class TestWorktreeWorkflow:
         ):
             mock_deps.return_value = True
 
-            result = runner.invoke(
+            runner.invoke(
                 app,
                 ["worktree", str(git_workspace), "feature-x", "--install-deps", "--no-start"],
             )
@@ -528,13 +517,9 @@ class TestOfflineWorkflow:
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)
-            ),
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
-            ),
+            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
             patch("scc_cli.cli.docker.run"),
         ):
             mock_load_config.return_value = {
@@ -542,7 +527,7 @@ class TestOfflineWorkflow:
             }
             mock_remote.return_value = {"organization": {"name": "Test"}}
 
-            result = runner.invoke(app, ["start", str(git_workspace), "--offline"])
+            runner.invoke(app, ["start", str(git_workspace), "--offline"])
 
         # Should have passed offline=True to remote
         if mock_remote.called:
@@ -567,16 +552,12 @@ class TestStandaloneWorkflow:
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)
-            ),
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
-            ),
+            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
             patch("scc_cli.cli.docker.run"),
         ):
-            result = runner.invoke(app, ["start", str(git_workspace), "--standalone"])
+            runner.invoke(app, ["start", str(git_workspace), "--standalone"])
 
         # Should NOT have called load_org_config
         mock_remote.assert_not_called()
@@ -601,19 +582,15 @@ class TestDepsWorkflow:
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)
-            ),
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
-            ),
+            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
             patch("scc_cli.cli.docker.run"),
             patch("scc_cli.cli.deps.auto_install_dependencies") as mock_deps,
         ):
             mock_deps.return_value = True
 
-            result = runner.invoke(app, ["start", str(git_workspace), "--install-deps"])
+            runner.invoke(app, ["start", str(git_workspace), "--install-deps"])
 
         mock_deps.assert_called_once()
 
@@ -653,7 +630,7 @@ class TestDataFlowIntegration:
         with patch("scc_cli.sessions.config.SESSIONS_FILE", sessions_file):
             # Record a session
             sessions._save_sessions([])  # Initialize
-            record = sessions.record_session(
+            sessions.record_session(
                 workspace="/tmp/test-proj",
                 team="platform",
                 session_name="test-session",

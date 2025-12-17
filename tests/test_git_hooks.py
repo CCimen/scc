@@ -8,13 +8,9 @@ These tests verify the new architecture requirements:
 """
 
 import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from scc_cli import git
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for SCC_HOOK_MARKER

@@ -57,9 +57,7 @@ def resolve_profile(org_config: dict, profile_name: str) -> dict:
 
     if profile_name not in profiles:
         available = ", ".join(sorted(profiles.keys())) or "(none)"
-        raise ValueError(
-            f"Profile '{profile_name}' not found. Available: {available}"
-        )
+        raise ValueError(f"Profile '{profile_name}' not found. Available: {available}")
 
     profile_info = profiles[profile_name]
     return {"name": profile_name, **profile_info}

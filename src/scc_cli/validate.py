@@ -103,9 +103,7 @@ def parse_semver(version_string: str) -> tuple[int, int, int]:
         raise ValueError(f"Invalid semver format: {version_string}") from e
 
 
-def check_schema_version(
-    config_version: str, cli_version: str
-) -> tuple[bool, str | None]:
+def check_schema_version(config_version: str, cli_version: str) -> tuple[bool, str | None]:
     """
     Check schema version compatibility.
 
@@ -145,9 +143,7 @@ def check_schema_version(
     return (True, None)
 
 
-def check_min_cli_version(
-    min_version: str, cli_version: str
-) -> tuple[bool, str | None]:
+def check_min_cli_version(min_version: str, cli_version: str) -> tuple[bool, str | None]:
     """
     Check if CLI meets minimum version requirement.
 

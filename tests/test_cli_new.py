@@ -8,9 +8,8 @@ These tests verify the new architecture requirements:
 - sessions command: interactive picker
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
@@ -127,7 +126,7 @@ class TestStartCommand:
             patch("scc_cli.cli.deps.auto_install_dependencies") as mock_deps,
         ):
             mock_deps.return_value = True
-            result = runner.invoke(app, ["start", str(tmp_path), "--install-deps"])
+            runner.invoke(app, ["start", str(tmp_path), "--install-deps"])
         # Should have called auto_install_dependencies
         mock_deps.assert_called_once()
 
@@ -146,7 +145,7 @@ class TestStartCommand:
             patch("scc_cli.cli.docker.run"),
         ):
             mock_remote.return_value = {"organization": {"name": "Test"}}
-            result = runner.invoke(app, ["start", str(tmp_path), "--offline"])
+            runner.invoke(app, ["start", str(tmp_path), "--offline"])
         # Should have passed offline=True to load_org_config
         if mock_remote.called:
             call_kwargs = mock_remote.call_args[1]
@@ -166,7 +165,7 @@ class TestStartCommand:
             patch("scc_cli.cli.docker.run"),
             patch("scc_cli.cli.remote.load_org_config") as mock_remote,
         ):
-            result = runner.invoke(app, ["start", str(tmp_path), "--standalone"])
+            runner.invoke(app, ["start", str(tmp_path), "--standalone"])
         # Should NOT have called load_org_config
         mock_remote.assert_not_called()
 
@@ -191,7 +190,7 @@ class TestWorktreeCommand:
             patch("scc_cli.cli.Confirm.ask", return_value=False),  # Don't start claude
         ):
             mock_deps.return_value = True
-            result = runner.invoke(
+            runner.invoke(
                 app, ["worktree", str(tmp_path), "feature-x", "--install-deps", "--no-start"]
             )
         mock_deps.assert_called_once_with(worktree_path)
@@ -208,7 +207,12 @@ class TestSessionsCommand:
     def test_sessions_shows_recent_sessions(self):
         """Should list recent sessions."""
         mock_sessions = [
-            {"name": "session1", "workspace": "/tmp/proj1", "last_used": "2025-01-01", "team": "dev"},
+            {
+                "name": "session1",
+                "workspace": "/tmp/proj1",
+                "last_used": "2025-01-01",
+                "team": "dev",
+            },
         ]
         with patch("scc_cli.cli.sessions.list_recent", return_value=mock_sessions):
             result = runner.invoke(app, ["sessions"])
@@ -226,7 +230,7 @@ class TestSessionsCommand:
             patch("scc_cli.cli.ui.select_session") as mock_select,
         ):
             mock_select.return_value = mock_sessions[0]
-            result = runner.invoke(app, ["sessions", "--select"])
+            runner.invoke(app, ["sessions", "--select"])
         # Should have called select_session for interactive picker
         mock_select.assert_called_once()
 
@@ -249,7 +253,7 @@ class TestTeamsCommand:
             mock_cfg.return_value = {"organization_source": {"url": "https://example.org"}}
             mock_remote.return_value = {"profiles": {"dev": {}}}
             mock_list.return_value = [{"name": "dev", "description": "Dev team"}]
-            result = runner.invoke(app, ["teams", "--sync"])
+            runner.invoke(app, ["teams", "--sync"])
         # Should call load_org_config with force_refresh=True
         if mock_remote.called:
             call_kwargs = mock_remote.call_args[1]

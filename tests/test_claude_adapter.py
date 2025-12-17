@@ -15,7 +15,6 @@ import pytest
 from scc_cli import claude_adapter
 from scc_cli.claude_adapter import AuthResult
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Fixtures
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -141,9 +140,7 @@ class TestResolveAuthWithName:
     def test_resolve_command_auth_blocked_by_default(self):
         """SECURITY: Command auth should be blocked by default to prevent RCE."""
         # Default behavior (allow_command=False) blocks command execution
-        token, env_name = claude_adapter.resolve_auth_with_name(
-            "command:echo secret"
-        )
+        token, env_name = claude_adapter.resolve_auth_with_name("command:echo secret")
         # Returns None because command auth is not allowed
         assert token is None
         assert env_name is None
@@ -255,9 +252,7 @@ class TestBuildClaudeSettings:
         assert "extraKnownMarketplaces" in settings
         assert "enabledPlugins" in settings
 
-    def test_extra_known_marketplaces_structure(
-        self, sample_profile, gitlab_marketplace
-    ):
+    def test_extra_known_marketplaces_structure(self, sample_profile, gitlab_marketplace):
         """extraKnownMarketplaces should have correct structure."""
         settings = claude_adapter.build_claude_settings(
             sample_profile, gitlab_marketplace, "test-org"
@@ -283,13 +278,9 @@ class TestBuildClaudeSettings:
         assert "my-org" in settings["extraKnownMarketplaces"]
         assert "public" not in settings["extraKnownMarketplaces"]
 
-    def test_marketplace_key_uses_name_if_no_org(
-        self, sample_profile, github_marketplace
-    ):
+    def test_marketplace_key_uses_name_if_no_org(self, sample_profile, github_marketplace):
         """Marketplace key should fall back to marketplace name."""
-        settings = claude_adapter.build_claude_settings(
-            sample_profile, github_marketplace, None
-        )
+        settings = claude_adapter.build_claude_settings(sample_profile, github_marketplace, None)
 
         assert "public" in settings["extraKnownMarketplaces"]
 
@@ -319,9 +310,7 @@ class TestBuildClaudeSettings:
         url = settings["extraKnownMarketplaces"]["test-org"]["url"]
         assert url == "https://gitlab.example.org/group/claude-marketplace"
 
-    def test_no_plugin_returns_empty_enabled(
-        self, sample_profile_no_plugin, github_marketplace
-    ):
+    def test_no_plugin_returns_empty_enabled(self, sample_profile_no_plugin, github_marketplace):
         """Profile without plugin should have empty enabledPlugins."""
         settings = claude_adapter.build_claude_settings(
             sample_profile_no_plugin, github_marketplace, "org"
@@ -405,9 +394,7 @@ class TestInjectCredentials:
                 mock_run.return_value.stdout = "trusted-secret\n"
 
                 # Explicitly allow command auth
-                claude_adapter.inject_credentials(
-                    marketplace, docker_env, allow_command=True
-                )
+                claude_adapter.inject_credentials(marketplace, docker_env, allow_command=True)
 
         assert "GITLAB_TOKEN" in docker_env
         assert docker_env["GITLAB_TOKEN"] == "trusted-secret"
@@ -446,9 +433,7 @@ class TestGetSettingsFileContent:
         """Should return valid JSON string."""
         import json
 
-        settings = claude_adapter.build_claude_settings(
-            sample_profile, gitlab_marketplace, "org"
-        )
+        settings = claude_adapter.build_claude_settings(sample_profile, gitlab_marketplace, "org")
         content = claude_adapter.get_settings_file_content(settings)
 
         # Should be parseable JSON
@@ -457,9 +442,7 @@ class TestGetSettingsFileContent:
 
     def test_json_is_formatted(self, sample_profile, gitlab_marketplace):
         """JSON should be formatted with indentation."""
-        settings = claude_adapter.build_claude_settings(
-            sample_profile, gitlab_marketplace, "org"
-        )
+        settings = claude_adapter.build_claude_settings(sample_profile, gitlab_marketplace, "org")
         content = claude_adapter.get_settings_file_content(settings)
 
         # Should have newlines (formatted)
@@ -480,9 +463,7 @@ class TestModuleIsolation:
 
     def test_settings_is_opaque_dict(self, sample_profile, gitlab_marketplace):
         """build_claude_settings returns dict that docker.py can pass through."""
-        settings = claude_adapter.build_claude_settings(
-            sample_profile, gitlab_marketplace, "org"
-        )
+        settings = claude_adapter.build_claude_settings(sample_profile, gitlab_marketplace, "org")
 
         # docker.py just needs to know it's a dict to inject
         assert isinstance(settings, dict)

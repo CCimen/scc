@@ -10,13 +10,9 @@ These tests verify the new architecture requirements:
 """
 
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from scc_cli import doctor
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for check_org_config_reachable
@@ -292,12 +288,16 @@ class TestCheckCacheTtlStatus:
 
         cache_meta = tmp_path / "cache_meta.json"
         expires = datetime.now(timezone.utc) + timedelta(hours=12)
-        cache_meta.write_text(json.dumps({
-            "org_config": {
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
-                "expires_at": expires.isoformat(),
-            }
-        }))
+        cache_meta.write_text(
+            json.dumps(
+                {
+                    "org_config": {
+                        "fetched_at": datetime.now(timezone.utc).isoformat(),
+                        "expires_at": expires.isoformat(),
+                    }
+                }
+            )
+        )
 
         with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_ttl_status()
@@ -312,12 +312,16 @@ class TestCheckCacheTtlStatus:
 
         cache_meta = tmp_path / "cache_meta.json"
         expired = datetime.now(timezone.utc) - timedelta(hours=1)
-        cache_meta.write_text(json.dumps({
-            "org_config": {
-                "fetched_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
-                "expires_at": expired.isoformat(),
-            }
-        }))
+        cache_meta.write_text(
+            json.dumps(
+                {
+                    "org_config": {
+                        "fetched_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                        "expires_at": expired.isoformat(),
+                    }
+                }
+            )
+        )
 
         with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_ttl_status()
@@ -430,7 +434,9 @@ class TestRunAllChecks:
         mock_docker = doctor.CheckResult(name="Docker", passed=True, message="available")
         mock_sandbox = doctor.CheckResult(name="Sandbox", passed=True, message="available")
         mock_daemon = doctor.CheckResult(name="Docker Daemon", passed=True, message="running")
-        mock_wsl2 = doctor.CheckResult(name="WSL2", passed=True, message="not WSL2", severity="info")
+        mock_wsl2 = doctor.CheckResult(
+            name="WSL2", passed=True, message="not WSL2", severity="info"
+        )
         mock_config = doctor.CheckResult(name="Config", passed=True, message="exists")
         mock_org = doctor.CheckResult(name="Org Config", passed=True, message="reachable")
         mock_auth = doctor.CheckResult(name="Auth", passed=True, message="ok")

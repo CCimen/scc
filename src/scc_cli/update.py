@@ -561,15 +561,11 @@ def render_update_notification(console: Console, result: UpdateCheckResult) -> N
             )
 
         elif org.status == "auth_failed":
-            console.print(
-                "[red]✗ Auth failed and no cached config available. "
-                "Run: scc setup[/red]"
-            )
+            console.print("[red]✗ Auth failed and no cached config available. Run: scc setup[/red]")
 
         elif org.status == "no_cache":
             console.print(
-                "[yellow]⚠ No organization config cached. "
-                "Run: scc setup when on network[/yellow]"
+                "[yellow]⚠ No organization config cached. Run: scc setup when on network[/yellow]"
             )
 
         # Don't show anything for 'unchanged', 'offline', 'standalone', 'throttled'

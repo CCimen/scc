@@ -123,7 +123,7 @@ class TestDetectPackageManager:
 
     def test_detects_gradle_from_build_gradle_kts(self, tmp_path):
         """Should detect gradle from build.gradle.kts (Kotlin DSL)."""
-        (tmp_path / "build.gradle.kts").write_text("plugins { kotlin(\"jvm\") }")
+        (tmp_path / "build.gradle.kts").write_text('plugins { kotlin("jvm") }')
 
         result = deps.detect_package_manager(tmp_path)
 

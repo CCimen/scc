@@ -6,8 +6,6 @@ updated for the current architecture where org config is fetched remotely.
 For comprehensive tests including XDG paths and migration, see test_config_new.py.
 """
 
-
-
 from scc_cli.config import deep_merge
 
 

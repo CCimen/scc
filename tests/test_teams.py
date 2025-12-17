@@ -4,7 +4,6 @@ import pytest
 
 from scc_cli import teams
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Fixtures
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -233,7 +232,9 @@ class TestGetTeamPluginId:
 
     def test_plugin_id_different_teams(self, sample_config):
         """get_team_plugin_id should work for different teams."""
-        assert teams.get_team_plugin_id("team-evolution", sample_config) == "team-evolution@sundsvall"
+        assert (
+            teams.get_team_plugin_id("team-evolution", sample_config) == "team-evolution@sundsvall"
+        )
         assert teams.get_team_plugin_id("draken", sample_config) == "draken@sundsvall"
 
     def test_plugin_id_no_plugin_returns_none(self, sample_config):

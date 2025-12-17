@@ -18,7 +18,6 @@ New checks (v2):
 """
 
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -578,6 +577,7 @@ def check_cache_readable() -> CheckResult:
 
         # Calculate fingerprint
         import hashlib
+
         fingerprint = hashlib.sha256(content.encode()).hexdigest()[:12]
 
         org_name = org_config.get("organization", {}).get("name", "Unknown")

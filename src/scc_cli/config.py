@@ -257,9 +257,7 @@ def init_config(console: Console) -> None:
     # Run migration if needed
     migrated = migrate_config_if_needed()
     if migrated:
-        console.print(
-            f"[yellow]⚠️  Migrated config from {LEGACY_CONFIG_DIR} to {CONFIG_DIR}[/]"
-        )
+        console.print(f"[yellow]⚠️  Migrated config from {LEGACY_CONFIG_DIR} to {CONFIG_DIR}[/]")
         console.print("[dim]Old directory preserved. You may delete it manually.[/]")
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
