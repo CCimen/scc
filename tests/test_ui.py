@@ -105,11 +105,7 @@ class TestSelectWorkspaceSource:
     def test_select_workspace_source_team_repos_option_when_available(self):
         """select_workspace_source should show team_repos when team has repositories."""
         console = MagicMock()
-        cfg = {
-            "profiles": {
-                "team1": {"repositories": [{"name": "repo1"}]}
-            }
-        }
+        cfg = {"profiles": {"team1": {"repositories": [{"name": "repo1"}]}}}
 
         # With team_repos option inserted, selection 2 = team_repos
         with patch("scc_cli.ui.IntPrompt.ask", return_value=2):
@@ -278,9 +274,7 @@ class TestSelectTeamRepo:
         cfg = {
             "profiles": {
                 "team1": {
-                    "repositories": [
-                        {"name": "repo1", "url": "https://github.com/org/repo1"}
-                    ]
+                    "repositories": [{"name": "repo1", "url": "https://github.com/org/repo1"}]
                 }
             }
         }
@@ -298,11 +292,7 @@ class TestSelectTeamRepo:
 
         cfg = {
             "profiles": {
-                "team1": {
-                    "repositories": [
-                        {"name": "repo1", "local_path": str(local_dir)}
-                    ]
-                }
+                "team1": {"repositories": [{"name": "repo1", "local_path": str(local_dir)}]}
             }
         }
 
@@ -317,9 +307,7 @@ class TestSelectTeamRepo:
         cfg = {
             "profiles": {
                 "team1": {
-                    "repositories": [
-                        {"name": "repo1", "url": "https://github.com/org/repo1"}
-                    ]
+                    "repositories": [{"name": "repo1", "url": "https://github.com/org/repo1"}]
                 }
             },
             "workspace_base": str(tmp_path),

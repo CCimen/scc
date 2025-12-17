@@ -105,9 +105,7 @@ class TestCleanupWorktreeRmtreeFallback:
     to continue anyway. The rmtree is DESTRUCTIVE and must be tested.
     """
 
-    def test_rmtree_fallback_triggered_when_git_worktree_remove_fails(
-        self, worktree_setup
-    ):
+    def test_rmtree_fallback_triggered_when_git_worktree_remove_fails(self, worktree_setup):
         """When git worktree remove fails, rmtree fallback should execute.
 
         SAFETY TEST: Verify fallback actually removes the worktree directory.
@@ -173,9 +171,7 @@ class TestCleanupWorktreeRmtreeFallback:
         assert test_file.exists()
         assert test_file.read_text() == "important data"
 
-    def test_rmtree_handles_worktree_with_uncommitted_changes_when_forced(
-        self, worktree_setup
-    ):
+    def test_rmtree_handles_worktree_with_uncommitted_changes_when_forced(self, worktree_setup):
         """Force flag should allow rmtree to delete worktree with uncommitted changes.
 
         SAFETY TEST: Verify data loss warning path works correctly.

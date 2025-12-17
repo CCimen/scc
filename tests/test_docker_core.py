@@ -806,8 +806,6 @@ class TestGetOrCreateContainer:
         workspace = tmp_path / "project"
         workspace.mkdir()
 
-        cmd, _ = docker.get_or_create_container(
-            workspace=workspace, continue_session=True
-        )
+        cmd, _ = docker.get_or_create_container(workspace=workspace, continue_session=True)
 
         assert "-c" in cmd
