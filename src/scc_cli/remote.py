@@ -15,14 +15,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import subprocess
+import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import requests
+
+from scc_cli.auth import is_remote_command_allowed
+from scc_cli.auth import resolve_auth as _resolve_auth_impl
 
 if TYPE_CHECKING:
     pass
@@ -90,49 +92,37 @@ def validate_org_config_url(url: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def resolve_auth(auth_spec: str | None) -> str | None:
+def resolve_auth(auth_spec: str | None, *, from_remote: bool = False) -> str | None:
     """Resolve auth from 'env:VAR' or 'command:CMD' syntax.
+
+    SECURITY: Uses auth.py module with shell=False to prevent shell injection.
 
     Args:
         auth_spec: Auth specification string or None
+        from_remote: If True, applies trust model restrictions for remote org config.
+                    command: auth requires SCC_ALLOW_REMOTE_COMMANDS=1 when from_remote=True.
 
     Returns:
         Token string or None if not available/configured
+
+    Raises:
+        ValueError: If command: auth is used from remote config without opt-in
     """
     if not auth_spec:
         return None
 
-    auth_spec = auth_spec.strip()
-    if not auth_spec:
+    # Determine if command: auth is allowed based on source
+    # User config (from_remote=False): Always allow command: auth
+    # Remote org config (from_remote=True): Require explicit opt-in
+    allow_command = not from_remote or is_remote_command_allowed()
+
+    try:
+        result = _resolve_auth_impl(auth_spec, allow_command=allow_command)
+        return result.token if result else None
+    except RuntimeError:
+        # Command execution failed - return None for backward compatibility
+        # (old behavior: failed commands returned None)
         return None
-
-    # env:VAR_NAME format
-    if auth_spec.startswith("env:"):
-        env_name = auth_spec[4:]
-        token = os.environ.get(env_name)
-        if token:
-            token = token.strip()
-        return token or None
-
-    # command:CMD format
-    if auth_spec.startswith("command:"):
-        cmd = auth_spec[8:]
-        try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0 and result.stdout:
-                return result.stdout.strip()
-            return None
-        except (subprocess.TimeoutExpired, OSError):
-            return None
-
-    # Unknown format
-    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -216,10 +206,11 @@ def save_to_cache(
     # Ensure cache directory exists
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save org config
+    # Save org config with restrictive permissions (owner read/write only)
     config_file = CACHE_DIR / "org_config.json"
     config_content = json.dumps(org_config, indent=2)
     config_file.write_text(config_content)
+    config_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
 
     # Calculate fingerprint (SHA256 of cached bytes)
     fingerprint = hashlib.sha256(config_file.read_bytes()).hexdigest()
@@ -240,6 +231,7 @@ def save_to_cache(
     }
     meta_file = CACHE_DIR / "cache_meta.json"
     meta_file.write_text(json.dumps(meta, indent=2))
+    meta_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
 
 
 def load_from_cache() -> tuple[dict | None, dict | None]:

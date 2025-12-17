@@ -346,3 +346,659 @@ class TestGetUpdateCommand:
         """Unknown method should default to pip command."""
         cmd = get_update_command("unknown")
         assert cmd == f"pip install --upgrade {PACKAGE_NAME}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEW TESTS: Org Config Update System
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from datetime import datetime, timedelta, timezone
+from io import StringIO
+
+import pytest
+from rich.console import Console
+
+from scc_cli.update import (
+    OrgConfigUpdateResult,
+    UpdateCheckResult,
+    UpdateInfo,
+    _format_age,
+    _load_update_check_meta,
+    _mark_cli_check_done,
+    _mark_org_config_check_done,
+    _save_update_check_meta,
+    _should_check_cli_updates,
+    _should_check_org_config,
+    check_all_updates,
+    check_org_config_update,
+    render_update_notification,
+    render_update_status_panel,
+)
+from scc_cli import update
+
+
+@pytest.fixture
+def temp_cache_dir(tmp_path, monkeypatch):
+    """Set up temporary cache directory for update check metadata."""
+    cache_dir = tmp_path / ".cache" / "scc"
+    cache_dir.mkdir(parents=True)
+    monkeypatch.setattr(update, "UPDATE_CHECK_CACHE_DIR", cache_dir)
+    monkeypatch.setattr(update, "UPDATE_CHECK_META_FILE", cache_dir / "update_check_meta.json")
+    return cache_dir
+
+
+@pytest.fixture
+def console():
+    """Create a console for capturing output."""
+    return Console(file=StringIO(), force_terminal=True, width=100)
+
+
+class TestUpdateCheckMeta:
+    """Tests for update check metadata persistence."""
+
+    def test_load_empty_meta_when_no_file(self, temp_cache_dir):
+        """Returns empty dict when no metadata file exists."""
+        meta = _load_update_check_meta()
+        assert meta == {}
+
+    def test_save_and_load_meta(self, temp_cache_dir):
+        """Metadata can be saved and loaded."""
+        test_meta = {"cli_last_check": "2025-01-01T10:00:00+00:00"}
+        _save_update_check_meta(test_meta)
+
+        loaded = _load_update_check_meta()
+        assert loaded == test_meta
+
+    def test_load_handles_invalid_json(self, temp_cache_dir):
+        """Returns empty dict when metadata file contains invalid JSON."""
+        meta_file = temp_cache_dir / "update_check_meta.json"
+        meta_file.write_text("not valid json {{{")
+
+        meta = _load_update_check_meta()
+        assert meta == {}
+
+
+class TestCLIThrottling:
+    """Tests for CLI update check throttling."""
+
+    def test_should_check_when_never_checked(self, temp_cache_dir):
+        """Should check when no previous check recorded."""
+        assert _should_check_cli_updates() is True
+
+    def test_should_not_check_when_recently_checked(self, temp_cache_dir):
+        """Should not check when last check was recent."""
+        _mark_cli_check_done()
+        assert _should_check_cli_updates() is False
+
+    def test_should_check_after_interval_elapsed(self, temp_cache_dir):
+        """Should check when interval has elapsed."""
+        old_time = datetime.now(timezone.utc) - timedelta(hours=25)
+        meta = {"cli_last_check": old_time.isoformat()}
+        _save_update_check_meta(meta)
+
+        assert _should_check_cli_updates() is True
+
+    def test_should_check_with_invalid_timestamp(self, temp_cache_dir):
+        """Should check when timestamp is invalid."""
+        meta = {"cli_last_check": "not-a-valid-timestamp"}
+        _save_update_check_meta(meta)
+
+        assert _should_check_cli_updates() is True
+
+    def test_mark_cli_check_done_updates_timestamp(self, temp_cache_dir):
+        """Marking check done updates the timestamp."""
+        _mark_cli_check_done()
+
+        meta = _load_update_check_meta()
+        assert "cli_last_check" in meta
+
+        ts = datetime.fromisoformat(meta["cli_last_check"])
+        now = datetime.now(timezone.utc)
+        assert (now - ts).total_seconds() < 10
+
+
+class TestOrgConfigThrottling:
+    """Tests for org config check throttling."""
+
+    def test_should_check_when_never_checked(self, temp_cache_dir):
+        """Should check when no previous check recorded."""
+        assert _should_check_org_config() is True
+
+    def test_should_not_check_when_recently_checked(self, temp_cache_dir):
+        """Should not check when last check was recent."""
+        _mark_org_config_check_done()
+        assert _should_check_org_config() is False
+
+    def test_should_check_after_interval_elapsed(self, temp_cache_dir):
+        """Should check when interval has elapsed."""
+        old_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        meta = {"org_config_last_check": old_time.isoformat()}
+        _save_update_check_meta(meta)
+
+        assert _should_check_org_config() is True
+
+
+class TestCheckOrgConfigUpdate:
+    """Tests for org config update checking."""
+
+    def test_standalone_mode_returns_standalone_status(self, temp_cache_dir):
+        """Standalone mode returns standalone status immediately."""
+        user_config = {"standalone": True}
+        result = check_org_config_update(user_config)
+        assert result.status == "standalone"
+
+    def test_no_org_source_returns_standalone_status(self, temp_cache_dir):
+        """No organization source returns standalone status."""
+        user_config = {}
+        result = check_org_config_update(user_config)
+        assert result.status == "standalone"
+
+    def test_no_url_returns_standalone_status(self, temp_cache_dir):
+        """Missing URL in org source returns standalone status."""
+        user_config = {"organization_source": {"auth": "env:TOKEN"}}
+        result = check_org_config_update(user_config)
+        assert result.status == "standalone"
+
+    def test_throttled_returns_throttled_status(self, temp_cache_dir):
+        """Returns throttled status when check interval hasn't elapsed."""
+        user_config = {
+            "organization_source": {"url": "https://example.com/config.json"}
+        }
+        _mark_org_config_check_done()
+        result = check_org_config_update(user_config, force=False)
+        assert result.status == "throttled"
+
+    def test_force_bypasses_throttle(self, temp_cache_dir):
+        """Force flag bypasses throttle check."""
+        user_config = {
+            "organization_source": {"url": "https://example.com/config.json"}
+        }
+        _mark_org_config_check_done()
+
+        with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
+            with patch("scc_cli.remote.resolve_auth", return_value=None):
+                with patch("scc_cli.remote.fetch_org_config", return_value=(None, None, -2)):
+                    result = check_org_config_update(user_config, force=True)
+
+        assert result.status != "throttled"
+
+    def test_304_not_modified_returns_unchanged(self, temp_cache_dir):
+        """304 response returns unchanged status."""
+        user_config = {
+            "organization_source": {"url": "https://example.com/config.json"}
+        }
+
+        fetched_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        cached_meta = {
+            "org_config": {
+                "fetched_at": fetched_at.isoformat(),
+                "etag": "abc123",
+            }
+        }
+
+        with patch("scc_cli.remote.load_from_cache", return_value=({"test": True}, cached_meta)):
+            with patch("scc_cli.remote.resolve_auth", return_value=None):
+                with patch("scc_cli.remote.fetch_org_config", return_value=(None, "abc123", 304)):
+                    result = check_org_config_update(user_config, force=True)
+
+        assert result.status == "unchanged"
+        assert result.cached_age_hours is not None
+        assert 1.9 < result.cached_age_hours < 2.1
+
+    def test_200_ok_returns_updated(self, temp_cache_dir):
+        """200 response returns updated status and saves to cache."""
+        user_config = {
+            "organization_source": {"url": "https://example.com/config.json"}
+        }
+
+        new_config = {"organization": {"name": "Test Org"}}
+
+        with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
+            with patch("scc_cli.remote.resolve_auth", return_value=None):
+                with patch("scc_cli.remote.fetch_org_config", return_value=(new_config, "new-etag", 200)):
+                    with patch("scc_cli.remote.save_to_cache") as mock_save:
+                        result = check_org_config_update(user_config, force=True)
+
+        assert result.status == "updated"
+        assert result.message is not None
+        mock_save.assert_called_once()
+
+    def test_401_with_cache_returns_auth_failed(self, temp_cache_dir):
+        """401 with cached config returns auth_failed with cache info."""
+        user_config = {
+            "organization_source": {
+                "url": "https://example.com/config.json",
+                "auth": "env:TOKEN",
+            }
+        }
+
+        fetched_at = datetime.now(timezone.utc) - timedelta(hours=5)
+        cached_meta = {"org_config": {"fetched_at": fetched_at.isoformat()}}
+
+        with patch("scc_cli.remote.load_from_cache", return_value=({"test": True}, cached_meta)):
+            with patch("scc_cli.remote.resolve_auth", return_value="expired-token"):
+                with patch("scc_cli.remote.fetch_org_config", return_value=(None, None, 401)):
+                    result = check_org_config_update(user_config, force=True)
+
+        assert result.status == "auth_failed"
+        assert result.cached_age_hours is not None
+        assert result.message is not None
+
+    def test_401_without_cache_returns_auth_failed(self, temp_cache_dir):
+        """401 without cached config returns auth_failed without cache info."""
+        user_config = {
+            "organization_source": {
+                "url": "https://example.com/config.json",
+                "auth": "env:TOKEN",
+            }
+        }
+
+        with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
+            with patch("scc_cli.remote.resolve_auth", return_value="expired-token"):
+                with patch("scc_cli.remote.fetch_org_config", return_value=(None, None, 401)):
+                    result = check_org_config_update(user_config, force=True)
+
+        assert result.status == "auth_failed"
+        assert result.cached_age_hours is None
+
+    def test_network_error_with_cache_returns_offline(self, temp_cache_dir):
+        """Network error with cached config returns offline status."""
+        user_config = {
+            "organization_source": {"url": "https://example.com/config.json"}
+        }
+
+        fetched_at = datetime.now(timezone.utc) - timedelta(hours=12)
+        cached_meta = {"org_config": {"fetched_at": fetched_at.isoformat()}}
+
+        with patch("scc_cli.remote.load_from_cache", return_value=({"test": True}, cached_meta)):
+            with patch("scc_cli.remote.resolve_auth", return_value=None):
+                with patch("scc_cli.remote.fetch_org_config", side_effect=Exception("Network error")):
+                    result = check_org_config_update(user_config, force=True)
+
+        assert result.status == "offline"
+        assert result.cached_age_hours is not None
+
+    def test_network_error_without_cache_returns_no_cache(self, temp_cache_dir):
+        """Network error without cached config returns no_cache status."""
+        user_config = {
+            "organization_source": {"url": "https://example.com/config.json"}
+        }
+
+        with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
+            with patch("scc_cli.remote.resolve_auth", return_value=None):
+                with patch("scc_cli.remote.fetch_org_config", side_effect=Exception("Network error")):
+                    result = check_org_config_update(user_config, force=True)
+
+        assert result.status == "no_cache"
+
+
+class TestCheckAllUpdates:
+    """Tests for combined update checking."""
+
+    def test_checks_both_cli_and_org_config(self, temp_cache_dir):
+        """Checks both CLI and org config updates."""
+        user_config = {"standalone": True}
+
+        with patch.object(update, "check_for_updates") as mock_cli:
+            mock_cli.return_value = UpdateInfo(
+                current="1.0.0",
+                latest="1.0.1",
+                update_available=True,
+                install_method="pip",
+            )
+
+            result = check_all_updates(user_config, force=True)
+
+        assert result.cli_update is not None
+        assert result.cli_update.update_available is True
+        assert result.org_config is not None
+        assert result.org_config.status == "standalone"
+
+    def test_respects_cli_throttle(self, temp_cache_dir):
+        """Respects CLI throttle when not forced."""
+        user_config = {"standalone": True}
+        _mark_cli_check_done()
+
+        with patch.object(update, "check_for_updates") as mock_cli:
+            result = check_all_updates(user_config, force=False)
+
+        mock_cli.assert_not_called()
+        assert result.cli_update is None
+
+    def test_force_bypasses_all_throttles(self, temp_cache_dir):
+        """Force flag bypasses all throttles."""
+        user_config = {"standalone": True}
+        _mark_cli_check_done()
+        _mark_org_config_check_done()
+
+        with patch.object(update, "check_for_updates") as mock_cli:
+            mock_cli.return_value = UpdateInfo(
+                current="1.0.0",
+                latest="1.0.0",
+                update_available=False,
+                install_method="pip",
+            )
+
+            result = check_all_updates(user_config, force=True)
+
+        mock_cli.assert_called_once()
+        assert result.cli_update is not None
+
+
+class TestFormatAge:
+    """Tests for age formatting."""
+
+    def test_format_minutes(self):
+        """Formats sub-hour ages as minutes."""
+        assert _format_age(0.5) == "30 minutes"
+        # 0.02 hours = 1.2 minutes, rounds to 1
+        assert _format_age(0.02) == "1 minute"
+
+    def test_format_hours(self):
+        """Formats sub-day ages as hours."""
+        assert _format_age(1) == "1 hour"
+        assert _format_age(5) == "5 hours"
+        assert _format_age(23.9) == "23 hours"
+
+    def test_format_days(self):
+        """Formats multi-day ages as days."""
+        assert _format_age(24) == "1 day"
+        assert _format_age(48) == "2 days"
+        assert _format_age(72) == "3 days"
+
+
+class TestRenderUpdateNotification:
+    """Tests for non-intrusive update notifications."""
+
+    def test_shows_cli_update_available(self, console):
+        """Shows notification when CLI update is available."""
+        import re
+
+        result = UpdateCheckResult(
+            cli_update=UpdateInfo(
+                current="1.0.0",
+                latest="1.0.1",
+                update_available=True,
+                install_method="pip",
+            )
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+        # Strip ANSI escape codes for version checking (Rich adds styling)
+        plain_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
+
+        assert "Update available" in output
+        assert "1.0.0" in plain_output
+        assert "1.0.1" in plain_output
+        assert "pip install" in output
+
+    def test_quiet_when_cli_up_to_date(self, console):
+        """No output when CLI is up to date."""
+        result = UpdateCheckResult(
+            cli_update=UpdateInfo(
+                current="1.0.0",
+                latest="1.0.0",
+                update_available=False,
+                install_method="pip",
+            )
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert output == ""
+
+    def test_shows_org_config_updated(self, console):
+        """Shows notification when org config is updated."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(
+                status="updated",
+                message="Organization config updated from remote",
+            )
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization config updated" in output
+
+    def test_shows_auth_failed_with_cache(self, console):
+        """Shows warning when auth failed but cache exists."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(
+                status="auth_failed",
+                message="Auth failed for org config",
+                cached_age_hours=5.0,
+            )
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert "Auth failed" in output
+        assert "cached version" in output
+
+    def test_shows_auth_failed_without_cache(self, console):
+        """Shows error when auth failed and no cache."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(
+                status="auth_failed",
+                message="Auth failed and no cached config available",
+            )
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert "Auth failed" in output
+        assert "scc setup" in output
+
+    def test_shows_no_cache_warning(self, console):
+        """Shows warning when no cache is available."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="no_cache")
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert "No organization config" in output
+        assert "scc setup" in output
+
+    def test_quiet_for_unchanged_status(self, console):
+        """No output for unchanged status."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="unchanged", cached_age_hours=1.0)
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert output == ""
+
+    def test_quiet_for_offline_status(self, console):
+        """No output for offline status."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="offline", cached_age_hours=12.0)
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert output == ""
+
+    def test_quiet_for_throttled_status(self, console):
+        """No output for throttled status."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="throttled")
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert output == ""
+
+    def test_quiet_for_standalone_status(self, console):
+        """No output for standalone status."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="standalone")
+        )
+
+        render_update_notification(console, result)
+        output = console.file.getvalue()
+
+        assert output == ""
+
+
+class TestRenderUpdateStatusPanel:
+    """Tests for detailed update status panel."""
+
+    def test_shows_cli_up_to_date(self, console):
+        """Shows CLI version as up to date."""
+        result = UpdateCheckResult(
+            cli_update=UpdateInfo(
+                current="1.0.0",
+                latest="1.0.0",
+                update_available=False,
+                install_method="pip",
+            )
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "CLI Version" in output
+        assert "1.0.0" in output
+        assert "up to date" in output
+
+    def test_shows_cli_update_available(self, console):
+        """Shows CLI update available with command."""
+        result = UpdateCheckResult(
+            cli_update=UpdateInfo(
+                current="1.0.0",
+                latest="1.0.1",
+                update_available=True,
+                install_method="pipx",
+            )
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "CLI Version" in output
+        assert "1.0.0" in output
+        assert "1.0.1" in output
+        assert "update available" in output
+        assert "pipx upgrade" in output
+
+    def test_shows_cli_throttled(self, console):
+        """Shows CLI as not checked when throttled."""
+        result = UpdateCheckResult(cli_update=None)
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "CLI Version" in output
+        assert "throttled" in output
+
+    def test_shows_org_config_standalone(self, console):
+        """Shows standalone mode for org config."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="standalone")
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "Standalone mode" in output
+
+    def test_shows_org_config_updated(self, console):
+        """Shows org config as updated."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="updated")
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "Updated from remote" in output
+
+    def test_shows_org_config_unchanged_with_age(self, console):
+        """Shows org config as unchanged with cache age."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="unchanged", cached_age_hours=2.5)
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "Current" in output
+        assert "cached" in output
+
+    def test_shows_org_config_offline(self, console):
+        """Shows org config in offline mode."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="offline", cached_age_hours=8.0)
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "cached config" in output
+        assert "offline" in output.lower()
+
+    def test_shows_org_config_auth_failed_with_cache(self, console):
+        """Shows auth failed with cache info."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="auth_failed", cached_age_hours=3.0)
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "Auth failed" in output
+        assert "cached" in output
+
+    def test_shows_org_config_auth_failed_no_cache(self, console):
+        """Shows auth failed without cache."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="auth_failed")
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "Auth failed" in output
+        assert "no cache" in output
+
+    def test_shows_org_config_no_cache(self, console):
+        """Shows no cache available."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="no_cache")
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "No cached config" in output
+        assert "scc setup" in output
+
+    def test_shows_org_config_throttled(self, console):
+        """Shows org config as not checked when throttled."""
+        result = UpdateCheckResult(
+            org_config=OrgConfigUpdateResult(status="throttled")
+        )
+
+        render_update_status_panel(console, result)
+        output = console.file.getvalue()
+
+        assert "Organization Config" in output
+        assert "throttled" in output

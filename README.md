@@ -1,35 +1,8 @@
 # SCC - Sandboxed Claude CLI
 
-[![PyPI](https://img.shields.io/pypi/v/scc-cli?style=flat-square&label=PyPI)](https://pypi.org/project/scc-cli/)
-[![Python](https://img.shields.io/pypi/pyversions/scc-cli?style=flat-square&label=Python)](https://pypi.org/project/scc-cli/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen?style=flat-square)](#contributing)
-
-[Quick Start](#quick-start) ·
-[Commands](#commands) ·
-[Configuration](#configuration) ·
-[Architecture](docs/ARCHITECTURE.md) ·
-[Contributing](#contributing)
-
----
-
 Run Claude Code in Docker sandboxes with organization-managed team profiles, marketplace integration, and git worktree support.
 
-## Why this exists
-
-Our teams needed a way to use Claude Code that was:
-- **Isolated**: AI runs in containers, not directly on developer machines
-- **Standardized**: Teams share configurations from a central organization config
-- **Safe**: Protected branches stay protected, even when AI suggests changes
-- **Pluggable**: Organization-specific Claude plugins via marketplace integration
-
-## Prerequisites
-
-- Python 3.10+
-- Docker Desktop 4.50+ (for sandbox support)
-- Git 2.30+
-
-Run `scc doctor` to verify your setup.
+SCC isolates AI execution in containers, enforces branch safety, and lets organizations distribute Claude plugins through a central configuration. Developers get standardized setups without manual configuration.
 
 ## Installation
 
@@ -37,57 +10,36 @@ Run `scc doctor` to verify your setup.
 pip install scc-cli
 ```
 
-Or with pipx for isolation:
+Or with pipx:
 
 ```bash
 pipx install scc-cli
 ```
 
-## Quick start
+Requires Python 3.10+, Docker Desktop 4.50+, and Git 2.30+.
+
+## Quick Start
 
 ```bash
-# First run triggers a setup wizard
+# Run setup wizard
 scc setup
 
-# Or start directly with a workspace
+# Start Claude Code in a sandbox
 scc start ~/projects/api-service --team platform
 
 # Check system health
 scc doctor
 ```
 
-This runs Claude Code in a Docker sandbox with your repo mounted. Organization plugins are automatically injected based on your team profile.
+## Usage
 
-## Setup modes
-
-### Organization mode (recommended)
-
-Connect to your organization's config to get team profiles and plugin access:
+### Starting sessions
 
 ```bash
-scc setup
-
-# Enter your organization config URL when prompted:
-# > https://gitlab.example.org/devops/scc-config.json
-```
-
-### Standalone mode
-
-Use SCC without an organization config:
-
-```bash
-scc setup --standalone
-```
-
-## Common workflows
-
-### Starting a session
-
-```bash
-# Interactive mode - prompts for team and workspace
+# Interactive mode
 scc
 
-# Direct mode with team profile
+# With team profile
 scc start ~/projects/my-repo --team platform
 
 # Continue most recent session
@@ -100,63 +52,80 @@ scc start ~/projects/my-repo --offline
 ### Parallel development with worktrees
 
 ```bash
-# Create isolated workspace for a feature
+# Create isolated workspace
 scc worktree ~/projects/api-service feature-auth
 # Creates: ~/projects/api-service-worktrees/feature-auth/
 # Branch: claude/feature-auth
 
-# Work on urgent fix in parallel
-scc worktree ~/projects/api-service hotfix-123
-
-# Create worktree and install dependencies
+# With dependency installation
 scc worktree ~/projects/api-service feature-x --install-deps
 
 # List worktrees
 scc worktrees ~/projects/api-service
 
-# Clean up when done
+# Clean up
 scc cleanup ~/projects/api-service feature-auth
 ```
 
-### Managing teams and sessions
+### Managing configuration
 
 ```bash
-# List team profiles from organization config
+# List team profiles
 scc teams
 
-# Force refresh from remote
+# Refresh from remote
 scc teams --sync
+
+# Check for CLI and config updates
+scc update
+
+# Force update check
+scc update --force
 
 # List recent sessions
 scc sessions
-
-# List running sandboxes
-scc list
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `scc` | Interactive mode with wizard |
+| `scc` | Interactive mode |
 | `scc setup` | Configure organization connection |
-| `scc start <path>` | Start Claude Code in a sandbox |
+| `scc start <path>` | Start Claude Code in sandbox |
 | `scc stop` | Stop running sandbox(es) |
-| `scc doctor` | Check prerequisites and system health |
-| `scc teams` | List team profiles from org config |
+| `scc doctor` | Check prerequisites |
+| `scc update` | Check for CLI and config updates |
+| `scc teams` | List team profiles |
 | `scc sessions` | List recent sessions |
-| `scc list` | List running Docker sandboxes |
-| `scc worktree <repo> <name>` | Create git worktree for parallel work |
-| `scc worktrees <repo>` | List worktrees for a repository |
-| `scc cleanup <repo> <name>` | Remove a worktree |
+| `scc list` | List running containers |
+| `scc worktree <repo> <name>` | Create git worktree |
+| `scc worktrees <repo>` | List worktrees |
+| `scc cleanup <repo> <name>` | Remove worktree |
 | `scc config` | View or edit configuration |
-| `scc config set <key> <value>` | Set configuration value |
 
-Run `scc <command> --help` for detailed options.
+Run `scc <command> --help` for options.
 
 ## Configuration
 
-### User config (`~/.config/scc/config.json`)
+### Setup modes
+
+Organization mode connects to a central config:
+
+```bash
+scc setup
+# Enter URL when prompted: https://gitlab.example.org/devops/scc-config.json
+```
+
+Standalone mode runs without organization config:
+
+```bash
+scc setup --standalone
+```
+
+### User config
+
+Located at `~/.config/scc/config.json`:
 
 ```json
 {
@@ -165,100 +134,61 @@ Run `scc <command> --help` for detailed options.
     "auth": "env:GITLAB_TOKEN"
   },
   "selected_profile": "platform",
-  "hooks": {
-    "enabled": true
-  }
+  "hooks": { "enabled": true }
 }
 ```
 
-### Organization config (IT-managed)
+Edit with `scc config --edit`.
 
-```json
-{
-  "organization": {
-    "name": "Example Organization",
-    "id": "example-org"
-  },
-  "marketplaces": [
-    {
-      "name": "internal",
-      "type": "gitlab",
-      "host": "gitlab.example.org",
-      "repo": "group/claude-marketplace",
-      "auth": "env:GITLAB_TOKEN"
-    }
-  ],
-  "profiles": {
-    "platform": {
-      "description": "Platform team (Python, FastAPI)",
-      "plugin": "platform",
-      "marketplace": "internal"
-    }
-  }
-}
-```
+### Authentication methods
 
-Edit user config with `scc config --edit`.
+| Method | Syntax |
+|--------|--------|
+| Environment variable | `"auth": "env:GITLAB_TOKEN"` |
+| Command | `"auth": "command:op read op://Dev/token"` |
+| None (public) | `"auth": null` |
 
-## Authentication
-
-| Method | Syntax | Example |
-|--------|--------|---------|
-| Environment variable | `env:VAR` | `"auth": "env:GITLAB_TOKEN"` |
-| Command | `command:CMD` | `"auth": "command:op read op://Dev/token"` |
-| None (public) | `null` | `"auth": null` |
-
-## File locations
+### File locations
 
 ```
-~/.config/scc/           # User configuration
-├── config.json          # Organization URL, selected team, preferences
+~/.config/scc/           # Configuration
+├── config.json          # Org URL, team, preferences
 
-~/.cache/scc/            # Regenerable cache
-├── org_config.json      # Cached remote org config
+~/.cache/scc/            # Cache (safe to delete)
+├── org_config.json      # Remote config cache
 └── cache_meta.json      # ETags, timestamps
-
-<repo>/.git/hooks/       # Repo-local hooks (if enabled)
-└── pre-push             # Blocks pushes to protected branches
 ```
-
-## Exit codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 2 | Invalid usage |
-| 3 | Missing prerequisites |
-| 4 | External tool failure |
-| 5 | Internal error |
-
-## WSL2 users
-
-Run inside WSL2, not Windows. Keep projects in the Linux filesystem (`~/projects`) rather than `/mnt/c/...` for acceptable performance. The CLI warns when it detects slow paths.
 
 ## Troubleshooting
 
+Run `scc doctor` to diagnose issues.
+
 | Problem | Solution |
 |---------|----------|
-| "Docker not reachable" | Start Docker Desktop |
-| "Docker version too old" | Update to Docker Desktop 4.50+ |
-| "Organization config fetch failed" | Check URL and authentication token |
+| Docker not reachable | Start Docker Desktop |
+| Organization config fetch failed | Check URL and token |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
-| Permission denied on Linux | Add user to docker group: `sudo usermod -aG docker $USER` |
+| Permission denied (Linux) | `sudo usermod -aG docker $USER` |
 
-Run `scc doctor` to diagnose most issues.
+### WSL2
 
-## Contributing
+Run inside WSL2, not Windows. Keep projects in the Linux filesystem for acceptable performance.
 
-Contributions welcome. Please:
+## Development
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Run tests before committing (`uv run pytest`)
-4. Submit a pull request
+```bash
+# Install dependencies
+uv sync
 
-See [CLAUDE.md](CLAUDE.md) for development methodology and code quality principles.
+# Run tests
+uv run pytest
+
+# Run linter
+uv run ruff check --fix
+```
+
+See [CLAUDE.md](CLAUDE.md) for development methodology.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT

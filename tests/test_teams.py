@@ -343,6 +343,171 @@ class TestValidateTeamProfile:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for NEW architecture: org_config parameter
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def sample_org_config():
+    """Create a sample org config (NEW architecture - remote config)."""
+    return {
+        "organization": {
+            "name": "Test Organization",
+            "id": "test-org",
+        },
+        "marketplaces": [
+            {
+                "name": "internal",
+                "type": "gitlab",
+                "host": "gitlab.company.com",
+                "repo": "devops/claude-plugins",
+            },
+            {
+                "name": "public",
+                "type": "github",
+                "repo": "company/public-plugins",
+            },
+        ],
+        "profiles": {
+            "platform": {
+                "description": "Platform team (Python, FastAPI)",
+                "plugin": "platform",
+                "marketplace": "internal",
+            },
+            "api": {
+                "description": "API team (Java, Spring Boot)",
+                "plugin": "api",
+                "marketplace": "public",
+            },
+            "base": {
+                "description": "Base profile - no plugin",
+                "plugin": None,
+            },
+        },
+    }
+
+
+class TestListTeamsWithOrgConfig:
+    """Tests for list_teams with org_config parameter (NEW architecture)."""
+
+    def test_list_teams_uses_org_config_when_provided(self, sample_org_config):
+        """list_teams should use org_config.profiles when org_config is provided."""
+        empty_user_config = {}  # User config has no profiles
+        result = teams.list_teams(empty_user_config, org_config=sample_org_config)
+
+        assert len(result) == 3
+        team_names = [t["name"] for t in result]
+        assert "platform" in team_names
+        assert "api" in team_names
+        assert "base" in team_names
+
+    def test_list_teams_org_config_overrides_user_config(self, sample_config, sample_org_config):
+        """When org_config is provided, it should be used instead of user config profiles."""
+        result = teams.list_teams(sample_config, org_config=sample_org_config)
+
+        # Should use org_config profiles, not sample_config profiles
+        team_names = [t["name"] for t in result]
+        assert "platform" in team_names  # From org_config
+        assert "ai-teamet" not in team_names  # From sample_config - should NOT be present
+
+    def test_list_teams_falls_back_to_user_config(self, sample_config):
+        """When org_config is None, should fall back to user config profiles."""
+        result = teams.list_teams(sample_config, org_config=None)
+
+        team_names = [t["name"] for t in result]
+        assert "ai-teamet" in team_names  # From sample_config (legacy)
+
+
+class TestGetTeamDetailsWithOrgConfig:
+    """Tests for get_team_details with org_config parameter (NEW architecture)."""
+
+    def test_get_team_details_uses_org_config(self, sample_org_config):
+        """get_team_details should use org_config when provided."""
+        empty_user_config = {}
+        result = teams.get_team_details("platform", empty_user_config, org_config=sample_org_config)
+
+        assert result is not None
+        assert result["name"] == "platform"
+        assert result["description"] == "Platform team (Python, FastAPI)"
+        assert result["plugin"] == "platform"
+        assert result["marketplace"] == "internal"
+        assert result["marketplace_type"] == "gitlab"
+        assert result["marketplace_repo"] == "devops/claude-plugins"
+
+    def test_get_team_details_resolves_marketplace(self, sample_org_config):
+        """get_team_details should resolve marketplace by name from org_config."""
+        result = teams.get_team_details("api", {}, org_config=sample_org_config)
+
+        assert result["marketplace"] == "public"
+        assert result["marketplace_type"] == "github"
+        assert result["marketplace_repo"] == "company/public-plugins"
+
+    def test_get_team_details_nonexistent_in_org_config(self, sample_org_config):
+        """get_team_details should return None for team not in org_config."""
+        result = teams.get_team_details("nonexistent", {}, org_config=sample_org_config)
+        assert result is None
+
+    def test_get_team_details_falls_back_to_user_config(self, sample_config):
+        """When org_config is None, should fall back to user config."""
+        result = teams.get_team_details("ai-teamet", sample_config, org_config=None)
+
+        assert result is not None
+        assert result["name"] == "ai-teamet"
+        assert result["marketplace"] == "sundsvall"  # From legacy config
+
+
+class TestValidateTeamProfileWithOrgConfig:
+    """Tests for validate_team_profile with org_config parameter (NEW architecture)."""
+
+    def test_validate_uses_org_config(self, sample_org_config):
+        """validate_team_profile should use org_config when provided."""
+        result = teams.validate_team_profile("platform", cfg={}, org_config=sample_org_config)
+
+        assert result["valid"] is True
+        assert result["team"] == "platform"
+        assert result["plugin"] == "platform"
+        assert result["errors"] == []
+
+    def test_validate_nonexistent_in_org_config(self, sample_org_config):
+        """validate_team_profile should detect missing team in org_config."""
+        result = teams.validate_team_profile("nonexistent", cfg={}, org_config=sample_org_config)
+
+        assert result["valid"] is False
+        assert any("not found" in e for e in result["errors"])
+
+    def test_validate_marketplace_not_found_warning(self):
+        """validate_team_profile should warn when marketplace not found in org_config."""
+        org_config = {
+            "marketplaces": [],  # No marketplaces defined
+            "profiles": {
+                "test-team": {
+                    "plugin": "test-plugin",
+                    "marketplace": "missing-marketplace",
+                },
+            },
+        }
+        result = teams.validate_team_profile("test-team", cfg={}, org_config=org_config)
+
+        assert result["valid"] is True  # Still valid, just warning
+        assert any("not found" in w for w in result["warnings"])
+
+    def test_validate_base_no_warning_in_org_config(self, sample_org_config):
+        """validate_team_profile should not warn for 'base' profile without plugin."""
+        result = teams.validate_team_profile("base", cfg={}, org_config=sample_org_config)
+
+        assert result["valid"] is True
+        # base is allowed to have no plugin
+        assert not any("no plugin" in w.lower() for w in result["warnings"])
+
+    def test_validate_falls_back_to_user_config(self, sample_config):
+        """When org_config is None, should fall back to user config."""
+        result = teams.validate_team_profile("ai-teamet", cfg=sample_config, org_config=None)
+
+        assert result["valid"] is True
+        assert result["plugin"] == "ai-teamet"
+
+
 class TestConfigIntegration:
     """Tests for teams functions using config loading."""
 

@@ -2,35 +2,36 @@
 
 SCC runs Claude Code in Docker containers with mounted workspaces. It pulls org config from a URL, expands team profiles into plugin sets, and injects settings into the sandbox.
 
-## High-Level Overview
+## Overview
 
 ```mermaid
 graph LR
-    A[Developer] --> B[SCC CLI]
-    B --> C[Remote Config]
-    B --> D[Docker Sandbox]
-    D --> E[Claude Code]
-    E --> F[Claude API]
-    E --> G[Workspace Mount]
+    Dev[Developer] --> CLI[SCC CLI]
+    CLI -->|fetch| Config[Remote Config]
+    CLI -->|launch| Sandbox[Docker Sandbox]
+    Sandbox --> Claude[Claude Code]
+    Claude -->|calls| API[Claude API]
+    Claude <-->|read/write| Workspace[Workspace]
 ```
 
 SCC acts as orchestration layer only. It does not download plugins, communicate with Claude's API, or run any AI logic. Claude Code inside the container handles all of that.
 
-## Scope and Constraints
+## Scope
 
-**What SCC does:**
+What SCC does:
 - Fetches and caches organization config from any HTTPS URL
 - Resolves team profiles to marketplace plugin references
 - Manages git worktrees for parallel development
 - Enforces branch safety via repo-local hooks
 - Launches Docker sandbox with injected credentials
+- Checks for CLI updates from PyPI
+- Notifies when org config has changed remotely
 
-**What SCC does not do:**
+What SCC does not do:
 - Download or cache plugin content
 - Verify plugin integrity or signatures
 - Communicate with Claude's API
 - Restrict container network traffic
-- Guarantee security against malicious AI behavior
 
 ## Security Model
 
@@ -38,24 +39,28 @@ Docker provides process isolation, not containment of a malicious model.
 
 ```mermaid
 graph TB
-    subgraph Host["Host Machine (Trusted)"]
+    subgraph Host[Host Machine]
         CLI[SCC CLI]
         Config[Local Config]
+        Creds[Credentials]
     end
 
-    subgraph Container["Docker Container (Sandboxed)"]
+    subgraph Container[Docker Sandbox]
         Claude[Claude Code]
         Plugins[Plugins]
     end
 
-    Workspace[Workspace Directory]
+    Workspace[Workspace Dir]
+    Network[Network]
 
-    CLI --> Container
-    Container <--> Workspace
-    Container --> Network[Network Access]
+    CLI -->|launch| Container
+    CLI -->|inject env vars| Container
+    CLI -->|fetch config| Network
+    Container <-->|mount| Workspace
+    Container -->|API calls| Network
 ```
 
-**Trust boundaries:**
+Trust boundaries:
 
 | Boundary | Isolated | Shared |
 |----------|----------|--------|
@@ -64,12 +69,12 @@ graph TB
 | Network | None | Full access (required for Claude API) |
 | Environment | Host env vars | Explicitly passed tokens |
 
-**Credential flow:**
+Credential flow:
 - Tokens resolved from `env:VAR` or `command:CMD` syntax
 - Injected into container via Docker environment variables
 - Never written to disk or printed in logs
 
-## Component Design
+## Module Design
 
 ```mermaid
 graph TD
@@ -77,17 +82,20 @@ graph TD
     CLI --> Remote[remote.py]
     CLI --> Docker[docker.py]
     CLI --> Git[git.py]
+    CLI --> Update[update.py]
+    CLI --> Setup[setup.py]
+    CLI --> Doctor[doctor.py]
 
     Remote --> Validate[validate.py]
-    Remote --> Profiles[profiles.py]
 
     Docker --> Adapter[claude_adapter.py]
     Docker --> Sessions[sessions.py]
+    Docker --> Deps[deps.py]
 
-    Profiles --> Adapter
+    Adapter --> Profiles[profiles.py]
 ```
 
-**Module responsibilities:**
+Module responsibilities:
 
 | Module | Does | Does Not |
 |--------|------|----------|
@@ -97,58 +105,94 @@ graph TD
 | `validate.py` | Schema validation | HTTP, file I/O |
 | `config.py` | Local config, XDG paths | Remote fetching |
 | `docker.py` | Container lifecycle, credential injection | URL building |
+| `update.py` | Version checking, throttling, notifications | Container operations |
 
 The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
+
+## Update System
+
+SCC checks for updates to both the CLI package and organization config.
+
+### Throttling
+
+Update checks are throttled to avoid excessive network requests:
+
+| Check Type | Interval | Rationale |
+|------------|----------|-----------|
+| CLI version (PyPI) | 24 hours | Package releases are infrequent |
+| Org config | 1 hour | Config changes need faster propagation |
+
+Throttle state is stored in `~/.cache/scc/update_check_meta.json`:
+
+```json
+{
+  "last_cli_check": "2025-12-17T10:00:00Z",
+  "last_org_config_check": "2025-12-17T14:30:00Z"
+}
+```
+
+### CLI Updates
+
+The CLI fetches version info from PyPI's JSON API:
+
+```
+GET https://pypi.org/pypi/scc-cli/json
+→ Extract info.version
+→ Compare with installed version
+→ Detect install method (pip, pipx, uv)
+→ Generate appropriate upgrade command
+```
+
+### Org Config Updates
+
+Org config updates use ETag-based conditional fetching:
+
+```
+GET https://example.org/config.json
+If-None-Match: "abc123"
+
+→ 304 Not Modified: Use cache, no action needed
+→ 200 OK: Config updated, refresh cache
+→ 401/403: Auth failed, warn user
+→ Network error: Use stale cache if available
+```
+
+### Notification Behavior
+
+During `scc start`, non-intrusive notifications appear for:
+- CLI updates available (shows upgrade command)
+- Org config updated from remote
+- Auth failures when stale cache exists
+
+The `scc update` command forces immediate checks and shows detailed status.
 
 ## Lifecycle Flows
 
 ### Setup
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant C as CLI
-    participant R as Remote Config
-    participant D as Disk
-
-    U->>C: scc setup
-    C->>U: Prompt for org URL
-    U->>C: https://example.org/config.json
-    C->>R: GET config (with auth if needed)
-    R-->>C: org_config.json
-    C->>C: Validate against schema
-    C->>U: Select team profile
-    U->>C: platform
-    C->>D: Save to ~/.config/scc/
+```
+User: scc setup
+CLI: Prompt for org URL
+User: https://example.org/config.json
+CLI: GET config (with auth if needed)
+CLI: Validate against schema
+CLI: Prompt for team profile
+User: platform
+CLI: Save to ~/.config/scc/
 ```
 
 ### Start Session
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant C as CLI
-    participant Cache as Cache
-    participant R as Remote
-    participant D as Docker
-
-    U->>C: scc start ~/repo --team platform
-    C->>Cache: Check org config TTL
-    alt Cache Valid
-        Cache-->>C: Use cached config
-    else Cache Expired
-        C->>R: GET config (If-None-Match: etag)
-        alt 304 Not Modified
-            R-->>C: Use cache
-        else 200 OK
-            R-->>C: New config + ETag
-            C->>Cache: Update cache
-        end
-    end
-    C->>C: Resolve profile → plugin + marketplace
-    C->>C: Check branch safety
-    C->>D: docker sandbox run (workspace mount, env vars)
-    D-->>U: Claude Code session starts
+```
+User: scc start ~/repo --team platform
+CLI: Check org config TTL
+     └─ Cache valid? Use cache
+     └─ Cache expired? GET with If-None-Match
+        └─ 304? Use cache
+        └─ 200? Update cache
+CLI: Resolve profile → plugin + marketplace
+CLI: Check branch safety
+CLI: docker sandbox run (workspace mount, env vars)
 ```
 
 ## Configuration Precedence
@@ -164,39 +208,45 @@ From highest to lowest priority:
 
 ```
 ~/.config/scc/
-    config.json         # Org URL, selected profile, preferences
+    config.json              # Org URL, selected profile, preferences
 
 ~/.cache/scc/
-    org_config.json     # Cached remote config
-    cache_meta.json     # ETags, timestamps
+    org_config.json          # Cached remote config
+    cache_meta.json          # ETags, timestamps
+    update_check_meta.json   # Update check throttling
 
 ~/projects/
-    my-repo/            # Main repository
-    my-repo-worktrees/  # Worktrees created by SCC
+    my-repo/                 # Main repository
+    my-repo-worktrees/       # Worktrees created by SCC
         feature-a/
         hotfix-123/
 
 <repo>/.git/hooks/
-    pre-push            # SCC-managed hook (opt-in)
+    pre-push                 # SCC-managed hook (opt-in)
 ```
 
 ## Performance
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| Container resume | ~500ms | Typical case with re-use |
+| Container resume | ~500ms | Typical with re-use |
 | Container create | 3-5s | Cold start |
 | Config fetch | 100-500ms | HTTP with auth |
 | Cache check | ~5ms | Local TTL comparison |
+| Update check | 200-800ms | PyPI + org config (when not throttled) |
 | Worktree create | 500ms-5min | Depends on `--install-deps` |
 
-Container re-use makes resume 10x faster than fresh containers. Each workspace+branch combination gets a deterministic container name (`scc-<hash>-<hash>`) for automatic re-use.
+Container re-use makes resume 10x faster than fresh containers. Each workspace+branch combination gets a deterministic container name for automatic re-use.
 
 ## Design Decisions
 
 ### Why remote config?
 
 Organizations update their configs without requiring CLI updates. IT teams manage profiles centrally. One URL change propagates to all developers.
+
+### Why throttled update checks?
+
+Checking PyPI and remote config on every command would add latency. Throttling (24h for CLI, 1h for org config) balances freshness with responsiveness.
 
 ### Why worktrees over branches?
 
@@ -219,7 +269,7 @@ All errors inherit from `SCCError` with:
 
 ## Limitations
 
-- **WSL2 performance**: Workspaces on `/mnt/c/...` are slow. CLI warns but cannot fix this.
-- **Container accumulation**: Old containers not auto-cleaned. Run `docker container prune` periodically.
-- **Single session per branch**: Cannot run multiple sessions on same workspace+branch simultaneously.
-- **Network required**: Org config fetch needs network. Use `--offline` for cache-only mode.
+- WSL2 performance: Workspaces on `/mnt/c/...` are slow. CLI warns but cannot fix this.
+- Container accumulation: Old containers not auto-cleaned. Run `docker container prune` periodically.
+- Single session per branch: Cannot run multiple sessions on same workspace+branch simultaneously.
+- Network required: Org config fetch needs network. Use `--offline` for cache-only mode.

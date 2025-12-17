@@ -324,8 +324,11 @@ def start(
     # Inject team plugin settings into Docker sandbox
     if team:
         with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
+            # Load cached org config (NEW architecture)
+            org_config = config.load_cached_org_config()
+
             # Validate team profile exists
-            validation = teams.validate_team_profile(team, cfg)
+            validation = teams.validate_team_profile(team, cfg, org_config=org_config)
             if not validation["valid"]:
                 console.print(
                     create_warning_panel(
@@ -338,7 +341,7 @@ def start(
 
             # Inject team settings (extraKnownMarketplaces + enabledPlugins)
             # This happens in the Docker volume, Claude Code handles the rest
-            docker.inject_team_settings(team)
+            docker.inject_team_settings(team, org_config=org_config)
 
     # Get current branch for container naming
     current_branch = None
@@ -629,6 +632,9 @@ def teams_cmd(
     """List available team profiles or show team details."""
     cfg = config.load_config()
 
+    # Load cached org config (NEW architecture)
+    org_config = config.load_cached_org_config()
+
     # Sync mode
     if sync:
         _sync_teams(cfg, team_name)
@@ -636,11 +642,11 @@ def teams_cmd(
 
     # Detail view for specific team
     if team_name:
-        _show_team_details(cfg, team_name)
+        _show_team_details(cfg, team_name, org_config=org_config)
         return
 
-    # List all teams
-    available_teams = teams.list_teams(cfg)
+    # List all teams (pass org_config for NEW architecture)
+    available_teams = teams.list_teams(cfg, org_config=org_config)
 
     if not available_teams:
         console.print(
@@ -673,9 +679,9 @@ def teams_cmd(
     console.print("[dim]Use: scc teams <name> for details, scc teams --sync to update[/dim]")
 
 
-def _show_team_details(cfg: dict, team_name: str) -> None:
+def _show_team_details(cfg: dict, team_name: str, org_config: dict | None = None) -> None:
     """Display detailed information for a team profile."""
-    details = teams.get_team_details(team_name, cfg)
+    details = teams.get_team_details(team_name, cfg, org_config=org_config)
 
     if not details:
         console.print(
@@ -1157,41 +1163,21 @@ def doctor_cmd(
 
 @app.command(name="update")
 @handle_errors
-def update_cmd():
-    """Check for updates to scc-cli CLI."""
+def update_cmd(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force check even if recently checked"
+    ),
+):
+    """Check for updates to scc-cli CLI and organization config."""
     from . import update as update_module
 
+    cfg = config.load_config()
+
     with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner="dots"):
-        info = update_module.check_for_updates()
+        result = update_module.check_all_updates(cfg, force=force)
 
-    console.print()
-
-    if info.latest is None:
-        console.print(
-            create_warning_panel(
-                "Check Failed",
-                "Could not reach PyPI to check for updates.",
-                "Check your internet connection",
-            )
-        )
-        raise typer.Exit(1)
-
-    if info.update_available:
-        cmd = update_module.get_update_command(info.install_method)
-        console.print(
-            create_info_panel(
-                "Update Available",
-                f"Current: {info.current}\nLatest:  {info.latest}",
-                f"Run: {cmd}",
-            )
-        )
-    else:
-        console.print(
-            create_success_panel(
-                "Up to Date",
-                {"Version": info.current},
-            )
-        )
+    # Render detailed update status panel
+    update_module.render_update_status_panel(console, result)
 
 
 @app.command(name="statusline")

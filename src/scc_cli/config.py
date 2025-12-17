@@ -423,6 +423,27 @@ def get_organization_name() -> str | None:
     return None
 
 
+def load_cached_org_config() -> dict | None:
+    """Load cached organization config from ~/.cache/scc/org_config.json.
+
+    This is the NEW architecture function for loading org config.
+    The org config contains profiles and marketplaces defined by team admins.
+
+    Returns:
+        Parsed org config dict, or None if cache doesn't exist or is invalid.
+    """
+    cache_file = CACHE_DIR / "org_config.json"
+
+    if not cache_file.exists():
+        return None
+
+    try:
+        content = cache_file.read_text(encoding="utf-8")
+        return json.loads(content)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def load_teams_config() -> dict:
     """Alias for load_user_config (backward compatibility)."""
     return load_user_config()

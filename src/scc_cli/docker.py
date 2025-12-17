@@ -457,6 +457,39 @@ def list_running_sandboxes() -> list[ContainerInfo]:
         return []
 
 
+def validate_container_filename(filename: str) -> str:
+    """Validate filename for injection into container volume.
+
+    SECURITY: Defense-in-depth against path traversal attacks.
+    Although files go to a Docker volume (low risk), we validate anyway.
+
+    Args:
+        filename: Filename to validate
+
+    Returns:
+        Validated filename
+
+    Raises:
+        ValueError: If filename contains path traversal or unsafe characters
+    """
+    if not filename:
+        raise ValueError("Filename cannot be empty")
+
+    # Reject path separators (prevent ../../../etc/passwd attacks)
+    if "/" in filename or "\\" in filename:
+        raise ValueError(f"Invalid filename: path separators not allowed: {filename}")
+
+    # Reject hidden files starting with dot (e.g., .bashrc, .profile)
+    if filename.startswith("."):
+        raise ValueError(f"Invalid filename: hidden files not allowed: {filename}")
+
+    # Reject null bytes (can truncate strings in some contexts)
+    if "\x00" in filename:
+        raise ValueError("Invalid filename: null bytes not allowed")
+
+    return filename
+
+
 def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
     """
     Inject a file into the Docker sandbox persistent volume.
@@ -466,11 +499,18 @@ def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
 
     Args:
         filename: Name of file to create (e.g., "settings.json", "scc-statusline.sh")
+                  Must be a simple filename, no path separators allowed.
         content: Content to write
 
     Returns:
         True if successful
+
+    Raises:
+        ValueError: If filename contains unsafe characters
     """
+    # Validate filename to prevent path traversal
+    filename = validate_container_filename(filename)
+
     try:
         # Escape content for shell (replace single quotes)
         escaped_content = content.replace("'", "'\"'\"'")

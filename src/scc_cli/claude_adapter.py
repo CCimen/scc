@@ -18,12 +18,11 @@ No other module should import or reference extraKnownMarketplaces or enabledPlug
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from scc_cli.auth import is_remote_command_allowed, resolve_auth as _resolve_auth_impl
 from scc_cli.profiles import get_marketplace_url
 
 if TYPE_CHECKING:
@@ -55,18 +54,29 @@ class AuthResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def resolve_auth_with_name(auth_spec: str | None) -> tuple[str | None, str | None]:
+def resolve_auth_with_name(
+    auth_spec: str | None,
+    allow_command: bool = False,
+) -> tuple[str | None, str | None]:
     """Resolve auth spec to (token, env_name) tuple.
 
+    SECURITY: Uses auth.py module with shell=False to prevent shell injection.
+    Command execution is disabled by default (secure by default).
+
     Supports:
-    - env:VAR_NAME - read from environment variable
-    - command:CMD - execute command and use output as token
+    - env:VAR_NAME - read from environment variable (always allowed)
+    - command:CMD - execute command (only if allow_command=True)
 
     Args:
         auth_spec: Auth specification string or None
+        allow_command: Whether to allow command: auth specs. Default False
+            for security (prevents arbitrary command execution from untrusted
+            sources like remote org config). Set True only for trusted sources
+            or when user explicitly opts in via SCC_ALLOW_REMOTE_COMMANDS=1.
 
     Returns:
         Tuple of (token, env_name). Token is None if not available.
+        env_name is always returned for env: specs (useful for error messages).
     """
     if not auth_spec:
         return (None, None)
@@ -75,38 +85,41 @@ def resolve_auth_with_name(auth_spec: str | None) -> tuple[str | None, str | Non
     if not auth_spec:
         return (None, None)
 
-    # env:VAR_NAME format
+    # Extract env_name for env: specs (even if token is missing - for error messages)
+    # This preserves the old behavior where env_name was always returned
+    env_name_fallback = None
     if auth_spec.startswith("env:"):
-        env_name = auth_spec[4:]
-        token = os.environ.get(env_name)
-        if token:
-            token = token.strip()
-        return (token, env_name)
+        env_name_fallback = auth_spec[4:]
 
-    # command:CMD format
-    if auth_spec.startswith("command:"):
-        cmd = auth_spec[8:]
-        try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0 and result.stdout:
-                token = result.stdout.strip()
-                return (token, "SCC_AUTH_TOKEN")
-            return (None, "SCC_AUTH_TOKEN")
-        except (subprocess.TimeoutExpired, OSError):
-            return (None, "SCC_AUTH_TOKEN")
-
-    # Unknown format
-    return (None, None)
+    try:
+        # Use secure auth.py implementation (shell=False, validated binary)
+        # Pass through allow_command to enforce trust model
+        result = _resolve_auth_impl(auth_spec, allow_command=allow_command)
+        if result:
+            # Use result.env_name if available, otherwise use our fallback
+            env_name = result.env_name if result.env_name else "SCC_AUTH_TOKEN"
+            return (result.token, env_name)
+        # Auth failed but we have env name from spec - return it for error messages
+        if env_name_fallback:
+            return (None, env_name_fallback)
+        return (None, None)
+    except (ValueError, RuntimeError):
+        # Auth resolution failed - return env_name for error messages if available
+        # ValueError: invalid auth spec format
+        # RuntimeError: command execution failed
+        if env_name_fallback:
+            return (None, env_name_fallback)
+        return (None, None)
 
 
-def resolve_marketplace_auth(marketplace: dict) -> AuthResult | None:
+def resolve_marketplace_auth(
+    marketplace: dict,
+    allow_command: bool = False,
+) -> AuthResult | None:
     """Resolve marketplace auth spec to AuthResult.
+
+    SECURITY: Command execution is disabled by default to prevent arbitrary
+    code execution from untrusted remote org configs.
 
     Determines which standard env vars to also set based on marketplace type:
     - gitlab: also set GITLAB_TOKEN
@@ -114,6 +127,9 @@ def resolve_marketplace_auth(marketplace: dict) -> AuthResult | None:
 
     Args:
         marketplace: Marketplace config dict
+        allow_command: Whether to allow command: auth specs. Default False
+            for security. Use is_remote_command_allowed() to check if user
+            has opted in via SCC_ALLOW_REMOTE_COMMANDS=1.
 
     Returns:
         AuthResult with token and env var names, or None if no auth needed
@@ -122,7 +138,7 @@ def resolve_marketplace_auth(marketplace: dict) -> AuthResult | None:
     if not auth_spec:
         return None
 
-    token, env_name = resolve_auth_with_name(auth_spec)
+    token, env_name = resolve_auth_with_name(auth_spec, allow_command=allow_command)
     if not token or not env_name:
         return None
 
@@ -198,17 +214,30 @@ def get_settings_file_content(settings: dict) -> str:
 
 
 def inject_credentials(
-    marketplace: dict, docker_env: MutableMapping[str, str]
+    marketplace: dict,
+    docker_env: MutableMapping[str, str],
+    allow_command: bool | None = None,
 ) -> None:
     """Inject marketplace credentials into Docker environment.
+
+    SECURITY: By default, checks SCC_ALLOW_REMOTE_COMMANDS env var to determine
+    if command: auth is allowed. This prevents arbitrary code execution from
+    untrusted remote org configs.
 
     Uses setdefault to preserve any user-provided overrides.
 
     Args:
         marketplace: Marketplace config dict
         docker_env: Mutable dict to inject credentials into
+        allow_command: Whether to allow command: auth specs. If None (default),
+            uses is_remote_command_allowed() to check env var. Pass True/False
+            to override.
     """
-    result = resolve_marketplace_auth(marketplace)
+    # Determine if command auth is allowed
+    if allow_command is None:
+        allow_command = is_remote_command_allowed()
+
+    result = resolve_marketplace_auth(marketplace, allow_command=allow_command)
     if not result:
         return
 
