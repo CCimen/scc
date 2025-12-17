@@ -1,19 +1,30 @@
 """
 Team profile management.
 
-Fetches team-specific configurations from GitHub or local config.
+Simplified architecture: SCC generates extraKnownMarketplaces + enabledPlugins,
+Claude Code handles plugin fetching, installation, and updates natively.
 """
 
-import json
-import subprocess
-import tempfile
-from pathlib import Path
+from . import config as config_module
 
 
-def list_teams(cfg: dict) -> list[dict]:
-    """List available teams from configuration."""
+def list_teams(cfg: dict, org_config: dict | None = None) -> list[dict]:
+    """List available teams from configuration.
 
-    profiles = cfg.get("profiles", {})
+    Args:
+        cfg: User config (used for legacy fallback)
+        org_config: Organization config with profiles. If provided, uses
+            NEW architecture. If None, falls back to legacy behavior.
+
+    Returns:
+        List of team dicts with name, description, plugin
+    """
+    # NEW architecture: use org_config for profiles
+    if org_config is not None:
+        profiles = org_config.get("profiles", {})
+    else:
+        # Legacy fallback
+        profiles = cfg.get("profiles", {})
 
     teams = []
     for name, info in profiles.items():
@@ -21,176 +32,204 @@ def list_teams(cfg: dict) -> list[dict]:
             {
                 "name": name,
                 "description": info.get("description", ""),
-                "tools": info.get("tools", []),
-                "repositories": info.get("repositories", []),
+                "plugin": info.get("plugin"),
             }
         )
 
     return teams
 
 
-def get_team_details(team: str, cfg: dict) -> dict | None:
+def get_team_details(team: str, cfg: dict, org_config: dict | None = None) -> dict | None:
     """
     Get detailed information for a specific team.
 
+    Args:
+        team: Team/profile name
+        cfg: User config (used for legacy fallback)
+        org_config: Organization config. If provided, uses NEW architecture.
+
     Returns None if team doesn't exist.
     """
-    profiles = cfg.get("profiles", {})
-    team_info = profiles.get(team)
+    # NEW architecture: use org_config for profiles
+    if org_config is not None:
+        profiles = org_config.get("profiles", {})
+        marketplaces = org_config.get("marketplaces", [])
+    else:
+        # Legacy fallback
+        profiles = cfg.get("profiles", {})
+        marketplaces = []
 
+    team_info = profiles.get(team)
     if not team_info:
         return None
 
+    # Get marketplace info
+    if org_config is not None:
+        # NEW: look up marketplace by name from org_config
+        marketplace_name = team_info.get("marketplace")
+        marketplace = next(
+            (m for m in marketplaces if m.get("name") == marketplace_name),
+            {},
+        )
+        return {
+            "name": team,
+            "description": team_info.get("description", ""),
+            "plugin": team_info.get("plugin"),
+            "marketplace": marketplace.get("name"),
+            "marketplace_type": marketplace.get("type"),
+            "marketplace_repo": marketplace.get("repo"),
+        }
+    else:
+        # Legacy: single marketplace in cfg
+        marketplace = cfg.get("marketplace", {})
+        return {
+            "name": team,
+            "description": team_info.get("description", ""),
+            "plugin": team_info.get("plugin"),
+            "marketplace": marketplace.get("name"),
+            "marketplace_repo": marketplace.get("repo"),
+        }
+
+
+def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
+    """
+    Generate sandbox settings for a team profile.
+
+    Returns settings.json content with extraKnownMarketplaces
+    and enabledPlugins configured for Claude Code.
+
+    This is the core function of the simplified architecture:
+    - SCC injects these settings into the Docker sandbox volume
+    - Claude Code sees extraKnownMarketplaces and fetches the marketplace
+    - Claude Code installs the specified plugin automatically
+    - Teams maintain their plugins in the marketplace repo
+
+    Args:
+        team_name: Name of the team profile (e.g., "api-team")
+        cfg: Optional config dict. If None, loads from config file.
+
+    Returns:
+        Dict with extraKnownMarketplaces and enabledPlugins for settings.json
+        Returns empty dict if team has no plugin configured.
+    """
+    if cfg is None:
+        cfg = config_module.load_config()
+
+    marketplace = cfg.get("marketplace", {})
+    marketplace_name = marketplace.get("name", "sundsvall")
+    marketplace_repo = marketplace.get("repo", "sundsvall/claude-plugins-marketplace")
+
+    profile = cfg.get("profiles", {}).get(team_name, {})
+    plugin_name = profile.get("plugin")
+
+    # No plugin configured for this profile
+    if not plugin_name:
+        return {}
+
+    # Generate settings that Claude Code understands
     return {
-        "name": team,
-        "description": team_info.get("description", ""),
-        "tools": team_info.get("tools", []),
-        "repositories": team_info.get("repositories", []),
-        "settings": team_info.get("settings", {}),
-        "claude_md": team_info.get("claude_md"),
+        "extraKnownMarketplaces": {
+            marketplace_name: {
+                "source": {
+                    "source": "github",
+                    "repo": marketplace_repo,
+                }
+            }
+        },
+        "enabledPlugins": [f"{plugin_name}@{marketplace_name}"],
     }
 
 
-def fetch_team_config(team: str, cfg: dict) -> dict:
+def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
     """
-    Fetch team-specific configuration.
+    Get the full plugin ID for a team (e.g., "api-team@sundsvall").
 
-    First checks local config, then tries to fetch from GitHub if configured.
+    Returns None if team has no plugin configured.
     """
+    if cfg is None:
+        cfg = config_module.load_config()
 
-    # Check local config first
-    local_config = cfg.get("profiles", {}).get(team)
+    marketplace = cfg.get("marketplace", {})
+    marketplace_name = marketplace.get("name", "sundsvall")
 
-    if local_config:
-        return local_config
+    profile = cfg.get("profiles", {}).get(team_name, {})
+    plugin_name = profile.get("plugin")
 
-    # Try fetching from GitHub
-    org_config = cfg.get("organization", {})
-    github_org = org_config.get("github_org")
-    config_repo = org_config.get("config_repo")
+    if not plugin_name:
+        return None
 
-    if github_org and config_repo:
-        return fetch_from_github(github_org, config_repo, team)
-
-    # Return empty config
-    return {"tools": [], "repositories": []}
+    return f"{plugin_name}@{marketplace_name}"
 
 
-def fetch_from_github(org: str, repo: str, team: str) -> dict:
+def validate_team_profile(
+    team_name: str,
+    cfg: dict | None = None,
+    org_config: dict | None = None,
+) -> dict:
     """
-    Fetch team configuration from GitHub repository.
+    Validate a team profile configuration.
 
-    Looks for profiles/{team}/config.json in the repository.
+    Args:
+        team_name: Name of the team/profile to validate
+        cfg: User config (deprecated, kept for backward compatibility)
+        org_config: Organization config with profiles and marketplaces.
+            If provided, uses NEW architecture. If None, falls back to
+            legacy behavior (reading profiles from cfg).
+
+    Returns dict with:
+        - valid: bool
+        - team: team name
+        - plugin: plugin name or None
+        - errors: list of validation errors
+        - warnings: list of warnings
     """
+    if cfg is None:
+        cfg = config_module.load_config()
 
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Sparse checkout just the team folder
-            subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--filter=blob:none",
-                    "--sparse",
-                    f"https://github.com/{org}/{repo}.git",
-                    tmpdir,
-                ],
-                capture_output=True,
-                timeout=30,
-            )
+    result = {
+        "valid": True,
+        "team": team_name,
+        "plugin": None,
+        "errors": [],
+        "warnings": [],
+    }
 
-            subprocess.run(
-                ["git", "-C", tmpdir, "sparse-checkout", "set", f"profiles/{team}"],
-                capture_output=True,
-                timeout=10,
-            )
+    # NEW architecture: use org_config for profiles
+    if org_config is not None:
+        profiles = org_config.get("profiles", {})
+        marketplaces = org_config.get("marketplaces", [])
+    else:
+        # Legacy fallback: read from user config (deprecated)
+        profiles = cfg.get("profiles", {})
+        marketplaces = []
 
-            config_path = Path(tmpdir) / "profiles" / team / "config.json"
+    # Check if team exists
+    if team_name not in profiles:
+        result["valid"] = False
+        result["errors"].append(f"Team '{team_name}' not found in profiles")
+        return result
 
-            if config_path.exists():
-                with open(config_path) as f:
-                    return json.load(f)
+    profile = profiles[team_name]
+    result["plugin"] = profile.get("plugin")
 
-    except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
-        pass
+    # Check marketplace configuration (NEW architecture)
+    if org_config is not None:
+        marketplace_name = profile.get("marketplace")
+        if marketplace_name:
+            # Find the marketplace in org_config
+            marketplace_found = any(m.get("name") == marketplace_name for m in marketplaces)
+            if not marketplace_found:
+                result["warnings"].append(f"Marketplace '{marketplace_name}' not found")
+    else:
+        # Legacy: check single marketplace
+        marketplace = cfg.get("marketplace", {})
+        if not marketplace.get("repo"):
+            result["warnings"].append("No marketplace repo configured")
 
-    return {"tools": [], "repositories": []}
+    # Check if plugin is configured (not required for 'base' profile)
+    if not result["plugin"] and team_name != "base":
+        result["warnings"].append(
+            f"Team '{team_name}' has no plugin configured - using base settings"
+        )
 
-
-def apply_team_config(workspace: Path, team_config: dict):
-    """
-    Apply team configuration to a workspace.
-
-    This copies CLAUDE.md, settings.json, and skills to the workspace.
-    """
-
-    if not workspace or not workspace.exists():
-        return
-
-    # Paths
-    claude_dir = workspace / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
-
-    # Apply settings if present in team config
-    if "settings" in team_config:
-        settings_path = claude_dir / "settings.json"
-
-        if not settings_path.exists():
-            with open(settings_path, "w") as f:
-                json.dump(team_config["settings"], f, indent=2)
-
-    # Apply CLAUDE.md if present
-    if "claude_md" in team_config:
-        claude_md_path = workspace / "CLAUDE.md"
-
-        if not claude_md_path.exists():
-            claude_md_path.write_text(team_config["claude_md"])
-
-
-def get_team_repositories(team: str, cfg: dict) -> list[dict]:
-    """Get list of repositories for a team."""
-
-    team_config = cfg.get("profiles", {}).get(team, {})
-    return team_config.get("repositories", [])
-
-
-def add_team_repository(team: str, repo: dict, cfg: dict) -> bool:
-    """Add a repository to a team's list."""
-
-    from . import config as cfg_module
-
-    if team not in cfg.get("profiles", {}):
-        return False
-
-    cfg["profiles"][team].setdefault("repositories", []).append(repo)
-    cfg_module.save_config(cfg)
-
-    return True
-
-
-def sync_team_from_github(team: str, cfg: dict) -> bool:
-    """
-    Sync team configuration from GitHub.
-
-    Downloads the latest configuration and updates local config.
-    """
-
-    org_config = cfg.get("organization", {})
-    github_org = org_config.get("github_org")
-    config_repo = org_config.get("config_repo")
-
-    if not github_org or not config_repo:
-        return False
-
-    team_config = fetch_from_github(github_org, config_repo, team)
-
-    if team_config:
-        from . import config as cfg_module
-
-        cfg["profiles"][team] = team_config
-        cfg_module.save_config(cfg)
-        return True
-
-    return False
+    return result

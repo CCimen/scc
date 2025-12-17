@@ -329,6 +329,51 @@ def show_launch_info(console: Console, workspace: Path, team: str, session_name:
     console.print("\n[yellow]Starting Docker sandbox...[/yellow]\n")
 
 
+def select_session(console: Console, sessions_list: list[dict]) -> dict | None:
+    """Interactive session selection from a list of sessions.
+
+    Args:
+        console: Rich console for output
+        sessions_list: List of session dicts with 'name', 'workspace', 'last_used', etc.
+
+    Returns:
+        Selected session dict or None if cancelled.
+    """
+    if not sessions_list:
+        console.print("[yellow]No sessions available.[/yellow]")
+        return None
+
+    console.print("\n[bold cyan]Select a session:[/bold cyan]\n")
+
+    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+    table.add_column("Option", style="yellow", width=4)
+    table.add_column("Name", style="cyan")
+    table.add_column("Workspace", style="white")
+    table.add_column("Last Used", style="dim")
+
+    for i, session in enumerate(sessions_list, 1):
+        name = session.get("name", "-")
+        workspace = session.get("workspace", "-")
+        last_used = session.get("last_used", "-")
+        table.add_row(f"[{i}]", name, workspace, last_used)
+
+    table.add_row("[0]", "← Cancel", "", "")
+
+    console.print(table)
+
+    valid_choices = [str(i) for i in range(0, len(sessions_list) + 1)]
+    choice = IntPrompt.ask(
+        "\n[cyan]Select session[/cyan]",
+        default=1,
+        choices=valid_choices,
+    )
+
+    if choice == 0:
+        return None
+
+    return sessions_list[choice - 1]
+
+
 def show_worktree_options(console: Console, workspace: Path) -> str | None:
     """Show worktree options during an active session."""
 

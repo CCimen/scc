@@ -19,7 +19,7 @@ from rich.prompt import Confirm, Prompt
 from rich.status import Status
 from rich.table import Table
 
-from . import config, docker, doctor, git, sessions, setup, teams, ui
+from . import config, deps, docker, doctor, git, profiles, remote, sessions, setup, teams, ui
 from . import platform as platform_module
 from .errors import (
     NotAGitRepoError,
@@ -228,6 +228,15 @@ def start(
     fresh: bool = typer.Option(
         False, "--fresh", help="Force new container (don't resume existing)"
     ),
+    install_deps: bool = typer.Option(
+        False, "--install-deps", help="Install dependencies before starting"
+    ),
+    offline: bool = typer.Option(
+        False, "--offline", help="Use cached config only (error if none)"
+    ),
+    standalone: bool = typer.Option(
+        False, "--standalone", help="Run without organization config"
+    ),
 ):
     """
     Start Claude Code in a Docker sandbox.
@@ -246,6 +255,18 @@ def start(
         workspace, team, session_name, worktree_name = interactive_start(cfg)
         if workspace is None:
             raise typer.Exit()
+
+    # Auto-select most recent session when --continue without workspace
+    if continue_session and workspace is None:
+        recent_session = sessions.get_most_recent()
+        if recent_session:
+            workspace = recent_session.get("workspace")
+            if not team:
+                team = recent_session.get("team")
+            console.print(f"[dim]Resuming: {workspace}[/dim]")
+        else:
+            console.print("[yellow]No recent sessions found.[/yellow]")
+            raise typer.Exit(1)
 
     # Validate Docker with spinner
     with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
@@ -287,15 +308,40 @@ def start(
             )
         )
 
+    # Install dependencies if requested
+    if install_deps and workspace_path:
+        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
+            success = deps.auto_install_dependencies(workspace_path)
+        if success:
+            console.print("[green]✓ Dependencies installed[/green]")
+        else:
+            console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
+
     # Check git safety (handles protected branch warnings)
     if workspace_path and workspace_path.exists():
         git.check_branch_safety(workspace_path, console)
 
-    # Load team profile
+    # Inject team plugin settings into Docker sandbox
     if team:
-        with Status(f"[cyan]Loading {team} profile...[/cyan]", console=console, spinner="dots"):
-            team_config = teams.fetch_team_config(team, cfg)
-            teams.apply_team_config(workspace_path, team_config)
+        with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
+            # Load cached org config (NEW architecture)
+            org_config = config.load_cached_org_config()
+
+            # Validate team profile exists
+            validation = teams.validate_team_profile(team, cfg, org_config=org_config)
+            if not validation["valid"]:
+                console.print(
+                    create_warning_panel(
+                        "Team Not Found",
+                        f"No team profile named '{team}'.",
+                        "Run 'scc teams' to see available profiles",
+                    )
+                )
+                raise typer.Exit(1)
+
+            # Inject team settings (extraKnownMarketplaces + enabledPlugins)
+            # This happens in the Docker volume, Claude Code handles the rest
+            docker.inject_team_settings(team, org_config=org_config)
 
     # Get current branch for container naming
     current_branch = None
@@ -477,6 +523,9 @@ def worktree_cmd(
     start_claude: bool = typer.Option(
         True, "--start/--no-start", help="Start Claude after creating"
     ),
+    install_deps: bool = typer.Option(
+        False, "--install-deps", help="Install dependencies after creating worktree"
+    ),
 ):
     """Create a new worktree for parallel development."""
     workspace_path = Path(workspace).expanduser().resolve()
@@ -499,6 +548,15 @@ def worktree_cmd(
             },
         )
     )
+
+    # Install dependencies if requested
+    if install_deps:
+        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
+            success = deps.auto_install_dependencies(worktree_path)
+        if success:
+            console.print("[green]✓ Dependencies installed[/green]")
+        else:
+            console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
 
     if start_claude:
         console.print()
@@ -574,6 +632,9 @@ def teams_cmd(
     """List available team profiles or show team details."""
     cfg = config.load_config()
 
+    # Load cached org config (NEW architecture)
+    org_config = config.load_cached_org_config()
+
     # Sync mode
     if sync:
         _sync_teams(cfg, team_name)
@@ -581,11 +642,11 @@ def teams_cmd(
 
     # Detail view for specific team
     if team_name:
-        _show_team_details(cfg, team_name)
+        _show_team_details(cfg, team_name, org_config=org_config)
         return
 
-    # List all teams
-    available_teams = teams.list_teams(cfg)
+    # List all teams (pass org_config for NEW architecture)
+    available_teams = teams.list_teams(cfg, org_config=org_config)
 
     if not available_teams:
         console.print(
@@ -600,9 +661,8 @@ def teams_cmd(
     # Build rows for responsive table
     rows = []
     for team in available_teams:
-        tools = ", ".join(team.get("tools", [])) or "-"
-        repos = str(len(team.get("repositories", [])))
-        rows.append([team["name"], team["description"], tools, repos])
+        plugin = team.get("plugin") or "-"
+        rows.append([team["name"], team["description"], plugin])
 
     _render_responsive_table(
         title="Available Team Profiles",
@@ -612,17 +672,16 @@ def teams_cmd(
         ],
         rows=rows,
         wide_columns=[
-            ("Tools", "yellow"),
-            ("Repos", "dim"),
+            ("Plugin", "yellow"),
         ],
     )
 
     console.print("[dim]Use: scc teams <name> for details, scc teams --sync to update[/dim]")
 
 
-def _show_team_details(cfg: dict, team_name: str) -> None:
+def _show_team_details(cfg: dict, team_name: str, org_config: dict | None = None) -> None:
     """Display detailed information for a team profile."""
-    details = teams.get_team_details(team_name, cfg)
+    details = teams.get_team_details(team_name, cfg, org_config=org_config)
 
     if not details:
         console.print(
@@ -640,29 +699,15 @@ def _show_team_details(cfg: dict, team_name: str) -> None:
     grid.add_column(style="white")
 
     grid.add_row("Description:", details.get("description", "-"))
-    grid.add_row(
-        "Tools:",
-        ", ".join(details.get("tools", [])) or "[dim]None configured[/dim]",
-    )
 
-    repos = details.get("repositories", [])
-    if repos:
-        repo_names = [r.get("name", r.get("url", "?")) for r in repos[:5]]
-        repos_str = ", ".join(repo_names)
-        if len(repos) > 5:
-            repos_str += f" [dim]+{len(repos) - 5} more[/dim]"
-        grid.add_row("Repositories:", repos_str)
+    # Show plugin info (new simplified schema)
+    plugin = details.get("plugin")
+    if plugin:
+        marketplace = details.get("marketplace", "sundsvall")
+        grid.add_row("Plugin:", f"{plugin}@{marketplace}")
+        grid.add_row("Marketplace:", details.get("marketplace_repo", "-"))
     else:
-        grid.add_row("Repositories:", "[dim]None configured[/dim]")
-
-    has_settings = bool(details.get("settings"))
-    has_claude_md = bool(details.get("claude_md"))
-    extras = []
-    if has_settings:
-        extras.append("settings.json")
-    if has_claude_md:
-        extras.append("CLAUDE.md")
-    grid.add_row("Includes:", ", ".join(extras) if extras else "[dim]No extras[/dim]")
+        grid.add_row("Plugin:", "[dim]None (base profile)[/dim]")
 
     panel = Panel(
         grid,
@@ -759,9 +804,18 @@ def _sync_teams(cfg: dict, team_name: str | None) -> None:
 @handle_errors
 def sessions_cmd(
     limit: int = typer.Option(10, "-n", "--limit", help="Number of sessions to show"),
+    select: bool = typer.Option(False, "--select", "-s", help="Interactive picker to select a session"),
 ):
     """List recent Claude Code sessions."""
     recent = sessions.list_recent(limit)
+
+    # Interactive picker mode
+    if select and recent:
+        selected = ui.select_session(console, recent)
+        if selected:
+            console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
+            console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        return
 
     if not recent:
         console.print(
@@ -947,10 +1001,33 @@ def stop_cmd(
 def setup_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick setup with defaults"),
     reset: bool = typer.Option(False, "--reset", help="Reset configuration"),
+    org_url: str | None = typer.Option(None, "--org-url", help="Organization config URL (for non-interactive)"),
+    team: str | None = typer.Option(None, "--team", "-t", help="Team profile to select"),
+    auth: str | None = typer.Option(None, "--auth", help="Auth spec (env:VAR or command:CMD)"),
+    standalone: bool = typer.Option(False, "--standalone", help="Standalone mode (no organization)"),
 ):
-    """Run initial setup wizard."""
+    """Run initial setup wizard.
+
+    Examples:
+        scc setup                                    # Interactive wizard
+        scc setup --standalone                       # Standalone mode
+        scc setup --org-url <url> --team dev         # Non-interactive
+    """
     if reset:
         setup.reset_setup(console)
+        return
+
+    # Non-interactive mode if org_url or standalone specified
+    if org_url or standalone:
+        success = setup.run_non_interactive_setup(
+            console,
+            org_url=org_url,
+            team=team,
+            auth=auth,
+            standalone=standalone,
+        )
+        if not success:
+            raise typer.Exit(1)
         return
 
     if quick:
@@ -962,30 +1039,104 @@ def setup_cmd(
 @app.command(name="config")
 @handle_errors
 def config_cmd(
+    action: str = typer.Argument(None, help="Action: set, get, show, edit"),
+    key: str = typer.Argument(None, help="Config key (for set/get, e.g. hooks.enabled)"),
+    value: str = typer.Argument(None, help="Value (for set only)"),
     show: bool = typer.Option(False, "--show", help="Show current config"),
     edit: bool = typer.Option(False, "--edit", help="Open config in editor"),
 ):
-    """View or edit configuration."""
-    if show:
-        cfg = config.load_config()
+    """View or edit configuration.
+
+    Examples:
+        scc config --show                    # Show all config
+        scc config get selected_profile      # Get specific key
+        scc config set hooks.enabled true    # Set a value
+        scc config --edit                    # Open in editor
+    """
+    # Handle action-based commands
+    if action == "set":
+        if not key or value is None:
+            console.print("[red]Usage: scc config set <key> <value>[/red]")
+            raise typer.Exit(1)
+        _config_set(key, value)
+        return
+
+    if action == "get":
+        if not key:
+            console.print("[red]Usage: scc config get <key>[/red]")
+            raise typer.Exit(1)
+        _config_get(key)
+        return
+
+    # Handle --show and --edit flags
+    if show or action == "show":
+        cfg = config.load_user_config()
         console.print(
             create_info_panel(
                 "Configuration",
-                "Current settings loaded from ~/.config/scc-cli/",
+                f"Current settings loaded from {config.CONFIG_FILE}",
             )
         )
         console.print()
         console.print_json(data=cfg)
-    elif edit:
+    elif edit or action == "edit":
         config.open_in_editor()
     else:
         console.print(
             create_info_panel(
                 "Configuration Help",
-                "Use --show to view current settings\nUse --edit to modify in your editor",
-                "Config location: ~/.config/scc-cli/config.json",
+                "Commands:\n  scc config --show     View current settings\n  scc config --edit     Edit in your editor\n  scc config get <key>  Get a specific value\n  scc config set <key> <value>  Set a value",
+                f"Config location: {config.CONFIG_FILE}",
             )
         )
+
+
+def _config_set(key: str, value: str) -> None:
+    """Set a configuration value by dotted key path."""
+    cfg = config.load_user_config()
+
+    # Parse dotted key path (e.g., "hooks.enabled")
+    keys = key.split(".")
+    obj = cfg
+    for k in keys[:-1]:
+        if k not in obj:
+            obj[k] = {}
+        obj = obj[k]
+
+    # Parse value (handle booleans and numbers)
+    if value.lower() == "true":
+        parsed_value = True
+    elif value.lower() == "false":
+        parsed_value = False
+    elif value.isdigit():
+        parsed_value = int(value)
+    else:
+        parsed_value = value
+
+    obj[keys[-1]] = parsed_value
+    config.save_user_config(cfg)
+    console.print(f"[green]✓ Set {key} = {parsed_value}[/green]")
+
+
+def _config_get(key: str) -> None:
+    """Get a configuration value by dotted key path."""
+    cfg = config.load_user_config()
+
+    # Navigate dotted key path
+    keys = key.split(".")
+    obj = cfg
+    for k in keys:
+        if isinstance(obj, dict) and k in obj:
+            obj = obj[k]
+        else:
+            console.print(f"[yellow]Key '{key}' not found[/yellow]")
+            return
+
+    # Display value
+    if isinstance(obj, dict):
+        console.print_json(data=obj)
+    else:
+        console.print(str(obj))
 
 
 @app.command(name="doctor")
@@ -1012,41 +1163,21 @@ def doctor_cmd(
 
 @app.command(name="update")
 @handle_errors
-def update_cmd():
-    """Check for updates to scc-cli CLI."""
+def update_cmd(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force check even if recently checked"
+    ),
+):
+    """Check for updates to scc-cli CLI and organization config."""
     from . import update as update_module
 
+    cfg = config.load_config()
+
     with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner="dots"):
-        info = update_module.check_for_updates()
+        result = update_module.check_all_updates(cfg, force=force)
 
-    console.print()
-
-    if info.latest is None:
-        console.print(
-            create_warning_panel(
-                "Check Failed",
-                "Could not reach PyPI to check for updates.",
-                "Check your internet connection",
-            )
-        )
-        raise typer.Exit(1)
-
-    if info.update_available:
-        cmd = update_module.get_update_command(info.install_method)
-        console.print(
-            create_info_panel(
-                "Update Available",
-                f"Current: {info.current}\nLatest:  {info.latest}",
-                f"Run: {cmd}",
-            )
-        )
-    else:
-        console.print(
-            create_success_panel(
-                "Up to Date",
-                {"Version": info.current},
-            )
-        )
+    # Render detailed update status panel
+    update_module.render_update_status_panel(console, result)
 
 
 @app.command(name="statusline")

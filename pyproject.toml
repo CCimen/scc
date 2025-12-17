@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scc-cli"
-version = "1.0.0"
+version = "1.0.1"
 description = "Run Claude Code in Docker sandboxes with team configs and git worktree support"
 readme = "README.md"
 license = "MIT"
@@ -28,6 +28,8 @@ requires-python = ">=3.10"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
+    "jsonschema>=4.25.1",
+    "requests>=2.32.5",
 ]
 
 [project.optional-dependencies]
@@ -75,3 +77,8 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --cov=scc_cli"
+
+[dependency-groups]
+dev = [
+    "responses>=0.25.8",
+]

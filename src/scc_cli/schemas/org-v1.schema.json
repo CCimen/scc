@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://scc-cli.dev/schemas/org-v1.json",
+  "title": "SCC Organization Config v1",
+  "description": "Schema for SCC organization configuration files",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference URL"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this schema (e.g., '1.0.0')"
+    },
+    "min_cli_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Minimum SCC CLI version required to use this config"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when config was generated"
+    },
+    "organization": {
+      "type": "object",
+      "description": "Organization identification",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Display name of the organization"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "URL-safe organization identifier"
+        },
+        "contact": {
+          "type": "string",
+          "description": "Contact email or URL for the organization"
+        }
+      },
+      "required": ["name", "id"]
+    },
+    "marketplaces": {
+      "type": "array",
+      "description": "List of marketplace sources for plugins",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Unique marketplace identifier"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["github", "gitlab", "https"],
+            "description": "Marketplace source type"
+          },
+          "host": {
+            "type": "string",
+            "description": "Custom host for self-hosted instances (e.g., gitlab.example.org)"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Repository path (e.g., group/subgroup/repo)"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Full HTTPS URL (required for type=https)"
+          },
+          "ref": {
+            "type": "string",
+            "default": "main",
+            "description": "Git ref (branch/tag) to use"
+          },
+          "auth": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "string",
+                "pattern": "^(env|command):.+$"
+              }
+            ],
+            "description": "Auth spec: 'env:VAR_NAME', 'command:CMD', or null for public"
+          }
+        },
+        "required": ["name", "type"]
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Team profiles mapping names to plugin configurations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of this profile"
+          },
+          "plugin": {
+            "oneOf": [
+              { "type": "null" },
+              { "type": "string", "minLength": 1 }
+            ],
+            "description": "Plugin name to enable for this profile"
+          },
+          "marketplace": {
+            "type": "string",
+            "description": "Marketplace name where plugin is located"
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Default settings for the organization",
+      "properties": {
+        "profile": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" }
+          ],
+          "description": "Default profile to use if none specified"
+        },
+        "cache_ttl_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 168,
+          "default": 24,
+          "description": "Cache TTL in hours (1-168)"
+        }
+      }
+    }
+  },
+  "required": ["organization"]
+}

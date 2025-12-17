@@ -1,11 +1,11 @@
 """
-First-run setup wizard for SCC - Sandboxed Claude CLI.
+Setup wizard for SCC - Sandboxed Claude CLI.
 
-Provides a minimal, user-friendly onboarding experience:
-- Prerequisite validation
-- Workspace configuration
-- Team profile selection (optional)
-- Status line configuration (optional)
+Remote organization config workflow:
+- Prompt for org config URL (or standalone mode)
+- Handle authentication (env:VAR, command:CMD)
+- Team/profile selection from remote config
+- Git hooks enablement option
 
 Philosophy: "Get started in under 60 seconds"
 - Minimal questions
@@ -13,9 +13,6 @@ Philosophy: "Get started in under 60 seconds"
 - Clear guidance
 """
 
-import importlib.resources
-import json
-from pathlib import Path
 
 from rich import box
 from rich.console import Console
@@ -23,8 +20,8 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from . import config, doctor
-from . import platform as platform_module
+from . import config
+from .remote import fetch_org_config
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Welcome Screen
@@ -42,104 +39,166 @@ WELCOME_BANNER = """
 """
 
 
-WELCOME_BANNER_SIMPLE = """
-[cyan]┌─────────────────────────────────────────────────────────┐[/cyan]
-[cyan]│[/cyan]  [bold white]Welcome to SCC - Sandboxed Claude CLI[/bold white]               [cyan]│[/cyan]
-[cyan]│[/cyan]  [dim]Safe development environment for AI-assisted coding[/dim]  [cyan]│[/cyan]
-[cyan]└─────────────────────────────────────────────────────────┘[/cyan]
-"""
-
-
 def show_welcome(console: Console) -> None:
     """Display the welcome banner."""
     console.print()
-    if platform_module.is_wide_terminal(90):
-        console.print(WELCOME_BANNER)
-    else:
-        console.print(WELCOME_BANNER_SIMPLE)
+    console.print(WELCOME_BANNER)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Setup Steps
+# Organization Config URL
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def check_prerequisites(console: Console) -> bool:
-    """
-    Run prerequisite checks and display results.
+def prompt_has_org_config(console: Console) -> bool:
+    """Ask if user has an organization config URL.
 
-    Returns True if all critical prerequisites pass.
+    Returns:
+        True if user has org config URL, False for standalone mode.
     """
-    console.print("[bold cyan]Checking prerequisites...[/bold cyan]")
     console.print()
-
-    result = doctor.run_doctor()
-    doctor.render_doctor_results(console, result)
-
-    return result.all_ok
-
-
-def prompt_workspace_base(console: Console) -> Path:
-    """
-    Prompt user for workspace base directory.
-
-    Returns the selected or default workspace path.
-    """
-    default_path = platform_module.get_recommended_workspace_base()
-
-    console.print()
-    console.print("[bold cyan]Where do you keep your projects?[/bold cyan]")
-    console.print()
-
-    # Show platform-specific recommendation
-    if platform_module.is_wsl2():
-        console.print(
-            "[dim]Tip: For best performance in WSL2, keep projects inside the Linux filesystem.[/dim]"
-        )
-        console.print()
-
-    # Prompt with default
-    path_str = Prompt.ask(
-        "  [cyan]Projects directory[/cyan]",
-        default=str(default_path),
+    return Confirm.ask(
+        "[cyan]Do you have an organization config URL?[/cyan]",
+        default=True,
     )
 
-    workspace_path = Path(path_str).expanduser().resolve()
 
-    # Create if doesn't exist
-    if not workspace_path.exists():
-        console.print()
-        if Confirm.ask(
-            "  [yellow]Directory doesn't exist. Create it?[/yellow]",
-            default=True,
-        ):
-            workspace_path.mkdir(parents=True, exist_ok=True)
-            console.print(f"  [green]  Created {workspace_path}[/green]")
-        else:
-            console.print("  [dim]Using path anyway (will create on first use)[/dim]")
+def prompt_org_url(console: Console) -> str:
+    """Prompt for organization config URL.
 
-    return workspace_path
+    Validates that URL is HTTPS. Rejects HTTP URLs.
 
-
-def prompt_team_selection(console: Console) -> str | None:
-    """
-    Prompt user to select a team profile (optional).
-
-    Returns the selected team name or None for base profile.
+    Returns:
+        Valid HTTPS URL string.
     """
     console.print()
-    console.print("[bold cyan]Select your team (optional)[/bold cyan]")
-    console.print()
-    console.print("[dim]Team profiles provide pre-configured settings for your stack.[/dim]")
+    console.print("[dim]Enter your organization config URL (HTTPS only)[/dim]")
     console.print()
 
-    # Get available teams from config
-    teams_config = config.load_teams_config()
-    profiles = teams_config.get("profiles", {})
+    while True:
+        url = Prompt.ask("[cyan]Organization config URL[/cyan]")
+
+        # Validate HTTPS
+        if url.startswith("http://"):
+            console.print("[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]")
+            continue
+
+        if not url.startswith("https://"):
+            console.print("[red]✗ URL must start with https://[/red]")
+            continue
+
+        return url
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Authentication
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def prompt_auth_method(console: Console) -> str | None:
+    """Prompt for authentication method.
+
+    Options:
+    1. Environment variable (env:VAR)
+    2. Command (command:CMD)
+    3. Skip (no auth)
+
+    Returns:
+        Auth spec string (env:VAR or command:CMD) or None to skip.
+    """
+    console.print()
+    console.print("[bold cyan]Authentication required[/bold cyan]")
+    console.print()
+    console.print("[dim]How would you like to provide authentication?[/dim]")
+    console.print()
+    console.print("  [yellow][1][/yellow] Environment variable (env:VAR_NAME)")
+    console.print("  [yellow][2][/yellow] Command (command:your-command)")
+    console.print("  [yellow][3][/yellow] Skip authentication")
+    console.print()
+
+    choice = Prompt.ask(
+        "[cyan]Select option[/cyan]",
+        choices=["1", "2", "3"],
+        default="1",
+    )
+
+    if choice == "1":
+        var_name = Prompt.ask("[cyan]Environment variable name[/cyan]")
+        return f"env:{var_name}"
+
+    if choice == "2":
+        command = Prompt.ask("[cyan]Command to run[/cyan]")
+        return f"command:{command}"
+
+    # Choice 3: Skip
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Remote Config Fetching
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def fetch_and_validate_org_config(
+    console: Console, url: str, auth: str | None
+) -> dict | None:
+    """Fetch and validate organization config from URL.
+
+    Args:
+        console: Rich console for output
+        url: HTTPS URL to org config
+        auth: Auth spec (env:VAR, command:CMD) or None
+
+    Returns:
+        Organization config dict if successful, None if auth required (401).
+    """
+    console.print()
+    console.print("[dim]Fetching organization config...[/dim]")
+
+    config_data, etag, status = fetch_org_config(url, auth=auth, etag=None)
+
+    if status == 401:
+        console.print("[yellow]⚠️ Authentication required (401)[/yellow]")
+        return None
+
+    if status == 403:
+        console.print("[red]✗ Access denied (403)[/red]")
+        return None
+
+    if status != 200 or config_data is None:
+        console.print(f"[red]✗ Failed to fetch config (status: {status})[/red]")
+        return None
+
+    org_name = config_data.get("organization", {}).get("name", "Unknown")
+    console.print(f"[green]✓ Connected to: {org_name}[/green]")
+
+    return config_data
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Profile Selection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def prompt_profile_selection(console: Console, org_config: dict) -> str | None:
+    """Prompt user to select a profile from org config.
+
+    Args:
+        console: Rich console for output
+        org_config: Organization config with profiles
+
+    Returns:
+        Selected profile name or None for no profile.
+    """
+    profiles = org_config.get("profiles", {})
 
     if not profiles:
-        console.print("[dim]No team profiles configured. Using base settings.[/dim]")
+        console.print("[dim]No profiles configured.[/dim]")
         return None
+
+    console.print()
+    console.print("[bold cyan]Select your team profile[/bold cyan]")
+    console.print()
 
     # Build selection table
     table = Table(
@@ -149,27 +208,26 @@ def prompt_team_selection(console: Console) -> str | None:
         border_style="dim",
     )
     table.add_column("Option", style="yellow", width=4)
-    table.add_column("Team", style="cyan", min_width=15)
+    table.add_column("Profile", style="cyan", min_width=15)
     table.add_column("Description", style="dim")
 
-    # Filter out "base" from profiles list since it's always shown as [0] option
-    team_list = [name for name in profiles.keys() if name.lower() != "base"]
+    profile_list = list(profiles.keys())
 
-    for i, team_name in enumerate(team_list, 1):
-        team_info = profiles[team_name]
-        desc = team_info.get("description", "")
-        table.add_row(f"[{i}]", team_name, desc)
+    for i, profile_name in enumerate(profile_list, 1):
+        profile_info = profiles[profile_name]
+        desc = profile_info.get("description", "")
+        table.add_row(f"[{i}]", profile_name, desc)
 
-    table.add_row("[0]", "base", "No team-specific settings")
+    table.add_row("[0]", "none", "No profile")
 
     console.print(table)
     console.print()
 
     # Get selection
-    valid_choices = [str(i) for i in range(0, len(team_list) + 1)]
+    valid_choices = [str(i) for i in range(0, len(profile_list) + 1)]
     choice_str = Prompt.ask(
-        "  [cyan]Select team[/cyan]",
-        default="0",
+        "[cyan]Select profile[/cyan]",
+        default="0" if not profile_list else "1",
         choices=valid_choices,
     )
     choice = int(choice_str)
@@ -177,137 +235,121 @@ def prompt_team_selection(console: Console) -> str | None:
     if choice == 0:
         return None
 
-    return team_list[choice - 1]
+    return profile_list[choice - 1]
 
 
-def install_statusline(console: Console) -> bool:
-    """
-    Install the SCC status line into Docker sandbox volume.
-
-    SCC philosophy: Everything stays in Docker, not on host.
-    Returns True if installation successful.
-    """
-    from . import docker
-
-    # Get the status line script from package resources
-    try:
-        template_files = importlib.resources.files("scc_cli.templates")
-        script_content = (template_files / "statusline.sh").read_text()
-    except (FileNotFoundError, TypeError):
-        # Fallback: read from relative path during development
-        dev_path = Path(__file__).parent / "templates" / "statusline.sh"
-        if dev_path.exists():
-            script_content = dev_path.read_text()
-        else:
-            console.print("  [dim]Could not find statusline template, skipping.[/dim]")
-            return False
-
-    # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
-    script_ok = docker.inject_file_to_sandbox_volume("scc-statusline.sh", script_content)
-
-    # Get existing settings from Docker volume (if any)
-    existing_settings = docker.get_sandbox_settings() or {}
-
-    # Add statusline config (path inside container)
-    existing_settings["statusLine"] = {
-        "type": "command",
-        "command": "/mnt/claude-data/scc-statusline.sh",
-        "padding": 0,
-    }
-
-    # Inject settings into Docker volume
-    settings_ok = docker.inject_file_to_sandbox_volume(
-        "settings.json", json.dumps(existing_settings, indent=2)
-    )
-
-    return script_ok and settings_ok
+# ═══════════════════════════════════════════════════════════════════════════════
+# Hooks Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
-def prompt_statusline_setup(console: Console) -> bool:
-    """
-    Prompt user to install the SCC status line.
+def prompt_hooks_enablement(console: Console) -> bool:
+    """Prompt user about git hooks installation.
 
-    Returns True if status line was installed.
+    Returns:
+        True if hooks should be enabled, False otherwise.
     """
     console.print()
-    console.print("[bold cyan]Status line configuration (optional)[/bold cyan]")
+    console.print("[bold cyan]Git Hooks Protection[/bold cyan]")
     console.print()
-    console.print("[dim]The status line shows useful info in Claude Code:[/dim]")
     console.print(
-        "  [dim]→ [bold]Model[/bold] | [cyan]🌿 branch[/cyan] or "
-        "[magenta]⎇ worktree[/magenta]:branch | [green]Ctx %[/green] | "
-        "[yellow]$cost[/yellow][/dim]"
+        "[dim]Install repo-local hooks to block pushes to protected branches?[/dim]"
     )
+    console.print("[dim](main, master, develop, production, staging)[/dim]")
     console.print()
 
-    if Confirm.ask(
-        "  [cyan]Install the SCC status line?[/cyan]",
+    return Confirm.ask(
+        "[cyan]Enable git hooks protection?[/cyan]",
         default=True,
-    ):
-        if install_statusline(console):
-            console.print("  [green]✓ Status line installed[/green]")
-            return True
-        else:
-            console.print("  [yellow]! Could not install status line[/yellow]")
-            return False
-
-    console.print("  [dim]Skipped. Run 'scc statusline --install' later if needed.[/dim]")
-    return False
+    )
 
 
-def save_configuration(
+# ═══════════════════════════════════════════════════════════════════════════════
+# Save Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def save_setup_config(
     console: Console,
-    workspace_base: Path,
-    default_team: str | None = None,
+    org_url: str | None,
+    auth: str | None,
+    profile: str | None,
+    hooks_enabled: bool,
+    standalone: bool = False,
 ) -> None:
-    """
-    Save the setup configuration.
+    """Save setup configuration to user config file.
 
-    Creates config directory and saves user preferences.
+    Args:
+        console: Rich console for output
+        org_url: Organization config URL or None
+        auth: Auth spec or None
+        profile: Selected profile name or None
+        hooks_enabled: Whether git hooks are enabled
+        standalone: Whether running in standalone mode
     """
     console.print()
-    console.print("[bold cyan]Saving configuration...[/bold cyan]")
+    console.print("[dim]Saving configuration...[/dim]")
 
     # Ensure config directory exists
     config.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build configuration
     user_config = {
-        "workspace_base": str(workspace_base),
-        "default_team": default_team,
-        "setup_completed": True,
-        "version": "1.0",
+        "config_version": "1.0.0",
+        "hooks": {"enabled": hooks_enabled},
     }
+
+    if standalone:
+        user_config["standalone"] = True
+        user_config["organization_source"] = None
+    elif org_url:
+        user_config["organization_source"] = {
+            "url": org_url,
+            "auth": auth,
+        }
+        user_config["selected_profile"] = profile
 
     # Save to config file
     config.save_user_config(user_config)
 
-    console.print(f"  [green]  Configuration saved to {config.CONFIG_FILE}[/green]")
+    console.print(f"[green]✓ Configuration saved to {config.CONFIG_FILE}[/green]")
 
 
-def show_completion(
+# ═══════════════════════════════════════════════════════════════════════════════
+# Setup Complete Display
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def show_setup_complete(
     console: Console,
-    workspace_base: Path,
-    team: str | None,
-    statusline_installed: bool = False,
+    org_name: str | None = None,
+    profile: str | None = None,
+    standalone: bool = False,
 ) -> None:
-    """
-    Display setup completion message with next steps.
+    """Display setup completion message.
+
+    Args:
+        console: Rich console for output
+        org_name: Organization name (if connected)
+        profile: Selected profile name
+        standalone: Whether in standalone mode
     """
     console.print()
 
     # Build completion info
     info_lines = []
-    info_lines.append(f"[cyan]Workspace:[/cyan] {workspace_base}")
-    info_lines.append(f"[cyan]Team:[/cyan] {team or 'base'}")
+    if standalone:
+        info_lines.append("[cyan]Mode:[/cyan] Standalone (no organization)")
+    elif org_name:
+        info_lines.append(f"[cyan]Organization:[/cyan] {org_name}")
+        info_lines.append(f"[cyan]Profile:[/cyan] {profile or 'none'}")
+
     info_lines.append(f"[cyan]Config:[/cyan] {config.CONFIG_DIR}")
-    if statusline_installed:
-        info_lines.append("[cyan]Status line:[/cyan] [green]Enabled[/green]")
 
     # Create panel
     panel = Panel(
         "\n".join(info_lines),
-        title="[bold green]  Setup Complete[/bold green]",
+        title="[bold green]✓ Setup Complete[/bold green]",
         border_style="green",
         padding=(1, 2),
     )
@@ -315,92 +357,166 @@ def show_completion(
 
     # Next steps
     console.print()
-    console.print("[bold white]Next steps:[/bold white]")
+    console.print("[bold white]Get started:[/bold white]")
     console.print()
-    console.print("  [cyan]scc[/cyan]                  [dim]Start Claude Code interactively[/dim]")
-    console.print("  [cyan]scc -w ~/project[/cyan]    [dim]Start with specific workspace[/dim]")
-    console.print("  [cyan]scc doctor[/cyan]          [dim]Check system health anytime[/dim]")
-    console.print("  [cyan]scc --help[/cyan]          [dim]See all available commands[/dim]")
+    console.print("  [cyan]scc start ~/project[/cyan]     [dim]Start Claude Code[/dim]")
+    console.print("  [cyan]scc teams[/cyan]               [dim]List available teams[/dim]")
+    console.print("  [cyan]scc doctor[/cyan]              [dim]Check system health[/dim]")
     console.print()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Main Setup Flow
+# Main Setup Wizard
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def run_setup(console: Console, skip_prereqs: bool = False) -> bool:
-    """
-    Run the complete first-run setup wizard.
+def run_setup_wizard(console: Console) -> bool:
+    """Run the interactive setup wizard.
 
-    Args:
-        console: Rich console for output
-        skip_prereqs: Skip prerequisite checks (for testing)
+    Flow:
+    1. Ask if user has org config URL
+    2. If yes: fetch config, handle auth, select profile
+    3. If no: standalone mode
+    4. Configure hooks
+    5. Save config
 
     Returns:
-        True if setup completed successfully
+        True if setup completed successfully.
     """
     # Welcome
     show_welcome(console)
 
-    # Prerequisites
-    if not skip_prereqs:
-        if not check_prerequisites(console):
-            console.print()
-            console.print(
-                "[yellow]  Setup paused. Please fix the issues above and run [bold]scc[/bold] again.[/yellow]"
-            )
-            console.print()
+    # Check for org config
+    has_org_config = prompt_has_org_config(console)
+
+    if has_org_config:
+        # Get org URL
+        org_url = prompt_org_url(console)
+
+        # Try to fetch without auth first
+        org_config = fetch_and_validate_org_config(console, org_url, auth=None)
+
+        # If 401, prompt for auth and retry
+        auth = None
+        if org_config is None:
+            auth = prompt_auth_method(console)
+            if auth:
+                org_config = fetch_and_validate_org_config(console, org_url, auth=auth)
+
+        if org_config is None:
+            console.print("[red]✗ Could not fetch organization config[/red]")
             return False
 
-    # Workspace selection
-    workspace_base = prompt_workspace_base(console)
+        # Profile selection
+        profile = prompt_profile_selection(console, org_config)
 
-    # Team selection (optional)
-    team = prompt_team_selection(console)
+        # Hooks
+        hooks_enabled = prompt_hooks_enablement(console)
 
-    # Status line setup (optional)
-    statusline_installed = prompt_statusline_setup(console)
+        # Save config
+        save_setup_config(
+            console,
+            org_url=org_url,
+            auth=auth,
+            profile=profile,
+            hooks_enabled=hooks_enabled,
+        )
 
-    # Save configuration
-    save_configuration(console, workspace_base, team)
+        # Complete
+        org_name = org_config.get("organization", {}).get("name")
+        show_setup_complete(console, org_name=org_name, profile=profile)
 
-    # Show completion
-    show_completion(console, workspace_base, team, statusline_installed)
+    else:
+        # Standalone mode
+        console.print()
+        console.print("[dim]Setting up standalone mode (no organization config)[/dim]")
+
+        # Hooks
+        hooks_enabled = prompt_hooks_enablement(console)
+
+        # Save config
+        save_setup_config(
+            console,
+            org_url=None,
+            auth=None,
+            profile=None,
+            hooks_enabled=hooks_enabled,
+            standalone=True,
+        )
+
+        # Complete
+        show_setup_complete(console, standalone=True)
 
     return True
 
 
-def run_quick_setup(console: Console, workspace_base: Path | None = None) -> bool:
+# ═══════════════════════════════════════════════════════════════════════════════
+# Non-Interactive Setup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def run_non_interactive_setup(
+    console: Console,
+    org_url: str | None = None,
+    team: str | None = None,
+    auth: str | None = None,
+    standalone: bool = False,
+) -> bool:
+    """Run non-interactive setup with CLI arguments.
+
+    Args:
+        console: Rich console for output
+        org_url: Organization config URL
+        team: Team/profile name
+        auth: Auth spec (env:VAR or command:CMD)
+        standalone: Enable standalone mode
+
+    Returns:
+        True if setup completed successfully.
     """
-    Run minimal setup with defaults.
+    if standalone:
+        # Standalone mode - no org config needed
+        save_setup_config(
+            console,
+            org_url=None,
+            auth=None,
+            profile=None,
+            hooks_enabled=False,
+            standalone=True,
+        )
+        show_setup_complete(console, standalone=True)
+        return True
 
-    Used when user wants to skip interactive prompts.
-    Includes status line installation by default.
-    """
-    console.print("[bold cyan]Running quick setup with defaults...[/bold cyan]")
-    console.print()
+    if not org_url:
+        console.print("[red]✗ Organization URL required (use --org-url)[/red]")
+        return False
 
-    # Use default workspace if not provided
-    if workspace_base is None:
-        workspace_base = platform_module.get_recommended_workspace_base()
+    # Fetch org config
+    org_config = fetch_and_validate_org_config(console, org_url, auth=auth)
 
-    # Ensure workspace exists
-    workspace_base.mkdir(parents=True, exist_ok=True)
+    if org_config is None:
+        console.print("[red]✗ Could not fetch organization config[/red]")
+        return False
 
-    # Install status line by default (part of smart defaults)
-    statusline_ok = install_statusline(console)
+    # Validate team if provided
+    if team:
+        profiles = org_config.get("profiles", {})
+        if team not in profiles:
+            available = ", ".join(profiles.keys())
+            console.print(f"[red]✗ Team '{team}' not found. Available: {available}[/red]")
+            return False
 
-    # Save minimal configuration
-    save_configuration(console, workspace_base, default_team=None)
+    # Save config
+    save_setup_config(
+        console,
+        org_url=org_url,
+        auth=auth,
+        profile=team,
+        hooks_enabled=True,  # Default to enabled for non-interactive
+    )
 
-    console.print(f"  [green]✓ Workspace: {workspace_base}[/green]")
-    console.print(f"  [green]✓ Config: {config.CONFIG_DIR}[/green]")
-    if statusline_ok:
-        console.print("  [green]✓ Status line: Enabled[/green]")
-    console.print()
-    console.print("[dim]Run [bold]scc[/bold] to start Claude Code.[/dim]")
-    console.print()
+    org_name = org_config.get("organization", {}).get("name")
+    show_setup_complete(console, org_name=org_name, profile=team)
 
     return True
 
@@ -411,13 +527,12 @@ def run_quick_setup(console: Console, workspace_base: Path | None = None) -> boo
 
 
 def is_setup_needed() -> bool:
-    """
-    Check if first-run setup is needed.
+    """Check if first-run setup is needed.
 
     Returns True if:
     - Config directory doesn't exist
     - Config file doesn't exist
-    - setup_completed flag is False
+    - config_version field is missing
     """
     if not config.CONFIG_DIR.exists():
         return True
@@ -425,14 +540,13 @@ def is_setup_needed() -> bool:
     if not config.CONFIG_FILE.exists():
         return True
 
-    # Check setup_completed flag
+    # Check for config version
     user_config = config.load_user_config()
-    return not user_config.get("setup_completed", False)
+    return "config_version" not in user_config
 
 
 def maybe_run_setup(console: Console) -> bool:
-    """
-    Run setup if needed, otherwise return True.
+    """Run setup if needed, otherwise return True.
 
     Call this at the start of commands that require configuration.
     Returns True if ready to proceed, False if setup failed.
@@ -444,7 +558,7 @@ def maybe_run_setup(console: Console) -> bool:
     console.print("[dim]First-time setup detected. Let's get you started![/dim]")
     console.print()
 
-    return run_setup(console)
+    return run_setup_wizard(console)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -453,8 +567,7 @@ def maybe_run_setup(console: Console) -> bool:
 
 
 def reset_setup(console: Console) -> None:
-    """
-    Reset setup configuration to defaults.
+    """Reset setup configuration to defaults.
 
     Used when user wants to reconfigure.
     """
@@ -466,5 +579,7 @@ def reset_setup(console: Console) -> None:
         console.print(f"  [dim]Removed {config.CONFIG_FILE}[/dim]")
 
     console.print()
-    console.print("[green]  Configuration reset.[/green] Run [bold]scc[/bold] to set up again.")
+    console.print(
+        "[green]✓ Configuration reset.[/green] Run [bold]scc setup[/bold] again."
+    )
     console.print()

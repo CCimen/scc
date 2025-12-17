@@ -1,4 +1,16 @@
-"""Update checking for scc-cli CLI (stdlib only)."""
+"""
+Update checking for scc-cli CLI and organization config.
+
+Two independent update mechanisms:
+1. CLI version: Checks PyPI (public, always accessible), throttled to once/24h
+2. Org config: Checks remote URL with ETag, throttled to TTL (1-6h typically)
+
+Design principles:
+- Non-blocking: Update checks should not delay CLI startup
+- Graceful degradation: Offline = use cache silently
+- Cache-first: Always prefer cached data over network errors
+- UX-friendly: Clear, non-intrusive update notifications
+"""
 
 import json
 import os
@@ -8,8 +20,17 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_installed_version
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from rich.console import Console
+from rich.panel import Panel
+
+if TYPE_CHECKING:
+    pass
 
 # Package name on PyPI
 PACKAGE_NAME = "scc-cli"
@@ -20,18 +41,47 @@ PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 # Timeout for PyPI requests (kept short to avoid hanging CLI)
 REQUEST_TIMEOUT = 3
 
+# Throttling: Don't check CLI version more than once per day
+CLI_CHECK_INTERVAL_HOURS = 24
+
+# Throttling: Org config check interval (1 hour minimum between checks)
+# Note: This is separate from cache TTL. TTL controls staleness,
+# this controls how often we even attempt to check.
+ORG_CONFIG_CHECK_INTERVAL_HOURS = 1
+
+# Cache directory for update check timestamps
+UPDATE_CHECK_CACHE_DIR = Path.home() / ".cache" / "scc"
+UPDATE_CHECK_META_FILE = UPDATE_CHECK_CACHE_DIR / "update_check_meta.json"
+
 # Pre-release tag ordering (lower = earlier in release cycle)
 _PRERELEASE_ORDER = {"dev": 0, "a": 1, "alpha": 1, "b": 2, "beta": 2, "rc": 3, "c": 3}
 
 
 @dataclass
 class UpdateInfo:
-    """Information about available updates."""
+    """Information about available CLI updates."""
 
     current: str
     latest: str | None
     update_available: bool
     install_method: str  # 'pip', 'pipx', 'uv', 'editable'
+
+
+@dataclass
+class OrgConfigUpdateResult:
+    """Result of org config update check."""
+
+    status: str  # 'updated', 'unchanged', 'offline', 'auth_failed', 'no_cache', 'standalone'
+    message: str | None = None
+    cached_age_hours: float | None = None
+
+
+@dataclass
+class UpdateCheckResult:
+    """Combined result of all update checks."""
+
+    cli_update: UpdateInfo | None = None
+    org_config: OrgConfigUpdateResult | None = None
 
 
 def check_for_updates() -> UpdateInfo:
@@ -247,3 +297,373 @@ def get_update_command(method: str) -> str:
         return f"uv pip install --upgrade {PACKAGE_NAME}"
     else:
         return f"pip install --upgrade {PACKAGE_NAME}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Update Check Throttling
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _load_update_check_meta() -> dict:
+    """Load update check metadata (timestamps for throttling)."""
+    if not UPDATE_CHECK_META_FILE.exists():
+        return {}
+    try:
+        return json.loads(UPDATE_CHECK_META_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_update_check_meta(meta: dict) -> None:
+    """Save update check metadata."""
+    UPDATE_CHECK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    UPDATE_CHECK_META_FILE.write_text(json.dumps(meta, indent=2))
+
+
+def _should_check_cli_updates() -> bool:
+    """Check if enough time has passed since last CLI update check."""
+    meta = _load_update_check_meta()
+    last_check_str = meta.get("cli_last_check")
+
+    if not last_check_str:
+        return True
+
+    try:
+        last_check = datetime.fromisoformat(last_check_str)
+        now = datetime.now(timezone.utc)
+        elapsed = now - last_check
+        return elapsed > timedelta(hours=CLI_CHECK_INTERVAL_HOURS)
+    except (ValueError, TypeError):
+        return True
+
+
+def _mark_cli_check_done() -> None:
+    """Update timestamp for CLI update check."""
+    meta = _load_update_check_meta()
+    meta["cli_last_check"] = datetime.now(timezone.utc).isoformat()
+    _save_update_check_meta(meta)
+
+
+def _should_check_org_config() -> bool:
+    """Check if enough time has passed since last org config check."""
+    meta = _load_update_check_meta()
+    last_check_str = meta.get("org_config_last_check")
+
+    if not last_check_str:
+        return True
+
+    try:
+        last_check = datetime.fromisoformat(last_check_str)
+        now = datetime.now(timezone.utc)
+        elapsed = now - last_check
+        return elapsed > timedelta(hours=ORG_CONFIG_CHECK_INTERVAL_HOURS)
+    except (ValueError, TypeError):
+        return True
+
+
+def _mark_org_config_check_done() -> None:
+    """Update timestamp for org config check."""
+    meta = _load_update_check_meta()
+    meta["org_config_last_check"] = datetime.now(timezone.utc).isoformat()
+    _save_update_check_meta(meta)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Org Config Update Checking
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def check_org_config_update(user_config: dict, force: bool = False) -> OrgConfigUpdateResult:
+    """
+    Check for org config updates using ETag conditional fetch.
+
+    Scenarios:
+    - On corporate network: Fetches org config with auth token, updates cache
+    - Off VPN (offline): Uses cached config, skips update check silently
+    - Auth token expired/invalid: Uses cached config, shows warning
+    - Never fetched + offline: Returns 'no_cache' status
+
+    Args:
+        user_config: User config dict with organization_source
+        force: Force check even if throttle interval hasn't elapsed
+
+    Returns:
+        OrgConfigUpdateResult with status and optional message
+    """
+    # Import here to avoid circular imports
+    from scc_cli import remote
+
+    # Standalone mode - no org config to update
+    if user_config.get("standalone"):
+        return OrgConfigUpdateResult(status="standalone")
+
+    # No organization source configured
+    org_source = user_config.get("organization_source")
+    if not org_source:
+        return OrgConfigUpdateResult(status="standalone")
+
+    url = org_source.get("url")
+    if not url:
+        return OrgConfigUpdateResult(status="standalone")
+
+    auth_spec = org_source.get("auth")
+
+    # Check throttle (unless forced)
+    if not force and not _should_check_org_config():
+        # Return early - too soon to check
+        return OrgConfigUpdateResult(status="throttled")
+
+    # Try to load existing cache
+    cached_config, meta = remote.load_from_cache()
+
+    # Calculate cache age if available
+    cached_age_hours = None
+    if meta and meta.get("org_config", {}).get("fetched_at"):
+        try:
+            fetched_at = datetime.fromisoformat(meta["org_config"]["fetched_at"])
+            now = datetime.now(timezone.utc)
+            cached_age_hours = (now - fetched_at).total_seconds() / 3600
+        except (ValueError, TypeError):
+            pass
+
+    # Resolve auth
+    auth = remote.resolve_auth(auth_spec) if auth_spec else None
+
+    # Get cached ETag for conditional request
+    etag = meta.get("org_config", {}).get("etag") if meta else None
+
+    # Attempt to fetch with ETag
+    try:
+        config, new_etag, status = remote.fetch_org_config(url, auth=auth, etag=etag)
+    except Exception:
+        # Network error - use cache silently
+        _mark_org_config_check_done()
+        if cached_config:
+            return OrgConfigUpdateResult(
+                status="offline",
+                cached_age_hours=cached_age_hours,
+            )
+        return OrgConfigUpdateResult(status="no_cache")
+
+    # Mark check as done
+    _mark_org_config_check_done()
+
+    # 304 Not Modified - cache is current
+    if status == 304:
+        return OrgConfigUpdateResult(
+            status="unchanged",
+            cached_age_hours=cached_age_hours,
+        )
+
+    # 200 OK - new config available
+    if status == 200 and config is not None:
+        # Save to cache
+        ttl_hours = config.get("defaults", {}).get("cache_ttl_hours", 24)
+        remote.save_to_cache(config, url, new_etag, ttl_hours)
+        return OrgConfigUpdateResult(
+            status="updated",
+            message="Organization config updated from remote",
+        )
+
+    # 401/403 - auth failed
+    if status in (401, 403):
+        if cached_config:
+            return OrgConfigUpdateResult(
+                status="auth_failed",
+                message="Auth failed for org config, using cached version",
+                cached_age_hours=cached_age_hours,
+            )
+        return OrgConfigUpdateResult(
+            status="auth_failed",
+            message="Auth failed and no cached config available",
+        )
+
+    # Other errors - use cache if available
+    if cached_config:
+        return OrgConfigUpdateResult(
+            status="offline",
+            cached_age_hours=cached_age_hours,
+        )
+
+    return OrgConfigUpdateResult(status="no_cache")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Combined Update Check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def check_all_updates(user_config: dict, force: bool = False) -> UpdateCheckResult:
+    """
+    Check for all available updates (CLI and org config).
+
+    This is the main entry point for update checking.
+
+    Args:
+        user_config: User config dict
+        force: Force checks even if throttle intervals haven't elapsed
+
+    Returns:
+        UpdateCheckResult with CLI and org config update info
+    """
+    result = UpdateCheckResult()
+
+    # Check CLI updates (throttled)
+    if force or _should_check_cli_updates():
+        result.cli_update = check_for_updates()
+        _mark_cli_check_done()
+
+    # Check org config updates (throttled)
+    result.org_config = check_org_config_update(user_config, force=force)
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# UX-Friendly Console Output
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def render_update_notification(console: Console, result: UpdateCheckResult) -> None:
+    """
+    Render update notifications in a UX-friendly way.
+
+    Design principles:
+    - Non-intrusive: Single line for most cases
+    - Actionable: Show exact command to run
+    - Quiet on success: No noise when everything is current
+
+    Args:
+        console: Rich Console instance
+        result: UpdateCheckResult from check_all_updates()
+    """
+    # CLI update notification
+    if result.cli_update and result.cli_update.update_available:
+        cli = result.cli_update
+        update_cmd = get_update_command(cli.install_method)
+        console.print(
+            f"[cyan]⬆ Update available:[/cyan] "
+            f"scc-cli [dim]{cli.current}[/dim] → [green]{cli.latest}[/green]  "
+            f"[dim]Run: {update_cmd}[/dim]"
+        )
+
+    # Org config notifications (only show warnings/errors)
+    if result.org_config:
+        org = result.org_config
+
+        if org.status == "updated":
+            console.print("[green]✓[/green] Organization config updated")
+
+        elif org.status == "auth_failed" and org.cached_age_hours is not None:
+            age_str = _format_age(org.cached_age_hours)
+            console.print(
+                f"[yellow]⚠ Auth failed for org config, using cached version ({age_str} old)[/yellow]"
+            )
+
+        elif org.status == "auth_failed":
+            console.print(
+                "[red]✗ Auth failed and no cached config available. "
+                "Run: scc setup[/red]"
+            )
+
+        elif org.status == "no_cache":
+            console.print(
+                "[yellow]⚠ No organization config cached. "
+                "Run: scc setup when on network[/yellow]"
+            )
+
+        # Don't show anything for 'unchanged', 'offline', 'standalone', 'throttled'
+        # - These are normal states that don't need user attention
+
+
+def render_update_status_panel(console: Console, result: UpdateCheckResult) -> None:
+    """
+    Render detailed update status panel (for `scc update` command).
+
+    Args:
+        console: Rich Console instance
+        result: UpdateCheckResult from check_all_updates()
+    """
+    lines = []
+
+    # CLI Version section
+    lines.append("[bold]CLI Version[/bold]")
+    if result.cli_update:
+        cli = result.cli_update
+        if cli.update_available:
+            lines.append(f"  Current: {cli.current}")
+            lines.append(f"  Latest:  [green]{cli.latest}[/green] [cyan](update available)[/cyan]")
+            lines.append(f"  Update:  [dim]{get_update_command(cli.install_method)}[/dim]")
+        else:
+            lines.append(f"  [green]✓[/green] {cli.current} (up to date)")
+    else:
+        lines.append("  [dim]Not checked (throttled)[/dim]")
+
+    lines.append("")
+
+    # Org Config section
+    lines.append("[bold]Organization Config[/bold]")
+    if result.org_config:
+        org = result.org_config
+
+        if org.status == "standalone":
+            lines.append("  [dim]Standalone mode (no org config)[/dim]")
+
+        elif org.status == "updated":
+            lines.append("  [green]✓[/green] Updated from remote")
+
+        elif org.status == "unchanged":
+            if org.cached_age_hours is not None:
+                age_str = _format_age(org.cached_age_hours)
+                lines.append(f"  [green]✓[/green] Current (cached {age_str} ago)")
+            else:
+                lines.append("  [green]✓[/green] Current (unchanged)")
+
+        elif org.status == "offline":
+            if org.cached_age_hours is not None:
+                age_str = _format_age(org.cached_age_hours)
+                lines.append(f"  [yellow]⚠[/yellow] Using cached config ({age_str} old)")
+                lines.append("  [dim]Remote check failed (offline?)[/dim]")
+            else:
+                lines.append("  [yellow]⚠[/yellow] Offline, using cached config")
+
+        elif org.status == "auth_failed":
+            if org.cached_age_hours is not None:
+                age_str = _format_age(org.cached_age_hours)
+                lines.append(f"  [yellow]⚠[/yellow] Auth failed, using cached ({age_str} old)")
+            else:
+                lines.append("  [red]✗[/red] Auth failed, no cache available")
+            lines.append("  [dim]Check your auth token or run: scc setup[/dim]")
+
+        elif org.status == "no_cache":
+            lines.append("  [red]✗[/red] No cached config available")
+            lines.append("  [dim]Run: scc setup when on network[/dim]")
+
+        elif org.status == "throttled":
+            lines.append("  [dim]Not checked (throttled)[/dim]")
+    else:
+        lines.append("  [dim]Not checked[/dim]")
+
+    panel = Panel(
+        "\n".join(lines),
+        title="[bold]Update Status[/bold]",
+        border_style="blue",
+        padding=(0, 1),
+    )
+
+    console.print()
+    console.print(panel)
+    console.print()
+
+
+def _format_age(hours: float) -> str:
+    """Format age in hours to human-readable string."""
+    if hours < 1:
+        minutes = int(hours * 60)
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    elif hours < 24:
+        h = int(hours)
+        return f"{h} hour{'s' if h != 1 else ''}"
+    else:
+        days = int(hours / 24)
+        return f"{days} day{'s' if days != 1 else ''}"

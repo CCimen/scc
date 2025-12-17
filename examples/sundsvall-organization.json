@@ -1,0 +1,32 @@
+{
+  "organization": {
+    "name": "Sundsvalls kommun",
+    "github_org": "sundsvall"
+  },
+  "marketplace": {
+    "name": "sundsvall",
+    "repo": "sundsvall/claude-plugins-marketplace"
+  },
+  "profiles": {
+    "ai-teamet": {
+      "description": "AI platform development (Svelte, Python, DDD)",
+      "plugin": "ai-teamet"
+    },
+    "team-evolution": {
+      "description": ".NET/C# Metakatalogen development",
+      "plugin": "team-evolution"
+    },
+    "draken": {
+      "description": "Ärendehanteringssystem development",
+      "plugin": "draken"
+    },
+    "hydran": {
+      "description": "Hydran system development",
+      "plugin": "hydran"
+    },
+    "dept44": {
+      "description": "Java API team (Spring Boot/WSO2)",
+      "plugin": "dept44"
+    }
+  }
+}

@@ -1,21 +1,25 @@
-# SCC - Sandboxed Claude CLI
+<h1 align="center">SCC - Sandboxed Claude CLI</h1>
 
-Run Claude Code in Docker sandboxes with team-based configuration and git worktree support.
+<p align="center">
+  <a href="https://pypi.org/project/scc-cli/"><img src="https://img.shields.io/pypi/v/scc-cli?style=flat-square&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/scc-cli/"><img src="https://img.shields.io/pypi/pyversions/scc-cli?style=flat-square&label=Python" alt="Python"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT"></a>
+  <a href="#contributing"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen?style=flat-square" alt="Contributions Welcome"></a>
+</p>
 
-## Why this exists
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
-Our teams needed a way to use Claude Code that was:
-- **Isolated**: AI runs in containers, not directly on developer machines
-- **Standardized**: Teams share configurations, not tribal knowledge
-- **Safe**: Protected branches stay protected, even when AI suggests changes
+---
 
-## Prerequisites
+Run Claude Code in Docker sandboxes with organization-managed team profiles, marketplace integration, and git worktree support.
 
-- Python 3.10+
-- Docker Desktop 4.50+ (for sandbox support)
-- Git 2.30+
-
-Run `scc doctor` to verify your setup.
+SCC isolates AI execution in containers, enforces branch safety, and lets organizations distribute Claude plugins through a central configuration. Developers get standardized setups without manual configuration.
 
 ## Installation
 
@@ -23,161 +27,185 @@ Run `scc doctor` to verify your setup.
 pip install scc-cli
 ```
 
-Or with pipx for isolation:
+Or with pipx:
 
 ```bash
 pipx install scc-cli
 ```
 
-## Quick start
+Requires Python 3.10+, Docker Desktop 4.50+, and Git 2.30+.
+
+## Quick Start
 
 ```bash
-# First run triggers a setup wizard
-scc
+# Run setup wizard
+scc setup
 
-# Or start directly with a workspace
-scc start ~/projects/api-service --team java-wso2
+# Start Claude Code in a sandbox
+scc start ~/projects/api-service --team platform
 
 # Check system health
 scc doctor
 ```
 
-This runs Claude Code in a Docker sandbox with your repo mounted. You log in once; credentials persist across sessions.
+## Usage
 
-## Common workflows
-
-### Starting a session
+### Starting sessions
 
 ```bash
-# Interactive mode - prompts for team and workspace
+# Interactive mode
 scc
 
-# Direct mode with team profile
-scc start ~/projects/my-repo --team python-fastapi
+# With team profile
+scc start ~/projects/my-repo --team platform
 
-# Continue last Claude conversation
-scc start ~/projects/my-repo --continue
+# Continue most recent session
+scc start --continue
+
+# Offline mode (cache only)
+scc start ~/projects/my-repo --offline
 ```
 
 ### Parallel development with worktrees
 
 ```bash
-# Create isolated workspace for a feature
+# Create isolated workspace
 scc worktree ~/projects/api-service feature-auth
 # Creates: ~/projects/api-service-worktrees/feature-auth/
 # Branch: claude/feature-auth
 
-# Work on urgent fix in parallel
-scc worktree ~/projects/api-service hotfix-123
+# With dependency installation
+scc worktree ~/projects/api-service feature-x --install-deps
 
 # List worktrees
 scc worktrees ~/projects/api-service
 
-# Clean up when done
+# Clean up
 scc cleanup ~/projects/api-service feature-auth
 ```
 
-### Managing teams and sessions
+### Managing configuration
 
 ```bash
 # List team profiles
 scc teams
 
-# Show team details
-scc teams java-wso2
-
-# Sync profiles from GitHub
+# Refresh from remote
 scc teams --sync
+
+# Check for CLI and config updates
+scc update
+
+# Force update check
+scc update --force
 
 # List recent sessions
 scc sessions
-
-# List running sandboxes
-scc list
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `scc` | Interactive mode with wizard |
-| `scc start <path>` | Start Claude Code in a sandbox |
+| `scc` | Interactive mode |
+| `scc setup` | Configure organization connection |
+| `scc start <path>` | Start Claude Code in sandbox |
 | `scc stop` | Stop running sandbox(es) |
-| `scc doctor` | Check prerequisites and system health |
-| `scc teams` | List, view, or sync team profiles |
+| `scc doctor` | Check prerequisites |
+| `scc update` | Check for CLI and config updates |
+| `scc teams` | List team profiles |
 | `scc sessions` | List recent sessions |
-| `scc list` | List running Docker sandboxes |
-| `scc worktree <repo> <name>` | Create git worktree for parallel work |
-| `scc worktrees <repo>` | List worktrees for a repository |
-| `scc cleanup <repo> <name>` | Remove a worktree |
+| `scc list` | List running containers |
+| `scc worktree <repo> <name>` | Create git worktree |
+| `scc worktrees <repo>` | List worktrees |
+| `scc cleanup <repo> <name>` | Remove worktree |
 | `scc config` | View or edit configuration |
-| `scc setup` | Run setup wizard |
-| `scc update` | Check for CLI updates |
-| `scc statusline` | Configure status line with git info |
 
-Run `scc <command> --help` for detailed options.
+Run `scc <command> --help` for options.
 
 ## Configuration
 
-Config lives in `~/.config/scc-cli/config.json`:
+### Setup modes
+
+Organization mode connects to a central config:
+
+```bash
+scc setup
+# Enter URL when prompted: https://gitlab.example.org/devops/scc-config.json
+```
+
+Standalone mode runs without organization config:
+
+```bash
+scc setup --standalone
+```
+
+### User config
+
+Located at `~/.config/scc/config.json`:
 
 ```json
 {
-  "workspace_base": "~/projects",
-  "profiles": {
-    "java-wso2": {
-      "description": "Java/Spring Boot/WSO2",
-      "tools": ["java", "maven"]
-    }
-  }
+  "organization_source": {
+    "url": "https://gitlab.example.org/devops/scc-config.json",
+    "auth": "env:GITLAB_TOKEN"
+  },
+  "selected_profile": "platform",
+  "hooks": { "enabled": true }
 }
 ```
 
 Edit with `scc config --edit`.
 
-## Exit codes
+### Authentication methods
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 2 | Invalid usage |
-| 3 | Missing prerequisites |
-| 4 | External tool failure |
-| 5 | Internal error |
+| Method | Syntax |
+|--------|--------|
+| Environment variable | `"auth": "env:GITLAB_TOKEN"` |
+| Command | `"auth": "command:op read op://Dev/token"` |
+| None (public) | `"auth": null` |
 
-## WSL2 users
+### File locations
 
-Run inside WSL2, not Windows. Keep projects in the Linux filesystem (`~/projects`) rather than `/mnt/c/...` for acceptable performance. The CLI warns when it detects slow paths.
+```
+~/.config/scc/           # Configuration
+├── config.json          # Org URL, team, preferences
+
+~/.cache/scc/            # Cache (safe to delete)
+├── org_config.json      # Remote config cache
+└── cache_meta.json      # ETags, timestamps
+```
 
 ## Troubleshooting
 
+Run `scc doctor` to diagnose issues.
+
 | Problem | Solution |
 |---------|----------|
-| "Docker not reachable" | Start Docker Desktop |
-| "Docker version too old" | Update to Docker Desktop 4.50+ |
+| Docker not reachable | Start Docker Desktop |
+| Organization config fetch failed | Check URL and token |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
-| Permission denied on Linux | Add user to docker group: `sudo usermod -aG docker $USER` |
+| Permission denied (Linux) | `sudo usermod -aG docker $USER` |
 
-Run `scc doctor` to diagnose most issues.
+### WSL2
 
-## Cleanup
+Run inside WSL2, not Windows. Keep projects in the Linux filesystem for acceptable performance.
+
+## Development
 
 ```bash
-# Stop all running sandboxes
-scc stop
+# Install dependencies
+uv sync
 
-# Stop a specific sandbox
-scc stop claude-sandbox-2025...
+# Run tests
+uv run pytest
 
-# List running sandboxes
-scc list
+# Run linter
+uv run ruff check --fix
 ```
 
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [Contributing](CONTRIBUTING.md) - Development setup and PR process
+See [CLAUDE.md](CLAUDE.md) for development methodology.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT
