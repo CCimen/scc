@@ -182,7 +182,14 @@ class TestDetectInstallMethod:
         with (
             patch("importlib.metadata.distribution", side_effect=Exception()),
             patch("sys.prefix", "/some/venv"),
-            patch.dict("os.environ", {"PIPX_HOME": "/home/user/.local/pipx"}),
+            patch.dict(
+                "os.environ",
+                {
+                    "PIPX_HOME": "/home/user/.local/pipx",
+                    "UV_PYTHON_INSTALL_DIR": "",
+                    "UV_CACHE_DIR": "",
+                },
+            ),
             patch("shutil.which", return_value=None),
         ):
             # The prefix must contain the PIPX_HOME value
