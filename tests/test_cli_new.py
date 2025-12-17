@@ -135,7 +135,7 @@ class TestStartCommand:
         with (
             patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli.config.load_config", return_value={}),
-            patch("scc_cli.cli.remote.load_org_config") as mock_remote,
+            patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
@@ -163,7 +163,7 @@ class TestStartCommand:
             patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
             patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
             patch("scc_cli.cli.docker.run"),
-            patch("scc_cli.cli.remote.load_org_config") as mock_remote,
+            patch("scc_cli.remote.load_org_config") as mock_remote,
         ):
             runner.invoke(app, ["start", str(tmp_path), "--standalone"])
         # Should NOT have called load_org_config
@@ -247,8 +247,8 @@ class TestTeamsCommand:
         """Should fetch org config from remote when --sync."""
         with (
             patch("scc_cli.cli.config.load_config") as mock_cfg,
-            patch("scc_cli.cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.cli.profiles.list_profiles") as mock_list,
+            patch("scc_cli.remote.load_org_config") as mock_remote,
+            patch("scc_cli.profiles.list_profiles") as mock_list,
         ):
             mock_cfg.return_value = {"organization_source": {"url": "https://example.org"}}
             mock_remote.return_value = {"profiles": {"dev": {}}}

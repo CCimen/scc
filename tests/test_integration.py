@@ -236,7 +236,7 @@ class TestStartWorkflow:
         with (
             patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli.config.load_config") as mock_load_config,
-            patch("scc_cli.cli.remote.load_org_config", return_value=sample_org_config),
+            patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="feature-x"),
@@ -356,8 +356,8 @@ class TestTeamsWorkflow:
 
         with (
             patch("scc_cli.cli.config.load_config") as mock_load_config,
-            patch("scc_cli.cli.remote.load_org_config", return_value=sample_org_config),
-            patch("scc_cli.cli.profiles.list_profiles") as mock_list,
+            patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
+            patch("scc_cli.profiles.list_profiles") as mock_list,
         ):
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
@@ -375,8 +375,8 @@ class TestTeamsWorkflow:
         """Teams --sync should force refresh from remote."""
         with (
             patch("scc_cli.cli.config.load_config") as mock_load_config,
-            patch("scc_cli.cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.cli.profiles.list_profiles") as mock_list,
+            patch("scc_cli.remote.load_org_config") as mock_remote,
+            patch("scc_cli.profiles.list_profiles") as mock_list,
         ):
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
@@ -513,7 +513,7 @@ class TestOfflineWorkflow:
         with (
             patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli.config.load_config") as mock_load_config,
-            patch("scc_cli.cli.remote.load_org_config") as mock_remote,
+            patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
@@ -548,7 +548,7 @@ class TestStandaloneWorkflow:
         with (
             patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli.remote.load_org_config") as mock_remote,
+            patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.cli.docker.check_docker_available"),
             patch("scc_cli.cli.git.check_branch_safety"),
             patch("scc_cli.cli.git.get_current_branch", return_value="main"),
