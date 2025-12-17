@@ -1,270 +1,225 @@
 # Architecture
 
-This document explains how the CLI works and why it was designed this way.
+SCC runs Claude Code in Docker containers with mounted workspaces. It pulls org config from a URL, expands team profiles into plugin sets, and injects settings into the sandbox.
 
-## Overview
+## High-Level Overview
 
-SCC is a thin orchestration layer that fetches organization configuration from a remote URL, resolves team profiles to marketplace plugins, and launches Claude Code in a Docker sandbox with the appropriate settings injected.
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  SCC – Sandboxed Claude CLI                                                │
-│  • Fetches remote org config (any HTTPS URL)                               │
-│  • Caches locally with TTL + ETag                                          │
-│  • Validates schema, checks version compatibility                          │
-│  • Manages git worktrees for parallel development                          │
-│  • Enforces branch safety (opt-in repo-local hooks + runtime checks)       │
-│  • Launches Docker sandbox with injected settings                          │
-│  • Knows NOTHING about any specific organization                           │
-│  • Does NOT download marketplace/plugin content                            │
-└────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ HTTPS fetch (with ETag caching)
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  Remote Organization Config (IT-managed)                                   │
-│  • GitLab raw, GitHub raw, S3, any HTTPS endpoint                          │
-│  • JSON file with: org identity, team profiles, marketplace refs           │
-│  • Auth: env:VAR_NAME, command:CMD, or null (public)                       │
-└────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ SCC passes REFERENCES ONLY to Claude Code
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  Docker Sandbox with Claude Code                                           │
-│  • Receives: extraKnownMarketplaces + enabledPlugins                       │
-│  • Claude Code handles: fetching, installing, caching plugins              │
-│  • SCC is completely hands-off after injection                             │
-└────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    A[Developer] --> B[SCC CLI]
+    B --> C[Remote Config]
+    B --> D[Docker Sandbox]
+    D --> E[Claude Code]
+    E --> F[Claude API]
+    E --> G[Workspace Mount]
 ```
 
-## Security model
+SCC acts as orchestration layer only. It does not download plugins, communicate with Claude's API, or run any AI logic. Claude Code inside the container handles all of that.
 
-The "sandbox" provides process isolation, not security guarantees against a malicious AI.
+## Scope and Constraints
 
-**What's isolated:**
-- Claude Code runs in a Docker container, not on the host
-- Only the workspace directory is mounted (read/write)
-- Container has network access (required for Claude API)
+**What SCC does:**
+- Fetches and caches organization config from any HTTPS URL
+- Resolves team profiles to marketplace plugin references
+- Manages git worktrees for parallel development
+- Enforces branch safety via repo-local hooks
+- Launches Docker sandbox with injected credentials
 
-**What's not isolated:**
-- The mounted workspace is fully accessible to Claude Code
-- Environment variables passed to the container (including tokens)
-- Network traffic is not restricted
+**What SCC does not do:**
+- Download or cache plugin content
+- Verify plugin integrity or signatures
+- Communicate with Claude's API
+- Restrict container network traffic
+- Guarantee security against malicious AI behavior
 
-**Branch protection:**
-- The CLI checks if you're on a protected branch (main, master, develop) before starting
-- If detected, it prompts to create a `claude/*` branch or worktree
-- Repo-local pre-push hooks can block pushes to protected branches (opt-in)
+## Security Model
 
-**Credentials:**
-- Organization config auth tokens resolved from env vars or commands
-- Marketplace tokens injected into Docker env for Claude Code to use
-- No tokens stored on disk or printed in logs
+Docker provides process isolation, not containment of a malicious model.
 
-## Key design decisions
+```mermaid
+graph TB
+    subgraph Host["Host Machine (Trusted)"]
+        CLI[SCC CLI]
+        Config[Local Config]
+    end
 
-### Remote organization config
+    subgraph Container["Docker Container (Sandboxed)"]
+        Claude[Claude Code]
+        Plugins[Plugins]
+    end
 
-SCC does NOT hardcode organization-specific information. Instead:
+    Workspace[Workspace Directory]
 
-1. User provides an HTTPS URL to their organization's config during `scc setup`
-2. SCC fetches this JSON file with ETag caching (24h TTL by default)
-3. The org config defines team profiles and marketplace references
-4. SCC resolves `profile → plugin + marketplace` and injects into Docker
-
-**Why**: Organizations can update their configs without requiring CLI updates. IT teams manage configs centrally.
-
-### Module separation
-
-| Module | Responsibility | Does NOT Do |
-|--------|---------------|-------------|
-| `profiles.py` | Profile resolution, marketplace URL logic | HTTP calls, file I/O |
-| `remote.py` | HTTP fetch, auth, caching | Business logic, profile resolution |
-| `claude_adapter.py` | Claude Code format knowledge | HTTP, profiles, caching |
-| `validate.py` | Schema validation, version checks | HTTP, file I/O |
-| `config.py` | Local config management | Remote fetching |
-| `docker.py` | Docker sandbox execution | URL building, profiles |
-
-**Why**: Each module has a single responsibility. `claude_adapter.py` isolates ALL Claude Code format knowledge, so if Claude changes their settings format, only one file needs updating.
-
-### Container re-use over ephemeral containers
-
-Each workspace+branch combination gets a deterministic container name: `scc-<workspace_hash>-<branch_hash>`. When you run `scc start` on the same workspace, it resumes the existing container rather than creating a new one.
-
-**Why**: Claude Code maintains conversation context inside the container. Creating fresh containers loses this context. Resuming an existing container takes ~500ms vs ~3-5s for a new one.
-
-**Trade-off**: Containers accumulate. Users need to periodically clean up with `docker container prune` or use `scc start --fresh`.
-
-### Worktrees for isolation, not branches
-
-We use `git worktree` to create separate working directories rather than asking developers to switch branches. Each worktree gets its own container.
-
-**Why**: Developers often need to context-switch (urgent bug while working on a feature). Worktrees let you have multiple Claude Code sessions running in parallel, each with its own state.
-
-### Typed exceptions with user-facing messages
-
-All errors inherit from `SCCError` and carry:
-- `user_message`: Plain language explanation
-- `suggested_action`: One concrete next step
-- `exit_code`: For scripting (3=prerequisites, 4=external tool, 5=internal)
-
-**Why**: Generic Python exceptions produce confusing output for non-developers. The error handler catches these and renders them as formatted panels.
-
-### XDG Base Directory compliance
-
-Configuration is stored in XDG-compliant locations:
-- `~/.config/scc/` - User configuration (backup-worthy)
-- `~/.cache/scc/` - Regenerable cache (safe to delete)
-
-**Why**: Follows standard conventions, allows easy backup/migration, cache can be safely deleted.
-
-## Module structure
-
-```
-src/scc_cli/
-    cli.py              Entry point. Typer commands and error handling.
-    config.py           Load/save local configuration. XDG paths.
-    profiles.py         Profile resolution, marketplace URL logic.
-    remote.py           HTTP fetch, auth resolution, ETag caching.
-    validate.py         Schema validation against bundled JSON schema.
-    claude_adapter.py   Claude Code settings format (isolated).
-    docker.py           Build docker commands. Credential injection.
-    git.py              Branch safety. Worktree creation. Repo-local hooks.
-    deps.py             Dependency detection and installation.
-    sessions.py         Track recent sessions. Link sessions to containers.
-    doctor.py           Prerequisite checks and health diagnostics.
-    setup.py            Setup wizard for organization connection.
-    errors.py           Exception classes with exit codes.
-    platform.py         Detect macOS/Linux/WSL2. Path normalization.
-    ui.py               Rich panels, tables, error rendering.
-    schemas/
-        org-v1.schema.json   Bundled schema for offline validation.
+    CLI --> Container
+    Container <--> Workspace
+    Container --> Network[Network Access]
 ```
 
-## Data flow
+**Trust boundaries:**
 
-### Setup flow
+| Boundary | Isolated | Shared |
+|----------|----------|--------|
+| Filesystem | Host system | Mounted workspace (read/write) |
+| Process | Host processes | Container processes |
+| Network | None | Full access (required for Claude API) |
+| Environment | Host env vars | Explicitly passed tokens |
 
+**Credential flow:**
+- Tokens resolved from `env:VAR` or `command:CMD` syntax
+- Injected into container via Docker environment variables
+- Never written to disk or printed in logs
+
+## Component Design
+
+```mermaid
+graph TD
+    CLI[cli.py] --> Config[config.py]
+    CLI --> Remote[remote.py]
+    CLI --> Docker[docker.py]
+    CLI --> Git[git.py]
+
+    Remote --> Validate[validate.py]
+    Remote --> Profiles[profiles.py]
+
+    Docker --> Adapter[claude_adapter.py]
+    Docker --> Sessions[sessions.py]
+
+    Profiles --> Adapter
 ```
-scc setup
-    │
-    ├─ 1. Prompt for org config URL (or --standalone)
-    ├─ 2. remote.py: Fetch org config with auth handling
-    ├─ 3. validate.py: Validate against bundled schema
-    ├─ 4. profiles.py: Extract available profiles
-    ├─ 5. ui.py: Prompt for profile selection
-    ├─ 6. config.py: Save user config
-    └─ 7. git.py: Optionally install repo-local hooks
+
+**Module responsibilities:**
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `profiles.py` | Profile resolution, marketplace URLs | HTTP, file I/O |
+| `remote.py` | HTTP fetch, auth, ETag caching | Business logic |
+| `claude_adapter.py` | Claude Code format knowledge | HTTP, profiles |
+| `validate.py` | Schema validation | HTTP, file I/O |
+| `config.py` | Local config, XDG paths | Remote fetching |
+| `docker.py` | Container lifecycle, credential injection | URL building |
+
+The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
+
+## Lifecycle Flows
+
+### Setup
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as CLI
+    participant R as Remote Config
+    participant D as Disk
+
+    U->>C: scc setup
+    C->>U: Prompt for org URL
+    U->>C: https://example.org/config.json
+    C->>R: GET config (with auth if needed)
+    R-->>C: org_config.json
+    C->>C: Validate against schema
+    C->>U: Select team profile
+    U->>C: platform
+    C->>D: Save to ~/.config/scc/
 ```
 
-### Start flow
+### Start Session
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as CLI
+    participant Cache as Cache
+    participant R as Remote
+    participant D as Docker
+
+    U->>C: scc start ~/repo --team platform
+    C->>Cache: Check org config TTL
+    alt Cache Valid
+        Cache-->>C: Use cached config
+    else Cache Expired
+        C->>R: GET config (If-None-Match: etag)
+        alt 304 Not Modified
+            R-->>C: Use cache
+        else 200 OK
+            R-->>C: New config + ETag
+            C->>Cache: Update cache
+        end
+    end
+    C->>C: Resolve profile → plugin + marketplace
+    C->>C: Check branch safety
+    C->>D: docker sandbox run (workspace mount, env vars)
+    D-->>U: Claude Code session starts
 ```
-scc start ~/projects/my-repo --team platform
-    │
-    ├─ 1. config.py: Load user config
-    ├─ 2. remote.py: Load org config (cache or refresh)
-    ├─ 3. validate.py: Check schema/version compatibility
-    ├─ 4. profiles.py: Resolve profile → plugin + marketplace
-    ├─ 5. git.py: Check branch safety, offer alternatives
-    ├─ 6. claude_adapter.py: Build Claude settings payload
-    ├─ 7. docker.py: Inject credentials, build docker command
-    ├─ 8. sessions.py: Record session before exec
-    └─ 9. os.execvp() → Docker takes over
-```
 
-### Error handling
+## Configuration Precedence
 
-1. Operation raises `SCCError` subclass (e.g., `PrerequisiteError`)
-2. `@handle_errors` decorator in `cli.py` catches it
-3. `ui.render_error()` formats the message as a panel
-4. CLI exits with the error's exit code
+From highest to lowest priority:
 
-## File locations
+1. CLI flags (`--team`, `--offline`)
+2. User config (`~/.config/scc/config.json`)
+3. Organization config (remote-fetched, cached)
+4. Built-in defaults
+
+## File Locations
 
 ```
 ~/.config/scc/
-    config.json         User configuration (org URL, selected profile)
+    config.json         # Org URL, selected profile, preferences
 
 ~/.cache/scc/
-    org_config.json     Cached remote org config
-    cache_meta.json     ETags, timestamps, fingerprints
+    org_config.json     # Cached remote config
+    cache_meta.json     # ETags, timestamps
 
 ~/projects/
-    my-repo/            Main repository
-    my-repo-worktrees/  Worktrees for my-repo
+    my-repo/            # Main repository
+    my-repo-worktrees/  # Worktrees created by SCC
         feature-a/
         hotfix-123/
 
 <repo>/.git/hooks/
-    pre-push            SCC-managed hook (if hooks.enabled=true)
+    pre-push            # SCC-managed hook (opt-in)
 ```
 
-## Configuration priority
-
-From highest to lowest:
-
-1. CLI flags: `--team`, `--offline`, etc.
-2. User config: `~/.config/scc/config.json`
-3. Organization config: Remote-fetched, cached locally
-4. Built-in defaults
-
-## Authentication flow
-
-```
-User config:                  Organization config:
-"auth": "env:GITLAB_TOKEN"    "auth": "env:ORG_TOKEN"
-           │                             │
-           ▼                             ▼
-    resolve_auth()                resolve_auth()
-           │                             │
-           ▼                             ▼
-    Token for org fetch          Token for marketplace
-           │                             │
-           ▼                             ▼
-    Fetch org config             Inject into Docker env
-```
-
-Auth methods:
-- `env:VAR_NAME` - Read from environment variable
-- `command:CMD` - Execute command, use stdout as token
-- `null` - No authentication (public URLs)
-
-## Performance characteristics
+## Performance
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| Config load | ~5ms | Single JSON read |
-| Cache check | ~5ms | Read + TTL comparison |
-| Org config fetch | 100-500ms | HTTP with auth |
-| Schema validation | ~10ms | Against bundled schema |
-| Docker check | ~500ms | Subprocess to docker |
-| Container resume | ~500ms | `docker start -ai` |
-| Container create | 3-5s | Full `docker sandbox run` |
-| Worktree create | 500ms-5min | Depends on deps installation |
+| Container resume | ~500ms | Typical case with re-use |
+| Container create | 3-5s | Cold start |
+| Config fetch | 100-500ms | HTTP with auth |
+| Cache check | ~5ms | Local TTL comparison |
+| Worktree create | 500ms-5min | Depends on `--install-deps` |
 
-Container re-use makes the typical case (resume) 10x faster than always creating fresh containers.
+Container re-use makes resume 10x faster than fresh containers. Each workspace+branch combination gets a deterministic container name (`scc-<hash>-<hash>`) for automatic re-use.
 
-## Known limitations
+## Design Decisions
 
-- **WSL2 path performance**: Workspaces on `/mnt/c/...` are slow. The CLI warns but cannot fix this.
-- **Container accumulation**: Old containers are not automatically cleaned up.
-- **Single container per workspace+branch**: Cannot run multiple sessions on the same branch simultaneously.
-- **Network dependency**: Org config fetch requires network (use `--offline` for cache-only).
+### Why remote config?
 
-## What SCC does NOT do
+Organizations update their configs without requiring CLI updates. IT teams manage profiles centrally. One URL change propagates to all developers.
 
-SCC is intentionally minimal. It does NOT:
+### Why worktrees over branches?
 
-- Download or cache plugin content (Claude Code does this)
-- Verify plugin integrity (no checksum verification)
-- Maintain a local marketplace mirror
-- Communicate with Claude's API directly
-- Handle Claude Code authentication
+Developers context-switch frequently. Worktrees allow multiple Claude Code sessions running in parallel, each with its own container and conversation state.
 
-SCC only:
-- Fetches and caches organization config
-- Resolves profiles to marketplace references
-- Injects settings into Docker environment
-- Manages git worktrees and branch safety
+### Why container re-use?
+
+Claude Code maintains conversation context inside the container. Fresh containers lose this context. Trade-off: containers accumulate and need periodic cleanup with `docker container prune`.
+
+### Why XDG paths?
+
+Standard conventions allow easy backup (`~/.config/scc/`) while keeping regenerable cache separate (`~/.cache/scc/`). Cache deletion is always safe.
+
+### Why typed exceptions?
+
+All errors inherit from `SCCError` with:
+- `user_message`: Plain language explanation
+- `suggested_action`: Concrete next step
+- `exit_code`: For scripting (3=prerequisites, 4=external tool, 5=internal)
+
+## Limitations
+
+- **WSL2 performance**: Workspaces on `/mnt/c/...` are slow. CLI warns but cannot fix this.
+- **Container accumulation**: Old containers not auto-cleaned. Run `docker container prune` periodically.
+- **Single session per branch**: Cannot run multiple sessions on same workspace+branch simultaneously.
+- **Network required**: Org config fetch needs network. Use `--offline` for cache-only mode.

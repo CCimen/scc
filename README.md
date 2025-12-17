@@ -1,5 +1,18 @@
 # SCC - Sandboxed Claude CLI
 
+[![PyPI](https://img.shields.io/pypi/v/scc-cli?style=flat-square&label=PyPI)](https://pypi.org/project/scc-cli/)
+[![Python](https://img.shields.io/pypi/pyversions/scc-cli?style=flat-square&label=Python)](https://pypi.org/project/scc-cli/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen?style=flat-square)](#contributing)
+
+[Quick Start](#quick-start) ·
+[Commands](#commands) ·
+[Configuration](#configuration) ·
+[Architecture](docs/ARCHITECTURE.md) ·
+[Contributing](#contributing)
+
+---
+
 Run Claude Code in Docker sandboxes with organization-managed team profiles, marketplace integration, and git worktree support.
 
 ## Why this exists
@@ -235,9 +248,16 @@ Run inside WSL2, not Windows. Keep projects in the Linux filesystem (`~/projects
 
 Run `scc doctor` to diagnose most issues.
 
-## Documentation
+## Contributing
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
+Contributions welcome. Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Run tests before committing (`uv run pytest`)
+4. Submit a pull request
+
+See [CLAUDE.md](CLAUDE.md) for development methodology and code quality principles.
 
 ## License
 
