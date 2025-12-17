@@ -47,3 +47,6 @@ Thumbs.db
 
 # Local config (don't commit user-specific settings)
 *.local.json
+
+# Claude Code project instructions (local development only)
+CLAUDE.md

@@ -1,0 +1,426 @@
+"""Tests for claude_adapter module.
+
+CRITICAL: This module tests the ONLY moving integration surface with Claude Code.
+These tests verify the exact output shape Claude Code expects.
+
+If Claude Code changes its format, ONLY these tests and claude_adapter.py should change.
+No other module should reference extraKnownMarketplaces or enabledPlugins.
+"""
+
+import os
+from unittest import mock
+
+import pytest
+
+from scc_cli import claude_adapter
+from scc_cli.claude_adapter import AuthResult
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Test Fixtures
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def sample_profile():
+    """Create a sample profile with plugin."""
+    return {
+        "name": "platform",
+        "description": "Platform team",
+        "plugin": "platform-plugin",
+        "marketplace": "internal",
+    }
+
+
+@pytest.fixture
+def sample_profile_no_plugin():
+    """Create a profile without plugin."""
+    return {
+        "name": "base",
+        "description": "Base profile",
+        "plugin": None,
+        "marketplace": None,
+    }
+
+
+@pytest.fixture
+def github_marketplace():
+    """Create a GitHub marketplace config."""
+    return {
+        "name": "public",
+        "type": "github",
+        "repo": "my-org/plugins",
+        "ref": "main",
+        "auth": None,
+    }
+
+
+@pytest.fixture
+def gitlab_marketplace():
+    """Create a GitLab marketplace config with auth."""
+    return {
+        "name": "internal",
+        "type": "gitlab",
+        "host": "gitlab.example.org",
+        "repo": "group/claude-marketplace",
+        "ref": "main",
+        "auth": "env:GITLAB_TOKEN",
+    }
+
+
+@pytest.fixture
+def https_marketplace():
+    """Create an HTTPS marketplace config."""
+    return {
+        "name": "custom",
+        "type": "https",
+        "url": "https://plugins.example.org/marketplace",
+        "auth": "env:CUSTOM_TOKEN",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for AuthResult dataclass
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestAuthResult:
+    """Tests for AuthResult dataclass."""
+
+    def test_auth_result_creation(self):
+        """AuthResult should store env_name and token."""
+        result = AuthResult(env_name="MY_TOKEN", token="secret123")
+        assert result.env_name == "MY_TOKEN"
+        assert result.token == "secret123"
+        assert result.also_set == ()
+
+    def test_auth_result_with_also_set(self):
+        """AuthResult should support also_set for standard env vars."""
+        result = AuthResult(
+            env_name="CUSTOM_GITLAB_TOKEN",
+            token="secret",
+            also_set=("GITLAB_TOKEN",),
+        )
+        assert result.also_set == ("GITLAB_TOKEN",)
+
+    def test_auth_result_is_frozen(self):
+        """AuthResult should be immutable (frozen dataclass)."""
+        result = AuthResult(env_name="TOKEN", token="secret")
+        with pytest.raises(AttributeError):
+            result.token = "modified"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for resolve_auth_with_name
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestResolveAuthWithName:
+    """Tests for resolve_auth_with_name function."""
+
+    def test_resolve_env_auth(self):
+        """Should resolve env:VAR_NAME auth spec."""
+        with mock.patch.dict(os.environ, {"MY_TOKEN": "secret123"}):
+            token, env_name = claude_adapter.resolve_auth_with_name("env:MY_TOKEN")
+            assert token == "secret123"
+            assert env_name == "MY_TOKEN"
+
+    def test_resolve_env_auth_missing(self):
+        """Should return None for missing env var."""
+        with mock.patch.dict(os.environ, {}, clear=True):
+            token, env_name = claude_adapter.resolve_auth_with_name("env:MISSING_VAR")
+            assert token is None
+            assert env_name == "MISSING_VAR"
+
+    def test_resolve_env_auth_strips_whitespace(self):
+        """Should strip whitespace from token."""
+        with mock.patch.dict(os.environ, {"MY_TOKEN": "  secret with spaces  \n"}):
+            token, env_name = claude_adapter.resolve_auth_with_name("env:MY_TOKEN")
+            assert token == "secret with spaces"
+
+    def test_resolve_command_auth(self):
+        """Should resolve command:CMD auth spec."""
+        with mock.patch("subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = "command-secret\n"
+
+            token, env_name = claude_adapter.resolve_auth_with_name(
+                "command:echo secret"
+            )
+            assert token == "command-secret"
+            assert env_name == "SCC_AUTH_TOKEN"
+
+    def test_resolve_command_auth_failure(self):
+        """Should return None for failed command."""
+        with mock.patch("subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 1
+            mock_run.return_value.stdout = ""
+
+            token, env_name = claude_adapter.resolve_auth_with_name(
+                "command:failing-cmd"
+            )
+            assert token is None
+
+    def test_resolve_none_auth(self):
+        """Should return None for null auth spec."""
+        token, env_name = claude_adapter.resolve_auth_with_name(None)
+        assert token is None
+        assert env_name is None
+
+    def test_resolve_empty_auth(self):
+        """Should return None for empty auth spec."""
+        token, env_name = claude_adapter.resolve_auth_with_name("")
+        assert token is None
+        assert env_name is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for resolve_marketplace_auth
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestResolveMarketplaceAuth:
+    """Tests for resolve_marketplace_auth function."""
+
+    def test_public_marketplace_no_auth(self, github_marketplace):
+        """Public marketplace should return None."""
+        result = claude_adapter.resolve_marketplace_auth(github_marketplace)
+        assert result is None
+
+    def test_gitlab_marketplace_with_auth(self, gitlab_marketplace):
+        """GitLab marketplace should include GITLAB_TOKEN in also_set."""
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "gitlab-secret"}):
+            result = claude_adapter.resolve_marketplace_auth(gitlab_marketplace)
+            assert result is not None
+            assert result.env_name == "GITLAB_TOKEN"
+            assert result.token == "gitlab-secret"
+            assert "GITLAB_TOKEN" in result.also_set
+
+    def test_github_marketplace_with_auth(self):
+        """GitHub marketplace should include GITHUB_TOKEN in also_set."""
+        marketplace = {
+            "name": "private",
+            "type": "github",
+            "repo": "org/private-plugins",
+            "auth": "env:GH_TOKEN",
+        }
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "gh-secret"}):
+            result = claude_adapter.resolve_marketplace_auth(marketplace)
+            assert result is not None
+            assert result.env_name == "GH_TOKEN"
+            assert "GITHUB_TOKEN" in result.also_set
+
+    def test_https_marketplace_with_auth(self, https_marketplace):
+        """HTTPS marketplace should not add standard env vars."""
+        with mock.patch.dict(os.environ, {"CUSTOM_TOKEN": "custom-secret"}):
+            result = claude_adapter.resolve_marketplace_auth(https_marketplace)
+            assert result is not None
+            assert result.also_set == ()  # No standard vars for https type
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for build_claude_settings - CRITICAL OUTPUT SHAPE TESTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBuildClaudeSettings:
+    """Tests for build_claude_settings function.
+
+    CRITICAL: These tests verify the exact shape Claude Code expects.
+    If Claude Code changes format, update ONLY these tests and claude_adapter.py.
+    """
+
+    def test_settings_structure(self, sample_profile, gitlab_marketplace):
+        """Settings should have correct top-level structure."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "test-org"
+        )
+
+        # Verify exact keys Claude Code expects
+        assert "extraKnownMarketplaces" in settings
+        assert "enabledPlugins" in settings
+
+    def test_extra_known_marketplaces_structure(
+        self, sample_profile, gitlab_marketplace
+    ):
+        """extraKnownMarketplaces should have correct structure."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "test-org"
+        )
+
+        marketplaces = settings["extraKnownMarketplaces"]
+
+        # Key is org_id when provided
+        assert "test-org" in marketplaces
+
+        # Marketplace entry structure
+        entry = marketplaces["test-org"]
+        assert "name" in entry
+        assert "url" in entry
+        assert entry["url"].startswith("https://")
+
+    def test_marketplace_key_uses_org_id(self, sample_profile, github_marketplace):
+        """Marketplace key should be org_id when provided."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, github_marketplace, "my-org"
+        )
+
+        assert "my-org" in settings["extraKnownMarketplaces"]
+        assert "public" not in settings["extraKnownMarketplaces"]
+
+    def test_marketplace_key_uses_name_if_no_org(
+        self, sample_profile, github_marketplace
+    ):
+        """Marketplace key should fall back to marketplace name."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, github_marketplace, None
+        )
+
+        assert "public" in settings["extraKnownMarketplaces"]
+
+    def test_enabled_plugins_format(self, sample_profile, gitlab_marketplace):
+        """enabledPlugins should be list of 'plugin@marketplace' strings."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "test-org"
+        )
+
+        assert settings["enabledPlugins"] == ["platform-plugin@test-org"]
+
+    def test_enabled_plugins_uses_correct_key(self, sample_profile, github_marketplace):
+        """Plugin reference should match marketplace key."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, github_marketplace, "my-org"
+        )
+
+        # Plugin should reference my-org (org_id), not "public" (marketplace name)
+        assert settings["enabledPlugins"] == ["platform-plugin@my-org"]
+
+    def test_marketplace_url_is_https(self, sample_profile, gitlab_marketplace):
+        """Marketplace URL should be HTTPS."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "test-org"
+        )
+
+        url = settings["extraKnownMarketplaces"]["test-org"]["url"]
+        assert url == "https://gitlab.example.org/group/claude-marketplace"
+
+    def test_no_plugin_returns_empty_enabled(
+        self, sample_profile_no_plugin, github_marketplace
+    ):
+        """Profile without plugin should have empty enabledPlugins."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile_no_plugin, github_marketplace, "org"
+        )
+
+        assert settings["enabledPlugins"] == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for inject_credentials
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestInjectCredentials:
+    """Tests for inject_credentials function."""
+
+    def test_inject_gitlab_credentials(self, gitlab_marketplace):
+        """Should inject GitLab token into docker env."""
+        docker_env = {}
+
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "secret"}):
+            claude_adapter.inject_credentials(gitlab_marketplace, docker_env)
+
+        assert "GITLAB_TOKEN" in docker_env
+        assert docker_env["GITLAB_TOKEN"] == "secret"
+
+    def test_inject_preserves_existing_env(self, gitlab_marketplace):
+        """Should not overwrite existing env vars (setdefault)."""
+        docker_env = {"GITLAB_TOKEN": "existing-value"}
+
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "new-value"}):
+            claude_adapter.inject_credentials(gitlab_marketplace, docker_env)
+
+        # Should preserve existing value
+        assert docker_env["GITLAB_TOKEN"] == "existing-value"
+
+    def test_inject_adds_standard_vars(self, gitlab_marketplace):
+        """Should also set standard env var names."""
+        docker_env = {}
+
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "secret"}):
+            claude_adapter.inject_credentials(gitlab_marketplace, docker_env)
+
+        # GITLAB_TOKEN is both the original and the standard var
+        assert "GITLAB_TOKEN" in docker_env
+
+    def test_inject_no_auth_does_nothing(self, github_marketplace):
+        """Public marketplace should not modify docker_env."""
+        docker_env = {}
+        claude_adapter.inject_credentials(github_marketplace, docker_env)
+        assert docker_env == {}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for get_settings_file_content
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestGetSettingsFileContent:
+    """Tests for get_settings_file_content function."""
+
+    def test_returns_valid_json(self, sample_profile, gitlab_marketplace):
+        """Should return valid JSON string."""
+        import json
+
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "org"
+        )
+        content = claude_adapter.get_settings_file_content(settings)
+
+        # Should be parseable JSON
+        parsed = json.loads(content)
+        assert "extraKnownMarketplaces" in parsed
+
+    def test_json_is_formatted(self, sample_profile, gitlab_marketplace):
+        """JSON should be formatted with indentation."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "org"
+        )
+        content = claude_adapter.get_settings_file_content(settings)
+
+        # Should have newlines (formatted)
+        assert "\n" in content
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for module isolation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestModuleIsolation:
+    """Tests verifying module isolation boundaries.
+
+    docker.py should NOT need to know Claude Code format.
+    It should only receive opaque settings dict and env vars.
+    """
+
+    def test_settings_is_opaque_dict(self, sample_profile, gitlab_marketplace):
+        """build_claude_settings returns dict that docker.py can pass through."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, gitlab_marketplace, "org"
+        )
+
+        # docker.py just needs to know it's a dict to inject
+        assert isinstance(settings, dict)
+
+    def test_env_vars_are_simple_dict(self, gitlab_marketplace):
+        """inject_credentials produces simple str->str dict."""
+        docker_env = {}
+
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "secret"}):
+            claude_adapter.inject_credentials(gitlab_marketplace, docker_env)
+
+        # docker.py just needs simple dict for -e flags
+        for key, value in docker_env.items():
+            assert isinstance(key, str)
+            assert isinstance(value, str)

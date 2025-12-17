@@ -56,6 +56,23 @@ class SessionRecord:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def get_most_recent() -> dict | None:
+    """
+    Get the most recently used session.
+
+    Returns:
+        Session dict with workspace, team, container_name, etc. or None if no sessions.
+    """
+    sessions = _load_sessions()
+
+    if not sessions:
+        return None
+
+    # Sort by last_used descending and return first
+    sessions.sort(key=lambda s: s.get("last_used", ""), reverse=True)
+    return sessions[0]
+
+
 def list_recent(limit: int = 10) -> list[dict]:
     """
     List recent sessions with container and relative time info.

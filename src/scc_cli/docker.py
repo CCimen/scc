@@ -9,6 +9,7 @@ Container re-use pattern:
 
 import datetime
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -520,10 +521,8 @@ def get_sandbox_settings() -> dict | None:
             timeout=30,
         )
         if result.returncode == 0 and result.stdout.strip():
-            import json
-
             return json.loads(result.stdout)
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError, json.JSONDecodeError):
         pass
     return None
 
@@ -573,6 +572,150 @@ def prepare_sandbox_volume_for_credentials() -> bool:
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return False
+
+
+def inject_settings(settings: dict) -> bool:
+    """
+    Inject pre-built settings into the Docker sandbox volume.
+
+    This is the "dumb" settings injection function. docker.py does NOT know
+    about Claude Code settings format - it just merges and injects JSON.
+
+    Settings are merged with any existing settings in the sandbox volume
+    (e.g., status line config). New settings take precedence for conflicts.
+
+    Args:
+        settings: Pre-built settings dict (from claude_adapter.build_claude_settings)
+
+    Returns:
+        True if settings were injected successfully, False otherwise
+    """
+    # Get existing settings from Docker volume (preserve status line, etc.)
+    existing_settings = get_sandbox_settings() or {}
+
+    # Merge settings with existing settings
+    # New settings take precedence for overlapping keys
+    merged_settings = {**existing_settings, **settings}
+
+    # Inject merged settings into Docker volume
+    return inject_file_to_sandbox_volume(
+        "settings.json",
+        json.dumps(merged_settings, indent=2),
+    )
+
+
+def inject_team_settings(team_name: str, org_config: dict | None = None) -> bool:
+    """
+    Inject team-specific settings into the Docker sandbox volume.
+
+    Supports two modes:
+    1. With org_config: Uses new remote org config architecture
+       - Resolves profile/marketplace from org_config
+       - Builds settings via claude_adapter
+    2. Without org_config (deprecated): Uses legacy teams module
+
+    Args:
+        team_name: Name of the team profile
+        org_config: Optional remote organization config. If provided, uses
+            the new architecture with profiles.py and claude_adapter.py
+
+    Returns:
+        True if settings were injected successfully, False otherwise
+    """
+    if org_config is not None:
+        # New architecture: use profiles.py and claude_adapter.py
+        from . import claude_adapter, profiles
+
+        # Resolve profile from org config
+        profile = profiles.resolve_profile(org_config, team_name)
+
+        # Check if profile has a plugin
+        if not profile.get("plugin"):
+            return True  # No plugin to inject
+
+        # Resolve marketplace
+        marketplace = profiles.resolve_marketplace(org_config, profile)
+
+        # Get org_id for namespacing
+        org_id = org_config.get("organization", {}).get("id")
+
+        # Build settings using claude_adapter
+        settings = claude_adapter.build_claude_settings(profile, marketplace, org_id)
+
+        # Inject settings
+        return inject_settings(settings)
+    else:
+        # Legacy mode: use old teams module
+        from . import teams
+
+        team_settings = teams.get_team_sandbox_settings(team_name)
+
+        if not team_settings:
+            return True
+
+        return inject_settings(team_settings)
+
+
+def launch_with_org_config(
+    workspace: Path,
+    org_config: dict,
+    team: str,
+    continue_session: bool = False,
+    resume: bool = False,
+) -> None:
+    """
+    Launch Docker sandbox with team profile from remote org config.
+
+    This is the main orchestration function for the new architecture:
+    1. Resolves profile and marketplace from org_config (via profiles.py)
+    2. Builds Claude Code settings (via claude_adapter.py)
+    3. Injects settings into sandbox volume
+    4. Launches Docker sandbox
+
+    docker.py is "dumb" - it delegates all Claude Code format knowledge
+    to claude_adapter.py and profile resolution to profiles.py.
+
+    Args:
+        workspace: Path to workspace directory
+        org_config: Remote organization config dict
+        team: Team profile name
+        continue_session: Pass -c flag to Claude
+        resume: Pass --resume flag to Claude
+
+    Raises:
+        ValueError: If team/profile not found in org_config
+        DockerNotFoundError: If Docker not available
+        SandboxLaunchError: If sandbox fails to start
+    """
+    from . import claude_adapter, profiles
+
+    # Check Docker is available
+    check_docker_available()
+
+    # Resolve profile from org config (raises ValueError if not found)
+    profile = profiles.resolve_profile(org_config, team)
+
+    # Resolve marketplace for the profile
+    marketplace = profiles.resolve_marketplace(org_config, profile)
+
+    # Get org_id for namespacing
+    org_id = org_config.get("organization", {}).get("id")
+
+    # Build Claude Code settings using the adapter
+    settings = claude_adapter.build_claude_settings(profile, marketplace, org_id)
+
+    # Inject settings into sandbox volume
+    inject_settings(settings)
+
+    # Build and run the Docker sandbox command
+    cmd = build_command(
+        workspace=workspace,
+        continue_session=continue_session,
+        resume=resume,
+    )
+
+    # Run the sandbox
+    run(cmd)
 
 
 def get_or_create_container(

@@ -8,9 +8,19 @@ Philosophy: "Fast feedback, clear guidance"
 - Check all prerequisites quickly
 - Provide clear pass/fail indicators
 - Offer actionable fix suggestions
+
+New checks (v2):
+- Organization config reachability
+- Marketplace authentication availability
+- Credential injection verification
+- Cache status and TTL checks
+- Migration status checks
 """
 
+import json
+import os
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from rich import box
@@ -18,6 +28,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from . import config
+from .remote import fetch_org_config, resolve_auth
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Classes
@@ -285,6 +298,460 @@ def check_config_directory() -> CheckResult:
             fix_hint=f"Check permissions: chmod 755 {config_dir}",
             severity="error",
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Organization & Marketplace Health Checks (v2)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def load_cached_org_config() -> dict | None:
+    """Load cached organization config from cache directory.
+
+    Returns:
+        Cached org config dict if valid, None otherwise.
+    """
+    cache_file = config.CACHE_DIR / "org_config.json"
+
+    if not cache_file.exists():
+        return None
+
+    try:
+        content = cache_file.read_text()
+        return json.loads(content)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def check_org_config_reachable() -> CheckResult | None:
+    """Check if organization config URL is reachable.
+
+    Returns:
+        CheckResult if org config is configured, None for standalone mode.
+    """
+    user_config = config.load_user_config()
+
+    # Skip for standalone mode
+    if user_config.get("standalone"):
+        return None
+
+    # Skip if no org source configured
+    org_source = user_config.get("organization_source")
+    if not org_source:
+        return None
+
+    url = org_source.get("url")
+    if not url:
+        return None
+
+    auth = org_source.get("auth")
+
+    # Try to fetch org config
+    try:
+        org_config, etag, status = fetch_org_config(url, auth=auth, etag=None)
+    except Exception as e:
+        return CheckResult(
+            name="Org Config",
+            passed=False,
+            message=f"Failed to fetch org config: {e}",
+            fix_hint="Check network connection and URL",
+            severity="error",
+        )
+
+    if status == 401:
+        return CheckResult(
+            name="Org Config",
+            passed=False,
+            message=f"Authentication required (401) for {url}",
+            fix_hint="Configure auth with: scc setup",
+            severity="error",
+        )
+
+    if status == 403:
+        return CheckResult(
+            name="Org Config",
+            passed=False,
+            message=f"Access denied (403) for {url}",
+            fix_hint="Check your access permissions",
+            severity="error",
+        )
+
+    if status != 200 or org_config is None:
+        return CheckResult(
+            name="Org Config",
+            passed=False,
+            message=f"Failed to fetch org config (status: {status})",
+            fix_hint="Check URL and network connection",
+            severity="error",
+        )
+
+    org_name = org_config.get("organization", {}).get("name", "Unknown")
+    return CheckResult(
+        name="Org Config",
+        passed=True,
+        message=f"Connected to: {org_name}",
+    )
+
+
+def check_marketplace_auth_available() -> CheckResult | None:
+    """Check if marketplace authentication token is available.
+
+    Returns:
+        CheckResult if marketplace is configured, None otherwise.
+    """
+    user_config = config.load_user_config()
+    org_config = load_cached_org_config()
+
+    # Skip if no org config
+    if org_config is None:
+        return None
+
+    # Skip if no profile selected
+    profile_name = user_config.get("selected_profile")
+    if not profile_name:
+        return None
+
+    # Find the profile
+    profiles = org_config.get("profiles", {})
+    profile = profiles.get(profile_name)
+    if not profile:
+        return None
+
+    # Find the marketplace
+    marketplace_name = profile.get("marketplace")
+    marketplaces = org_config.get("marketplaces", [])
+    marketplace = None
+    for m in marketplaces:
+        if m.get("name") == marketplace_name:
+            marketplace = m
+            break
+
+    if marketplace is None:
+        return CheckResult(
+            name="Marketplace Auth",
+            passed=False,
+            message=f"Marketplace '{marketplace_name}' not found in org config",
+            severity="error",
+        )
+
+    # Check auth requirement
+    auth_spec = marketplace.get("auth")
+
+    if auth_spec is None:
+        return CheckResult(
+            name="Marketplace Auth",
+            passed=True,
+            message="Public marketplace (no auth needed)",
+        )
+
+    # Try to resolve auth
+    try:
+        token = resolve_auth(auth_spec)
+        if token:
+            return CheckResult(
+                name="Marketplace Auth",
+                passed=True,
+                message=f"{auth_spec} is set",
+            )
+        else:
+            # Provide helpful hint based on auth type
+            if auth_spec.startswith("env:"):
+                var_name = auth_spec.split(":", 1)[1]
+                hint = f"Set with: export {var_name}=your-token"
+            else:
+                cmd = auth_spec.split(":", 1)[1] if ":" in auth_spec else auth_spec
+                hint = f"Run manually to debug: {cmd}"
+
+            return CheckResult(
+                name="Marketplace Auth",
+                passed=False,
+                message=f"{auth_spec} not set or invalid",
+                fix_hint=hint,
+                severity="error",
+            )
+    except Exception as e:
+        return CheckResult(
+            name="Marketplace Auth",
+            passed=False,
+            message=f"Auth resolution failed: {e}",
+            severity="error",
+        )
+
+
+def check_credential_injection() -> CheckResult | None:
+    """Check what credentials will be injected into Docker container.
+
+    Shows env var NAMES only, never values. Prevents confusion about
+    whether tokens are being passed to the container.
+
+    Returns:
+        CheckResult showing injection status, None if no profile.
+    """
+    user_config = config.load_user_config()
+    org_config = load_cached_org_config()
+
+    # Skip if no org config
+    if org_config is None:
+        return None
+
+    # Skip if no profile selected
+    profile_name = user_config.get("selected_profile")
+    if not profile_name:
+        return None
+
+    # Find the profile
+    profiles = org_config.get("profiles", {})
+    profile = profiles.get(profile_name)
+    if not profile:
+        return None
+
+    # Find the marketplace
+    marketplace_name = profile.get("marketplace")
+    marketplaces = org_config.get("marketplaces", [])
+    marketplace = None
+    for m in marketplaces:
+        if m.get("name") == marketplace_name:
+            marketplace = m
+            break
+
+    if marketplace is None:
+        return None
+
+    # Check auth requirement
+    auth_spec = marketplace.get("auth")
+
+    if auth_spec is None:
+        return CheckResult(
+            name="Container Injection",
+            passed=True,
+            message="No credentials needed (public marketplace)",
+        )
+
+    # Determine what env vars will be injected
+    env_vars = []
+
+    if auth_spec.startswith("env:"):
+        var_name = auth_spec.split(":", 1)[1]
+        env_vars.append(var_name)
+
+        # Add standard vars based on marketplace type
+        marketplace_type = marketplace.get("type")
+        if marketplace_type == "gitlab" and var_name != "GITLAB_TOKEN":
+            env_vars.append("GITLAB_TOKEN")
+        elif marketplace_type == "github" and var_name != "GITHUB_TOKEN":
+            env_vars.append("GITHUB_TOKEN")
+
+    if env_vars:
+        env_list = ", ".join(env_vars)
+        return CheckResult(
+            name="Container Injection",
+            passed=True,
+            message=f"Will inject [{env_list}] into Docker env",
+        )
+    else:
+        return CheckResult(
+            name="Container Injection",
+            passed=True,
+            message="Command-based auth (resolved at runtime)",
+        )
+
+
+def check_cache_readable() -> CheckResult:
+    """Check if organization config cache is readable and valid.
+
+    Returns:
+        CheckResult with cache status.
+    """
+    cache_file = config.CACHE_DIR / "org_config.json"
+
+    if not cache_file.exists():
+        return CheckResult(
+            name="Cache",
+            passed=True,
+            message="No cache file (will fetch on first use)",
+            severity="info",
+        )
+
+    try:
+        content = cache_file.read_text()
+        org_config = json.loads(content)
+
+        # Calculate fingerprint
+        import hashlib
+        fingerprint = hashlib.sha256(content.encode()).hexdigest()[:12]
+
+        org_name = org_config.get("organization", {}).get("name", "Unknown")
+        return CheckResult(
+            name="Cache",
+            passed=True,
+            message=f"Cache valid: {org_name} (fingerprint: {fingerprint})",
+        )
+    except json.JSONDecodeError:
+        return CheckResult(
+            name="Cache",
+            passed=False,
+            message="Cache file is corrupted (invalid JSON)",
+            fix_hint="Run 'scc teams --sync' to refresh",
+            severity="error",
+        )
+    except OSError as e:
+        return CheckResult(
+            name="Cache",
+            passed=False,
+            message=f"Cannot read cache file: {e}",
+            severity="error",
+        )
+
+
+def check_cache_ttl_status() -> CheckResult | None:
+    """Check if cache is within TTL (time-to-live).
+
+    Returns:
+        CheckResult with TTL status, None if no cache metadata.
+    """
+    meta_file = config.CACHE_DIR / "cache_meta.json"
+
+    if not meta_file.exists():
+        return None
+
+    try:
+        content = meta_file.read_text()
+        meta = json.loads(content)
+    except (json.JSONDecodeError, OSError):
+        return CheckResult(
+            name="Cache TTL",
+            passed=False,
+            message="Cache metadata is corrupted",
+            fix_hint="Run 'scc teams --sync' to refresh",
+            severity="warning",
+        )
+
+    org_meta = meta.get("org_config", {})
+    expires_at_str = org_meta.get("expires_at")
+
+    if not expires_at_str:
+        return CheckResult(
+            name="Cache TTL",
+            passed=True,
+            message="No expiration set in cache",
+            severity="info",
+        )
+
+    try:
+        # Parse ISO format datetime
+        expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+
+        if now < expires_at:
+            remaining = expires_at - now
+            hours = remaining.total_seconds() / 3600
+            return CheckResult(
+                name="Cache TTL",
+                passed=True,
+                message=f"Cache valid for {hours:.1f} more hours",
+            )
+        else:
+            elapsed = now - expires_at
+            hours = elapsed.total_seconds() / 3600
+            return CheckResult(
+                name="Cache TTL",
+                passed=False,
+                message=f"Cache expired {hours:.1f} hours ago",
+                fix_hint="Run 'scc teams --sync' to refresh",
+                severity="warning",
+            )
+    except (ValueError, TypeError):
+        return CheckResult(
+            name="Cache TTL",
+            passed=False,
+            message="Invalid expiration date in cache metadata",
+            fix_hint="Run 'scc teams --sync' to refresh",
+            severity="warning",
+        )
+
+
+def check_migration_status() -> CheckResult:
+    """Check if legacy configuration has been migrated.
+
+    Returns:
+        CheckResult with migration status.
+    """
+    legacy_dir = config.LEGACY_CONFIG_DIR
+    new_dir = config.CONFIG_DIR
+
+    # Both new and legacy exist - warn about cleanup
+    if legacy_dir.exists() and new_dir.exists():
+        return CheckResult(
+            name="Migration",
+            passed=False,
+            message=f"Legacy config still exists at {legacy_dir}",
+            fix_hint="You may delete the old directory manually",
+            severity="warning",
+        )
+
+    # Only legacy exists - needs migration
+    if legacy_dir.exists() and not new_dir.exists():
+        return CheckResult(
+            name="Migration",
+            passed=False,
+            message="Config migration needed",
+            fix_hint="Run any scc command to trigger automatic migration",
+            severity="warning",
+        )
+
+    # New config exists or fresh install
+    return CheckResult(
+        name="Migration",
+        passed=True,
+        message="No legacy configuration found",
+    )
+
+
+def run_all_checks() -> list[CheckResult]:
+    """Run all health checks and return list of results.
+
+    Includes both environment checks and organization/marketplace checks.
+
+    Returns:
+        List of all CheckResult objects (excluding None results).
+    """
+    results = []
+
+    # Environment checks
+    results.append(check_git())
+    results.append(check_docker())
+    results.append(check_docker_sandbox())
+    results.append(check_docker_running())
+
+    wsl2_result, _ = check_wsl2()
+    results.append(wsl2_result)
+
+    results.append(check_config_directory())
+
+    # Organization checks (may return None)
+    org_check = check_org_config_reachable()
+    if org_check is not None:
+        results.append(org_check)
+
+    auth_check = check_marketplace_auth_available()
+    if auth_check is not None:
+        results.append(auth_check)
+
+    injection_check = check_credential_injection()
+    if injection_check is not None:
+        results.append(injection_check)
+
+    # Cache checks
+    results.append(check_cache_readable())
+
+    ttl_check = check_cache_ttl_status()
+    if ttl_check is not None:
+        results.append(ttl_check)
+
+    # Migration check
+    results.append(check_migration_status())
+
+    return results
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

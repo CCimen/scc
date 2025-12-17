@@ -56,13 +56,24 @@ def temp_git_repo(temp_dir):
 
 @pytest.fixture
 def temp_config_dir(temp_dir, monkeypatch):
-    """Create a temporary config directory and patch config paths."""
-    config_dir = temp_dir / ".config" / "scc-cli"
+    """Create a temporary config directory and patch config paths.
+
+    NOTE: This fixture is for the config architecture with remote org config.
+    - config_dir is ~/.config/scc/ (not scc-cli)
+    - cache_dir is ~/.cache/scc/
+    - No local org config (org config is fetched remotely)
+    """
+    config_dir = temp_dir / ".config" / "scc"
     config_dir.mkdir(parents=True)
+
+    cache_dir = temp_dir / ".cache" / "scc"
+    cache_dir.mkdir(parents=True)
 
     monkeypatch.setattr("scc_cli.config.CONFIG_DIR", config_dir)
     monkeypatch.setattr("scc_cli.config.CONFIG_FILE", config_dir / "config.json")
     monkeypatch.setattr("scc_cli.config.SESSIONS_FILE", config_dir / "sessions.json")
+    monkeypatch.setattr("scc_cli.config.CACHE_DIR", cache_dir)
+    monkeypatch.setattr("scc_cli.config.LEGACY_CONFIG_DIR", temp_dir / ".config" / "scc-cli")
 
     yield config_dir
 

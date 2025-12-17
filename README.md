@@ -1,13 +1,14 @@
 # SCC - Sandboxed Claude CLI
 
-Run Claude Code in Docker sandboxes with team-based configuration and git worktree support.
+Run Claude Code in Docker sandboxes with organization-managed team profiles, marketplace integration, and git worktree support.
 
 ## Why this exists
 
 Our teams needed a way to use Claude Code that was:
 - **Isolated**: AI runs in containers, not directly on developer machines
-- **Standardized**: Teams share configurations, not tribal knowledge
+- **Standardized**: Teams share configurations from a central organization config
 - **Safe**: Protected branches stay protected, even when AI suggests changes
+- **Pluggable**: Organization-specific Claude plugins via marketplace integration
 
 ## Prerequisites
 
@@ -33,16 +34,37 @@ pipx install scc-cli
 
 ```bash
 # First run triggers a setup wizard
-scc
+scc setup
 
 # Or start directly with a workspace
-scc start ~/projects/api-service --team java-wso2
+scc start ~/projects/api-service --team platform
 
 # Check system health
 scc doctor
 ```
 
-This runs Claude Code in a Docker sandbox with your repo mounted. You log in once; credentials persist across sessions.
+This runs Claude Code in a Docker sandbox with your repo mounted. Organization plugins are automatically injected based on your team profile.
+
+## Setup modes
+
+### Organization mode (recommended)
+
+Connect to your organization's config to get team profiles and plugin access:
+
+```bash
+scc setup
+
+# Enter your organization config URL when prompted:
+# > https://gitlab.example.org/devops/scc-config.json
+```
+
+### Standalone mode
+
+Use SCC without an organization config:
+
+```bash
+scc setup --standalone
+```
 
 ## Common workflows
 
@@ -53,10 +75,13 @@ This runs Claude Code in a Docker sandbox with your repo mounted. You log in onc
 scc
 
 # Direct mode with team profile
-scc start ~/projects/my-repo --team python-fastapi
+scc start ~/projects/my-repo --team platform
 
-# Continue last Claude conversation
-scc start ~/projects/my-repo --continue
+# Continue most recent session
+scc start --continue
+
+# Offline mode (cache only)
+scc start ~/projects/my-repo --offline
 ```
 
 ### Parallel development with worktrees
@@ -70,6 +95,9 @@ scc worktree ~/projects/api-service feature-auth
 # Work on urgent fix in parallel
 scc worktree ~/projects/api-service hotfix-123
 
+# Create worktree and install dependencies
+scc worktree ~/projects/api-service feature-x --install-deps
+
 # List worktrees
 scc worktrees ~/projects/api-service
 
@@ -80,13 +108,10 @@ scc cleanup ~/projects/api-service feature-auth
 ### Managing teams and sessions
 
 ```bash
-# List team profiles
+# List team profiles from organization config
 scc teams
 
-# Show team details
-scc teams java-wso2
-
-# Sync profiles from GitHub
+# Force refresh from remote
 scc teams --sync
 
 # List recent sessions
@@ -101,39 +126,88 @@ scc list
 | Command | Description |
 |---------|-------------|
 | `scc` | Interactive mode with wizard |
+| `scc setup` | Configure organization connection |
 | `scc start <path>` | Start Claude Code in a sandbox |
 | `scc stop` | Stop running sandbox(es) |
 | `scc doctor` | Check prerequisites and system health |
-| `scc teams` | List, view, or sync team profiles |
+| `scc teams` | List team profiles from org config |
 | `scc sessions` | List recent sessions |
 | `scc list` | List running Docker sandboxes |
 | `scc worktree <repo> <name>` | Create git worktree for parallel work |
 | `scc worktrees <repo>` | List worktrees for a repository |
 | `scc cleanup <repo> <name>` | Remove a worktree |
 | `scc config` | View or edit configuration |
-| `scc setup` | Run setup wizard |
-| `scc update` | Check for CLI updates |
-| `scc statusline` | Configure status line with git info |
+| `scc config set <key> <value>` | Set configuration value |
 
 Run `scc <command> --help` for detailed options.
 
 ## Configuration
 
-Config lives in `~/.config/scc-cli/config.json`:
+### User config (`~/.config/scc/config.json`)
 
 ```json
 {
-  "workspace_base": "~/projects",
+  "organization_source": {
+    "url": "https://gitlab.example.org/devops/scc-config.json",
+    "auth": "env:GITLAB_TOKEN"
+  },
+  "selected_profile": "platform",
+  "hooks": {
+    "enabled": true
+  }
+}
+```
+
+### Organization config (IT-managed)
+
+```json
+{
+  "organization": {
+    "name": "Example Organization",
+    "id": "example-org"
+  },
+  "marketplaces": [
+    {
+      "name": "internal",
+      "type": "gitlab",
+      "host": "gitlab.example.org",
+      "repo": "group/claude-marketplace",
+      "auth": "env:GITLAB_TOKEN"
+    }
+  ],
   "profiles": {
-    "java-wso2": {
-      "description": "Java/Spring Boot/WSO2",
-      "tools": ["java", "maven"]
+    "platform": {
+      "description": "Platform team (Python, FastAPI)",
+      "plugin": "platform",
+      "marketplace": "internal"
     }
   }
 }
 ```
 
-Edit with `scc config --edit`.
+Edit user config with `scc config --edit`.
+
+## Authentication
+
+| Method | Syntax | Example |
+|--------|--------|---------|
+| Environment variable | `env:VAR` | `"auth": "env:GITLAB_TOKEN"` |
+| Command | `command:CMD` | `"auth": "command:op read op://Dev/token"` |
+| None (public) | `null` | `"auth": null` |
+
+## File locations
+
+```
+~/.config/scc/           # User configuration
+├── config.json          # Organization URL, selected team, preferences
+
+~/.cache/scc/            # Regenerable cache
+├── org_config.json      # Cached remote org config
+└── cache_meta.json      # ETags, timestamps
+
+<repo>/.git/hooks/       # Repo-local hooks (if enabled)
+└── pre-push             # Blocks pushes to protected branches
+```
 
 ## Exit codes
 
@@ -155,28 +229,15 @@ Run inside WSL2, not Windows. Keep projects in the Linux filesystem (`~/projects
 |---------|----------|
 | "Docker not reachable" | Start Docker Desktop |
 | "Docker version too old" | Update to Docker Desktop 4.50+ |
+| "Organization config fetch failed" | Check URL and authentication token |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
 | Permission denied on Linux | Add user to docker group: `sudo usermod -aG docker $USER` |
 
 Run `scc doctor` to diagnose most issues.
 
-## Cleanup
-
-```bash
-# Stop all running sandboxes
-scc stop
-
-# Stop a specific sandbox
-scc stop claude-sandbox-2025...
-
-# List running sandboxes
-scc list
-```
-
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [Contributing](CONTRIBUTING.md) - Development setup and PR process
 
 ## License
 

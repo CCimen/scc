@@ -1,0 +1,32 @@
+{
+  "_comment": "Example organization config - copy to ~/.config/scc-cli/organization.json or /etc/scc-cli/organization.json",
+
+  "organization": {
+    "name": "Your Organization Name",
+    "github_org": "your-github-org"
+  },
+
+  "marketplace": {
+    "name": "your-org",
+    "repo": "your-github-org/claude-plugins-marketplace"
+  },
+
+  "profiles": {
+    "backend-team": {
+      "description": "Backend development (Java, Python, Go)",
+      "plugin": "backend-team"
+    },
+    "frontend-team": {
+      "description": "Frontend development (React, Vue, Angular)",
+      "plugin": "frontend-team"
+    },
+    "devops-team": {
+      "description": "DevOps and infrastructure",
+      "plugin": "devops-team"
+    },
+    "mobile-team": {
+      "description": "Mobile app development (iOS, Android)",
+      "plugin": "mobile-team"
+    }
+  }
+}
