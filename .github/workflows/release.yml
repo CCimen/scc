@@ -1,0 +1,66 @@
+name: Release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.1.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          pip install build twine
+
+      - name: Verify version matches
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+          if [ "$VERSION" != "$INPUT_VERSION" ]; then
+            echo "Error: pyproject.toml version ($VERSION) does not match input version ($INPUT_VERSION)"
+            echo "Update pyproject.toml before releasing."
+            exit 1
+          fi
+          echo "Version verified: $VERSION"
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body: |
+            Release v${{ inputs.version }}
+
+            Install or upgrade:
+            ```bash
+            pip install --upgrade scc-cli
+            ```
+          draft: false
+          prerelease: false
