@@ -2,18 +2,38 @@
 
 import json
 import urllib.error
+from datetime import datetime, timedelta, timezone
 from importlib.metadata import PackageNotFoundError
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
+import pytest
+from rich.console import Console
+
+from scc_cli import update
 from scc_cli.update import (
     PACKAGE_NAME,
+    OrgConfigUpdateResult,
+    UpdateCheckResult,
+    UpdateInfo,
     _compare_versions,
     _detect_install_method,
     _fetch_latest_from_pypi,
+    _format_age,
     _get_current_version,
+    _load_update_check_meta,
+    _mark_cli_check_done,
+    _mark_org_config_check_done,
     _parse_version,
+    _save_update_check_meta,
+    _should_check_cli_updates,
+    _should_check_org_config,
+    check_all_updates,
     check_for_updates,
+    check_org_config_update,
     get_update_command,
+    render_update_notification,
+    render_update_status_panel,
 )
 
 
@@ -352,30 +372,6 @@ class TestGetUpdateCommand:
 # NEW TESTS: Org Config Update System
 # ═══════════════════════════════════════════════════════════════════════════════
 
-from datetime import datetime, timedelta, timezone
-from io import StringIO
-
-import pytest
-from rich.console import Console
-
-from scc_cli.update import (
-    OrgConfigUpdateResult,
-    UpdateCheckResult,
-    UpdateInfo,
-    _format_age,
-    _load_update_check_meta,
-    _mark_cli_check_done,
-    _mark_org_config_check_done,
-    _save_update_check_meta,
-    _should_check_cli_updates,
-    _should_check_org_config,
-    check_all_updates,
-    check_org_config_update,
-    render_update_notification,
-    render_update_status_panel,
-)
-from scc_cli import update
-
 
 @pytest.fixture
 def temp_cache_dir(tmp_path, monkeypatch):
@@ -501,18 +497,14 @@ class TestCheckOrgConfigUpdate:
 
     def test_throttled_returns_throttled_status(self, temp_cache_dir):
         """Returns throttled status when check interval hasn't elapsed."""
-        user_config = {
-            "organization_source": {"url": "https://example.com/config.json"}
-        }
+        user_config = {"organization_source": {"url": "https://example.com/config.json"}}
         _mark_org_config_check_done()
         result = check_org_config_update(user_config, force=False)
         assert result.status == "throttled"
 
     def test_force_bypasses_throttle(self, temp_cache_dir):
         """Force flag bypasses throttle check."""
-        user_config = {
-            "organization_source": {"url": "https://example.com/config.json"}
-        }
+        user_config = {"organization_source": {"url": "https://example.com/config.json"}}
         _mark_org_config_check_done()
 
         with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
@@ -524,9 +516,7 @@ class TestCheckOrgConfigUpdate:
 
     def test_304_not_modified_returns_unchanged(self, temp_cache_dir):
         """304 response returns unchanged status."""
-        user_config = {
-            "organization_source": {"url": "https://example.com/config.json"}
-        }
+        user_config = {"organization_source": {"url": "https://example.com/config.json"}}
 
         fetched_at = datetime.now(timezone.utc) - timedelta(hours=2)
         cached_meta = {
@@ -547,15 +537,15 @@ class TestCheckOrgConfigUpdate:
 
     def test_200_ok_returns_updated(self, temp_cache_dir):
         """200 response returns updated status and saves to cache."""
-        user_config = {
-            "organization_source": {"url": "https://example.com/config.json"}
-        }
+        user_config = {"organization_source": {"url": "https://example.com/config.json"}}
 
         new_config = {"organization": {"name": "Test Org"}}
 
         with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
             with patch("scc_cli.remote.resolve_auth", return_value=None):
-                with patch("scc_cli.remote.fetch_org_config", return_value=(new_config, "new-etag", 200)):
+                with patch(
+                    "scc_cli.remote.fetch_org_config", return_value=(new_config, "new-etag", 200)
+                ):
                     with patch("scc_cli.remote.save_to_cache") as mock_save:
                         result = check_org_config_update(user_config, force=True)
 
@@ -603,16 +593,16 @@ class TestCheckOrgConfigUpdate:
 
     def test_network_error_with_cache_returns_offline(self, temp_cache_dir):
         """Network error with cached config returns offline status."""
-        user_config = {
-            "organization_source": {"url": "https://example.com/config.json"}
-        }
+        user_config = {"organization_source": {"url": "https://example.com/config.json"}}
 
         fetched_at = datetime.now(timezone.utc) - timedelta(hours=12)
         cached_meta = {"org_config": {"fetched_at": fetched_at.isoformat()}}
 
         with patch("scc_cli.remote.load_from_cache", return_value=({"test": True}, cached_meta)):
             with patch("scc_cli.remote.resolve_auth", return_value=None):
-                with patch("scc_cli.remote.fetch_org_config", side_effect=Exception("Network error")):
+                with patch(
+                    "scc_cli.remote.fetch_org_config", side_effect=Exception("Network error")
+                ):
                     result = check_org_config_update(user_config, force=True)
 
         assert result.status == "offline"
@@ -620,13 +610,13 @@ class TestCheckOrgConfigUpdate:
 
     def test_network_error_without_cache_returns_no_cache(self, temp_cache_dir):
         """Network error without cached config returns no_cache status."""
-        user_config = {
-            "organization_source": {"url": "https://example.com/config.json"}
-        }
+        user_config = {"organization_source": {"url": "https://example.com/config.json"}}
 
         with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
             with patch("scc_cli.remote.resolve_auth", return_value=None):
-                with patch("scc_cli.remote.fetch_org_config", side_effect=Exception("Network error")):
+                with patch(
+                    "scc_cli.remote.fetch_org_config", side_effect=Exception("Network error")
+                ):
                     result = check_org_config_update(user_config, force=True)
 
         assert result.status == "no_cache"
@@ -796,9 +786,7 @@ class TestRenderUpdateNotification:
 
     def test_shows_no_cache_warning(self, console):
         """Shows warning when no cache is available."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="no_cache")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="no_cache"))
 
         render_update_notification(console, result)
         output = console.file.getvalue()
@@ -830,9 +818,7 @@ class TestRenderUpdateNotification:
 
     def test_quiet_for_throttled_status(self, console):
         """No output for throttled status."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="throttled")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="throttled"))
 
         render_update_notification(console, result)
         output = console.file.getvalue()
@@ -841,9 +827,7 @@ class TestRenderUpdateNotification:
 
     def test_quiet_for_standalone_status(self, console):
         """No output for standalone status."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="standalone")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="standalone"))
 
         render_update_notification(console, result)
         output = console.file.getvalue()
@@ -904,9 +888,7 @@ class TestRenderUpdateStatusPanel:
 
     def test_shows_org_config_standalone(self, console):
         """Shows standalone mode for org config."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="standalone")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="standalone"))
 
         render_update_status_panel(console, result)
         output = console.file.getvalue()
@@ -916,9 +898,7 @@ class TestRenderUpdateStatusPanel:
 
     def test_shows_org_config_updated(self, console):
         """Shows org config as updated."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="updated")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="updated"))
 
         render_update_status_panel(console, result)
         output = console.file.getvalue()
@@ -967,9 +947,7 @@ class TestRenderUpdateStatusPanel:
 
     def test_shows_org_config_auth_failed_no_cache(self, console):
         """Shows auth failed without cache."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="auth_failed")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="auth_failed"))
 
         render_update_status_panel(console, result)
         output = console.file.getvalue()
@@ -980,9 +958,7 @@ class TestRenderUpdateStatusPanel:
 
     def test_shows_org_config_no_cache(self, console):
         """Shows no cache available."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="no_cache")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="no_cache"))
 
         render_update_status_panel(console, result)
         output = console.file.getvalue()
@@ -993,9 +969,7 @@ class TestRenderUpdateStatusPanel:
 
     def test_shows_org_config_throttled(self, console):
         """Shows org config as not checked when throttled."""
-        result = UpdateCheckResult(
-            org_config=OrgConfigUpdateResult(status="throttled")
-        )
+        result = UpdateCheckResult(org_config=OrgConfigUpdateResult(status="throttled"))
 
         render_update_status_panel(console, result)
         output = console.file.getvalue()

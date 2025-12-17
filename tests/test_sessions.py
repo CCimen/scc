@@ -9,13 +9,10 @@ These tests verify:
 
 import json
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from scc_cli import sessions
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -25,7 +22,6 @@ from scc_cli import sessions
 @pytest.fixture
 def sessions_file(tmp_path, monkeypatch):
     """Create a temporary sessions file."""
-    from scc_cli import config
 
     # Point to temp directory
     sessions_path = tmp_path / "sessions.json"
@@ -105,11 +101,13 @@ class TestGetMostRecent:
 
     def test_handles_single_session(self, sessions_file):
         """Should return the only session when just one exists."""
-        single_session = [{
-            "workspace": "/tmp/only-one",
-            "team": "dev",
-            "last_used": datetime.now().isoformat(),
-        }]
+        single_session = [
+            {
+                "workspace": "/tmp/only-one",
+                "team": "dev",
+                "last_used": datetime.now().isoformat(),
+            }
+        ]
         sessions_file.write_text(json.dumps({"sessions": single_session}))
 
         result = sessions.get_most_recent()
@@ -157,10 +155,12 @@ class TestListRecent:
     def test_formats_relative_time(self, sessions_file):
         """Should format last_used as relative time."""
         now = datetime.now()
-        recent_session = [{
-            "workspace": "/tmp/test",
-            "last_used": (now - timedelta(minutes=5)).isoformat(),
-        }]
+        recent_session = [
+            {
+                "workspace": "/tmp/test",
+                "last_used": (now - timedelta(minutes=5)).isoformat(),
+            }
+        ]
         sessions_file.write_text(json.dumps({"sessions": recent_session}))
 
         result = sessions.list_recent()
@@ -170,10 +170,12 @@ class TestListRecent:
 
     def test_generates_name_from_workspace_if_missing(self, sessions_file):
         """Should generate name from workspace path if name is None."""
-        session_without_name = [{
-            "workspace": "/home/user/projects/my-project",
-            "last_used": datetime.now().isoformat(),
-        }]
+        session_without_name = [
+            {
+                "workspace": "/home/user/projects/my-project",
+                "last_used": datetime.now().isoformat(),
+            }
+        ]
         sessions_file.write_text(json.dumps({"sessions": session_without_name}))
 
         result = sessions.list_recent()
@@ -209,13 +211,15 @@ class TestRecordSession:
 
     def test_updates_existing_session(self, sessions_file):
         """Should update existing session with same workspace+branch."""
-        initial = [{
-            "workspace": "/tmp/proj",
-            "branch": "main",
-            "team": "old-team",
-            "last_used": "2024-01-01T00:00:00",
-            "created_at": "2024-01-01T00:00:00",
-        }]
+        initial = [
+            {
+                "workspace": "/tmp/proj",
+                "branch": "main",
+                "team": "old-team",
+                "last_used": "2024-01-01T00:00:00",
+                "created_at": "2024-01-01T00:00:00",
+            }
+        ]
         sessions_file.write_text(json.dumps({"sessions": initial}))
 
         result = sessions.record_session(
@@ -234,11 +238,13 @@ class TestRecordSession:
 
     def test_creates_new_session_for_different_branch(self, sessions_file):
         """Should create new session if branch differs."""
-        initial = [{
-            "workspace": "/tmp/proj",
-            "branch": "main",
-            "last_used": datetime.now().isoformat(),
-        }]
+        initial = [
+            {
+                "workspace": "/tmp/proj",
+                "branch": "main",
+                "last_used": datetime.now().isoformat(),
+            }
+        ]
         sessions_file.write_text(json.dumps({"sessions": initial}))
 
         sessions.record_session(

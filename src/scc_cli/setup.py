@@ -13,7 +13,6 @@ Philosophy: "Get started in under 60 seconds"
 - Clear guidance
 """
 
-
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -139,9 +138,7 @@ def prompt_auth_method(console: Console) -> str | None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def fetch_and_validate_org_config(
-    console: Console, url: str, auth: str | None
-) -> dict | None:
+def fetch_and_validate_org_config(console: Console, url: str, auth: str | None) -> dict | None:
     """Fetch and validate organization config from URL.
 
     Args:
@@ -252,9 +249,7 @@ def prompt_hooks_enablement(console: Console) -> bool:
     console.print()
     console.print("[bold cyan]Git Hooks Protection[/bold cyan]")
     console.print()
-    console.print(
-        "[dim]Install repo-local hooks to block pushes to protected branches?[/dim]"
-    )
+    console.print("[dim]Install repo-local hooks to block pushes to protected branches?[/dim]")
     console.print("[dim](main, master, develop, production, staging)[/dim]")
     console.print()
 
@@ -579,7 +574,5 @@ def reset_setup(console: Console) -> None:
         console.print(f"  [dim]Removed {config.CONFIG_FILE}[/dim]")
 
     console.print()
-    console.print(
-        "[green]✓ Configuration reset.[/green] Run [bold]scc setup[/bold] again."
-    )
+    console.print("[green]✓ Configuration reset.[/green] Run [bold]scc setup[/bold] again.")
     console.print()

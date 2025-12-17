@@ -95,9 +95,7 @@ class TestInjectSettings:
         """inject_settings should inject pre-built settings to sandbox volume."""
         with (
             patch("scc_cli.docker.get_sandbox_settings", return_value=None),
-            patch(
-                "scc_cli.docker.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
+            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
         ):
             result = docker.inject_settings(sample_claude_settings)
 
@@ -115,9 +113,7 @@ class TestInjectSettings:
 
         with (
             patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch(
-                "scc_cli.docker.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
+            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
         ):
             result = docker.inject_settings(sample_claude_settings)
 
@@ -137,9 +133,7 @@ class TestInjectSettings:
 
         with (
             patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch(
-                "scc_cli.docker.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
+            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
         ):
             docker.inject_settings(new_settings)
 
@@ -153,9 +147,7 @@ class TestInjectSettings:
 
         with (
             patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch(
-                "scc_cli.docker.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
+            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
         ):
             result = docker.inject_settings({})
 
@@ -183,9 +175,7 @@ class TestInjectSettings:
 class TestLaunchWithOrgConfig:
     """Tests for launch_with_org_config() - full launch orchestration."""
 
-    def test_launch_with_org_config_resolves_profile(
-        self, sample_org_config, tmp_path
-    ):
+    def test_launch_with_org_config_resolves_profile(self, sample_org_config, tmp_path):
         """launch_with_org_config should resolve profile from org config."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -203,9 +193,7 @@ class TestLaunchWithOrgConfig:
             # Should call inject_settings with built settings
             mock_run.assert_called_once()
 
-    def test_launch_with_org_config_builds_correct_settings(
-        self, sample_org_config, tmp_path
-    ):
+    def test_launch_with_org_config_builds_correct_settings(self, sample_org_config, tmp_path):
         """launch_with_org_config should build settings using claude_adapter."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -228,9 +216,7 @@ class TestLaunchWithOrgConfig:
             # Verify org_id is used as key
             assert "my-org" in settings["extraKnownMarketplaces"]
 
-    def test_launch_with_org_config_invalid_team_raises(
-        self, sample_org_config, tmp_path
-    ):
+    def test_launch_with_org_config_invalid_team_raises(self, sample_org_config, tmp_path):
         """launch_with_org_config should raise for invalid team."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -258,9 +244,7 @@ class TestInjectTeamSettingsWithOrgConfig:
             patch("scc_cli.docker.inject_settings", return_value=True) as mock_inject,
             patch.dict("os.environ", {"GITLAB_TOKEN": "secret"}, clear=False),
         ):
-            result = docker.inject_team_settings(
-                team_name="platform", org_config=sample_org_config
-            )
+            result = docker.inject_team_settings(team_name="platform", org_config=sample_org_config)
 
             assert result is True
             mock_inject.assert_called_once()
@@ -276,9 +260,7 @@ class TestInjectTeamSettingsWithOrgConfig:
         }
 
         with patch("scc_cli.docker.inject_settings") as mock_inject:
-            result = docker.inject_team_settings(
-                team_name="base", org_config=org_config
-            )
+            result = docker.inject_team_settings(team_name="base", org_config=org_config)
 
             # Should return True without injecting
             assert result is True
@@ -293,9 +275,7 @@ class TestInjectTeamSettingsWithOrgConfig:
 class TestCredentialInjection:
     """Tests for credential injection into Docker environment."""
 
-    def test_credentials_injected_for_private_marketplace(
-        self, sample_org_config, tmp_path
-    ):
+    def test_credentials_injected_for_private_marketplace(self, sample_org_config, tmp_path):
         """Private marketplace credentials should be injected into Docker env."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -328,9 +308,7 @@ class TestCredentialInjection:
                     "auth": None,  # Public
                 }
             ],
-            "profiles": {
-                "default": {"plugin": "default", "marketplace": "public"}
-            },
+            "profiles": {"default": {"plugin": "default", "marketplace": "public"}},
         }
 
         with (

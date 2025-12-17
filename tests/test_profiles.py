@@ -202,22 +202,32 @@ class TestGetMarketplaceUrl:
     def test_github_enterprise_custom_host(self):
         """GitHub Enterprise with custom host should work."""
         marketplace = {"type": "github", "host": "github.corp.example.com", "repo": "org/plugins"}
-        assert profiles.get_marketplace_url(marketplace) == "https://github.corp.example.com/org/plugins"
+        assert (
+            profiles.get_marketplace_url(marketplace)
+            == "https://github.corp.example.com/org/plugins"
+        )
 
     def test_custom_host_with_port(self):
         """Custom host with port should be preserved."""
         marketplace = {"type": "gitlab", "host": "gitlab.example.org:8443", "repo": "group/repo"}
-        assert profiles.get_marketplace_url(marketplace) == "https://gitlab.example.org:8443/group/repo"
+        assert (
+            profiles.get_marketplace_url(marketplace)
+            == "https://gitlab.example.org:8443/group/repo"
+        )
 
     def test_https_url_direct(self):
         """Direct HTTPS URL should be used as-is (normalized)."""
         marketplace = {"type": "https", "url": "https://plugins.example.org/marketplace"}
-        assert profiles.get_marketplace_url(marketplace) == "https://plugins.example.org/marketplace"
+        assert (
+            profiles.get_marketplace_url(marketplace) == "https://plugins.example.org/marketplace"
+        )
 
     def test_https_url_with_trailing_slash(self):
         """Trailing slash should be stripped."""
         marketplace = {"type": "https", "url": "https://plugins.example.org/marketplace/"}
-        assert profiles.get_marketplace_url(marketplace) == "https://plugins.example.org/marketplace"
+        assert (
+            profiles.get_marketplace_url(marketplace) == "https://plugins.example.org/marketplace"
+        )
 
     def test_repo_path_strips_leading_slash(self):
         """Leading slash in repo path should be stripped."""
@@ -231,8 +241,15 @@ class TestGetMarketplaceUrl:
 
     def test_repo_path_with_subgroups(self):
         """GitLab subgroups should be preserved."""
-        marketplace = {"type": "gitlab", "host": "gitlab.example.org", "repo": "group/subgroup/repo"}
-        assert profiles.get_marketplace_url(marketplace) == "https://gitlab.example.org/group/subgroup/repo"
+        marketplace = {
+            "type": "gitlab",
+            "host": "gitlab.example.org",
+            "repo": "group/subgroup/repo",
+        }
+        assert (
+            profiles.get_marketplace_url(marketplace)
+            == "https://gitlab.example.org/group/subgroup/repo"
+        )
 
     # --- SECURITY: HTTPS-only enforcement ---
 

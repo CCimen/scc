@@ -22,7 +22,8 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from scc_cli.auth import is_remote_command_allowed, resolve_auth as _resolve_auth_impl
+from scc_cli.auth import is_remote_command_allowed
+from scc_cli.auth import resolve_auth as _resolve_auth_impl
 from scc_cli.profiles import get_marketplace_url
 
 if TYPE_CHECKING:
@@ -160,9 +161,7 @@ def resolve_marketplace_auth(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def build_claude_settings(
-    profile: dict, marketplace: dict, org_id: str | None
-) -> dict:
+def build_claude_settings(profile: dict, marketplace: dict, org_id: str | None) -> dict:
     """Build Claude Code settings payload.
 
     This is the ONLY function that knows Claude Code's settings format.

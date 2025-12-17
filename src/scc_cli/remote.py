@@ -192,9 +192,7 @@ def fetch_org_config(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def save_to_cache(
-    org_config: dict, source_url: str, etag: str | None, ttl_hours: int
-) -> None:
+def save_to_cache(org_config: dict, source_url: str, etag: str | None, ttl_hours: int) -> None:
     """Save org config to cache with metadata.
 
     Args:
@@ -326,9 +324,7 @@ def load_org_config(
     if offline:
         if cached_config is not None:
             return cached_config
-        raise CacheNotFoundError(
-            f"No cached config available for offline mode. URL: {url}"
-        )
+        raise CacheNotFoundError(f"No cached config available for offline mode. URL: {url}")
 
     # Check if cache is valid and we don't need to refresh
     if not force_refresh and cached_config is not None and is_cache_valid(meta):

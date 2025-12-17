@@ -242,9 +242,7 @@ class TestFetchOrgConfig:
             status=304,
         )
 
-        config, etag, status = remote.fetch_org_config(
-            url, auth=None, etag='"cached-etag"'
-        )
+        config, etag, status = remote.fetch_org_config(url, auth=None, etag='"cached-etag"')
 
         assert status == 304
         assert config is None  # Use cached version
@@ -353,9 +351,7 @@ class TestCacheOperations:
         assert "expires_at" in meta["org_config"]
         assert "fingerprint" in meta["org_config"]
 
-    def test_save_to_cache_creates_directory(
-        self, sample_org_config, tmp_path, monkeypatch
-    ):
+    def test_save_to_cache_creates_directory(self, sample_org_config, tmp_path, monkeypatch):
         """Should create cache directory if it doesn't exist."""
         cache_dir = tmp_path / "new_cache" / "scc"
         monkeypatch.setattr(remote, "CACHE_DIR", cache_dir)
@@ -509,9 +505,7 @@ class TestLoadOrgConfig:
         assert config["organization"]["name"] == "Test Organization"
         assert len(responses.calls) == 1
 
-    def test_uses_cache_when_valid(
-        self, sample_org_config, temp_cache_dir, monkeypatch
-    ):
+    def test_uses_cache_when_valid(self, sample_org_config, temp_cache_dir, monkeypatch):
         """Should use cache when within TTL."""
         monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
 
@@ -546,9 +540,7 @@ class TestLoadOrgConfig:
         # No HTTP calls made - used cache
 
     @responses.activate
-    def test_force_refresh_bypasses_cache(
-        self, sample_org_config, temp_cache_dir, monkeypatch
-    ):
+    def test_force_refresh_bypasses_cache(self, sample_org_config, temp_cache_dir, monkeypatch):
         """Should bypass cache when force_refresh=True."""
         monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
 
@@ -588,9 +580,7 @@ class TestLoadOrgConfig:
         assert config["organization"]["name"] == "Test Organization"  # Fresh content
         assert len(responses.calls) == 1
 
-    def test_offline_mode_uses_cache_only(
-        self, sample_org_config, temp_cache_dir, monkeypatch
-    ):
+    def test_offline_mode_uses_cache_only(self, sample_org_config, temp_cache_dir, monkeypatch):
         """Should use cache only in offline mode."""
         monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
 
@@ -662,9 +652,7 @@ class TestFingerprint:
         assert len(fingerprint) == 64  # SHA256 produces 64 hex chars
         assert all(c in "0123456789abcdef" for c in fingerprint)
 
-    def test_fingerprint_matches_content(
-        self, sample_org_config, temp_cache_dir, monkeypatch
-    ):
+    def test_fingerprint_matches_content(self, sample_org_config, temp_cache_dir, monkeypatch):
         """Fingerprint should match SHA256 of config file content."""
         monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
 
