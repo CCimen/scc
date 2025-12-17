@@ -1,4 +1,4 @@
-# SCC - Sandboxed Claude CLI
+<h1 align="center">SCC - Sandboxed Claude CLI</h1>
 
 <p align="center">
   <a href="https://pypi.org/project/scc-cli/"><img src="https://img.shields.io/pypi/v/scc-cli?style=flat-square&label=PyPI" alt="PyPI"></a>
