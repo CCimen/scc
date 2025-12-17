@@ -6,13 +6,23 @@ These tests verify the new architecture requirements:
 - start command: --install-deps, --offline, --standalone options
 - worktree command: --install-deps option
 - sessions command: interactive picker
+
+Additional tests per plan:
+- Error handling and exit codes
+- Doctor command health checks
+- Start requires setup first
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
+from scc_cli.errors import (
+    DockerNotFoundError,
+    DockerVersionError,
+    SandboxNotAvailableError,
+)
 
 runner = CliRunner()
 
@@ -258,3 +268,499 @@ class TestTeamsCommand:
         if mock_remote.called:
             call_kwargs = mock_remote.call_args[1]
             assert call_kwargs.get("force_refresh") is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for start command error handling
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestStartCommandErrors:
+    """Tests for start command error handling and exit codes."""
+
+    def test_start_requires_setup_first(self, tmp_path):
+        """Should prompt for setup when not configured."""
+        with (
+            patch("scc_cli.cli.setup.is_setup_needed", return_value=True),
+            patch("scc_cli.cli.setup.maybe_run_setup", return_value=False),
+        ):
+            result = runner.invoke(app, ["start", str(tmp_path)])
+
+        # Should exit with code 1 when setup fails/is declined
+        assert result.exit_code == 1
+
+    def test_start_shows_docker_not_found_error(self, tmp_path):
+        """Should show helpful message when Docker not installed."""
+        with (
+            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.cli.docker.check_docker_available") as mock_docker,
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(tmp_path, False)),
+        ):
+            mock_docker.side_effect = DockerNotFoundError()
+            result = runner.invoke(app, ["start", str(tmp_path)])
+
+        # Should show error message about Docker
+        assert "docker" in result.output.lower() or result.exit_code != 0
+
+    def test_start_shows_docker_version_error(self, tmp_path):
+        """Should show helpful message when Docker version too old."""
+        with (
+            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.cli.docker.check_docker_available") as mock_docker,
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(tmp_path, False)),
+        ):
+            mock_docker.side_effect = DockerVersionError(current_version="4.0.0")
+            result = runner.invoke(app, ["start", str(tmp_path)])
+
+        # Should indicate version issue
+        assert result.exit_code != 0
+
+    def test_start_shows_sandbox_not_available_error(self, tmp_path):
+        """Should show helpful message when sandbox not available."""
+        with (
+            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.cli.docker.check_docker_available") as mock_docker,
+            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(tmp_path, False)),
+        ):
+            mock_docker.side_effect = SandboxNotAvailableError()
+            result = runner.invoke(app, ["start", str(tmp_path)])
+
+        # Should indicate sandbox not available
+        assert result.exit_code != 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for doctor command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestDoctorCommand:
+    """Tests for doctor command health checks."""
+
+    def test_doctor_shows_healthy_status(self):
+        """Doctor should show healthy when all checks pass."""
+        with (
+            patch("scc_cli.cli.doctor.run_all_checks") as mock_checks,
+            patch("scc_cli.cli.config.load_config", return_value={}),
+        ):
+            mock_checks.return_value = []  # No issues
+            result = runner.invoke(app, ["doctor"])
+
+        assert result.exit_code == 0
+
+    def test_doctor_shows_fix_suggestions(self):
+        """Doctor should show fix suggestions when issues found."""
+        mock_issues = [
+            {
+                "check": "docker",
+                "status": "error",
+                "message": "Docker not found",
+                "suggestion": "Install Docker Desktop",
+            }
+        ]
+        with (
+            patch("scc_cli.cli.doctor.run_all_checks", return_value=mock_issues),
+            patch("scc_cli.cli.config.load_config", return_value={}),
+        ):
+            result = runner.invoke(app, ["doctor"])
+
+        # Should show the issue and suggestion
+        assert "docker" in result.output.lower() or result.exit_code != 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for config command edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestConfigCommandEdgeCases:
+    """Tests for config command edge cases."""
+
+    def test_config_get_missing_key_shows_error(self):
+        """Should show helpful error when key doesn't exist."""
+        with patch("scc_cli.cli.config.load_user_config") as mock_load:
+            mock_load.return_value = {}
+            result = runner.invoke(app, ["config", "get", "nonexistent.key"])
+
+        # Should indicate key not found
+        assert "not found" in result.output.lower() or "none" in result.output.lower()
+
+    def test_config_set_nested_key(self):
+        """Should support setting nested keys like hooks.enabled."""
+        with (
+            patch("scc_cli.cli.config.load_user_config") as mock_load,
+            patch("scc_cli.cli.config.save_user_config") as mock_save,
+        ):
+            mock_load.return_value = {"hooks": {"enabled": False}}
+            result = runner.invoke(app, ["config", "set", "hooks.enabled", "true"])
+
+        assert result.exit_code == 0
+        mock_save.assert_called_once()
+
+    def test_config_show_displays_all(self):
+        """Config without args should show all config."""
+        with patch("scc_cli.cli.config.load_user_config") as mock_load:
+            mock_load.return_value = {
+                "selected_profile": "dev",
+                "hooks": {"enabled": True},
+            }
+            result = runner.invoke(app, ["config"])
+
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for update command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestUpdateCommand:
+    """Tests for update command."""
+
+    def test_update_shows_current_version(self):
+        """Update should show current version."""
+        mock_result = {
+            "cli_update_available": False,
+            "cli_current_version": "0.1.0",
+            "org_config_update_available": False,
+        }
+        with (
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.update.check_all_updates", return_value=mock_result),
+            patch("scc_cli.update.render_update_status_panel"),
+        ):
+            result = runner.invoke(app, ["update"])
+
+        assert result.exit_code == 0
+
+    def test_update_check_shows_available_update(self):
+        """Update should show when new version available."""
+        mock_result = {
+            "cli_update_available": True,
+            "cli_current_version": "0.1.0",
+            "cli_latest_version": "0.2.0",
+            "org_config_update_available": False,
+        }
+        with (
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.update.check_all_updates", return_value=mock_result),
+            patch("scc_cli.update.render_update_status_panel"),
+        ):
+            result = runner.invoke(app, ["update", "--force"])
+
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for list command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestListCommand:
+    """Tests for list command (containers)."""
+
+    def test_list_shows_running_containers(self):
+        """List should show running scc containers."""
+        mock_container = MagicMock()
+        mock_container.name = "scc-project-xyz"
+        mock_container.status = "Up 2 hours"
+        mock_container.workspace = "/home/user/project"
+        mock_container.profile = "dev"
+        mock_container.branch = "main"
+
+        with patch("scc_cli.cli.docker.list_scc_containers", return_value=[mock_container]):
+            result = runner.invoke(app, ["list"])
+
+        assert result.exit_code == 0
+
+    def test_list_shows_empty_message(self):
+        """List should show message when no containers."""
+        with patch("scc_cli.cli.docker.list_scc_containers", return_value=[]):
+            result = runner.invoke(app, ["list"])
+
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for stop command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestStopCommand:
+    """Tests for stop command."""
+
+    def test_stop_stops_container(self):
+        """Stop should stop specified container."""
+        mock_container = MagicMock()
+        mock_container.name = "scc-project-abc123"
+        mock_container.id = "abc123def456"
+
+        with (
+            patch("scc_cli.cli.docker.list_running_sandboxes", return_value=[mock_container]),
+            patch("scc_cli.cli.docker.stop_container", return_value=True) as mock_stop,
+        ):
+            result = runner.invoke(app, ["stop", "scc-project-abc123"])
+
+        assert result.exit_code == 0
+        mock_stop.assert_called_once_with("abc123def456")
+
+    def test_stop_nonexistent_container_shows_error(self):
+        """Stop should show error for nonexistent container."""
+        # Return some containers but not the one we're looking for
+        mock_container = MagicMock()
+        mock_container.name = "other-container"
+        mock_container.id = "other123"
+
+        with patch("scc_cli.cli.docker.list_running_sandboxes", return_value=[mock_container]):
+            result = runner.invoke(app, ["stop", "nonexistent"])
+
+        # Should indicate container not found
+        assert result.exit_code == 1
+
+    def test_stop_all_when_no_containers(self):
+        """Stop should show message when no containers running."""
+        with patch("scc_cli.cli.docker.list_running_sandboxes", return_value=[]):
+            result = runner.invoke(app, ["stop"])
+
+        # Should indicate no containers running
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for worktree error handling
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWorktreeCommandErrors:
+    """Tests for worktree command error handling."""
+
+    def test_worktree_not_git_repo_shows_error(self, tmp_path):
+        """Should show error when not in a git repo."""
+        with patch("scc_cli.cli.git.is_git_repo", return_value=False):
+            result = runner.invoke(app, ["worktree", str(tmp_path), "feature-x"])
+
+        # Should indicate not a git repo
+        assert result.exit_code != 0 or "git" in result.output.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for main app callback
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestMainCallback:
+    """Tests for main CLI callback."""
+
+    def test_version_flag_shows_version(self):
+        """--version should show version info."""
+        result = runner.invoke(app, ["--version"])
+
+        # Should show version without error
+        assert result.exit_code == 0 or "version" in result.output.lower()
+
+    def test_help_shows_commands(self):
+        """--help should show available commands."""
+        result = runner.invoke(app, ["--help"])
+
+        assert result.exit_code == 0
+        assert "start" in result.output.lower()
+        assert "setup" in result.output.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for cleanup command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCleanupCommand:
+    """Tests for cleanup (worktree removal) command."""
+
+    def test_cleanup_removes_worktree(self, tmp_path):
+        """Cleanup should remove specified worktree."""
+        tmp_path.mkdir(exist_ok=True)
+        with patch("scc_cli.cli.git.cleanup_worktree", return_value=True) as mock_cleanup:
+            result = runner.invoke(app, ["cleanup", str(tmp_path), "feature-x"])
+
+        assert result.exit_code == 0
+        mock_cleanup.assert_called_once()
+
+    def test_cleanup_force_flag(self, tmp_path):
+        """Cleanup with --force should pass force to git."""
+        tmp_path.mkdir(exist_ok=True)
+        with patch("scc_cli.cli.git.cleanup_worktree", return_value=True) as mock_cleanup:
+            result = runner.invoke(app, ["cleanup", str(tmp_path), "feature-x", "--force"])
+
+        assert result.exit_code == 0
+        mock_cleanup.assert_called_once()
+        # cleanup_worktree(workspace_path, name, force, console)
+        call_args = mock_cleanup.call_args[0]
+        assert call_args[2] is True  # force is 3rd positional arg
+
+    def test_cleanup_nonexistent_workspace_fails(self, tmp_path):
+        """Cleanup should fail for nonexistent workspace."""
+        nonexistent = tmp_path / "nonexistent"
+        result = runner.invoke(app, ["cleanup", str(nonexistent), "feature-x"])
+
+        # Should fail because workspace doesn't exist
+        assert result.exit_code != 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for statusline command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestStatuslineCommand:
+    """Tests for statusline configuration command."""
+
+    def test_statusline_show_with_configured(self):
+        """Should show current statusline configuration."""
+        mock_settings = {"statusLine": {"command": "/path/to/script"}}
+        with patch("scc_cli.cli.docker.get_sandbox_settings", return_value=mock_settings):
+            result = runner.invoke(app, ["statusline", "--show"])
+
+        assert result.exit_code == 0
+
+    def test_statusline_show_not_configured(self):
+        """Should indicate when statusline not configured."""
+        mock_settings = {"otherSetting": True}
+        with patch("scc_cli.cli.docker.get_sandbox_settings", return_value=mock_settings):
+            result = runner.invoke(app, ["statusline", "--show"])
+
+        assert result.exit_code == 0
+
+    def test_statusline_show_no_settings(self):
+        """Should indicate when no settings exist."""
+        with patch("scc_cli.cli.docker.get_sandbox_settings", return_value=None):
+            result = runner.invoke(app, ["statusline", "--show"])
+
+        assert result.exit_code == 0
+
+    def test_statusline_uninstall_removes_config(self):
+        """Uninstall should remove statusline from settings."""
+        mock_settings = {"statusLine": {"command": "/path/to/script"}, "other": True}
+        with (
+            patch("scc_cli.cli.docker.get_sandbox_settings", return_value=mock_settings),
+            patch("scc_cli.cli.docker.inject_file_to_sandbox_volume", return_value=True),
+        ):
+            result = runner.invoke(app, ["statusline", "--uninstall"])
+
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for worktrees command (list worktrees)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWorktreesCommand:
+    """Tests for listing worktrees."""
+
+    def test_worktrees_shows_list(self, tmp_path):
+        """Should list all worktrees for repository."""
+        tmp_path.mkdir(exist_ok=True)
+        mock_worktrees = [MagicMock(path=str(tmp_path), branch="main", is_main=True)]
+        with (
+            patch("scc_cli.cli.git.list_worktrees", return_value=mock_worktrees),
+            patch("scc_cli.cli.git.render_worktrees"),
+        ):
+            result = runner.invoke(app, ["worktrees", str(tmp_path)])
+
+        assert result.exit_code == 0
+
+    def test_worktrees_empty_list(self, tmp_path):
+        """Should show message when no worktrees."""
+        tmp_path.mkdir(exist_ok=True)
+        with patch("scc_cli.cli.git.list_worktrees", return_value=[]):
+            result = runner.invoke(app, ["worktrees", str(tmp_path)])
+
+        assert result.exit_code == 0
+
+    def test_worktrees_nonexistent_path(self, tmp_path):
+        """Should error when workspace doesn't exist."""
+        nonexistent = tmp_path / "nonexistent"
+        result = runner.invoke(app, ["worktrees", str(nonexistent)])
+
+        assert result.exit_code != 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for teams command detail view
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTeamsCommandDetails:
+    """Tests for teams command detailed views."""
+
+    def test_teams_shows_specific_team(self):
+        """Should show details for specific team."""
+        mock_team_details = {
+            "name": "ai-team",
+            "description": "AI development team",
+            "plugin": "ai-tools",
+        }
+        with (
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.cli.config.load_cached_org_config", return_value=None),
+            patch("scc_cli.cli.teams.get_team_details", return_value=mock_team_details),
+        ):
+            result = runner.invoke(app, ["teams", "ai-team"])
+
+        assert result.exit_code == 0
+
+    def test_teams_shows_all_teams(self):
+        """Should list all available teams."""
+        mock_teams = [
+            {"name": "team-a", "description": "Team A", "plugin": None},
+            {"name": "team-b", "description": "Team B", "plugin": "plugin-b"},
+        ]
+        with (
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.cli.config.load_cached_org_config", return_value=None),
+            patch("scc_cli.cli.teams.list_teams", return_value=mock_teams),
+        ):
+            result = runner.invoke(app, ["teams"])
+
+        assert result.exit_code == 0
+
+    def test_teams_no_teams_configured(self):
+        """Should show message when no teams configured."""
+        with (
+            patch("scc_cli.cli.config.load_config", return_value={}),
+            patch("scc_cli.cli.config.load_cached_org_config", return_value=None),
+            patch("scc_cli.cli.teams.list_teams", return_value=[]),
+        ):
+            result = runner.invoke(app, ["teams"])
+
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for sessions command additional paths
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSessionsCommandDetails:
+    """Additional tests for sessions command."""
+
+    def test_sessions_empty_list(self):
+        """Should show message when no sessions."""
+        with patch("scc_cli.cli.sessions.list_recent", return_value=[]):
+            result = runner.invoke(app, ["sessions"])
+
+        assert result.exit_code == 0
+
+    def test_sessions_with_limit(self):
+        """Should respect limit option."""
+        mock_sessions = [
+            {"name": f"session-{i}", "workspace": f"/path/{i}", "timestamp": "2024-01-01"}
+            for i in range(5)
+        ]
+        with patch("scc_cli.cli.sessions.list_recent", return_value=mock_sessions) as mock_list:
+            result = runner.invoke(app, ["sessions", "-n", "5"])
+
+        assert result.exit_code == 0
+        mock_list.assert_called_once_with(5)

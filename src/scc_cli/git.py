@@ -694,7 +694,7 @@ def _fetch_branch(repo_path: Path, branch: str) -> None:
     if result.returncode != 0:
         error_msg = result.stderr.strip() if result.stderr else "Unknown fetch error"
         raise WorktreeCreationError(
-            worktree_name=branch,
+            name=branch,
             debug_context=f"Failed to fetch branch '{branch}': {error_msg}",
         )
 
