@@ -161,10 +161,91 @@ def resolve_marketplace_auth(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _build_source_object(marketplace: dict) -> dict:
+    """Build Claude Code's source object from SCC marketplace config.
+
+    This handles the translation from SCC's org-config format to Claude's
+    extraKnownMarketplaces source format.
+
+    SCC type → Claude source type mapping:
+    - github → github (requires 'repo')
+    - gitlab → git (builds URL from 'host' and 'repo')
+    - https → url (requires 'url')
+
+    Args:
+        marketplace: SCC marketplace config dict with 'type' and type-specific fields
+
+    Returns:
+        Claude source object with 'source' type and appropriate fields
+
+    Raises:
+        ValueError: If required fields are missing for the marketplace type
+    """
+    marketplace_type = marketplace.get("type", "").lower()
+
+    if marketplace_type == "github":
+        # GitHub requires 'repo' field
+        repo = marketplace.get("repo")
+        if not repo:
+            raise ValueError(
+                f"GitHub marketplace '{marketplace.get('name', 'unknown')}' "
+                "missing required 'repo' field"
+            )
+        source = {"source": "github", "repo": repo}
+        # Optional ref field
+        if marketplace.get("ref"):
+            source["ref"] = marketplace["ref"]
+        return source
+
+    elif marketplace_type == "gitlab":
+        # GitLab maps to 'git' source type with constructed URL
+        repo = marketplace.get("repo")
+        host = marketplace.get("host", "gitlab.com")
+        if not repo:
+            raise ValueError(
+                f"GitLab marketplace '{marketplace.get('name', 'unknown')}' "
+                "missing required 'repo' field"
+            )
+        # Build HTTPS URL from host and repo
+        url = f"https://{host}/{repo}"
+        source = {"source": "git", "url": url}
+        # Optional ref field
+        if marketplace.get("ref"):
+            source["ref"] = marketplace["ref"]
+        return source
+
+    elif marketplace_type == "https":
+        # HTTPS maps to 'url' source type
+        url = marketplace.get("url")
+        if not url:
+            raise ValueError(
+                f"HTTPS marketplace '{marketplace.get('name', 'unknown')}' "
+                "missing required 'url' field"
+            )
+        return {"source": "url", "url": url}
+
+    else:
+        # Unknown type - try to build URL-based source as fallback
+        url = get_marketplace_url(marketplace)
+        if url:
+            return {"source": "url", "url": url}
+        raise ValueError(
+            f"Marketplace '{marketplace.get('name', 'unknown')}' has "
+            f"unknown type '{marketplace_type}' and no fallback URL"
+        )
+
+
 def build_claude_settings(profile: dict, marketplace: dict, org_id: str | None) -> dict:
     """Build Claude Code settings payload.
 
     This is the ONLY function that knows Claude Code's settings format.
+
+    Claude's extraKnownMarketplaces format (as of Dec 2024):
+    {
+        "marketplaceKey": {
+            "source": {"source": "github", "repo": "owner/repo", "ref": "main"}
+        }
+    }
 
     Args:
         profile: Resolved profile with 'plugin' key
@@ -173,10 +254,15 @@ def build_claude_settings(profile: dict, marketplace: dict, org_id: str | None) 
 
     Returns:
         Settings dict to inject into Claude Code
+
+    Raises:
+        ValueError: If marketplace is missing required fields for its type
     """
     # Key is org_id if provided, otherwise marketplace name
     marketplace_key = org_id or marketplace.get("name", "default")
-    marketplace_url = get_marketplace_url(marketplace)
+
+    # Build Claude's nested source object from SCC marketplace config
+    source_object = _build_source_object(marketplace)
 
     # Build enabled plugins list
     plugin_name = profile.get("plugin")
@@ -187,8 +273,7 @@ def build_claude_settings(profile: dict, marketplace: dict, org_id: str | None) 
     return {
         "extraKnownMarketplaces": {
             marketplace_key: {
-                "name": marketplace.get("name", marketplace_key),
-                "url": marketplace_url,
+                "source": source_object,
             }
         },
         "enabledPlugins": enabled_plugins,

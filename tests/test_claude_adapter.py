@@ -231,6 +231,108 @@ class TestResolveMarketplaceAuth:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Tests for _build_source_object - Claude source type mapping
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBuildSourceObject:
+    """Tests for _build_source_object helper function.
+
+    CRITICAL: These tests verify the exact source object format Claude Code expects.
+    Claude uses nested source objects: {"source": {"source": "github", "repo": "..."}}.
+    """
+
+    def test_github_source_format(self, github_marketplace):
+        """GitHub marketplace should produce correct source object."""
+        source = claude_adapter._build_source_object(github_marketplace)
+
+        assert source == {
+            "source": "github",
+            "repo": "my-org/plugins",
+            "ref": "main",
+        }
+
+    def test_github_source_without_ref(self):
+        """GitHub without ref should omit ref field."""
+        marketplace = {
+            "name": "simple",
+            "type": "github",
+            "repo": "owner/repo",
+        }
+        source = claude_adapter._build_source_object(marketplace)
+
+        assert source == {"source": "github", "repo": "owner/repo"}
+        assert "ref" not in source
+
+    def test_github_missing_repo_raises(self):
+        """GitHub type without repo should raise ValueError."""
+        marketplace = {"name": "broken", "type": "github"}
+
+        with pytest.raises(ValueError, match="missing required 'repo'"):
+            claude_adapter._build_source_object(marketplace)
+
+    def test_gitlab_source_format(self, gitlab_marketplace):
+        """GitLab marketplace should map to 'git' source type with full URL."""
+        source = claude_adapter._build_source_object(gitlab_marketplace)
+
+        # GitLab maps to generic 'git' source type
+        assert source["source"] == "git"
+        assert source["url"] == "https://gitlab.example.org/group/claude-marketplace"
+        assert source["ref"] == "main"
+
+    def test_gitlab_without_ref(self):
+        """GitLab without ref should omit ref field."""
+        marketplace = {
+            "name": "gl",
+            "type": "gitlab",
+            "host": "gitlab.example.org",
+            "repo": "group/project",
+        }
+        source = claude_adapter._build_source_object(marketplace)
+
+        assert source == {
+            "source": "git",
+            "url": "https://gitlab.example.org/group/project",
+        }
+        assert "ref" not in source
+
+    def test_https_source_format(self, https_marketplace):
+        """HTTPS marketplace should map to 'url' source type."""
+        source = claude_adapter._build_source_object(https_marketplace)
+
+        assert source == {
+            "source": "url",
+            "url": "https://plugins.example.org/marketplace",
+        }
+
+    def test_https_missing_url_raises(self):
+        """HTTPS type without url should raise ValueError."""
+        marketplace = {"name": "broken", "type": "https"}
+
+        with pytest.raises(ValueError, match="missing required 'url'"):
+            claude_adapter._build_source_object(marketplace)
+
+    def test_unknown_type_raises(self):
+        """Unknown marketplace type should raise ValueError."""
+        marketplace = {"name": "mystery", "type": "npm"}
+
+        # Fallback tries get_marketplace_url() which raises descriptive error
+        with pytest.raises(ValueError, match="requires 'url' or 'host'"):
+            claude_adapter._build_source_object(marketplace)
+
+    def test_type_case_insensitive(self):
+        """Type matching should be case-insensitive."""
+        marketplace = {
+            "name": "caps",
+            "type": "GITHUB",
+            "repo": "owner/repo",
+        }
+        source = claude_adapter._build_source_object(marketplace)
+
+        assert source["source"] == "github"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Tests for build_claude_settings - CRITICAL OUTPUT SHAPE TESTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -239,6 +341,7 @@ class TestBuildClaudeSettings:
     """Tests for build_claude_settings function.
 
     CRITICAL: These tests verify the exact shape Claude Code expects.
+    Claude expects: {"extraKnownMarketplaces": {"key": {"source": {...}}}}
     If Claude Code changes format, update ONLY these tests and claude_adapter.py.
     """
 
@@ -252,22 +355,68 @@ class TestBuildClaudeSettings:
         assert "extraKnownMarketplaces" in settings
         assert "enabledPlugins" in settings
 
-    def test_extra_known_marketplaces_structure(self, sample_profile, gitlab_marketplace):
-        """extraKnownMarketplaces should have correct structure."""
+    def test_extra_known_marketplaces_has_source_object(self, sample_profile, github_marketplace):
+        """extraKnownMarketplaces entries must have nested 'source' object.
+
+        Claude's official format (from docs):
+        {
+            "extraKnownMarketplaces": {
+                "team-tools": {
+                    "source": {
+                        "source": "github",
+                        "repo": "your-org/claude-plugins"
+                    }
+                }
+            }
+        }
+        """
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, github_marketplace, "my-org"
+        )
+
+        entry = settings["extraKnownMarketplaces"]["my-org"]
+
+        # CRITICAL: Must have nested "source" object
+        assert "source" in entry
+        assert isinstance(entry["source"], dict)
+        assert entry["source"]["source"] == "github"
+        assert entry["source"]["repo"] == "my-org/plugins"
+
+    def test_github_marketplace_correct_format(self, sample_profile, github_marketplace):
+        """GitHub marketplace should produce correct Claude format."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, github_marketplace, "my-org"
+        )
+
+        expected_source = {
+            "source": "github",
+            "repo": "my-org/plugins",
+            "ref": "main",
+        }
+        assert settings["extraKnownMarketplaces"]["my-org"]["source"] == expected_source
+
+    def test_gitlab_marketplace_correct_format(self, sample_profile, gitlab_marketplace):
+        """GitLab marketplace should map to git source type."""
         settings = claude_adapter.build_claude_settings(
             sample_profile, gitlab_marketplace, "test-org"
         )
 
-        marketplaces = settings["extraKnownMarketplaces"]
+        source = settings["extraKnownMarketplaces"]["test-org"]["source"]
+        assert source["source"] == "git"
+        assert source["url"] == "https://gitlab.example.org/group/claude-marketplace"
+        assert source["ref"] == "main"
 
-        # Key is org_id when provided
-        assert "test-org" in marketplaces
+    def test_https_marketplace_correct_format(self, sample_profile, https_marketplace):
+        """HTTPS marketplace should map to url source type."""
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, https_marketplace, "custom-org"
+        )
 
-        # Marketplace entry structure
-        entry = marketplaces["test-org"]
-        assert "name" in entry
-        assert "url" in entry
-        assert entry["url"].startswith("https://")
+        source = settings["extraKnownMarketplaces"]["custom-org"]["source"]
+        assert source == {
+            "source": "url",
+            "url": "https://plugins.example.org/marketplace",
+        }
 
     def test_marketplace_key_uses_org_id(self, sample_profile, github_marketplace):
         """Marketplace key should be org_id when provided."""
@@ -301,15 +450,6 @@ class TestBuildClaudeSettings:
         # Plugin should reference my-org (org_id), not "public" (marketplace name)
         assert settings["enabledPlugins"] == ["platform-plugin@my-org"]
 
-    def test_marketplace_url_is_https(self, sample_profile, gitlab_marketplace):
-        """Marketplace URL should be HTTPS."""
-        settings = claude_adapter.build_claude_settings(
-            sample_profile, gitlab_marketplace, "test-org"
-        )
-
-        url = settings["extraKnownMarketplaces"]["test-org"]["url"]
-        assert url == "https://gitlab.example.org/group/claude-marketplace"
-
     def test_no_plugin_returns_empty_enabled(self, sample_profile_no_plugin, github_marketplace):
         """Profile without plugin should have empty enabledPlugins."""
         settings = claude_adapter.build_claude_settings(
@@ -317,6 +457,20 @@ class TestBuildClaudeSettings:
         )
 
         assert settings["enabledPlugins"] == []
+
+    def test_no_name_or_url_in_marketplace_entry(self, sample_profile, github_marketplace):
+        """Marketplace entry should NOT have 'name' or 'url' at top level.
+
+        Old broken format had: {"name": "...", "url": "..."}
+        Correct format has: {"source": {...}}
+        """
+        settings = claude_adapter.build_claude_settings(
+            sample_profile, github_marketplace, "my-org"
+        )
+
+        entry = settings["extraKnownMarketplaces"]["my-org"]
+        assert "name" not in entry, "Old format 'name' field should not be present"
+        assert "url" not in entry, "Old format 'url' field should not be present"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
