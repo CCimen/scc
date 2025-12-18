@@ -1,0 +1,511 @@
+"""
+CLI Configuration Commands.
+
+Commands for managing teams, config, and setup.
+"""
+
+from pathlib import Path
+
+import typer
+from rich.panel import Panel
+from rich.status import Status
+from rich.table import Table
+
+from . import config, profiles, setup, teams
+from .cli_common import console, handle_errors, render_responsive_table
+from .panels import create_info_panel, create_success_panel, create_warning_panel
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Config App
+# ─────────────────────────────────────────────────────────────────────────────
+
+config_app = typer.Typer(
+    name="config",
+    help="Manage configuration and team profiles.",
+    no_args_is_help=False,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Teams Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@handle_errors
+def teams_cmd(
+    team_name: str | None = typer.Argument(None, help="Team name to show details"),
+    sync: bool = typer.Option(False, "--sync", "-s", help="Sync team configs from GitHub"),
+) -> None:
+    """List available team profiles or show team details."""
+    cfg = config.load_config()
+
+    # Load cached org config (NEW architecture)
+    org_config = config.load_cached_org_config()
+
+    # Sync mode
+    if sync:
+        _sync_teams(cfg, team_name)
+        return
+
+    # Detail view for specific team
+    if team_name:
+        _show_team_details(cfg, team_name, org_config=org_config)
+        return
+
+    # List all teams (pass org_config for NEW architecture)
+    available_teams = teams.list_teams(cfg, org_config=org_config)
+
+    if not available_teams:
+        console.print(
+            create_warning_panel(
+                "No Teams",
+                "No team profiles configured.",
+                "Run 'scc setup' to initialize configuration",
+            )
+        )
+        return
+
+    # Build rows for responsive table
+    rows = []
+    for team in available_teams:
+        plugin = team.get("plugin") or "-"
+        rows.append([team["name"], team["description"], plugin])
+
+    render_responsive_table(
+        title="Available Team Profiles",
+        columns=[
+            ("Team", "cyan"),
+            ("Description", "white"),
+        ],
+        rows=rows,
+        wide_columns=[
+            ("Plugin", "yellow"),
+        ],
+    )
+
+    console.print("[dim]Use: scc teams <name> for details, scc teams --sync to update[/dim]")
+
+
+def _show_team_details(cfg: dict, team_name: str, org_config: dict | None = None) -> None:
+    """Display detailed information for a team profile."""
+    details = teams.get_team_details(team_name, cfg, org_config=org_config)
+
+    if not details:
+        console.print(
+            create_warning_panel(
+                "Team Not Found",
+                f"No team profile named '{team_name}'.",
+                "Run 'scc teams' to see available profiles",
+            )
+        )
+        return
+
+    # Build detail panel
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column(style="white")
+
+    grid.add_row("Description:", details.get("description", "-"))
+
+    # Show plugin info (new simplified schema)
+    plugin = details.get("plugin")
+    if plugin:
+        marketplace = details.get("marketplace", "sundsvall")
+        grid.add_row("Plugin:", f"{plugin}@{marketplace}")
+        grid.add_row("Marketplace:", details.get("marketplace_repo", "-"))
+    else:
+        grid.add_row("Plugin:", "[dim]None (base profile)[/dim]")
+
+    panel = Panel(
+        grid,
+        title=f"[bold cyan]Team: {team_name}[/bold cyan]",
+        border_style="cyan",
+        padding=(1, 2),
+    )
+
+    console.print()
+    console.print(panel)
+    console.print()
+    console.print(f"[dim]Use: scc start -t {team_name} to use this profile[/dim]")
+
+
+def _sync_teams(cfg: dict, team_name: str | None) -> None:
+    """Sync team configurations from GitHub."""
+    org_config = cfg.get("organization", {})
+    github_org = org_config.get("github_org")
+    config_repo = org_config.get("config_repo")
+
+    if not github_org or not config_repo:
+        console.print(
+            create_warning_panel(
+                "Sync Not Configured",
+                "No GitHub organization or config repository set.",
+                "Configure organization.github_org and organization.config_repo in config",
+            )
+        )
+        return
+
+    if team_name:
+        # Sync specific team
+        with Status(
+            f"[cyan]Syncing {team_name} from GitHub...[/cyan]",
+            console=console,
+            spinner="dots",
+        ):
+            success = teams.sync_team_from_github(team_name, cfg)  # type: ignore[attr-defined]  # TODO: implement sync_team_from_github
+
+        if success:
+            console.print(
+                create_success_panel(
+                    "Team Synced",
+                    {"Team": team_name, "Source": f"{github_org}/{config_repo}"},
+                )
+            )
+        else:
+            console.print(
+                create_warning_panel(
+                    "Sync Failed",
+                    f"Could not sync team '{team_name}'.",
+                    f"Check if profiles/{team_name} exists in {github_org}/{config_repo}",
+                )
+            )
+    else:
+        # Sync all teams
+        team_profiles = cfg.get("profiles", {})
+        synced = []
+        failed = []
+
+        for name in team_profiles.keys():
+            with Status(
+                f"[cyan]Syncing {name}...[/cyan]",
+                console=console,
+                spinner="dots",
+            ):
+                if teams.sync_team_from_github(name, cfg):  # type: ignore[attr-defined]
+                    synced.append(name)
+                else:
+                    failed.append(name)
+
+        if synced:
+            console.print(
+                create_success_panel(
+                    "Teams Synced",
+                    {
+                        "Synced": ", ".join(synced),
+                        "Source": f"{github_org}/{config_repo}",
+                    },
+                )
+            )
+
+        if failed:
+            console.print(
+                create_warning_panel(
+                    "Some Syncs Failed",
+                    f"Could not sync: {', '.join(failed)}",
+                    "These teams may not exist in the remote repository",
+                )
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Setup Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@handle_errors
+def setup_cmd(
+    quick: bool = typer.Option(False, "--quick", "-q", help="Quick setup with defaults"),
+    reset: bool = typer.Option(False, "--reset", help="Reset configuration"),
+    org_url: str | None = typer.Option(
+        None, "--org-url", help="Organization config URL (for non-interactive)"
+    ),
+    team: str | None = typer.Option(None, "--team", "-t", help="Team profile to select"),
+    auth: str | None = typer.Option(None, "--auth", help="Auth spec (env:VAR or command:CMD)"),
+    standalone: bool = typer.Option(
+        False, "--standalone", help="Standalone mode (no organization)"
+    ),
+) -> None:
+    """Run initial setup wizard.
+
+    Examples:
+        scc setup                                    # Interactive wizard
+        scc setup --standalone                       # Standalone mode
+        scc setup --org-url <url> --team dev         # Non-interactive
+    """
+    if reset:
+        setup.reset_setup(console)
+        return
+
+    # Non-interactive mode if org_url or standalone specified
+    if org_url or standalone:
+        success = setup.run_non_interactive_setup(
+            console,
+            org_url=org_url,
+            team=team,
+            auth=auth,
+            standalone=standalone,
+        )
+        if not success:
+            raise typer.Exit(1)
+        return
+
+    # Run the setup wizard (--quick flag is a no-op for now, wizard handles all cases)
+    setup.run_setup_wizard(console)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Config Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@handle_errors
+def config_cmd(
+    action: str = typer.Argument(None, help="Action: set, get, show, edit, explain"),
+    key: str = typer.Argument(None, help="Config key (for set/get, e.g. hooks.enabled)"),
+    value: str = typer.Argument(None, help="Value (for set only)"),
+    show: bool = typer.Option(False, "--show", help="Show current config"),
+    edit: bool = typer.Option(False, "--edit", help="Open config in editor"),
+    field: str | None = typer.Option(
+        None, "--field", help="Filter explain output to specific field (plugins, session, etc.)"
+    ),
+    workspace: str | None = typer.Option(
+        None, "--workspace", help="Workspace path for project config (default: current directory)"
+    ),
+) -> None:
+    """View or edit configuration.
+
+    Examples:
+        scc config --show                    # Show all config
+        scc config get selected_profile      # Get specific key
+        scc config set hooks.enabled true    # Set a value
+        scc config --edit                    # Open in editor
+        scc config explain                   # Explain effective config
+        scc config explain --field plugins   # Explain only plugins
+    """
+    # Handle action-based commands
+    if action == "set":
+        if not key or value is None:
+            console.print("[red]Usage: scc config set <key> <value>[/red]")
+            raise typer.Exit(1)
+        _config_set(key, value)
+        return
+
+    if action == "get":
+        if not key:
+            console.print("[red]Usage: scc config get <key>[/red]")
+            raise typer.Exit(1)
+        _config_get(key)
+        return
+
+    if action == "explain":
+        _config_explain(field_filter=field, workspace_path=workspace)
+        return
+
+    # Handle --show and --edit flags
+    if show or action == "show":
+        cfg = config.load_user_config()
+        console.print(
+            create_info_panel(
+                "Configuration",
+                f"Current settings loaded from {config.CONFIG_FILE}",
+            )
+        )
+        console.print()
+        console.print_json(data=cfg)
+    elif edit or action == "edit":
+        config.open_in_editor()
+    else:
+        console.print(
+            create_info_panel(
+                "Configuration Help",
+                "Commands:\n  scc config --show     View current settings\n  scc config --edit     Edit in your editor\n  scc config get <key>  Get a specific value\n  scc config set <key> <value>  Set a value",
+                f"Config location: {config.CONFIG_FILE}",
+            )
+        )
+
+
+def _config_set(key: str, value: str) -> None:
+    """Set a configuration value by dotted key path."""
+    cfg = config.load_user_config()
+
+    # Parse dotted key path (e.g., "hooks.enabled")
+    keys = key.split(".")
+    obj = cfg
+    for k in keys[:-1]:
+        if k not in obj:
+            obj[k] = {}
+        obj = obj[k]
+
+    # Parse value (handle booleans and numbers)
+    parsed_value: bool | int | str
+    if value.lower() == "true":
+        parsed_value = True
+    elif value.lower() == "false":
+        parsed_value = False
+    elif value.isdigit():
+        parsed_value = int(value)
+    else:
+        parsed_value = value
+
+    obj[keys[-1]] = parsed_value
+    config.save_user_config(cfg)
+    console.print(f"[green]✓ Set {key} = {parsed_value}[/green]")
+
+
+def _config_get(key: str) -> None:
+    """Get a configuration value by dotted key path."""
+    cfg = config.load_user_config()
+
+    # Navigate dotted key path
+    keys = key.split(".")
+    obj = cfg
+    for k in keys:
+        if isinstance(obj, dict) and k in obj:
+            obj = obj[k]
+        else:
+            console.print(f"[yellow]Key '{key}' not found[/yellow]")
+            return
+
+    # Display value
+    if isinstance(obj, dict):
+        console.print_json(data=obj)
+    else:
+        console.print(str(obj))
+
+
+def _config_explain(field_filter: str | None = None, workspace_path: str | None = None) -> None:
+    """Explain the effective configuration with source attribution.
+
+    Shows:
+    - Effective config values and where they came from
+    - Blocked items and the patterns that blocked them
+    - Denied additions and why they were denied
+    """
+    # Load org config
+    org_config = config.load_cached_org_config()
+    if not org_config:
+        console.print(
+            "[red]No organization config found. Run 'scc setup' first.[/red]"
+        )
+        raise typer.Exit(1)
+
+    # Get selected profile/team
+    team = config.get_selected_profile()
+    if not team:
+        console.print(
+            "[red]No team selected. Run 'scc team select <team>' first.[/red]"
+        )
+        raise typer.Exit(1)
+
+    # Determine workspace path
+    ws_path = Path(workspace_path) if workspace_path else Path.cwd()
+
+    # Compute effective config
+    effective = profiles.compute_effective_config(
+        org_config=org_config,
+        team_name=team,
+        workspace_path=ws_path,
+    )
+
+    # Build output
+    console.print(
+        create_info_panel(
+            "Effective Configuration",
+            f"Organization: {org_config.get('organization', {}).get('name', 'Unknown')}",
+            f"Team: {team}",
+        )
+    )
+    console.print()
+
+    # Show decisions (config values with source attribution)
+    _render_config_decisions(effective, field_filter)
+
+    # Show blocked items
+    if effective.blocked_items and (not field_filter or field_filter == "blocked"):
+        _render_blocked_items(effective.blocked_items)
+
+    # Show denied additions
+    if effective.denied_additions and (not field_filter or field_filter == "denied"):
+        _render_denied_additions(effective.denied_additions)
+
+
+def _render_config_decisions(
+    effective: profiles.EffectiveConfig, field_filter: str | None
+) -> None:
+    """Render config decisions grouped by field."""
+    # Group decisions by field
+    by_field: dict[str, list[profiles.ConfigDecision]] = {}
+    for decision in effective.decisions:
+        field = decision.field.split(".")[0]  # Get top-level field
+        if field_filter and field != field_filter:
+            continue
+        if field not in by_field:
+            by_field[field] = []
+        by_field[field].append(decision)
+
+    # Also show effective values even if no explicit decisions
+    if not field_filter or field_filter == "plugins":
+        console.print("[bold cyan]Plugins[/bold cyan]")
+        if effective.plugins:
+            for plugin in sorted(effective.plugins):
+                # Find decision for this plugin
+                plugin_decision = next(
+                    (d for d in effective.decisions if d.field == "plugins" and d.value == plugin),
+                    None,
+                )
+                if plugin_decision:
+                    console.print(f"  [green]✓[/green] {plugin} [dim](from {plugin_decision.source})[/dim]")
+                else:
+                    console.print(f"  [green]✓[/green] {plugin}")
+        else:
+            console.print("  [dim]None configured[/dim]")
+        console.print()
+
+    if not field_filter or field_filter == "session":
+        console.print("[bold cyan]Session Config[/bold cyan]")
+        timeout = effective.session_config.timeout_hours or 8
+        auto_resume = effective.session_config.auto_resume
+        # Find decision for timeout
+        timeout_decision = next(
+            (d for d in effective.decisions if "timeout" in d.field.lower()),
+            None,
+        )
+        if timeout_decision:
+            console.print(f"  timeout_hours: {timeout} [dim](from {timeout_decision.source})[/dim]")
+        else:
+            console.print(f"  timeout_hours: {timeout} [dim](default)[/dim]")
+        console.print(f"  auto_resume: {auto_resume}")
+        console.print()
+
+    if not field_filter or field_filter == "network":
+        console.print("[bold cyan]Network Policy[/bold cyan]")
+        policy = effective.network_policy or "default"
+        policy_decision = next(
+            (d for d in effective.decisions if d.field == "network_policy"),
+            None,
+        )
+        if policy_decision:
+            console.print(f"  {policy} [dim](from {policy_decision.source})[/dim]")
+        else:
+            console.print(f"  {policy}")
+        console.print()
+
+
+def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:
+    """Render blocked items with patterns."""
+    console.print("[bold red]Blocked Items[/bold red]")
+    for item in blocked_items:
+        console.print(
+            f"  [red]✗[/red] {item.item} [dim](blocked by pattern '{item.blocked_by}' from {item.source})[/dim]"
+        )
+    console.print()
+
+
+def _render_denied_additions(denied_additions: list[profiles.DelegationDenied]) -> None:
+    """Render denied additions with reasons."""
+    console.print("[bold yellow]Denied Additions[/bold yellow]")
+    for denied in denied_additions:
+        console.print(
+            f"  [yellow]⚠[/yellow] {denied.item} [dim](requested by {denied.requested_by}: {denied.reason})[/dim]"
+        )
+    console.print()

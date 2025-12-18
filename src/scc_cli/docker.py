@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from . import stats
 from .errors import (
     ContainerNotFoundError,
     DockerNotFoundError,
@@ -758,6 +759,133 @@ def launch_with_org_config(
         continue_session=continue_session,
         resume=resume,
     )
+
+    # Run the sandbox
+    run(cmd)
+
+
+def launch_with_org_config_v2(
+    workspace: Path,
+    org_config: dict,
+    team: str,
+    continue_session: bool = False,
+    resume: bool = False,
+    is_offline: bool = False,
+    cache_age_hours: int | None = None,
+) -> None:
+    """
+    Launch Docker sandbox with v2 config inheritance.
+
+    This is the v2 orchestration function that supports:
+    - 3-layer config inheritance (org → team → project)
+    - Security boundary enforcement (blocked items)
+    - Delegation rules (denied additions)
+    - Offline mode with stale cache warnings
+
+    Args:
+        workspace: Path to workspace directory
+        org_config: Remote organization config dict (v2 schema)
+        team: Team profile name
+        continue_session: Pass -c flag to Claude
+        resume: Pass --resume flag to Claude
+        is_offline: Whether operating in offline mode
+        cache_age_hours: Age of cached config in hours (for staleness warning)
+
+    Raises:
+        PolicyViolationError: If blocked plugins are detected
+        ValueError: If team/profile not found in org_config
+        DockerNotFoundError: If Docker not available
+    """
+    from . import claude_adapter, profiles
+    from .errors import PolicyViolationError
+
+    # Check Docker is available
+    check_docker_available()
+
+    # Compute effective config with 3-layer inheritance
+    # This handles org defaults → team profile → project .scc.yaml
+    effective = profiles.compute_effective_config(
+        org_config=org_config,
+        team_name=team,
+        workspace_path=workspace,
+    )
+
+    # Check for security violations (blocked items = hard failure)
+    if effective.blocked_items:
+        # Raise error for first blocked item
+        blocked = effective.blocked_items[0]
+        raise PolicyViolationError(
+            item=blocked.item,
+            blocked_by=blocked.blocked_by,
+        )
+
+    # Warn about denied additions (soft failure - continue but warn)
+    if effective.denied_additions:
+        for denied in effective.denied_additions:
+            print(
+                f"⚠️  Plugin '{denied.item}' was denied: {denied.reason}"
+            )
+
+    # Warn about stale cache when offline
+    if is_offline and cache_age_hours is not None and cache_age_hours > 24:
+        print(
+            f"⚠️  Running offline with stale config cache ({cache_age_hours}h old)"
+        )
+
+    # Get org_id for namespacing
+    org_id = org_config.get("organization", {}).get("id")
+
+    # Get marketplace info if available
+    marketplace = None
+    try:
+        profile = profiles.resolve_profile(org_config, team)
+        marketplace = profiles.resolve_marketplace(org_config, profile)
+    except (ValueError, KeyError):
+        pass
+
+    # Build Claude Code settings using the v2 adapter
+    settings = claude_adapter.build_settings_from_effective_config(
+        effective_config=effective,
+        org_id=org_id,
+        marketplace=marketplace,
+    )
+
+    # Inject settings into sandbox volume
+    inject_settings(settings)
+
+    # Build and run the Docker sandbox command
+    cmd = build_command(
+        workspace=workspace,
+        continue_session=continue_session,
+        resume=resume,
+    )
+
+    # Record session start for usage stats
+    # NOTE: session_end cannot be recorded on Unix because os.execvp replaces
+    # the process. Incomplete sessions are tracked by the stats module.
+    # Stats errors are non-fatal - launch must always proceed.
+    try:
+        # Get stats config from org config (may be None for defaults)
+        stats_config = org_config.get("stats")
+
+        # Get expected duration from session config (default 8 hours)
+        expected_duration = effective.session_config.timeout_hours or 8
+
+        # Generate session ID
+        session_id = stats.generate_session_id()
+
+        # Record session start
+        stats.record_session_start(
+            session_id=session_id,
+            project_name=workspace.name,
+            team_name=team,
+            expected_duration_hours=expected_duration,
+            stats_config=stats_config,
+        )
+    except Exception:
+        # Stats recording failure must never block launch
+        # Silently continue - user can still use scc without stats
+        pass
 
     # Run the sandbox
     run(cmd)

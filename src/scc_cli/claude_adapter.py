@@ -27,7 +27,7 @@ from scc_cli.auth import resolve_auth as _resolve_auth_impl
 from scc_cli.profiles import get_marketplace_url
 
 if TYPE_CHECKING:
-    pass
+    from scc_cli.profiles import EffectiveConfig, MCPServer
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -290,6 +290,158 @@ def get_settings_file_content(settings: dict) -> str:
         Formatted JSON string
     """
     return json.dumps(settings, indent=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V2 Settings Builder (EffectiveConfig)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def build_settings_from_effective_config(
+    effective_config: EffectiveConfig,
+    org_id: str | None = None,
+    marketplace: dict | None = None,
+) -> dict:
+    """Build Claude Code settings from EffectiveConfig.
+
+    This function translates the governance-aware EffectiveConfig
+    to Claude Code's settings format.
+
+    Args:
+        effective_config: The computed effective configuration with
+            plugins, MCP servers, and session settings
+        org_id: Organization ID for namespacing (optional)
+        marketplace: Marketplace config for source info (optional,
+            needed if extraKnownMarketplaces is required)
+
+    Returns:
+        Settings dict ready for injection into Claude Code
+    """
+
+    settings: dict = {}
+
+    # Build enabled plugins list
+    marketplace_key = org_id or "default"
+    enabled_plugins = []
+    for plugin in effective_config.plugins:
+        enabled_plugins.append(f"{plugin}@{marketplace_key}")
+
+    if enabled_plugins:
+        settings["enabledPlugins"] = enabled_plugins
+
+    # Build MCP servers config
+    if effective_config.mcp_servers:
+        mcp_servers: dict = {}
+        for server in effective_config.mcp_servers:
+            server_config = _build_mcp_server_config(server)
+            if server_config:
+                mcp_servers[server.name] = server_config
+        if mcp_servers:
+            settings["mcpServers"] = mcp_servers
+
+    # Include marketplace if provided
+    if marketplace:
+        try:
+            source_object = _build_source_object(marketplace)
+            settings["extraKnownMarketplaces"] = {
+                marketplace_key: {"source": source_object}
+            }
+        except ValueError:
+            # Skip if marketplace is incomplete
+            pass
+
+    return settings
+
+
+def _build_mcp_server_config(server: MCPServer) -> dict | None:
+    """Build Claude Code MCP server config from MCPServer dataclass.
+
+    Claude Code MCP format (Dec 2024):
+    - HTTP: {"type": "http", "url": "...", "headers": {...}}
+    - SSE: {"type": "sse", "url": "...", "headers": {...}}
+    - Stdio: {"type": "stdio", "command": "...", "args": [...], "env": {...}}
+
+    Args:
+        server: MCPServer dataclass instance
+
+    Returns:
+        Dict in Claude Code's mcpServers format, or None if invalid
+    """
+    if server.type == "sse":
+        if not server.url:
+            return None
+        config: dict = {
+            "type": "sse",
+            "url": server.url,
+        }
+        if server.headers:
+            config["headers"] = server.headers
+        return config
+
+    elif server.type == "http":
+        if not server.url:
+            return None
+        config = {
+            "type": "http",
+            "url": server.url,
+        }
+        if server.headers:
+            config["headers"] = server.headers
+        return config
+
+    elif server.type == "stdio":
+        if not server.command:
+            return None
+        config = {
+            "type": "stdio",
+            "command": server.command,
+        }
+        if server.args:
+            config["args"] = server.args
+        if server.env:
+            config["env"] = server.env
+        return config
+
+    else:
+        return None
+
+
+def translate_mcp_server(server: MCPServer) -> tuple[str, dict] | tuple[None, None]:
+    """Translate MCPServer to Claude Code format.
+
+    Returns a tuple of (server_name, config_dict) for use in
+    Claude Code's mcpServers settings.
+
+    Args:
+        server: MCPServer dataclass instance
+
+    Returns:
+        Tuple of (name, config) or (None, None) if invalid
+    """
+    config = _build_mcp_server_config(server)
+    if config is None:
+        return None, None
+    return server.name, config
+
+
+def build_mcp_servers(effective_config: EffectiveConfig) -> dict:
+    """Build MCP servers dict from EffectiveConfig.
+
+    Returns the mcpServers dict in Claude Code's format:
+    {"server-name": {"type": "...", "url": "..."}, ...}
+
+    Args:
+        effective_config: The computed effective configuration
+
+    Returns:
+        Dict mapping server names to their configurations
+    """
+    mcp_servers: dict = {}
+    for server in effective_config.mcp_servers:
+        name, config = translate_mcp_server(server)
+        if name and config:
+            mcp_servers[name] = config
+    return mcp_servers
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

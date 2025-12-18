@@ -126,7 +126,7 @@ class TestSetupWorkflow:
 
     def test_setup_standalone_creates_config(self, full_config_environment):
         """Standalone setup should create minimal config."""
-        with patch("scc_cli.cli.setup.run_non_interactive_setup") as mock_setup:
+        with patch("scc_cli.cli_config.setup.run_non_interactive_setup") as mock_setup:
             mock_setup.return_value = True
             result = runner.invoke(app, ["setup", "--standalone"])
 
@@ -141,7 +141,7 @@ class TestSetupWorkflow:
     def test_setup_with_org_url_fetches_config(self, full_config_environment, sample_org_config):
         """Setup with org URL should fetch and cache config."""
         with (
-            patch("scc_cli.cli.setup.run_non_interactive_setup") as mock_setup,
+            patch("scc_cli.cli_config.setup.run_non_interactive_setup") as mock_setup,
             patch("scc_cli.remote.fetch_org_config") as mock_fetch,
         ):
             mock_setup.return_value = True
@@ -168,8 +168,8 @@ class TestSetupWorkflow:
 
         # Patch config module
         with (
-            patch("scc_cli.cli.config.load_user_config") as mock_load,
-            patch("scc_cli.cli.config.save_user_config") as mock_save,
+            patch("scc_cli.cli_config.config.load_user_config") as mock_load,
+            patch("scc_cli.cli_config.config.save_user_config") as mock_save,
         ):
             mock_load.return_value = {"selected_profile": "old-team"}
 
@@ -190,7 +190,7 @@ class TestStartWorkflow:
 
     def test_start_requires_setup_first(self, full_config_environment, git_workspace):
         """Start should prompt for setup if not configured."""
-        with patch("scc_cli.cli.setup.is_setup_needed", return_value=True):
+        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=True):
             result = runner.invoke(app, ["start", str(git_workspace)])
 
         # Should indicate setup is needed
@@ -199,17 +199,17 @@ class TestStartWorkflow:
     def test_start_with_workspace_launches_docker(self, full_config_environment, git_workspace):
         """Start with workspace should launch Docker sandbox."""
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli.docker.check_docker_available"),
-            patch("scc_cli.cli.git.check_branch_safety"),
-            patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
-            patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)
+                "scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)
             ) as mock_get_container,
-            patch("scc_cli.cli.docker.run"),
+            patch("scc_cli.cli_launch.docker.run"),
         ):
             runner.invoke(app, ["start", str(git_workspace)])
 
@@ -234,16 +234,16 @@ class TestStartWorkflow:
         )
 
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config") as mock_load_config,
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
-            patch("scc_cli.cli.docker.check_docker_available"),
-            patch("scc_cli.cli.git.check_branch_safety"),
-            patch("scc_cli.cli.git.get_current_branch", return_value="feature-x"),
-            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
-            patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
-            patch("scc_cli.cli.docker.run"),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="feature-x"),
+            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch("scc_cli.cli_launch.docker.run"),
         ):
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
@@ -291,7 +291,7 @@ class TestSessionWorkflow:
 
         # Also patch sessions module
         with patch("scc_cli.sessions.config.SESSIONS_FILE", sessions_file):
-            with patch("scc_cli.cli.sessions.list_recent") as mock_list:
+            with patch("scc_cli.cli_worktree.sessions.list_recent") as mock_list:
                 mock_list.return_value = [
                     {"name": "session1", "workspace": "/tmp/proj1", "last_used": "1h ago"},
                     {"name": "session2", "workspace": "/tmp/proj2", "last_used": "2h ago"},
@@ -307,16 +307,16 @@ class TestSessionWorkflow:
         config_dir / "sessions.json"
 
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli.sessions.get_most_recent") as mock_recent,
-            patch("scc_cli.cli.docker.check_docker_available"),
-            patch("scc_cli.cli.git.check_branch_safety"),
-            patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
-            patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
-            patch("scc_cli.cli.docker.run"),
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.sessions.get_most_recent") as mock_recent,
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch("scc_cli.cli_launch.docker.run"),
         ):
             mock_recent.return_value = {
                 "workspace": str(git_workspace),
@@ -331,9 +331,9 @@ class TestSessionWorkflow:
     def test_continue_without_sessions_shows_error(self, full_config_environment):
         """--continue with no sessions should show appropriate error."""
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli.sessions.get_most_recent", return_value=None),
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.sessions.get_most_recent", return_value=None),
         ):
             result = runner.invoke(app, ["start", "--continue"])
 
@@ -355,7 +355,7 @@ class TestTeamsWorkflow:
         org_config_file.write_text(json.dumps(sample_org_config))
 
         with (
-            patch("scc_cli.cli.config.load_config") as mock_load_config,
+            patch("scc_cli.cli_config.config.load_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
             patch("scc_cli.profiles.list_profiles") as mock_list,
         ):
@@ -374,7 +374,7 @@ class TestTeamsWorkflow:
     def test_teams_sync_forces_refresh(self, full_config_environment, sample_org_config):
         """Teams --sync should force refresh from remote."""
         with (
-            patch("scc_cli.cli.config.load_config") as mock_load_config,
+            patch("scc_cli.cli_config.config.load_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.profiles.list_profiles") as mock_list,
         ):
@@ -405,7 +405,7 @@ class TestDoctorWorkflow:
     def test_doctor_checks_all_components(self, full_config_environment):
         """Doctor should check Docker, Git, Config, and connectivity."""
         with (
-            patch("scc_cli.cli.doctor.run_doctor") as mock_doctor,
+            patch("scc_cli.cli_admin.doctor.run_doctor") as mock_doctor,
         ):
             mock_doctor.return_value = None
             runner.invoke(app, ["doctor"])
@@ -425,9 +425,9 @@ class TestWorktreeWorkflow:
     def test_worktree_creates_branch_and_worktree(self, full_config_environment, git_workspace):
         """Worktree command should create git worktree and branch."""
         with (
-            patch("scc_cli.cli.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli.git.create_worktree") as mock_create,
-            patch("scc_cli.cli.Confirm.ask", return_value=False),  # Don't start claude
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
+            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),  # Don't start claude
         ):
             worktree_path = git_workspace.parent / "claude" / "feature-x"
             mock_create.return_value = worktree_path
@@ -442,10 +442,10 @@ class TestWorktreeWorkflow:
         worktree_path.mkdir(parents=True)
 
         with (
-            patch("scc_cli.cli.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli.git.create_worktree", return_value=worktree_path),
-            patch("scc_cli.cli.deps.auto_install_dependencies") as mock_deps,
-            patch("scc_cli.cli.Confirm.ask", return_value=False),
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.create_worktree", return_value=worktree_path),
+            patch("scc_cli.cli_worktree.deps.auto_install_dependencies") as mock_deps,
+            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),
         ):
             mock_deps.return_value = True
 
@@ -511,16 +511,16 @@ class TestOfflineWorkflow:
         )
 
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config") as mock_load_config,
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.cli.docker.check_docker_available"),
-            patch("scc_cli.cli.git.check_branch_safety"),
-            patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
-            patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
-            patch("scc_cli.cli.docker.run"),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch("scc_cli.cli_launch.docker.run"),
         ):
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
@@ -546,16 +546,16 @@ class TestStandaloneWorkflow:
     def test_start_standalone_skips_org_config(self, full_config_environment, git_workspace):
         """--standalone should skip org config entirely."""
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.cli.docker.check_docker_available"),
-            patch("scc_cli.cli.git.check_branch_safety"),
-            patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
-            patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
-            patch("scc_cli.cli.docker.run"),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch("scc_cli.cli_launch.docker.run"),
         ):
             runner.invoke(app, ["start", str(git_workspace), "--standalone"])
 
@@ -577,16 +577,16 @@ class TestDepsWorkflow:
         (git_workspace / "package.json").write_text("{}")
 
         with (
-            patch("scc_cli.cli.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli.docker.check_docker_available"),
-            patch("scc_cli.cli.git.check_branch_safety"),
-            patch("scc_cli.cli.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli.git.get_workspace_mount_path", return_value=(git_workspace, False)),
-            patch("scc_cli.cli.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli.docker.get_or_create_container", return_value=(["docker"], False)),
-            patch("scc_cli.cli.docker.run"),
-            patch("scc_cli.cli.deps.auto_install_dependencies") as mock_deps,
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch("scc_cli.cli_launch.docker.run"),
+            patch("scc_cli.cli_launch.deps.auto_install_dependencies") as mock_deps,
         ):
             mock_deps.return_value = True
 

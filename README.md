@@ -1,23 +1,6 @@
-<h1 align="center">SCC - Sandboxed Claude CLI</h1>
+# SCC - Sandboxed Claude CLI
 
-<p align="center">
-  <a href="https://pypi.org/project/scc-cli/"><img src="https://img.shields.io/pypi/v/scc-cli?style=flat-square&label=PyPI" alt="PyPI"></a>
-  <a href="https://pypi.org/project/scc-cli/"><img src="https://img.shields.io/pypi/pyversions/scc-cli?style=flat-square&label=Python" alt="Python"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT"></a>
-  <a href="#contributing"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen?style=flat-square" alt="Contributions Welcome"></a>
-</p>
-
-<p align="center">
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#commands">Commands</a> ·
-  <a href="#configuration">Configuration</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="#contributing">Contributing</a>
-</p>
-
----
-
-Run Claude Code in Docker sandboxes with organization-managed team profiles, marketplace integration, and git worktree support.
+Run Claude Code in Docker sandboxes with organization-managed team profiles and git worktree support.
 
 SCC isolates AI execution in containers, enforces branch safety, and lets organizations distribute Claude plugins through a central configuration. Developers get standardized setups without manual configuration.
 
@@ -96,11 +79,14 @@ scc teams --sync
 # Check for CLI and config updates
 scc update
 
-# Force update check
-scc update --force
+# View effective configuration
+scc config explain
 
 # List recent sessions
 scc sessions
+
+# View usage stats
+scc stats
 ```
 
 ## Commands
@@ -115,11 +101,14 @@ scc sessions
 | `scc update` | Check for CLI and config updates |
 | `scc teams` | List team profiles |
 | `scc sessions` | List recent sessions |
+| `scc stats` | View usage statistics |
+| `scc statusline` | Configure status line for worktree info |
 | `scc list` | List running containers |
 | `scc worktree <repo> <name>` | Create git worktree |
 | `scc worktrees <repo>` | List worktrees |
 | `scc cleanup <repo> <name>` | Remove worktree |
 | `scc config` | View or edit configuration |
+| `scc config explain` | Show effective config with sources |
 
 Run `scc <command> --help` for options.
 
@@ -140,6 +129,30 @@ Standalone mode runs without organization config:
 scc setup --standalone
 ```
 
+### Config inheritance
+
+Configuration flows through three layers:
+
+1. **Organization** - security boundaries, default plugins, delegation rules
+2. **Team profile** - additional plugins and MCP servers for specific teams
+3. **Project** - `.scc.yaml` in repo root for project-specific settings
+
+Organizations define what teams can add. Teams define what projects can add. Security blocks (like `blocked_plugins: ["malicious-*"]`) cannot be overridden at any level.
+
+See [GOVERNANCE.md](docs/GOVERNANCE.md) for delegation rules and examples.
+
+### Project config
+
+Add `.scc.yaml` to your repository root:
+
+```yaml
+additional_plugins:
+  - "project-linter"
+
+session:
+  timeout_hours: 4
+```
+
 ### User config
 
 Located at `~/.config/scc/config.json`:
@@ -150,8 +163,7 @@ Located at `~/.config/scc/config.json`:
     "url": "https://gitlab.example.org/devops/scc-config.json",
     "auth": "env:GITLAB_TOKEN"
   },
-  "selected_profile": "platform",
-  "hooks": { "enabled": true }
+  "selected_profile": "platform"
 }
 ```
 
@@ -173,7 +185,11 @@ Edit with `scc config --edit`.
 
 ~/.cache/scc/            # Cache (safe to delete)
 ├── org_config.json      # Remote config cache
-└── cache_meta.json      # ETags, timestamps
+├── cache_meta.json      # ETags, timestamps
+└── usage.jsonl          # Session usage events
+
+<repo>/
+└── .scc.yaml            # Project-specific config
 ```
 
 ## Troubleshooting
@@ -186,10 +202,21 @@ Run `scc doctor` to diagnose issues.
 | Organization config fetch failed | Check URL and token |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
 | Permission denied (Linux) | `sudo usermod -aG docker $USER` |
+| Plugin blocked | Check `scc config explain` for security blocks |
+| Addition denied | Team not delegated for that resource type |
+
+See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 ### WSL2
 
 Run inside WSL2, not Windows. Keep projects in the Linux filesystem for acceptable performance.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - system design, module structure, data flow
+- [Governance](docs/GOVERNANCE.md) - delegation model, security boundaries, config examples
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - common problems and solutions
+- [Development](CLAUDE.md) - contributing guidelines, TDD methodology
 
 ## Development
 
@@ -203,8 +230,6 @@ uv run pytest
 # Run linter
 uv run ruff check --fix
 ```
-
-See [CLAUDE.md](CLAUDE.md) for development methodology.
 
 ## License
 

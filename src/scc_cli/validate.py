@@ -143,6 +143,36 @@ def check_schema_version(config_version: str, cli_version: str) -> tuple[bool, s
     return (True, None)
 
 
+def detect_schema_version(config: dict) -> str:
+    """
+    Detect schema version from config.
+
+    Args:
+        config: Organization config dict
+
+    Returns:
+        Schema version string ("v1" or "v2")
+
+    Raises:
+        ValueError: If schema_version format is invalid
+    """
+    schema_version = config.get("schema_version", "1.0.0")
+
+    # Validate format
+    try:
+        parts = schema_version.split(".")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid schema_version format: {schema_version}")
+        major = int(parts[0])
+    except (ValueError, AttributeError) as e:
+        raise ValueError(f"Invalid schema_version format: {schema_version}") from e
+
+    # Determine version based on major version number
+    if major >= 2:
+        return "v2"
+    return "v1"
+
+
 def check_min_cli_version(min_version: str, cli_version: str) -> tuple[bool, str | None]:
     """
     Check if CLI meets minimum version requirement.

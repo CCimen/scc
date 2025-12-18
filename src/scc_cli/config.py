@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+import yaml  # type: ignore[import-untyped]
 from rich.console import Console
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -446,3 +447,89 @@ def load_cached_org_config() -> dict[Any, Any] | None:
 def load_teams_config() -> dict:
     """Alias for load_user_config (backward compatibility)."""
     return load_user_config()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Project Config Reader (.scc.yaml)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Project config filename
+PROJECT_CONFIG_FILE = ".scc.yaml"
+
+
+def read_project_config(workspace_path: str | Path) -> dict | None:
+    """Read project configuration from .scc.yaml file.
+
+    Args:
+        workspace_path: Path to the workspace/project directory (can be str or Path)
+
+    Returns:
+        Parsed project config dict, or None if file doesn't exist or is empty
+
+    Raises:
+        ValueError: If YAML is malformed or config has invalid schema
+    """
+    # Convert to Path if string
+    if isinstance(workspace_path, str):
+        workspace_path = Path(workspace_path)
+
+    config_file = workspace_path / PROJECT_CONFIG_FILE
+
+    # File doesn't exist - return None (valid case)
+    if not config_file.exists():
+        return None
+
+    try:
+        content = config_file.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ValueError(f"Failed to read {PROJECT_CONFIG_FILE}: {e}")
+
+    # Empty file - return None (valid case)
+    if not content.strip():
+        return None
+
+    # Parse YAML
+    try:
+        config = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in {PROJECT_CONFIG_FILE}: {e}")
+
+    # yaml.safe_load returns None for empty documents
+    if config is None:
+        return None
+
+    # Validate schema
+    _validate_project_config_schema(config)
+
+    return cast(dict, config)
+
+
+def _validate_project_config_schema(config: dict) -> None:
+    """Validate project config schema.
+
+    Args:
+        config: Parsed project config dict
+
+    Raises:
+        ValueError: If config has invalid schema
+    """
+    # additional_plugins must be a list
+    if "additional_plugins" in config:
+        if not isinstance(config["additional_plugins"], list):
+            raise ValueError("additional_plugins must be a list")
+
+    # additional_mcp_servers must be a list
+    if "additional_mcp_servers" in config:
+        if not isinstance(config["additional_mcp_servers"], list):
+            raise ValueError("additional_mcp_servers must be a list")
+
+    # session must be a dict
+    if "session" in config:
+        if not isinstance(config["session"], dict):
+            raise ValueError("session must be a dict")
+
+        # timeout_hours must be an integer if present
+        session = config["session"]
+        if "timeout_hours" in session:
+            if not isinstance(session["timeout_hours"], int):
+                raise ValueError("session.timeout_hours must be an integer")
