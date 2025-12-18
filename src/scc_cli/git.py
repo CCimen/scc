@@ -788,7 +788,7 @@ def _get_worktrees_data(repo_path: Path) -> list[WorktreeInfo]:
             return []
 
         worktrees = []
-        current = {}
+        current: dict[str, str] = {}
 
         for line in result.stdout.split("\n"):
             if line.startswith("worktree "):

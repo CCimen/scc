@@ -21,6 +21,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from rich import box
 from rich.console import Console
@@ -317,7 +318,7 @@ def load_cached_org_config() -> dict | None:
 
     try:
         content = cache_file.read_text()
-        return json.loads(content)
+        return cast(dict[Any, Any], json.loads(content))
     except (json.JSONDecodeError, OSError):
         return None
 

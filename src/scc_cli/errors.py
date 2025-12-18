@@ -65,7 +65,7 @@ class DockerVersionError(PrerequisiteError):
         default="Update Docker Desktop from https://docker.com/products/docker-desktop"
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.user_message:
             self.user_message = (
                 f"Docker Desktop {self.required_version}+ required for sandbox support\n"
@@ -99,7 +99,7 @@ class ToolError(SCCError):
     command: str | None = None
     stderr: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.command or self.stderr:
             parts = []
             if self.command:
@@ -124,7 +124,7 @@ class WorkspaceNotFoundError(WorkspaceError):
     user_message: str = field(default="")
     suggested_action: str = field(default="Check the path exists or create the directory")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.user_message and self.path:
             self.user_message = f"Workspace not found: {self.path}"
@@ -138,7 +138,7 @@ class NotAGitRepoError(WorkspaceError):
     user_message: str = field(default="")
     suggested_action: str = field(default="Initialize git with 'git init' or clone a repository")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.user_message and self.path:
             self.user_message = f"Not a git repository: {self.path}"
@@ -152,7 +152,7 @@ class CloneError(WorkspaceError):
     user_message: str = field(default="")
     suggested_action: str = field(default="Check the repository URL and your network connection")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.user_message and self.url:
             self.user_message = f"Failed to clone repository: {self.url}"
@@ -175,7 +175,7 @@ class WorktreeExistsError(GitWorktreeError):
         default="Use existing worktree, remove it first, or choose a different name"
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.user_message and self.path:
             self.user_message = f"Worktree already exists: {self.path}"
@@ -191,7 +191,7 @@ class WorktreeCreationError(GitWorktreeError):
         default="Check if the branch already exists or if there are uncommitted changes"
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.user_message and self.name:
             self.user_message = f"Failed to create worktree: {self.name}"
@@ -218,7 +218,7 @@ class ContainerNotFoundError(ToolError):
         default="Start a new session or check 'scc list' for available containers"
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.user_message and self.container_name:
             self.user_message = f"Container not found: {self.container_name}"
@@ -253,6 +253,6 @@ class ProfileNotFoundError(ConfigError):
         default="Run 'scc teams' to see available profiles or 'scc teams --sync' to update"
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.user_message and self.profile_name:
             self.user_message = f"Team profile not found: {self.profile_name}"

@@ -11,7 +11,7 @@ SSH and HTTP URLs are rejected for security.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ def resolve_profile(org_config: dict, profile_name: str) -> dict:
     return {"name": profile_name, **profile_info}
 
 
-def resolve_marketplace(org_config: dict, profile: dict) -> dict:
+def resolve_marketplace(org_config: dict[Any, Any], profile: dict[Any, Any]) -> dict[Any, Any]:
     """
     Resolve marketplace for a profile.
 
@@ -73,7 +73,7 @@ def resolve_marketplace(org_config: dict, profile: dict) -> dict:
     marketplace_name = profile.get("marketplace")
 
     # Support both new marketplaces[] array and legacy marketplace{} object
-    marketplaces = org_config.get("marketplaces", [])
+    marketplaces: list[dict[Any, Any]] = org_config.get("marketplaces", [])
 
     for m in marketplaces:
         if m.get("name") == marketplace_name:
@@ -144,7 +144,7 @@ def get_marketplace_url(marketplace: dict) -> str:
         # Normalize: remove trailing slash, drop fragments
         normalized_path = parsed.path.rstrip("/")
         normalized = parsed._replace(path=normalized_path, fragment="")
-        return urlunparse(normalized)
+        return cast(str, urlunparse(normalized))
 
     # No URL provided - construct from host + repo
     host = (marketplace.get("host") or "").strip()
@@ -296,7 +296,7 @@ def validate_team_profile(team_name: str, cfg: dict | None = None) -> dict:
     if cfg is None:
         cfg = config_module.load_config()
 
-    result = {
+    result: dict[str, Any] = {
         "valid": True,
         "team": team_name,
         "plugin": None,

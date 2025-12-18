@@ -3,7 +3,7 @@ UI components using Rich library.
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from rich import box
 from rich.console import Console
@@ -116,16 +116,16 @@ LOGO_SIMPLE = """
 """
 
 
-def show_header(console: Console):
+def show_header(console: Console) -> None:
     """Display the application header."""
     console.print(LOGO_SIMPLE, style="cyan")
 
 
-def select_team(console: Console, cfg: dict) -> str | None:
+def select_team(console: Console, cfg: dict[str, Any]) -> str | None:
     """Interactive team selection."""
 
-    teams = cfg.get("profiles", {})
-    team_list = list(teams.keys())
+    teams: dict[str, Any] = cfg.get("profiles", {})
+    team_list: list[str] = list(teams.keys())
 
     console.print("\n[bold cyan]Select your team:[/bold cyan]\n")
 
@@ -153,7 +153,7 @@ def select_team(console: Console, cfg: dict) -> str | None:
     return selected
 
 
-def select_workspace_source(console: Console, cfg: dict, team: str) -> str:
+def select_workspace_source(console: Console, cfg: dict, team: str | None) -> str:
     """Select where to get the workspace from."""
 
     console.print("\n[bold cyan]Where is your project?[/bold cyan]\n")
@@ -194,11 +194,11 @@ def select_workspace_source(console: Console, cfg: dict, team: str) -> str:
     return options[choice - 1][0]
 
 
-def select_recent_workspace(console: Console, cfg: dict) -> str | None:
+def select_recent_workspace(console: Console, cfg: dict[str, Any]) -> str | None:
     """Select from recent workspaces."""
     from . import sessions
 
-    recent = sessions.list_recent(10)
+    recent: list[dict[str, Any]] = sessions.list_recent(10)
 
     if not recent:
         console.print("[yellow]No recent workspaces found.[/yellow]")
@@ -228,14 +228,14 @@ def select_recent_workspace(console: Console, cfg: dict) -> str | None:
     if choice == 0:
         return None
 
-    return recent[choice - 1]["workspace"]
+    return cast(str, recent[choice - 1]["workspace"])
 
 
-def select_team_repo(console: Console, cfg: dict, team: str) -> str | None:
+def select_team_repo(console: Console, cfg: dict[str, Any], team: str | None) -> str | None:
     """Select from team's common repositories."""
 
-    team_config = cfg.get("profiles", {}).get(team, {})
-    repos = team_config.get("repositories", [])
+    team_config: dict[str, Any] = cfg.get("profiles", {}).get(team, {})
+    repos: list[dict[str, Any]] = team_config.get("repositories", [])
 
     if not repos:
         console.print("[yellow]No team repositories configured.[/yellow]")
@@ -270,7 +270,7 @@ def select_team_repo(console: Console, cfg: dict, team: str) -> str | None:
     selected_repo = repos[choice - 1]
 
     # Check if already cloned locally
-    local_path = selected_repo.get("local_path")
+    local_path: str | None = selected_repo.get("local_path")
     if local_path and Path(local_path).expanduser().exists():
         return local_path
 
@@ -308,7 +308,7 @@ def prompt_repo_url(console: Console) -> str:
     return url
 
 
-def show_launch_info(console: Console, workspace: Path, team: str, session_name: str):
+def show_launch_info(console: Console, workspace: Path, team: str, session_name: str) -> None:
     """Display info before launching Claude Code."""
 
     console.print("\n")

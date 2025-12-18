@@ -216,13 +216,13 @@ def _build_source_object(marketplace: dict) -> dict:
 
     elif marketplace_type == "https":
         # HTTPS maps to 'url' source type
-        url = marketplace.get("url")
-        if not url:
+        https_url: str | None = marketplace.get("url")
+        if not https_url:
             raise ValueError(
                 f"HTTPS marketplace '{marketplace.get('name', 'unknown')}' "
                 "missing required 'url' field"
             )
-        return {"source": "url", "url": url}
+        return {"source": "url", "url": https_url}
 
     else:
         # Unknown type - try to build URL-based source as fallback

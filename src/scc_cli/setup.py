@@ -13,6 +13,8 @@ Philosophy: "Get started in under 60 seconds"
 - Clear guidance
 """
 
+from typing import Any, cast
+
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -232,7 +234,7 @@ def prompt_profile_selection(console: Console, org_config: dict) -> str | None:
     if choice == 0:
         return None
 
-    return profile_list[choice - 1]
+    return cast(str, profile_list[choice - 1])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -289,7 +291,7 @@ def save_setup_config(
     config.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build configuration
-    user_config = {
+    user_config: dict[str, Any] = {
         "config_version": "1.0.0",
         "hooks": {"enabled": hooks_enabled},
     }
