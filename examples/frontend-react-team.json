@@ -1,0 +1,58 @@
+{
+  "$comment": "Frontend team config - React/Next.js focused development",
+
+  "schema_version": "1.0",
+  "min_cli_version": "0.1.0",
+  "generated_at": "2025-12-18T10:00:00Z",
+
+  "organization": {
+    "name": "TechStart AB",
+    "id": "techstart",
+    "contact": "frontend-lead@techstart.example.se"
+  },
+
+  "marketplaces": [
+    {
+      "name": "techstart-plugins",
+      "type": "github",
+      "repo": "techstart-ab/claude-plugins",
+      "ref": "main",
+      "auth": "env:GITHUB_TOKEN"
+    },
+    {
+      "name": "react-community",
+      "type": "github",
+      "repo": "react-claude-plugins/community",
+      "ref": "stable",
+      "auth": null
+    }
+  ],
+
+  "profiles": {
+    "nextjs-fullstack": {
+      "description": "Next.js App Router with TypeScript, Tailwind, Prisma",
+      "plugin": "nextjs-fullstack",
+      "marketplace": "techstart-plugins"
+    },
+    "react-spa": {
+      "description": "React SPA with Vite, React Query, Zustand",
+      "plugin": "react-spa-patterns",
+      "marketplace": "techstart-plugins"
+    },
+    "design-system": {
+      "description": "Component library development with Storybook",
+      "plugin": "design-system-dev",
+      "marketplace": "techstart-plugins"
+    },
+    "react-testing": {
+      "description": "Testing with Vitest, Testing Library, Playwright",
+      "plugin": "react-testing",
+      "marketplace": "react-community"
+    }
+  },
+
+  "defaults": {
+    "profile": "nextjs-fullstack",
+    "cache_ttl_hours": 24
+  }
+}
