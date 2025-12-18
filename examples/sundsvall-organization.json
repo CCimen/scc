@@ -1,32 +1,56 @@
 {
+  "$comment": "Sundsvalls kommun org config - real-world example for Swedish municipality",
+
+  "schema_version": "1.0",
+  "min_cli_version": "0.1.0",
+  "generated_at": "2025-12-18T10:00:00Z",
+
   "organization": {
     "name": "Sundsvalls kommun",
-    "github_org": "sundsvall"
+    "id": "sundsvall",
+    "contact": "it-support@sundsvall.se"
   },
-  "marketplace": {
-    "name": "sundsvall",
-    "repo": "sundsvall/claude-plugins-marketplace"
-  },
+
+  "marketplaces": [
+    {
+      "name": "sundsvall-plugins",
+      "type": "github",
+      "repo": "sundsvall/claude-plugins-marketplace",
+      "ref": "main",
+      "auth": "env:GITHUB_TOKEN"
+    }
+  ],
+
   "profiles": {
     "ai-teamet": {
-      "description": "AI platform development (Svelte, Python, DDD)",
-      "plugin": "ai-teamet"
+      "description": "AI platform development - Svelte, Python, DDD architecture",
+      "plugin": "ai-teamet",
+      "marketplace": "sundsvall-plugins"
     },
     "team-evolution": {
-      "description": ".NET/C# Metakatalogen development",
-      "plugin": "team-evolution"
+      "description": ".NET/C# Metakatalogen development - Entity Framework, Azure",
+      "plugin": "team-evolution",
+      "marketplace": "sundsvall-plugins"
     },
     "draken": {
-      "description": "Ärendehanteringssystem development",
-      "plugin": "draken"
+      "description": "Case management system (Ärendehanteringssystem)",
+      "plugin": "draken",
+      "marketplace": "sundsvall-plugins"
     },
     "hydran": {
       "description": "Hydran system development",
-      "plugin": "hydran"
+      "plugin": "hydran",
+      "marketplace": "sundsvall-plugins"
     },
     "dept44": {
-      "description": "Java API team (Spring Boot/WSO2)",
-      "plugin": "dept44"
+      "description": "Java API team - Spring Boot, WSO2 integration",
+      "plugin": "dept44",
+      "marketplace": "sundsvall-plugins"
     }
+  },
+
+  "defaults": {
+    "profile": "ai-teamet",
+    "cache_ttl_hours": 12
   }
 }

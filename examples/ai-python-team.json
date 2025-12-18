@@ -1,0 +1,63 @@
+{
+  "$comment": "AI/ML team config - Python machine learning and LLM development",
+
+  "schema_version": "1.0",
+  "min_cli_version": "0.1.0",
+  "generated_at": "2025-12-18T10:00:00Z",
+
+  "organization": {
+    "name": "AI Research Lab",
+    "id": "ai-lab",
+    "contact": "ml-platform@ai-lab.example.org"
+  },
+
+  "marketplaces": [
+    {
+      "name": "ai-lab-plugins",
+      "type": "github",
+      "repo": "ai-research-lab/claude-ml-plugins",
+      "ref": "main",
+      "auth": "env:GITHUB_TOKEN"
+    },
+    {
+      "name": "ml-community",
+      "type": "github",
+      "repo": "ml-claude-community/plugins",
+      "ref": "stable",
+      "auth": null
+    }
+  ],
+
+  "profiles": {
+    "llm-development": {
+      "description": "LangChain, LlamaIndex, prompt engineering, RAG patterns",
+      "plugin": "llm-development",
+      "marketplace": "ai-lab-plugins"
+    },
+    "pytorch-ml": {
+      "description": "PyTorch training, model optimization, CUDA",
+      "plugin": "pytorch-patterns",
+      "marketplace": "ai-lab-plugins"
+    },
+    "data-science": {
+      "description": "Pandas, NumPy, Jupyter, data visualization",
+      "plugin": "data-science-toolkit",
+      "marketplace": "ml-community"
+    },
+    "mlops": {
+      "description": "MLflow, DVC, model deployment, monitoring",
+      "plugin": "mlops-patterns",
+      "marketplace": "ai-lab-plugins"
+    },
+    "fastapi-ml": {
+      "description": "FastAPI ML serving, async patterns, Pydantic",
+      "plugin": "fastapi-ml-serving",
+      "marketplace": "ai-lab-plugins"
+    }
+  },
+
+  "defaults": {
+    "profile": "llm-development",
+    "cache_ttl_hours": 12
+  }
+}

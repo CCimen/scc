@@ -1,0 +1,62 @@
+{
+  "$comment": "Database/.NET team config - SQL Server and .NET development",
+
+  "schema_version": "1.0",
+  "min_cli_version": "0.1.0",
+  "generated_at": "2025-12-18T10:00:00Z",
+
+  "organization": {
+    "name": "DataCore Systems",
+    "id": "datacore",
+    "contact": "data-platform@datacore.example.com"
+  },
+
+  "marketplaces": [
+    {
+      "name": "datacore-tools",
+      "type": "github",
+      "repo": "datacore-systems/claude-data-plugins",
+      "ref": "main",
+      "auth": "env:GITHUB_TOKEN"
+    },
+    {
+      "name": "azure-devops",
+      "type": "https",
+      "url": "https://devops.datacore.example.com/plugins/marketplace.json",
+      "auth": "env:AZURE_DEVOPS_PAT"
+    }
+  ],
+
+  "profiles": {
+    "dotnet-api": {
+      "description": ".NET 8 Web API with Entity Framework Core, MediatR",
+      "plugin": "dotnet-webapi",
+      "marketplace": "datacore-tools"
+    },
+    "ef-core": {
+      "description": "Entity Framework Core migrations, LINQ, performance",
+      "plugin": "ef-core-patterns",
+      "marketplace": "datacore-tools"
+    },
+    "sql-server": {
+      "description": "T-SQL optimization, stored procedures, indexing",
+      "plugin": "sql-server-expert",
+      "marketplace": "datacore-tools"
+    },
+    "azure-sql": {
+      "description": "Azure SQL Database, Cosmos DB, Data Factory",
+      "plugin": "azure-data-services",
+      "marketplace": "azure-devops"
+    },
+    "blazor-ui": {
+      "description": "Blazor Server/WASM with MudBlazor components",
+      "plugin": "blazor-patterns",
+      "marketplace": "datacore-tools"
+    }
+  },
+
+  "defaults": {
+    "profile": "dotnet-api",
+    "cache_ttl_hours": 24
+  }
+}
