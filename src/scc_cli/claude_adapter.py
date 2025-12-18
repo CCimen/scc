@@ -343,9 +343,7 @@ def build_settings_from_effective_config(
     if marketplace:
         try:
             source_object = _build_source_object(marketplace)
-            settings["extraKnownMarketplaces"] = {
-                marketplace_key: {"source": source_object}
-            }
+            settings["extraKnownMarketplaces"] = {marketplace_key: {"source": source_object}}
         except ValueError:
             # Skip if marketplace is incomplete
             pass

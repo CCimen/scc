@@ -822,15 +822,11 @@ def launch_with_org_config_v2(
     # Warn about denied additions (soft failure - continue but warn)
     if effective.denied_additions:
         for denied in effective.denied_additions:
-            print(
-                f"⚠️  Plugin '{denied.item}' was denied: {denied.reason}"
-            )
+            print(f"⚠️  Plugin '{denied.item}' was denied: {denied.reason}")
 
     # Warn about stale cache when offline
     if is_offline and cache_age_hours is not None and cache_age_hours > 24:
-        print(
-            f"⚠️  Running offline with stale config cache ({cache_age_hours}h old)"
-        )
+        print(f"⚠️  Running offline with stale config cache ({cache_age_hours}h old)")
 
     # Get org_id for namespacing
     org_id = org_config.get("organization", {}).get("id")

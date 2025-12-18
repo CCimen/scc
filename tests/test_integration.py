@@ -204,10 +204,14 @@ class TestStartWorkflow:
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch("scc_cli.cli_launch.git.check_branch_safety"),
             patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
             patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker"], False),
             ) as mock_get_container,
             patch("scc_cli.cli_launch.docker.run"),
         ):
@@ -240,9 +244,15 @@ class TestStartWorkflow:
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch("scc_cli.cli_launch.git.check_branch_safety"),
             patch("scc_cli.cli_launch.git.get_current_branch", return_value="feature-x"),
-            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
             patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker"], False),
+            ),
             patch("scc_cli.cli_launch.docker.run"),
         ):
             mock_load_config.return_value = {
@@ -313,9 +323,15 @@ class TestSessionWorkflow:
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch("scc_cli.cli_launch.git.check_branch_safety"),
             patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
             patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker"], False),
+            ),
             patch("scc_cli.cli_launch.docker.run"),
         ):
             mock_recent.return_value = {
@@ -517,9 +533,15 @@ class TestOfflineWorkflow:
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch("scc_cli.cli_launch.git.check_branch_safety"),
             patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
             patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker"], False),
+            ),
             patch("scc_cli.cli_launch.docker.run"),
         ):
             mock_load_config.return_value = {
@@ -552,9 +574,15 @@ class TestStandaloneWorkflow:
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch("scc_cli.cli_launch.git.check_branch_safety"),
             patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
             patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker"], False),
+            ),
             patch("scc_cli.cli_launch.docker.run"),
         ):
             runner.invoke(app, ["start", str(git_workspace), "--standalone"])
@@ -582,9 +610,15 @@ class TestDepsWorkflow:
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch("scc_cli.cli_launch.git.check_branch_safety"),
             patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
-            patch("scc_cli.cli_launch.git.get_workspace_mount_path", return_value=(git_workspace, False)),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
             patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
-            patch("scc_cli.cli_launch.docker.get_or_create_container", return_value=(["docker"], False)),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker"], False),
+            ),
             patch("scc_cli.cli_launch.docker.run"),
             patch("scc_cli.cli_launch.deps.auto_install_dependencies") as mock_deps,
         ):

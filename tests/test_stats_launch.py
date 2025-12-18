@@ -10,11 +10,9 @@ Tests verify that:
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test fixtures
@@ -116,9 +114,7 @@ def mock_workspace(tmp_path):
 class TestLaunchStatsRecording:
     """Tests for stats recording during launch."""
 
-    def test_session_start_recorded_before_run(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_session_start_recorded_before_run(self, mock_workspace, org_config_with_stats):
         """Should record session_start before docker run command."""
         from scc_cli import docker
 
@@ -142,17 +138,11 @@ class TestLaunchStatsRecording:
 
             # Verify call order: record_session_start before run
             calls = mock_record.mock_calls + mock_run.mock_calls
-            record_index = next(
-                i for i, c in enumerate(calls) if c == mock_record.mock_calls[0]
-            )
-            run_index = next(
-                i for i, c in enumerate(calls) if c == mock_run.mock_calls[0]
-            )
+            record_index = next(i for i, c in enumerate(calls) if c == mock_record.mock_calls[0])
+            run_index = next(i for i, c in enumerate(calls) if c == mock_run.mock_calls[0])
             assert record_index < run_index, "session_start should be recorded before run"
 
-    def test_session_start_includes_project_name(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_session_start_includes_project_name(self, mock_workspace, org_config_with_stats):
         """Should pass workspace directory name as project_name."""
         from scc_cli import docker
 
@@ -175,9 +165,7 @@ class TestLaunchStatsRecording:
             call_kwargs = mock_record.call_args
             assert call_kwargs[1]["project_name"] == mock_workspace.name
 
-    def test_session_start_includes_team_name(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_session_start_includes_team_name(self, mock_workspace, org_config_with_stats):
         """Should pass team name to session start."""
         from scc_cli import docker
 
@@ -199,9 +187,7 @@ class TestLaunchStatsRecording:
             call_kwargs = mock_record.call_args
             assert call_kwargs[1]["team_name"] == "dev"
 
-    def test_session_start_includes_session_id(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_session_start_includes_session_id(self, mock_workspace, org_config_with_stats):
         """Should generate and pass unique session ID."""
         from scc_cli import docker
 
@@ -232,9 +218,7 @@ class TestLaunchStatsRecording:
 class TestLaunchStatsConfigRespect:
     """Tests for respecting stats configuration from org config."""
 
-    def test_stats_disabled_skips_recording(
-        self, mock_workspace, org_config_stats_disabled
-    ):
+    def test_stats_disabled_skips_recording(self, mock_workspace, org_config_stats_disabled):
         """Should not record session when stats.enabled is False."""
         from scc_cli import docker
 
@@ -258,9 +242,7 @@ class TestLaunchStatsConfigRespect:
             call_kwargs = mock_record.call_args
             assert call_kwargs[1]["stats_config"]["enabled"] is False
 
-    def test_stats_config_passed_to_record(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_stats_config_passed_to_record(self, mock_workspace, org_config_with_stats):
         """Should pass stats config to record_session_start."""
         from scc_cli import docker
 
@@ -284,9 +266,7 @@ class TestLaunchStatsConfigRespect:
             assert stats_config["enabled"] is True
             assert stats_config["user_identity_mode"] == "hash"
 
-    def test_anonymous_mode_passed_to_record(
-        self, mock_workspace, org_config_stats_anonymous
-    ):
+    def test_anonymous_mode_passed_to_record(self, mock_workspace, org_config_stats_anonymous):
         """Should pass user_identity_mode='none' when configured."""
         from scc_cli import docker
 
@@ -309,9 +289,7 @@ class TestLaunchStatsConfigRespect:
             stats_config = call_kwargs[1]["stats_config"]
             assert stats_config["user_identity_mode"] == "none"
 
-    def test_no_stats_config_uses_defaults(
-        self, mock_workspace, minimal_org_config_v2
-    ):
+    def test_no_stats_config_uses_defaults(self, mock_workspace, minimal_org_config_v2):
         """Should use default stats config when not specified."""
         from scc_cli import docker
 
@@ -415,9 +393,7 @@ class TestLaunchExpectedDuration:
 class TestLaunchStatsErrorHandling:
     """Tests for error handling in stats recording."""
 
-    def test_stats_error_does_not_block_launch(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_stats_error_does_not_block_launch(self, mock_workspace, org_config_with_stats):
         """Stats recording errors should not prevent launch."""
         from scc_cli import docker
 
@@ -442,9 +418,7 @@ class TestLaunchStatsErrorHandling:
             # run() should still be called
             mock_run.assert_called_once()
 
-    def test_session_id_generation_error_handled(
-        self, mock_workspace, org_config_with_stats
-    ):
+    def test_session_id_generation_error_handled(self, mock_workspace, org_config_with_stats):
         """Session ID generation errors should not block launch."""
         from scc_cli import docker
 
@@ -453,7 +427,7 @@ class TestLaunchStatsErrorHandling:
             patch.object(docker, "inject_settings"),
             patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
             patch.object(docker, "run") as mock_run,
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.stats.record_session_start"),
             patch(
                 "scc_cli.docker.stats.generate_session_id",
                 side_effect=Exception("UUID generation failed"),

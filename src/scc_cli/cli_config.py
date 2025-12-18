@@ -384,17 +384,13 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
     # Load org config
     org_config = config.load_cached_org_config()
     if not org_config:
-        console.print(
-            "[red]No organization config found. Run 'scc setup' first.[/red]"
-        )
+        console.print("[red]No organization config found. Run 'scc setup' first.[/red]")
         raise typer.Exit(1)
 
     # Get selected profile/team
     team = config.get_selected_profile()
     if not team:
-        console.print(
-            "[red]No team selected. Run 'scc team select <team>' first.[/red]"
-        )
+        console.print("[red]No team selected. Run 'scc team select <team>' first.[/red]")
         raise typer.Exit(1)
 
     # Determine workspace path
@@ -429,9 +425,7 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
         _render_denied_additions(effective.denied_additions)
 
 
-def _render_config_decisions(
-    effective: profiles.EffectiveConfig, field_filter: str | None
-) -> None:
+def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: str | None) -> None:
     """Render config decisions grouped by field."""
     # Group decisions by field
     by_field: dict[str, list[profiles.ConfigDecision]] = {}
@@ -454,7 +448,9 @@ def _render_config_decisions(
                     None,
                 )
                 if plugin_decision:
-                    console.print(f"  [green]✓[/green] {plugin} [dim](from {plugin_decision.source})[/dim]")
+                    console.print(
+                        f"  [green]✓[/green] {plugin} [dim](from {plugin_decision.source})[/dim]"
+                    )
                 else:
                     console.print(f"  [green]✓[/green] {plugin}")
         else:

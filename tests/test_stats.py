@@ -12,8 +12,6 @@ TDD approach: These tests define expected behavior before implementation.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -116,9 +114,7 @@ class TestHashIdentifier:
 class TestRecordSessionStart:
     """Tests for session start recording."""
 
-    def test_record_session_start_creates_file_if_not_exists(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_start_creates_file_if_not_exists(self, stats_cache_dir: Path) -> None:
         """Should create usage.jsonl file if it doesn't exist."""
         from scc_cli.stats import record_session_start
 
@@ -135,9 +131,7 @@ class TestRecordSessionStart:
 
         assert usage_file.exists()
 
-    def test_record_session_start_appends_to_existing_file(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_start_appends_to_existing_file(self, stats_cache_dir: Path) -> None:
         """Should append to existing file, not overwrite."""
         from scc_cli.stats import record_session_start
 
@@ -156,9 +150,7 @@ class TestRecordSessionStart:
         lines = usage_file.read_text().strip().split("\n")
         assert len(lines) == 2  # Original + new event
 
-    def test_record_session_start_event_structure(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_start_event_structure(self, stats_cache_dir: Path) -> None:
         """Session start event should have required fields."""
         from scc_cli.stats import record_session_start
 
@@ -184,9 +176,7 @@ class TestRecordSessionStart:
         assert "timestamp" in event
         assert "user_id_hash" in event  # Pseudonymized user ID
 
-    def test_record_session_start_timestamp_is_iso_format(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_start_timestamp_is_iso_format(self, stats_cache_dir: Path) -> None:
         """Timestamp should be ISO 8601 format."""
         from scc_cli.stats import record_session_start
 
@@ -205,9 +195,7 @@ class TestRecordSessionStart:
         timestamp = datetime.fromisoformat(event["timestamp"])
         assert isinstance(timestamp, datetime)
 
-    def test_record_session_start_optional_fields(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_start_optional_fields(self, stats_cache_dir: Path) -> None:
         """Should handle optional fields gracefully."""
         from scc_cli.stats import record_session_start
 
@@ -234,9 +222,7 @@ class TestRecordSessionStart:
 class TestRecordSessionEnd:
     """Tests for session end recording."""
 
-    def test_record_session_end_creates_event(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_end_creates_event(self, stats_cache_dir: Path) -> None:
         """Should create a session_end event."""
         from scc_cli.stats import record_session_end, record_session_start
 
@@ -264,9 +250,7 @@ class TestRecordSessionEnd:
         assert end_event["event_type"] == "session_end"
         assert end_event["session_id"] == "session-to-end"
 
-    def test_record_session_end_includes_duration(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_end_includes_duration(self, stats_cache_dir: Path) -> None:
         """Session end should include actual duration."""
         from scc_cli.stats import record_session_end
 
@@ -281,9 +265,7 @@ class TestRecordSessionEnd:
         event = json.loads(usage_file.read_text().strip())
         assert event["actual_duration_minutes"] == 90
 
-    def test_record_session_end_with_exit_status(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_end_with_exit_status(self, stats_cache_dir: Path) -> None:
         """Session end should record exit status (clean/crash/interrupted)."""
         from scc_cli.stats import record_session_end
 
@@ -299,9 +281,7 @@ class TestRecordSessionEnd:
         event = json.loads(usage_file.read_text().strip())
         assert event["exit_status"] == "clean"
 
-    def test_record_session_end_default_exit_status_is_clean(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_record_session_end_default_exit_status_is_clean(self, stats_cache_dir: Path) -> None:
         """Default exit status should be 'clean'."""
         from scc_cli.stats import record_session_end
 
@@ -325,9 +305,7 @@ class TestRecordSessionEnd:
 class TestJSONLOperations:
     """Tests for JSONL file reading and writing."""
 
-    def test_read_usage_events_returns_empty_list_if_no_file(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_read_usage_events_returns_empty_list_if_no_file(self, stats_cache_dir: Path) -> None:
         """Should return empty list if usage.jsonl doesn't exist."""
         from scc_cli.stats import read_usage_events
 
@@ -336,9 +314,7 @@ class TestJSONLOperations:
 
         assert events == []
 
-    def test_read_usage_events_parses_all_lines(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_read_usage_events_parses_all_lines(self, stats_cache_dir: Path) -> None:
         """Should parse all JSONL lines into events."""
         from scc_cli.stats import read_usage_events
 
@@ -356,9 +332,7 @@ class TestJSONLOperations:
         assert events[0]["session_id"] == "1"
         assert events[1]["event_type"] == "session_end"
 
-    def test_read_usage_events_skips_malformed_lines(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_read_usage_events_skips_malformed_lines(self, stats_cache_dir: Path) -> None:
         """Should skip malformed JSON lines gracefully."""
         from scc_cli.stats import read_usage_events
 
@@ -374,9 +348,7 @@ class TestJSONLOperations:
 
         assert len(events) == 2  # Skipped the malformed line
 
-    def test_read_usage_events_handles_empty_file(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_read_usage_events_handles_empty_file(self, stats_cache_dir: Path) -> None:
         """Should handle empty file gracefully."""
         from scc_cli.stats import read_usage_events
 
@@ -388,9 +360,7 @@ class TestJSONLOperations:
 
         assert events == []
 
-    def test_write_event_atomic_append(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_write_event_atomic_append(self, stats_cache_dir: Path) -> None:
         """Event writing should be atomic (complete event or nothing)."""
         from scc_cli.stats import record_session_start
 
@@ -423,9 +393,7 @@ class TestJSONLOperations:
 class TestStatsAggregation:
     """Tests for stats aggregation and reporting."""
 
-    def test_get_stats_returns_stats_report(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_get_stats_returns_stats_report(self, stats_cache_dir: Path) -> None:
         """get_stats() should return a StatsReport object."""
         from scc_cli.stats import StatsReport, get_stats
 
@@ -434,9 +402,7 @@ class TestStatsAggregation:
 
         assert isinstance(report, StatsReport)
 
-    def test_get_stats_counts_sessions(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_get_stats_counts_sessions(self, stats_cache_dir: Path) -> None:
         """Should count total sessions."""
         from scc_cli.stats import get_stats, record_session_end, record_session_start
 
@@ -458,9 +424,7 @@ class TestStatsAggregation:
 
         assert report.total_sessions == 3
 
-    def test_get_stats_calculates_total_duration(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_get_stats_calculates_total_duration(self, stats_cache_dir: Path) -> None:
         """Should sum total duration from completed sessions."""
         from scc_cli.stats import get_stats, record_session_end, record_session_start
 
@@ -487,9 +451,7 @@ class TestStatsAggregation:
 
         assert report.total_duration_minutes == 150  # 60 + 90
 
-    def test_get_stats_counts_incomplete_sessions(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_get_stats_counts_incomplete_sessions(self, stats_cache_dir: Path) -> None:
         """Should identify sessions without session_end (incomplete)."""
         from scc_cli.stats import get_stats, record_session_end, record_session_start
 
@@ -516,9 +478,7 @@ class TestStatsAggregation:
         assert report.total_sessions == 2
         assert report.incomplete_sessions == 1
 
-    def test_get_stats_breaks_down_by_project(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_get_stats_breaks_down_by_project(self, stats_cache_dir: Path) -> None:
         """Should provide per-project breakdown."""
         from scc_cli.stats import get_stats, record_session_end, record_session_start
 
@@ -556,11 +516,9 @@ class TestStatsAggregation:
         assert report.by_project["project-a"]["duration_minutes"] == 75  # 30 + 45
         assert report.by_project["project-b"]["sessions"] == 1
 
-    def test_get_stats_with_date_range(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_get_stats_with_date_range(self, stats_cache_dir: Path) -> None:
         """Should filter stats by date range."""
-        from scc_cli.stats import get_stats, read_usage_events
+        from scc_cli.stats import get_stats
 
         usage_file = stats_cache_dir / "usage.jsonl"
 
@@ -580,9 +538,7 @@ class TestStatsAggregation:
             "team_name": "t",
         }
 
-        usage_file.write_text(
-            json.dumps(old_event) + "\n" + json.dumps(recent_event) + "\n"
-        )
+        usage_file.write_text(json.dumps(old_event) + "\n" + json.dumps(recent_event) + "\n")
 
         with patch("scc_cli.stats.CACHE_DIR", stats_cache_dir):
             # Filter to last 30 days
@@ -649,9 +605,7 @@ class TestStatsReportDataclass:
 class TestStatsExport:
     """Tests for stats export functionality."""
 
-    def test_export_stats_json_format(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_export_stats_json_format(self, stats_cache_dir: Path) -> None:
         """export_stats() should produce valid JSON."""
         from scc_cli.stats import export_stats, record_session_end, record_session_start
 
@@ -671,9 +625,7 @@ class TestStatsExport:
         assert "total_sessions" in parsed
         assert "total_duration_minutes" in parsed
 
-    def test_export_raw_events(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_export_raw_events(self, stats_cache_dir: Path) -> None:
         """Should be able to export raw event data."""
         from scc_cli.stats import export_raw_events, record_session_start
 
@@ -702,9 +654,7 @@ class TestStatsExport:
 class TestStatsConfig:
     """Tests for stats configuration from org config."""
 
-    def test_stats_disabled_does_not_record(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_stats_disabled_does_not_record(self, stats_cache_dir: Path) -> None:
         """When stats.enabled=false, should not record events."""
         from scc_cli.stats import record_session_start
 
@@ -723,9 +673,7 @@ class TestStatsConfig:
         # File should not be created or should be empty
         assert not usage_file.exists() or usage_file.read_text() == ""
 
-    def test_stats_enabled_records_normally(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_stats_enabled_records_normally(self, stats_cache_dir: Path) -> None:
         """When stats.enabled=true (default), should record events."""
         from scc_cli.stats import record_session_start
 
@@ -744,9 +692,7 @@ class TestStatsConfig:
         assert usage_file.exists()
         assert len(usage_file.read_text().strip()) > 0
 
-    def test_user_identity_mode_hash_pseudonymizes(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_user_identity_mode_hash_pseudonymizes(self, stats_cache_dir: Path) -> None:
         """user_identity_mode='hash' should use hashed user ID."""
         from scc_cli.stats import record_session_start
 
@@ -768,9 +714,7 @@ class TestStatsConfig:
         assert event.get("user_id_hash") is not None
         assert "testuser" not in event.get("user_id_hash", "")
 
-    def test_user_identity_mode_none_excludes_user(
-        self, stats_cache_dir: Path
-    ) -> None:
+    def test_user_identity_mode_none_excludes_user(self, stats_cache_dir: Path) -> None:
         """user_identity_mode='none' should not include user ID."""
         from scc_cli.stats import record_session_start
 

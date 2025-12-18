@@ -208,7 +208,10 @@ def is_project_delegated(org_config: dict, team_name: str | None) -> tuple[bool,
     team_allows = team_delegation.get("allow_project_overrides", False)
 
     if not team_allows:
-        return (False, f"Team '{team_name}' disabled project overrides (allow_project_overrides: false)")
+        return (
+            False,
+            f"Team '{team_name}' disabled project overrides (allow_project_overrides: false)",
+        )
 
     return (True, "")
 

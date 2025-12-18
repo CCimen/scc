@@ -127,25 +127,19 @@ class TestV2SchemaSecurityValidation:
         assert len(errors) >= 1
         assert any("blocked_plugins" in e for e in errors)
 
-    def test_validate_security_blocked_plugins_items_must_be_strings(
-        self, valid_v2_org_config
-    ):
+    def test_validate_security_blocked_plugins_items_must_be_strings(self, valid_v2_org_config):
         """Security blocked_plugins items must be strings."""
         valid_v2_org_config["security"]["blocked_plugins"] = [123, True]
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert len(errors) >= 1
 
-    def test_validate_security_blocked_mcp_servers_must_be_array(
-        self, valid_v2_org_config
-    ):
+    def test_validate_security_blocked_mcp_servers_must_be_array(self, valid_v2_org_config):
         """Security blocked_mcp_servers must be an array."""
         valid_v2_org_config["security"]["blocked_mcp_servers"] = "not-an-array"
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert len(errors) >= 1
 
-    def test_validate_security_blocked_base_images_must_be_array(
-        self, valid_v2_org_config
-    ):
+    def test_validate_security_blocked_base_images_must_be_array(self, valid_v2_org_config):
         """Security blocked_base_images must be an array."""
         valid_v2_org_config["security"]["blocked_base_images"] = "not-an-array"
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
@@ -171,9 +165,7 @@ class TestV2SchemaDefaultsValidation:
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert len(errors) >= 1
 
-    def test_validate_defaults_session_timeout_reasonable_max(
-        self, valid_v2_org_config
-    ):
+    def test_validate_defaults_session_timeout_reasonable_max(self, valid_v2_org_config):
         """Session timeout_hours must be reasonable (max 24 hours)."""
         valid_v2_org_config["defaults"]["session"]["timeout_hours"] = 100
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
@@ -200,17 +192,13 @@ class TestV2SchemaDelegationValidation:
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert errors == []
 
-    def test_validate_delegation_teams_plugins_must_be_array(
-        self, valid_v2_org_config
-    ):
+    def test_validate_delegation_teams_plugins_must_be_array(self, valid_v2_org_config):
         """Team delegation allow_additional_plugins must be an array."""
         valid_v2_org_config["delegation"]["teams"]["allow_additional_plugins"] = "not-an-array"
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert len(errors) >= 1
 
-    def test_validate_delegation_projects_inherit_must_be_bool(
-        self, valid_v2_org_config
-    ):
+    def test_validate_delegation_projects_inherit_must_be_bool(self, valid_v2_org_config):
         """Project delegation inherit_team_delegation must be boolean."""
         valid_v2_org_config["delegation"]["projects"]["inherit_team_delegation"] = "yes"
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
@@ -238,17 +226,13 @@ class TestV2SchemaProfilesValidation:
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert len(errors) >= 1
 
-    def test_validate_profile_additional_plugins_must_be_array(
-        self, valid_v2_org_config
-    ):
+    def test_validate_profile_additional_plugins_must_be_array(self, valid_v2_org_config):
         """Profile additional_plugins must be an array."""
         valid_v2_org_config["profiles"]["urban-planning"]["additional_plugins"] = "gis-tools"
         errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
         assert len(errors) >= 1
 
-    def test_validate_profile_mcp_server_requires_name_type_url(
-        self, valid_v2_org_config
-    ):
+    def test_validate_profile_mcp_server_requires_name_type_url(self, valid_v2_org_config):
         """MCP server must have name, type, and url."""
         valid_v2_org_config["profiles"]["urban-planning"]["additional_mcp_servers"] = [
             {"name": "missing-type-and-url"}
@@ -307,9 +291,7 @@ class TestV2SchemaEdgeCases:
 
     def test_validate_minimal_v2_config(self, minimal_v2_org_config):
         """Minimal v2 config should be valid."""
-        errors = validate.validate_org_config(
-            minimal_v2_org_config, schema_version="v2"
-        )
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
         assert errors == []
 
     def test_validate_v2_requires_schema_version_2(self):
@@ -324,25 +306,19 @@ class TestV2SchemaEdgeCases:
     def test_validate_empty_security_block_is_valid(self, minimal_v2_org_config):
         """Empty security block should be valid (uses defaults)."""
         minimal_v2_org_config["security"] = {}
-        errors = validate.validate_org_config(
-            minimal_v2_org_config, schema_version="v2"
-        )
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
         assert errors == []
 
     def test_validate_empty_delegation_block_is_valid(self, minimal_v2_org_config):
         """Empty delegation block should be valid (uses defaults)."""
         minimal_v2_org_config["delegation"] = {}
-        errors = validate.validate_org_config(
-            minimal_v2_org_config, schema_version="v2"
-        )
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
         assert errors == []
 
     def test_validate_empty_stats_block_is_valid(self, minimal_v2_org_config):
         """Empty stats block should be valid (uses defaults)."""
         minimal_v2_org_config["stats"] = {}
-        errors = validate.validate_org_config(
-            minimal_v2_org_config, schema_version="v2"
-        )
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
         assert errors == []
 
 
@@ -391,9 +367,7 @@ class TestDelegationHierarchy:
     `allow_project_overrides` should be ignored (treated as false).
     """
 
-    def test_org_disabled_inheritance_ignores_team_delegation(
-        self, valid_v2_org_config
-    ):
+    def test_org_disabled_inheritance_ignores_team_delegation(self, valid_v2_org_config):
         """When org disables inheritance, team delegation should be ignored."""
         # Org says teams cannot delegate to projects
         valid_v2_org_config["delegation"]["projects"]["inherit_team_delegation"] = False
@@ -407,9 +381,7 @@ class TestDelegationHierarchy:
         assert errors == []
         # Note: The actual enforcement of this rule happens in compute_effective_config()
 
-    def test_org_enabled_inheritance_respects_team_delegation(
-        self, valid_v2_org_config
-    ):
+    def test_org_enabled_inheritance_respects_team_delegation(self, valid_v2_org_config):
         """When org enables inheritance, team delegation should be respected."""
         valid_v2_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
         valid_v2_org_config["profiles"]["urban-planning"]["delegation"][
@@ -474,9 +446,7 @@ class TestComputeEffectiveConfigBasicMerge:
         mcp_names = [s.name for s in result.mcp_servers]
         assert "gis-internal" in mcp_names
 
-    def test_project_extends_team_when_delegated(
-        self, valid_v2_org_config, project_config
-    ):
+    def test_project_extends_team_when_delegated(self, valid_v2_org_config, project_config):
         """Project should extend team config when delegation allows."""
         from scc_cli.profiles import compute_effective_config
 
@@ -554,11 +524,11 @@ class TestComputeEffectiveConfigDelegation:
         # Should have denied addition in tracking
         denied = [d for d in result.denied_additions if d.item == "project-specific-tool"]
         assert len(denied) == 1
-        assert "org disabled" in denied[0].reason.lower() or "inherit_team" in denied[0].reason.lower()
+        assert (
+            "org disabled" in denied[0].reason.lower() or "inherit_team" in denied[0].reason.lower()
+        )
 
-    def test_org_enables_but_team_disables_delegation(
-        self, valid_v2_org_config, project_config
-    ):
+    def test_org_enables_but_team_disables_delegation(self, valid_v2_org_config, project_config):
         """When org enables but team disables, project additions should be rejected."""
         from scc_cli.profiles import compute_effective_config
 
@@ -583,9 +553,7 @@ class TestComputeEffectiveConfigDelegation:
         assert len(denied) == 1
         assert "team" in denied[0].reason.lower()
 
-    def test_both_org_and_team_enable_delegation(
-        self, valid_v2_org_config, project_config
-    ):
+    def test_both_org_and_team_enable_delegation(self, valid_v2_org_config, project_config):
         """When both org and team enable, project additions should be allowed."""
         from scc_cli.profiles import compute_effective_config
 
@@ -671,9 +639,7 @@ class TestComputeEffectiveConfigSecurityBlocks:
         # gis-tools from team should be blocked
         assert "gis-tools" not in result.plugins
 
-    def test_blocked_plugin_rejected_from_project(
-        self, valid_v2_org_config, project_config
-    ):
+    def test_blocked_plugin_rejected_from_project(self, valid_v2_org_config, project_config):
         """Plugin from project matching blocked pattern should be rejected."""
         from scc_cli.profiles import compute_effective_config
 
@@ -833,8 +799,6 @@ class TestComputeEffectiveConfigDecisionTracking:
         )
 
         # Check that decisions track sources
-        plugin_decisions = {d.field: d for d in result.decisions if "plugin" in d.field.lower()}
-
         # Should have decisions for plugins from different sources
         sources = [d.source for d in result.decisions]
         assert any("org" in s.lower() or "default" in s.lower() for s in sources)
@@ -859,9 +823,7 @@ class TestComputeEffectiveConfigDecisionTracking:
         assert blocked[0].blocked_by == "gis-*"
         assert "security" in blocked[0].source.lower()
 
-    def test_denied_additions_tracked_with_reason(
-        self, valid_v2_org_config, project_config
-    ):
+    def test_denied_additions_tracked_with_reason(self, valid_v2_org_config, project_config):
         """Denied additions should explain why they were denied."""
         from scc_cli.profiles import compute_effective_config
 
@@ -1128,9 +1090,7 @@ class TestProjectConfigIntegration:
     TDD: These tests verify the full integration path.
     """
 
-    def test_compute_effective_config_loads_project_from_path(
-        self, valid_v2_org_config, tmp_path
-    ):
+    def test_compute_effective_config_loads_project_from_path(self, valid_v2_org_config, tmp_path):
         """compute_effective_config should load project config from workspace path."""
         from scc_cli.profiles import compute_effective_config
 
@@ -1160,9 +1120,7 @@ session:
         assert "project-specific-tool" in result.plugins
         assert result.session_config.timeout_hours == 3
 
-    def test_compute_effective_config_no_project_file_is_ok(
-        self, valid_v2_org_config, tmp_path
-    ):
+    def test_compute_effective_config_no_project_file_is_ok(self, valid_v2_org_config, tmp_path):
         """compute_effective_config should work when no .scc.yaml exists."""
         from scc_cli.profiles import compute_effective_config
 
@@ -1310,7 +1268,7 @@ class TestLaunchWithConfigInheritance:
 
     def test_launch_uses_effective_config(self, valid_v2_org_config, tmp_path):
         """launch_with_org_config_v2 should use compute_effective_config."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from scc_cli.docker import launch_with_org_config_v2
 
@@ -1333,9 +1291,7 @@ class TestLaunchWithConfigInheritance:
             # Should include plugins from effective config
             assert "enabledPlugins" in injected_settings
 
-    def test_launch_with_workspace_loads_project_config(
-        self, valid_v2_org_config, tmp_path
-    ):
+    def test_launch_with_workspace_loads_project_config(self, valid_v2_org_config, tmp_path):
         """launch_with_org_config_v2 should load .scc.yaml from workspace."""
         from unittest.mock import patch
 
@@ -1449,9 +1405,7 @@ additional_plugins:
 class TestLaunchOfflineBehavior:
     """Tests for offline behavior during launch."""
 
-    def test_launch_with_stale_cache_shows_warning(
-        self, valid_v2_org_config, tmp_path, capsys
-    ):
+    def test_launch_with_stale_cache_shows_warning(self, valid_v2_org_config, tmp_path, capsys):
         """When using cached config offline, should show warning."""
         from unittest.mock import patch
 

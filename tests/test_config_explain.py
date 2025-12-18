@@ -12,7 +12,7 @@ This command helps users understand:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -177,9 +177,7 @@ def mock_org_config():
     return {
         "schema_version": "2.0",
         "organization": {"name": "Test Org"},
-        "profiles": {
-            "dev": {"description": "Dev team"}
-        },
+        "profiles": {"dev": {"description": "Dev team"}},
     }
 
 
@@ -196,7 +194,10 @@ class TestConfigExplainBasic:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_basic),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -209,7 +210,10 @@ class TestConfigExplainBasic:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_basic),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -223,7 +227,10 @@ class TestConfigExplainBasic:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_basic),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -245,7 +252,10 @@ class TestConfigExplainBlocked:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_with_blocked),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_blocked,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -258,7 +268,10 @@ class TestConfigExplainBlocked:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_with_blocked),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_blocked,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -280,7 +293,10 @@ class TestConfigExplainDenied:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_with_denied),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_denied,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -293,7 +309,10 @@ class TestConfigExplainDenied:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_with_denied),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_denied,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -315,7 +334,10 @@ class TestConfigExplainFieldFilter:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_full),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_full,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain", "--field", "plugins"])
 
@@ -329,7 +351,10 @@ class TestConfigExplainFieldFilter:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_full),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_full,
+            ),
         ):
             result = runner.invoke(cli.app, ["config", "explain", "--field", "session"])
 
@@ -353,11 +378,12 @@ class TestConfigExplainWorkspace:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_basic) as mock_compute,
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_basic,
+            ) as mock_compute,
         ):
-            result = runner.invoke(
-                cli.app, ["config", "explain", "--workspace", str(workspace)]
-            )
+            result = runner.invoke(cli.app, ["config", "explain", "--workspace", str(workspace)])
 
         assert result.exit_code == 0
         # Should pass workspace to compute_effective_config
@@ -370,7 +396,10 @@ class TestConfigExplainWorkspace:
         with (
             patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
             patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
-            patch("scc_cli.cli_config.profiles.compute_effective_config", return_value=effective_config_basic) as mock_compute,
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_basic,
+            ) as mock_compute,
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -395,7 +424,11 @@ class TestConfigExplainErrors:
             result = runner.invoke(cli.app, ["config", "explain"])
 
         # Should exit with error or helpful message
-        assert result.exit_code != 0 or "no org" in result.output.lower() or "setup" in result.output.lower()
+        assert (
+            result.exit_code != 0
+            or "no org" in result.output.lower()
+            or "setup" in result.output.lower()
+        )
 
     def test_explain_no_team_selected(self, mock_org_config):
         """Should handle no team selected."""
