@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 from rich.console import Console
 
@@ -149,9 +150,9 @@ def deep_merge(base: dict, override: dict) -> dict:
     return base
 
 
-def _deep_copy(d: dict) -> dict:
+def _deep_copy(d: dict[Any, Any]) -> dict[Any, Any]:
     """Create a deep copy of a dict (simple implementation for JSON-safe data)."""
-    return json.loads(json.dumps(d))
+    return cast(dict[Any, Any], json.loads(json.dumps(d)))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -326,13 +327,13 @@ def add_recent_workspace(workspace: str, team: str | None = None) -> None:
         pass
 
 
-def get_recent_workspaces(limit: int = 10) -> list:
+def get_recent_workspaces(limit: int = 10) -> list[Any]:
     """Get recent workspaces."""
     try:
         if SESSIONS_FILE.exists():
             with open(SESSIONS_FILE) as f:
                 data = json.load(f)
-            return data.get("sessions", [])[:limit]
+            return cast(list[Any], data.get("sessions", [])[:limit])
     except (OSError, json.JSONDecodeError):
         pass
 
@@ -421,7 +422,7 @@ def get_organization_name() -> str | None:
     return None
 
 
-def load_cached_org_config() -> dict | None:
+def load_cached_org_config() -> dict[Any, Any] | None:
     """Load cached organization config from ~/.cache/scc/org_config.json.
 
     This is the NEW architecture function for loading org config.
@@ -437,7 +438,7 @@ def load_cached_org_config() -> dict | None:
 
     try:
         content = cache_file.read_text(encoding="utf-8")
-        return json.loads(content)
+        return cast(dict[Any, Any], json.loads(content))
     except (json.JSONDecodeError, OSError):
         return None
 

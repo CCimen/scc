@@ -16,6 +16,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from .errors import (
     ContainerNotFoundError,
@@ -301,6 +302,10 @@ def run(cmd: list[str], ensure_credentials: bool = True) -> int:
                     # Exit child process silently
                     sys.exit(0)
                 except Exception:
+                    # Intentional broad catch in forked child process.
+                    # Child must exit cleanly without tracebacks to avoid
+                    # polluting parent's stderr or causing hangs.
+                    # This is a best-effort workaround for Docker Desktop credential bugs.
                     sys.exit(1)
             # Parent continues to execvp
 
@@ -561,7 +566,7 @@ def get_sandbox_settings() -> dict | None:
             timeout=30,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return json.loads(result.stdout)
+            return cast(dict[Any, Any], json.loads(result.stdout))
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError, json.JSONDecodeError):
         pass
     return None
@@ -759,7 +764,7 @@ def launch_with_org_config(
 
 
 def get_or_create_container(
-    workspace: Path,
+    workspace: Path | None,
     branch: str | None = None,
     profile: str | None = None,
     force_new: bool = False,

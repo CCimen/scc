@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_installed_version
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from rich.console import Console
 from rich.panel import Panel
@@ -120,7 +120,7 @@ def _fetch_latest_from_pypi() -> str | None:
     try:
         with urllib.request.urlopen(PYPI_URL, timeout=REQUEST_TIMEOUT) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data["info"]["version"]
+            return cast(str, data["info"]["version"])
     except (urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError, KeyError):
         # Network errors, invalid JSON, timeouts, or malformed response
         return None
@@ -235,10 +235,11 @@ def _detect_install_method() -> str:
 
         dist = distribution(PACKAGE_NAME)
         # PEP 610: Check for editable install via direct_url.json
-        if dist.read_text("direct_url.json"):
+        direct_url_text = dist.read_text("direct_url.json")
+        if direct_url_text:
             import json as json_mod
 
-            direct_url = json_mod.loads(dist.read_text("direct_url.json"))
+            direct_url = json_mod.loads(direct_url_text)
             if direct_url.get("dir_info", {}).get("editable", False):
                 return "editable"
     except Exception:
@@ -258,7 +259,17 @@ def _detect_install_method() -> str:
     if any(ind and ind.lower() in prefix for ind in pipx_indicators if ind):
         return "pipx"
 
-    # Check for uv environment
+    # Check for uv tool install (CLI tools installed via `uv tool install`)
+    # These are in ~/.local/share/uv/tools/ or $UV_TOOL_DIR
+    uv_tool_indicators = [
+        "uv/tools",
+        "uv\\tools",  # Windows
+        os.environ.get("UV_TOOL_DIR", ""),
+    ]
+    if any(ind and ind.lower() in prefix for ind in uv_tool_indicators if ind):
+        return "uv_tool"
+
+    # Check for uv environment (regular uv pip install in venv)
     # uv uses UV_PYTHON_INSTALL_DIR and creates venvs differently
     uv_indicators = [
         os.environ.get("UV_PYTHON_INSTALL_DIR", ""),
@@ -286,13 +297,15 @@ def get_update_command(method: str) -> str:
     Return the appropriate update command for the install method.
 
     Args:
-        method: One of 'pipx', 'uv', 'pip', 'editable'
+        method: One of 'pipx', 'uv_tool', 'uv', 'pip', 'editable'
 
     Returns:
         Shell command to run for updating
     """
     if method == "pipx":
         return f"pipx upgrade {PACKAGE_NAME}"
+    elif method == "uv_tool":
+        return f"uv tool upgrade {PACKAGE_NAME}"
     elif method == "uv":
         return f"uv pip install --upgrade {PACKAGE_NAME}"
     else:
@@ -304,17 +317,17 @@ def get_update_command(method: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _load_update_check_meta() -> dict:
+def _load_update_check_meta() -> dict[Any, Any]:
     """Load update check metadata (timestamps for throttling)."""
     if not UPDATE_CHECK_META_FILE.exists():
         return {}
     try:
-        return json.loads(UPDATE_CHECK_META_FILE.read_text())
+        return cast(dict[Any, Any], json.loads(UPDATE_CHECK_META_FILE.read_text()))
     except (json.JSONDecodeError, OSError):
         return {}
 
 
-def _save_update_check_meta(meta: dict) -> None:
+def _save_update_check_meta(meta: dict[str, Any]) -> None:
     """Save update check metadata."""
     UPDATE_CHECK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     UPDATE_CHECK_META_FILE.write_text(json.dumps(meta, indent=2))
@@ -373,7 +386,9 @@ def _mark_org_config_check_done() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def check_org_config_update(user_config: dict, force: bool = False) -> OrgConfigUpdateResult:
+def check_org_config_update(
+    user_config: dict[str, Any], force: bool = False
+) -> OrgConfigUpdateResult:
     """
     Check for org config updates using ETag conditional fetch.
 
@@ -493,7 +508,7 @@ def check_org_config_update(user_config: dict, force: bool = False) -> OrgConfig
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def check_all_updates(user_config: dict, force: bool = False) -> UpdateCheckResult:
+def check_all_updates(user_config: dict[str, Any], force: bool = False) -> UpdateCheckResult:
     """
     Check for all available updates (CLI and org config).
 

@@ -13,6 +13,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 from . import config
 
@@ -306,7 +307,7 @@ def get_claude_sessions_dir() -> Path:
     return Path.home() / ".claude"
 
 
-def get_claude_recent_sessions() -> list[dict]:
+def get_claude_recent_sessions() -> list[dict[Any, Any]]:
     """
     Try to get recent sessions from Claude Code's own storage.
 
@@ -320,7 +321,7 @@ def get_claude_recent_sessions() -> list[dict]:
         try:
             with open(sessions_file) as f:
                 data = json.load(f)
-            return data.get("sessions", [])
+            return cast(list[dict[Any, Any]], data.get("sessions", []))
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -332,7 +333,7 @@ def get_claude_recent_sessions() -> list[dict]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _load_sessions() -> list[dict]:
+def _load_sessions() -> list[dict[Any, Any]]:
     """Load sessions from the config file."""
     sessions_file = config.SESSIONS_FILE
 
@@ -340,7 +341,7 @@ def _load_sessions() -> list[dict]:
         try:
             with open(sessions_file) as f:
                 data = json.load(f)
-            return data.get("sessions", [])
+            return cast(list[dict[Any, Any]], data.get("sessions", []))
         except (OSError, json.JSONDecodeError):
             pass
 

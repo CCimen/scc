@@ -5,6 +5,8 @@ Simplified architecture: SCC generates extraKnownMarketplaces + enabledPlugins,
 Claude Code handles plugin fetching, installation, and updates natively.
 """
 
+from typing import Any
+
 from . import config as config_module
 
 
@@ -67,7 +69,7 @@ def get_team_details(team: str, cfg: dict, org_config: dict | None = None) -> di
     if org_config is not None:
         # NEW: look up marketplace by name from org_config
         marketplace_name = team_info.get("marketplace")
-        marketplace = next(
+        marketplace: dict[str, Any] = next(
             (m for m in marketplaces if m.get("name") == marketplace_name),
             {},
         )
@@ -186,7 +188,7 @@ def validate_team_profile(
     if cfg is None:
         cfg = config_module.load_config()
 
-    result = {
+    result: dict[str, Any] = {
         "valid": True,
         "team": team_name,
         "plugin": None,

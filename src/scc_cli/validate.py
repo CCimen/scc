@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from importlib.resources import files
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from jsonschema import Draft7Validator
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def load_bundled_schema(version: str = "v1") -> dict:
+def load_bundled_schema(version: str = "v1") -> dict[Any, Any]:
     """
     Load schema from package resources.
 
@@ -43,7 +43,7 @@ def load_bundled_schema(version: str = "v1") -> dict:
     schema_file = files("scc_cli.schemas").joinpath(f"org-{version}.schema.json")
     try:
         content = schema_file.read_text()
-        return json.loads(content)
+        return cast(dict[Any, Any], json.loads(content))
     except FileNotFoundError:
         raise FileNotFoundError(f"Schema version '{version}' not found")
 
