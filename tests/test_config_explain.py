@@ -23,6 +23,7 @@ from scc_cli.profiles import (
     ConfigDecision,
     DelegationDenied,
     EffectiveConfig,
+    MCPServer,
     SessionConfig,
 )
 
@@ -440,6 +441,93 @@ class TestConfigExplainErrors:
 
         # Should exit with error or helpful message
         assert result.exit_code != 0 or "team" in result.output.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for MCP servers display
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def effective_config_with_mcp():
+    """Effective config with MCP servers."""
+    return EffectiveConfig(
+        plugins={"plugin-a"},
+        mcp_servers=[
+            MCPServer(name="gis-internal", type="sse", url="https://gis.example.com/mcp"),
+            MCPServer(name="local-tool", type="stdio", command="/usr/bin/tool"),
+        ],
+        network_policy="default",
+        session_config=SessionConfig(),
+        decisions=[
+            ConfigDecision(
+                field="mcp_servers",
+                value="gis-internal",
+                reason="Added by team profile",
+                source="team.gis",
+            ),
+            ConfigDecision(
+                field="mcp_servers",
+                value="local-tool",
+                reason="Added by project config",
+                source="project",
+            ),
+        ],
+        blocked_items=[],
+        denied_additions=[],
+    )
+
+
+class TestConfigExplainMCPServers:
+    """Tests for MCP servers in config explain."""
+
+    def test_explain_shows_mcp_servers(self, effective_config_with_mcp, mock_org_config):
+        """Should display MCP servers."""
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_mcp,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "gis-internal" in result.output
+        assert "local-tool" in result.output
+
+    def test_explain_shows_mcp_server_types(self, effective_config_with_mcp, mock_org_config):
+        """Should show MCP server types (sse, stdio)."""
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_mcp,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "sse" in result.output.lower()
+        assert "stdio" in result.output.lower()
+
+    def test_explain_filter_mcp_servers(self, effective_config_with_mcp, mock_org_config):
+        """Should filter output to only MCP servers."""
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective_config_with_mcp,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain", "--field", "mcp_servers"])
+
+        assert result.exit_code == 0
+        assert "gis-internal" in result.output
+        assert "local-tool" in result.output
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -56,6 +56,7 @@ def org_config_with_mcp() -> dict[str, Any]:
         "organization": {"name": "Test Org", "id": "test-org"},
         "security": {
             "blocked_mcp_servers": ["*.untrusted.com", "malicious-*"],
+            "allow_stdio_mcp": True,  # Enable stdio for tests
         },
         "defaults": {
             "allowed_plugins": ["test-plugin"],
@@ -83,7 +84,7 @@ def org_config_with_mcp() -> dict[str, Any]:
                     {
                         "name": "finance-api",
                         "type": "stdio",
-                        "command": "finance-mcp",
+                        "command": "/usr/local/bin/finance-mcp",  # Must be absolute path
                         "args": ["--config", "/etc/finance.json"],
                     }
                 ],

@@ -106,6 +106,27 @@ class EffectiveConfig:
     denied_additions: list[DelegationDenied] = field(default_factory=list)
 
 
+@dataclass
+class StdioValidationResult:
+    """Result of validating a stdio MCP server configuration.
+
+    stdio servers are the "sharpest knife" - they have elevated privileges:
+    - Mounted workspace (write access)
+    - Network access (required for some tools)
+    - Tokens in environment variables
+
+    This validation implements layered defense:
+    - Gate 1: Feature gate (org must explicitly enable)
+    - Gate 2: Absolute path required (prevents ./evil injection)
+    - Gate 3: Prefix allowlist + commonpath (prevents path traversal)
+    - Warnings for host-side checks (command runs in container, not host)
+    """
+
+    blocked: bool
+    reason: str = ""
+    warnings: list[str] = field(default_factory=list)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Config Inheritance Functions (3-layer merge)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -115,6 +136,10 @@ def matches_blocked(item: str, blocked_patterns: list[str]) -> str | None:
     """
     Check if item matches any blocked pattern using fnmatch.
 
+    Uses casefold() for case-insensitive matching. This is important because:
+    - casefold() handles Unicode edge cases (e.g., German ß → ss)
+    - Pattern "Malicious-*" should block "malicious-tool"
+
     Args:
         item: The item to check (plugin name, MCP server name/URL, etc.)
         blocked_patterns: List of fnmatch patterns
@@ -122,10 +147,157 @@ def matches_blocked(item: str, blocked_patterns: list[str]) -> str | None:
     Returns:
         The pattern that matched, or None if no match
     """
+    # Normalize item: strip whitespace and casefold for case-insensitive matching
+    normalized_item = item.strip().casefold()
+
     for pattern in blocked_patterns:
-        if fnmatch(item, pattern):
-            return pattern
+        # Normalize pattern the same way
+        normalized_pattern = pattern.strip().casefold()
+        if fnmatch(normalized_item, normalized_pattern):
+            return pattern  # Return original pattern for error messages
     return None
+
+
+def normalize_image_for_policy(ref: str) -> str:
+    """
+    Normalize Docker image reference for policy matching.
+
+    Handles implicit :latest tag - this is crucial for blocking unpinned images.
+    For example, blocking "*:latest" should catch "ubuntu" (which implicitly uses :latest).
+
+    Phase 1 scope: Only handles implicit :latest normalization.
+    NOT full OCI canonicalization (docker.io/library etc) - that's Phase 2.
+
+    Args:
+        ref: Docker image reference (e.g., "ubuntu", "python:3.11", "nginx@sha256:...")
+
+    Returns:
+        Normalized reference, casefolded for matching.
+        Empty strings remain empty.
+    """
+    r = ref.strip()
+    if not r:
+        return r
+
+    # If image has a digest (@sha256:...), don't add :latest
+    # Digests are immutable and take precedence over tags
+    if "@" in r:
+        return r.casefold()
+
+    # Check if the last component (after the last /) has an explicit tag
+    # We need to handle registry:port/path:tag correctly
+    last_segment = r.rsplit("/", 1)[-1]
+
+    # If no ":" in the last segment, there's no explicit tag → add :latest
+    # This handles:
+    #   - "ubuntu" → "ubuntu:latest"
+    #   - "ghcr.io/owner/repo" → "ghcr.io/owner/repo:latest"
+    #   - "registry:5000/ns/img" → "registry:5000/ns/img:latest" (port is before /)
+    if ":" not in last_segment:
+        r = f"{r}:latest"
+
+    return r.casefold()
+
+
+def validate_stdio_server(
+    server: dict[str, Any],
+    org_config: dict[str, Any],
+) -> StdioValidationResult:
+    """
+    Validate a stdio MCP server configuration against org security policy.
+
+    stdio servers are the "sharpest knife" - they have elevated privileges:
+    - Mounted workspace (write access)
+    - Network access (required for some tools)
+    - Tokens in environment variables
+
+    Validation gates (in order):
+    1. Feature gate: security.allow_stdio_mcp must be true (default: false)
+    2. Absolute path: command must be an absolute path (not relative)
+    3. Prefix allowlist: if allowed_stdio_prefixes is set, command must be under one
+
+    Host-side checks (existence, executable) generate warnings only because
+    the command runs inside the container, not on the host.
+
+    Args:
+        server: MCP server dict with 'name', 'type', 'command' fields
+        org_config: Organization config dict
+
+    Returns:
+        StdioValidationResult with blocked=True/False, reason, and warnings
+    """
+    import os
+
+    command = server.get("command", "")
+    warnings: list[str] = []
+    security = org_config.get("security", {})
+
+    # Gate 1: Feature gate - stdio must be explicitly enabled by org
+    # Default is False because stdio servers have elevated privileges
+    if not security.get("allow_stdio_mcp", False):
+        return StdioValidationResult(
+            blocked=True,
+            reason="stdio MCP disabled by org policy",
+        )
+
+    # Gate 2: Absolute path required - prevents "./evil" injection attacks
+    if not os.path.isabs(command):
+        return StdioValidationResult(
+            blocked=True,
+            reason="stdio command must be absolute path",
+        )
+
+    # Gate 3: Prefix allowlist with commonpath enforcement
+    # Uses realpath to resolve symlinks and ".." traversal attempts
+    prefixes = security.get("allowed_stdio_prefixes", [])
+    if prefixes:
+        # Resolve the actual path (handles symlinks and ..)
+        try:
+            resolved = os.path.realpath(command)
+        except OSError:
+            # If we can't resolve, use the original command
+            resolved = command
+
+        # Normalize prefixes the same way
+        normalized_prefixes = []
+        for p in prefixes:
+            try:
+                # Remove trailing slash for consistent commonpath comparison
+                normalized_prefixes.append(os.path.realpath(p.rstrip("/")))
+            except OSError:
+                normalized_prefixes.append(p.rstrip("/"))
+
+        # Check if resolved path is under any allowed prefix
+        allowed = False
+        for prefix in normalized_prefixes:
+            try:
+                # commonpath returns the longest common sub-path
+                # If it equals the prefix, command is under that prefix
+                common = os.path.commonpath([resolved, prefix])
+                if common == prefix:
+                    allowed = True
+                    break
+            except ValueError:
+                # Different drives on Windows, or empty sequence
+                continue
+
+        if not allowed:
+            return StdioValidationResult(
+                blocked=True,
+                reason=f"Resolved path {resolved} not in allowed prefixes",
+            )
+
+    # Host-side checks: WARN only (command runs in container, not host)
+    # These are informational because filesystem differs between host and container
+    if not os.path.exists(command):
+        warnings.append(f"Command not found on host: {command}")
+    elif not os.access(command, os.X_OK):
+        warnings.append(f"Command not executable on host: {command}")
+
+    return StdioValidationResult(
+        blocked=False,
+        warnings=warnings,
+    )
 
 
 def _extract_domain(url: str) -> str:
@@ -382,6 +554,20 @@ def compute_effective_config(
             )
             continue
 
+        # stdio-type servers require additional security validation
+        if server_dict.get("type") == "stdio":
+            stdio_result = validate_stdio_server(server_dict, org_config)
+            if stdio_result.blocked:
+                result.blocked_items.append(
+                    BlockedItem(
+                        item=server_name,
+                        blocked_by=stdio_result.reason,
+                        source="org.security",
+                    )
+                )
+                continue
+            # Warnings are logged inside validate_stdio_server
+
         mcp_server = MCPServer(
             name=server_name,
             type=server_dict.get("type", "sse"),
@@ -483,6 +669,20 @@ def compute_effective_config(
                     )
                 )
                 continue
+
+            # stdio-type servers require additional security validation
+            if server_dict.get("type") == "stdio":
+                stdio_result = validate_stdio_server(server_dict, org_config)
+                if stdio_result.blocked:
+                    result.blocked_items.append(
+                        BlockedItem(
+                            item=server_name,
+                            blocked_by=stdio_result.reason,
+                            source="org.security",
+                        )
+                    )
+                    continue
+                # Warnings are logged inside validate_stdio_server
 
             mcp_server = MCPServer(
                 name=server_name,

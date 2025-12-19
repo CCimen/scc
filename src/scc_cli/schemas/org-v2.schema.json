@@ -1,272 +1,261 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://scc-cli.dev/schemas/org-v2.json",
-  "title": "SCC Organization Config v2",
-  "description": "Schema for SCC organization configuration files with governance features",
-  "type": "object",
-  "properties": {
-    "$schema": {
-      "type": "string",
-      "description": "JSON Schema reference URL"
-    },
-    "schema_version": {
-      "type": "string",
-      "pattern": "^2\\.[0-9]+\\.[0-9]+$",
-      "description": "Semantic version of this schema (must start with 2.x.x)"
-    },
-    "min_cli_version": {
-      "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "description": "Minimum SCC CLI version required to use this config"
-    },
-    "organization": {
-      "type": "object",
-      "description": "Organization identification",
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Display name of the organization"
-        },
-        "id": {
-          "type": "string",
-          "pattern": "^[a-z0-9-]+$",
-          "description": "URL-safe organization identifier"
-        },
-        "contact": {
-          "type": "string",
-          "description": "Contact email or URL for the organization"
-        }
-      },
-      "required": ["name", "id"]
-    },
-    "security": {
-      "type": "object",
-      "description": "Hard security boundaries (NEVER overridable by teams or projects)",
-      "properties": {
-        "blocked_plugins": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Plugin patterns to block (supports fnmatch wildcards)"
-        },
-        "blocked_mcp_servers": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "MCP server patterns to block (supports fnmatch wildcards)"
-        },
-        "blocked_base_images": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Docker base image patterns to block (supports fnmatch wildcards)"
-        }
-      },
-      "additionalProperties": false
-    },
-    "defaults": {
-      "type": "object",
-      "description": "Default settings (baseline, can be extended if delegated)",
-      "properties": {
-        "allowed_plugins": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Default allowed plugins (can be extended by teams)"
-        },
-        "allowed_mcp_servers": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Default allowed MCP server patterns"
-        },
-        "network_policy": {
-          "type": "string",
-          "enum": ["corp-proxy-only", "unrestricted", "isolated"],
-          "description": "Network access policy"
-        },
-        "session": {
-          "type": "object",
-          "properties": {
-            "timeout_hours": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 24,
-              "description": "Session timeout in hours (1-24)"
-            },
-            "auto_resume": {
-              "type": "boolean",
-              "description": "Whether sessions can be automatically resumed"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "delegation": {
-      "type": "object",
-      "description": "Delegation rules controlling what teams/projects can add",
-      "properties": {
-        "teams": {
-          "type": "object",
-          "description": "What teams are allowed to add",
-          "properties": {
-            "allow_additional_plugins": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Plugin patterns teams can add (use ['*'] for unrestricted)"
-            },
-            "allow_additional_mcp_servers": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Team names or patterns that can add MCP servers"
-            },
-            "allow_network_override": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Network policies teams can override to"
-            }
-          },
-          "additionalProperties": false
-        },
-        "projects": {
-          "type": "object",
-          "description": "Project-level delegation settings",
-          "properties": {
-            "inherit_team_delegation": {
-              "type": "boolean",
-              "description": "Whether teams can delegate to projects (master switch)"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "profiles": {
-      "type": "object",
-      "description": "Team profiles with configurations and delegation settings",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "description": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://scc-cli.dev/schemas/org-v2.json",
+    "title": "SCC Organization Config v2",
+    "description": "Schema for SCC organization configuration files with governance features",
+    "type": "object",
+    "properties": {
+        "$schema": {"type": "string", "description": "JSON Schema reference URL"},
+        "schema_version": {
             "type": "string",
-            "description": "Human-readable description of this team profile"
-          },
-          "additional_plugins": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "Additional plugins enabled for this team"
-          },
-          "additional_mcp_servers": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
+            "pattern": "^2\\.[0-9]+\\.[0-9]+$",
+            "description": "Semantic version of this schema (must start with 2.x.x)"
+        },
+        "min_cli_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "description": "Minimum SCC CLI version required to use this config"
+        },
+        "organization": {
+            "type": "object",
+            "description": "Organization identification",
+            "properties": {
                 "name": {
-                  "type": "string",
-                  "description": "MCP server name"
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Display name of the organization"
                 },
-                "type": {
-                  "type": "string",
-                  "enum": ["sse", "stdio", "http"],
-                  "description": "MCP server connection type (sse, stdio, or http)"
+                "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$",
+                    "description": "URL-safe organization identifier"
                 },
-                "url": {
-                  "type": "string",
-                  "format": "uri",
-                  "description": "MCP server URL (required for sse and http types)"
-                },
-                "command": {
-                  "type": "string",
-                  "description": "Command to run (required for stdio type)"
-                },
-                "args": {
-                  "type": "array",
-                  "items": { "type": "string" },
-                  "description": "Command arguments (for stdio type)"
-                },
-                "env": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "description": "Environment variables for stdio type (values can use ${VAR} syntax)"
-                },
-                "headers": {
-                  "type": "object",
-                  "additionalProperties": { "type": "string" },
-                  "description": "HTTP headers for sse/http types (values can use ${VAR} syntax)"
+                "contact": {
+                    "type": "string",
+                    "description": "Contact email or URL for the organization"
                 }
-              },
-              "required": ["name", "type"],
-              "oneOf": [
-                {
-                  "properties": { "type": { "const": "sse" } },
-                  "required": ["url"]
-                },
-                {
-                  "properties": { "type": { "const": "http" } },
-                  "required": ["url"]
-                },
-                {
-                  "properties": { "type": { "const": "stdio" } },
-                  "required": ["command"]
-                }
-              ]
             },
-            "description": "Additional MCP servers for this team"
-          },
-          "network_policy": {
-            "type": "string",
-            "enum": ["corp-proxy-only", "unrestricted", "isolated"],
-            "description": "Override network policy for this team"
-          },
-          "session": {
+            "required": ["name", "id"]
+        },
+        "security": {
             "type": "object",
+            "description": "Hard security boundaries (NEVER overridable by teams or projects)",
             "properties": {
-              "timeout_hours": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 24
-              },
-              "auto_resume": {
-                "type": "boolean"
-              }
+                "blocked_plugins": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Plugin patterns to block (supports fnmatch wildcards)"
+                },
+                "blocked_mcp_servers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "MCP server patterns to block (supports fnmatch wildcards)"
+                },
+                "blocked_base_images": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Docker base image patterns to block (supports fnmatch wildcards)"
+                },
+                "allow_stdio_mcp": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether stdio-type MCP servers are allowed. Disabled by default because stdio servers have elevated privileges (mounted workspace, network, tokens)."
+                },
+                "allowed_stdio_prefixes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Absolute path prefixes where stdio commands must reside. If not set, any absolute path is allowed (when allow_stdio_mcp is true). Uses realpath + commonpath for secure validation."
+                }
             },
             "additionalProperties": false
-          },
-          "delegation": {
+        },
+        "defaults": {
             "type": "object",
-            "description": "Team-level delegation to projects",
+            "description": "Default settings (baseline, can be extended if delegated)",
             "properties": {
-              "allow_project_overrides": {
-                "type": "boolean",
-                "description": "Whether projects can add to this team's config"
-              }
+                "allowed_plugins": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Default allowed plugins (can be extended by teams)"
+                },
+                "allowed_mcp_servers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Default allowed MCP server patterns"
+                },
+                "network_policy": {
+                    "type": "string",
+                    "enum": ["corp-proxy-only", "unrestricted", "isolated"],
+                    "description": "Network access policy"
+                },
+                "session": {
+                    "type": "object",
+                    "properties": {
+                        "timeout_hours": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 24,
+                            "description": "Session timeout in hours (1-24)"
+                        },
+                        "auto_resume": {
+                            "type": "boolean",
+                            "description": "Whether sessions can be automatically resumed"
+                        }
+                    },
+                    "additionalProperties": false
+                }
             },
             "additionalProperties": false
-          }
+        },
+        "delegation": {
+            "type": "object",
+            "description": "Delegation rules controlling what teams/projects can add",
+            "properties": {
+                "teams": {
+                    "type": "object",
+                    "description": "What teams are allowed to add",
+                    "properties": {
+                        "allow_additional_plugins": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Plugin patterns teams can add (use ['*'] for unrestricted)"
+                        },
+                        "allow_additional_mcp_servers": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Team names or patterns that can add MCP servers"
+                        },
+                        "allow_network_override": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Network policies teams can override to"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "projects": {
+                    "type": "object",
+                    "description": "Project-level delegation settings",
+                    "properties": {
+                        "inherit_team_delegation": {
+                            "type": "boolean",
+                            "description": "Whether teams can delegate to projects (master switch)"
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
+        "profiles": {
+            "type": "object",
+            "description": "Team profiles with configurations and delegation settings",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable description of this team profile"
+                    },
+                    "additional_plugins": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Additional plugins enabled for this team"
+                    },
+                    "additional_mcp_servers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "MCP server name"},
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["sse", "stdio", "http"],
+                                    "description": "MCP server connection type (sse, stdio, or http)"
+                                },
+                                "url": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "description": "MCP server URL (required for sse and http types)"
+                                },
+                                "command": {
+                                    "type": "string",
+                                    "description": "Command to run (required for stdio type)"
+                                },
+                                "args": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Command arguments (for stdio type)"
+                                },
+                                "env": {
+                                    "type": "object",
+                                    "additionalProperties": {"type": "string"},
+                                    "description": "Environment variables for stdio type (values can use ${VAR} syntax)"
+                                },
+                                "headers": {
+                                    "type": "object",
+                                    "additionalProperties": {"type": "string"},
+                                    "description": "HTTP headers for sse/http types (values can use ${VAR} syntax)"
+                                }
+                            },
+                            "required": ["name", "type"],
+                            "oneOf": [
+                                {"properties": {"type": {"const": "sse"}}, "required": ["url"]},
+                                {"properties": {"type": {"const": "http"}}, "required": ["url"]},
+                                {"properties": {"type": {"const": "stdio"}}, "required": ["command"]}
+                            ]
+                        },
+                        "description": "Additional MCP servers for this team"
+                    },
+                    "network_policy": {
+                        "type": "string",
+                        "enum": ["corp-proxy-only", "unrestricted", "isolated"],
+                        "description": "Override network policy for this team"
+                    },
+                    "session": {
+                        "type": "object",
+                        "properties": {
+                            "timeout_hours": {"type": "integer", "minimum": 1, "maximum": 24},
+                            "auto_resume": {"type": "boolean"}
+                        },
+                        "additionalProperties": false
+                    },
+                    "delegation": {
+                        "type": "object",
+                        "description": "Team-level delegation to projects",
+                        "properties": {
+                            "allow_project_overrides": {
+                                "type": "boolean",
+                                "description": "Whether projects can add to this team's config"
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        "stats": {
+            "type": "object",
+            "description": "Usage statistics configuration",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Whether to collect usage statistics"
+                },
+                "user_identity_mode": {
+                    "type": "string",
+                    "enum": ["hash", "clear", "anonymous"],
+                    "description": "How to identify users in stats (hash=SHA256, clear=username, anonymous=no identifier)"
+                },
+                "retention_days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365,
+                    "description": "Number of days to retain stats (1-365)"
+                }
+            },
+            "additionalProperties": false
         }
-      }
     },
-    "stats": {
-      "type": "object",
-      "description": "Usage statistics configuration",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Whether to collect usage statistics"
-        },
-        "user_identity_mode": {
-          "type": "string",
-          "enum": ["hash", "clear", "anonymous"],
-          "description": "How to identify users in stats (hash=SHA256, clear=username, anonymous=no identifier)"
-        },
-        "retention_days": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 365,
-          "description": "Number of days to retain stats (1-365)"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  "required": ["schema_version", "organization"]
+    "required": ["schema_version", "organization"]
 }

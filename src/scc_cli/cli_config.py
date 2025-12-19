@@ -486,6 +486,30 @@ def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: 
             console.print(f"  {policy}")
         console.print()
 
+    if not field_filter or field_filter == "mcp_servers":
+        console.print("[bold cyan]MCP Servers[/bold cyan]")
+        if effective.mcp_servers:
+            for server in effective.mcp_servers:
+                # Find decision for this server
+                server_decision = next(
+                    (
+                        d
+                        for d in effective.decisions
+                        if d.field == "mcp_servers" and d.value == server.name
+                    ),
+                    None,
+                )
+                server_info = f"{server.name} ({server.type})"
+                if server_decision:
+                    console.print(
+                        f"  [green]✓[/green] {server_info} [dim](from {server_decision.source})[/dim]"
+                    )
+                else:
+                    console.print(f"  [green]✓[/green] {server_info}")
+        else:
+            console.print("  [dim]None configured[/dim]")
+        console.print()
+
 
 def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:
     """Render blocked items with patterns."""
