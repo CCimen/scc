@@ -17,7 +17,7 @@ Each layer can add to the previous, but cannot remove security restrictions.
 
 ## Security Boundaries
 
-Organizations define patterns that block plugins or MCP servers globally:
+Organizations define patterns that block plugins, MCP servers, or Docker base images globally:
 
 ```yaml
 security:
@@ -27,9 +27,14 @@ security:
   blocked_mcp_servers:
     - "*.untrusted.com"
     - "insecure-api"
+  blocked_base_images:
+    - "*:latest"
+    - "docker.io/*"
 ```
 
-These use glob patterns (fnmatch). If a plugin matches `malicious-*`, no team or project can use it. This is absolute.
+These use glob patterns (fnmatch) with case-insensitive matching. If a plugin matches `malicious-*`, no team or project can use it. This is absolute.
+
+Untagged images are normalized to `:latest` before matching. `ubuntu` becomes `ubuntu:latest`, which would be blocked by `*:latest`.
 
 ## Delegation
 
@@ -198,6 +203,20 @@ additional_mcp_servers:
     args: ["--config", "/etc/tool.conf"]
 ```
 
+Stdio servers are disabled by default because they run with elevated privileges (mounted workspace, network access, tokens in environment). Organizations must explicitly enable them:
+
+```yaml
+security:
+  allow_stdio_mcp: true
+  allowed_stdio_prefixes:
+    - "/usr/local/bin/"
+    - "/opt/approved-tools/"
+```
+
+If `allow_stdio_mcp` is false (the default), all stdio servers are blocked. When enabled, `allowed_stdio_prefixes` restricts which command paths are permitted. Commands must be absolute paths. Path traversal attempts are blocked via realpath resolution.
+
+If no prefixes are configured, any absolute path is allowed (when stdio is enabled).
+
 All types go through security checks. The server name and URL domain are matched against `blocked_mcp_servers` patterns.
 
 ## Debugging Configuration
@@ -214,8 +233,14 @@ When something doesn't work as expected:
 
 When setting up organization config:
 
-1. Define `security.blocked_plugins` and `security.blocked_mcp_servers` for hard boundaries
-2. Set `defaults.allowed_plugins` for baseline tools everyone gets
-3. Configure `delegation.teams` to control which teams can add resources
-4. Create team profiles with appropriate `allow_project_overrides` settings
-5. Test with `scc config explain` to verify effective configuration
+1. Define security blocks for hard boundaries:
+   - `security.blocked_plugins` - plugin name patterns
+   - `security.blocked_mcp_servers` - server name/URL patterns
+   - `security.blocked_base_images` - Docker image patterns (consider blocking `*:latest`)
+2. Configure stdio MCP policy:
+   - `security.allow_stdio_mcp` - false by default, enable only if needed
+   - `security.allowed_stdio_prefixes` - restrict to trusted paths when enabled
+3. Set `defaults.allowed_plugins` for baseline tools everyone gets
+4. Configure `delegation.teams` to control which teams can add resources
+5. Create team profiles with appropriate `allow_project_overrides` settings
+6. Test with `scc config explain` to verify effective configuration

@@ -82,7 +82,7 @@ graph TB
 
 ### Security Boundaries
 
-Organization config defines `security.blocked_plugins` and `security.blocked_mcp_servers` using glob patterns. These cannot be overridden:
+Organization config defines security blocks using glob patterns. These cannot be overridden:
 
 ```yaml
 security:
@@ -90,9 +90,18 @@ security:
     - "known-malicious-*"
   blocked_mcp_servers:
     - "*.untrusted.com"
+  blocked_base_images:
+    - "*:latest"
+  allow_stdio_mcp: false
+  allowed_stdio_prefixes:
+    - "/usr/local/bin/"
 ```
 
-If a team or project tries to add a blocked item, it appears in `denied_additions` with the reason.
+Pattern matching is case-insensitive (using Unicode-aware casefolding). Untagged Docker images are normalized to `:latest` before matching.
+
+Stdio MCP servers require explicit opt-in (`allow_stdio_mcp: true`) and can be restricted to specific path prefixes. Path traversal is blocked via realpath resolution with commonpath validation.
+
+If a team or project tries to add a blocked item, it appears in `blocked_items`. Items that fail delegation checks appear in `denied_additions`.
 
 ### Delegation
 
@@ -244,7 +253,7 @@ Module responsibilities:
 
 | Module | Does | Does Not |
 |--------|------|----------|
-| `profiles.py` | Profile resolution, effective config computation, delegation checks | HTTP, file I/O |
+| `profiles.py` | Profile resolution, effective config computation, delegation checks, security validation (blocked patterns, stdio gate, image normalization) | HTTP, file I/O |
 | `remote.py` | HTTP fetch, auth, ETag caching | Business logic |
 | `claude_adapter.py` | Claude Code format knowledge, MCP server translation | HTTP, profiles |
 | `validate.py` | Schema validation | HTTP, file I/O |

@@ -1,0 +1,79 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v2.schema.json",
+    "schema_version": "2.0.0",
+    "min_cli_version": "0.5.0",
+    "organization": {
+        "name": "Secure Corp",
+        "id": "secure-corp",
+        "contact": "security@example.com"
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-beta",
+            "untrusted-*"
+        ],
+        "blocked_mcp_servers": [
+            "*-dev",
+            "localhost:*"
+        ],
+        "blocked_base_images": [
+            "*:latest",
+            "*:dev",
+            "*:nightly",
+            "docker.io/library/*"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "official-*",
+            "approved-*"
+        ],
+        "allowed_mcp_servers": [
+            "https://mcp.internal.example.com/*"
+        ],
+        "network_policy": "corp-proxy-only",
+        "session": {
+            "timeout_hours": 8,
+            "auto_resume": false
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": [],
+            "allow_additional_mcp_servers": [],
+            "allow_network_override": []
+        },
+        "projects": {
+            "inherit_team_delegation": false
+        }
+    },
+    "profiles": {
+        "security-team": {
+            "description": "Security team with audit tools",
+            "additional_plugins": [
+                "security-scanner"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "vuln-scanner",
+                    "type": "sse",
+                    "url": "https://mcp.internal.example.com/vuln-scanner",
+                    "headers": {
+                        "Authorization": "Bearer ${SCANNER_TOKEN}"
+                    }
+                }
+            ]
+        },
+        "compliance": {
+            "description": "Compliance team with restricted access",
+            "network_policy": "isolated"
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 90
+    }
+}

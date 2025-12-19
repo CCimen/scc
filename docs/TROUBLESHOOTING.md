@@ -25,6 +25,86 @@ Look for `blocked_items` in the output.
 
 **Solution**: Security blocks are absolute. Contact your organization admin to request an exception or use a different resource.
 
+## Base Image Blocked
+
+**Symptom**: Container fails to start with "base image blocked by policy"
+
+**Diagnosis**:
+```bash
+scc config explain --field security
+```
+
+Look for `blocked_base_images` patterns.
+
+**Common cause**: Your org blocks `:latest` tags with a pattern like `*:latest`. SCC normalizes images without explicit tags by adding `:latest`, so `python` becomes `python:latest` which matches the block.
+
+**Solution**: Use explicit version tags:
+```yaml
+# In .scc.yaml
+base_image: python:3.12-slim
+```
+
+Not: `python` or `python:latest`
+
+## Stdio MCP Server Blocked
+
+**Symptom**: MCP server with `type: stdio` fails with "security policy prevents stdio MCP servers"
+
+**Diagnosis**:
+```bash
+scc config explain --field security
+```
+
+Check if `allow_stdio_mcp` is `false` (the default).
+
+**Cause**: Stdio MCP servers have elevated privileges (they run with mounted workspace, network access, and tokens). They're disabled by default for security.
+
+**Solutions**:
+
+1. **Use a different transport** - SSE or HTTP servers don't require the stdio gate:
+   ```json
+   {
+     "name": "my-server",
+     "type": "sse",
+     "url": "https://mcp.example.com/my-server"
+   }
+   ```
+
+2. **Request org admin enable stdio** - They must set `allow_stdio_mcp: true` in the org config security section
+
+## Stdio Command Path Blocked
+
+**Symptom**: Stdio MCP server fails with "command path not in allowed prefixes"
+
+**Diagnosis**:
+```bash
+scc config explain --field security
+```
+
+Check the `allowed_stdio_prefixes` list.
+
+**Cause**: When stdio is enabled, commands must reside in allowed paths. SCC resolves symlinks and validates the real path is under an allowed prefix.
+
+**Examples**:
+- Allowed prefixes: `["/usr/local/bin", "/opt/tools"]`
+- `/usr/local/bin/mcp-tool` → allowed
+- `/home/user/bin/mcp-tool` → blocked
+- `/usr/local/bin/link` → symlink to `/home/user/actual` → blocked (real path checked)
+
+**Solution**: Move the binary to an allowed prefix or ask org admin to add your path to `allowed_stdio_prefixes`.
+
+## Pattern Matching is Case-Insensitive
+
+**Symptom**: A plugin or image is blocked even though the pattern case doesn't match exactly.
+
+**Example**:
+- Pattern: `*-DEV`
+- Blocked: `my-tool-dev`, `MyTool-Dev`, `MYTOOL-DEV`
+
+**Cause**: All security patterns use case-insensitive matching via Unicode casefolding. This prevents bypass attempts using case variations.
+
+**Solution**: This is expected security behavior. There is no workaround; the match is intentional.
+
 ## Addition Denied
 
 **Symptom**: Your `.scc.yaml` additions are ignored.
