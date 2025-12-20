@@ -237,9 +237,11 @@ security:
     - "/opt/approved-tools/"
 ```
 
-If `allow_stdio_mcp` is false (the default), all stdio servers are blocked. When enabled, `allowed_stdio_prefixes` restricts which command paths are permitted. Commands must be absolute paths. Path traversal attempts are blocked via realpath resolution.
+If `allow_stdio_mcp` is false (the default), all SCC-managed stdio servers are blocked. When enabled, `allowed_stdio_prefixes` restricts which command paths are permitted. Commands must be absolute paths. Path traversal attempts are blocked via realpath resolution.
 
 If no prefixes are configured, any absolute path is allowed (when stdio is enabled).
+
+This does not apply to stdio MCP servers bundled inside plugins; plugins are allowed or blocked as a whole.
 
 All MCP servers declared in SCC-managed configuration (org/team/project) go through security checks. The server name and URL domain are matched against `blocked_mcp_servers` patterns.
 
