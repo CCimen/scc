@@ -49,7 +49,7 @@
                 "blocked_mcp_servers": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "MCP server patterns to block (supports fnmatch wildcards)"
+                    "description": "fnmatch patterns to block MCP servers in SCC-managed config (org/team/project). Does NOT affect MCP servers bundled inside marketplace plugins."
                 },
                 "blocked_base_images": {
                     "type": "array",

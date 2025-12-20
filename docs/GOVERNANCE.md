@@ -2,6 +2,30 @@
 
 SCC enforces a 3-layer configuration system. Organizations define security boundaries. Teams add tools within those boundaries. Projects customize further if their team allows it.
 
+## Trust Model
+
+There are **two sources** of MCP servers in a Claude Code environment:
+
+### 1. SCC-Managed MCP Servers (org/team/project config)
+
+These are controlled by SCC governance:
+- `blocked_mcp_servers` patterns apply ✓
+- `allow_stdio_mcp` gate applies ✓ (for SCC-managed stdio declarations)
+- `allowed_stdio_prefixes` validation applies ✓
+- Delegation controls who can add them ✓
+
+**Example:** Finance team wants to add `jira-api` (HTTP/SSE) to reach an internal service → delegation controls this.
+
+### 2. Plugin-Bundled MCP Servers (`.mcp.json` inside plugins)
+
+SCC does not fetch or inspect plugin contents. These are **not** governed by `blocked_mcp_servers`.
+- To restrict, block the entire plugin
+- Treat plugins as atomic trust units
+
+**Example:** Plugin "cool-dev-tools" bundles an MCP server → SCC can't partially strip it; you either allow the plugin or block it.
+
+**Implication:** If you allow a plugin, you implicitly allow its bundled MCP servers.
+
 ## The Three Layers
 
 ```
@@ -217,7 +241,7 @@ If `allow_stdio_mcp` is false (the default), all stdio servers are blocked. When
 
 If no prefixes are configured, any absolute path is allowed (when stdio is enabled).
 
-All types go through security checks. The server name and URL domain are matched against `blocked_mcp_servers` patterns.
+All MCP servers declared in SCC-managed configuration (org/team/project) go through security checks. The server name and URL domain are matched against `blocked_mcp_servers` patterns.
 
 ## Debugging Configuration
 

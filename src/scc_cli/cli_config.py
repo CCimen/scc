@@ -453,6 +453,12 @@ def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: 
                     )
                 else:
                     console.print(f"  [green]✓[/green] {plugin}")
+            # Plugin trust model note
+            console.print()
+            console.print(
+                "  [dim]Note: Plugins may bundle .mcp.json MCP servers. "
+                "SCC does not inspect plugin contents; to restrict, block the plugin.[/dim]"
+            )
         else:
             console.print("  [dim]None configured[/dim]")
         console.print()

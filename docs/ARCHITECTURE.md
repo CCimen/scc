@@ -190,6 +190,8 @@ Trust boundaries:
 | Network | None | Full access (required for Claude API) |
 | Environment | Host env vars | Explicitly passed tokens |
 
+**Plugin content is trusted as a unit** — SCC does not download or inspect plugin internals (including bundled `.mcp.json` servers); policy is enforced at the enable/disable boundary only.
+
 Credential flow:
 - Tokens resolved from `env:VAR` or `command:CMD` syntax
 - Injected into container via Docker environment variables
