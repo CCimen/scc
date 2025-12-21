@@ -64,20 +64,24 @@
     },
     "profiles": {
         "team-a": {
-            "description": "Example team A with SSE MCP server",
+            "description": "Example team A with HTTP MCP servers (authenticated and public)",
             "additional_plugins": [
                 "team-plugin-1",
                 "team-plugin-2"
             ],
             "additional_mcp_servers": [
                 {
-                    "name": "team-a-server",
-                    "type": "sse",
-                    "url": "https://mcp.example.com/team-a",
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
                     "headers": {
-                        "Authorization": "Bearer ${TEAM_A_TOKEN}",
-                        "X-Custom-Header": "value"
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
                     }
+                },
+                {
+                    "name": "shadcn",
+                    "type": "http",
+                    "url": "https://www.shadcn.io/api/mcp"
                 }
             ],
             "network_policy": "corp-proxy-only",
@@ -90,14 +94,14 @@
             }
         },
         "team-b": {
-            "description": "Example team B with HTTP MCP server",
+            "description": "Example team B with SSE MCP server (streaming transport)",
             "additional_mcp_servers": [
                 {
-                    "name": "team-b-api",
-                    "type": "http",
-                    "url": "https://api.example.com/mcp",
+                    "name": "mermaid-mcp",
+                    "type": "sse",
+                    "url": "https://mcp.mermaid.ai/sse",
                     "headers": {
-                        "X-API-Key": "${TEAM_B_API_KEY}"
+                        "X-Custom-Header": "optional-value"
                     }
                 }
             ],
@@ -109,17 +113,14 @@
             "description": "Team with stdio MCP server (requires allow_stdio_mcp: true)",
             "additional_mcp_servers": [
                 {
-                    "name": "local-tool",
+                    "name": "playwright",
                     "type": "stdio",
-                    "command": "/usr/local/bin/mcp-tool",
+                    "command": "npx",
                     "args": [
-                        "--config",
-                        "/etc/mcp/config.yaml",
-                        "--verbose"
+                        "@playwright/mcp@latest"
                     ],
                     "env": {
-                        "MCP_HOME": "/opt/mcp",
-                        "LOG_FILE": "${HOME}/mcp.log"
+                        "PLAYWRIGHT_BROWSERS_PATH": "${HOME}/.cache/ms-playwright"
                     }
                 }
             ],

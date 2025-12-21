@@ -1,0 +1,190 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v2.schema.json",
+    "schema_version": "2.0.0",
+    "organization": {
+        "name": "Multi-Stack Organization",
+        "id": "multi-stack-org",
+        "contact": "platform-team@example.com"
+    },
+    "security": {
+        "blocked_plugins": [
+            "deprecated-*",
+            "*-malicious",
+            "*-experimental"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com",
+            "localhost:*"
+        ],
+        "blocked_base_images": [
+            "*:latest",
+            "*:dev"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "core-*",
+            "shared-*"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": [
+                "team-*",
+                "approved-*"
+            ],
+            "allow_additional_mcp_servers": [
+                "frontend-react",
+                "backend-java",
+                "dotnet-sql",
+                "python-data"
+            ],
+            "allow_network_override": [
+                "corp-proxy-only"
+            ]
+        },
+        "projects": {
+            "inherit_team_delegation": true
+        }
+    },
+    "profiles": {
+        "frontend-react": {
+            "description": "Frontend teams using Next.js, React, and TypeScript",
+            "additional_plugins": [
+                "team-react-tools",
+                "team-ui-components",
+                "approved-storybook"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "shadcn",
+                    "type": "http",
+                    "url": "https://www.shadcn.io/api/mcp"
+                },
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "http",
+                    "url": "https://mcp.mermaid.ai/mcp"
+                }
+            ],
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "backend-java": {
+            "description": "Backend teams using Spring Boot and Java microservices",
+            "additional_plugins": [
+                "team-java-tools",
+                "team-spring-boot",
+                "approved-openapi"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "http",
+                    "url": "https://mcp.mermaid.ai/mcp"
+                }
+            ],
+            "network_policy": "corp-proxy-only",
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "dotnet-sql": {
+            "description": "Teams using .NET/C# with SQL Server",
+            "additional_plugins": [
+                "team-dotnet-tools",
+                "team-ef-core",
+                "approved-sql-tools"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "http",
+                    "url": "https://mcp.mermaid.ai/mcp"
+                }
+            ],
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "python-data": {
+            "description": "AI/ML teams using FastAPI, Python, and data science tools",
+            "additional_plugins": [
+                "team-python-tools",
+                "team-ml-ops",
+                "approved-jupyter"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "http",
+                    "url": "https://mcp.mermaid.ai/mcp"
+                }
+            ],
+            "session": {
+                "timeout_hours": 24
+            },
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "platform": {
+            "description": "Platform engineering team with infrastructure tools",
+            "additional_plugins": [
+                "team-infra-tools",
+                "approved-terraform",
+                "approved-kubernetes"
+            ],
+            "session": {
+                "timeout_hours": 24
+            },
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 30
+    }
+}

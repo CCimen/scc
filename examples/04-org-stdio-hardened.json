@@ -33,38 +33,37 @@
     },
     "profiles": {
         "local-dev": {
-            "description": "Team using local stdio MCP servers",
+            "description": "Team using local stdio MCP servers for testing",
             "additional_mcp_servers": [
                 {
-                    "name": "local-search",
+                    "name": "playwright",
                     "type": "stdio",
-                    "command": "/usr/local/bin/mcp-search",
-                    "args": ["--index", "/data/search-index"]
-                },
-                {
-                    "name": "code-analyzer",
-                    "type": "stdio",
-                    "command": "/opt/mcp-tools/analyzer",
-                    "args": ["--format", "json"],
-                    "env": {
-                        "ANALYZER_CONFIG": "/etc/analyzer.conf",
-                        "LOG_LEVEL": "info"
-                    }
+                    "command": "npx",
+                    "args": ["@playwright/mcp@latest"]
                 }
             ]
         },
         "hybrid": {
-            "description": "Team using both local and remote MCP servers",
+            "description": "Team using both local stdio and remote HTTP MCP servers",
             "additional_mcp_servers": [
                 {
-                    "name": "local-linter",
+                    "name": "playwright",
                     "type": "stdio",
-                    "command": "/usr/local/bin/mcp-lint"
+                    "command": "npx",
+                    "args": ["@playwright/mcp@latest"]
                 },
                 {
-                    "name": "remote-api",
-                    "type": "sse",
-                    "url": "https://mcp.example.com/api"
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "http",
+                    "url": "https://mcp.mermaid.ai/mcp"
                 }
             ]
         }
