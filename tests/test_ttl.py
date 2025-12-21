@@ -174,13 +174,9 @@ class TestParseUntil:
 
         # Mock current time to 10:00 on Dec 21, 2025
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
         # Use UTC as local timezone for predictable test behavior
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc)
 
         result = parse_until("17:00")
         # Should be 17:00 same day (7 hours later)
@@ -193,13 +189,9 @@ class TestParseUntil:
 
         # Mock current time to 23:00 on Dec 21, 2025
         fixed_now = datetime(2025, 12, 21, 23, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
         # Use UTC as local timezone for predictable test behavior
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc)
 
         result = parse_until("02:00")
         # Should be 02:00 next day (Dec 22)
@@ -212,13 +204,9 @@ class TestParseUntil:
 
         # Mock current time to exactly 17:00
         fixed_now = datetime(2025, 12, 21, 17, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
         # Use UTC as local timezone for predictable test behavior
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc)
 
         result = parse_until("17:00")
         # Should be 17:00 next day
@@ -262,12 +250,8 @@ class TestDSTHandling:
         # Mock current time to just before spring forward (March 9, 2025 in US)
         # In US Eastern, 2:00 AM becomes 3:00 AM (2:30 doesn't exist)
         fixed_now = datetime(2025, 3, 9, 1, 0, 0, tzinfo=ZoneInfo("America/New_York"))
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_local_tz", lambda: ZoneInfo("America/New_York")
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
+        monkeypatch.setattr("scc_cli.utils.ttl._get_local_tz", lambda: ZoneInfo("America/New_York"))
 
         with pytest.raises(ValueError) as exc_info:
             parse_until("02:30")
@@ -281,12 +265,8 @@ class TestDSTHandling:
         # Mock current time to just before fall back (Nov 2, 2025 in US)
         # In US Eastern, 1:30 AM occurs twice
         fixed_now = datetime(2025, 11, 2, 0, 30, 0, tzinfo=ZoneInfo("America/New_York"))
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_local_tz", lambda: ZoneInfo("America/New_York")
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
+        monkeypatch.setattr("scc_cli.utils.ttl._get_local_tz", lambda: ZoneInfo("America/New_York"))
 
         with pytest.raises(ValueError) as exc_info:
             parse_until("01:30")
@@ -344,9 +324,7 @@ class TestCalculateExpiration:
         from scc_cli.utils.ttl import calculate_expiration
 
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
 
         result = calculate_expiration(ttl="8h")
         assert result == datetime(2025, 12, 21, 18, 0, 0, tzinfo=timezone.utc)
@@ -367,12 +345,8 @@ class TestCalculateExpiration:
         from scc_cli.utils.ttl import calculate_expiration
 
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
+        monkeypatch.setattr("scc_cli.utils.ttl._get_local_tz", lambda: timezone.utc)
 
         result = calculate_expiration(until="17:00")
         assert result.hour == 17
@@ -383,9 +357,7 @@ class TestCalculateExpiration:
         from scc_cli.utils.ttl import calculate_expiration
 
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
 
         result = calculate_expiration()
         # Default is 8h
@@ -397,7 +369,10 @@ class TestCalculateExpiration:
 
         with pytest.raises(ValueError) as exc_info:
             calculate_expiration(ttl="8h", expires_at="2025-12-21T17:00:00Z")
-        assert "mutually exclusive" in str(exc_info.value).lower() or "one of" in str(exc_info.value).lower()
+        assert (
+            "mutually exclusive" in str(exc_info.value).lower()
+            or "one of" in str(exc_info.value).lower()
+        )
 
     def test_all_three_raises(self):
         """Specifying all three options raises ValueError."""
@@ -428,9 +403,7 @@ class TestFormatExpiration:
         from scc_cli.utils.ttl import format_relative
 
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
 
         expires = datetime(2025, 12, 21, 17, 45, 0, tzinfo=timezone.utc)
         result = format_relative(expires)
@@ -441,9 +414,7 @@ class TestFormatExpiration:
         from scc_cli.utils.ttl import format_relative
 
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
 
         expires = datetime(2025, 12, 21, 10, 30, 0, tzinfo=timezone.utc)
         result = format_relative(expires)
@@ -454,9 +425,7 @@ class TestFormatExpiration:
         from scc_cli.utils.ttl import format_relative
 
         fixed_now = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
 
         expires = datetime(2025, 12, 22, 10, 0, 0, tzinfo=timezone.utc)
         result = format_relative(expires)
@@ -467,9 +436,7 @@ class TestFormatExpiration:
         from scc_cli.utils.ttl import format_relative
 
         fixed_now = datetime(2025, 12, 21, 17, 0, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr(
-            "scc_cli.utils.ttl._get_now", lambda: fixed_now
-        )
+        monkeypatch.setattr("scc_cli.utils.ttl._get_now", lambda: fixed_now)
 
         expires = datetime(2025, 12, 21, 10, 0, 0, tzinfo=timezone.utc)
         result = format_relative(expires)

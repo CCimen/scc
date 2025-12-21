@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from scc_cli.models.plugin_audit import (
     AuditOutput,
     HookInfo,
@@ -238,9 +236,7 @@ class TestPluginManifests:
                         "hooks": [{"type": "command", "command": "./format.sh"}],
                     }
                 ],
-                "SessionStart": [
-                    {"hooks": [{"type": "prompt", "prompt": "Welcome"}]}
-                ],
+                "SessionStart": [{"hooks": [{"type": "prompt", "prompt": "Welcome"}]}],
             }
         }
         manifests = PluginManifests(

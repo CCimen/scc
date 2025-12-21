@@ -3,8 +3,6 @@
 Following TDD: Write tests first, then implement.
 """
 
-import pytest
-
 from scc_cli.utils.fuzzy import find_similar, similarity_score
 
 
@@ -87,7 +85,11 @@ class TestFindSimilar:
         # foo-prod-1 should be more similar to "foo-prod-" than foo-prod-staging-extra
         if len(result) >= 2:
             idx1 = result.index("foo-prod-1") if "foo-prod-1" in result else 999
-            idx2 = result.index("foo-prod-staging-extra") if "foo-prod-staging-extra" in result else 999
+            idx2 = (
+                result.index("foo-prod-staging-extra")
+                if "foo-prod-staging-extra" in result
+                else 999
+            )
             assert idx1 < idx2
 
     def test_empty_candidates(self):
@@ -114,7 +116,8 @@ class TestFindSimilar:
         result = find_similar("jira", candidates)
         # The exact behavior depends on the similarity algorithm
         # but "jira" vs "jira-api" should be similar enough
-        # This test mostly verifies the default parameter works
+        # This test verifies the default parameter works without error
+        assert isinstance(result, list)
 
 
 class TestIntegrationScenarios:

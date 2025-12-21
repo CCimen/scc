@@ -11,8 +11,6 @@ Fix-it commands should:
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestGenerateUnblockCommand:
     """Tests for generating unblock commands for delegation denials."""

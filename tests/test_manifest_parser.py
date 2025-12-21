@@ -8,10 +8,7 @@ These tests define the expected behavior for parsing plugin manifests:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-
-import pytest
 
 from scc_cli.models.plugin_audit import (
     ManifestResult,
@@ -195,11 +192,7 @@ class TestParseMcpManifest:
         """Default transport should be 'stdio' when not specified."""
         from scc_cli.audit.parser import parse_mcp_content
 
-        content = {
-            "mcpServers": {
-                "my-server": {"command": "node", "args": ["server.js"]}
-            }
-        }
+        content = {"mcpServers": {"my-server": {"command": "node", "args": ["server.js"]}}}
         servers = parse_mcp_content(content)
 
         assert servers[0].transport == "stdio"
@@ -312,9 +305,7 @@ class TestParseHooksManifest:
         from scc_cli.audit.parser import parse_hooks_content
 
         content = {
-            "hooks": {
-                "SessionStart": [{"hooks": [{"type": "command", "command": "init.sh"}]}]
-            }
+            "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "init.sh"}]}]}
         }
         hooks = parse_hooks_content(content)
 
@@ -326,9 +317,7 @@ class TestParseHooksManifest:
         from scc_cli.audit.parser import parse_hooks_content
 
         content = {
-            "hooks": {
-                "PreToolUse": [{"hooks": [{"type": "unknown_type", "data": "value"}]}]
-            }
+            "hooks": {"PreToolUse": [{"hooks": [{"type": "unknown_type", "data": "value"}]}]}
         }
         hooks = parse_hooks_content(content)
 

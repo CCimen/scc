@@ -662,9 +662,7 @@ class TestUnblockCommand:
         """Should create local exception for blocked target."""
         # Mock the evaluation to show item as denied
         mock_eval = MagicMock()
-        mock_eval.denied_additions = [
-            MagicMock(target="jira-api", target_type="mcp_server")
-        ]
+        mock_eval.denied_additions = [MagicMock(target="jira-api", target_type="mcp_server")]
         mock_eval.blocked_items = []
 
         with (
@@ -691,9 +689,7 @@ class TestUnblockCommand:
     def test_unblock_shared_uses_repo_store(self, mock_user_store, mock_repo_store):
         """Should use repo store with --shared."""
         mock_eval = MagicMock()
-        mock_eval.denied_additions = [
-            MagicMock(target="jira-api", target_type="mcp_server")
-        ]
+        mock_eval.denied_additions = [MagicMock(target="jira-api", target_type="mcp_server")]
         mock_eval.blocked_items = []
 
         with (
@@ -721,9 +717,7 @@ class TestUnblockCommand:
         """Should fail when trying to unblock security-blocked item."""
         mock_eval = MagicMock()
         mock_eval.denied_additions = []
-        mock_eval.blocked_items = [
-            MagicMock(target="vendor-tools", target_type="plugin")
-        ]
+        mock_eval.blocked_items = [MagicMock(target="vendor-tools", target_type="plugin")]
 
         with (
             patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
@@ -774,9 +768,7 @@ class TestUnblockCommand:
     def test_unblock_requires_reason(self, mock_user_store, mock_repo_store):
         """Should require --reason."""
         mock_eval = MagicMock()
-        mock_eval.denied_additions = [
-            MagicMock(target="jira-api", target_type="mcp_server")
-        ]
+        mock_eval.denied_additions = [MagicMock(target="jira-api", target_type="mcp_server")]
         mock_eval.blocked_items = []
 
         with (
@@ -799,9 +791,7 @@ class TestUnblockCommand:
     def test_unblock_shows_store_path(self, mock_user_store, mock_repo_store):
         """Should show where exception was saved."""
         mock_eval = MagicMock()
-        mock_eval.denied_additions = [
-            MagicMock(target="jira-api", target_type="mcp_server")
-        ]
+        mock_eval.denied_additions = [MagicMock(target="jira-api", target_type="mcp_server")]
         mock_eval.blocked_items = []
 
         with (

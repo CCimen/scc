@@ -10,8 +10,6 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import pytest
-
 from scc_cli.models.plugin_audit import (
     ManifestStatus,
     PluginAuditResult,
@@ -33,13 +31,7 @@ class TestReadPluginManifests:
         plugin_dir.mkdir()
         mcp_file = plugin_dir / ".mcp.json"
         mcp_file.write_text(
-            json.dumps(
-                {
-                    "mcpServers": {
-                        "my-server": {"command": "node", "args": ["server.js"]}
-                    }
-                }
-            )
+            json.dumps({"mcpServers": {"my-server": {"command": "node", "args": ["server.js"]}}})
         )
 
         manifests = read_plugin_manifests(plugin_dir)
@@ -62,9 +54,7 @@ class TestReadPluginManifests:
             json.dumps(
                 {
                     "hooks": {
-                        "PreToolUse": [
-                            {"hooks": [{"type": "command", "command": "validate.sh"}]}
-                        ]
+                        "PreToolUse": [{"hooks": [{"type": "command", "command": "validate.sh"}]}]
                     }
                 }
             )
