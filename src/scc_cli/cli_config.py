@@ -560,8 +560,10 @@ def _infer_target_type(item: str, source: str) -> str:
     item_lower = item.lower()
 
     # Image patterns (contains : or @ for tags/digests, or common registries)
-    if ":" in item or "@" in item or any(
-        reg in item_lower for reg in ["docker", "ghcr.io", "registry", ".io/", ".com/"]
+    if (
+        ":" in item
+        or "@" in item
+        or any(reg in item_lower for reg in ["docker", "ghcr.io", "registry", ".io/", ".com/"])
     ):
         return "base_image"
 

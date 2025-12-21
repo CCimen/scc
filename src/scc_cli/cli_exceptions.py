@@ -331,8 +331,8 @@ def exceptions_create(
     if policy:
         console.print("\n[bold cyan]Add this to your org config exceptions:[/bold cyan]\n")
         console.print(f"  - id: {exception.id}")
-        console.print(f"    reason: \"{exception.reason}\"")
-        console.print(f"    expires_at: \"{exception.expires_at}\"")
+        console.print(f'    reason: "{exception.reason}"')
+        console.print(f'    expires_at: "{exception.expires_at}"')
         console.print("    allow:")
         if exception.allow.plugins:
             console.print(f"      plugins: {exception.allow.plugins}")
@@ -368,9 +368,7 @@ def exceptions_create(
     if pruned > 0:
         console.print(f"  [dim]Note: Pruned {pruned} expired entries.[/dim]")
     if shared and _is_git_ignored(store_path):
-        console.print(
-            "\n[yellow]⚠️  Warning:[/yellow] .scc/exceptions.json is ignored by git."
-        )
+        console.print("\n[yellow]⚠️  Warning:[/yellow] .scc/exceptions.json is ignored by git.")
         console.print("    Your team won't see this shared exception.")
     console.print()
 
@@ -486,9 +484,7 @@ def exceptions_reset(
 ) -> None:
     """Reset (clear) exception stores. Destructive operation."""
     if not yes:
-        console.print(
-            "[red]Error: --yes is required for destructive reset operation.[/red]"
-        )
+        console.print("[red]Error: --yes is required for destructive reset operation.[/red]")
         raise typer.Exit(1)
 
     if not user and not repo:
@@ -584,7 +580,7 @@ def unblock_cmd(
             )
             console.print("  To request policy exception (requires PR approval):")
             console.print(
-                f'    scc exceptions create --policy --id INC-... --allow-mcp {target} '
+                f"    scc exceptions create --policy --id INC-... --allow-mcp {target} "
                 f'--ttl 8h --reason "..."'
             )
             console.print()
@@ -602,9 +598,7 @@ def unblock_cmd(
         denied_names = [d.target for d in eval_result.denied_additions]
         suggestions = find_similar(target, denied_names)
 
-        console.print(
-            f"\n[red]✗[/red] Nothing to unblock: '{target}' is not currently denied.\n"
-        )
+        console.print(f"\n[red]✗[/red] Nothing to unblock: '{target}' is not currently denied.\n")
 
         if suggestions:
             console.print("[yellow]Did you mean one of these?[/yellow]")
@@ -613,9 +607,7 @@ def unblock_cmd(
             console.print("\n[dim]Re-run with the exact name.[/dim]")
         else:
             console.print("  To create a preemptive exception, use:")
-            console.print(
-                f'    scc exceptions create --allow-mcp {target} --ttl 8h --reason "..."'
-            )
+            console.print(f'    scc exceptions create --allow-mcp {target} --ttl 8h --reason "..."')
         console.print()
         raise typer.Exit(1)
 
@@ -669,14 +661,12 @@ def unblock_cmd(
 
     console.print(
         f"\n[green]✓[/green] Created {store_type} override for "
-        f"{target_type} \"{target}\" (expires in {expires_in})"
+        f'{target_type} "{target}" (expires in {expires_in})'
     )
     console.print(f"  Saved to {store_path}")
     if pruned > 0:
         console.print(f"  [dim]Note: Pruned {pruned} expired entries.[/dim]")
     if shared and _is_git_ignored(store_path):
-        console.print(
-            "\n[yellow]⚠️  Warning:[/yellow] .scc/exceptions.json is ignored by git."
-        )
+        console.print("\n[yellow]⚠️  Warning:[/yellow] .scc/exceptions.json is ignored by git.")
         console.print("    Your team won't see this shared exception.")
     console.print()

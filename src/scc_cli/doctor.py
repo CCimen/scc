@@ -734,9 +734,7 @@ def check_exception_stores() -> CheckResult:
         try:
             user_file = user_store.read()
             if user_file.schema_version > 1:
-                warnings.append(
-                    f"User store uses newer schema v{user_file.schema_version}"
-                )
+                warnings.append(f"User store uses newer schema v{user_file.schema_version}")
         except Exception as e:
             issues.append(f"User store corrupt: {e}")
 
@@ -756,9 +754,7 @@ def check_exception_stores() -> CheckResult:
             try:
                 repo_file = repo_store.read()
                 if repo_file.schema_version > 1:
-                    warnings.append(
-                        f"Repo store uses newer schema v{repo_file.schema_version}"
-                    )
+                    warnings.append(f"Repo store uses newer schema v{repo_file.schema_version}")
             except Exception as e:
                 issues.append(f"Repo store corrupt: {e}")
 
