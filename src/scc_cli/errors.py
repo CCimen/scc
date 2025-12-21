@@ -268,10 +268,9 @@ class PolicyViolationError(ConfigError):
 
     item: str = ""
     blocked_by: str = ""
+    item_type: str = "plugin"  # Default to plugin
     user_message: str = field(default="")
-    suggested_action: str = field(
-        default="Contact your organization admin if you need access to this plugin"
-    )
+    suggested_action: str = field(default="")
 
     def __post_init__(self) -> None:
         if not self.user_message and self.item:
@@ -282,3 +281,10 @@ class PolicyViolationError(ConfigError):
                 )
             else:
                 self.user_message = f"Security policy violation: '{self.item}' is blocked"
+
+        # Generate fix-it command for suggested action
+        if not self.suggested_action and self.item:
+            from scc_cli.utils.fixit import generate_policy_exception_command
+
+            cmd = generate_policy_exception_command(self.item, self.item_type)
+            self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"

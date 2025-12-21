@@ -821,8 +821,13 @@ def launch_with_org_config_v2(
 
     # Warn about denied additions (soft failure - continue but warn)
     if effective.denied_additions:
+        from scc_cli.utils.fixit import generate_unblock_command
+
         for denied in effective.denied_additions:
-            print(f"⚠️  Plugin '{denied.item}' was denied: {denied.reason}")
+            print(f"⚠️  '{denied.item}' was denied: {denied.reason}")
+            # Add fix-it command - make it stand out
+            cmd = generate_unblock_command(denied.item, "plugin")
+            print(f"   → To unblock: {cmd}")
 
     # Warn about stale cache when offline
     if is_offline and cache_age_hours is not None and cache_age_hours > 24:

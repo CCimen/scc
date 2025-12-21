@@ -546,3 +546,440 @@ class TestConfigExplainHelp:
         assert "explain" in result.output.lower()
         # Should document the purpose
         assert "config" in result.output.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Golden tests for explain output format
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestConfigExplainGoldenBlockedItems:
+    """Golden tests for blocked items output format.
+
+    These tests verify the exact output format matches the expected structure:
+    - Header with "Blocked Items"
+    - Each item shows: ✗ item (blocked by pattern 'X' from source)
+    - Fix-it command for policy exception
+    """
+
+    def test_blocked_items_output_format_plugin(self, mock_org_config):
+        """Verify blocked plugin output matches expected golden format."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[
+                BlockedItem(
+                    item="malicious-plugin",
+                    blocked_by="malicious-*",
+                    source="org.security",
+                    target_type="plugin",
+                ),
+            ],
+            denied_additions=[],
+        )
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Golden format checks
+        assert "Blocked Items" in result.output
+        assert "malicious-plugin" in result.output
+        assert "malicious-*" in result.output
+        assert "org.security" in result.output
+        # Fix-it command should include --policy and --allow-plugin
+        assert "--policy" in result.output or "policy" in result.output.lower()
+        assert "requires PR" in result.output.lower() or "--allow-plugin" in result.output
+
+    def test_blocked_items_output_format_mcp_server(self, mock_org_config):
+        """Verify blocked MCP server output matches expected golden format."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[
+                BlockedItem(
+                    item="malware-server",
+                    blocked_by="malware-*",
+                    source="org.security",
+                    target_type="mcp_server",
+                ),
+            ],
+            denied_additions=[],
+        )
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "Blocked Items" in result.output
+        assert "malware-server" in result.output
+        assert "--allow-mcp" in result.output or "mcp" in result.output.lower()
+
+
+class TestConfigExplainGoldenDeniedAdditions:
+    """Golden tests for denied additions output format.
+
+    These tests verify the exact output format matches the expected structure:
+    - Header with "Denied Additions"
+    - Each item shows: ⚠ item (requested by X: reason)
+    - Fix-it command for scc unblock
+    """
+
+    def test_denied_additions_output_format(self, mock_org_config):
+        """Verify denied additions output matches expected golden format."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[
+                DelegationDenied(
+                    item="jira-api",
+                    requested_by="project",
+                    reason="Team not delegated for MCP additions",
+                    target_type="mcp_server",
+                ),
+            ],
+        )
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Golden format checks
+        assert "Denied Additions" in result.output
+        assert "jira-api" in result.output
+        assert "project" in result.output
+        # Fix-it command should include scc unblock
+        assert "unblock" in result.output.lower()
+        assert "--ttl" in result.output or "ttl" in result.output.lower()
+
+    def test_denied_additions_shows_local_scope_hint(self, mock_org_config):
+        """Verify denied additions include hint about local scope."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[
+                DelegationDenied(
+                    item="restricted-plugin",
+                    requested_by="project",
+                    reason="Not in delegated scope",
+                    target_type="plugin",
+                ),
+            ],
+        )
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Should show unblock is for local scope
+        assert "unblock" in result.output.lower()
+
+
+class TestConfigExplainGoldenActiveExceptions:
+    """Golden tests for active exceptions output format.
+
+    These tests verify the exact output format matches the expected structure:
+    - Header with "Active Exceptions"
+    - Each exception shows: [scope] ID targets expires_in (source: X)
+    - Expired count notification
+    """
+
+    def test_active_exceptions_output_format(self, mock_org_config, tmp_path):
+        """Verify active exceptions output matches expected golden format."""
+        from datetime import datetime, timedelta, timezone
+
+        from scc_cli.models.exceptions import AllowTargets, ExceptionFile
+        from scc_cli.models.exceptions import Exception as SccException
+
+        # Create an active exception
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=8)
+        exception = SccException(
+            id="local-20251221-a3f2",
+            created_at=now.isoformat(),
+            expires_at=expires_at.isoformat(),
+            reason="Sprint planning integration",
+            scope="local",
+            allow=AllowTargets(mcp_servers=["jira-api"]),
+        )
+
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[],
+        )
+
+        # Mock the exception stores
+        exc_file = ExceptionFile(exceptions=[exception])
+        empty_file = ExceptionFile()
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+            patch("scc_cli.cli_config.UserStore") as mock_user_store,
+            patch("scc_cli.cli_config.RepoStore") as mock_repo_store,
+        ):
+            mock_user_store.return_value.read.return_value = exc_file
+            mock_repo_store.return_value.read.return_value = empty_file
+
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Golden format checks
+        assert "Active Exceptions" in result.output
+        assert "local-20251221-a3f2" in result.output
+        assert "jira-api" in result.output or "mcp" in result.output.lower()
+        assert "expires" in result.output.lower()
+        assert "user" in result.output.lower() or "source" in result.output.lower()
+
+    def test_active_exceptions_shows_scope_badge(self, mock_org_config, tmp_path):
+        """Verify active exceptions show scope badge [local] or [policy]."""
+        from datetime import datetime, timedelta, timezone
+
+        from scc_cli.models.exceptions import AllowTargets, ExceptionFile
+        from scc_cli.models.exceptions import Exception as SccException
+
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=8)
+        exception = SccException(
+            id="local-20251221-b4c5",
+            created_at=now.isoformat(),
+            expires_at=expires_at.isoformat(),
+            reason="Testing",
+            scope="local",
+            allow=AllowTargets(plugins=["test-plugin"]),
+        )
+
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[],
+        )
+
+        exc_file = ExceptionFile(exceptions=[exception])
+        empty_file = ExceptionFile()
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+            patch("scc_cli.cli_config.UserStore") as mock_user_store,
+            patch("scc_cli.cli_config.RepoStore") as mock_repo_store,
+        ):
+            mock_user_store.return_value.read.return_value = exc_file
+            mock_repo_store.return_value.read.return_value = empty_file
+
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Should show scope badge
+        assert "[local]" in result.output or "local" in result.output.lower()
+
+    def test_expired_exceptions_show_cleanup_hint(self, mock_org_config, tmp_path):
+        """Verify expired exceptions count shows cleanup hint."""
+        from datetime import datetime, timedelta, timezone
+
+        from scc_cli.models.exceptions import AllowTargets, ExceptionFile
+        from scc_cli.models.exceptions import Exception as SccException
+
+        # Create an expired exception
+        now = datetime.now(timezone.utc)
+        expired_at = now - timedelta(hours=1)  # Already expired
+        exception = SccException(
+            id="local-20251220-exp1",
+            created_at=(now - timedelta(hours=10)).isoformat(),
+            expires_at=expired_at.isoformat(),
+            reason="Old exception",
+            scope="local",
+            allow=AllowTargets(plugins=["old-plugin"]),
+        )
+
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[],
+        )
+
+        exc_file = ExceptionFile(exceptions=[exception])
+        empty_file = ExceptionFile()
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+            patch("scc_cli.cli_config.UserStore") as mock_user_store,
+            patch("scc_cli.cli_config.RepoStore") as mock_repo_store,
+        ):
+            mock_user_store.return_value.read.return_value = exc_file
+            mock_repo_store.return_value.read.return_value = empty_file
+
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Should show expired count and cleanup hint
+        assert "expired" in result.output.lower()
+        assert "cleanup" in result.output.lower()
+
+
+class TestConfigExplainGoldenCombined:
+    """Golden tests for combined output with all sections."""
+
+    def test_explain_full_output_order(self, mock_org_config):
+        """Verify explain shows sections in correct order.
+
+        Expected order:
+        1. Effective Configuration header
+        2. Config decisions
+        3. Blocked items (if any)
+        4. Denied additions (if any)
+        5. Active exceptions (if any)
+        """
+        effective = EffectiveConfig(
+            plugins={"plugin-a"},
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[
+                ConfigDecision(
+                    field="plugins",
+                    value="plugin-a",
+                    reason="Organization default",
+                    source="org.defaults",
+                ),
+            ],
+            blocked_items=[
+                BlockedItem(
+                    item="bad-plugin",
+                    blocked_by="bad-*",
+                    source="org.security",
+                    target_type="plugin",
+                ),
+            ],
+            denied_additions=[
+                DelegationDenied(
+                    item="denied-plugin",
+                    requested_by="project",
+                    reason="Not delegated",
+                    target_type="plugin",
+                ),
+            ],
+        )
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        output = result.output
+
+        # Verify sections appear in correct order
+        effective_pos = output.find("Effective Configuration")
+        blocked_pos = output.find("Blocked Items")
+        denied_pos = output.find("Denied Additions")
+
+        assert effective_pos < blocked_pos, "Effective config should appear before blocked items"
+        assert blocked_pos < denied_pos, "Blocked items should appear before denied additions"
+
+    def test_explain_empty_sections_not_shown(self, mock_org_config):
+        """Verify empty sections (no blocked, no denied) don't show headers."""
+        effective = EffectiveConfig(
+            plugins={"plugin-a"},
+            mcp_servers=[],
+            network_policy="default",
+            session_config=SessionConfig(),
+            decisions=[
+                ConfigDecision(
+                    field="plugins",
+                    value="plugin-a",
+                    reason="Organization default",
+                    source="org.defaults",
+                ),
+            ],
+            blocked_items=[],  # Empty
+            denied_additions=[],  # Empty
+        )
+
+        with (
+            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
+            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.cli_config.profiles.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        # Empty sections should not appear
+        assert "Blocked Items" not in result.output
+        assert "Denied Additions" not in result.output

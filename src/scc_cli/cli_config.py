@@ -14,6 +14,8 @@ from rich.table import Table
 from . import config, profiles, setup, teams
 from .cli_common import console, handle_errors, render_responsive_table
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .stores.exception_store import RepoStore, UserStore
+from .utils.ttl import format_relative
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config App
@@ -424,6 +426,16 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
     if effective.denied_additions and (not field_filter or field_filter == "denied"):
         _render_denied_additions(effective.denied_additions)
 
+    # Show active exceptions
+    if not field_filter or field_filter == "exceptions":
+        expired_count = _render_active_exceptions()
+        if expired_count > 0:
+            console.print(
+                f"[dim]Note: {expired_count} expired local overrides "
+                f"(run `scc exceptions cleanup`)[/dim]"
+            )
+            console.print()
+
 
 def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: str | None) -> None:
     """Render config decisions grouped by field."""
@@ -518,20 +530,136 @@ def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: 
 
 
 def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:
-    """Render blocked items with patterns."""
+    """Render blocked items with patterns and fix-it commands."""
+    from scc_cli.utils.fixit import generate_policy_exception_command
+
     console.print("[bold red]Blocked Items[/bold red]")
     for item in blocked_items:
         console.print(
-            f"  [red]✗[/red] {item.item} [dim](blocked by pattern '{item.blocked_by}' from {item.source})[/dim]"
+            f"  [red]✗[/red] [bold]{item.item}[/bold] [dim](blocked by pattern '{item.blocked_by}' from {item.source})[/dim]"
         )
+        # Infer target type from source or pattern
+        target_type = _infer_target_type(item.item, item.source)
+        cmd = generate_policy_exception_command(item.item, target_type)
+        console.print("      [dim]To request exception (requires PR):[/dim]")
+        console.print(f"      [cyan]{cmd}[/cyan]")
     console.print()
+
+
+def _infer_target_type(item: str, source: str) -> str:
+    """Infer target type from item name or source context.
+
+    Args:
+        item: The item name (plugin, server, image)
+        source: The source context (e.g., "org.security")
+
+    Returns:
+        One of "plugin", "mcp_server", or "base_image"
+    """
+    # Check for common patterns
+    item_lower = item.lower()
+
+    # Image patterns (contains : or @ for tags/digests, or common registries)
+    if ":" in item or "@" in item or any(
+        reg in item_lower for reg in ["docker", "ghcr.io", "registry", ".io/", ".com/"]
+    ):
+        return "base_image"
+
+    # MCP server patterns (often have -api, -server, -mcp suffix or look like URLs)
+    if any(pattern in item_lower for pattern in ["-api", "-server", "-mcp", "/"]):
+        return "mcp_server"
+
+    # Default to plugin (most common case for blocked items)
+    return "plugin"
 
 
 def _render_denied_additions(denied_additions: list[profiles.DelegationDenied]) -> None:
-    """Render denied additions with reasons."""
+    """Render denied additions with reasons and fix-it commands."""
+    from scc_cli.utils.fixit import generate_unblock_command
+
     console.print("[bold yellow]Denied Additions[/bold yellow]")
     for denied in denied_additions:
         console.print(
-            f"  [yellow]⚠[/yellow] {denied.item} [dim](requested by {denied.requested_by}: {denied.reason})[/dim]"
+            f"  [yellow]⚠[/yellow] [bold]{denied.item}[/bold] [dim](requested by {denied.requested_by}: {denied.reason})[/dim]"
         )
+        # Infer target type from item name
+        target_type = _infer_target_type(denied.item, denied.requested_by)
+        cmd = generate_unblock_command(denied.item, target_type)
+        console.print("      [dim]To unblock locally:[/dim]")
+        console.print(f"      [cyan]{cmd}[/cyan]")
     console.print()
+
+
+def _render_active_exceptions() -> int:
+    """Render active exceptions from user and repo stores.
+
+    Returns the count of expired exceptions found (for user notification).
+    """
+    from datetime import datetime, timezone
+
+    from .models.exceptions import Exception as SccException
+
+    # Load exceptions from both stores
+    user_store = UserStore()
+    repo_store = RepoStore(Path.cwd())
+
+    user_file = user_store.read()
+    repo_file = repo_store.read()
+
+    # Filter active exceptions
+    now = datetime.now(timezone.utc)
+    active: list[tuple[str, SccException]] = []  # (source, exception)
+    expired_count = 0
+
+    for exc in user_file.exceptions:
+        try:
+            expires = datetime.fromisoformat(exc.expires_at.replace("Z", "+00:00"))
+            if expires > now:
+                active.append(("user", exc))
+            else:
+                expired_count += 1
+        except (ValueError, AttributeError):
+            expired_count += 1
+
+    for exc in repo_file.exceptions:
+        try:
+            expires = datetime.fromisoformat(exc.expires_at.replace("Z", "+00:00"))
+            if expires > now:
+                active.append(("repo", exc))
+            else:
+                expired_count += 1
+        except (ValueError, AttributeError):
+            expired_count += 1
+
+    if not active:
+        return expired_count
+
+    console.print("[bold cyan]Active Exceptions[/bold cyan]")
+
+    for source, exc in active:
+        # Format the exception target
+        targets: list[str] = []
+        if exc.allow.plugins:
+            targets.extend(f"plugin:{p}" for p in exc.allow.plugins)
+        if exc.allow.mcp_servers:
+            targets.extend(f"mcp:{s}" for s in exc.allow.mcp_servers)
+        if exc.allow.base_images:
+            targets.extend(f"image:{i}" for i in exc.allow.base_images)
+
+        target_str = ", ".join(targets) if targets else "none"
+
+        # Calculate expires_in
+        try:
+            expires = datetime.fromisoformat(exc.expires_at.replace("Z", "+00:00"))
+            expires_in = format_relative(expires)
+        except (ValueError, AttributeError):
+            expires_in = "unknown"
+
+        scope_badge = "[dim][local][/dim]" if exc.scope == "local" else "[cyan][policy][/cyan]"
+        console.print(
+            f"  {scope_badge} {exc.id}  {target_str}  "
+            f"[dim]expires in {expires_in}[/dim]  [dim](source: {source})[/dim]"
+        )
+
+    console.print()
+    return expired_count

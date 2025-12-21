@@ -130,6 +130,96 @@ Look for `denied_additions` in the output.
    - Your team profile has `delegation.allow_project_overrides: false`
    - Solution: Ask team lead to enable project overrides, or add the resource to the team profile instead
 
+**Quick unblock**: If you need the resource now, create a temporary local override:
+```bash
+scc unblock jira-api --ttl 8h --reason "Sprint planning integration"
+```
+
+This works for delegation denials only. Security blocks require a policy exception (see below).
+
+## Exception Troubleshooting
+
+### Local Override Not Working
+
+**Symptom**: You ran `scc unblock` but the resource is still blocked.
+
+**Diagnosis**:
+```bash
+scc config explain
+```
+
+Check if the item appears in `blocked_items` (security block) vs `denied_additions` (delegation denial).
+
+**Cause**: Local overrides only work for delegation denials. Security blocks require policy exceptions.
+
+**Solution for security blocks**:
+```bash
+scc exceptions create --policy --id INC-2025-001 \
+  --allow-plugin vendor-tools --ttl 8h \
+  --reason "Emergency vendor integration"
+```
+
+This generates YAML for a PR. Policy exceptions require review.
+
+### Exception Already Expired
+
+**Symptom**: `scc config explain` shows no active exceptions, but you created one.
+
+**Diagnosis**:
+```bash
+scc exceptions list --all
+```
+
+Check if your exception appears as expired.
+
+**Cause**: Exceptions have a max TTL of 24 hours. Default is 8 hours.
+
+**Solution**: Create a new exception:
+```bash
+scc unblock target-name --ttl 8h --reason "Continuing work"
+```
+
+To clean up expired entries:
+```bash
+scc exceptions cleanup
+```
+
+### Corrupt Exception File
+
+**Symptom**: Warning about corrupted exceptions file on startup.
+
+SCC automatically backs up corrupt files to `~/.config/scc/exceptions.json.bak-YYYYMMDD`.
+
+**Diagnosis**:
+```bash
+scc doctor
+```
+
+**Solution**: If the backup contains valid exceptions, restore it:
+```bash
+cp ~/.config/scc/exceptions.json.bak-20251221 ~/.config/scc/exceptions.json
+```
+
+To start fresh:
+```bash
+scc exceptions reset --user --yes
+```
+
+### Shared Exception Not Visible to Team
+
+**Symptom**: You used `--shared` but teammates don't see the exception.
+
+**Diagnosis**: Check if `.scc/exceptions.json` is in `.gitignore`:
+```bash
+git check-ignore .scc/exceptions.json
+```
+
+**Cause**: If the file is gitignored, it won't be committed and shared.
+
+**Solutions**:
+1. Remove from `.gitignore` and commit
+2. Or use user-scoped exceptions instead (without `--shared`)
+
 ## Organization Config Fetch Failed
 
 **Symptom**: `scc start` fails with "Failed to fetch organization config"

@@ -245,6 +245,83 @@ This does not apply to stdio MCP servers bundled inside plugins; plugins are all
 
 All MCP servers declared in SCC-managed configuration (org/team/project) go through security checks. The server name and URL domain are matched against `blocked_mcp_servers` patterns.
 
+## Exceptions
+
+Sometimes you need to temporarily bypass governance controls. SCC provides a time-bounded exception system with two scopes:
+
+### Local Overrides (Self-Serve)
+
+When delegation denies an addition (team/project not authorized), you can create a local override:
+
+```bash
+scc unblock jira-api --ttl 8h --reason "Sprint demo integration"
+```
+
+This creates a time-limited exception stored locally. Useful for:
+- Urgent integrations during active development
+- Testing before requesting permanent delegation
+- Personal tooling not worth formal approval
+
+Local overrides **cannot** bypass security blocks (the `blocked_*` patterns). They only work for delegation denials.
+
+### Policy Exceptions (PR-Approved)
+
+When security policies block something, only a policy exception can override it:
+
+```bash
+scc exceptions create --policy --id INC-2025-00123 \
+  --allow-plugin vendor-tools --ttl 24h \
+  --reason "Emergency vendor integration per INC-2025-00123"
+```
+
+Policy exceptions:
+- Require PR review and approval (stored in config repo)
+- Can override any block (security + delegation)
+- Should reference an incident/ticket ID
+- Have organization-defined TTL limits
+
+### Exception Targets
+
+Both exception types can target:
+- **Plugins**: `--allow-plugin <name>`
+- **MCP Servers**: `--allow-mcp <name>`
+- **Base Images**: `--allow-image <ref>`
+
+### Viewing Active Exceptions
+
+```bash
+scc config explain   # Shows active exceptions in output
+scc exceptions list  # Lists all exceptions with expiry times
+```
+
+### TTL and Expiration
+
+All exceptions are time-bounded:
+- Default: 8 hours
+- Maximum: 24 hours (configurable by org)
+- Formats: `--ttl 8h`, `--expires-at 2025-12-21T17:00:00+01:00`, `--until 17:00`
+
+Expired exceptions are automatically ignored. Run `scc exceptions cleanup` to remove them.
+
+### Exception Stores
+
+| Store | Location | Purpose |
+|-------|----------|---------|
+| User | `~/.config/scc/exceptions.json` | Personal, machine-local |
+| Repo | `.scc/exceptions.json` | Shared with team (if committed) |
+| Policy | Config repo | Org-approved, PR-reviewed |
+
+Use `--shared` with `scc unblock` to write to repo store instead of user store.
+
+### Quick Reference
+
+| Scenario | Solution |
+|----------|----------|
+| Delegation denied, need it now | `scc unblock <target> --ttl 8h --reason "..."` |
+| Security blocked, have approval | `scc exceptions create --policy --id INC-... --allow-* ...` |
+| Check what's blocked/overridden | `scc config explain` |
+| Clean up old exceptions | `scc exceptions cleanup` |
+
 ## Debugging Configuration
 
 When something doesn't work as expected:
@@ -254,6 +331,7 @@ When something doesn't work as expected:
 3. Check `denied_additions` for delegation failures
 4. Verify your team is delegated for the resource type
 5. Verify your team allows project overrides (if using `.scc.yaml`)
+6. Check `Active Exceptions` section for any overrides in effect
 
 ## Org Admin Checklist
 

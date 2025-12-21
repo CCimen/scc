@@ -48,6 +48,7 @@ class BlockedItem:
     item: str
     blocked_by: str  # The pattern that matched
     source: str  # Always "org.security"
+    target_type: str = "plugin"  # "plugin" | "mcp_server" | "base_image"
 
 
 @dataclass
@@ -57,6 +58,7 @@ class DelegationDenied:
     item: str
     requested_by: str  # "team" | "project"
     reason: str
+    target_type: str = "plugin"  # "plugin" | "mcp_server" | "base_image"
 
 
 @dataclass
@@ -539,6 +541,7 @@ def compute_effective_config(
                     item=server_name or server_url,
                     blocked_by=blocked_by,
                     source="org.security",
+                    target_type="mcp_server",
                 )
             )
             continue
@@ -550,6 +553,7 @@ def compute_effective_config(
                     item=server_name,
                     requested_by="team",
                     reason=f"Team '{team_name}' not allowed to add MCP servers",
+                    target_type="mcp_server",
                 )
             )
             continue
@@ -563,6 +567,7 @@ def compute_effective_config(
                         item=server_name,
                         blocked_by=stdio_result.reason,
                         source="org.security",
+                        target_type="mcp_server",
                     )
                 )
                 continue
@@ -655,6 +660,7 @@ def compute_effective_config(
                         item=server_name or server_url,
                         blocked_by=blocked_by,
                         source="org.security",
+                        target_type="mcp_server",
                     )
                 )
                 continue
@@ -666,6 +672,7 @@ def compute_effective_config(
                         item=server_name,
                         requested_by="project",
                         reason=delegation_reason,
+                        target_type="mcp_server",
                     )
                 )
                 continue
@@ -679,6 +686,7 @@ def compute_effective_config(
                             item=server_name,
                             blocked_by=stdio_result.reason,
                             source="org.security",
+                            target_type="mcp_server",
                         )
                     )
                     continue

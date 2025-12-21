@@ -24,12 +24,14 @@ from .cli_admin import (
     statusline_cmd,
     update_cmd,
 )
+from .cli_audit import audit_app
 from .cli_common import console, state
 from .cli_config import (
     config_cmd,
     setup_cmd,
     teams_cmd,
 )
+from .cli_exceptions import exceptions_app, unblock_cmd
 
 # Import command functions from domain modules
 from .cli_launch import start
@@ -140,6 +142,13 @@ app.command(name="statusline")(statusline_cmd)
 
 # Add stats sub-app
 app.add_typer(stats_app, name="stats")
+
+# Exception management commands
+app.add_typer(exceptions_app, name="exceptions")
+app.command(name="unblock")(unblock_cmd)
+
+# Audit commands
+app.add_typer(audit_app, name="audit")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
