@@ -106,6 +106,37 @@ scc sessions
 scc stats
 ```
 
+### Temporary overrides
+
+If governance blocks something you need:
+
+```bash
+# Unblock a resource for 8 hours (delegation denials only)
+scc unblock jira-api --ttl 8h --reason "Sprint demo"
+
+# List active exceptions
+scc exceptions list
+
+# Clean up expired exceptions
+scc exceptions cleanup
+```
+
+Local overrides work for delegation denials. Security blocks require policy exceptions via PR. See [GOVERNANCE.md](docs/GOVERNANCE.md#exceptions).
+
+### Plugin auditing
+
+Check what MCP servers and hooks are declared by installed plugins:
+
+```bash
+# Human-readable summary
+scc audit plugins
+
+# JSON for CI pipelines
+scc audit plugins --json
+```
+
+Exit code 0 means all manifests parsed. Exit code 1 means parsing errors found.
+
 ## Commands
 
 | Command | Description |
@@ -126,6 +157,9 @@ scc stats
 | `scc cleanup <repo> <name>` | Remove worktree |
 | `scc config` | View or edit configuration |
 | `scc config explain` | Show effective config with sources |
+| `scc unblock <target>` | Create temporary override for blocked resource |
+| `scc exceptions list` | List active and expired exceptions |
+| `scc audit plugins` | Audit installed plugins for MCP servers and hooks |
 
 Run `scc <command> --help` for options.
 
@@ -220,7 +254,8 @@ Run `scc doctor` to diagnose issues.
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
 | Permission denied (Linux) | `sudo usermod -aG docker $USER` |
 | Plugin blocked | Check `scc config explain` for security blocks |
-| Addition denied | Team not delegated for that resource type |
+| Addition denied | `scc unblock <target> --ttl 8h --reason "..."` |
+| Plugin audit shows malformed | Fix JSON syntax in plugin's `.mcp.json` or `hooks.json` |
 
 See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 

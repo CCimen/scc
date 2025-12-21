@@ -201,42 +201,71 @@ Credential flow:
 
 ```mermaid
 graph TD
+    %% Styling for visual distinction
+    classDef cli fill:#e1f5fe,stroke:#01579b
+    classDef core fill:#fff9c4,stroke:#fbc02d
+    classDef gov fill:#f3e5f5,stroke:#7b1fa2
+    classDef audit fill:#fbe9e7,stroke:#d84315
+    classDef runtime fill:#e8f5e9,stroke:#2e7d32
+
     subgraph CLI[CLI Layer]
-        Main[cli.py<br/>orchestrator]
-        Launch[cli_launch.py<br/>start command]
-        Worktree[cli_worktree.py<br/>worktree/sessions]
-        CfgCLI[cli_config.py<br/>teams/setup/config]
-        Admin[cli_admin.py<br/>doctor/update/stats]
-        Common[cli_common.py<br/>shared utilities]
+        Main[cli.py]:::cli
+        Launch[cli_launch.py]:::cli
+        Worktree[cli_worktree.py]:::cli
+        CfgCLI[cli_config.py]:::cli
+        Admin[cli_admin.py]:::cli
+        ExcCLI[cli_exceptions.py]:::cli
+        AuditCLI[cli_audit.py]:::cli
     end
 
-    subgraph Core[Core Modules]
-        Config[config.py]
-        Remote[remote.py]
-        Profiles[profiles.py]
-        Validate[validate.py]
+    subgraph Core[Core & Config]
+        Config[config.py]:::core
+        Remote[remote.py]:::core
+        Profiles[profiles.py]:::core
+        Validate[validate.py]:::core
     end
 
-    subgraph Integration[Integration Layer]
-        Docker[docker.py]
-        Adapter[claude_adapter.py]
-        Git[git.py]
-        Sessions[sessions.py]
-        Stats[stats.py]
+    subgraph Governance[Governance]
+        Evaluate[evaluate.py]:::gov
+        ApplyExc[apply_exceptions.py]:::gov
+        ExcStore[exception_store.py]:::gov
+    end
+
+    subgraph AuditPkg[Audit]
+        AuditReader[reader.py]:::audit
+        AuditParser[parser.py]:::audit
+    end
+
+    subgraph Runtime[Runtime Services]
+        Docker[docker.py]:::runtime
+        Adapter[claude_adapter.py]:::runtime
+        Git[git.py]:::runtime
+        Sessions[sessions.py]:::runtime
+        Stats[stats.py]:::runtime
     end
 
     Main --> Launch
     Main --> Worktree
     Main --> CfgCLI
     Main --> Admin
+    Main --> ExcCLI
+    Main --> AuditCLI
 
     Launch --> Docker
     Launch --> Config
     Launch --> Git
     Launch --> Sessions
+    Launch --> Evaluate
+
+    ExcCLI --> ExcStore
+    ExcCLI --> ApplyExc
+
+    AuditCLI --> AuditReader
+    AuditReader --> AuditParser
 
     CfgCLI --> Config
     CfgCLI --> Profiles
+    CfgCLI --> Remote
 
     Admin --> Stats
     Admin --> Config
@@ -248,8 +277,13 @@ graph TD
 
     Adapter --> Profiles
     Profiles --> Config
+    Remote --> Config
+    Evaluate --> Profiles
+    ApplyExc --> Evaluate
     Sessions --> Config
 ```
+
+This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services.
 
 Module responsibilities:
 
@@ -263,6 +297,11 @@ Module responsibilities:
 | `docker.py` | Container lifecycle, credential injection | URL building |
 | `stats.py` | Session recording, aggregation, reporting | Container operations |
 | `update.py` | Version checking, throttling, notifications | Container operations |
+| `evaluation/evaluate.py` | Pure governance evaluation, BlockReason classification | I/O, exception storage |
+| `evaluation/apply_exceptions.py` | Exception overlay (policy and local scopes) | Storage, HTTP |
+| `stores/exception_store.py` | JSON read/write, backup-on-corrupt, prune expired | Business logic |
+| `audit/parser.py` | JSON manifest parsing, error extraction | File I/O |
+| `audit/reader.py` | Plugin discovery, manifest file reading | Parsing logic |
 
 The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
 
@@ -330,6 +369,108 @@ If-None-Match: "abc123"
 → Network error: Use stale cache if available
 ```
 
+## Exceptions System
+
+Exceptions allow temporary overrides when governance blocks something you need.
+
+### Two Scopes
+
+| Scope | Storage | Can Override | Approval |
+|-------|---------|--------------|----------|
+| Local | `~/.config/scc/exceptions.json` or `.scc/exceptions.json` | Delegation denials only | Self-serve |
+| Policy | Config repo (org/team/project) | Any block (security + delegation) | PR review |
+
+Local overrides handle delegation denials (team not allowed to add something). Security blocks (org-level `blocked_*` patterns) require policy exceptions stored in the config repo.
+
+### Evaluation Flow
+
+```mermaid
+graph LR
+    subgraph Input
+        Config[Effective Config]
+        Policy[Policy Exceptions]
+        Local[Local Overrides]
+    end
+
+    subgraph Evaluation
+        Eval[evaluate.py<br/>classify BlockReason]
+        ApplyP[apply_exceptions<br/>policy scope]
+        ApplyL[apply_exceptions<br/>local scope]
+    end
+
+    subgraph Output
+        Result[EvaluationResult<br/>decisions + warnings]
+    end
+
+    Config --> Eval
+    Eval --> ApplyP
+    Policy --> ApplyP
+    ApplyP --> ApplyL
+    Local --> ApplyL
+    ApplyL --> Result
+```
+
+Security blocks are tagged with `BlockReason.SECURITY` and cannot be overridden by local exceptions. Delegation denials are tagged with `BlockReason.DELEGATION` and can be overridden by either scope.
+
+### Storage
+
+Exception files use JSON with schema versioning for forward compatibility:
+
+```json
+{
+  "schema_version": 1,
+  "exceptions": [
+    {
+      "id": "local-20251221-a3f2",
+      "created_at": "2025-12-21T10:00:00Z",
+      "expires_at": "2025-12-21T18:00:00Z",
+      "reason": "Sprint demo",
+      "scope": "local",
+      "allow": {"mcp_servers": ["jira-api"]}
+    }
+  ]
+}
+```
+
+Corrupt files are backed up to `*.bak-YYYYMMDD` and replaced with an empty store. Expired exceptions are pruned on write operations.
+
+## Plugin Audit
+
+The audit system provides visibility into installed Claude Code plugin manifests.
+
+### Discovery
+
+```mermaid
+graph LR
+    Registry[~/.claude/plugins/<br/>installed_plugins.json] --> Discover[discover_installed_plugins]
+    Discover --> Plugin1[Plugin Dir 1]
+    Discover --> Plugin2[Plugin Dir 2]
+    Plugin1 --> Read[read_plugin_manifests]
+    Plugin2 --> Read
+    Read --> MCP[.mcp.json]
+    Read --> Hooks[hooks/hooks.json]
+    MCP --> Parse[parse_json_content]
+    Hooks --> Parse
+    Parse --> Result[AuditOutput]
+```
+
+### Manifest Status
+
+| Status | Meaning | CI Exit Code |
+|--------|---------|--------------|
+| `parsed` | Valid JSON, content extracted | 0 |
+| `missing` | File not found (expected) | 0 |
+| `malformed` | Invalid JSON syntax | 1 |
+| `unreadable` | Permission error | 1 |
+
+Exit code 1 signals CI to fail the pipeline when manifest problems exist.
+
+### Output
+
+Human output shows a summary table with MCP server and hook counts. JSON output includes full manifest content with `schemaVersion: 1` for automation.
+
+The audit is informational only. SCC does not enforce plugin internals.
+
 ## Lifecycle Flows
 
 ### Setup
@@ -374,6 +515,7 @@ Security boundaries from org config override everything.
 ```
 ~/.config/scc/
     config.json              # Org URL, selected profile, preferences
+    exceptions.json          # User-scoped local overrides
 
 ~/.cache/scc/
     org_config.json          # Cached remote config
@@ -381,9 +523,16 @@ Security boundaries from org config override everything.
     update_check_meta.json   # Update check throttling
     usage.jsonl              # Session usage events
 
+~/.claude/
+    plugins/
+        installed_plugins.json   # Claude Code plugin registry
+        <plugin-name>/           # Installed plugin directories
+
 ~/projects/
     my-repo/                 # Main repository
         .scc.yaml            # Project-specific config (optional)
+        .scc/
+            exceptions.json  # Repo-scoped local overrides (optional)
     my-repo-worktrees/       # Worktrees created by SCC
         feature-a/
         hotfix-123/

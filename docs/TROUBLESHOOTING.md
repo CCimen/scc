@@ -220,6 +220,75 @@ git check-ignore .scc/exceptions.json
 1. Remove from `.gitignore` and commit
 2. Or use user-scoped exceptions instead (without `--shared`)
 
+## Plugin Audit Failures
+
+### Malformed Manifest
+
+**Symptom**: `scc audit plugins` exits with code 1 and shows "malformed" status.
+
+**Example output**:
+```
+Plugin: broken-tool
+  .mcp.json: malformed (line 15, col 8: Expected ',' but found '}')
+```
+
+**Cause**: The plugin's `.mcp.json` or `hooks/hooks.json` contains invalid JSON.
+
+**Solution**: Fix the JSON syntax in the plugin directory:
+```bash
+# Find the plugin location
+scc audit plugins --json | grep -A5 '"name": "broken-tool"'
+
+# Edit the manifest and fix the syntax error at the reported line/column
+```
+
+Common JSON errors:
+- Missing comma between properties
+- Trailing comma after last property
+- Unquoted keys
+- Single quotes instead of double quotes
+
+### Unreadable Manifest
+
+**Symptom**: `scc audit plugins` shows "unreadable" status.
+
+**Cause**: Permission error reading the manifest file.
+
+**Solution**:
+```bash
+# Check permissions on the plugin directory
+ls -la ~/.claude/plugins/
+
+# Fix permissions if needed
+chmod -R u+r ~/.claude/plugins/broken-tool/
+```
+
+### CI Pipeline Fails on Audit
+
+**Symptom**: CI job fails with exit code 1 from `scc audit plugins`.
+
+**Cause**: One or more installed plugins have manifest problems. Exit code 1 means at least one manifest couldn't be parsed.
+
+**Solution**: Run the audit locally with JSON output to identify the problem:
+```bash
+scc audit plugins --json
+```
+
+Look for plugins with `"status": "malformed"` or `"status": "unreadable"` in the output. Fix or remove those plugins.
+
+### No Plugins Found
+
+**Symptom**: `scc audit plugins` shows "No plugins installed."
+
+**Cause**: The Claude Code plugin registry is empty or missing.
+
+**Diagnosis**: Check if the registry exists:
+```bash
+cat ~/.claude/plugins/installed_plugins.json
+```
+
+This is informational only. If you haven't installed any Claude Code plugins, this is expected. The audit command exits with code 0 in this case.
+
 ## Organization Config Fetch Failed
 
 **Symptom**: `scc start` fails with "Failed to fetch organization config"
