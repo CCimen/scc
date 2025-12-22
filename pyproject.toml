@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scc-cli"
-version = "1.2.0"
+version = "1.2.1"
 description = "Run Claude Code in Docker sandboxes with team configs and git worktree support"
 readme = "README.md"
 license = "MIT"
@@ -30,6 +30,7 @@ dependencies = [
     "rich>=13.0.0",
     "jsonschema>=4.25.1",
     "requests>=2.32.5",
+    "pyyaml>=6.0.0",
 ]
 
 [project.optional-dependencies]
