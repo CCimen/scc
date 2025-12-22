@@ -29,7 +29,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from . import config
+from . import __version__, config
 from .remote import fetch_org_config, resolve_auth
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -962,7 +962,12 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
 
     # Wrap table in panel
     title_style = "bold green" if result.all_ok else "bold red"
-    title_text = "System Health Check" if result.all_ok else "System Health Check - Issues Found"
+    version_suffix = f" (scc-cli v{__version__})"
+    title_text = (
+        f"System Health Check{version_suffix}"
+        if result.all_ok
+        else f"System Health Check - Issues Found{version_suffix}"
+    )
 
     panel = Panel(
         table,
