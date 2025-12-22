@@ -17,9 +17,42 @@
 
 ---
 
-Run Claude Code in Docker sandboxes with organization-managed team profiles, marketplace integration, and git worktree support.
+Run Claude Code in Docker sandboxes with organization-managed team profiles and git worktree support.
 
 SCC isolates AI execution in containers, enforces branch safety, and lets organizations distribute Claude plugins through a central configuration. Developers get standardized setups without manual configuration.
+
+## 30-Second Guide
+
+```bash
+pip install scc-cli      # Install
+scc setup                # Configure (interactive wizard, ~2 min)
+scc start ~/project      # Launch Claude Code in sandbox
+```
+
+That's it. Check `scc --version` for version info, `scc doctor` if something's wrong.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        SCC Mental Model                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   WORKTREE (optional)     SESSION              CONTAINER    │
+│   ┌─────────────┐        ┌─────────┐         ┌───────────┐ │
+│   │ Isolated    │        │ Your    │         │ Docker    │ │
+│   │ git branch  │───────▶│ work    │────────▶│ sandbox   │ │
+│   │ + directory │        │ history │         │ (secure)  │ │
+│   └─────────────┘        └─────────┘         └───────────┘ │
+│                                                             │
+│   scc worktree           scc start            scc list     │
+│   scc cleanup            --resume/--select    scc stop     │
+│                          scc sessions         scc prune    │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│ Worktrees are optional. Most users just: scc start ~/repo  │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Installation
 
@@ -48,25 +81,59 @@ scc start ~/projects/api-service --team platform
 scc doctor
 ```
 
+## Daily Commands
+
+Quick reference for everyday development:
+
+| Command | What it does |
+|---------|--------------|
+| `scc start ~/project` | Launch Claude Code in sandbox |
+| `scc start --resume` | Resume most recent session |
+| `scc start --select` | Pick from recent sessions |
+| `scc stop` | Stop running sandbox(es) |
+| `scc list` | Show running containers |
+| `scc prune` | Clean up stopped containers |
+| `scc doctor` | Check system health |
+| `scc config explain` | Debug why something was blocked |
+| `scc teams` | List available team profiles |
+| `scc setup --team <name>` | Switch to a different team |
+
 ## Usage
+
+### Interactive mode
+
+Running `scc` without arguments launches an interactive workspace selector:
+
+```bash
+scc
+```
+
+This shows recent workspaces and lets you pick where to start. For CI/scripts, use explicit commands instead:
+
+```bash
+# CI/automation: always specify the path explicitly
+scc start /path/to/repo --team platform
+```
 
 ### Starting sessions
 
 ```bash
-# Interactive mode
-scc
-
 # With team profile
 scc start ~/projects/my-repo --team platform
 
-# Continue most recent session
-scc start --continue
+# Resume most recent session
+scc start --resume
+
+# Pick from recent sessions interactively
+scc start --select
 
 # Offline mode (cache only)
 scc start ~/projects/my-repo --offline
 ```
 
 ### Parallel development with worktrees
+
+Use worktrees when you need to work on multiple features simultaneously without context switching. Each worktree gets its own directory, branch, and Claude session—ideal for parallel AI-assisted development.
 
 ```bash
 # Create isolated workspace
@@ -96,12 +163,60 @@ scc teams --sync
 # Check for CLI and config updates
 scc update
 
-# Force update check
-scc update --force
+# View effective configuration
+scc config explain
 
 # List recent sessions
 scc sessions
+
+# View usage stats
+scc stats
 ```
+
+### Switching teams
+
+To change your team profile without running the full setup wizard:
+
+```bash
+# Switch to a different team
+scc setup --team backend-java
+
+# See available teams first
+scc teams
+```
+
+This updates your profile selection while keeping your organization connection intact.
+
+### Temporary overrides
+
+If governance blocks something you need:
+
+```bash
+# Unblock a resource for 8 hours (delegation denials only)
+scc unblock jira-api --ttl 8h --reason "Sprint demo"
+
+# List active exceptions
+scc exceptions list
+
+# Clean up expired exceptions
+scc exceptions cleanup
+```
+
+Local overrides work for delegation denials. Security blocks require policy exceptions via PR. See [GOVERNANCE.md](docs/GOVERNANCE.md#exceptions).
+
+### Plugin auditing
+
+Check what MCP servers and hooks are declared by installed plugins:
+
+```bash
+# Human-readable summary
+scc audit plugins
+
+# JSON for CI pipelines
+scc audit plugins --json
+```
+
+Exit code 0 means all manifests parsed. Exit code 1 means parsing errors found.
 
 ## Commands
 
@@ -115,11 +230,18 @@ scc sessions
 | `scc update` | Check for CLI and config updates |
 | `scc teams` | List team profiles |
 | `scc sessions` | List recent sessions |
+| `scc stats` | View usage statistics |
+| `scc statusline` | Configure status line for worktree info |
 | `scc list` | List running containers |
+| `scc prune` | Remove stopped containers (dry-run by default) |
 | `scc worktree <repo> <name>` | Create git worktree |
 | `scc worktrees <repo>` | List worktrees |
 | `scc cleanup <repo> <name>` | Remove worktree |
 | `scc config` | View or edit configuration |
+| `scc config explain` | Show effective config with sources |
+| `scc unblock <target>` | Create temporary override for blocked resource |
+| `scc exceptions list` | List active and expired exceptions |
+| `scc audit plugins` | Audit installed plugins for MCP servers and hooks |
 
 Run `scc <command> --help` for options.
 
@@ -140,6 +262,30 @@ Standalone mode runs without organization config:
 scc setup --standalone
 ```
 
+### Config inheritance
+
+Configuration flows through three layers:
+
+1. **Organization** - security boundaries, default plugins, delegation rules
+2. **Team profile** - additional plugins and MCP servers for specific teams
+3. **Project** - `.scc.yaml` in repo root for project-specific settings
+
+Organizations define what teams can add. Teams define what projects can add. Security blocks (like `blocked_plugins: ["malicious-*"]`) cannot be overridden at any level.
+
+See [GOVERNANCE.md](docs/GOVERNANCE.md) for delegation rules and examples.
+
+### Project config
+
+Add `.scc.yaml` to your repository root:
+
+```yaml
+additional_plugins:
+  - "project-linter"
+
+session:
+  timeout_hours: 4
+```
+
 ### User config
 
 Located at `~/.config/scc/config.json`:
@@ -150,8 +296,7 @@ Located at `~/.config/scc/config.json`:
     "url": "https://gitlab.example.org/devops/scc-config.json",
     "auth": "env:GITLAB_TOKEN"
   },
-  "selected_profile": "platform",
-  "hooks": { "enabled": true }
+  "selected_profile": "platform"
 }
 ```
 
@@ -173,7 +318,11 @@ Edit with `scc config --edit`.
 
 ~/.cache/scc/            # Cache (safe to delete)
 ├── org_config.json      # Remote config cache
-└── cache_meta.json      # ETags, timestamps
+├── cache_meta.json      # ETags, timestamps
+└── usage.jsonl          # Session usage events
+
+<repo>/
+└── .scc.yaml            # Project-specific config
 ```
 
 ## Troubleshooting
@@ -186,10 +335,39 @@ Run `scc doctor` to diagnose issues.
 | Organization config fetch failed | Check URL and token |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
 | Permission denied (Linux) | `sudo usermod -aG docker $USER` |
+| Plugin blocked | Check `scc config explain` for security blocks |
+| Addition denied | `scc unblock <target> --ttl 8h --reason "..."` |
+| Plugin audit shows malformed | Fix JSON syntax in plugin's `.mcp.json` or `hooks.json` |
+
+See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 ### WSL2
 
 Run inside WSL2, not Windows. Keep projects in the Linux filesystem for acceptable performance.
+
+### Container management
+
+SCC containers accumulate over time. Clean them up safely:
+
+```bash
+# See what would be removed (dry run, default)
+scc prune
+
+# Actually remove stopped containers
+scc prune --yes
+
+# To clean up everything: stop first, then prune
+scc stop && scc prune --yes
+```
+
+`scc prune` only removes **stopped** SCC containers (labeled `scc.managed=true`). It never touches running containers or non-SCC workloads.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - system design, module structure, data flow
+- [Governance](docs/GOVERNANCE.md) - delegation model, security boundaries, config examples
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - common problems and solutions
+- [Development](CLAUDE.md) - contributing guidelines, TDD methodology
 
 ## Development
 
@@ -204,7 +382,22 @@ uv run pytest
 uv run ruff check --fix
 ```
 
-See [CLAUDE.md](CLAUDE.md) for development methodology.
+## Optional: Shell Completion
+
+Enable tab completion for scc commands:
+
+```bash
+# Bash
+scc --install-completion bash
+
+# Zsh
+scc --install-completion zsh
+
+# Fish
+scc --install-completion fish
+```
+
+Restart your shell after installation.
 
 ## License
 

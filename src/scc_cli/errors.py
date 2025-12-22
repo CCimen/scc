@@ -256,3 +256,35 @@ class ProfileNotFoundError(ConfigError):
     def __post_init__(self) -> None:
         if not self.user_message and self.profile_name:
             self.user_message = f"Team profile not found: {self.profile_name}"
+
+
+@dataclass
+class PolicyViolationError(ConfigError):
+    """Security policy violation during config processing.
+
+    Raised when a plugin, MCP server, or other item is blocked by
+    organization security policies.
+    """
+
+    item: str = ""
+    blocked_by: str = ""
+    item_type: str = "plugin"  # Default to plugin
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message and self.item:
+            if self.blocked_by:
+                self.user_message = (
+                    f"Security policy violation: '{self.item}' is blocked "
+                    f"by pattern '{self.blocked_by}'"
+                )
+            else:
+                self.user_message = f"Security policy violation: '{self.item}' is blocked"
+
+        # Generate fix-it command for suggested action
+        if not self.suggested_action and self.item:
+            from scc_cli.utils.fixit import generate_policy_exception_command
+
+            cmd = generate_policy_exception_command(self.item, self.item_type)
+            self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"

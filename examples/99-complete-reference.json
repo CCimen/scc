@@ -1,0 +1,135 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v2.schema.json",
+    "schema_version": "2.0.0",
+    "min_cli_version": "0.5.0",
+    "organization": {
+        "name": "Reference Organization",
+        "id": "reference-org",
+        "contact": "docs@example.com"
+    },
+    "security": {
+        "blocked_plugins": [
+            "pattern-*",
+            "exact-plugin-name",
+            "*-suffix"
+        ],
+        "blocked_mcp_servers": [
+            "*.blocked.com",
+            "specific-server"
+        ],
+        "blocked_base_images": [
+            "*:latest",
+            "*:dev",
+            "docker.io/untrusted/*"
+        ],
+        "allow_stdio_mcp": true,
+        "allowed_stdio_prefixes": [
+            "/usr/local/bin",
+            "/opt/approved-tools"
+        ]
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "core-*",
+            "org-approved-*"
+        ],
+        "allowed_mcp_servers": [
+            "https://mcp.example.com/*"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": [
+                "team-*",
+                "community-*"
+            ],
+            "allow_additional_mcp_servers": [
+                "team-a",
+                "team-b",
+                "special-team"
+            ],
+            "allow_network_override": [
+                "corp-proxy-only",
+                "isolated"
+            ]
+        },
+        "projects": {
+            "inherit_team_delegation": true
+        }
+    },
+    "profiles": {
+        "team-a": {
+            "description": "Example team A with HTTP MCP servers (authenticated and public)",
+            "additional_plugins": [
+                "team-plugin-1",
+                "team-plugin-2"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "shadcn",
+                    "type": "http",
+                    "url": "https://www.shadcn.io/api/mcp"
+                }
+            ],
+            "network_policy": "corp-proxy-only",
+            "session": {
+                "timeout_hours": 8,
+                "auto_resume": false
+            },
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "team-b": {
+            "description": "Example team B with SSE MCP server (streaming transport)",
+            "additional_mcp_servers": [
+                {
+                    "name": "mermaid-mcp",
+                    "type": "sse",
+                    "url": "https://mcp.mermaid.ai/sse",
+                    "headers": {
+                        "X-Custom-Header": "optional-value"
+                    }
+                }
+            ],
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        },
+        "special-team": {
+            "description": "Team with stdio MCP server (requires allow_stdio_mcp: true)",
+            "additional_mcp_servers": [
+                {
+                    "name": "playwright",
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": [
+                        "@playwright/mcp@latest"
+                    ],
+                    "env": {
+                        "PLAYWRIGHT_BROWSERS_PATH": "${HOME}/.cache/ms-playwright"
+                    }
+                }
+            ],
+            "network_policy": "isolated"
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 365
+    }
+}

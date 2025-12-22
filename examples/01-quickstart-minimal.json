@@ -1,0 +1,23 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v2.schema.json",
+    "schema_version": "2.0.0",
+    "organization": {
+        "name": "My Organization",
+        "id": "my-org"
+    },
+    "security": {
+        "blocked_plugins": [],
+        "blocked_mcp_servers": [],
+        "blocked_base_images": ["*:latest"],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": ["*"],
+        "network_policy": "unrestricted"
+    },
+    "profiles": {
+        "default": {
+            "description": "Default team profile"
+        }
+    }
+}

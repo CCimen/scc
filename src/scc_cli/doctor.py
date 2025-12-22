@@ -29,7 +29,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from . import config
+from . import __version__, config
 from .remote import fetch_org_config, resolve_auth
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -708,6 +708,92 @@ def check_migration_status() -> CheckResult:
     )
 
 
+def check_exception_stores() -> CheckResult:
+    """Check if exception stores are readable and valid.
+
+    Validates both user and repo exception stores:
+    - JSON parse errors
+    - Schema version compatibility
+    - Backup files from corruption recovery
+
+    Returns:
+        CheckResult with exception store status.
+    """
+    from pathlib import Path
+
+    from .stores.exception_store import RepoStore, UserStore
+
+    issues: list[str] = []
+    warnings: list[str] = []
+
+    # Check user store
+    user_store = UserStore()
+    user_path = user_store.path
+
+    if user_path.exists():
+        try:
+            user_file = user_store.read()
+            if user_file.schema_version > 1:
+                warnings.append(f"User store uses newer schema v{user_file.schema_version}")
+        except Exception as e:
+            issues.append(f"User store corrupt: {e}")
+
+        # Check for backup files indicating past corruption
+        backup_pattern = f"{user_path.name}.bak-*"
+        backup_dir = user_path.parent
+        backups = list(backup_dir.glob(backup_pattern))
+        if backups:
+            warnings.append(f"Found {len(backups)} user store backup(s)")
+
+    # Check repo store (if in a git repo)
+    try:
+        repo_store = RepoStore(Path.cwd())
+        repo_path = repo_store.path
+
+        if repo_path.exists():
+            try:
+                repo_file = repo_store.read()
+                if repo_file.schema_version > 1:
+                    warnings.append(f"Repo store uses newer schema v{repo_file.schema_version}")
+            except Exception as e:
+                issues.append(f"Repo store corrupt: {e}")
+
+            # Check for backup files
+            backup_pattern = f"{repo_path.name}.bak-*"
+            backup_dir = repo_path.parent
+            backups = list(backup_dir.glob(backup_pattern))
+            if backups:
+                warnings.append(f"Found {len(backups)} repo store backup(s)")
+    except Exception:
+        # Not in a repo or repo store not accessible - that's fine
+        pass
+
+    # Build result
+    if issues:
+        return CheckResult(
+            name="Exception Stores",
+            passed=False,
+            message="; ".join(issues),
+            fix_hint="Run 'scc exceptions reset --user --yes' to reset corrupt stores",
+            severity="error",
+        )
+
+    if warnings:
+        return CheckResult(
+            name="Exception Stores",
+            passed=True,
+            message="; ".join(warnings),
+            fix_hint="Consider upgrading SCC or running 'scc exceptions cleanup'",
+            severity="warning",
+        )
+
+    return CheckResult(
+        name="Exception Stores",
+        passed=True,
+        message="Exception stores OK",
+    )
+
+
 def run_all_checks() -> list[CheckResult]:
     """Run all health checks and return list of results.
 
@@ -751,6 +837,9 @@ def run_all_checks() -> list[CheckResult]:
 
     # Migration check
     results.append(check_migration_status())
+
+    # Exception stores check
+    results.append(check_exception_stores())
 
     return results
 
@@ -873,7 +962,12 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
 
     # Wrap table in panel
     title_style = "bold green" if result.all_ok else "bold red"
-    title_text = "System Health Check" if result.all_ok else "System Health Check - Issues Found"
+    version_suffix = f" (scc-cli v{__version__})"
+    title_text = (
+        f"System Health Check{version_suffix}"
+        if result.all_ok
+        else f"System Health Check - Issues Found{version_suffix}"
+    )
 
     panel = Panel(
         table,

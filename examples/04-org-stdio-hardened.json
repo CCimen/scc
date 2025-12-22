@@ -1,0 +1,71 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v2.schema.json",
+    "schema_version": "2.0.0",
+    "organization": {
+        "name": "Local Tools Org",
+        "id": "local-tools-org",
+        "contact": "admin@example.com"
+    },
+    "security": {
+        "blocked_plugins": [],
+        "blocked_mcp_servers": [],
+        "blocked_base_images": [
+            "*:latest"
+        ],
+        "allow_stdio_mcp": true,
+        "allowed_stdio_prefixes": [
+            "/usr/local/bin",
+            "/opt/mcp-tools"
+        ]
+    },
+    "defaults": {
+        "allowed_plugins": ["*"],
+        "network_policy": "unrestricted"
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": ["*"]
+        },
+        "projects": {
+            "inherit_team_delegation": true
+        }
+    },
+    "profiles": {
+        "local-dev": {
+            "description": "Team using local stdio MCP servers for testing",
+            "additional_mcp_servers": [
+                {
+                    "name": "playwright",
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": ["@playwright/mcp@latest"]
+                }
+            ]
+        },
+        "hybrid": {
+            "description": "Team using both local stdio and remote HTTP MCP servers",
+            "additional_mcp_servers": [
+                {
+                    "name": "playwright",
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": ["@playwright/mcp@latest"]
+                },
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                    }
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "http",
+                    "url": "https://mcp.mermaid.ai/mcp"
+                }
+            ]
+        }
+    }
+}
