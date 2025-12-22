@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -176,15 +177,61 @@ def build_labels(
     return labels
 
 
+def _build_credentials_wrapper(claude_args: list[str]) -> str:
+    """
+    Build a shell wrapper that ensures credentials symlink exists before Claude starts.
+
+    The Docker sandbox volume persists credentials at /mnt/claude-data/credentials.json,
+    but Claude expects them at ~/.claude/credentials.json. This wrapper creates the
+    symlink synchronously BEFORE starting Claude, eliminating the race condition
+    that previously caused "Missing API key" errors when switching projects.
+
+    The wrapper uses:
+    - set -e: Exit on first error for fail-fast behavior
+    - $HOME instead of ~: More reliable expansion across shells
+    - touch with error suppression: Ensure target file exists (handles fresh volumes)
+    - ln -sf (not -snf): Better BusyBox/minimal shell compatibility
+    - exec claude: Replace shell for proper signal handling
+
+    Args:
+        claude_args: Arguments to pass to Claude (e.g., ["--resume", "-c"])
+
+    Returns:
+        Shell command string that creates symlink and execs Claude
+    """
+    # Escape Claude arguments for shell safety
+    escaped_args = " ".join(shlex.quote(arg) for arg in claude_args) if claude_args else ""
+
+    # Build wrapper script:
+    # 1. set -e: Exit immediately if any command fails
+    # 2. mkdir -p $HOME/.claude: Ensure directory exists (use $HOME not ~ for portability)
+    # 3. touch target file: Ensure credentials file exists (handles fresh volumes)
+    #    - 2>/dev/null || true: Suppress permission errors on root-owned volumes
+    # 4. ln -sf: Create symlink (s=symbolic, f=force replace)
+    #    - Removed -n flag for BusyBox compatibility
+    # 5. exec claude: Replace shell with Claude process for proper signal handling
+    wrapper = (
+        "set -e && "
+        'mkdir -p "$HOME/.claude" && '
+        "touch /mnt/claude-data/credentials.json 2>/dev/null || true && "
+        'ln -sf /mnt/claude-data/credentials.json "$HOME/.claude/credentials.json" && '
+        f"exec claude {escaped_args}".rstrip()
+    )
+    return wrapper
+
+
 def build_command(
     workspace: Path | None = None,
     continue_session: bool = False,
     resume: bool = False,
 ) -> list[str]:
     """
-    Build the docker sandbox run command.
+    Build the docker sandbox run command with credentials wrapper.
 
-    Docker sandbox run structure: docker sandbox run [sandbox-flags] claude [claude-args]
+    Docker sandbox run structure: docker sandbox run [sandbox-flags] sh -c "wrapper"
+
+    The wrapper script ensures the credentials symlink exists BEFORE Claude starts,
+    fixing the race condition that caused credential loss when switching projects.
 
     Note: Docker sandbox is ephemeral - it doesn't support --name, --label,
     or -e flags. Volume mounts and credentials are handled automatically.
@@ -199,18 +246,22 @@ def build_command(
     """
     cmd = ["docker", "sandbox", "run"]
 
-    # Add workspace mount (sandbox flag, goes before 'claude')
+    # Add workspace mount (sandbox flag, goes before 'sh')
     if workspace:
         cmd.extend(["-w", str(workspace)])
 
-    # Add the claude agent
-    cmd.append("claude")
-
-    # Add Claude-specific flags (go after 'claude')
+    # Build Claude arguments
+    claude_args = []
     if continue_session:
-        cmd.append("-c")
+        claude_args.append("-c")
     elif resume:
-        cmd.append("--resume")
+        claude_args.append("--resume")
+
+    # Build wrapper script that creates symlink before starting Claude
+    wrapper = _build_credentials_wrapper(claude_args)
+
+    # Use sh -c to run the wrapper script
+    cmd.extend(["sh", "-c", wrapper])
 
     return cmd
 
@@ -220,97 +271,25 @@ def build_start_command(container_name: str) -> list[str]:
     return ["docker", "start", "-ai", container_name]
 
 
-def _ensure_credentials_symlink() -> bool:
-    """
-    Ensure the credentials.json symlink exists in a running sandbox.
-
-    Docker Desktop's sandbox has a bug where credentials.json is not symlinked
-    from ~/.claude/ to /mnt/claude-data/, causing credentials to not persist.
-    This function creates the symlink if missing.
-
-    Returns:
-        True if symlink exists or was created successfully
-    """
-    import time
-
-    # Find the running sandbox container
-    sandboxes = list_running_sandboxes()
-    if not sandboxes:
-        return False
-
-    container_id = sandboxes[0].id
-
-    # Wait a moment for container to fully initialize
-    time.sleep(2)
-
-    try:
-        # Create symlink if it doesn't exist (idempotent)
-        result = subprocess.run(
-            [
-                "docker",
-                "exec",
-                container_id,
-                "sh",
-                "-c",
-                # Check if symlink exists, create if not
-                "[ -L /home/agent/.claude/credentials.json ] || "
-                "ln -sf /mnt/claude-data/credentials.json /home/agent/.claude/credentials.json",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return False
-
-
-def run(cmd: list[str], ensure_credentials: bool = True) -> int:
+def run(cmd: list[str]) -> int:
     """
     Execute the Docker command.
 
     On Unix: Uses os.execvp to replace current process (most efficient)
     On Windows: Uses subprocess.run
 
+    Credential persistence is now handled by the wrapper script in build_command(),
+    which creates the symlink synchronously before starting Claude. This eliminates
+    the race condition that previously required a fork/sleep workaround.
+
     Args:
         cmd: Command to execute
-        ensure_credentials: If True, spawn background process to ensure
-            credentials.json symlink exists (workaround for Docker Desktop bug)
 
     Raises:
         SandboxLaunchError: If Docker command fails to start
     """
     try:
-        # On Unix, fork a background process to fix credentials symlink
-        # This must happen BEFORE execvp since execvp replaces the process
-        if os.name != "nt" and ensure_credentials:
-            pid = os.fork()
-            if pid == 0:
-                # Child process: wait and ensure symlink
-                try:
-                    import sys
-                    import time
-
-                    # Detach from terminal
-                    os.setsid()
-
-                    # Wait for sandbox to start
-                    time.sleep(3)
-
-                    # Ensure symlink exists
-                    _ensure_credentials_symlink()
-
-                    # Exit child process silently
-                    sys.exit(0)
-                except Exception:
-                    # Intentional broad catch in forked child process.
-                    # Child must exit cleanly without tracebacks to avoid
-                    # polluting parent's stderr or causing hangs.
-                    # This is a best-effort workaround for Docker Desktop credential bugs.
-                    sys.exit(1)
-            # Parent continues to execvp
-
-        # Use execvp to replace current process (Unix)
+        # Use execvp to replace current process (Unix) - most efficient
         if os.name != "nt":
             os.execvp(cmd[0], cmd)
             # If execvp returns, something went wrong

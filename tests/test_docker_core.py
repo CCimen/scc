@@ -199,73 +199,155 @@ class TestBuildLabels:
 
 
 class TestBuildCommand:
-    """Tests for build_command() - Docker sandbox command construction."""
+    """Tests for build_command() - Docker sandbox command construction with wrapper.
+
+    The new command format uses a wrapper script to ensure credentials symlink
+    exists before Claude starts:
+    docker sandbox run [-w path] sh -c "mkdir ... && ln ... && exec claude [args]"
+    """
 
     def test_basic_command_structure(self):
-        """Command should start with 'docker sandbox run ... claude'."""
+        """Command should use sh -c wrapper with claude inside."""
         cmd = docker.build_command()
 
         assert cmd[0] == "docker"
         assert cmd[1] == "sandbox"
         assert cmd[2] == "run"
-        assert "claude" in cmd
+        assert "sh" in cmd
+        assert "-c" in cmd
+        # Claude command is inside the wrapper script
+        wrapper = cmd[-1]
+        assert "exec claude" in wrapper
+
+    def test_wrapper_creates_credentials_directory(self):
+        """Wrapper should create $HOME/.claude directory."""
+        cmd = docker.build_command()
+        wrapper = cmd[-1]
+
+        # Uses $HOME instead of ~ for shell portability
+        assert 'mkdir -p "$HOME/.claude"' in wrapper
+
+    def test_wrapper_creates_credentials_symlink(self):
+        """Wrapper should create credentials.json symlink."""
+        cmd = docker.build_command()
+        wrapper = cmd[-1]
+
+        # Uses -sf (not -snf) for BusyBox compatibility, $HOME for portability
+        assert (
+            'ln -sf /mnt/claude-data/credentials.json "$HOME/.claude/credentials.json"' in wrapper
+        )
+
+    def test_wrapper_exec_command_order(self):
+        """Wrapper should execute commands in correct order."""
+        cmd = docker.build_command()
+        wrapper = cmd[-1]
+
+        # Check order: set -e && mkdir && touch && ln && exec claude
+        set_e_pos = wrapper.find("set -e")
+        mkdir_pos = wrapper.find("mkdir")
+        touch_pos = wrapper.find("touch")
+        ln_pos = wrapper.find("ln -sf")
+        exec_pos = wrapper.find("exec claude")
+
+        assert set_e_pos < mkdir_pos < touch_pos < ln_pos < exec_pos, (
+            "Commands must be in order: set -e, mkdir, touch, ln, exec claude"
+        )
 
     def test_includes_workspace_flag(self, tmp_path):
-        """Should include -w flag with workspace path."""
+        """Should include -w flag with workspace path before sh."""
         workspace = tmp_path / "project"
         workspace.mkdir()
 
         cmd = docker.build_command(workspace=workspace)
 
         assert "-w" in cmd
-        idx = cmd.index("-w")
-        assert cmd[idx + 1] == str(workspace)
-
-    def test_workspace_flag_before_claude(self, tmp_path):
-        """Workspace flag should come before 'claude' argument."""
-        workspace = tmp_path / "project"
-        workspace.mkdir()
-
-        cmd = docker.build_command(workspace=workspace)
-
         w_idx = cmd.index("-w")
-        claude_idx = cmd.index("claude")
-        assert w_idx < claude_idx
+        assert cmd[w_idx + 1] == str(workspace)
+        # -w should come before sh
+        sh_idx = cmd.index("sh")
+        assert w_idx < sh_idx
 
-    def test_continue_session_flag(self):
-        """Should include -c flag when continue_session is True."""
+    def test_continue_session_flag_in_wrapper(self):
+        """Should include -c flag in wrapper when continue_session is True."""
         cmd = docker.build_command(continue_session=True)
+        wrapper = cmd[-1]
 
-        assert "-c" in cmd
+        assert "exec claude -c" in wrapper or "exec claude '-c'" in wrapper
 
-    def test_continue_flag_after_claude(self):
-        """Continue flag should come after 'claude' argument."""
-        cmd = docker.build_command(continue_session=True)
-
-        c_idx = cmd.index("-c")
-        claude_idx = cmd.index("claude")
-        assert c_idx > claude_idx
-
-    def test_resume_flag(self):
-        """Should include --resume flag when resume is True."""
+    def test_resume_flag_in_wrapper(self):
+        """Should include --resume flag in wrapper when resume is True."""
         cmd = docker.build_command(resume=True)
+        wrapper = cmd[-1]
 
-        assert "--resume" in cmd
-
-    def test_resume_flag_after_claude(self):
-        """Resume flag should come after 'claude' argument."""
-        cmd = docker.build_command(resume=True)
-
-        resume_idx = cmd.index("--resume")
-        claude_idx = cmd.index("claude")
-        assert resume_idx > claude_idx
+        assert "--resume" in wrapper
 
     def test_continue_takes_precedence_over_resume(self):
         """When both continue and resume are True, only -c should be used."""
         cmd = docker.build_command(continue_session=True, resume=True)
+        wrapper = cmd[-1]
 
-        assert "-c" in cmd
-        assert "--resume" not in cmd
+        assert "-c" in wrapper
+        assert "--resume" not in wrapper
+
+    def test_no_flags_when_not_specified(self):
+        """Should not include flags when neither continue nor resume specified."""
+        cmd = docker.build_command()
+        wrapper = cmd[-1]
+
+        # Should end with "exec claude" (no flags)
+        assert wrapper.rstrip().endswith("exec claude")
+
+
+class TestBuildCredentialsWrapper:
+    """Tests for _build_credentials_wrapper() helper function."""
+
+    def test_empty_args_returns_clean_wrapper(self):
+        """Wrapper with no args should end with 'exec claude'."""
+        wrapper = docker._build_credentials_wrapper([])
+
+        assert wrapper.endswith("exec claude")
+        assert 'mkdir -p "$HOME/.claude"' in wrapper
+        assert "ln -sf" in wrapper
+
+    def test_wrapper_starts_with_set_e(self):
+        """Wrapper should start with 'set -e' for fail-fast behavior."""
+        wrapper = docker._build_credentials_wrapper([])
+
+        assert wrapper.startswith("set -e")
+
+    def test_wrapper_includes_touch_command(self):
+        """Wrapper should touch credentials file to handle fresh volumes."""
+        wrapper = docker._build_credentials_wrapper([])
+
+        assert "touch /mnt/claude-data/credentials.json 2>/dev/null || true" in wrapper
+
+    def test_resume_arg_included(self):
+        """Wrapper should include --resume when passed."""
+        wrapper = docker._build_credentials_wrapper(["--resume"])
+
+        assert "exec claude --resume" in wrapper
+
+    def test_continue_arg_included(self):
+        """Wrapper should include -c when passed."""
+        wrapper = docker._build_credentials_wrapper(["-c"])
+
+        assert "exec claude -c" in wrapper or "exec claude '-c'" in wrapper
+
+    def test_shell_escaping_for_special_args(self):
+        """Wrapper should properly escape special characters in args."""
+        # Test with an arg that has spaces or special chars
+        wrapper = docker._build_credentials_wrapper(["--some-flag"])
+
+        # shlex.quote should be used for safety
+        assert "--some-flag" in wrapper
+
+    def test_shell_escaping_for_dangerous_args(self):
+        """Wrapper should escape dangerous shell characters."""
+        # shlex.quote protects against injection
+        wrapper = docker._build_credentials_wrapper(["arg; rm -rf /"])
+
+        # The dangerous command should be escaped/quoted, not executed
+        assert "rm -rf" not in wrapper or "'" in wrapper
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -520,7 +602,8 @@ class TestRun:
     """Tests for run() - Docker command execution.
 
     Note: We test error handling, not Docker daemon behavior.
-    The credential symlink workaround is INTENTIONAL and should not be flagged.
+    Credential persistence is now handled by the wrapper script in build_command(),
+    eliminating the previous fork/sleep workaround.
     """
 
     def test_raises_sandbox_launch_error_on_file_not_found(self):
@@ -548,7 +631,7 @@ class TestRun:
             patch("os.name", "nt"),
             patch("subprocess.run", return_value=mock_result) as mock_subprocess,
         ):
-            result = docker.run(["docker", "sandbox", "run"], ensure_credentials=False)
+            result = docker.run(["docker", "sandbox", "run"])
 
             mock_subprocess.assert_called_once()
             assert result == 0
