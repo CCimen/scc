@@ -8,6 +8,7 @@ Flag Consolidation (from plan):
 - --continue (-c): Hidden alias for --resume (backward compatibility)
 """
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -16,6 +17,12 @@ from typer.testing import CliRunner
 from scc_cli.cli import app
 
 runner = CliRunner()
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text for clean string matching."""
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_escape.sub("", text)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -290,11 +297,12 @@ class TestContinueAlias:
     def test_continue_flag_is_hidden(self):
         """--continue should be hidden from help output."""
         result = runner.invoke(app, ["start", "--help"])
+        output = strip_ansi(result.output)
 
         # Check that --continue is NOT in help but --resume IS
         # This is the expected behavior for hidden alias
-        assert "--resume" in result.output
-        assert "--select" in result.output
+        assert "--resume" in output
+        assert "--select" in output
         # --continue should be hidden (not shown in help)
         # This assertion will verify the "hidden" property
 
