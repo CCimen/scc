@@ -33,26 +33,34 @@ That's it. Check `scc --version` for version info, `scc doctor` if something's w
 
 ### How It Works
 
+```mermaid
+flowchart LR
+    subgraph source ["📁 Code Source"]
+        Repo["Your Repo"]
+        WT["Worktree<br/>(optional)"]
+    end
+
+    Session["📋 Session<br/>Work history<br/>Resume anytime"]
+    Container["🐳 Container<br/>Docker sandbox<br/>Claude Code runs here"]
+
+    Repo --> Session
+    WT -.->|"isolates branch"| Session
+    Session --> Container
+
+    style Session fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    classDef optional stroke-dasharray: 5 5,stroke:#888
+    class WT optional
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        SCC Mental Model                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   WORKTREE (optional)     SESSION              CONTAINER    │
-│   ┌─────────────┐        ┌─────────┐         ┌───────────┐ │
-│   │ Isolated    │        │ Your    │         │ Docker    │ │
-│   │ git branch  │───────▶│ work    │────────▶│ sandbox   │ │
-│   │ + directory │        │ history │         │ (secure)  │ │
-│   └─────────────┘        └─────────┘         └───────────┘ │
-│                                                             │
-│   scc worktree           scc start            scc list     │
-│   scc cleanup            --resume/--select    scc stop     │
-│                          scc sessions         scc prune    │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ Worktrees are optional. Most users just: scc start ~/repo  │
-└─────────────────────────────────────────────────────────────┘
-```
+
+> **Durability:** Sessions persist across restarts. Containers are ephemeral (recreated each launch).
+
+| Concept | Commands | Notes |
+|---------|----------|-------|
+| **Session** | `scc start`, `--resume`, `--select` | Your work history, the "brain" |
+| **Container** | `scc list`, `scc stop`, `scc prune` | Isolated Docker sandbox |
+| **Worktree** | `scc worktree`, `scc cleanup` | Optional parallel branches |
+
+**Most users just:** `scc start ~/repo` — worktrees are for parallel development.
 
 ## Installation
 
