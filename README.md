@@ -33,26 +33,22 @@ That's it. Check `scc --version` for version info, `scc doctor` if something's w
 
 ### How It Works
 
+```mermaid
+flowchart LR
+    subgraph source ["Code Source"]
+        Repo["Your Repo"]
+        WT["Worktree (optional)"]
+    end
+    Session["Session: Persistent history"]
+    Container["Container: Ephemeral sandbox"]
+    Repo --> Session
+    WT -.->|"branch isolation"| Session
+    Session --> Container
+    classDef optional stroke-dasharray: 5 5,stroke:#888
+    class WT optional
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        SCC Mental Model                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   WORKTREE (optional)     SESSION              CONTAINER    │
-│   ┌─────────────┐        ┌─────────┐         ┌───────────┐ │
-│   │ Isolated    │        │ Your    │         │ Docker    │ │
-│   │ git branch  │───────▶│ work    │────────▶│ sandbox   │ │
-│   │ + directory │        │ history │         │ (secure)  │ │
-│   └─────────────┘        └─────────┘         └───────────┘ │
-│                                                             │
-│   scc worktree           scc start            scc list     │
-│   scc cleanup            --resume/--select    scc stop     │
-│                          scc sessions         scc prune    │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ Worktrees are optional. Most users just: scc start ~/repo  │
-└─────────────────────────────────────────────────────────────┘
-```
+
+> Sessions persist across restarts. Containers are recreated each launch.
 
 ## Installation
 
