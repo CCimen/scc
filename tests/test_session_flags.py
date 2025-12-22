@@ -8,7 +8,7 @@ Flag Consolidation (from plan):
 - --continue (-c): Hidden alias for --resume (backward compatibility)
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -116,7 +116,7 @@ class TestResumeFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            result = runner.invoke(app, ["start", "-r"])
+            _result = runner.invoke(app, ["start", "-r"])
 
         mock_recent.assert_called_once()
 
@@ -163,7 +163,7 @@ class TestSelectFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            result = runner.invoke(app, ["start", "--select"])
+            _result = runner.invoke(app, ["start", "--select"])
 
         # Should have called the session picker
         mock_picker.assert_called_once()
@@ -191,7 +191,7 @@ class TestSelectFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            result = runner.invoke(app, ["start", "-s"])
+            _result = runner.invoke(app, ["start", "-s"])
 
         mock_picker.assert_called_once()
 
@@ -254,7 +254,7 @@ class TestContinueAlias:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            result = runner.invoke(app, ["start", "--continue"])
+            _result = runner.invoke(app, ["start", "--continue"])
 
         # Should behave like --resume (call get_most_recent)
         mock_recent.assert_called_once()
@@ -283,7 +283,7 @@ class TestContinueAlias:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            result = runner.invoke(app, ["start", "-c"])
+            _result = runner.invoke(app, ["start", "-c"])
 
         mock_recent.assert_called_once()
 

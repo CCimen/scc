@@ -331,7 +331,7 @@ class TestPruneStatusDetection:
             ),
             patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
         ):
-            result = runner.invoke(app, ["prune", "--yes"])
+            runner.invoke(app, ["prune", "--yes"])
 
         if is_stopped:
             # Should try to remove stopped containers
