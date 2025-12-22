@@ -21,6 +21,39 @@ Run Claude Code in Docker sandboxes with organization-managed team profiles and 
 
 SCC isolates AI execution in containers, enforces branch safety, and lets organizations distribute Claude plugins through a central configuration. Developers get standardized setups without manual configuration.
 
+## 30-Second Guide
+
+```bash
+pip install scc-cli      # Install
+scc setup                # Configure (interactive wizard, ~2 min)
+scc start ~/project      # Launch Claude Code in sandbox
+```
+
+That's it. Check `scc --version` for version info, `scc doctor` if something's wrong.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        SCC Mental Model                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   WORKTREE (optional)     SESSION              CONTAINER    │
+│   ┌─────────────┐        ┌─────────┐         ┌───────────┐ │
+│   │ Isolated    │        │ Your    │         │ Docker    │ │
+│   │ git branch  │───────▶│ work    │────────▶│ sandbox   │ │
+│   │ + directory │        │ history │         │ (secure)  │ │
+│   └─────────────┘        └─────────┘         └───────────┘ │
+│                                                             │
+│   scc worktree           scc start            scc list     │
+│   scc cleanup            --resume/--select    scc stop     │
+│                          scc sessions         scc prune    │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│ Worktrees are optional. Most users just: scc start ~/repo  │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Installation
 
 ```bash
@@ -48,25 +81,59 @@ scc start ~/projects/api-service --team platform
 scc doctor
 ```
 
+## Daily Commands
+
+Quick reference for everyday development:
+
+| Command | What it does |
+|---------|--------------|
+| `scc start ~/project` | Launch Claude Code in sandbox |
+| `scc start --resume` | Resume most recent session |
+| `scc start --select` | Pick from recent sessions |
+| `scc stop` | Stop running sandbox(es) |
+| `scc list` | Show running containers |
+| `scc prune` | Clean up stopped containers |
+| `scc doctor` | Check system health |
+| `scc config explain` | Debug why something was blocked |
+| `scc teams` | List available team profiles |
+| `scc setup --team <name>` | Switch to a different team |
+
 ## Usage
+
+### Interactive mode
+
+Running `scc` without arguments launches an interactive workspace selector:
+
+```bash
+scc
+```
+
+This shows recent workspaces and lets you pick where to start. For CI/scripts, use explicit commands instead:
+
+```bash
+# CI/automation: always specify the path explicitly
+scc start /path/to/repo --team platform
+```
 
 ### Starting sessions
 
 ```bash
-# Interactive mode
-scc
-
 # With team profile
 scc start ~/projects/my-repo --team platform
 
-# Continue most recent session
-scc start --continue
+# Resume most recent session
+scc start --resume
+
+# Pick from recent sessions interactively
+scc start --select
 
 # Offline mode (cache only)
 scc start ~/projects/my-repo --offline
 ```
 
 ### Parallel development with worktrees
+
+Use worktrees when you need to work on multiple features simultaneously without context switching. Each worktree gets its own directory, branch, and Claude session—ideal for parallel AI-assisted development.
 
 ```bash
 # Create isolated workspace
@@ -105,6 +172,20 @@ scc sessions
 # View usage stats
 scc stats
 ```
+
+### Switching teams
+
+To change your team profile without running the full setup wizard:
+
+```bash
+# Switch to a different team
+scc setup --team backend-java
+
+# See available teams first
+scc teams
+```
+
+This updates your profile selection while keeping your organization connection intact.
 
 ### Temporary overrides
 
@@ -152,6 +233,7 @@ Exit code 0 means all manifests parsed. Exit code 1 means parsing errors found.
 | `scc stats` | View usage statistics |
 | `scc statusline` | Configure status line for worktree info |
 | `scc list` | List running containers |
+| `scc prune` | Remove stopped containers (dry-run by default) |
 | `scc worktree <repo> <name>` | Create git worktree |
 | `scc worktrees <repo>` | List worktrees |
 | `scc cleanup <repo> <name>` | Remove worktree |
@@ -263,6 +345,23 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 Run inside WSL2, not Windows. Keep projects in the Linux filesystem for acceptable performance.
 
+### Container management
+
+SCC containers accumulate over time. Clean them up safely:
+
+```bash
+# See what would be removed (dry run, default)
+scc prune
+
+# Actually remove stopped containers
+scc prune --yes
+
+# To clean up everything: stop first, then prune
+scc stop && scc prune --yes
+```
+
+`scc prune` only removes **stopped** SCC containers (labeled `scc.managed=true`). It never touches running containers or non-SCC workloads.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) - system design, module structure, data flow
@@ -282,6 +381,23 @@ uv run pytest
 # Run linter
 uv run ruff check --fix
 ```
+
+## Optional: Shell Completion
+
+Enable tab completion for scc commands:
+
+```bash
+# Bash
+scc --install-completion bash
+
+# Zsh
+scc --install-completion zsh
+
+# Fish
+scc --install-completion fish
+```
+
+Restart your shell after installation.
 
 ## License
 

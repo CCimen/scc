@@ -370,7 +370,7 @@ scc teams
 
 ## Session Won't Resume
 
-**Symptom**: `scc start --continue` doesn't find your session
+**Symptom**: `scc start --resume` doesn't find your session
 
 **Diagnosis**:
 ```bash
@@ -379,8 +379,8 @@ scc sessions
 
 **Possible causes**:
 
-1. **Container removed** - Run `docker container prune` carefully; it removes stopped containers
-2. **Different workspace** - `--continue` matches by workspace path
+1. **Container removed** - If you ran `scc prune --yes`, stopped containers are removed
+2. **Different workspace** - `--resume` matches by workspace path
 3. **No previous sessions** - Check `~/.cache/scc/` for session data
 
 **Solution**: Start fresh:
@@ -421,19 +421,23 @@ scc teams --sync
 
 **Symptom**: Docker uses lots of disk space
 
-**Cause**: SCC creates containers that aren't auto-cleaned
+**Cause**: SCC containers accumulate over time and aren't auto-cleaned
 
 **Solution**:
 ```bash
-# List scc containers
-docker ps -a --filter "name=scc-"
+# See what would be removed (dry run)
+scc prune
 
-# Remove stopped containers
-docker container prune
+# Remove stopped SCC containers
+scc prune --yes
 
-# Remove old scc containers specifically
-docker rm $(docker ps -a -q --filter "name=scc-" --filter "status=exited")
+# To clean everything: stop running containers first
+scc stop && scc prune --yes
 ```
+
+`scc prune` only removes **stopped** containers labeled `scc.managed=true`. It never touches running containers or non-SCC workloads.
+
+**Warning**: Avoid `docker container prune` — it removes ALL stopped containers, including non-SCC workloads.
 
 ## MCP Server Connection Failed
 

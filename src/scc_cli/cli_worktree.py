@@ -342,3 +342,102 @@ def stop_cmd(
                 f"Could not stop: {', '.join(failed)}",
             )
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prune Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _is_container_stopped(status: str) -> bool:
+    """Check if a container status indicates it's stopped (not running).
+
+    Docker status strings:
+    - "Up 2 hours" / "Up 30 seconds" / "Up 2 hours (healthy)" = running
+    - "Exited (0) 2 hours ago" / "Exited (137) 5 seconds ago" = stopped
+    - "Created" = created but never started (stopped)
+    - "Dead" = dead container (stopped)
+    """
+    status_lower = status.lower()
+    # Running containers have status starting with "up"
+    if status_lower.startswith("up"):
+        return False
+    # Everything else is stopped: Exited, Created, Dead, etc.
+    return True
+
+
+@handle_errors
+def prune_cmd(
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Actually remove containers (default is dry-run)"
+    ),
+) -> None:
+    """Remove stopped SCC containers.
+
+    By default, shows what would be removed (dry-run).
+    Use --yes to actually remove containers.
+
+    Only removes STOPPED containers with scc.managed=true label.
+    Running containers are never affected.
+
+    Examples:
+        scc prune              # Show what would be removed
+        scc prune --yes        # Actually remove stopped containers
+        scc stop && scc prune --yes  # Stop then remove all
+    """
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
+        all_containers = docker.list_scc_containers()
+
+    # Filter to only stopped containers
+    stopped = [c for c in all_containers if _is_container_stopped(c.status)]
+
+    if not stopped:
+        console.print(
+            create_info_panel(
+                "Nothing to Prune",
+                "No stopped SCC containers found.",
+                "Run 'scc stop' first to stop running containers, then prune.",
+            )
+        )
+        return
+
+    # Dry-run mode (default)
+    if not yes:
+        console.print(
+            create_info_panel(
+                "Dry Run - Would Remove",
+                f"{len(stopped)} stopped container(s):",
+                "\n".join(f"  • {c.name}" for c in stopped),
+            )
+        )
+        console.print("\n[dim]Run with --yes to actually remove.[/dim]")
+        return
+
+    # Actually remove containers
+    console.print(f"[cyan]Removing {len(stopped)} stopped container(s)...[/cyan]")
+
+    removed = []
+    failed = []
+    for c in stopped:
+        with Status(f"[cyan]Removing {c.name}...[/cyan]", console=console):
+            if docker.remove_container(c.name):
+                removed.append(c.name)
+            else:
+                failed.append(c.name)
+
+    if removed:
+        console.print(
+            create_success_panel(
+                "Containers Removed",
+                {"Removed": str(len(removed)), "Names": ", ".join(removed)},
+            )
+        )
+
+    if failed:
+        console.print(
+            create_warning_panel(
+                "Some Failed",
+                f"Could not remove: {', '.join(failed)}",
+            )
+        )
+        raise typer.Exit(1)

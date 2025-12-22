@@ -826,8 +826,8 @@ def launch_with_org_config_v2(
         for denied in effective.denied_additions:
             print(f"⚠️  '{denied.item}' was denied: {denied.reason}")
             # Add fix-it command - make it stand out
-            cmd = generate_unblock_command(denied.item, "plugin")
-            print(f"   → To unblock: {cmd}")
+            fix_cmd = generate_unblock_command(denied.item, "plugin")
+            print(f"   → To unblock: {fix_cmd}")
 
     # Warn about stale cache when offline
     if is_offline and cache_age_hours is not None and cache_age_hours > 24:

@@ -38,6 +38,7 @@ from .cli_launch import start
 from .cli_worktree import (
     cleanup_cmd,
     list_cmd,
+    prune_cmd,
     sessions_cmd,
     stop_cmd,
     worktree_cmd,
@@ -108,8 +109,9 @@ def main_callback(
             workspace=None,
             team=None,
             session_name=None,
-            continue_session=False,
             resume=False,
+            select=False,
+            continue_session=False,
             worktree_name=None,
             fresh=False,
         )
@@ -129,6 +131,7 @@ app.command(name="cleanup")(cleanup_cmd)
 app.command(name="sessions")(sessions_cmd)
 app.command(name="list")(list_cmd)
 app.command(name="stop")(stop_cmd)
+app.command(name="prune")(prune_cmd)
 
 # Configuration commands
 app.command(name="teams")(teams_cmd)

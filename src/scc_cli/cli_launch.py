@@ -43,9 +43,12 @@ launch_app = typer.Typer(
 def start(
     workspace: str | None = typer.Argument(None, help="Path to workspace (optional)"),
     team: str | None = typer.Option(None, "-t", "--team", help="Team profile to use"),
-    session_name: str | None = typer.Option(None, "-s", "--session", help="Session name"),
-    continue_session: bool = typer.Option(False, "-c", "--continue", help="Continue last session"),
-    resume: bool = typer.Option(False, "-r", "--resume", help="Show session picker"),
+    session_name: str | None = typer.Option(None, "--session", help="Session name"),
+    resume: bool = typer.Option(False, "-r", "--resume", help="Resume most recent session"),
+    select: bool = typer.Option(False, "-s", "--select", help="Select from recent sessions"),
+    continue_session: bool = typer.Option(
+        False, "-c", "--continue", hidden=True, help="Alias for --resume (deprecated)"
+    ),
     worktree_name: str | None = typer.Option(
         None, "-w", "--worktree", help="Create worktree with this name"
     ),
@@ -70,14 +73,33 @@ def start(
 
     cfg = config.load_config()
 
-    # Interactive mode if no workspace provided
-    if workspace is None and not continue_session and not resume:
+    # Treat --continue as alias for --resume (backward compatibility)
+    if continue_session:
+        resume = True
+
+    # Interactive mode if no workspace provided and no session flags
+    if workspace is None and not resume and not select:
         workspace, team, session_name, worktree_name = interactive_start(cfg)
         if workspace is None:
             raise typer.Exit()
 
-    # Auto-select most recent session when --continue without workspace
-    if continue_session and workspace is None:
+    # Handle --select: interactive session picker
+    if select and workspace is None:
+        recent_sessions = sessions.list_recent(limit=10)
+        if not recent_sessions:
+            console.print("[yellow]No recent sessions found.[/yellow]")
+            raise typer.Exit(1)
+        selected = ui.select_session(console, recent_sessions)
+        if selected is None:
+            # User cancelled
+            raise typer.Exit()
+        workspace = selected.get("workspace")
+        if not team:
+            team = selected.get("team")
+        console.print(f"[dim]Selected: {workspace}[/dim]")
+
+    # Handle --resume: auto-select most recent session
+    elif resume and workspace is None:
         recent_session = sessions.get_most_recent()
         if recent_session:
             workspace = recent_session.get("workspace")
@@ -193,12 +215,14 @@ def start(
     docker.prepare_sandbox_volume_for_credentials()
 
     # Get or create container (re-use pattern)
+    # Unify resume flags: --resume and --continue both enable Claude session continuity
+    should_continue_session = resume or continue_session
     docker_cmd, is_resume = docker.get_or_create_container(
         workspace=mount_path,
         branch=current_branch,
         profile=team,
         force_new=fresh,
-        continue_session=continue_session,
+        continue_session=should_continue_session,
         env_vars=None,
     )
 
