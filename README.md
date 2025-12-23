@@ -323,11 +323,12 @@ Edit with `scc config --edit`.
 
 ## Troubleshooting
 
-Run `scc doctor` to diagnose issues.
+Run `scc doctor` to diagnose issues. For JSON config errors, doctor displays colorized code frames showing the exact line and column where syntax errors occur.
 
 | Problem | Solution |
 |---------|----------|
 | Docker not reachable | Start Docker Desktop |
+| Config file has JSON error | Doctor shows error location with code frame |
 | Organization config fetch failed | Check URL and token |
 | Slow file operations (WSL2) | Move project to `~/projects`, not `/mnt/c/` |
 | Permission denied (Linux) | `sudo usermod -aG docker $USER` |

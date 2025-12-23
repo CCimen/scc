@@ -7,12 +7,195 @@ These tests verify the new architecture requirements:
 - Credential injection verification
 - Cache status checks
 - Migration status checks
+- JSON validation with enhanced error display (DX improvement)
 """
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 from scc_cli import doctor
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for JSON Validation Helpers (DX Enhancement)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestValidateJsonFile:
+    """Tests for validate_json_file() function."""
+
+    def test_returns_valid_for_correct_json(self, tmp_path: Path) -> None:
+        """Should return valid=True for correct JSON."""
+        json_file = tmp_path / "valid.json"
+        json_file.write_text('{"key": "value", "number": 42}')
+
+        result = doctor.validate_json_file(json_file)
+
+        assert result.valid is True
+        assert result.error_message is None
+        assert result.line is None
+        assert result.code_frame is None
+
+    def test_returns_invalid_with_line_info_for_bad_json(self, tmp_path: Path) -> None:
+        """Should return valid=False with line/column for invalid JSON."""
+        json_file = tmp_path / "invalid.json"
+        json_file.write_text('{\n  "key": "value"\n  "missing_comma": true\n}')
+
+        result = doctor.validate_json_file(json_file)
+
+        assert result.valid is False
+        assert result.error_message is not None
+        assert result.line is not None
+        assert result.line >= 1
+        assert result.code_frame is not None
+
+    def test_returns_valid_for_nonexistent_file(self, tmp_path: Path) -> None:
+        """Should return valid=True for non-existent file (no error)."""
+        json_file = tmp_path / "does_not_exist.json"
+
+        result = doctor.validate_json_file(json_file)
+
+        assert result.valid is True
+
+    def test_returns_error_for_empty_object(self, tmp_path: Path) -> None:
+        """Should return valid=True for empty but valid JSON."""
+        json_file = tmp_path / "empty.json"
+        json_file.write_text("{}")
+
+        result = doctor.validate_json_file(json_file)
+
+        assert result.valid is True
+
+    def test_captures_trailing_comma_error(self, tmp_path: Path) -> None:
+        """Should capture trailing comma errors with correct location."""
+        json_file = tmp_path / "trailing_comma.json"
+        json_file.write_text('{"key": "value",}')
+
+        result = doctor.validate_json_file(json_file)
+
+        assert result.valid is False
+        assert result.error_message is not None
+        assert result.code_frame is not None
+
+
+class TestFormatCodeFrame:
+    """Tests for format_code_frame() function."""
+
+    def test_creates_code_frame_with_arrow(self) -> None:
+        """Should create code frame with arrow pointing to error line."""
+        content = '{\n  "key": "value"\n  "error_here": true\n}'
+        result = doctor.format_code_frame(content, 3, 3, Path("test.json"))
+
+        assert "→" in result  # Arrow indicator
+        assert "3" in result  # Line number
+        assert "^" in result  # Caret pointing to column
+
+    def test_includes_context_lines(self) -> None:
+        """Should include context lines before and after error."""
+        content = "line1\nline2\nline3\nline4\nline5"
+        result = doctor.format_code_frame(content, 3, 1, Path("test.json"), context_lines=2)
+
+        assert "1" in result  # Line 1 should be included
+        assert "5" in result  # Line 5 should be included
+
+    def test_truncates_long_lines(self) -> None:
+        """Should truncate lines longer than 80 characters."""
+        long_line = "x" * 100
+        content = f'{{\n  "key": "{long_line}"\n}}'
+        result = doctor.format_code_frame(content, 2, 1, Path("test.json"))
+
+        # Long line should be truncated with ...
+        assert "..." in result
+
+    def test_includes_file_path_header(self) -> None:
+        """Should include file path in header."""
+        content = '{"key": "value"}'
+        result = doctor.format_code_frame(content, 1, 1, Path("/path/to/config.json"))
+
+        assert "config.json" in result
+
+
+class TestGetJsonErrorHints:
+    """Tests for get_json_error_hints() function."""
+
+    def test_provides_hint_for_missing_comma(self) -> None:
+        """Should provide hint for missing comma error."""
+        hints = doctor.get_json_error_hints("Expecting ',' delimiter")
+
+        assert len(hints) > 0
+        assert any("comma" in h.lower() for h in hints)
+
+    def test_provides_hint_for_trailing_comma(self) -> None:
+        """Should provide hint for trailing comma error."""
+        hints = doctor.get_json_error_hints("Expecting property name enclosed in double quotes")
+
+        assert len(hints) > 0
+        assert any("trailing" in h.lower() or "brace" in h.lower() for h in hints)
+
+    def test_provides_hint_for_missing_colon(self) -> None:
+        """Should provide hint for missing colon error."""
+        hints = doctor.get_json_error_hints("Expecting ':'")
+
+        assert len(hints) > 0
+        assert any("colon" in h.lower() for h in hints)
+
+    def test_provides_generic_hint_for_unknown_error(self) -> None:
+        """Should provide generic hint for unknown errors."""
+        hints = doctor.get_json_error_hints("Some unknown error message")
+
+        assert len(hints) > 0
+        assert any("syntax" in h.lower() or "json" in h.lower() for h in hints)
+
+
+class TestCheckUserConfigValid:
+    """Tests for check_user_config_valid() function."""
+
+    def test_returns_ok_when_config_valid(self, tmp_path: Path) -> None:
+        """Should return OK when user config is valid JSON."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{"config_version": "1.0.0", "standalone": false}')
+
+        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+            result = doctor.check_user_config_valid()
+
+        assert result.passed is True
+        assert result.code_frame is None
+
+    def test_returns_ok_when_no_config_file(self, tmp_path: Path) -> None:
+        """Should return OK (info) when no config file exists."""
+        config_file = tmp_path / "config.json"  # Does not exist
+
+        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+            result = doctor.check_user_config_valid()
+
+        assert result.passed is True
+        assert result.severity == "info"
+
+    def test_returns_error_with_code_frame_for_invalid_json(self, tmp_path: Path) -> None:
+        """Should return error with code frame for invalid JSON."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{\n  "key": "value"\n  "missing_comma": true\n}')
+
+        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+            result = doctor.check_user_config_valid()
+
+        assert result.passed is False
+        assert result.severity == "error"
+        assert result.code_frame is not None
+        assert "→" in result.code_frame  # Has arrow indicator
+        assert result.fix_hint is not None
+
+    def test_includes_line_number_in_message(self, tmp_path: Path) -> None:
+        """Should include line number in error message."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{\n  "key": "value",\n}')  # Trailing comma
+
+        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+            result = doctor.check_user_config_valid()
+
+        assert result.passed is False
+        assert "line" in result.message.lower()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for check_org_config_reachable
@@ -272,6 +455,19 @@ class TestCheckCacheReadable:
         assert result.passed is False
         assert result.severity == "error"
 
+    def test_returns_code_frame_for_corrupted_cache(self, tmp_path):
+        """Should return code frame for corrupted cache JSON (DX enhancement)."""
+        cache_file = tmp_path / "org_config.json"
+        cache_file.write_text('{\n  "org": "test"\n  "missing_comma": true\n}')
+
+        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+            result = doctor.check_cache_readable()
+
+        assert result is not None
+        assert result.passed is False
+        assert result.code_frame is not None
+        assert "→" in result.code_frame  # Has arrow indicator
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for check_cache_ttl_status
@@ -438,6 +634,7 @@ class TestRunAllChecks:
             name="WSL2", passed=True, message="not WSL2", severity="info"
         )
         mock_config = doctor.CheckResult(name="Config", passed=True, message="exists")
+        mock_user_config = doctor.CheckResult(name="User Config", passed=True, message="valid")
         mock_org = doctor.CheckResult(name="Org Config", passed=True, message="reachable")
         mock_auth = doctor.CheckResult(name="Auth", passed=True, message="ok")
         mock_injection = doctor.CheckResult(name="Injection", passed=True, message="ok")
@@ -452,6 +649,7 @@ class TestRunAllChecks:
             patch("scc_cli.doctor.check_docker_running", return_value=mock_daemon),
             patch("scc_cli.doctor.check_wsl2", return_value=(mock_wsl2, False)),
             patch("scc_cli.doctor.check_config_directory", return_value=mock_config),
+            patch("scc_cli.doctor.check_user_config_valid", return_value=mock_user_config),
             patch("scc_cli.doctor.check_org_config_reachable", return_value=mock_org),
             patch("scc_cli.doctor.check_marketplace_auth_available", return_value=mock_auth),
             patch("scc_cli.doctor.check_credential_injection", return_value=mock_injection),
@@ -462,8 +660,9 @@ class TestRunAllChecks:
             results = doctor.run_all_checks()
 
         # Should have multiple checks
-        assert len(results) >= 6
+        assert len(results) >= 7
 
         # Should include new check categories
         check_names = [r.name for r in results]
+        assert "User Config" in check_names
         assert "Org Config" in check_names or any("org" in n.lower() for n in check_names)
