@@ -199,62 +199,48 @@ class TestBuildLabels:
 
 
 class TestBuildCommand:
-    """Tests for build_command() - Docker sandbox command construction with wrapper.
+    """Tests for build_command() - Docker sandbox command construction.
 
-    The new command format uses a wrapper script to ensure credentials symlink
-    exists before Claude starts:
-    docker sandbox run [-w path] sh -c "mkdir ... && ln ... && exec claude [args]"
+    Command format: docker sandbox run [-w path] claude [args]
+    Credential persistence is handled by:
+    - Docker sandbox auto-mounts docker-claude-sandbox-data:/mnt/claude-data
+    - run() forking a child process to create symlinks inside container
     """
 
     def test_basic_command_structure(self):
-        """Command should use sh -c wrapper with claude inside."""
+        """Command should have correct docker sandbox structure."""
         cmd = docker.build_command()
 
         assert cmd[0] == "docker"
         assert cmd[1] == "sandbox"
         assert cmd[2] == "run"
-        assert "sh" in cmd
-        assert "-c" in cmd
-        # Claude command is inside the wrapper script
-        wrapper = cmd[-1]
-        assert "exec claude" in wrapper
+        assert "claude" in cmd
 
-    def test_wrapper_creates_credentials_directory(self):
-        """Wrapper should create $HOME/.claude directory."""
+    def test_no_explicit_volume_mount(self):
+        """Should NOT include explicit volume mount (Docker sandbox auto-mounts it).
+
+        Docker sandbox automatically mounts docker-claude-sandbox-data:/mnt/claude-data.
+        Adding an explicit -v flag causes "Duplicate mount point" error.
+        """
         cmd = docker.build_command()
-        wrapper = cmd[-1]
 
-        # Uses $HOME instead of ~ for shell portability
-        assert 'mkdir -p "$HOME/.claude"' in wrapper
+        # Volume mount should NOT be present (Docker sandbox handles it)
+        assert "-v" not in cmd
 
-    def test_wrapper_creates_credentials_symlink(self):
-        """Wrapper should create credentials.json symlink."""
+    def test_does_not_use_credentials_flag(self):
+        """Should NOT use --credentials flag (we use symlink workaround instead)."""
         cmd = docker.build_command()
-        wrapper = cmd[-1]
 
-        # Uses -sf (not -snf) for BusyBox compatibility, $HOME for portability
-        assert (
-            'ln -sf /mnt/claude-data/credentials.json "$HOME/.claude/credentials.json"' in wrapper
-        )
+        assert "--credentials" not in cmd
 
-    def test_wrapper_exec_command_order(self):
-        """Wrapper should execute commands in correct order."""
+    def test_claude_is_agent(self):
+        """Claude should be specified as the agent."""
         cmd = docker.build_command()
-        wrapper = cmd[-1]
 
-        # Check order: set -e && mkdir && touch && ln && exec claude
-        set_e_pos = wrapper.find("set -e")
-        mkdir_pos = wrapper.find("mkdir")
-        touch_pos = wrapper.find("touch")
-        ln_pos = wrapper.find("ln -sf")
-        exec_pos = wrapper.find("exec claude")
-
-        assert set_e_pos < mkdir_pos < touch_pos < ln_pos < exec_pos, (
-            "Commands must be in order: set -e, mkdir, touch, ln, exec claude"
-        )
+        assert "claude" in cmd
 
     def test_includes_workspace_flag(self, tmp_path):
-        """Should include -w flag with workspace path before sh."""
+        """Should include -w flag with workspace path before claude."""
         workspace = tmp_path / "project"
         workspace.mkdir()
 
@@ -263,91 +249,88 @@ class TestBuildCommand:
         assert "-w" in cmd
         w_idx = cmd.index("-w")
         assert cmd[w_idx + 1] == str(workspace)
-        # -w should come before sh
-        sh_idx = cmd.index("sh")
-        assert w_idx < sh_idx
+        # -w should come before claude
+        claude_idx = cmd.index("claude")
+        assert w_idx < claude_idx
 
-    def test_continue_session_flag_in_wrapper(self):
-        """Should include -c flag in wrapper when continue_session is True."""
+    def test_continue_session_flag(self):
+        """Should include -c flag after claude when continue_session is True."""
         cmd = docker.build_command(continue_session=True)
-        wrapper = cmd[-1]
 
-        assert "exec claude -c" in wrapper or "exec claude '-c'" in wrapper
+        claude_idx = cmd.index("claude")
+        assert "-c" in cmd
+        assert cmd.index("-c") > claude_idx
 
-    def test_resume_flag_in_wrapper(self):
-        """Should include --resume flag in wrapper when resume is True."""
+    def test_resume_flag(self):
+        """Should include --resume flag after claude when resume is True."""
         cmd = docker.build_command(resume=True)
-        wrapper = cmd[-1]
 
-        assert "--resume" in wrapper
+        claude_idx = cmd.index("claude")
+        assert "--resume" in cmd
+        assert cmd.index("--resume") > claude_idx
 
     def test_continue_takes_precedence_over_resume(self):
         """When both continue and resume are True, only -c should be used."""
         cmd = docker.build_command(continue_session=True, resume=True)
-        wrapper = cmd[-1]
 
-        assert "-c" in wrapper
-        assert "--resume" not in wrapper
+        assert "-c" in cmd
+        assert "--resume" not in cmd
 
-    def test_no_flags_when_not_specified(self):
-        """Should not include flags when neither continue nor resume specified."""
+    def test_no_session_flags_when_not_specified(self):
+        """Should not include session flags when neither continue nor resume specified."""
         cmd = docker.build_command()
-        wrapper = cmd[-1]
 
-        # Should end with "exec claude" (no flags)
-        assert wrapper.rstrip().endswith("exec claude")
+        assert "-c" not in cmd
+        assert "--resume" not in cmd
+        # Without session flags, command should end with 'claude'
+        assert cmd[-1] == "claude"
+        # Verify expected command structure: docker sandbox run claude
+        # (no explicit volume mount - Docker sandbox auto-mounts it)
+        assert cmd == ["docker", "sandbox", "run", "claude"]
 
+    def test_detached_mode_includes_d_flag(self):
+        """When detached=True, command should include -d flag."""
+        cmd = docker.build_command(detached=True)
 
-class TestBuildCredentialsWrapper:
-    """Tests for _build_credentials_wrapper() helper function."""
+        assert "-d" in cmd
+        # Agent name is ALWAYS required by docker sandbox run
+        assert cmd == ["docker", "sandbox", "run", "-d", "claude"]
 
-    def test_empty_args_returns_clean_wrapper(self):
-        """Wrapper with no args should end with 'exec claude'."""
-        wrapper = docker._build_credentials_wrapper([])
+    def test_detached_mode_includes_claude_agent(self):
+        """When detached=True, command should still include claude agent (required by docker)."""
+        cmd = docker.build_command(detached=True)
 
-        assert wrapper.endswith("exec claude")
-        assert 'mkdir -p "$HOME/.claude"' in wrapper
-        assert "ln -sf" in wrapper
+        # docker sandbox run ALWAYS requires the agent name
+        assert "claude" in cmd
 
-    def test_wrapper_starts_with_set_e(self):
-        """Wrapper should start with 'set -e' for fail-fast behavior."""
-        wrapper = docker._build_credentials_wrapper([])
+    def test_detached_mode_skips_session_flags(self):
+        """When detached=True, session flags should be skipped (passed via exec later)."""
+        cmd = docker.build_command(detached=True, continue_session=True, resume=True)
 
-        assert wrapper.startswith("set -e")
+        assert "-d" in cmd
+        assert "claude" in cmd
+        # Session flags are passed via docker exec, not during container creation
+        assert "-c" not in cmd
+        assert "--resume" not in cmd
 
-    def test_wrapper_includes_touch_command(self):
-        """Wrapper should touch credentials file to handle fresh volumes."""
-        wrapper = docker._build_credentials_wrapper([])
+    def test_detached_with_workspace(self, tmp_path):
+        """Detached mode should still include workspace path."""
+        workspace = tmp_path / "project"
+        workspace.mkdir()
 
-        assert "touch /mnt/claude-data/credentials.json 2>/dev/null || true" in wrapper
+        cmd = docker.build_command(workspace=workspace, detached=True)
 
-    def test_resume_arg_included(self):
-        """Wrapper should include --resume when passed."""
-        wrapper = docker._build_credentials_wrapper(["--resume"])
+        assert "-d" in cmd
+        assert "-w" in cmd
+        assert str(workspace) in cmd
+        assert "claude" in cmd  # Agent always required
 
-        assert "exec claude --resume" in wrapper
+    def test_default_not_detached(self):
+        """By default, detached should be False and command includes claude."""
+        cmd = docker.build_command()
 
-    def test_continue_arg_included(self):
-        """Wrapper should include -c when passed."""
-        wrapper = docker._build_credentials_wrapper(["-c"])
-
-        assert "exec claude -c" in wrapper or "exec claude '-c'" in wrapper
-
-    def test_shell_escaping_for_special_args(self):
-        """Wrapper should properly escape special characters in args."""
-        # Test with an arg that has spaces or special chars
-        wrapper = docker._build_credentials_wrapper(["--some-flag"])
-
-        # shlex.quote should be used for safety
-        assert "--some-flag" in wrapper
-
-    def test_shell_escaping_for_dangerous_args(self):
-        """Wrapper should escape dangerous shell characters."""
-        # shlex.quote protects against injection
-        wrapper = docker._build_credentials_wrapper(["arg; rm -rf /"])
-
-        # The dangerous command should be escaped/quoted, not executed
-        assert "rm -rf" not in wrapper or "'" in wrapper
+        assert "-d" not in cmd
+        assert "claude" in cmd
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -806,6 +789,9 @@ class TestListRunningSandboxes:
 
 class TestPrepareSandboxVolumeForCredentials:
     """Tests for prepare_sandbox_volume_for_credentials().
+
+    Prepares both .claude.json (OAuth/Claude Max) and credentials.json (API keys)
+    in the Docker volume with proper permissions for the agent user (uid=1000).
 
     NOTE: This is an INTENTIONAL workaround for Docker Desktop bugs.
     We test that the workaround WORKS, not that it "should not exist".
