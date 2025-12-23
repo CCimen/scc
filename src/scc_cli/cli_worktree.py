@@ -420,24 +420,30 @@ def _is_container_stopped(status: str) -> bool:
 @handle_errors
 def prune_cmd(
     yes: bool = typer.Option(
-        False, "--yes", "-y", help="Actually remove containers (default is dry-run)"
+        False, "--yes", "-y", "-f", help="Skip confirmation prompt (for scripts/CI)"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Only show what would be removed, don't prompt"
     ),
 ) -> None:
     """Remove stopped SCC containers.
 
-    By default, shows what would be removed (dry-run).
-    Use --yes to actually remove containers.
+    Shows stopped containers and prompts for confirmation before removing.
+    Use --yes/-f to skip confirmation (for scripts).
+    Use --dry-run to only preview without prompting.
 
-    Only removes STOPPED containers with scc.managed=true label.
-    Running containers are never affected.
+    Only removes STOPPED containers. Running containers are never affected.
 
     Examples:
-        scc prune              # Show what would be removed
-        scc prune --yes        # Actually remove stopped containers
-        scc stop && scc prune --yes  # Stop then remove all
+        scc prune              # Show containers, prompt to remove
+        scc prune --yes        # Remove without prompting (CI/scripts)
+        scc prune --dry-run    # Only show what would be removed
     """
     with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
-        all_containers = docker.list_scc_containers()
+        # Use _list_all_sandbox_containers to find ALL sandbox containers (by image)
+        # This matches how stop_cmd uses list_running_sandboxes (also by image)
+        # Containers created by Docker Desktop directly don't have SCC labels
+        all_containers = docker._list_all_sandbox_containers()
 
     # Filter to only stopped containers
     stopped = [c for c in all_containers if _is_container_stopped(c.status)]
@@ -452,17 +458,22 @@ def prune_cmd(
         )
         return
 
-    # Dry-run mode (default)
-    if not yes:
-        console.print(
-            create_info_panel(
-                "Dry Run - Would Remove",
-                f"{len(stopped)} stopped container(s):",
-                "\n".join(f"  • {c.name}" for c in stopped),
-            )
-        )
-        console.print("\n[dim]Run with --yes to actually remove.[/dim]")
+    # Always show what will be removed
+    console.print(f"\n[bold]Found {len(stopped)} stopped container(s):[/bold]")
+    for c in stopped:
+        console.print(f"  • {c.name}")
+    console.print()
+
+    # Dry-run mode: just show and exit
+    if dry_run:
+        console.print("[dim]Dry run complete. No containers removed.[/dim]")
         return
+
+    # Interactive confirmation (unless --yes/-f)
+    if not yes:
+        if not typer.confirm("Remove these containers?", default=False):
+            console.print("[dim]Aborted.[/dim]")
+            return
 
     # Actually remove containers
     console.print(f"[cyan]Removing {len(stopped)} stopped container(s)...[/cyan]")
