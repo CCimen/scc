@@ -21,7 +21,6 @@ from scc_cli.cli_helpers import (
 )
 from scc_cli.exit_codes import EXIT_USAGE
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for is_interactive()
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -212,16 +211,12 @@ class TestRequireReasonForGovernance:
 
     def test_yes_with_reason_returns_reason(self):
         """--yes with --reason should return the reason."""
-        result = require_reason_for_governance(
-            yes=True, reason="Testing exception"
-        )
+        result = require_reason_for_governance(yes=True, reason="Testing exception")
         assert result == "Testing exception"
 
     def test_no_yes_with_reason_returns_reason(self):
         """Reason provided without --yes should return the reason."""
-        result = require_reason_for_governance(
-            yes=False, reason="Manual testing"
-        )
+        result = require_reason_for_governance(yes=False, reason="Manual testing")
         assert result == "Manual testing"
 
     def test_interactive_prompts_for_reason(self):
