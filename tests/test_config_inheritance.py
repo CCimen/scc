@@ -1273,10 +1273,10 @@ class TestLaunchWithConfigInheritance:
         from scc_cli.docker import launch_with_org_config_v2
 
         with (
-            patch("scc_cli.docker.check_docker_available"),
-            patch("scc_cli.docker.inject_settings") as mock_inject,
-            patch("scc_cli.docker.build_command"),
-            patch("scc_cli.docker.run"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings") as mock_inject,
+            patch("scc_cli.docker.launch.build_command"),
+            patch("scc_cli.docker.launch.run"),
         ):
             launch_with_org_config_v2(
                 workspace=tmp_path,
@@ -1311,10 +1311,10 @@ additional_plugins:
 """)
 
         with (
-            patch("scc_cli.docker.check_docker_available"),
-            patch("scc_cli.docker.inject_settings") as mock_inject,
-            patch("scc_cli.docker.build_command"),
-            patch("scc_cli.docker.run"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings") as mock_inject,
+            patch("scc_cli.docker.launch.build_command"),
+            patch("scc_cli.docker.launch.run"),
         ):
             launch_with_org_config_v2(
                 workspace=tmp_path,
@@ -1355,7 +1355,7 @@ additional_plugins:
 """)
 
         with (
-            patch("scc_cli.docker.check_docker_available"),
+            patch("scc_cli.docker.launch.check_docker_available"),
             pytest.raises(PolicyViolationError) as exc_info,
         ):
             launch_with_org_config_v2(
@@ -1385,10 +1385,10 @@ additional_plugins:
 """)
 
         with (
-            patch("scc_cli.docker.check_docker_available"),
-            patch("scc_cli.docker.inject_settings"),
-            patch("scc_cli.docker.build_command"),
-            patch("scc_cli.docker.run"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command"),
+            patch("scc_cli.docker.launch.run"),
         ):
             # Should still launch but with warning
             launch_with_org_config_v2(
@@ -1412,10 +1412,10 @@ class TestLaunchOfflineBehavior:
         from scc_cli.docker import launch_with_org_config_v2
 
         with (
-            patch("scc_cli.docker.check_docker_available"),
-            patch("scc_cli.docker.inject_settings"),
-            patch("scc_cli.docker.build_command"),
-            patch("scc_cli.docker.run"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command"),
+            patch("scc_cli.docker.launch.run"),
         ):
             # Pass is_offline flag to trigger warning
             launch_with_org_config_v2(

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from .. import stats
+from ..constants import SANDBOX_DATA_VOLUME
 from ..errors import SandboxLaunchError
 from .core import (
     build_command,
@@ -191,7 +192,7 @@ def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
     """
     Inject a file into the Docker sandbox persistent volume.
 
-    Uses a temporary alpine container to write to the docker-claude-sandbox-data volume.
+    Uses a temporary alpine container to write to the sandbox data volume.
     Files are written to /data/ which maps to /mnt/claude-data/ in the sandbox.
 
     Args:
@@ -219,7 +220,7 @@ def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
                 "run",
                 "--rm",
                 "-v",
-                "docker-claude-sandbox-data:/data",
+                f"{SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "sh",
                 "-c",
@@ -248,7 +249,7 @@ def get_sandbox_settings() -> dict | None:
                 "run",
                 "--rm",
                 "-v",
-                "docker-claude-sandbox-data:/data",
+                f"{SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "cat",
                 "/data/settings.json",

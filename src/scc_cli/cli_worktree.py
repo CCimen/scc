@@ -12,6 +12,7 @@ from rich.status import Status
 
 from . import deps, docker, git, sessions, ui
 from .cli_common import console, handle_errors, render_responsive_table
+from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 
@@ -61,7 +62,7 @@ def worktree_cmd(
             "Worktree Created",
             {
                 "Path": str(worktree_path),
-                "Branch": f"claude/{name}",
+                "Branch": f"{WORKTREE_BRANCH_PREFIX}{name}",
                 "Base": base_branch or "current branch",
             },
         )
@@ -82,7 +83,7 @@ def worktree_cmd(
             docker.check_docker_available()
             docker_cmd, _ = docker.get_or_create_container(
                 workspace=worktree_path,
-                branch=f"claude/{name}",
+                branch=f"{WORKTREE_BRANCH_PREFIX}{name}",
             )
             docker.run(docker_cmd)
 

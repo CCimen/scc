@@ -225,8 +225,9 @@ class TestSelectFlag:
         ):
             result = runner.invoke(app, ["start", "--select"])
 
-        # Should exit without error
-        assert result.exit_code == 0
+        # User cancellation with --select exits with code 1 (explicit flag, no session selected)
+        # This differs from interactive mode which exits 0 on cancel
+        assert result.exit_code == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

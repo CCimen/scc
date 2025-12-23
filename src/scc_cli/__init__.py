@@ -5,7 +5,7 @@ A command-line tool for safely running Claude Code in Docker sandboxes
 with team-specific configurations and worktree management.
 """
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("scc-cli")

@@ -604,5 +604,7 @@ class TestIdGeneration:
         """generate_local_id returns unique IDs."""
         from scc_cli.models.exceptions import generate_local_id
 
-        ids = [generate_local_id() for _ in range(100)]
-        assert len(set(ids)) == 100  # All unique
+        # Using 10 iterations to minimize birthday paradox collision risk
+        # (4 hex chars = 65536 possibilities, 10 samples ≈ 0.07% collision chance)
+        ids = [generate_local_id() for _ in range(10)]
+        assert len(set(ids)) == 10  # All unique

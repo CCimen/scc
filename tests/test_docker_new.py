@@ -94,8 +94,10 @@ class TestInjectSettings:
     def test_inject_settings_with_valid_settings(self, sample_claude_settings):
         """inject_settings should inject pre-built settings to sandbox volume."""
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=None),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
         ):
             result = docker.inject_settings(sample_claude_settings)
 
@@ -112,8 +114,10 @@ class TestInjectSettings:
         existing = {"statusLine": {"command": "/some/script"}, "otherSetting": True}
 
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=existing),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
         ):
             result = docker.inject_settings(sample_claude_settings)
 
@@ -132,8 +136,10 @@ class TestInjectSettings:
         new_settings = {"enabledPlugins": ["new-plugin@new-market"]}
 
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=existing),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
         ):
             docker.inject_settings(new_settings)
 
@@ -146,8 +152,10 @@ class TestInjectSettings:
         existing = {"someKey": "someValue"}
 
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=existing),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
         ):
             result = docker.inject_settings({})
 
@@ -159,8 +167,8 @@ class TestInjectSettings:
     def test_inject_settings_handles_injection_failure(self, sample_claude_settings):
         """inject_settings should return False when injection fails."""
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=None),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=False),
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
+            patch("scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=False),
         ):
             result = docker.inject_settings(sample_claude_settings)
 
@@ -181,9 +189,9 @@ class TestLaunchWithOrgConfig:
         workspace.mkdir()
 
         with (
-            patch("scc_cli.docker.inject_settings", return_value=True),
-            patch("scc_cli.docker.run") as mock_run,
-            patch("scc_cli.docker.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings", return_value=True),
+            patch("scc_cli.docker.launch.run") as mock_run,
+            patch("scc_cli.docker.launch.check_docker_available"),
             patch.dict("os.environ", {"GITLAB_TOKEN": "secret"}, clear=False),
         ):
             docker.launch_with_org_config(
@@ -199,9 +207,9 @@ class TestLaunchWithOrgConfig:
         workspace.mkdir()
 
         with (
-            patch("scc_cli.docker.inject_settings", return_value=True) as mock_inject,
-            patch("scc_cli.docker.run"),
-            patch("scc_cli.docker.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.check_docker_available"),
             patch.dict("os.environ", {"GITLAB_TOKEN": "secret"}, clear=False),
         ):
             docker.launch_with_org_config(
@@ -222,7 +230,7 @@ class TestLaunchWithOrgConfig:
         workspace.mkdir()
 
         with (
-            patch("scc_cli.docker.check_docker_available"),
+            patch("scc_cli.docker.launch.check_docker_available"),
             pytest.raises(ValueError, match="Profile 'nonexistent' not found"),
         ):
             docker.launch_with_org_config(
@@ -241,7 +249,7 @@ class TestInjectTeamSettingsWithOrgConfig:
     def test_inject_team_settings_with_org_config(self, sample_org_config):
         """inject_team_settings should work with org_config parameter."""
         with (
-            patch("scc_cli.docker.inject_settings", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.inject_settings", return_value=True) as mock_inject,
             patch.dict("os.environ", {"GITLAB_TOKEN": "secret"}, clear=False),
         ):
             result = docker.inject_team_settings(team_name="platform", org_config=sample_org_config)
@@ -259,7 +267,7 @@ class TestInjectTeamSettingsWithOrgConfig:
             "profiles": {"base": {"description": "Base profile"}},
         }
 
-        with patch("scc_cli.docker.inject_settings") as mock_inject:
+        with patch("scc_cli.docker.launch.inject_settings") as mock_inject:
             result = docker.inject_team_settings(team_name="base", org_config=org_config)
 
             # Should return True without injecting
@@ -281,9 +289,9 @@ class TestCredentialInjection:
         workspace.mkdir()
 
         with (
-            patch("scc_cli.docker.inject_settings", return_value=True),
-            patch("scc_cli.docker.run") as mock_run,
-            patch("scc_cli.docker.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings", return_value=True),
+            patch("scc_cli.docker.launch.run") as mock_run,
+            patch("scc_cli.docker.launch.check_docker_available"),
             patch.dict("os.environ", {"GITLAB_TOKEN": "my-secret-token"}, clear=False),
         ):
             docker.launch_with_org_config(
@@ -312,9 +320,9 @@ class TestCredentialInjection:
         }
 
         with (
-            patch("scc_cli.docker.inject_settings", return_value=True),
-            patch("scc_cli.docker.run") as mock_run,
-            patch("scc_cli.docker.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings", return_value=True),
+            patch("scc_cli.docker.launch.run") as mock_run,
+            patch("scc_cli.docker.launch.check_docker_available"),
         ):
             docker.launch_with_org_config(
                 workspace=workspace, org_config=public_org_config, team="default"

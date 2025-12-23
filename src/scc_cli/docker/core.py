@@ -13,6 +13,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..constants import SANDBOX_IMAGE
 from ..errors import (
     ContainerNotFoundError,
     DockerNotFoundError,
@@ -282,7 +283,7 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
                 "ps",
                 "-a",
                 "--filter",
-                "ancestor=docker/sandbox-templates:claude-code",
+                f"ancestor={SANDBOX_IMAGE}",
                 "--format",
                 "{{.ID}}\t{{.Names}}\t{{.Status}}",
             ],
@@ -371,7 +372,7 @@ def list_running_sandboxes() -> list[ContainerInfo]:
                 "docker",
                 "ps",
                 "--filter",
-                "ancestor=docker/sandbox-templates:claude-code",
+                f"ancestor={SANDBOX_IMAGE}",
                 "--format",
                 "{{.ID}}\t{{.Names}}\t{{.Status}}",
             ],

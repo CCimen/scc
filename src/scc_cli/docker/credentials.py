@@ -29,6 +29,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ..constants import OAUTH_CREDENTIAL_KEY, SANDBOX_DATA_VOLUME
 from .core import _list_all_sandbox_containers, list_running_sandboxes
 
 
@@ -66,7 +67,7 @@ def _preinit_credential_volume() -> None:
                 "run",
                 "--rm",
                 "-v",
-                "docker-claude-sandbox-data:/data",
+                f"{SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "sh",
                 "-c",
@@ -98,7 +99,7 @@ def _check_volume_has_credentials() -> bool:
                 "run",
                 "--rm",
                 "-v",
-                "docker-claude-sandbox-data:/data",
+                f"{SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "cat",
                 "/data/.credentials.json",
@@ -114,7 +115,7 @@ def _check_volume_has_credentials() -> bool:
         # Validate JSON and check for OAuth tokens
         try:
             creds = json.loads(result.stdout)
-            return bool(creds and creds.get("claudeAiOauth"))
+            return bool(creds and creds.get(OAUTH_CREDENTIAL_KEY))
         except json.JSONDecodeError:
             return False
 
@@ -158,7 +159,7 @@ def _copy_credentials_from_container(container_id: str, is_running: bool) -> boo
             # Validate JSON
             try:
                 creds = json.loads(result.stdout)
-                if not creds or not creds.get("claudeAiOauth"):
+                if not creds or not creds.get(OAUTH_CREDENTIAL_KEY):
                     return False
             except json.JSONDecodeError:
                 return False
@@ -171,7 +172,7 @@ def _copy_credentials_from_container(container_id: str, is_running: bool) -> boo
                     "run",
                     "--rm",
                     "-v",
-                    "docker-claude-sandbox-data:/data",
+                    f"{SANDBOX_DATA_VOLUME}:/data",
                     "alpine",
                     "sh",
                     "-c",
@@ -197,7 +198,7 @@ def _copy_credentials_from_container(container_id: str, is_running: bool) -> boo
                         "run",
                         "--rm",
                         "-v",
-                        "docker-claude-sandbox-data:/data",
+                        f"{SANDBOX_DATA_VOLUME}:/data",
                         "alpine",
                         "sh",
                         "-c",
@@ -241,7 +242,7 @@ def _copy_credentials_from_container(container_id: str, is_running: bool) -> boo
                 try:
                     content = creds_path.read_text()
                     creds = json.loads(content)
-                    if not creds or not creds.get("claudeAiOauth"):
+                    if not creds or not creds.get(OAUTH_CREDENTIAL_KEY):
                         return False
                 except (json.JSONDecodeError, OSError):
                     return False
@@ -254,7 +255,7 @@ def _copy_credentials_from_container(container_id: str, is_running: bool) -> boo
                         "run",
                         "--rm",
                         "-v",
-                        "docker-claude-sandbox-data:/data",
+                        f"{SANDBOX_DATA_VOLUME}:/data",
                         "alpine",
                         "sh",
                         "-c",
@@ -288,7 +289,7 @@ def _copy_credentials_from_container(container_id: str, is_running: bool) -> boo
                                 "run",
                                 "--rm",
                                 "-v",
-                                "docker-claude-sandbox-data:/data",
+                                f"{SANDBOX_DATA_VOLUME}:/data",
                                 "alpine",
                                 "sh",
                                 "-c",
@@ -438,7 +439,7 @@ def _migrate_credentials_to_volume(container_id: str) -> bool:
             content = result.stdout
             try:
                 creds = json.loads(content)
-                if creds and creds.get("claudeAiOauth"):
+                if creds and creds.get(OAUTH_CREDENTIAL_KEY):
                     # Valid OAuth credentials - copy to volume
                     escaped = content.replace("'", "'\"'\"'")
                     subprocess.run(
@@ -447,7 +448,7 @@ def _migrate_credentials_to_volume(container_id: str) -> bool:
                             "run",
                             "--rm",
                             "-v",
-                            "docker-claude-sandbox-data:/data",
+                            f"{SANDBOX_DATA_VOLUME}:/data",
                             "alpine",
                             "sh",
                             "-c",
@@ -485,7 +486,7 @@ def _migrate_credentials_to_volume(container_id: str) -> bool:
                     "run",
                     "--rm",
                     "-v",
-                    "docker-claude-sandbox-data:/data",
+                    f"{SANDBOX_DATA_VOLUME}:/data",
                     "alpine",
                     "sh",
                     "-c",
@@ -697,7 +698,7 @@ def prepare_sandbox_volume_for_credentials() -> bool:
                 "run",
                 "--rm",
                 "-v",
-                "docker-claude-sandbox-data:/data",
+                f"{SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "sh",
                 "-c",
