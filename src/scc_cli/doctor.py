@@ -48,6 +48,19 @@ class CheckResult:
     fix_hint: str | None = None
     fix_url: str | None = None
     severity: str = "error"  # "error", "warning", "info"
+    code_frame: str | None = None  # Optional code frame for syntax errors
+
+
+@dataclass
+class JsonValidationResult:
+    """Result of JSON file validation with error details."""
+
+    valid: bool
+    error_message: str | None = None
+    line: int | None = None
+    column: int | None = None
+    file_path: Path | None = None
+    code_frame: str | None = None
 
 
 @dataclass
@@ -77,6 +90,156 @@ class DoctorResult:
     def warning_count(self) -> int:
         """Count of warnings."""
         return sum(1 for c in self.checks if not c.passed and c.severity == "warning")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JSON Validation Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def validate_json_file(file_path: Path) -> JsonValidationResult:
+    """
+    Validate a JSON file and extract detailed error information.
+
+    Args:
+        file_path: Path to the JSON file to validate
+
+    Returns:
+        JsonValidationResult with validation status and error details
+    """
+    if not file_path.exists():
+        return JsonValidationResult(valid=True, file_path=file_path)
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        json.loads(content)
+        return JsonValidationResult(valid=True, file_path=file_path)
+    except json.JSONDecodeError as e:
+        code_frame = format_code_frame(content, e.lineno, e.colno, file_path)
+        return JsonValidationResult(
+            valid=False,
+            error_message=e.msg,
+            line=e.lineno,
+            column=e.colno,
+            file_path=file_path,
+            code_frame=code_frame,
+        )
+    except OSError as e:
+        return JsonValidationResult(
+            valid=False,
+            error_message=f"Cannot read file: {e}",
+            file_path=file_path,
+        )
+
+
+def format_code_frame(
+    content: str,
+    error_line: int,
+    error_col: int,
+    file_path: Path,
+    context_lines: int = 2,
+) -> str:
+    """
+    Format a code frame showing the error location with context.
+
+    Creates a visual representation like:
+        10 │   "selected_profile": "dev-team",
+        11 │   "preferences": {
+      → 12 │     "auto_update": true
+           │     ^
+        13 │     "show_tips": false
+        14 │   }
+
+    Args:
+        content: The file content
+        error_line: Line number where error occurred (1-indexed)
+        error_col: Column number where error occurred (1-indexed)
+        file_path: Path to the file (for display)
+        context_lines: Number of lines to show before/after error
+
+    Returns:
+        Formatted code frame string with Rich markup
+    """
+    lines = content.splitlines()
+    total_lines = len(lines)
+
+    # Calculate line range to display
+    start_line = max(1, error_line - context_lines)
+    end_line = min(total_lines, error_line + context_lines)
+
+    # Calculate padding for line numbers
+    max_line_num = end_line
+    line_num_width = len(str(max_line_num))
+
+    frame_lines = []
+
+    # Add file path header
+    frame_lines.append(f"[dim]File: {file_path}[/dim]")
+    frame_lines.append("")
+
+    for line_num in range(start_line, end_line + 1):
+        line_content = lines[line_num - 1] if line_num <= total_lines else ""
+
+        # Truncate long lines to prevent secret leakage (keep first 80 chars)
+        if len(line_content) > 80:
+            line_content = line_content[:77] + "..."
+
+        if line_num == error_line:
+            # Error line with arrow indicator
+            frame_lines.append(
+                f"[bold red]→ {line_num:>{line_num_width}} │[/bold red] "
+                f"[white]{_escape_rich(line_content)}[/white]"
+            )
+            # Caret line pointing to error column
+            caret_padding = " " * (line_num_width + 4 + max(0, error_col - 1))
+            frame_lines.append(f"[bold red]{caret_padding}^[/bold red]")
+        else:
+            # Context line
+            frame_lines.append(
+                f"[dim]  {line_num:>{line_num_width}} │[/dim] "
+                f"[dim]{_escape_rich(line_content)}[/dim]"
+            )
+
+    return "\n".join(frame_lines)
+
+
+def _escape_rich(text: str) -> str:
+    """Escape Rich markup characters in text."""
+    return text.replace("[", "\\[").replace("]", "\\]")
+
+
+def get_json_error_hints(error_message: str) -> list[str]:
+    """
+    Get helpful hints based on common JSON error messages.
+
+    Args:
+        error_message: The JSON decode error message
+
+    Returns:
+        List of helpful hints for fixing the error
+    """
+    hints = []
+    error_lower = error_message.lower()
+
+    if "expecting" in error_lower and "," in error_lower:
+        hints.append("Missing comma between values")
+    elif "expecting property name" in error_lower:
+        hints.append("Trailing comma after last item (not allowed in JSON)")
+        hints.append("Missing closing brace or bracket")
+    elif "expecting value" in error_lower:
+        hints.append("Missing value after colon or comma")
+        hints.append("Empty array or object element")
+    elif "expecting ':'" in error_lower:
+        hints.append("Missing colon after property name")
+    elif "unterminated string" in error_lower or "invalid \\escape" in error_lower:
+        hints.append("Unclosed string quote or invalid escape sequence")
+    elif "extra data" in error_lower:
+        hints.append("Multiple root objects (JSON must have single root)")
+
+    if not hints:
+        hints.append("Check JSON syntax near the indicated line")
+
+    return hints
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -254,6 +417,59 @@ def check_workspace_path(workspace: Path | None = None) -> CheckResult:
         name="Workspace Path",
         passed=True,
         message=f"Workspace path is optimal: {workspace}",
+    )
+
+
+def check_user_config_valid() -> CheckResult:
+    """Check if user configuration file is valid JSON.
+
+    Validates ~/.config/scc/config.json for JSON syntax errors
+    and provides helpful error messages with code frames.
+
+    Returns:
+        CheckResult with user config validation status.
+    """
+    config_file = config.CONFIG_FILE
+
+    if not config_file.exists():
+        return CheckResult(
+            name="User Config",
+            passed=True,
+            message="No user config file (using defaults)",
+            severity="info",
+        )
+
+    result = validate_json_file(config_file)
+
+    if result.valid:
+        return CheckResult(
+            name="User Config",
+            passed=True,
+            message=f"User config is valid JSON: {config_file}",
+        )
+
+    # Build error message with hints
+    error_msg = f"Invalid JSON in {config_file.name}"
+    if result.line is not None:
+        error_msg += f" at line {result.line}"
+        if result.column is not None:
+            error_msg += f", column {result.column}"
+
+    # Get helpful hints
+    hints = get_json_error_hints(result.error_message or "")
+    fix_hint = f"Error: {result.error_message}\n"
+    fix_hint += "Hints:\n"
+    for hint in hints:
+        fix_hint += f"  • {hint}\n"
+    fix_hint += f"Edit with: $EDITOR {config_file}"
+
+    return CheckResult(
+        name="User Config",
+        passed=False,
+        message=error_msg,
+        fix_hint=fix_hint,
+        severity="error",
+        code_frame=result.code_frame,
     )
 
 
@@ -559,6 +775,8 @@ def check_credential_injection() -> CheckResult | None:
 def check_cache_readable() -> CheckResult:
     """Check if organization config cache is readable and valid.
 
+    Uses enhanced error display with code frames for JSON syntax errors.
+
     Returns:
         CheckResult with cache status.
     """
@@ -566,42 +784,63 @@ def check_cache_readable() -> CheckResult:
 
     if not cache_file.exists():
         return CheckResult(
-            name="Cache",
+            name="Org Cache",
             passed=True,
             message="No cache file (will fetch on first use)",
             severity="info",
         )
 
-    try:
-        content = cache_file.read_text()
-        org_config = json.loads(content)
+    # Use the new validation helper for enhanced error display
+    result = validate_json_file(cache_file)
 
-        # Calculate fingerprint
-        import hashlib
+    if result.valid:
+        try:
+            content = cache_file.read_text()
+            org_config = json.loads(content)
 
-        fingerprint = hashlib.sha256(content.encode()).hexdigest()[:12]
+            # Calculate fingerprint
+            import hashlib
 
-        org_name = org_config.get("organization", {}).get("name", "Unknown")
-        return CheckResult(
-            name="Cache",
-            passed=True,
-            message=f"Cache valid: {org_name} (fingerprint: {fingerprint})",
-        )
-    except json.JSONDecodeError:
-        return CheckResult(
-            name="Cache",
-            passed=False,
-            message="Cache file is corrupted (invalid JSON)",
-            fix_hint="Run 'scc teams --sync' to refresh",
-            severity="error",
-        )
-    except OSError as e:
-        return CheckResult(
-            name="Cache",
-            passed=False,
-            message=f"Cannot read cache file: {e}",
-            severity="error",
-        )
+            fingerprint = hashlib.sha256(content.encode()).hexdigest()[:12]
+
+            org_name = org_config.get("organization", {}).get("name", "Unknown")
+            return CheckResult(
+                name="Org Cache",
+                passed=True,
+                message=f"Cache valid: {org_name} (fingerprint: {fingerprint})",
+            )
+        except (json.JSONDecodeError, OSError) as e:
+            return CheckResult(
+                name="Org Cache",
+                passed=False,
+                message=f"Cannot read cache file: {e}",
+                fix_hint="Run 'scc teams --sync' to refresh",
+                severity="error",
+            )
+
+    # Invalid JSON - build detailed error message
+    error_msg = "Cache file is corrupted (invalid JSON)"
+    if result.line is not None:
+        error_msg += f" at line {result.line}"
+        if result.column is not None:
+            error_msg += f", column {result.column}"
+
+    # Get helpful hints
+    hints = get_json_error_hints(result.error_message or "")
+    fix_hint = f"Error: {result.error_message}\n"
+    fix_hint += "Hints:\n"
+    for hint in hints:
+        fix_hint += f"  • {hint}\n"
+    fix_hint += "Fix: Run 'scc teams --sync' to refresh cache"
+
+    return CheckResult(
+        name="Org Cache",
+        passed=False,
+        message=error_msg,
+        fix_hint=fix_hint,
+        severity="error",
+        code_frame=result.code_frame,
+    )
 
 
 def check_cache_ttl_status() -> CheckResult | None:
@@ -815,6 +1054,9 @@ def run_all_checks() -> list[CheckResult]:
 
     results.append(check_config_directory())
 
+    # User config validation (JSON syntax check)
+    results.append(check_user_config_valid())
+
     # Organization checks (may return None)
     org_check = check_org_config_reachable()
     if org_check is not None:
@@ -903,6 +1145,10 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
     config_check = check_config_directory()
     result.checks.append(config_check)
 
+    # User config JSON validation check
+    user_config_check = check_user_config_valid()
+    result.checks.append(user_config_check)
+
     return result
 
 
@@ -977,6 +1223,20 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
     )
 
     console.print(panel)
+
+    # Display code frames for any checks with syntax errors (beautiful error display)
+    code_frame_checks = [c for c in result.checks if c.code_frame and not c.passed]
+    for check in code_frame_checks:
+        if check.code_frame is not None:  # Type guard for mypy
+            console.print()
+            # Create a panel for the code frame with Rich styling
+            code_panel = Panel(
+                check.code_frame,
+                title=f"[bold red]⚠️  JSON Syntax Error: {check.name}[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            )
+            console.print(code_panel)
 
     # Summary line
     if result.all_ok:
