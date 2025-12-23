@@ -21,6 +21,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
+from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import (
     CloneError,
     GitNotFoundError,
@@ -41,7 +42,7 @@ from .subprocess_utils import run_command, run_command_bool, run_command_lines
 # ═══════════════════════════════════════════════════════════════════════════════
 
 PROTECTED_BRANCHES = ("main", "master", "develop", "production", "staging")
-BRANCH_PREFIX = "claude/"
+BRANCH_PREFIX = WORKTREE_BRANCH_PREFIX  # Imported from constants.py
 SCC_HOOK_MARKER = "# SCC-MANAGED-HOOK"  # Identifies hooks we can safely update
 
 
@@ -59,40 +60,6 @@ class WorktreeInfo:
     status: str = ""
     is_current: bool = False
     has_changes: bool = False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# UI Helpers - Aesthetic Components
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Panel functions imported from .panels module:
-# - create_info_panel
-# - create_warning_panel
-# - create_success_panel
-# - create_error_panel
-
-
-def _render_branch_badge(branch: str, is_protected: bool = False, is_current: bool = False) -> Text:
-    """Render a styled branch name badge."""
-    text = Text()
-    if is_current:
-        text.append("● ", style="green")
-    if is_protected:
-        text.append(branch, style="bold yellow")
-        text.append(" ", style="dim")
-        text.append("protected", style="dim yellow")
-    else:
-        text.append(branch, style="cyan")
-    return text
-
-
-def _render_path_truncated(path: str, max_width: int = 50) -> Text:
-    """Render a path with smart truncation from the left."""
-    if len(path) <= max_width:
-        return Text(path, style="dim")
-    # Truncate from left, keep the meaningful part
-    truncated = "..." + path[-(max_width - 1) :]
-    return Text(truncated, style="dim")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

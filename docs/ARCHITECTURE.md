@@ -219,6 +219,7 @@ graph TD
     end
 
     subgraph Core[Core & Config]
+        Constants[constants.py]:::core
         Config[config.py]:::core
         Remote[remote.py]:::core
         Profiles[profiles.py]:::core
@@ -237,7 +238,12 @@ graph TD
     end
 
     subgraph Runtime[Runtime Services]
-        Docker[docker.py]:::runtime
+        subgraph DockerPkg[docker/]
+            DockerInit[__init__.py]:::runtime
+            DockerCore[core.py]:::runtime
+            DockerCreds[credentials.py]:::runtime
+            DockerLaunch[launch.py]:::runtime
+        end
         Adapter[claude_adapter.py]:::runtime
         Git[git.py]:::runtime
         Sessions[sessions.py]:::runtime
@@ -251,7 +257,7 @@ graph TD
     Main --> ExcCLI
     Main --> AuditCLI
 
-    Launch --> Docker
+    Launch --> DockerLaunch
     Launch --> Config
     Launch --> Git
     Launch --> Sessions
@@ -269,11 +275,14 @@ graph TD
 
     Admin --> Stats
     Admin --> Config
-    Admin --> Docker
+    Admin --> DockerCore
 
-    Docker --> Adapter
-    Docker --> Sessions
-    Docker --> Stats
+    DockerLaunch --> Adapter
+    DockerLaunch --> Sessions
+    DockerLaunch --> Stats
+    DockerCore --> DockerInit
+    DockerCreds --> DockerInit
+    DockerLaunch --> DockerInit
 
     Adapter --> Profiles
     Profiles --> Config
@@ -281,20 +290,32 @@ graph TD
     Evaluate --> Profiles
     ApplyExc --> Evaluate
     Sessions --> Config
+
+    %% Constants provides backend-specific values
+    DockerCore --> Constants
+    DockerLaunch --> Constants
+    DockerCreds --> Constants
+    Sessions --> Constants
+    AuditCLI --> Constants
+    Git --> Constants
 ```
 
-This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services.
+This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration).
 
 Module responsibilities:
 
 | Module | Does | Does Not |
 |--------|------|----------|
+| `constants.py` | Centralize backend-specific values (agent name, image tag, volume names, credential paths, branch prefixes) | Business logic, I/O operations |
 | `profiles.py` | Profile resolution, effective config computation, delegation checks, security validation (blocked patterns, stdio gate, image normalization) | HTTP, file I/O |
 | `remote.py` | HTTP fetch, auth, ETag caching | Business logic |
 | `claude_adapter.py` | Claude Code format knowledge, MCP server translation | HTTP, profiles |
 | `validate.py` | Schema validation | HTTP, file I/O |
 | `config.py` | Local config, XDG paths, project config reading | Remote fetching |
-| `docker.py` | Container lifecycle, credential injection | URL building |
+| `docker/` | Docker sandbox operations (package) | URL building |
+| `docker/core.py` | Container lifecycle, Docker primitives, command building | Credential handling |
+| `docker/credentials.py` | Credential persistence, OAuth token management, volume sync | Container launching |
+| `docker/launch.py` | High-level launch orchestration, settings injection | Low-level Docker ops |
 | `stats.py` | Session recording, aggregation, reporting | Container operations |
 | `update.py` | Version checking, throttling, notifications | Container operations |
 | `evaluation/evaluate.py` | Pure governance evaluation, BlockReason classification | I/O, exception storage |

@@ -2,6 +2,15 @@
 CLI Launch Commands.
 
 Commands for starting Claude Code in Docker sandboxes.
+
+This module handles the `scc start` command, orchestrating:
+- Session selection (--resume, --select, interactive)
+- Workspace validation and preparation
+- Team profile configuration
+- Docker sandbox launch
+
+The main `start()` function delegates to focused helper functions
+for maintainability and testability.
 """
 
 from pathlib import Path
@@ -20,8 +29,270 @@ from .cli_common import (
     console,
     handle_errors,
 )
+from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper Functions (extracted for maintainability)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _resolve_session_selection(
+    workspace: str | None,
+    team: str | None,
+    resume: bool,
+    select: bool,
+    cfg: dict,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """
+    Handle session selection logic for --select, --resume, and interactive modes.
+
+    Returns:
+        Tuple of (workspace, team, session_name, worktree_name)
+        If user cancels or no session found, workspace will be None.
+    """
+    session_name = None
+    worktree_name = None
+
+    # Interactive mode if no workspace provided and no session flags
+    if workspace is None and not resume and not select:
+        workspace, team, session_name, worktree_name = interactive_start(cfg)
+        return workspace, team, session_name, worktree_name
+
+    # Handle --select: interactive session picker
+    if select and workspace is None:
+        recent_sessions = sessions.list_recent(limit=10)
+        if not recent_sessions:
+            console.print("[yellow]No recent sessions found.[/yellow]")
+            return None, team, None, None
+        selected = ui.select_session(console, recent_sessions)
+        if selected is None:
+            return None, team, None, None
+        workspace = selected.get("workspace")
+        if not team:
+            team = selected.get("team")
+        console.print(f"[dim]Selected: {workspace}[/dim]")
+
+    # Handle --resume: auto-select most recent session
+    elif resume and workspace is None:
+        recent_session = sessions.get_most_recent()
+        if recent_session:
+            workspace = recent_session.get("workspace")
+            if not team:
+                team = recent_session.get("team")
+            console.print(f"[dim]Resuming: {workspace}[/dim]")
+        else:
+            console.print("[yellow]No recent sessions found.[/yellow]")
+            return None, team, None, None
+
+    return workspace, team, session_name, worktree_name
+
+
+def _validate_and_resolve_workspace(workspace: str | None) -> Path | None:
+    """
+    Validate workspace path and handle platform-specific warnings.
+
+    Raises:
+        WorkspaceNotFoundError: If workspace path doesn't exist.
+        typer.Exit: If user declines to continue after WSL2 warning.
+    """
+    if workspace is None:
+        return None
+
+    workspace_path = Path(workspace).expanduser().resolve()
+
+    if not workspace_path.exists():
+        raise WorkspaceNotFoundError(path=str(workspace_path))
+
+    # WSL2 performance warning
+    if platform_module.is_wsl2():
+        is_optimal, warning = platform_module.check_path_performance(workspace_path)
+        if not is_optimal and warning:
+            console.print()
+            console.print(
+                create_warning_panel(
+                    "Performance Warning",
+                    "Your workspace is on the Windows filesystem.",
+                    "For better performance, move to ~/projects inside WSL.",
+                )
+            )
+            console.print()
+            if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
+                raise typer.Exit()
+
+    return workspace_path
+
+
+def _prepare_workspace(
+    workspace_path: Path | None,
+    worktree_name: str | None,
+    install_deps: bool,
+) -> Path | None:
+    """
+    Prepare workspace: create worktree, install deps, check git safety.
+
+    Returns:
+        The (possibly updated) workspace path after worktree creation.
+    """
+    if workspace_path is None:
+        return None
+
+    # Handle worktree creation
+    if worktree_name:
+        workspace_path = git.create_worktree(workspace_path, worktree_name)
+        console.print(
+            create_success_panel(
+                "Worktree Created",
+                {
+                    "Path": str(workspace_path),
+                    "Branch": f"{WORKTREE_BRANCH_PREFIX}{worktree_name}",
+                },
+            )
+        )
+
+    # Install dependencies if requested
+    if install_deps:
+        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
+            success = deps.auto_install_dependencies(workspace_path)
+        if success:
+            console.print("[green]✓ Dependencies installed[/green]")
+        else:
+            console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
+
+    # Check git safety (handles protected branch warnings)
+    if workspace_path.exists():
+        git.check_branch_safety(workspace_path, console)
+
+    return workspace_path
+
+
+def _configure_team_settings(team: str | None, cfg: dict) -> None:
+    """
+    Validate team profile and inject settings into Docker sandbox.
+
+    Raises:
+        typer.Exit: If team profile is not found.
+    """
+    if not team:
+        return
+
+    with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
+        org_config = config.load_cached_org_config()
+
+        validation = teams.validate_team_profile(team, cfg, org_config=org_config)
+        if not validation["valid"]:
+            console.print(
+                create_warning_panel(
+                    "Team Not Found",
+                    f"No team profile named '{team}'.",
+                    "Run 'scc teams' to see available profiles",
+                )
+            )
+            raise typer.Exit(1)
+
+        docker.inject_team_settings(team, org_config=org_config)
+
+
+def _resolve_mount_and_branch(workspace_path: Path | None) -> tuple[Path | None, str | None]:
+    """
+    Resolve mount path for worktrees and get current branch.
+
+    For worktrees, expands mount scope to include main repo.
+    Returns (mount_path, current_branch).
+    """
+    if workspace_path is None:
+        return None, None
+
+    # Get current branch
+    current_branch = None
+    try:
+        current_branch = git.get_current_branch(workspace_path)
+    except (NotAGitRepoError, OSError):
+        pass
+
+    # Handle worktree mounting
+    mount_path, is_expanded = git.get_workspace_mount_path(workspace_path)
+    if is_expanded:
+        console.print()
+        console.print(
+            create_info_panel(
+                "Worktree Detected",
+                f"Mounting parent directory for worktree support:\n{mount_path}",
+                "Both worktree and main repo will be accessible",
+            )
+        )
+        console.print()
+
+    return mount_path, current_branch
+
+
+def _launch_sandbox(
+    workspace_path: Path | None,
+    mount_path: Path | None,
+    team: str | None,
+    session_name: str | None,
+    current_branch: str | None,
+    should_continue_session: bool,
+    fresh: bool,
+) -> None:
+    """
+    Execute the Docker sandbox with all configurations applied.
+
+    Handles container creation, session recording, and process handoff.
+    """
+    # Prepare sandbox volume for credential persistence
+    docker.prepare_sandbox_volume_for_credentials()
+
+    # Get or create container
+    docker_cmd, is_resume = docker.get_or_create_container(
+        workspace=mount_path,
+        branch=current_branch,
+        profile=team,
+        force_new=fresh,
+        continue_session=should_continue_session,
+        env_vars=None,
+    )
+
+    # Extract container name for session tracking
+    container_name = _extract_container_name(docker_cmd, is_resume)
+
+    # Record session
+    if workspace_path:
+        sessions.record_session(
+            workspace=str(workspace_path),
+            team=team,
+            session_name=session_name,
+            container_name=container_name,
+            branch=current_branch,
+        )
+
+    # Show launch info and execute
+    _show_launch_panel(
+        workspace=workspace_path,
+        team=team,
+        session_name=session_name,
+        branch=current_branch,
+        is_resume=is_resume,
+    )
+
+    docker.run(docker_cmd)
+
+
+def _extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | None:
+    """Extract container name from docker command for session tracking."""
+    if "--name" in docker_cmd:
+        try:
+            name_idx = docker_cmd.index("--name") + 1
+            return docker_cmd[name_idx]
+        except (ValueError, IndexError):
+            pass
+    elif is_resume and docker_cmd:
+        # For resume, container name is the last arg
+        if docker_cmd[-1].startswith("scc-"):
+            return docker_cmd[-1]
+    return None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Launch App
@@ -66,7 +337,7 @@ def start(
 
     If no arguments provided, launches interactive mode.
     """
-    # First-run detection
+    # ── Step 1: First-run detection ──────────────────────────────────────────
     if setup.is_setup_needed():
         if not setup.maybe_run_setup(console):
             raise typer.Exit(1)
@@ -77,188 +348,46 @@ def start(
     if continue_session:
         resume = True
 
-    # Interactive mode if no workspace provided and no session flags
-    if workspace is None and not resume and not select:
-        workspace, team, session_name, worktree_name = interactive_start(cfg)
-        if workspace is None:
-            raise typer.Exit()
+    # ── Step 2: Session selection (interactive, --select, --resume) ──────────
+    workspace, team, session_name, worktree_name = _resolve_session_selection(
+        workspace=workspace,
+        team=team,
+        resume=resume,
+        select=select,
+        cfg=cfg,
+    )
+    if workspace is None and (select or resume):
+        raise typer.Exit(1)
+    if workspace is None:
+        raise typer.Exit()
 
-    # Handle --select: interactive session picker
-    if select and workspace is None:
-        recent_sessions = sessions.list_recent(limit=10)
-        if not recent_sessions:
-            console.print("[yellow]No recent sessions found.[/yellow]")
-            raise typer.Exit(1)
-        selected = ui.select_session(console, recent_sessions)
-        if selected is None:
-            # User cancelled
-            raise typer.Exit()
-        workspace = selected.get("workspace")
-        if not team:
-            team = selected.get("team")
-        console.print(f"[dim]Selected: {workspace}[/dim]")
-
-    # Handle --resume: auto-select most recent session
-    elif resume and workspace is None:
-        recent_session = sessions.get_most_recent()
-        if recent_session:
-            workspace = recent_session.get("workspace")
-            if not team:
-                team = recent_session.get("team")
-            console.print(f"[dim]Resuming: {workspace}[/dim]")
-        else:
-            console.print("[yellow]No recent sessions found.[/yellow]")
-            raise typer.Exit(1)
-
-    # Validate Docker with spinner
+    # ── Step 3: Docker availability check ────────────────────────────────────
     with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
         docker.check_docker_available()
 
-    # Resolve workspace path
-    workspace_path = Path(workspace).expanduser().resolve() if workspace else None
+    # ── Step 4: Workspace validation and platform checks ─────────────────────
+    workspace_path = _validate_and_resolve_workspace(workspace)
 
-    # Validate workspace exists
-    if workspace_path and not workspace_path.exists():
-        raise WorkspaceNotFoundError(path=str(workspace_path))
+    # ── Step 5: Workspace preparation (worktree, deps, git safety) ───────────
+    workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps)
 
-    # WSL2 performance warning
-    if workspace_path and platform_module.is_wsl2():
-        is_optimal, warning = platform_module.check_path_performance(workspace_path)
-        if not is_optimal and warning:
-            console.print()
-            console.print(
-                create_warning_panel(
-                    "Performance Warning",
-                    "Your workspace is on the Windows filesystem.",
-                    "For better performance, move to ~/projects inside WSL.",
-                )
-            )
-            console.print()
-            if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
-                raise typer.Exit()
+    # ── Step 6: Team configuration ───────────────────────────────────────────
+    _configure_team_settings(team, cfg)
 
-    # Handle worktree creation
-    if worktree_name and workspace_path:
-        workspace_path = git.create_worktree(workspace_path, worktree_name)
-        console.print(
-            create_success_panel(
-                "Worktree Created",
-                {
-                    "Path": str(workspace_path),
-                    "Branch": f"claude/{worktree_name}",
-                },
-            )
-        )
+    # ── Step 7: Resolve mount path and branch for worktrees ──────────────────
+    mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
 
-    # Install dependencies if requested
-    if install_deps and workspace_path:
-        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
-            success = deps.auto_install_dependencies(workspace_path)
-        if success:
-            console.print("[green]✓ Dependencies installed[/green]")
-        else:
-            console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
-
-    # Check git safety (handles protected branch warnings)
-    if workspace_path and workspace_path.exists():
-        git.check_branch_safety(workspace_path, console)
-
-    # Inject team plugin settings into Docker sandbox
-    if team:
-        with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
-            # Load cached org config (NEW architecture)
-            org_config = config.load_cached_org_config()
-
-            # Validate team profile exists
-            validation = teams.validate_team_profile(team, cfg, org_config=org_config)
-            if not validation["valid"]:
-                console.print(
-                    create_warning_panel(
-                        "Team Not Found",
-                        f"No team profile named '{team}'.",
-                        "Run 'scc teams' to see available profiles",
-                    )
-                )
-                raise typer.Exit(1)
-
-            # Inject team settings (extraKnownMarketplaces + enabledPlugins)
-            # This happens in the Docker volume, Claude Code handles the rest
-            docker.inject_team_settings(team, org_config=org_config)
-
-    # Get current branch for container naming
-    current_branch = None
-    if workspace_path:
-        try:
-            current_branch = git.get_current_branch(workspace_path)
-        except (NotAGitRepoError, OSError):
-            # Not a git repo or filesystem error - continue without branch
-            pass
-
-    # Handle worktree mounting - expand mount scope to include main repo
-    # Git worktrees use absolute paths in .git file that point to main repo
-    mount_path = workspace_path
-    if workspace_path:
-        mount_path, is_expanded = git.get_workspace_mount_path(workspace_path)
-        if is_expanded:
-            console.print()
-            console.print(
-                create_info_panel(
-                    "Worktree Detected",
-                    f"Mounting parent directory for worktree support:\n{mount_path}",
-                    "Both worktree and main repo will be accessible",
-                )
-            )
-            console.print()
-
-    # Prepare sandbox volume for credential persistence
-    # This fixes a Docker Desktop bug where credentials.json permissions are wrong
-    docker.prepare_sandbox_volume_for_credentials()
-
-    # Get or create container (re-use pattern)
-    # Unify resume flags: --resume and --continue both enable Claude session continuity
+    # ── Step 8: Launch sandbox ───────────────────────────────────────────────
     should_continue_session = resume or continue_session
-    docker_cmd, is_resume = docker.get_or_create_container(
-        workspace=mount_path,
-        branch=current_branch,
-        profile=team,
-        force_new=fresh,
-        continue_session=should_continue_session,
-        env_vars=None,
-    )
-
-    # Extract container name from command for session tracking
-    container_name = None
-    if "--name" in docker_cmd:
-        try:
-            name_idx = docker_cmd.index("--name") + 1
-            container_name = docker_cmd[name_idx]
-        except (ValueError, IndexError):
-            pass
-    elif is_resume and docker_cmd:
-        # For resume, container name is the last arg
-        container_name = docker_cmd[-1] if docker_cmd[-1].startswith("scc-") else None
-
-    # Record session with container linking
-    if workspace_path:
-        sessions.record_session(
-            workspace=str(workspace_path),
-            team=team,
-            session_name=session_name,
-            container_name=container_name,
-            branch=current_branch,
-        )
-
-    # Show launch info
-    _show_launch_panel(
-        workspace=workspace_path,
+    _launch_sandbox(
+        workspace_path=workspace_path,
+        mount_path=mount_path,
         team=team,
         session_name=session_name,
-        branch=current_branch,
-        is_resume=is_resume,
+        current_branch=current_branch,
+        should_continue_session=should_continue_session,
+        fresh=fresh,
     )
-
-    # Execute
-    docker.run(docker_cmd)
 
 
 def _show_launch_panel(

@@ -119,12 +119,14 @@ class TestLaunchStatsRecording:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run") as mock_run,
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session-123"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run") as mock_run,
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch(
+                "scc_cli.docker.launch.stats.generate_session_id", return_value="test-session-123"
+            ),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -147,12 +149,14 @@ class TestLaunchStatsRecording:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session-123"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch(
+                "scc_cli.docker.launch.stats.generate_session_id", return_value="test-session-123"
+            ),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -170,12 +174,14 @@ class TestLaunchStatsRecording:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session-123"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch(
+                "scc_cli.docker.launch.stats.generate_session_id", return_value="test-session-123"
+            ),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -192,12 +198,14 @@ class TestLaunchStatsRecording:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="unique-session-456"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch(
+                "scc_cli.docker.launch.stats.generate_session_id", return_value="unique-session-456"
+            ),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -223,12 +231,12 @@ class TestLaunchStatsConfigRespect:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -247,12 +255,12 @@ class TestLaunchStatsConfigRespect:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -271,12 +279,12 @@ class TestLaunchStatsConfigRespect:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -294,12 +302,12 @@ class TestLaunchStatsConfigRespect:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -344,12 +352,12 @@ class TestLaunchExpectedDuration:
         }
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -366,12 +374,12 @@ class TestLaunchExpectedDuration:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run"),
-            patch("scc_cli.docker.stats.record_session_start") as mock_record,
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run"),
+            patch("scc_cli.docker.launch.stats.record_session_start") as mock_record,
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             docker.launch_with_org_config_v2(
                 workspace=mock_workspace,
@@ -398,15 +406,15 @@ class TestLaunchStatsErrorHandling:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run") as mock_run,
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run") as mock_run,
             patch(
-                "scc_cli.docker.stats.record_session_start",
+                "scc_cli.docker.launch.stats.record_session_start",
                 side_effect=OSError("Cannot write to stats file"),
             ),
-            patch("scc_cli.docker.stats.generate_session_id", return_value="test-session"),
+            patch("scc_cli.docker.launch.stats.generate_session_id", return_value="test-session"),
         ):
             # Should not raise, launch should proceed
             docker.launch_with_org_config_v2(
@@ -423,13 +431,13 @@ class TestLaunchStatsErrorHandling:
         from scc_cli import docker
 
         with (
-            patch.object(docker, "check_docker_available"),
-            patch.object(docker, "inject_settings"),
-            patch.object(docker, "build_command", return_value=["docker", "sandbox"]),
-            patch.object(docker, "run") as mock_run,
-            patch("scc_cli.docker.stats.record_session_start"),
+            patch("scc_cli.docker.launch.check_docker_available"),
+            patch("scc_cli.docker.launch.inject_settings"),
+            patch("scc_cli.docker.launch.build_command", return_value=["docker", "sandbox"]),
+            patch("scc_cli.docker.launch.run") as mock_run,
+            patch("scc_cli.docker.launch.stats.record_session_start"),
             patch(
-                "scc_cli.docker.stats.generate_session_id",
+                "scc_cli.docker.launch.stats.generate_session_id",
                 side_effect=Exception("UUID generation failed"),
             ),
         ):

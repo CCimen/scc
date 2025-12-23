@@ -19,6 +19,7 @@ from rich.table import Table
 from rich.text import Text
 
 from scc_cli.audit.reader import audit_all_plugins
+from scc_cli.constants import AGENT_CONFIG_DIR
 from scc_cli.models.plugin_audit import (
     AuditOutput,
     ManifestStatus,
@@ -40,7 +41,7 @@ audit_app = typer.Typer(
 
 def get_claude_dir() -> Path:
     """Get the Claude Code directory path."""
-    return Path.home() / ".claude"
+    return Path.home() / AGENT_CONFIG_DIR
 
 
 def format_status(status: str) -> str:

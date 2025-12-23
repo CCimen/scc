@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import config
+from .constants import AGENT_CONFIG_DIR
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Classes
@@ -303,8 +304,8 @@ def prune_orphaned_sessions() -> int:
 
 def get_claude_sessions_dir() -> Path:
     """Get the Claude Code sessions directory."""
-    # Claude Code stores sessions in ~/.claude/
-    return Path.home() / ".claude"
+    # Claude Code stores sessions in its config directory
+    return Path.home() / AGENT_CONFIG_DIR
 
 
 def get_claude_recent_sessions() -> list[dict[Any, Any]]:

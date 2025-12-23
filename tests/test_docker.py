@@ -50,8 +50,10 @@ class TestInjectTeamSettings:
     def test_inject_team_settings_with_plugin(self, mock_team_settings):
         """inject_team_settings should inject team config when plugin exists."""
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=None),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
             patch("scc_cli.teams.get_team_sandbox_settings", return_value=mock_team_settings),
         ):
             result = docker.inject_team_settings("ai-teamet")
@@ -78,8 +80,12 @@ class TestInjectTeamSettings:
     ):
         """inject_team_settings should merge with existing settings."""
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=mock_existing_settings),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch(
+                "scc_cli.docker.launch.get_sandbox_settings", return_value=mock_existing_settings
+            ),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
             patch("scc_cli.teams.get_team_sandbox_settings", return_value=mock_team_settings),
         ):
             result = docker.inject_team_settings("ai-teamet")
@@ -101,8 +107,10 @@ class TestInjectTeamSettings:
         team = {"enabledPlugins": ["new-plugin@new-market"]}
 
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=existing),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=existing),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
             patch("scc_cli.teams.get_team_sandbox_settings", return_value=team),
         ):
             docker.inject_team_settings("test-team")
@@ -115,8 +123,8 @@ class TestInjectTeamSettings:
     def test_inject_team_settings_handles_injection_failure(self, mock_team_settings):
         """inject_team_settings should return False when injection fails."""
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=None),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=False),
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
+            patch("scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=False),
             patch("scc_cli.teams.get_team_sandbox_settings", return_value=mock_team_settings),
         ):
             result = docker.inject_team_settings("ai-teamet")
@@ -298,8 +306,10 @@ class TestTeamSettingsIntegration:
 
         # Mock Docker operations
         with (
-            patch("scc_cli.docker.get_sandbox_settings", return_value=None),
-            patch("scc_cli.docker.inject_file_to_sandbox_volume", return_value=True) as mock_inject,
+            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
         ):
             result = docker.inject_team_settings("ai-teamet")
 
@@ -328,7 +338,7 @@ class TestTeamSettingsIntegration:
         }
         config.save_config(test_config)
 
-        with patch("scc_cli.docker.inject_file_to_sandbox_volume") as mock_inject:
+        with patch("scc_cli.docker.launch.inject_file_to_sandbox_volume") as mock_inject:
             result = docker.inject_team_settings("base")
 
             assert result is True
