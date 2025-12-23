@@ -4,7 +4,9 @@ CLI Worktree and Session Commands.
 Commands for managing git worktrees, sessions, and containers.
 """
 
+from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.prompt import Confirm
@@ -12,8 +14,12 @@ from rich.status import Status
 
 from . import deps, docker, git, sessions, ui
 from .cli_common import console, handle_errors, render_responsive_table
+from .cli_helpers import ConfirmItems, confirm_action
 from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
+from .json_output import build_envelope
+from .kinds import Kind
+from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -23,8 +29,33 @@ from .panels import create_info_panel, create_success_panel, create_warning_pane
 worktree_app = typer.Typer(
     name="worktree",
     help="Manage git worktrees for parallel development.",
-    no_args_is_help=False,
+    no_args_is_help=True,
 )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pure Functions
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def build_worktree_list_data(
+    worktrees: list[dict[str, Any]],
+    workspace: str,
+) -> dict[str, Any]:
+    """Build worktree list data for JSON output.
+
+    Args:
+        worktrees: List of worktree dictionaries from git.list_worktrees()
+        workspace: Path to the workspace
+
+    Returns:
+        Dictionary with worktrees, count, and workspace
+    """
+    return {
+        "worktrees": worktrees,
+        "count": len(worktrees),
+        "workspace": workspace,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -32,8 +63,9 @@ worktree_app = typer.Typer(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@worktree_app.command("create")
 @handle_errors
-def worktree_cmd(
+def worktree_create_cmd(
     workspace: str = typer.Argument(..., help="Path to the main repository"),
     name: str = typer.Argument(..., help="Name for the worktree/feature"),
     base_branch: str | None = typer.Option(
@@ -88,11 +120,19 @@ def worktree_cmd(
             docker.run(docker_cmd)
 
 
+@worktree_app.command("list")
 @handle_errors
-def worktrees_cmd(
+def worktree_list_cmd(
     workspace: str = typer.Argument(".", help="Path to the repository"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
     """List all worktrees for a repository."""
+    # --pretty implies --json
+    if pretty:
+        json_output = True
+        set_pretty_mode(True)
+
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
@@ -100,12 +140,22 @@ def worktrees_cmd(
 
     worktree_list = git.list_worktrees(workspace_path)
 
+    # JSON output mode
+    if json_output:
+        with json_output_mode():
+            # Convert WorktreeInfo dataclasses to dicts for JSON serialization
+            worktree_dicts = [asdict(wt) for wt in worktree_list]
+            data = build_worktree_list_data(worktree_dicts, str(workspace_path))
+            envelope = build_envelope(Kind.WORKTREE_LIST, data=data)
+            print_json(envelope)
+            raise typer.Exit(0)
+
     if not worktree_list:
         console.print(
             create_warning_panel(
                 "No Worktrees",
                 "No worktrees found for this repository.",
-                "Create one with: scc worktree <repo> <name>",
+                "Create one with: scc worktree create <repo> <name>",
             )
         )
         return
@@ -114,30 +164,35 @@ def worktrees_cmd(
     git.render_worktrees(worktree_list, console)
 
 
+@worktree_app.command("remove")
 @handle_errors
-def cleanup_cmd(
+def worktree_remove_cmd(
     workspace: str = typer.Argument(..., help="Path to the main repository"),
     name: str = typer.Argument(..., help="Name of the worktree to remove"),
-    force: bool = typer.Option(False, "-f", "--force", help="Force removal"),
+    force: bool = typer.Option(
+        False, "-f", "--force", help="Force removal even with uncommitted changes"
+    ),
+    yes: bool = typer.Option(False, "-y", "--yes", help="Skip all confirmation prompts"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be removed without removing"
+    ),
 ) -> None:
-    """Clean up a worktree."""
+    """Remove a worktree.
+
+    By default, prompts for confirmation if there are uncommitted changes and
+    asks whether to delete the associated branch.
+
+    Use --yes to skip prompts (auto-confirms all actions).
+    Use --dry-run to preview what would be removed.
+    Use --force to remove even with uncommitted changes (still prompts unless --yes).
+    """
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    result = git.cleanup_worktree(workspace_path, name, force, console)
-
-    if result:
-        console.print(
-            create_success_panel(
-                "Worktree Removed",
-                {
-                    "Name": name,
-                    "Status": "Successfully cleaned up",
-                },
-            )
-        )
+    # cleanup_worktree handles all output including success panels
+    git.cleanup_worktree(workspace_path, name, force, console, skip_confirm=yes, dry_run=dry_run)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -259,13 +314,17 @@ def stop_cmd(
     all_containers: bool = typer.Option(
         False, "--all", "-a", help="Stop all running Claude Code sandboxes"
     ),
+    yes: bool = typer.Option(
+        False, "-y", "--yes", help="Skip confirmation prompt when stopping multiple containers"
+    ),
 ) -> None:
     """Stop running Docker sandbox(es).
 
     Examples:
-        scc stop                         # Stop all running sandboxes
+        scc stop                         # Stop all running sandboxes (prompts if >1)
         scc stop claude-sandbox-2025...  # Stop specific container
         scc stop --all                   # Stop all (explicit)
+        scc stop --yes                   # Stop all without confirmation
     """
     with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner="dots"):
         # List Docker Desktop sandbox containers (image: docker/sandbox-templates:claude-code)
@@ -316,7 +375,21 @@ def stop_cmd(
             raise typer.Exit(1)
         return
 
-    # Stop all running containers
+    # Stop all running containers - prompt for confirmation if multiple
+    if len(running) > 1:
+        try:
+            confirm_action(
+                yes=yes,
+                prompt=f"Stop {len(running)} running container(s)?",
+                items=ConfirmItems(
+                    title=f"Found {len(running)} running container(s):",
+                    items=[c.name for c in running],
+                ),
+            )
+        except typer.Abort:
+            console.print("[dim]Aborted.[/dim]")
+            return
+
     console.print(f"[cyan]Stopping {len(running)} container(s)...[/cyan]")
 
     stopped = []
@@ -370,24 +443,30 @@ def _is_container_stopped(status: str) -> bool:
 @handle_errors
 def prune_cmd(
     yes: bool = typer.Option(
-        False, "--yes", "-y", help="Actually remove containers (default is dry-run)"
+        False, "--yes", "-y", help="Skip confirmation prompt (for scripts/CI)"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Only show what would be removed, don't prompt"
     ),
 ) -> None:
     """Remove stopped SCC containers.
 
-    By default, shows what would be removed (dry-run).
-    Use --yes to actually remove containers.
+    Shows stopped containers and prompts for confirmation before removing.
+    Use --yes/-y to skip confirmation (for scripts/CI).
+    Use --dry-run to only preview without prompting.
 
-    Only removes STOPPED containers with scc.managed=true label.
-    Running containers are never affected.
+    Only removes STOPPED containers. Running containers are never affected.
 
     Examples:
-        scc prune              # Show what would be removed
-        scc prune --yes        # Actually remove stopped containers
-        scc stop && scc prune --yes  # Stop then remove all
+        scc prune              # Show containers, prompt to remove
+        scc prune --yes        # Remove without prompting (CI/scripts)
+        scc prune --dry-run    # Only show what would be removed
     """
     with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
-        all_containers = docker.list_scc_containers()
+        # Use _list_all_sandbox_containers to find ALL sandbox containers (by image)
+        # This matches how stop_cmd uses list_running_sandboxes (also by image)
+        # Containers created by Docker Desktop directly don't have SCC labels
+        all_containers = docker._list_all_sandbox_containers()
 
     # Filter to only stopped containers
     stopped = [c for c in all_containers if _is_container_stopped(c.status)]
@@ -402,16 +481,28 @@ def prune_cmd(
         )
         return
 
-    # Dry-run mode (default)
-    if not yes:
-        console.print(
-            create_info_panel(
-                "Dry Run - Would Remove",
-                f"{len(stopped)} stopped container(s):",
-                "\n".join(f"  • {c.name}" for c in stopped),
-            )
+    # Handle dry-run mode separately - show what would be removed
+    if dry_run:
+        console.print(f"[bold]Would remove {len(stopped)} stopped container(s):[/bold]")
+        for c in stopped:
+            console.print(f"  [dim]•[/dim] {c.name}")
+        console.print("[dim]Dry run complete. No containers removed.[/dim]")
+        return
+
+    # Use centralized confirmation helper for actual removal
+    # This handles: --yes, JSON mode, non-interactive mode
+    try:
+        confirm_action(
+            yes=yes,
+            dry_run=False,
+            prompt=f"Remove {len(stopped)} stopped container(s)?",
+            items=ConfirmItems(
+                title=f"Found {len(stopped)} stopped container(s):",
+                items=[c.name for c in stopped],
+            ),
         )
-        console.print("\n[dim]Run with --yes to actually remove.[/dim]")
+    except typer.Abort:
+        console.print("[dim]Aborted.[/dim]")
         return
 
     # Actually remove containers
@@ -442,3 +533,134 @@ def prune_cmd(
             )
         )
         raise typer.Exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Symmetric Alias Apps (Phase 8)
+# ─────────────────────────────────────────────────────────────────────────────
+
+session_app = typer.Typer(
+    name="session",
+    help="Session management commands.",
+    no_args_is_help=True,
+)
+
+container_app = typer.Typer(
+    name="container",
+    help="Container management commands.",
+    no_args_is_help=True,
+)
+
+
+@session_app.command("list")
+@handle_errors
+def session_list_cmd(
+    limit: int = typer.Option(10, "-n", "--limit", help="Number of sessions to show"),
+    select: bool = typer.Option(
+        False, "--select", "-s", help="Interactive picker to select a session"
+    ),
+) -> None:
+    """List recent Claude Code sessions.
+
+    Alias for 'scc sessions'. Provides symmetric command structure.
+
+    Examples:
+        scc session list
+        scc session list -n 20
+        scc session list --select
+    """
+    # Delegate to existing sessions logic
+    recent = sessions.list_recent(limit)
+
+    # Interactive picker mode
+    if select and recent:
+        selected = ui.select_session(console, recent)
+        if selected:
+            console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
+            console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        return
+
+    if not recent:
+        console.print(
+            create_warning_panel(
+                "No Sessions",
+                "No recent sessions found.",
+                "Start a session with: scc start <workspace>",
+            )
+        )
+        return
+
+    # Build rows for responsive table
+    rows = []
+    for s in recent:
+        # Shorten workspace path if needed
+        ws = s.get("workspace", "-")
+        if len(ws) > 40:
+            ws = "..." + ws[-37:]
+        rows.append([s.get("name", "-"), ws, s.get("last_used", "-"), s.get("team", "-")])
+
+    render_responsive_table(
+        title="Recent Sessions",
+        columns=[
+            ("Session", "cyan"),
+            ("Workspace", "white"),
+        ],
+        rows=rows,
+        wide_columns=[
+            ("Last Used", "yellow"),
+            ("Team", "green"),
+        ],
+    )
+
+
+@container_app.command("list")
+@handle_errors
+def container_list_cmd() -> None:
+    """List all SCC-managed Docker containers.
+
+    Alias for 'scc list'. Provides symmetric command structure.
+
+    Examples:
+        scc container list
+    """
+    # Delegate to existing list logic
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
+        containers = docker.list_scc_containers()
+
+    if not containers:
+        console.print(
+            create_warning_panel(
+                "No Containers",
+                "No SCC-managed containers found.",
+                "Start a session with: scc start <workspace>",
+            )
+        )
+        return
+
+    # Build rows
+    rows = []
+    for c in containers:
+        # Color status based on state
+        status = c.status
+        if status == "running":
+            status = f"[green]{status}[/green]"
+        elif status == "exited":
+            status = f"[yellow]{status}[/yellow]"
+
+        rows.append([c.name, status, c.workspace or "-", c.profile or "-", c.branch or "-"])
+
+    render_responsive_table(
+        title="SCC Containers",
+        columns=[
+            ("Name", "cyan"),
+            ("Status", "white"),
+        ],
+        rows=rows,
+        wide_columns=[
+            ("Workspace", "dim"),
+            ("Profile", "yellow"),
+            ("Branch", "green"),
+        ],
+    )
+
+    console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")

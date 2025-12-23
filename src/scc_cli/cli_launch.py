@@ -14,6 +14,7 @@ for maintainability and testability.
 """
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.panel import Panel
@@ -31,6 +32,9 @@ from .cli_common import (
 )
 from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
+from .json_output import build_envelope
+from .kinds import Kind
+from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,6 +299,62 @@ def _extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | Non
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Dry Run Data Builder (Pure Function)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def build_dry_run_data(
+    workspace_path: Path,
+    team: str | None,
+    org_config: dict[str, Any] | None,
+    project_config: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """
+    Build dry run data showing resolved configuration.
+
+    This pure function assembles configuration information for preview
+    without performing any side effects like Docker launch.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        team: Selected team profile name (or None).
+        org_config: Organization configuration dict (or None).
+        project_config: Project-level .scc.yaml config (or None).
+
+    Returns:
+        Dictionary with resolved configuration data.
+    """
+    plugins: list[dict[str, Any]] = []
+    blocked_items: list[str] = []
+
+    # Extract plugins from org config if team is specified
+    if org_config and team:
+        profiles = org_config.get("profiles", [])
+        for profile in profiles:
+            if profile.get("name") == team:
+                profile_plugins = profile.get("plugins", [])
+                for plugin in profile_plugins:
+                    plugins.append({"name": plugin.get("name", "unknown"), "source": "team"})
+
+    # Extract plugins from project config
+    if project_config:
+        project_plugins = project_config.get("plugins", [])
+        for plugin in project_plugins:
+            if isinstance(plugin, dict):
+                plugins.append({"name": plugin.get("name", "unknown"), "source": "project"})
+            elif isinstance(plugin, str):
+                plugins.append({"name": plugin, "source": "project"})
+
+    return {
+        "workspace": str(workspace_path),
+        "team": team,
+        "plugins": plugins,
+        "blocked_items": blocked_items,
+        "ready_to_start": len(blocked_items) == 0,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Launch App
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -331,6 +391,11 @@ def start(
     ),
     offline: bool = typer.Option(False, "--offline", help="Use cached config only (error if none)"),
     standalone: bool = typer.Option(False, "--standalone", help="Run without organization config"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview resolved configuration without launching"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
     """
     Start Claude Code in a Docker sandbox.
@@ -372,7 +437,39 @@ def start(
     workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps)
 
     # ── Step 6: Team configuration ───────────────────────────────────────────
-    _configure_team_settings(team, cfg)
+    if not dry_run:
+        _configure_team_settings(team, cfg)
+
+    # ── Step 6.5: Handle --dry-run (preview without launching) ────────────────
+    if dry_run:
+        org_config = config.load_cached_org_config()
+        project_config = None  # TODO: Load from .scc.yaml if present
+
+        dry_run_data = build_dry_run_data(
+            workspace_path=workspace_path,  # type: ignore[arg-type]
+            team=team,
+            org_config=org_config,
+            project_config=project_config,
+        )
+
+        # Handle --pretty implies --json
+        if pretty:
+            json_output = True
+
+        if json_output:
+            with json_output_mode():
+                if pretty:
+                    set_pretty_mode(True)
+                try:
+                    envelope = build_envelope(Kind.START_DRY_RUN, data=dry_run_data)
+                    print_json(envelope)
+                finally:
+                    if pretty:
+                        set_pretty_mode(False)
+        else:
+            _show_dry_run_panel(dry_run_data)
+
+        raise typer.Exit(0)
 
     # ── Step 7: Resolve mount path and branch for worktrees ──────────────────
     mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
@@ -431,6 +528,55 @@ def _show_launch_panel(
     console.print(panel)
     console.print()
     console.print("[dim]Starting Docker sandbox...[/dim]")
+    console.print()
+
+
+def _show_dry_run_panel(data: dict[str, Any]) -> None:
+    """Display dry run configuration preview."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column(style="white")
+
+    # Workspace
+    workspace = data.get("workspace", "")
+    if len(workspace) > MAX_DISPLAY_PATH_LENGTH:
+        workspace = "..." + workspace[-PATH_TRUNCATE_LENGTH:]
+    grid.add_row("Workspace:", workspace)
+
+    # Team
+    grid.add_row("Team:", data.get("team") or "base")
+
+    # Plugins
+    plugins = data.get("plugins", [])
+    if plugins:
+        plugin_list = ", ".join(p.get("name", "unknown") for p in plugins)
+        grid.add_row("Plugins:", plugin_list)
+    else:
+        grid.add_row("Plugins:", "[dim]none[/dim]")
+
+    # Ready status
+    ready = data.get("ready_to_start", True)
+    status = "[green]✓ Ready to start[/green]" if ready else "[red]✗ Blocked[/red]"
+    grid.add_row("Status:", status)
+
+    # Blocked items
+    blocked = data.get("blocked_items", [])
+    if blocked:
+        for item in blocked:
+            grid.add_row("[red]Blocked:[/red]", item)
+
+    panel = Panel(
+        grid,
+        title="[bold cyan]Dry Run Preview[/bold cyan]",
+        border_style="cyan",
+        padding=(0, 1),
+    )
+
+    console.print()
+    console.print(panel)
+    console.print()
+    if ready:
+        console.print("[dim]Remove --dry-run to launch[/dim]")
     console.print()
 
 

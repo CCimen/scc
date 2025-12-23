@@ -18,6 +18,7 @@ New checks (v2):
 """
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +50,7 @@ class CheckResult:
     fix_url: str | None = None
     severity: str = "error"  # "error", "warning", "info"
     code_frame: str | None = None  # Optional code frame for syntax errors
+    fix_commands: list[str] | None = None  # Copy-pasteable fix commands
 
 
 @dataclass
@@ -1033,6 +1035,89 @@ def check_exception_stores() -> CheckResult:
     )
 
 
+def check_proxy_environment() -> CheckResult:
+    """Check for proxy environment variables.
+
+    This is an informational check that detects common proxy configurations.
+    It never fails - just provides visibility into the environment.
+
+    Returns:
+        CheckResult with proxy environment info (always passes, severity=info).
+    """
+    proxy_vars = {
+        "HTTP_PROXY": os.environ.get("HTTP_PROXY"),
+        "http_proxy": os.environ.get("http_proxy"),
+        "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
+        "https_proxy": os.environ.get("https_proxy"),
+        "NO_PROXY": os.environ.get("NO_PROXY"),
+        "no_proxy": os.environ.get("no_proxy"),
+    }
+
+    # Find which ones are set
+    configured = {k: v for k, v in proxy_vars.items() if v}
+
+    if configured:
+        # Summarize what's configured
+        proxy_names = ", ".join(configured.keys())
+        message = f"Proxy configured: {proxy_names}"
+    else:
+        message = "No proxy environment variables detected"
+
+    return CheckResult(
+        name="Proxy Environment",
+        passed=True,
+        message=message,
+        severity="info",
+    )
+
+
+def build_doctor_json_data(result: DoctorResult) -> dict[str, Any]:
+    """Build JSON-serializable data from DoctorResult.
+
+    Args:
+        result: The DoctorResult to convert.
+
+    Returns:
+        Dictionary suitable for JSON envelope data field.
+    """
+    checks_data = []
+    for check in result.checks:
+        check_dict: dict[str, Any] = {
+            "name": check.name,
+            "passed": check.passed,
+            "message": check.message,
+            "severity": check.severity,
+        }
+        if check.version:
+            check_dict["version"] = check.version
+        if check.fix_hint:
+            check_dict["fix_hint"] = check.fix_hint
+        if check.fix_url:
+            check_dict["fix_url"] = check.fix_url
+        if check.fix_commands:
+            check_dict["fix_commands"] = check.fix_commands
+        if check.code_frame:
+            check_dict["code_frame"] = check.code_frame
+        checks_data.append(check_dict)
+
+    # Calculate summary stats
+    total = len(result.checks)
+    passed = sum(1 for c in result.checks if c.passed)
+    errors = sum(1 for c in result.checks if not c.passed and c.severity == "error")
+    warnings = sum(1 for c in result.checks if not c.passed and c.severity == "warning")
+
+    return {
+        "checks": checks_data,
+        "summary": {
+            "total": total,
+            "passed": passed,
+            "errors": errors,
+            "warnings": warnings,
+            "all_ok": result.all_ok,
+        },
+    }
+
+
 def run_all_checks() -> list[CheckResult]:
     """Run all health checks and return list of results.
 
@@ -1254,6 +1339,23 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
 
         console.print(f"  Found {' and '.join(summary_parts)}. ", end="")
         console.print("[dim]Fix the issues above to continue.[/dim]")
+
+        # Next Steps section with fix_commands
+        checks_with_commands = [c for c in result.checks if not c.passed and c.fix_commands]
+        if checks_with_commands:
+            console.print()
+            console.print("  [bold cyan]Next Steps[/bold cyan]")
+            console.print("  [dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
+            console.print()
+
+            for check in checks_with_commands:
+                console.print(f"  [bold white]{check.name}:[/bold white]")
+                if check.fix_hint:
+                    console.print(f"    [dim]{check.fix_hint}[/dim]")
+                if check.fix_commands:
+                    for i, cmd in enumerate(check.fix_commands, 1):
+                        console.print(f"    [cyan]{i}.[/cyan] [white]{cmd}[/white]")
+                console.print()
 
     console.print()
 

@@ -13,6 +13,7 @@ from rich.table import Table
 
 from . import config, profiles, setup, teams
 from .cli_common import console, handle_errors, render_responsive_table
+from .deprecation import warn_deprecated
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 from .stores.exception_store import RepoStore, UserStore
 from .utils.ttl import format_relative
@@ -38,7 +39,11 @@ def teams_cmd(
     team_name: str | None = typer.Argument(None, help="Team name to show details"),
     sync: bool = typer.Option(False, "--sync", "-s", help="Sync team configs from GitHub"),
 ) -> None:
-    """List available team profiles or show team details."""
+    """List available team profiles or show team details.
+
+    DEPRECATED: Use 'scc team list', 'scc team info <name>', or 'scc team switch <name>' instead.
+    """
+    warn_deprecated("scc teams", "scc team list/info/switch")
     cfg = config.load_config()
 
     # Load cached org config (NEW architecture)

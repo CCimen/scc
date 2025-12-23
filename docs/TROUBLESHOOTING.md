@@ -461,5 +461,10 @@ If none of these solutions work:
 
 1. Run `scc doctor --verbose` and note any warnings
 2. Run `scc config explain` to see effective configuration
-3. Check the [Architecture docs](ARCHITECTURE.md) to understand the config flow
-4. Open an issue with the diagnostic output
+3. Generate a support bundle for sharing:
+   ```bash
+   scc support bundle
+   ```
+   This collects diagnostic info with secrets redacted.
+4. Check the [Architecture docs](ARCHITECTURE.md) to understand the config flow
+5. Open an issue with the diagnostic output or support bundle

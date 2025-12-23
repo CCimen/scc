@@ -874,11 +874,25 @@ def cleanup_worktree(
     name: str,
     force: bool,
     console: Console,
+    *,
+    skip_confirm: bool = False,
+    dry_run: bool = False,
 ) -> bool:
     """
     Clean up a worktree with safety checks and visual feedback.
 
     Shows uncommitted changes before deletion to prevent accidental data loss.
+
+    Args:
+        repo_path: Path to the main repository.
+        name: Name of the worktree to remove.
+        force: If True, remove even if worktree has uncommitted changes.
+        console: Rich console for output.
+        skip_confirm: If True, skip interactive confirmations (--yes flag).
+        dry_run: If True, show what would be removed but don't actually remove.
+
+    Returns:
+        True if worktree was removed (or would be in dry-run mode), False otherwise.
     """
     safe_name = sanitize_branch_name(name)
     branch_name = f"{BRANCH_PREFIX}{safe_name}"
@@ -897,9 +911,20 @@ def cleanup_worktree(
         return False
 
     console.print()
-    console.print(
-        create_info_panel("Cleanup Worktree", f"Worktree: {safe_name}", f"Path: {worktree_path}")
-    )
+    if dry_run:
+        console.print(
+            create_info_panel(
+                "Dry Run: Cleanup Worktree",
+                f"Worktree: {safe_name}",
+                f"Path: {worktree_path}",
+            )
+        )
+    else:
+        console.print(
+            create_info_panel(
+                "Cleanup Worktree", f"Worktree: {safe_name}", f"Path: {worktree_path}"
+            )
+        )
     console.print()
 
     # Check for uncommitted changes - show evidence
@@ -921,9 +946,20 @@ def cleanup_worktree(
             console.print("[red bold]These changes will be permanently lost.[/red bold]")
             console.print()
 
-            if not Confirm.ask("[yellow]Delete worktree anyway?[/yellow]", default=False):
-                console.print("[dim]Cleanup cancelled.[/dim]")
-                return False
+            # Skip confirmation prompt if --yes was provided
+            if not skip_confirm:
+                if not Confirm.ask("[yellow]Delete worktree anyway?[/yellow]", default=False):
+                    console.print("[dim]Cleanup cancelled.[/dim]")
+                    return False
+
+    # Dry run: show what would be removed without actually removing
+    if dry_run:
+        console.print("  [cyan]Would remove:[/cyan]")
+        console.print(f"    • Worktree: {worktree_path}")
+        console.print(f"    • Branch: {branch_name} [dim](if confirmed)[/dim]")
+        console.print()
+        console.print("[dim]Dry run complete. No changes made.[/dim]")
+        return True
 
     # Remove worktree
     with console.status("[cyan]Removing worktree...[/cyan]", spinner="dots"):
@@ -947,10 +983,13 @@ def cleanup_worktree(
 
     console.print("  [green]✓[/green] Worktree removed")
 
-    # Ask about branch deletion
+    # Ask about branch deletion (auto-delete if --yes was provided)
     console.print()
     branch_deleted = False
-    if Confirm.ask(f"[cyan]Also delete branch '{branch_name}'?[/cyan]", default=False):
+    should_delete_branch = skip_confirm or Confirm.ask(
+        f"[cyan]Also delete branch '{branch_name}'?[/cyan]", default=False
+    )
+    if should_delete_branch:
         with console.status("[cyan]Deleting branch...[/cyan]", spinner="dots"):
             subprocess.run(
                 ["git", "-C", str(repo_path), "branch", "-D", branch_name],
