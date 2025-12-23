@@ -21,6 +21,7 @@ from rich.panel import Panel
 from .cli_admin import (
     doctor_cmd,
     stats_app,
+    status_cmd,
     statusline_cmd,
     update_cmd,
 )
@@ -32,17 +33,21 @@ from .cli_config import (
     teams_cmd,
 )
 from .cli_exceptions import exceptions_app, unblock_cmd
+from .cli_init import init_cmd
 
 # Import command functions from domain modules
 from .cli_launch import start
+from .cli_org import org_app
+from .cli_support import support_app
+from .cli_team import team_app
 from .cli_worktree import (
-    cleanup_cmd,
+    container_app,
     list_cmd,
     prune_cmd,
+    session_app,
     sessions_cmd,
     stop_cmd,
-    worktree_cmd,
-    worktrees_cmd,
+    worktree_app,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,44 +119,73 @@ def main_callback(
             continue_session=False,
             worktree_name=None,
             fresh=False,
+            install_deps=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            json_output=False,
+            pretty=False,
         )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Help Panel Group Names
+# ─────────────────────────────────────────────────────────────────────────────
+
+PANEL_SESSION = "Session Management"
+PANEL_WORKSPACE = "Workspace"
+PANEL_CONFIG = "Configuration"
+PANEL_ADMIN = "Administration"
+PANEL_GOVERNANCE = "Governance"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Register Commands from Domain Modules
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Launch commands
-app.command()(start)
+app.command(rich_help_panel=PANEL_SESSION)(start)
 
-# Worktree and session commands
-app.command(name="worktree")(worktree_cmd)
-app.command(name="worktrees")(worktrees_cmd)
-app.command(name="cleanup")(cleanup_cmd)
-app.command(name="sessions")(sessions_cmd)
-app.command(name="list")(list_cmd)
-app.command(name="stop")(stop_cmd)
-app.command(name="prune")(prune_cmd)
+# Worktree command group
+app.add_typer(worktree_app, name="worktree", rich_help_panel=PANEL_WORKSPACE)
+
+# Session and container commands
+app.command(name="sessions", rich_help_panel=PANEL_SESSION)(sessions_cmd)
+app.command(name="list", rich_help_panel=PANEL_SESSION)(list_cmd)
+app.command(name="stop", rich_help_panel=PANEL_SESSION)(stop_cmd)
+app.command(name="prune", rich_help_panel=PANEL_SESSION)(prune_cmd)
 
 # Configuration commands
-app.command(name="teams")(teams_cmd)
-app.command(name="setup")(setup_cmd)
-app.command(name="config")(config_cmd)
+app.add_typer(team_app, name="team", rich_help_panel=PANEL_CONFIG)
+app.command(name="teams", hidden=True)(teams_cmd)  # Deprecated alias
+app.command(name="setup", rich_help_panel=PANEL_CONFIG)(setup_cmd)
+app.command(name="config", rich_help_panel=PANEL_CONFIG)(config_cmd)
+app.command(name="init", rich_help_panel=PANEL_CONFIG)(init_cmd)
 
 # Admin commands
-app.command(name="doctor")(doctor_cmd)
-app.command(name="update")(update_cmd)
-app.command(name="statusline")(statusline_cmd)
+app.command(name="doctor", rich_help_panel=PANEL_ADMIN)(doctor_cmd)
+app.command(name="update", rich_help_panel=PANEL_ADMIN)(update_cmd)
+app.command(name="status", rich_help_panel=PANEL_ADMIN)(status_cmd)
+app.command(name="statusline", rich_help_panel=PANEL_ADMIN)(statusline_cmd)
 
 # Add stats sub-app
-app.add_typer(stats_app, name="stats")
+app.add_typer(stats_app, name="stats", rich_help_panel=PANEL_ADMIN)
 
 # Exception management commands
-app.add_typer(exceptions_app, name="exceptions")
-app.command(name="unblock")(unblock_cmd)
+app.add_typer(exceptions_app, name="exceptions", rich_help_panel=PANEL_GOVERNANCE)
+app.command(name="unblock", rich_help_panel=PANEL_GOVERNANCE)(unblock_cmd)
 
 # Audit commands
-app.add_typer(audit_app, name="audit")
+app.add_typer(audit_app, name="audit", rich_help_panel=PANEL_GOVERNANCE)
+
+# Support commands
+app.add_typer(support_app, name="support", rich_help_panel=PANEL_GOVERNANCE)
+
+# Org admin commands
+app.add_typer(org_app, name="org", rich_help_panel=PANEL_GOVERNANCE)
+
+# Symmetric alias apps (Phase 8)
+app.add_typer(session_app, name="session", rich_help_panel=PANEL_WORKSPACE)
+app.add_typer(container_app, name="container", rich_help_panel=PANEL_WORKSPACE)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

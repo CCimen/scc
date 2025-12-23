@@ -4,7 +4,9 @@ CLI Worktree and Session Commands.
 Commands for managing git worktrees, sessions, and containers.
 """
 
+from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.prompt import Confirm
@@ -14,6 +16,9 @@ from . import deps, docker, git, sessions, ui
 from .cli_common import console, handle_errors, render_responsive_table
 from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
+from .json_output import build_envelope
+from .kinds import Kind
+from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -23,8 +28,33 @@ from .panels import create_info_panel, create_success_panel, create_warning_pane
 worktree_app = typer.Typer(
     name="worktree",
     help="Manage git worktrees for parallel development.",
-    no_args_is_help=False,
+    no_args_is_help=True,
 )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pure Functions
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def build_worktree_list_data(
+    worktrees: list[dict[str, Any]],
+    workspace: str,
+) -> dict[str, Any]:
+    """Build worktree list data for JSON output.
+
+    Args:
+        worktrees: List of worktree dictionaries from git.list_worktrees()
+        workspace: Path to the workspace
+
+    Returns:
+        Dictionary with worktrees, count, and workspace
+    """
+    return {
+        "worktrees": worktrees,
+        "count": len(worktrees),
+        "workspace": workspace,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -32,8 +62,9 @@ worktree_app = typer.Typer(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@worktree_app.command("create")
 @handle_errors
-def worktree_cmd(
+def worktree_create_cmd(
     workspace: str = typer.Argument(..., help="Path to the main repository"),
     name: str = typer.Argument(..., help="Name for the worktree/feature"),
     base_branch: str | None = typer.Option(
@@ -88,11 +119,19 @@ def worktree_cmd(
             docker.run(docker_cmd)
 
 
+@worktree_app.command("list")
 @handle_errors
-def worktrees_cmd(
+def worktree_list_cmd(
     workspace: str = typer.Argument(".", help="Path to the repository"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
     """List all worktrees for a repository."""
+    # --pretty implies --json
+    if pretty:
+        json_output = True
+        set_pretty_mode(True)
+
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
@@ -100,12 +139,22 @@ def worktrees_cmd(
 
     worktree_list = git.list_worktrees(workspace_path)
 
+    # JSON output mode
+    if json_output:
+        with json_output_mode():
+            # Convert WorktreeInfo dataclasses to dicts for JSON serialization
+            worktree_dicts = [asdict(wt) for wt in worktree_list]
+            data = build_worktree_list_data(worktree_dicts, str(workspace_path))
+            envelope = build_envelope(Kind.WORKTREE_LIST, data=data)
+            print_json(envelope)
+            raise typer.Exit(0)
+
     if not worktree_list:
         console.print(
             create_warning_panel(
                 "No Worktrees",
                 "No worktrees found for this repository.",
-                "Create one with: scc worktree <repo> <name>",
+                "Create one with: scc worktree create <repo> <name>",
             )
         )
         return
@@ -114,13 +163,14 @@ def worktrees_cmd(
     git.render_worktrees(worktree_list, console)
 
 
+@worktree_app.command("remove")
 @handle_errors
-def cleanup_cmd(
+def worktree_remove_cmd(
     workspace: str = typer.Argument(..., help="Path to the main repository"),
     name: str = typer.Argument(..., help="Name of the worktree to remove"),
     force: bool = typer.Option(False, "-f", "--force", help="Force removal"),
 ) -> None:
-    """Clean up a worktree."""
+    """Remove a worktree."""
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
@@ -134,7 +184,7 @@ def cleanup_cmd(
                 "Worktree Removed",
                 {
                     "Name": name,
-                    "Status": "Successfully cleaned up",
+                    "Status": "Successfully removed",
                 },
             )
         )
@@ -442,3 +492,134 @@ def prune_cmd(
             )
         )
         raise typer.Exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Symmetric Alias Apps (Phase 8)
+# ─────────────────────────────────────────────────────────────────────────────
+
+session_app = typer.Typer(
+    name="session",
+    help="Session management commands.",
+    no_args_is_help=True,
+)
+
+container_app = typer.Typer(
+    name="container",
+    help="Container management commands.",
+    no_args_is_help=True,
+)
+
+
+@session_app.command("list")
+@handle_errors
+def session_list_cmd(
+    limit: int = typer.Option(10, "-n", "--limit", help="Number of sessions to show"),
+    select: bool = typer.Option(
+        False, "--select", "-s", help="Interactive picker to select a session"
+    ),
+) -> None:
+    """List recent Claude Code sessions.
+
+    Alias for 'scc sessions'. Provides symmetric command structure.
+
+    Examples:
+        scc session list
+        scc session list -n 20
+        scc session list --select
+    """
+    # Delegate to existing sessions logic
+    recent = sessions.list_recent(limit)
+
+    # Interactive picker mode
+    if select and recent:
+        selected = ui.select_session(console, recent)
+        if selected:
+            console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
+            console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        return
+
+    if not recent:
+        console.print(
+            create_warning_panel(
+                "No Sessions",
+                "No recent sessions found.",
+                "Start a session with: scc start <workspace>",
+            )
+        )
+        return
+
+    # Build rows for responsive table
+    rows = []
+    for s in recent:
+        # Shorten workspace path if needed
+        ws = s.get("workspace", "-")
+        if len(ws) > 40:
+            ws = "..." + ws[-37:]
+        rows.append([s.get("name", "-"), ws, s.get("last_used", "-"), s.get("team", "-")])
+
+    render_responsive_table(
+        title="Recent Sessions",
+        columns=[
+            ("Session", "cyan"),
+            ("Workspace", "white"),
+        ],
+        rows=rows,
+        wide_columns=[
+            ("Last Used", "yellow"),
+            ("Team", "green"),
+        ],
+    )
+
+
+@container_app.command("list")
+@handle_errors
+def container_list_cmd() -> None:
+    """List all SCC-managed Docker containers.
+
+    Alias for 'scc list'. Provides symmetric command structure.
+
+    Examples:
+        scc container list
+    """
+    # Delegate to existing list logic
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
+        containers = docker.list_scc_containers()
+
+    if not containers:
+        console.print(
+            create_warning_panel(
+                "No Containers",
+                "No SCC-managed containers found.",
+                "Start a session with: scc start <workspace>",
+            )
+        )
+        return
+
+    # Build rows
+    rows = []
+    for c in containers:
+        # Color status based on state
+        status = c.status
+        if status == "running":
+            status = f"[green]{status}[/green]"
+        elif status == "exited":
+            status = f"[yellow]{status}[/yellow]"
+
+        rows.append([c.name, status, c.workspace or "-", c.profile or "-", c.branch or "-"])
+
+    render_responsive_table(
+        title="SCC Containers",
+        columns=[
+            ("Name", "cyan"),
+            ("Status", "white"),
+        ],
+        rows=rows,
+        wide_columns=[
+            ("Workspace", "dim"),
+            ("Profile", "yellow"),
+            ("Branch", "green"),
+        ],
+    )
+
+    console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")

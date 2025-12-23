@@ -1,7 +1,7 @@
 """
 CLI Admin Commands.
 
-Commands for system administration: doctor, update, statusline, and stats.
+Commands for system administration: doctor, update, statusline, status, and stats.
 """
 
 import importlib.resources
@@ -11,11 +11,17 @@ from typing import Any
 
 import typer
 from rich import box
+from rich.panel import Panel
 from rich.status import Status
 from rich.table import Table
 
 from . import config, docker, doctor, stats
 from .cli_common import console, handle_errors
+from .docker.core import ContainerInfo
+from .json_command import json_command
+from .json_output import build_envelope
+from .kinds import Kind
+from .output_mode import is_json_mode, json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +36,201 @@ admin_app = typer.Typer(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Status Command - Pure Function
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def build_status_data(
+    cfg: dict[str, Any],
+    org: dict[str, Any] | None,
+    running_containers: list[ContainerInfo],
+    workspace_path: Path | None = None,
+) -> dict[str, Any]:
+    """Build status data structure from configuration and state.
+
+    This is a pure function that assembles all status information.
+    No I/O operations - just data transformation.
+
+    Args:
+        cfg: User configuration dict
+        org: Organization configuration dict (may be None)
+        running_containers: List of running container info
+        workspace_path: Current workspace path (optional)
+
+    Returns:
+        Status data dict suitable for JSON output or human display
+    """
+    # Organization info
+    org_source = cfg.get("organization_source") or {}
+    org_url = org_source.get("url")
+    org_name = org.get("name") if org else None
+
+    organization = {
+        "name": org_name,
+        "configured": bool(org_url),
+        "source_url": org_url,
+    }
+
+    # Team info
+    team_name = cfg.get("selected_profile")
+    team_details: dict[str, Any] = {"name": team_name}
+
+    # Look up delegation info if org config available
+    if org and team_name:
+        profiles = org.get("profiles", [])
+        for profile in profiles:
+            if profile.get("name") == team_name:
+                delegation = profile.get("delegation", {})
+                team_details["delegation"] = {
+                    "allow_additional_plugins": delegation.get("allow_additional_plugins", False),
+                    "allow_additional_mcp_servers": delegation.get(
+                        "allow_additional_mcp_servers", False
+                    ),
+                }
+                break
+
+    # Session info
+    session: dict[str, Any] = {
+        "active": len(running_containers) > 0,
+        "count": len(running_containers),
+        "containers": [],
+    }
+
+    for container in running_containers:
+        session["containers"].append(
+            {
+                "name": container.name,
+                "status": container.status,
+                "workspace": container.workspace,
+            }
+        )
+
+    # Workspace info
+    workspace: dict[str, Any] = {"path": None, "has_scc_yaml": False}
+    if workspace_path:
+        workspace["path"] = str(workspace_path)
+        scc_yaml = workspace_path / ".scc.yaml"
+        workspace["has_scc_yaml"] = scc_yaml.exists()
+
+    return {
+        "organization": organization,
+        "team": team_details,
+        "session": session,
+        "workspace": workspace,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Status Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@json_command(Kind.STATUS)
+@handle_errors
+def status_cmd(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
+) -> dict[str, Any]:
+    """Show current SCC configuration status.
+
+    Displays organization, team, workspace, and session information
+    in a concise format. Use --verbose for detailed governance info.
+
+    Examples:
+        scc status              # Quick status overview
+        scc status --verbose    # Include delegation details
+        scc status --json       # Output as JSON
+    """
+    cfg = config.load_user_config()
+    org_config = config.load_cached_org_config()
+
+    # Get running containers
+    running_containers = docker.list_running_sandboxes()
+
+    # Get current workspace
+    workspace_path = Path.cwd()
+
+    # Build status data
+    data = build_status_data(cfg, org_config, running_containers, workspace_path)
+
+    # Human-readable output
+    if not is_json_mode():
+        _render_status_human(data, verbose=verbose)
+
+    return data
+
+
+def _render_status_human(data: dict[str, Any], verbose: bool = False) -> None:
+    """Render status data as human-readable output."""
+    lines = []
+
+    # Organization
+    org = data["organization"]
+    if org["name"]:
+        lines.append(f"[bold]Organization:[/bold] {org['name']}")
+    elif org["configured"]:
+        lines.append("[bold]Organization:[/bold] [dim](configured, no name)[/dim]")
+    else:
+        lines.append("[bold]Organization:[/bold] [dim]Not configured[/dim]")
+
+    # Team
+    team = data["team"]
+    if team["name"]:
+        team_line = f"[bold]Team:[/bold] [cyan]{team['name']}[/cyan]"
+        if "delegation" in team and verbose:
+            delegation = team["delegation"]
+            perms = []
+            if delegation.get("allow_additional_plugins"):
+                perms.append("plugins")
+            if delegation.get("allow_additional_mcp_servers"):
+                perms.append("mcp-servers")
+            if perms:
+                team_line += f" [dim](can add: {', '.join(perms)})[/dim]"
+            else:
+                team_line += " [dim](no additional permissions)[/dim]"
+        lines.append(team_line)
+    else:
+        lines.append("[bold]Team:[/bold] [dim]None selected[/dim]")
+
+    # Workspace
+    workspace = data["workspace"]
+    if workspace["path"]:
+        ws_line = f"[bold]Workspace:[/bold] {workspace['path']}"
+        if workspace["has_scc_yaml"]:
+            ws_line += " [green](.scc.yaml found)[/green]"
+        lines.append(ws_line)
+
+    # Session
+    session = data["session"]
+    if session["active"]:
+        count = session["count"]
+        session_word = "session" if count == 1 else "sessions"
+        lines.append(f"[bold]Session:[/bold] [green]{count} active {session_word}[/green]")
+        if verbose and session["containers"]:
+            for container in session["containers"]:
+                lines.append(f"  [dim]• {container['name']} ({container['status']})[/dim]")
+    else:
+        lines.append("[bold]Session:[/bold] [dim]No active sessions[/dim]")
+
+    # Verbose: show source URL
+    if verbose and org["source_url"]:
+        lines.append("")
+        lines.append(f"[dim]Source: {org['source_url']}[/dim]")
+
+    # Print as panel
+    content = "\n".join(lines)
+    panel = Panel(
+        content,
+        title="[bold cyan]SCC Status[/bold cyan]",
+        border_style="cyan",
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Doctor Command
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,9 +239,26 @@ admin_app = typer.Typer(
 def doctor_cmd(
     workspace: str | None = typer.Argument(None, help="Optional workspace to check"),
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick status only"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
     """Check prerequisites and system health."""
     workspace_path = Path(workspace).expanduser().resolve() if workspace else None
+
+    # --pretty implies --json
+    if pretty:
+        json_output = True
+        set_pretty_mode(True)
+
+    if json_output:
+        with json_output_mode():
+            result = doctor.run_doctor(workspace_path)
+            data = doctor.build_doctor_json_data(result)
+            envelope = build_envelope(Kind.DOCTOR_REPORT, data=data, ok=result.all_ok)
+            print_json(envelope)
+            if not result.all_ok:
+                raise typer.Exit(3)  # Prerequisites failed
+            raise typer.Exit(0)
 
     with Status("[cyan]Running health checks...[/cyan]", console=console, spinner="dots"):
         result = doctor.run_doctor(workspace_path)

@@ -448,7 +448,9 @@ class TestWorktreeWorkflow:
             worktree_path = git_workspace.parent / "claude" / "feature-x"
             mock_create.return_value = worktree_path
 
-            runner.invoke(app, ["worktree", str(git_workspace), "feature-x", "--no-start"])
+            runner.invoke(
+                app, ["worktree", "create", str(git_workspace), "feature-x", "--no-start"]
+            )
 
         mock_create.assert_called_once()
 
@@ -467,7 +469,14 @@ class TestWorktreeWorkflow:
 
             runner.invoke(
                 app,
-                ["worktree", str(git_workspace), "feature-x", "--install-deps", "--no-start"],
+                [
+                    "worktree",
+                    "create",
+                    str(git_workspace),
+                    "feature-x",
+                    "--install-deps",
+                    "--no-start",
+                ],
             )
 
         mock_deps.assert_called_once_with(worktree_path)

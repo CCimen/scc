@@ -86,13 +86,15 @@ Quick reference for everyday development:
 | `scc start ~/project` | Launch Claude Code in sandbox |
 | `scc start --resume` | Resume most recent session |
 | `scc start --select` | Pick from recent sessions |
+| `scc start --dry-run` | Preview resolved config without launching |
 | `scc stop` | Stop running sandbox(es) |
 | `scc list` | Show running containers |
 | `scc prune` | Clean up stopped containers |
+| `scc status` | Quick status overview |
 | `scc doctor` | Check system health |
 | `scc config explain` | Debug why something was blocked |
-| `scc teams` | List available team profiles |
-| `scc setup --team <name>` | Switch to a different team |
+| `scc team list` | List available team profiles |
+| `scc team switch <name>` | Switch to a different team |
 
 ## Usage
 
@@ -133,34 +135,46 @@ Use worktrees when you need to work on multiple features simultaneously without 
 
 ```bash
 # Create isolated workspace
-scc worktree ~/projects/api-service feature-auth
+scc worktree create ~/projects/api-service feature-auth
 # Creates: ~/projects/api-service-worktrees/feature-auth/
 # Branch: claude/feature-auth
 
 # With dependency installation
-scc worktree ~/projects/api-service feature-x --install-deps
+scc worktree create ~/projects/api-service feature-x --install-deps
 
 # List worktrees
-scc worktrees ~/projects/api-service
+scc worktree list ~/projects/api-service
 
-# Clean up
-scc cleanup ~/projects/api-service feature-auth
+# List as JSON (for scripts)
+scc worktree list ~/projects/api-service --json
+
+# Remove worktree
+scc worktree remove ~/projects/api-service feature-auth
 ```
 
 ### Managing configuration
 
 ```bash
 # List team profiles
-scc teams
+scc team list
 
 # Refresh from remote
-scc teams --sync
+scc team list --sync
+
+# Show current team
+scc team current
+
+# Get team details
+scc team info platform
 
 # Check for CLI and config updates
 scc update
 
 # View effective configuration
 scc config explain
+
+# Show quick status overview
+scc status
 
 # List recent sessions
 scc sessions
@@ -175,10 +189,13 @@ To change your team profile without running the full setup wizard:
 
 ```bash
 # Switch to a different team
-scc setup --team backend-java
+scc team switch backend-java
+
+# Interactive team picker
+scc team switch
 
 # See available teams first
-scc teams
+scc team list
 ```
 
 This updates your profile selection while keeping your organization connection intact.
@@ -221,23 +238,34 @@ Exit code 0 means all manifests parsed. Exit code 1 means parsing errors found.
 | `scc` | Interactive mode |
 | `scc setup` | Configure organization connection |
 | `scc start <path>` | Start Claude Code in sandbox |
+| `scc start --dry-run` | Preview resolved configuration |
 | `scc stop` | Stop running sandbox(es) |
+| `scc status` | Quick status overview |
 | `scc doctor` | Check prerequisites |
 | `scc update` | Check for CLI and config updates |
-| `scc teams` | List team profiles |
+| `scc team list` | List team profiles |
+| `scc team switch <name>` | Switch to a different team |
+| `scc team current` | Show current team |
+| `scc team info <name>` | Show team details |
 | `scc sessions` | List recent sessions |
+| `scc session list` | List recent sessions (symmetric alias) |
 | `scc stats` | View usage statistics |
 | `scc statusline` | Configure status line for worktree info |
 | `scc list` | List running containers |
+| `scc container list` | List running containers (symmetric alias) |
 | `scc prune` | Remove stopped containers (dry-run by default) |
-| `scc worktree <repo> <name>` | Create git worktree |
-| `scc worktrees <repo>` | List worktrees |
-| `scc cleanup <repo> <name>` | Remove worktree |
+| `scc worktree create <repo> <name>` | Create git worktree |
+| `scc worktree list <repo>` | List worktrees (`--json` for CI) |
+| `scc worktree remove <repo> <name>` | Remove worktree |
 | `scc config` | View or edit configuration |
 | `scc config explain` | Show effective config with sources |
+| `scc init [path]` | Initialize project with .scc.yaml config file |
 | `scc unblock <target>` | Create temporary override for blocked resource |
 | `scc exceptions list` | List active and expired exceptions |
 | `scc audit plugins` | Audit installed plugins for MCP servers and hooks |
+| `scc support bundle` | Generate support bundle for troubleshooting |
+| `scc org validate <file>` | Validate organization config against schema |
+| `scc org schema` | Print bundled organization config schema |
 
 Run `scc <command> --help` for options.
 

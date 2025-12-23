@@ -326,6 +326,99 @@ Module responsibilities:
 
 The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
 
+## Output Infrastructure
+
+Commands with `--json` support use a standardized output system for CI/automation integration.
+
+### Exit Codes
+
+All commands use consistent exit codes defined in `exit_codes.py`:
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| 0 | `EXIT_SUCCESS` | Command completed successfully |
+| 1 | `EXIT_ERROR` | General/unexpected error |
+| 2 | `EXIT_USAGE` | Invalid usage/arguments (Typer default) |
+| 3 | `EXIT_CONFIG` | Configuration or network error |
+| 4 | `EXIT_VALIDATION` | Validation failed |
+| 5 | `EXIT_PREREQ` | Prerequisites not met |
+| 6 | `EXIT_GOVERNANCE` | Blocked by governance policy |
+
+### JSON Envelope
+
+All `--json` output follows a stable envelope format:
+
+```json
+{
+  "apiVersion": "scc.cli/v1",
+  "kind": "TeamList",
+  "metadata": {
+    "generatedAt": "2025-12-23T10:00:00Z",
+    "cliVersion": "1.2.3"
+  },
+  "status": {
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "data": { }
+}
+```
+
+The `kind` field uniquely identifies each command's output type. Kinds are centralized in `kinds.py` to prevent drift (e.g., "TeamList" vs "TeamsList").
+
+### Module Responsibilities
+
+| Module | Purpose |
+|--------|---------|
+| `exit_codes.py` | Exit code constants and exception-to-code mapping |
+| `kinds.py` | Enum of all JSON envelope `kind` values |
+| `output_mode.py` | Context manager for JSON mode, `print_human()` / `print_json()` helpers |
+| `json_output.py` | `build_envelope()` function for constructing JSON output |
+| `json_command.py` | `@json_command(Kind.X)` decorator for commands with `--json` support |
+| `deprecation.py` | `warn_deprecated()` for deprecation notices (suppressed in JSON mode) |
+
+### JSON Command Pattern
+
+Commands use the `@json_command` decorator for consistent JSON handling:
+
+```python
+@team_app.command("list")
+@json_command(Kind.TEAM_LIST)
+def team_list() -> dict:
+    # Return data dict, decorator handles envelope
+    return {"teams": [...]}
+```
+
+The decorator:
+1. Adds `--json` and `--pretty` flags automatically
+2. Enters JSON mode context (suppresses all stderr output)
+3. Catches exceptions and maps to appropriate exit codes
+4. Builds and prints the JSON envelope
+
+### Output Mode Context
+
+In JSON mode, all human-readable output is suppressed. Use the helpers:
+
+```python
+from .output_mode import print_human, print_json, is_json_mode
+
+print_human("Processing...")  # No-op in JSON mode
+if not is_json_mode():
+    console.print("[bold]Results[/bold]")  # Rich output
+```
+
+This ensures `--json` output contains only valid JSON on stdout, with no progress messages or warnings mixed in.
+
+### Key Rules
+
+When extending commands with JSON support:
+
+1. **Never print raw JSON** — use `build_envelope()` and `print_json()`
+2. **Stdout is reserved** — in JSON mode, stdout contains only the envelope
+3. **Stderr for humans** — warnings/progress go to stderr via `print_human()`
+4. **Exit codes matter** — CI tools rely on consistent exit codes; use the constants
+
 ## Usage Stats
 
 SCC tracks session usage locally for reporting to leadership.

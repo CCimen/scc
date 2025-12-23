@@ -317,6 +317,7 @@ Use `--shared` with `scc unblock` to write to repo store instead of user store.
 
 | Scenario | Solution |
 |----------|----------|
+| Quick status overview | `scc status` |
 | Delegation denied, need it now | `scc unblock <target> --ttl 8h --reason "..."` |
 | Security blocked, have approval | `scc exceptions create --policy --id INC-... --allow-* ...` |
 | Check what's blocked/overridden | `scc config explain` |
@@ -326,12 +327,13 @@ Use `--shared` with `scc unblock` to write to repo store instead of user store.
 
 When something doesn't work as expected:
 
-1. Run `scc config explain` to see effective configuration with sources
-2. Check `blocked_items` for security rejections
-3. Check `denied_additions` for delegation failures
-4. Verify your team is delegated for the resource type
-5. Verify your team allows project overrides (if using `.scc.yaml`)
-6. Check `Active Exceptions` section for any overrides in effect
+1. Run `scc status` for a quick overview of your current setup
+2. Run `scc config explain` to see effective configuration with sources
+3. Check `blocked_items` for security rejections
+4. Check `denied_additions` for delegation failures
+5. Verify your team is delegated for the resource type
+6. Verify your team allows project overrides (if using `.scc.yaml`)
+7. Check `Active Exceptions` section for any overrides in effect
 
 ## Org Admin Checklist
 

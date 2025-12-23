@@ -216,7 +216,8 @@ class TestWorktreeCommand:
         ):
             mock_deps.return_value = True
             runner.invoke(
-                app, ["worktree", str(tmp_path), "feature-x", "--install-deps", "--no-start"]
+                app,
+                ["worktree", "create", str(tmp_path), "feature-x", "--install-deps", "--no-start"],
             )
         mock_deps.assert_called_once_with(worktree_path)
 
@@ -557,7 +558,7 @@ class TestWorktreeCommandErrors:
     def test_worktree_not_git_repo_shows_error(self, tmp_path):
         """Should show error when not in a git repo."""
         with patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False):
-            result = runner.invoke(app, ["worktree", str(tmp_path), "feature-x"])
+            result = runner.invoke(app, ["worktree", "create", str(tmp_path), "feature-x"])
 
         # Should indicate not a git repo
         assert result.exit_code != 0 or "git" in result.output.lower()
@@ -585,44 +586,6 @@ class TestMainCallback:
         assert result.exit_code == 0
         assert "start" in result.output.lower()
         assert "setup" in result.output.lower()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for cleanup command
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestCleanupCommand:
-    """Tests for cleanup (worktree removal) command."""
-
-    def test_cleanup_removes_worktree(self, tmp_path):
-        """Cleanup should remove specified worktree."""
-        tmp_path.mkdir(exist_ok=True)
-        with patch("scc_cli.cli_worktree.git.cleanup_worktree", return_value=True) as mock_cleanup:
-            result = runner.invoke(app, ["cleanup", str(tmp_path), "feature-x"])
-
-        assert result.exit_code == 0
-        mock_cleanup.assert_called_once()
-
-    def test_cleanup_force_flag(self, tmp_path):
-        """Cleanup with --force should pass force to git."""
-        tmp_path.mkdir(exist_ok=True)
-        with patch("scc_cli.cli_worktree.git.cleanup_worktree", return_value=True) as mock_cleanup:
-            result = runner.invoke(app, ["cleanup", str(tmp_path), "feature-x", "--force"])
-
-        assert result.exit_code == 0
-        mock_cleanup.assert_called_once()
-        # cleanup_worktree(workspace_path, name, force, console)
-        call_args = mock_cleanup.call_args[0]
-        assert call_args[2] is True  # force is 3rd positional arg
-
-    def test_cleanup_nonexistent_workspace_fails(self, tmp_path):
-        """Cleanup should fail for nonexistent workspace."""
-        nonexistent = tmp_path / "nonexistent"
-        result = runner.invoke(app, ["cleanup", str(nonexistent), "feature-x"])
-
-        # Should fail because workspace doesn't exist
-        assert result.exit_code != 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -666,42 +629,6 @@ class TestStatuslineCommand:
             result = runner.invoke(app, ["statusline", "--uninstall"])
 
         assert result.exit_code == 0
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for worktrees command (list worktrees)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestWorktreesCommand:
-    """Tests for listing worktrees."""
-
-    def test_worktrees_shows_list(self, tmp_path):
-        """Should list all worktrees for repository."""
-        tmp_path.mkdir(exist_ok=True)
-        mock_worktrees = [MagicMock(path=str(tmp_path), branch="main", is_main=True)]
-        with (
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=mock_worktrees),
-            patch("scc_cli.cli_worktree.git.render_worktrees"),
-        ):
-            result = runner.invoke(app, ["worktrees", str(tmp_path)])
-
-        assert result.exit_code == 0
-
-    def test_worktrees_empty_list(self, tmp_path):
-        """Should show message when no worktrees."""
-        tmp_path.mkdir(exist_ok=True)
-        with patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[]):
-            result = runner.invoke(app, ["worktrees", str(tmp_path)])
-
-        assert result.exit_code == 0
-
-    def test_worktrees_nonexistent_path(self, tmp_path):
-        """Should error when workspace doesn't exist."""
-        nonexistent = tmp_path / "nonexistent"
-        result = runner.invoke(app, ["worktrees", str(nonexistent)])
-
-        assert result.exit_code != 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
