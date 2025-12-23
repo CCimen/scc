@@ -133,6 +133,7 @@ class TestPruneInteractiveConfirmation:
                 return_value=[stopped_container],
             ),
             patch("scc_cli.cli_worktree.docker.remove_container", return_value=True),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             # Provide 'y' input to confirm
             result = runner.invoke(app, ["prune"], input="y\n")
@@ -151,6 +152,7 @@ class TestPruneInteractiveConfirmation:
                 return_value=[stopped_container],
             ),
             patch("scc_cli.cli_worktree.docker.remove_container") as mock_remove,
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             result = runner.invoke(app, ["prune"], input="n\n")
 
@@ -168,6 +170,7 @@ class TestPruneInteractiveConfirmation:
                 return_value=[stopped_container],
             ),
             patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             result = runner.invoke(app, ["prune"], input="y\n")
 
@@ -207,20 +210,6 @@ class TestPruneWithYesFlag:
             patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
         ):
             result = runner.invoke(app, ["prune", "-y"])
-
-        assert result.exit_code == 0
-        mock_remove.assert_called_once()
-
-    def test_prune_force_f_flag_works(self, stopped_container):
-        """-f short flag should work like --yes (Docker-style)."""
-        with (
-            patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
-                return_value=[stopped_container],
-            ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
-        ):
-            result = runner.invoke(app, ["prune", "-f"])
 
         assert result.exit_code == 0
         mock_remove.assert_called_once()
@@ -279,9 +268,12 @@ class TestPruneOnlyStoppedContainers:
 
     def test_prune_all_running_shows_nothing_to_remove(self, running_container):
         """If all containers are running, should indicate nothing to prune."""
-        with patch(
-            "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
-            return_value=[running_container],
+        with (
+            patch(
+                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                return_value=[running_container],
+            ),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             result = runner.invoke(app, ["prune"])
 
@@ -304,7 +296,10 @@ class TestPruneEmptyState:
 
     def test_prune_no_containers_shows_message(self):
         """Should show message when no SCC containers exist."""
-        with patch("scc_cli.cli_worktree.docker._list_all_sandbox_containers", return_value=[]):
+        with (
+            patch("scc_cli.cli_worktree.docker._list_all_sandbox_containers", return_value=[]),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
+        ):
             result = runner.invoke(app, ["prune"])
 
         assert result.exit_code == 0

@@ -14,6 +14,7 @@ from rich.status import Status
 
 from . import deps, docker, git, sessions, ui
 from .cli_common import console, handle_errors, render_responsive_table
+from .cli_helpers import ConfirmItems, confirm_action
 from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
 from .json_output import build_envelope
@@ -168,26 +169,30 @@ def worktree_list_cmd(
 def worktree_remove_cmd(
     workspace: str = typer.Argument(..., help="Path to the main repository"),
     name: str = typer.Argument(..., help="Name of the worktree to remove"),
-    force: bool = typer.Option(False, "-f", "--force", help="Force removal"),
+    force: bool = typer.Option(
+        False, "-f", "--force", help="Force removal even with uncommitted changes"
+    ),
+    yes: bool = typer.Option(False, "-y", "--yes", help="Skip all confirmation prompts"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be removed without removing"
+    ),
 ) -> None:
-    """Remove a worktree."""
+    """Remove a worktree.
+
+    By default, prompts for confirmation if there are uncommitted changes and
+    asks whether to delete the associated branch.
+
+    Use --yes to skip prompts (auto-confirms all actions).
+    Use --dry-run to preview what would be removed.
+    Use --force to remove even with uncommitted changes (still prompts unless --yes).
+    """
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    result = git.cleanup_worktree(workspace_path, name, force, console)
-
-    if result:
-        console.print(
-            create_success_panel(
-                "Worktree Removed",
-                {
-                    "Name": name,
-                    "Status": "Successfully removed",
-                },
-            )
-        )
+    # cleanup_worktree handles all output including success panels
+    git.cleanup_worktree(workspace_path, name, force, console, skip_confirm=yes, dry_run=dry_run)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -309,13 +314,17 @@ def stop_cmd(
     all_containers: bool = typer.Option(
         False, "--all", "-a", help="Stop all running Claude Code sandboxes"
     ),
+    yes: bool = typer.Option(
+        False, "-y", "--yes", help="Skip confirmation prompt when stopping multiple containers"
+    ),
 ) -> None:
     """Stop running Docker sandbox(es).
 
     Examples:
-        scc stop                         # Stop all running sandboxes
+        scc stop                         # Stop all running sandboxes (prompts if >1)
         scc stop claude-sandbox-2025...  # Stop specific container
         scc stop --all                   # Stop all (explicit)
+        scc stop --yes                   # Stop all without confirmation
     """
     with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner="dots"):
         # List Docker Desktop sandbox containers (image: docker/sandbox-templates:claude-code)
@@ -366,7 +375,21 @@ def stop_cmd(
             raise typer.Exit(1)
         return
 
-    # Stop all running containers
+    # Stop all running containers - prompt for confirmation if multiple
+    if len(running) > 1:
+        try:
+            confirm_action(
+                yes=yes,
+                prompt=f"Stop {len(running)} running container(s)?",
+                items=ConfirmItems(
+                    title=f"Found {len(running)} running container(s):",
+                    items=[c.name for c in running],
+                ),
+            )
+        except typer.Abort:
+            console.print("[dim]Aborted.[/dim]")
+            return
+
     console.print(f"[cyan]Stopping {len(running)} container(s)...[/cyan]")
 
     stopped = []
@@ -420,7 +443,7 @@ def _is_container_stopped(status: str) -> bool:
 @handle_errors
 def prune_cmd(
     yes: bool = typer.Option(
-        False, "--yes", "-y", "-f", help="Skip confirmation prompt (for scripts/CI)"
+        False, "--yes", "-y", help="Skip confirmation prompt (for scripts/CI)"
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Only show what would be removed, don't prompt"
@@ -429,7 +452,7 @@ def prune_cmd(
     """Remove stopped SCC containers.
 
     Shows stopped containers and prompts for confirmation before removing.
-    Use --yes/-f to skip confirmation (for scripts).
+    Use --yes/-y to skip confirmation (for scripts/CI).
     Use --dry-run to only preview without prompting.
 
     Only removes STOPPED containers. Running containers are never affected.
@@ -458,22 +481,29 @@ def prune_cmd(
         )
         return
 
-    # Always show what will be removed
-    console.print(f"\n[bold]Found {len(stopped)} stopped container(s):[/bold]")
-    for c in stopped:
-        console.print(f"  • {c.name}")
-    console.print()
-
-    # Dry-run mode: just show and exit
+    # Handle dry-run mode separately - show what would be removed
     if dry_run:
+        console.print(f"[bold]Would remove {len(stopped)} stopped container(s):[/bold]")
+        for c in stopped:
+            console.print(f"  [dim]•[/dim] {c.name}")
         console.print("[dim]Dry run complete. No containers removed.[/dim]")
         return
 
-    # Interactive confirmation (unless --yes/-f)
-    if not yes:
-        if not typer.confirm("Remove these containers?", default=False):
-            console.print("[dim]Aborted.[/dim]")
-            return
+    # Use centralized confirmation helper for actual removal
+    # This handles: --yes, JSON mode, non-interactive mode
+    try:
+        confirm_action(
+            yes=yes,
+            dry_run=False,
+            prompt=f"Remove {len(stopped)} stopped container(s)?",
+            items=ConfirmItems(
+                title=f"Found {len(stopped)} stopped container(s):",
+                items=[c.name for c in stopped],
+            ),
+        )
+    except typer.Abort:
+        console.print("[dim]Aborted.[/dim]")
+        return
 
     # Actually remove containers
     console.print(f"[cyan]Removing {len(stopped)} stopped container(s)...[/cyan]")

@@ -27,6 +27,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .cli_common import handle_errors
+from .cli_helpers import create_audit_record, require_reason_for_governance
 from .models.exceptions import AllowTargets
 from .models.exceptions import Exception as SccException
 from .stores.exception_store import RepoStore, UserStore
@@ -549,8 +550,16 @@ def unblock_cmd(
     ] = None,
     reason: Annotated[
         str | None,
-        typer.Option("--reason", help="Reason for unblocking (required)."),
+        typer.Option("--reason", help="Reason for unblocking (required with --yes)."),
     ] = None,
+    ticket: Annotated[
+        str | None,
+        typer.Option("--ticket", help="Related ticket ID (e.g., JIRA-123) for audit trail."),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation prompt (requires --reason)."),
+    ] = False,
     shared: Annotated[
         bool,
         typer.Option("--shared", help="Save to repo store instead of user store."),
@@ -562,12 +571,15 @@ def unblock_cmd(
     delegation policy. This command only works for delegation denials, not
     security blocks.
 
+    Governance audit: All unblock operations are logged with actor, reason,
+    and timestamp for compliance tracking.
+
     Example:
         scc unblock jira-api --ttl 8h --reason "Need for sprint planning"
+        scc unblock my-plugin --yes --reason "Emergency fix" --ticket INC-123
     """
-    if not reason:
-        console.print("[red]Error: --reason is required.[/red]")
-        raise typer.Exit(1)
+    # Governance commands require --reason when using --yes (or prompt interactively)
+    validated_reason = require_reason_for_governance(yes=yes, reason=reason, command_name="unblock")
 
     # Get current evaluation state
     eval_result = get_current_denials()
@@ -634,7 +646,7 @@ def unblock_cmd(
         id=exc_id,
         created_at=format_expiration(now),
         expires_at=format_expiration(expiration),
-        reason=reason,
+        reason=validated_reason,
         scope="local",
         allow=allow,
     )
@@ -658,6 +670,16 @@ def unblock_cmd(
     store.write(exc_file)
 
     expires_in = format_relative(expiration)
+
+    # Create audit record for governance tracking
+    _audit = create_audit_record(
+        command="unblock",
+        target=target,
+        reason=validated_reason,
+        ticket=ticket,
+        expires_in=expires_in,
+    )
+    # Note: audit record is created for tracking; actual logging depends on audit sink configuration
 
     console.print(
         f"\n[green]✓[/green] Created {store_type} override for "

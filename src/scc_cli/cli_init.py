@@ -13,7 +13,8 @@ import typer
 from rich.panel import Panel
 
 from .cli_common import console, handle_errors
-from .exit_codes import EXIT_CONFIG, EXIT_SUCCESS
+from .cli_helpers import confirm_action, is_interactive
+from .exit_codes import EXIT_CONFIG, EXIT_SUCCESS, EXIT_USAGE
 from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import print_json, set_pretty_mode
@@ -115,12 +116,13 @@ def init_cmd(
         False,
         "--force",
         "-f",
-        help="Overwrite existing .scc.yaml file.",
+        help="Overwrite existing .scc.yaml file without prompting.",
     ),
-    non_interactive: bool = typer.Option(
+    yes: bool = typer.Option(
         False,
-        "--non-interactive",
-        help="Use defaults without prompts.",
+        "-y",
+        "--yes",
+        help="Skip confirmation prompts (still requires --force to overwrite).",
     ),
     json_output: bool = typer.Option(
         False,
@@ -137,6 +139,11 @@ def init_cmd(
 
     Creates a .scc.yaml file in the target directory with sensible defaults
     and helpful comments explaining each configuration option.
+
+    Three-tier overwrite logic:
+      - If file doesn't exist: create it
+      - If file exists + --force: overwrite without prompting
+      - If file exists + no --force: prompt in interactive mode, or hint to use --force
     """
     # --pretty implies --json
     if pretty:
@@ -176,12 +183,16 @@ def init_cmd(
             console.print(f"[red]Error:[/red] Path is not a directory: {target_dir}")
             raise typer.Exit(EXIT_CONFIG)
 
-    # Check for existing file
+    # Check for existing file - three-tier overwrite logic
     scc_yaml = target_dir / ".scc.yaml"
     overwritten = False
 
-    if scc_yaml.exists() and not force:
-        if json_output:
+    if scc_yaml.exists():
+        if force:
+            # Tier 3: --force → overwrite without prompting
+            overwritten = True
+        elif json_output:
+            # JSON mode: never prompt, just tell user to use --force
             envelope = build_envelope(
                 Kind.INIT_RESULT,
                 ok=False,
@@ -189,15 +200,34 @@ def init_cmd(
             )
             print_json(envelope)
             raise typer.Exit(EXIT_CONFIG)
+        elif yes:
+            # Tier 4: --yes without --force → hint that --force is required
+            console.print(
+                f"[yellow]Warning:[/yellow] File already exists: [cyan]{scc_yaml}[/cyan]\n"
+                "[dim]--yes skips prompts but does not allow overwriting.[/dim]\n"
+                "Use [yellow]--force[/yellow] to overwrite existing file."
+            )
+            raise typer.Exit(EXIT_USAGE)
+        elif is_interactive():
+            # Tier 2: Interactive without --force → prompt for confirmation
+            console.print(f"[yellow]Warning:[/yellow] File already exists: [cyan]{scc_yaml}[/cyan]")
+            try:
+                confirm_action(
+                    yes=False,
+                    prompt="Overwrite existing .scc.yaml?",
+                    non_interactive_requires_yes=False,
+                )
+                overwritten = True
+            except typer.Abort:
+                console.print("[dim]Aborted.[/dim]")
+                raise typer.Exit(EXIT_SUCCESS)
         else:
+            # Tier 3: Non-interactive without --force → exit with usage error
             console.print(
                 f"[red]Error:[/red] File already exists: [cyan]{scc_yaml}[/cyan]\n"
-                "Use [yellow]--force[/yellow] to overwrite."
+                "Use [yellow]--force[/yellow] to overwrite in non-interactive mode."
             )
-            raise typer.Exit(EXIT_CONFIG)
-
-    if scc_yaml.exists() and force:
-        overwritten = True
+            raise typer.Exit(EXIT_USAGE)
 
     # Check if git repo and warn if not
     is_git = is_git_repo(target_dir)

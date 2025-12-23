@@ -56,7 +56,7 @@ class TestInitFileCreation:
                 init_cmd(
                     path=str(tmp_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -77,7 +77,7 @@ class TestInitFileCreation:
                 init_cmd(
                     path=str(tmp_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -101,7 +101,7 @@ class TestInitFileCreation:
                 init_cmd(
                     path=str(tmp_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -125,7 +125,7 @@ class TestInitFileCreation:
                 init_cmd(
                     path=None,  # Default to current directory
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -157,7 +157,7 @@ class TestInitFileExistenceCheck:
                 init_cmd(
                     path=str(tmp_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -177,7 +177,7 @@ class TestInitFileExistenceCheck:
                 init_cmd(
                     path=str(tmp_path),
                     force=True,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -224,7 +224,7 @@ class TestInitGitRepoDetection:
                 init_cmd(
                     path=str(tmp_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -256,7 +256,7 @@ class TestInitNonInteractiveMode:
                 init_cmd(
                     path=str(tmp_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -267,14 +267,14 @@ class TestInitNonInteractiveMode:
         assert (tmp_path / ".scc.yaml").exists()
 
     def test_interactive_mode_available(self, tmp_path: Path) -> None:
-        """init without --non-interactive should support interactive mode."""
-        # This test verifies the function signature supports interactive mode
+        """init without --yes should support interactive mode."""
+        # This test verifies the function signature supports interactive/non-interactive mode
         import inspect
 
         from scc_cli.cli_init import init_cmd
 
         sig = inspect.signature(init_cmd)
-        assert "non_interactive" in sig.parameters
+        assert "yes" in sig.parameters
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -293,7 +293,7 @@ class TestInitJsonOutput:
             init_cmd(
                 path=str(tmp_path),
                 force=False,
-                non_interactive=True,
+                yes=True,
                 json_output=True,
                 pretty=False,
             )
@@ -314,7 +314,7 @@ class TestInitJsonOutput:
             init_cmd(
                 path=str(tmp_path),
                 force=False,
-                non_interactive=True,
+                yes=True,
                 json_output=True,
                 pretty=False,
             )
@@ -344,7 +344,7 @@ class TestInitErrorHandling:
                 init_cmd(
                     path="/nonexistent/path/to/project",
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
@@ -363,7 +363,7 @@ class TestInitErrorHandling:
                 init_cmd(
                     path=str(file_path),
                     force=False,
-                    non_interactive=True,
+                    yes=True,
                     json_output=False,
                     pretty=False,
                 )
