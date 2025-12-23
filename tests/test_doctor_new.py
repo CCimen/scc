@@ -16,7 +16,6 @@ from unittest.mock import patch
 
 from scc_cli import doctor
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for JSON Validation Helpers (DX Enhancement)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -196,6 +195,7 @@ class TestCheckUserConfigValid:
 
         assert result.passed is False
         assert "line" in result.message.lower()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for check_org_config_reachable
@@ -634,9 +634,7 @@ class TestRunAllChecks:
             name="WSL2", passed=True, message="not WSL2", severity="info"
         )
         mock_config = doctor.CheckResult(name="Config", passed=True, message="exists")
-        mock_user_config = doctor.CheckResult(
-            name="User Config", passed=True, message="valid"
-        )
+        mock_user_config = doctor.CheckResult(name="User Config", passed=True, message="valid")
         mock_org = doctor.CheckResult(name="Org Config", passed=True, message="reachable")
         mock_auth = doctor.CheckResult(name="Auth", passed=True, message="ok")
         mock_injection = doctor.CheckResult(name="Injection", passed=True, message="ok")
