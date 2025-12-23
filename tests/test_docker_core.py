@@ -418,16 +418,16 @@ class TestCheckDockerAvailable:
 
     def test_raises_docker_not_found_when_not_installed(self):
         """Should raise DockerNotFoundError when Docker not installed."""
-        with patch("scc_cli.docker._check_docker_installed", return_value=False):
+        with patch("scc_cli.docker.core._check_docker_installed", return_value=False):
             with pytest.raises(DockerNotFoundError):
                 docker.check_docker_available()
 
     def test_raises_version_error_when_too_old(self):
         """Should raise DockerVersionError when version is too old."""
         with (
-            patch("scc_cli.docker._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.get_docker_version", return_value="4.0.0"),
-            patch("scc_cli.docker.check_docker_sandbox", return_value=True),
+            patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.get_docker_version", return_value="4.0.0"),
+            patch("scc_cli.docker.core.check_docker_sandbox", return_value=True),
         ):
             with pytest.raises(DockerVersionError):
                 docker.check_docker_available()
@@ -435,9 +435,9 @@ class TestCheckDockerAvailable:
     def test_raises_sandbox_not_available_when_missing(self):
         """Should raise SandboxNotAvailableError when sandbox not available."""
         with (
-            patch("scc_cli.docker._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.get_docker_version", return_value="27.5.1"),
-            patch("scc_cli.docker.check_docker_sandbox", return_value=False),
+            patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.get_docker_version", return_value="27.5.1"),
+            patch("scc_cli.docker.core.check_docker_sandbox", return_value=False),
         ):
             with pytest.raises(SandboxNotAvailableError):
                 docker.check_docker_available()
@@ -445,9 +445,9 @@ class TestCheckDockerAvailable:
     def test_passes_when_all_requirements_met(self):
         """Should not raise when all requirements are met."""
         with (
-            patch("scc_cli.docker._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.get_docker_version", return_value="27.5.1"),
-            patch("scc_cli.docker.check_docker_sandbox", return_value=True),
+            patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.get_docker_version", return_value="27.5.1"),
+            patch("scc_cli.docker.core.check_docker_sandbox", return_value=True),
         ):
             # Should not raise
             docker.check_docker_available()
@@ -482,14 +482,14 @@ class TestCheckDockerSandbox:
 
     def test_returns_false_when_docker_not_installed(self):
         """Should return False when Docker is not installed."""
-        with patch("scc_cli.docker._check_docker_installed", return_value=False):
+        with patch("scc_cli.docker.core._check_docker_installed", return_value=False):
             assert docker.check_docker_sandbox() is False
 
     def test_checks_sandbox_help_command(self):
         """Should check 'docker sandbox --help' to detect feature."""
         with (
-            patch("scc_cli.docker._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.run_command_bool", return_value=True) as mock_run,
+            patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.run_command_bool", return_value=True) as mock_run,
         ):
             result = docker.check_docker_sandbox()
 
@@ -509,14 +509,14 @@ class TestGetDockerVersion:
 
     def test_returns_version_string(self):
         """Should return Docker version string."""
-        with patch("scc_cli.docker.run_command", return_value="Docker version 27.5.1"):
+        with patch("scc_cli.docker.core.run_command", return_value="Docker version 27.5.1"):
             result = docker.get_docker_version()
 
             assert result == "Docker version 27.5.1"
 
     def test_returns_none_on_failure(self):
         """Should return None when command fails."""
-        with patch("scc_cli.docker.run_command", return_value=None):
+        with patch("scc_cli.docker.core.run_command", return_value=None):
             result = docker.get_docker_version()
 
             assert result is None
@@ -532,17 +532,17 @@ class TestContainerExists:
 
     def test_returns_true_when_container_exists(self):
         """Should return True when container name is in output."""
-        with patch("scc_cli.docker.run_command", return_value="my-container"):
+        with patch("scc_cli.docker.core.run_command", return_value="my-container"):
             assert docker.container_exists("my-container") is True
 
     def test_returns_false_when_container_not_found(self):
         """Should return False when container name not in output."""
-        with patch("scc_cli.docker.run_command", return_value=""):
+        with patch("scc_cli.docker.core.run_command", return_value=""):
             assert docker.container_exists("my-container") is False
 
     def test_returns_false_on_command_failure(self):
         """Should return False when command fails."""
-        with patch("scc_cli.docker.run_command", return_value=None):
+        with patch("scc_cli.docker.core.run_command", return_value=None):
             assert docker.container_exists("my-container") is False
 
 
@@ -556,21 +556,21 @@ class TestGetContainerStatus:
 
     def test_returns_status_string(self):
         """Should return status string when container exists."""
-        with patch("scc_cli.docker.run_command", return_value="Up 2 hours"):
+        with patch("scc_cli.docker.core.run_command", return_value="Up 2 hours"):
             result = docker.get_container_status("my-container")
 
             assert result == "Up 2 hours"
 
     def test_returns_none_when_not_found(self):
         """Should return None when container not found."""
-        with patch("scc_cli.docker.run_command", return_value=""):
+        with patch("scc_cli.docker.core.run_command", return_value=""):
             result = docker.get_container_status("my-container")
 
             assert result is None
 
     def test_returns_none_on_command_failure(self):
         """Should return None when command fails."""
-        with patch("scc_cli.docker.run_command", return_value=None):
+        with patch("scc_cli.docker.core.run_command", return_value=None):
             result = docker.get_container_status("my-container")
 
             assert result is None
@@ -630,7 +630,7 @@ class TestStartContainer:
 
     def test_raises_container_not_found_when_missing(self):
         """Should raise ContainerNotFoundError when container doesn't exist."""
-        with patch("scc_cli.docker.container_exists", return_value=False):
+        with patch("scc_cli.docker.core.container_exists", return_value=False):
             with pytest.raises(ContainerNotFoundError) as exc_info:
                 docker.start_container("nonexistent-container")
 
@@ -647,7 +647,7 @@ class TestStopContainer:
 
     def test_calls_docker_stop(self):
         """Should call docker stop with container ID."""
-        with patch("scc_cli.docker.run_command_bool", return_value=True) as mock_run:
+        with patch("scc_cli.docker.core.run_command_bool", return_value=True) as mock_run:
             result = docker.stop_container("abc123")
 
             assert result is True
@@ -661,7 +661,7 @@ class TestRemoveContainer:
 
     def test_calls_docker_rm(self):
         """Should call docker rm with container name."""
-        with patch("scc_cli.docker.run_command_bool", return_value=True) as mock_run:
+        with patch("scc_cli.docker.core.run_command_bool", return_value=True) as mock_run:
             result = docker.remove_container("my-container")
 
             assert result is True
@@ -671,7 +671,7 @@ class TestRemoveContainer:
 
     def test_force_flag_adds_f(self):
         """Should add -f flag when force is True."""
-        with patch("scc_cli.docker.run_command_bool", return_value=True) as mock_run:
+        with patch("scc_cli.docker.core.run_command_bool", return_value=True) as mock_run:
             docker.remove_container("my-container", force=True)
 
             call_args = mock_run.call_args[0][0]
