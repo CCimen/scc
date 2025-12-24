@@ -244,6 +244,12 @@ graph TD
             DockerCreds[credentials.py]:::runtime
             DockerLaunch[launch.py]:::runtime
         end
+        subgraph DoctorPkg[doctor/]
+            DoctorInit[__init__.py]:::runtime
+            DoctorTypes[types.py]:::runtime
+            DoctorChecks[checks.py]:::runtime
+            DoctorRender[render.py]:::runtime
+        end
         Adapter[claude_adapter.py]:::runtime
         Git[git.py]:::runtime
         Sessions[sessions.py]:::runtime
@@ -300,7 +306,7 @@ graph TD
     Git --> Constants
 ```
 
-This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration).
+This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output).
 
 Module responsibilities:
 
@@ -316,6 +322,10 @@ Module responsibilities:
 | `docker/core.py` | Container lifecycle, Docker primitives, command building | Credential handling |
 | `docker/credentials.py` | Credential persistence, OAuth token management, volume sync | Container launching |
 | `docker/launch.py` | High-level launch orchestration, settings injection | Low-level Docker ops |
+| `doctor/` | Health checks and system diagnostics (package) | Auto-fixing issues |
+| `doctor/types.py` | Data structures (CheckResult, DoctorResult, JsonValidationResult) | Business logic |
+| `doctor/checks.py` | All health check functions (Git, Docker, config, cache, org) | Rendering |
+| `doctor/render.py` | Orchestration, JSON serialization, Rich terminal rendering | Check logic |
 | `stats.py` | Session recording, aggregation, reporting | Container operations |
 | `update.py` | Version checking, throttling, notifications | Container operations |
 | `evaluation/evaluate.py` | Pure governance evaluation, BlockReason classification | I/O, exception storage |
