@@ -257,6 +257,15 @@ def stop_container(container_id: str) -> bool:
     return run_command_bool(["docker", "stop", container_id], timeout=30)
 
 
+def resume_container(container_id: str) -> bool:
+    """Start a stopped container in background and return success status.
+
+    Unlike start_container() which attaches interactively, this just starts
+    the container and returns immediately. Suitable for batch operations.
+    """
+    return run_command_bool(["docker", "start", container_id], timeout=30)
+
+
 def remove_container(container_name: str, force: bool = False) -> bool:
     """Remove a container and return success status."""
     cmd = ["docker", "rm"]

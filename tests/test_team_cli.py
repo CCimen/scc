@@ -288,6 +288,165 @@ class TestTeamSwitch:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Team Switch Picker Integration Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTeamSwitchPickerIntegration:
+    """Tests for 'scc team switch' interactive picker integration.
+
+    These tests verify that the team switch command correctly integrates
+    with the interactive picker when no team name is provided. Since
+    CliRunner runs in non-TTY mode, we mock the picker to simulate
+    interactive selection.
+    """
+
+    def test_picker_called_when_no_team_provided_and_tty(self, mock_config, mock_org_config):
+        """When no team name is provided and TTY is available, picker should be called."""
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.config.save_user_config"),
+            # Mock the interactivity gate to allow prompts
+            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            # Set up context to allow prompts
+            mock_ctx = mock_ctx_create.return_value
+            mock_ctx.allows_prompt.return_value = True
+
+            # Picker returns a selected team
+            mock_picker.return_value = {"name": "frontend", "description": "Frontend team"}
+
+            result = runner.invoke(app, ["team", "switch"])
+            assert result.exit_code == 0
+            assert "frontend" in result.output
+
+            # Verify picker was called
+            mock_picker.assert_called_once()
+
+    def test_picker_selection_result_used_correctly(self, mock_config, mock_org_config):
+        """Team selected via picker should be saved to config."""
+        saved_config = {}
+
+        def save_config(cfg):
+            saved_config.update(cfg)
+
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.config.save_user_config", side_effect=save_config),
+            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            mock_ctx = mock_ctx_create.return_value
+            mock_ctx.allows_prompt.return_value = True
+            mock_picker.return_value = {"name": "frontend", "description": "Frontend team"}
+
+            result = runner.invoke(app, ["team", "switch"])
+            assert result.exit_code == 0
+            assert saved_config.get("selected_profile") == "frontend"
+
+    def test_picker_receives_current_team_for_marking(self, mock_config, mock_org_config):
+        """Picker should receive current team to mark it in the list."""
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.config.save_user_config"),
+            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            mock_ctx = mock_ctx_create.return_value
+            mock_ctx.allows_prompt.return_value = True
+            mock_picker.return_value = {"name": "frontend", "description": "Frontend"}
+
+            runner.invoke(app, ["team", "switch"])
+
+            # Verify current_team was passed
+            call_kwargs = mock_picker.call_args
+            assert call_kwargs.kwargs.get("current_team") == "platform"
+
+    def test_picker_cancellation_returns_cancelled_status(self, mock_config, mock_org_config):
+        """Cancelling the picker should return cancelled status in data."""
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            mock_ctx = mock_ctx_create.return_value
+            mock_ctx.allows_prompt.return_value = True
+            mock_picker.return_value = None  # User cancelled
+
+            result = runner.invoke(app, ["team", "switch", "--json"])
+            assert result.exit_code == 0
+
+            data = json.loads(result.output)
+            assert data["data"]["success"] is False
+            assert data["data"]["cancelled"] is True
+
+    def test_explicit_team_name_skips_picker(self, mock_config, mock_org_config):
+        """When team name is provided explicitly, picker should not be called."""
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.config.save_user_config"),
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            result = runner.invoke(app, ["team", "switch", "frontend"])
+            assert result.exit_code == 0
+            assert "frontend" in result.output
+
+            # Picker should NOT have been called
+            mock_picker.assert_not_called()
+
+    def test_json_mode_blocks_picker(self, mock_config, mock_org_config):
+        """In JSON mode without team name, should fail rather than show picker."""
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            result = runner.invoke(app, ["team", "switch", "--json"])
+            # Should fail because JSON mode blocks interactive picker
+            # and no team name was provided
+            assert result.exit_code != 0 or "error" in result.output.lower()
+            mock_picker.assert_not_called()
+
+    def test_non_interactive_flag_blocks_picker(self, mock_config, mock_org_config):
+        """--non-interactive flag should prevent picker from being shown."""
+        with (
+            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.cli_team.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.cli_team.pick_team") as mock_picker,
+        ):
+            result = runner.invoke(app, ["team", "switch", "--non-interactive"])
+            assert result.exit_code != 0
+            mock_picker.assert_not_called()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Team Info Command Tests
 # ═══════════════════════════════════════════════════════════════════════════════
 

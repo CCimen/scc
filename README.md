@@ -25,11 +25,11 @@ SCC isolates AI execution in containers, enforces branch safety, and lets organi
 
 ```bash
 pip install scc-cli      # Install
-scc setup                # Configure (interactive wizard, ~2 min)
+scc setup                # Configure (interactive wizard)
 scc start ~/project      # Launch Claude Code in sandbox
 ```
 
-That's it. Check `scc --version` for version info, `scc doctor` if something's wrong.
+Run `scc doctor` if something goes wrong.
 
 ### How It Works
 
@@ -95,18 +95,15 @@ Quick reference for everyday development:
 | `scc config explain` | Debug why something was blocked |
 | `scc team list` | List available team profiles |
 | `scc team switch <name>` | Switch to a different team |
+| `scc context clear` | Clear recent work contexts from cache |
 
 ## Usage
 
 ### Interactive mode
 
-Running `scc` without arguments launches an interactive workspace selector:
+Running `scc` without arguments launches the dashboard with recent workspaces.
 
-```bash
-scc
-```
-
-This shows recent workspaces and lets you pick where to start. For CI/scripts, use explicit commands instead:
+For CI and scripts, use explicit paths:
 
 ```bash
 # CI/automation: always specify the path explicitly
@@ -131,7 +128,7 @@ scc start ~/projects/my-repo --offline
 
 ### Parallel development with worktrees
 
-Use worktrees when you need to work on multiple features simultaneously without context switching. Each worktree gets its own directory, branch, and Claude session—ideal for parallel AI-assisted development.
+Worktrees let you work on multiple features simultaneously. Each gets its own directory, branch, and Claude session.
 
 ```bash
 # Create isolated workspace
@@ -257,6 +254,7 @@ Exit code 0 means all manifests parsed. Exit code 1 means parsing errors found.
 | `scc worktree create <repo> <name>` | Create git worktree |
 | `scc worktree list <repo>` | List worktrees (`--json` for CI) |
 | `scc worktree remove <repo> <name>` | Remove worktree |
+| `scc context clear` | Clear recent work contexts from cache |
 | `scc config` | View or edit configuration |
 | `scc config explain` | Show effective config with sources |
 | `scc init [path]` | Initialize project with .scc.yaml config file |
@@ -343,6 +341,7 @@ Edit with `scc config --edit`.
 ~/.cache/scc/            # Cache (safe to delete)
 ├── org_config.json      # Remote config cache
 ├── cache_meta.json      # ETags, timestamps
+├── contexts.json        # Recent work contexts
 └── usage.jsonl          # Session usage events
 
 <repo>/
@@ -363,6 +362,7 @@ Run `scc doctor` to diagnose issues. For JSON config errors, doctor displays col
 | Plugin blocked | Check `scc config explain` for security blocks |
 | Addition denied | `scc unblock <target> --ttl 8h --reason "..."` |
 | Plugin audit shows malformed | Fix JSON syntax in plugin's `.mcp.json` or `hooks.json` |
+| Stale work contexts | `scc context clear --yes` |
 
 See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 

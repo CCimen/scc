@@ -253,11 +253,11 @@ class TestSessionsCommand:
         ]
         with (
             patch("scc_cli.cli_worktree.sessions.list_recent", return_value=mock_sessions),
-            patch("scc_cli.cli_worktree.ui.select_session") as mock_select,
+            patch("scc_cli.cli_worktree.pick_session") as mock_select,
         ):
             mock_select.return_value = mock_sessions[0]
             runner.invoke(app, ["sessions", "--select"])
-        # Should have called select_session for interactive picker
+        # Should have called pick_session for interactive picker
         mock_select.assert_called_once()
 
 

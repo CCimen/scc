@@ -417,6 +417,22 @@ rm -rf ~/.cache/scc/
 scc teams --sync
 ```
 
+## Stale Work Contexts
+
+**Symptom**: Quick Resume shows outdated workspaces, or contexts reference moved/deleted directories.
+
+**Cause**: Work contexts are cached in `~/.cache/scc/contexts.json` and persist between sessions.
+
+**Solution**:
+```bash
+# Clear all cached work contexts
+scc context clear --yes
+
+# Contexts are repopulated when you run scc start
+```
+
+After clearing, the next `scc start` will rebuild the context list from your actual session activity.
+
 ## Container Accumulation
 
 **Symptom**: Docker uses lots of disk space

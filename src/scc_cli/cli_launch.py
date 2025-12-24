@@ -22,8 +22,9 @@ from rich.prompt import Confirm, Prompt
 from rich.status import Status
 from rich.table import Table
 
-from . import config, deps, docker, git, sessions, setup, teams, ui
+from . import config, deps, docker, git, sessions, setup, teams
 from . import platform as platform_module
+from . import ui_legacy as ui
 from .cli_common import (
     MAX_DISPLAY_PATH_LENGTH,
     PATH_TRUNCATE_LENGTH,
@@ -31,11 +32,13 @@ from .cli_common import (
     handle_errors,
 )
 from .constants import WORKTREE_BRANCH_PREFIX
+from .contexts import WorkContext, load_recent_contexts, record_context
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
 from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .ui.picker import TeamSwitchRequested, pick_context
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper Functions (extracted for maintainability)
@@ -261,7 +264,7 @@ def _launch_sandbox(
     # Extract container name for session tracking
     container_name = _extract_container_name(docker_cmd, is_resume)
 
-    # Record session
+    # Record session and context
     if workspace_path:
         sessions.record_session(
             workspace=str(workspace_path),
@@ -270,6 +273,18 @@ def _launch_sandbox(
             container_name=container_name,
             branch=current_branch,
         )
+        # Record context for quick resume feature
+        # Determine repo root (may be same as workspace for non-worktrees)
+        repo_root = git.get_worktree_main_repo(workspace_path) or workspace_path
+        worktree_name = workspace_path.name
+        context = WorkContext(
+            team=team or "base",
+            repo_root=repo_root,
+            worktree_path=workspace_path,
+            worktree_name=worktree_name,
+            last_session_id=session_name,
+        )
+        record_context(context)
 
     # Show launch info and execute
     _show_launch_panel(
@@ -598,6 +613,13 @@ def interactive_start(cfg: dict) -> tuple:
     Prompt for team selection, workspace source, optional worktree creation,
     and session naming.
 
+    The flow prioritizes quick resume by showing recent contexts first:
+    1. Recent Contexts (quick resume) - if contexts exist
+    2. Team selection - if no context selected
+    3. Workspace source selection
+    4. Worktree creation (optional)
+    5. Session naming (optional)
+
     Args:
         cfg: Application configuration dictionary containing workspace_base
             and other settings.
@@ -607,6 +629,34 @@ def interactive_start(cfg: dict) -> tuple:
         may be None if user cancels at any step.
     """
     ui.show_header(console)
+
+    # Step 0: Recent Contexts (quick resume)
+    # User can press 't' to switch teams (raises TeamSwitchRequested → skip to Step 1)
+    recent_contexts = load_recent_contexts(limit=10)
+    if recent_contexts:
+        try:
+            selected_context = pick_context(
+                recent_contexts,
+                title="Quick Resume",
+                subtitle="Select a recent context, 't' for teams, or Esc for new session",
+            )
+            if selected_context is not None:
+                # User selected a context - return immediately with its data
+                return (
+                    str(selected_context.worktree_path),
+                    selected_context.team,
+                    selected_context.last_session_id,
+                    None,  # worktree_name - not creating new worktree
+                )
+            # User cancelled (Esc) - continue with normal wizard flow
+            console.print()
+        except TeamSwitchRequested:
+            # User pressed 't' - skip to team selection (Step 1)
+            console.print()
+    else:
+        # First-time hint: no recent contexts yet
+        console.print("[dim]💡 Tip: Your recent contexts will appear here for quick resume[/dim]")
+        console.print()
 
     # Step 1: Select team
     team = ui.select_team(console, cfg)
