@@ -438,8 +438,15 @@ class TestProfileSelection:
 class TestStandaloneMode:
     """Tests for is_standalone_mode function."""
 
-    def test_is_standalone_mode_returns_false_by_default(self, temp_home, new_config_dir):
-        """Should return False when not explicitly set."""
+    def test_is_standalone_mode_returns_true_when_no_org_configured(
+        self, temp_home, new_config_dir
+    ):
+        """Should return True when no organization_source is configured.
+
+        This is the default state for fresh installs and solo developers.
+        When no org config is present, we default to standalone mode to
+        avoid friction for solo devs who don't need team selection.
+        """
         import importlib
 
         from scc_cli import config
@@ -450,7 +457,7 @@ class TestStandaloneMode:
 
         result = config.is_standalone_mode()
 
-        assert result is False
+        assert result is True
 
     def test_is_standalone_mode_returns_true_when_set(self, temp_home, new_config_dir):
         """Should return True when standalone is set."""

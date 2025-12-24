@@ -229,7 +229,7 @@ def select_recent_workspace(console: Console, cfg: dict[str, Any]) -> str | None
     )
 
     if choice == 0:
-        return None
+        return "back"  # Signal to go back to previous menu, not exit
 
     return cast(str, recent[choice - 1]["workspace"])
 
@@ -268,7 +268,7 @@ def select_team_repo(console: Console, cfg: dict[str, Any], team: str | None) ->
     )
 
     if choice == 0:
-        return None
+        return "back"  # Signal to go back to previous menu, not exit
 
     selected_repo = repos[choice - 1]
 

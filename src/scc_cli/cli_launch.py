@@ -34,6 +34,7 @@ from .cli_common import (
 from .constants import WORKTREE_BRANCH_PREFIX
 from .contexts import WorkContext, load_recent_contexts, record_context
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
+from .exit_codes import EXIT_CONFIG
 from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import json_output_mode, print_json, set_pretty_mode
@@ -615,7 +616,7 @@ def interactive_start(cfg: dict) -> tuple:
 
     The flow prioritizes quick resume by showing recent contexts first:
     1. Recent Contexts (quick resume) - if contexts exist
-    2. Team selection - if no context selected
+    2. Team selection - if no context selected (skipped in standalone mode)
     3. Workspace source selection
     4. Worktree creation (optional)
     5. Session naming (optional)
@@ -629,6 +630,13 @@ def interactive_start(cfg: dict) -> tuple:
         may be None if user cancels at any step.
     """
     ui.show_header(console)
+
+    # Determine mode: standalone vs organization
+    standalone_mode = config.is_standalone_mode()
+
+    # Get available teams (from org config if available)
+    org_config = config.load_cached_org_config()
+    available_teams = teams.list_teams(cfg, org_config)
 
     # Step 0: Recent Contexts (quick resume)
     # User can press 't' to switch teams (raises TeamSwitchRequested → skip to Step 1)
@@ -658,31 +666,69 @@ def interactive_start(cfg: dict) -> tuple:
         console.print("[dim]💡 Tip: Your recent contexts will appear here for quick resume[/dim]")
         console.print()
 
-    # Step 1: Select team
-    team = ui.select_team(console, cfg)
+    # Step 1: Select team (mode-aware handling)
+    team: str | None = None
 
-    # Step 2: Select workspace source
-    workspace_source = ui.select_workspace_source(console, cfg, team)
+    if standalone_mode:
+        # P0.1: Standalone mode - skip team picker entirely
+        # Solo devs don't need team selection friction
+        console.print("[dim]Running in standalone mode (no organization config)[/dim]")
+        console.print()
+    elif not available_teams:
+        # P0.2: Org mode with no teams configured - exit with clear error
+        # Get org URL for context in error message
+        user_cfg = config.load_user_config()
+        org_source = user_cfg.get("organization_source", {})
+        org_url = org_source.get("url", "unknown")
 
-    if workspace_source == "cancel":
-        return None, None, None, None
-    elif workspace_source == "recent":
-        workspace = ui.select_recent_workspace(console, cfg)
-    elif workspace_source == "team_repos":
-        workspace = ui.select_team_repo(console, cfg, team)
-    elif workspace_source == "custom":
-        workspace = ui.prompt_custom_workspace(console)
-    elif workspace_source == "clone":
-        repo_url = ui.prompt_repo_url(console)
-        if repo_url:
-            workspace = git.clone_repo(repo_url, cfg.get("workspace_base", "~/projects"))
-        else:
-            workspace = None
+        console.print()
+        console.print(
+            create_warning_panel(
+                "No Teams Configured",
+                f"Organization config from: {org_url}\n"
+                "No team profiles are defined in this organization.",
+                "Contact your admin to add profiles, or use: scc start --standalone",
+            )
+        )
+        console.print()
+        raise typer.Exit(EXIT_CONFIG)
     else:
-        return None, None, None, None
+        # Normal flow: org mode with teams available
+        team = ui.select_team(console, cfg)
 
-    if workspace is None:
-        return None, None, None, None
+    # Step 2: Select workspace source (with back navigation support)
+    workspace: str | None = None
+
+    while workspace is None:
+        workspace_source = ui.select_workspace_source(console, cfg, team)
+
+        if workspace_source == "cancel":
+            return None, None, None, None
+
+        if workspace_source == "recent":
+            result = ui.select_recent_workspace(console, cfg)
+            if result == "back":
+                continue  # Go back to source menu
+            workspace = result
+        elif workspace_source == "team_repos":
+            result = ui.select_team_repo(console, cfg, team)
+            if result == "back":
+                continue  # Go back to source menu
+            workspace = result
+        elif workspace_source == "custom":
+            workspace = ui.prompt_custom_workspace(console)
+            # Empty input means go back
+            if workspace is None:
+                continue
+        elif workspace_source == "clone":
+            repo_url = ui.prompt_repo_url(console)
+            if repo_url:
+                workspace = git.clone_repo(repo_url, cfg.get("workspace_base", "~/projects"))
+            # Empty URL means go back
+            if workspace is None:
+                continue
+        else:
+            return None, None, None, None
 
     # Step 3: Worktree option
     worktree_name = None
