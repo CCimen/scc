@@ -163,19 +163,23 @@ def map_key_to_action(
     *,
     custom_keys: dict[str, str] | None = None,
     enable_filter: bool = True,
+    filter_active: bool = False,
 ) -> Action[None]:
     """Map a key press to a semantic action.
 
     The mapping process follows this priority:
-    1. Check DEFAULT_KEY_MAP for standard actions
-    2. Check custom_keys for caller-defined actions
-    3. If enable_filter and printable, return FILTER_CHAR
-    4. Otherwise, return no-op (state_changed=False)
+    1. If filter_active and key is j/k, treat as FILTER_CHAR (user is typing)
+    2. Check DEFAULT_KEY_MAP for standard actions
+    3. Check custom_keys for caller-defined actions
+    4. If enable_filter and printable, return FILTER_CHAR
+    5. Otherwise, return no-op (state_changed=False)
 
     Args:
         key: The key that was pressed (from read_key()).
         custom_keys: Optional mapping of keys to custom action names.
         enable_filter: Whether to treat printable chars as filter input.
+        filter_active: Whether a filter query is currently active. When True,
+            j/k become filter characters instead of navigation shortcuts.
 
     Returns:
         An Action describing the semantic meaning of the key press.
@@ -191,7 +195,16 @@ def map_key_to_action(
         >>> action.custom_key
         's'
     """
-    # Priority 1: Check standard key map
+    # Priority 1: When filter is active, j/k become filter characters
+    # (user is typing, arrow keys still work for navigation)
+    if filter_active and enable_filter and key in ("j", "k"):
+        return Action(
+            action_type=ActionType.FILTER_CHAR,
+            filter_char=key,
+            should_exit=False,
+        )
+
+    # Priority 2: Check standard key map
     if key in DEFAULT_KEY_MAP:
         action_type = DEFAULT_KEY_MAP[key]
         should_exit = action_type in (
@@ -253,11 +266,16 @@ class KeyReader:
         self.custom_keys = custom_keys or {}
         self.enable_filter = enable_filter
 
-    def read(self) -> Action[None]:
+    def read(self, *, filter_active: bool = False) -> Action[None]:
         """Read a key and return the corresponding action.
 
         This method blocks until a key is pressed, then maps it
         to an Action using the configured settings.
+
+        Args:
+            filter_active: Whether a filter query is currently active.
+                When True, j/k become filter characters instead of
+                navigation shortcuts (arrow keys still work).
 
         Returns:
             The Action corresponding to the pressed key.
@@ -267,6 +285,7 @@ class KeyReader:
             key,
             custom_keys=self.custom_keys,
             enable_filter=self.enable_filter,
+            filter_active=filter_active,
         )
 
 

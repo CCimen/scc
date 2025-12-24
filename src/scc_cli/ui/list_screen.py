@@ -237,7 +237,7 @@ class ListScreen(Generic[T]):
             transient=True,  # Clear on exit
         ) as live:
             while True:
-                action = reader.read()
+                action = reader.read(filter_active=bool(self.state.filter_query))
 
                 # Handle action based on type
                 result = self._handle_action(action)

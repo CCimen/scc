@@ -185,7 +185,7 @@ class Dashboard:
             transient=True,
         ) as live:
             while True:
-                action = reader.read()
+                action = reader.read(filter_active=bool(self.state.list_state.filter_query))
 
                 result = self._handle_action(action)
                 if result is False:

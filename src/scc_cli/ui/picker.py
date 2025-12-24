@@ -393,7 +393,7 @@ def _run_single_select_picker(
         transient=True,
     ) as live:
         while True:
-            action = reader.read()
+            action = reader.read(filter_active=bool(state.filter_query))
 
             match action.action_type:
                 case ActionType.NAVIGATE_UP:
