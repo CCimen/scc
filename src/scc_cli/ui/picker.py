@@ -389,7 +389,7 @@ def _run_single_select_picker(
     with Live(
         render(),
         console=console,
-        refresh_per_second=4,  # Required > 0, we use manual refresh
+        auto_refresh=False,  # Manual refresh for instant response
         transient=True,
     ) as live:
         while True:
@@ -424,4 +424,4 @@ def _run_single_select_picker(
                     state.delete_filter_char()
 
             if action.state_changed:
-                live.update(render())
+                live.update(render(), refresh=True)

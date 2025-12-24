@@ -233,7 +233,7 @@ class ListScreen(Generic[T]):
         with Live(
             self._render(),
             console=self._console,
-            refresh_per_second=4,  # Required > 0, we use manual refresh
+            auto_refresh=False,  # Manual refresh for instant response
             transient=True,  # Clear on exit
         ) as live:
             while True:
@@ -250,7 +250,7 @@ class ListScreen(Generic[T]):
 
                 # Re-render if state changed
                 if action.state_changed:
-                    live.update(self._render())
+                    live.update(self._render(), refresh=True)
 
     def _render(self) -> RenderableType:
         """Render the current state to a Rich renderable."""
