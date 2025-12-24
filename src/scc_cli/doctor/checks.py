@@ -1,98 +1,24 @@
+"""Health check functions for the doctor module.
+
+This module contains all check functions organized by category:
+- JSON validation helpers
+- Environment checks (Git, Docker, WSL2, Workspace)
+- Configuration checks
+- Organization & Marketplace checks
+- Cache & State checks
+
+All check functions return CheckResult or CheckResult | None.
 """
-System health checks and prerequisite validation.
 
-The doctor module provides comprehensive health checks for all
-prerequisites needed to run Claude Code in Docker sandboxes.
-
-Philosophy: "Fast feedback, clear guidance"
-- Check all prerequisites quickly
-- Provide clear pass/fail indicators
-- Offer actionable fix suggestions
-
-New checks (v2):
-- Organization config reachability
-- Marketplace authentication availability
-- Credential injection verification
-- Cache status and TTL checks
-- Migration status checks
-"""
+from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-from rich import box
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-
-from . import __version__, config
-from .remote import fetch_org_config, resolve_auth
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Data Classes
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-@dataclass
-class CheckResult:
-    """Result of a single health check."""
-
-    name: str
-    passed: bool
-    message: str
-    version: str | None = None
-    fix_hint: str | None = None
-    fix_url: str | None = None
-    severity: str = "error"  # "error", "warning", "info"
-    code_frame: str | None = None  # Optional code frame for syntax errors
-    fix_commands: list[str] | None = None  # Copy-pasteable fix commands
-
-
-@dataclass
-class JsonValidationResult:
-    """Result of JSON file validation with error details."""
-
-    valid: bool
-    error_message: str | None = None
-    line: int | None = None
-    column: int | None = None
-    file_path: Path | None = None
-    code_frame: str | None = None
-
-
-@dataclass
-class DoctorResult:
-    """Complete health check results."""
-
-    git_ok: bool = False
-    git_version: str | None = None
-    docker_ok: bool = False
-    docker_version: str | None = None
-    sandbox_ok: bool = False
-    wsl2_detected: bool = False
-    windows_path_warning: bool = False
-    checks: list[CheckResult] = field(default_factory=list)
-
-    @property
-    def all_ok(self) -> bool:
-        """Check if all critical prerequisites pass."""
-        return self.git_ok and self.docker_ok and self.sandbox_ok
-
-    @property
-    def error_count(self) -> int:
-        """Count of failed critical checks."""
-        return sum(1 for c in self.checks if not c.passed and c.severity == "error")
-
-    @property
-    def warning_count(self) -> int:
-        """Count of warnings."""
-        return sum(1 for c in self.checks if not c.passed and c.severity == "warning")
-
+from .types import CheckResult, JsonValidationResult
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # JSON Validation Helpers
@@ -245,13 +171,13 @@ def get_json_error_hints(error_message: str) -> list[str]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Health Checks
+# Environment Checks (Git, Docker, WSL2, Workspace)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 def check_git() -> CheckResult:
     """Check if Git is installed and accessible."""
-    from . import git as git_module
+    from .. import git as git_module
 
     if not git_module.check_git_installed():
         return CheckResult(
@@ -274,7 +200,7 @@ def check_git() -> CheckResult:
 
 def check_docker() -> CheckResult:
     """Check if Docker is installed and running."""
-    from . import docker as docker_module
+    from .. import docker as docker_module
 
     version = docker_module.get_docker_version()
 
@@ -313,7 +239,7 @@ def check_docker() -> CheckResult:
 
 def check_docker_sandbox() -> CheckResult:
     """Check if Docker sandbox feature is available."""
-    from . import docker as docker_module
+    from .. import docker as docker_module
 
     if not docker_module.check_docker_sandbox():
         return CheckResult(
@@ -368,7 +294,7 @@ def check_docker_running() -> CheckResult:
 
 def check_wsl2() -> tuple[CheckResult, bool]:
     """Check WSL2 environment and return (result, is_wsl2)."""
-    from . import platform as platform_module
+    from .. import platform as platform_module
 
     is_wsl2 = platform_module.is_wsl2()
 
@@ -396,7 +322,7 @@ def check_wsl2() -> tuple[CheckResult, bool]:
 
 def check_workspace_path(workspace: Path | None = None) -> CheckResult:
     """Check if workspace path is optimal (not on Windows mount in WSL2)."""
-    from . import platform as platform_module
+    from .. import platform as platform_module
 
     if workspace is None:
         return CheckResult(
@@ -422,6 +348,11 @@ def check_workspace_path(workspace: Path | None = None) -> CheckResult:
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Configuration Checks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
 def check_user_config_valid() -> CheckResult:
     """Check if user configuration file is valid JSON.
 
@@ -431,6 +362,8 @@ def check_user_config_valid() -> CheckResult:
     Returns:
         CheckResult with user config validation status.
     """
+    from .. import config
+
     config_file = config.CONFIG_FILE
 
     if not config_file.exists():
@@ -477,7 +410,7 @@ def check_user_config_valid() -> CheckResult:
 
 def check_config_directory() -> CheckResult:
     """Check if configuration directory exists and is writable."""
-    from . import config
+    from .. import config
 
     config_dir = config.CONFIG_DIR
 
@@ -519,16 +452,18 @@ def check_config_directory() -> CheckResult:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Organization & Marketplace Health Checks (v2)
+# Organization & Marketplace Checks
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def load_cached_org_config() -> dict | None:
+def load_cached_org_config() -> dict[str, Any] | None:
     """Load cached organization config from cache directory.
 
     Returns:
         Cached org config dict if valid, None otherwise.
     """
+    from .. import config
+
     cache_file = config.CACHE_DIR / "org_config.json"
 
     if not cache_file.exists():
@@ -536,7 +471,7 @@ def load_cached_org_config() -> dict | None:
 
     try:
         content = cache_file.read_text()
-        return cast(dict[Any, Any], json.loads(content))
+        return cast(dict[str, Any], json.loads(content))
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -547,6 +482,9 @@ def check_org_config_reachable() -> CheckResult | None:
     Returns:
         CheckResult if org config is configured, None for standalone mode.
     """
+    from .. import config
+    from ..remote import fetch_org_config
+
     user_config = config.load_user_config()
 
     # Skip for standalone mode
@@ -617,6 +555,9 @@ def check_marketplace_auth_available() -> CheckResult | None:
     Returns:
         CheckResult if marketplace is configured, None otherwise.
     """
+    from .. import config
+    from ..remote import resolve_auth
+
     user_config = config.load_user_config()
     org_config = load_cached_org_config()
 
@@ -705,6 +646,8 @@ def check_credential_injection() -> CheckResult | None:
     Returns:
         CheckResult showing injection status, None if no profile.
     """
+    from .. import config
+
     user_config = config.load_user_config()
     org_config = load_cached_org_config()
 
@@ -774,6 +717,11 @@ def check_credential_injection() -> CheckResult | None:
         )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Cache & State Checks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
 def check_cache_readable() -> CheckResult:
     """Check if organization config cache is readable and valid.
 
@@ -782,6 +730,8 @@ def check_cache_readable() -> CheckResult:
     Returns:
         CheckResult with cache status.
     """
+    from .. import config
+
     cache_file = config.CACHE_DIR / "org_config.json"
 
     if not cache_file.exists():
@@ -851,6 +801,8 @@ def check_cache_ttl_status() -> CheckResult | None:
     Returns:
         CheckResult with TTL status, None if no cache metadata.
     """
+    from .. import config
+
     meta_file = config.CACHE_DIR / "cache_meta.json"
 
     if not meta_file.exists():
@@ -918,6 +870,8 @@ def check_migration_status() -> CheckResult:
     Returns:
         CheckResult with migration status.
     """
+    from .. import config
+
     legacy_dir = config.LEGACY_CONFIG_DIR
     new_dir = config.CONFIG_DIR
 
@@ -960,9 +914,7 @@ def check_exception_stores() -> CheckResult:
     Returns:
         CheckResult with exception store status.
     """
-    from pathlib import Path
-
-    from .stores.exception_store import RepoStore, UserStore
+    from ..stores.exception_store import RepoStore, UserStore
 
     issues: list[str] = []
     warnings: list[str] = []
@@ -1071,51 +1023,9 @@ def check_proxy_environment() -> CheckResult:
     )
 
 
-def build_doctor_json_data(result: DoctorResult) -> dict[str, Any]:
-    """Build JSON-serializable data from DoctorResult.
-
-    Args:
-        result: The DoctorResult to convert.
-
-    Returns:
-        Dictionary suitable for JSON envelope data field.
-    """
-    checks_data = []
-    for check in result.checks:
-        check_dict: dict[str, Any] = {
-            "name": check.name,
-            "passed": check.passed,
-            "message": check.message,
-            "severity": check.severity,
-        }
-        if check.version:
-            check_dict["version"] = check.version
-        if check.fix_hint:
-            check_dict["fix_hint"] = check.fix_hint
-        if check.fix_url:
-            check_dict["fix_url"] = check.fix_url
-        if check.fix_commands:
-            check_dict["fix_commands"] = check.fix_commands
-        if check.code_frame:
-            check_dict["code_frame"] = check.code_frame
-        checks_data.append(check_dict)
-
-    # Calculate summary stats
-    total = len(result.checks)
-    passed = sum(1 for c in result.checks if c.passed)
-    errors = sum(1 for c in result.checks if not c.passed and c.severity == "error")
-    warnings = sum(1 for c in result.checks if not c.passed and c.severity == "warning")
-
-    return {
-        "checks": checks_data,
-        "summary": {
-            "total": total,
-            "passed": passed,
-            "errors": errors,
-            "warnings": warnings,
-            "all_ok": result.all_ok,
-        },
-    }
+# ═══════════════════════════════════════════════════════════════════════════════
+# Check Orchestration
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def run_all_checks() -> list[CheckResult]:
@@ -1126,7 +1036,7 @@ def run_all_checks() -> list[CheckResult]:
     Returns:
         List of all CheckResult objects (excluding None results).
     """
-    results = []
+    results: list[CheckResult] = []
 
     # Environment checks
     results.append(check_git())
@@ -1169,268 +1079,3 @@ def run_all_checks() -> list[CheckResult]:
     results.append(check_exception_stores())
 
     return results
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Main Doctor Function
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def run_doctor(workspace: Path | None = None) -> DoctorResult:
-    """
-    Run all health checks and return comprehensive results.
-
-    Args:
-        workspace: Optional workspace path to check for optimization
-
-    Returns:
-        DoctorResult with all check results
-    """
-    result = DoctorResult()
-
-    # Git check
-    git_check = check_git()
-    result.checks.append(git_check)
-    result.git_ok = git_check.passed
-    result.git_version = git_check.version
-
-    # Docker check
-    docker_check = check_docker()
-    result.checks.append(docker_check)
-    result.docker_ok = docker_check.passed
-    result.docker_version = docker_check.version
-
-    # Docker daemon check (only if Docker is installed)
-    if result.docker_ok:
-        daemon_check = check_docker_running()
-        result.checks.append(daemon_check)
-        if not daemon_check.passed:
-            result.docker_ok = False
-
-    # Docker sandbox check (only if Docker is OK)
-    if result.docker_ok:
-        sandbox_check = check_docker_sandbox()
-        result.checks.append(sandbox_check)
-        result.sandbox_ok = sandbox_check.passed
-    else:
-        result.sandbox_ok = False
-
-    # WSL2 check
-    wsl2_check, is_wsl2 = check_wsl2()
-    result.checks.append(wsl2_check)
-    result.wsl2_detected = is_wsl2
-
-    # Workspace path check (if WSL2 and workspace provided)
-    if workspace:
-        path_check = check_workspace_path(workspace)
-        result.checks.append(path_check)
-        result.windows_path_warning = not path_check.passed and path_check.severity == "warning"
-
-    # Config directory check
-    config_check = check_config_directory()
-    result.checks.append(config_check)
-
-    # User config JSON validation check
-    user_config_check = check_user_config_valid()
-    result.checks.append(user_config_check)
-
-    return result
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Beautiful Rich UI Rendering
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def render_doctor_results(console: Console, result: DoctorResult) -> None:
-    """
-    Render doctor results with beautiful Rich formatting.
-
-    Uses consistent styling with the rest of the CLI:
-    - Cyan for info/brand
-    - Green for success
-    - Yellow for warnings
-    - Red for errors
-    """
-    # Header
-    console.print()
-
-    # Build results table
-    table = Table(
-        box=box.ROUNDED,
-        show_header=True,
-        header_style="bold cyan",
-        border_style="dim",
-        padding=(0, 1),
-    )
-
-    table.add_column("Status", width=8, justify="center")
-    table.add_column("Check", min_width=20)
-    table.add_column("Details", min_width=30)
-
-    for check in result.checks:
-        # Status icon with color
-        if check.passed:
-            status = Text("  ", style="bold green")
-        elif check.severity == "warning":
-            status = Text("  ", style="bold yellow")
-        else:
-            status = Text("  ", style="bold red")
-
-        # Check name
-        name = Text(check.name, style="white")
-
-        # Details with version and message
-        details = Text()
-        if check.version:
-            details.append(f"{check.version}\n", style="cyan")
-        details.append(check.message, style="dim" if check.passed else "white")
-
-        if not check.passed and check.fix_hint:
-            details.append(f"\n{check.fix_hint}", style="yellow")
-
-        table.add_row(status, name, details)
-
-    # Wrap table in panel
-    title_style = "bold green" if result.all_ok else "bold red"
-    version_suffix = f" (scc-cli v{__version__})"
-    title_text = (
-        f"System Health Check{version_suffix}"
-        if result.all_ok
-        else f"System Health Check - Issues Found{version_suffix}"
-    )
-
-    panel = Panel(
-        table,
-        title=f"[{title_style}]{title_text}[/{title_style}]",
-        border_style="green" if result.all_ok else "red",
-        padding=(1, 1),
-    )
-
-    console.print(panel)
-
-    # Display code frames for any checks with syntax errors (beautiful error display)
-    code_frame_checks = [c for c in result.checks if c.code_frame and not c.passed]
-    for check in code_frame_checks:
-        if check.code_frame is not None:  # Type guard for mypy
-            console.print()
-            # Create a panel for the code frame with Rich styling
-            code_panel = Panel(
-                check.code_frame,
-                title=f"[bold red]⚠️  JSON Syntax Error: {check.name}[/bold red]",
-                border_style="red",
-                padding=(1, 2),
-            )
-            console.print(code_panel)
-
-    # Summary line
-    if result.all_ok:
-        console.print()
-        console.print(
-            "  [bold green]All prerequisites met![/bold green] [dim]Ready to run Claude Code.[/dim]"
-        )
-    else:
-        console.print()
-        summary_parts = []
-        if result.error_count > 0:
-            summary_parts.append(f"[bold red]{result.error_count} error(s)[/bold red]")
-        if result.warning_count > 0:
-            summary_parts.append(f"[bold yellow]{result.warning_count} warning(s)[/bold yellow]")
-
-        console.print(f"  Found {' and '.join(summary_parts)}. ", end="")
-        console.print("[dim]Fix the issues above to continue.[/dim]")
-
-        # Next Steps section with fix_commands
-        checks_with_commands = [c for c in result.checks if not c.passed and c.fix_commands]
-        if checks_with_commands:
-            console.print()
-            console.print("  [bold cyan]Next Steps[/bold cyan]")
-            console.print("  [dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
-            console.print()
-
-            for check in checks_with_commands:
-                console.print(f"  [bold white]{check.name}:[/bold white]")
-                if check.fix_hint:
-                    console.print(f"    [dim]{check.fix_hint}[/dim]")
-                if check.fix_commands:
-                    for i, cmd in enumerate(check.fix_commands, 1):
-                        console.print(f"    [cyan]{i}.[/cyan] [white]{cmd}[/white]")
-                console.print()
-
-    console.print()
-
-
-def render_doctor_compact(console: Console, result: DoctorResult) -> None:
-    """
-    Render compact doctor results for inline display.
-
-    Used during startup to show quick status.
-    """
-    checks = []
-
-    # Git
-    if result.git_ok:
-        checks.append("[green]Git[/green]")
-    else:
-        checks.append("[red]Git[/red]")
-
-    # Docker
-    if result.docker_ok:
-        checks.append("[green]Docker[/green]")
-    else:
-        checks.append("[red]Docker[/red]")
-
-    # Sandbox
-    if result.sandbox_ok:
-        checks.append("[green]Sandbox[/green]")
-    else:
-        checks.append("[red]Sandbox[/red]")
-
-    console.print(f"  [dim]Prerequisites:[/dim] {' | '.join(checks)}")
-
-
-def render_quick_status(console: Console, result: DoctorResult) -> None:
-    """
-    Render a single-line status for quick checks.
-
-    Returns immediately with pass/fail indicator.
-    """
-    if result.all_ok:
-        console.print("[green]  All systems operational[/green]")
-    else:
-        failed = [c.name for c in result.checks if not c.passed and c.severity == "error"]
-        console.print(f"[red]  Issues detected:[/red] {', '.join(failed)}")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Quick Check Functions
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def quick_check() -> bool:
-    """
-    Perform a quick prerequisite check.
-
-    Returns True if all critical prerequisites are met.
-    Used for fast startup validation.
-    """
-    result = run_doctor()
-    return result.all_ok
-
-
-def is_first_run() -> bool:
-    """
-    Check if this is the first run of scc.
-
-    Returns True if config directory doesn't exist or is empty.
-    """
-    from . import config
-
-    config_dir = config.CONFIG_DIR
-
-    if not config_dir.exists():
-        return True
-
-    # Check if config file exists
-    config_file = config.CONFIG_FILE
-    return not config_file.exists()
