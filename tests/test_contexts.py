@@ -4,24 +4,19 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from scc_cli.contexts import (
     MAX_CONTEXTS,
     WorkContext,
-    _get_contexts_path,
-    _normalize_path,
     clear_contexts,
     get_context_for_path,
     load_recent_contexts,
     record_context,
     toggle_pin,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WorkContext dataclass tests
