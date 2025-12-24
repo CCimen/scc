@@ -1,6 +1,6 @@
-"""I/O layer for reading plugin manifests and discovering installed plugins.
+"""Provide I/O layer for reading plugin manifests and discovering installed plugins.
 
-This module provides file system operations for:
+Implement file system operations for:
 - Reading manifest files from plugin directories
 - Discovering installed plugins from the Claude Code registry
 - Creating audit results for plugins

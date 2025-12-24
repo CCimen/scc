@@ -1,6 +1,6 @@
-"""Exception store implementations for SCC Phase 2.1.
+"""Provide exception store implementations for SCC Phase 2.1.
 
-This module provides storage backends for time-bounded exceptions:
+Define storage backends for time-bounded exceptions:
 - UserStore: Personal exceptions in ~/.config/scc/exceptions.json
 - RepoStore: Shared repo exceptions in .scc/exceptions.json
 

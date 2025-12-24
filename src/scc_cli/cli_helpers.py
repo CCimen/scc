@@ -1,6 +1,6 @@
-"""Centralized CLI helpers for confirmation and safety patterns.
+"""Provide centralized CLI helpers for confirmation and safety patterns.
 
-This module provides standardized helpers for:
+Provide standardized helpers for:
 - Destructive operation confirmation (prune, worktree remove, etc.)
 - Governance command validation (unblock, exceptions)
 - Non-interactive mode detection (CI environments)
@@ -26,7 +26,13 @@ stderr_console = Console(stderr=True)
 
 @dataclass(frozen=True)
 class ConfirmItems:
-    """Items to display before confirmation prompt."""
+    """Hold items to display before a confirmation prompt.
+
+    Attributes:
+        title: Header text shown above the item list.
+        items: List of item descriptions to display.
+        max_display: Maximum items to show before truncating with count.
+    """
 
     title: str
     items: list[str]
@@ -36,10 +42,13 @@ class ConfirmItems:
 def is_interactive() -> bool:
     """Check if running in interactive mode.
 
-    Returns False if:
+    Return False if:
     - stdin is not a TTY (piped input, redirected)
     - CI environment variable is set to truthy value
     - JSON output mode is active
+
+    Returns:
+        True if interactive prompts are safe to use.
     """
     if is_json_mode():
         return False
@@ -213,6 +222,16 @@ def create_audit_record(
 
     This is mandatory for governance commands (unblock, exception creation).
     For other destructive operations, use only if SCC_AUDIT_LOG is enabled.
+
+    Args:
+        command: The governance command being executed.
+        target: The resource being affected (e.g., plugin name, policy).
+        reason: Justification for the operation.
+        ticket: Optional issue/ticket reference for traceability.
+        expires_in: Optional duration string for temporary exceptions.
+
+    Returns:
+        A timestamped audit record with actor information.
     """
     return AuditRecord(
         timestamp=datetime.now(timezone.utc),

@@ -1,7 +1,7 @@
-"""Doctor health check package - system diagnostics for SCC-CLI.
+"""Provide system diagnostics and health checks for SCC-CLI.
 
-This package provides comprehensive health checks for all prerequisites
-needed to run Claude Code in Docker sandboxes.
+Offer comprehensive health checks for all prerequisites needed to run
+Claude Code in Docker sandboxes.
 
 Philosophy: "Fast feedback, clear guidance"
 - Check all prerequisites quickly

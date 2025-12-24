@@ -1,7 +1,7 @@
 """
 JSON envelope builder for CLI output.
 
-Provides structured, versioned JSON envelopes for machine-readable output.
+Provide structured, versioned JSON envelopes for machine-readable output.
 All JSON output MUST use this builder to ensure consistency.
 
 Usage:

@@ -1,6 +1,6 @@
-"""Data models for the evaluation layer.
+"""Define data models for the evaluation layer.
 
-These dataclasses represent the results of evaluating configs and applying exceptions.
+Represent the results of evaluating configs and applying exceptions.
 All models are immutable and support the pure functional evaluation approach.
 """
 

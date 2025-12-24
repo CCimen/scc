@@ -1,8 +1,7 @@
-"""
-Deprecation warning infrastructure.
+"""Provide deprecation warning infrastructure.
 
-Provides consistent deprecation warnings that respect output modes.
-Warnings are suppressed in JSON mode to maintain clean machine output.
+Provide consistent deprecation warnings that respect output modes.
+Suppress warnings in JSON mode to maintain clean machine output.
 
 Usage:
     from scc_cli.deprecation import warn_deprecated

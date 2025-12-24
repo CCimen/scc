@@ -1,8 +1,7 @@
 """
-Dependency Installation Module.
+Provide dependency detection and installation for project workspaces.
 
-Opt-in dependency detection and installation for project workspaces.
-This module provides best-effort dependency installation that:
+Offer opt-in dependency installation that:
 - Is opt-in (--install-deps flag)
 - Never blocks scc start by default
 - Supports strict mode for CI/automation that needs hard failures
@@ -56,10 +55,10 @@ DETECTION_ORDER = [
 
 
 def detect_package_manager(workspace: Path) -> str | None:
-    """Detect package manager from project files.
+    """Detect the package manager from project files.
 
-    Detection is based on the presence of lock files and manifest files.
-    Lock files take priority over manifest files.
+    Base detection on the presence of lock files and manifest files.
+    Give lock files priority over manifest files.
 
     Args:
         workspace: Path to the project workspace
@@ -96,7 +95,7 @@ INSTALL_COMMANDS = {
 
 
 def get_install_command(package_manager: str) -> list[str] | None:
-    """Get the install command for a package manager.
+    """Return the install command for a package manager.
 
     Args:
         package_manager: Name of the package manager
@@ -117,7 +116,7 @@ def install_dependencies(
     package_manager: str,
     strict: bool = False,
 ) -> bool:
-    """Run dependency installation command.
+    """Run the dependency installation command.
 
     Args:
         workspace: Path to project workspace
@@ -166,9 +165,9 @@ def install_dependencies(
 
 
 def auto_install_dependencies(workspace: Path, strict: bool = False) -> bool:
-    """Detect package manager and install dependencies.
+    """Detect the package manager and install dependencies.
 
-    Convenience function that combines detection and installation.
+    Combine detection and installation as a convenience function.
 
     Args:
         workspace: Path to project workspace

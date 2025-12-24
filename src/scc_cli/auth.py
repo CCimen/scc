@@ -1,8 +1,8 @@
 """
-Authentication resolution module.
+Resolve authentication from environment variables and commands.
 
-Consolidates auth logic from remote.py and claude_adapter.py.
-Uses safe command execution (no shell=True).
+Consolidate auth logic from remote.py and claude_adapter.py.
+Use safe command execution (no shell=True).
 
 Trust Model:
 - User config auth: Trusted (local file, user controls)
@@ -44,8 +44,7 @@ def resolve_auth(
     auth_spec: str | None,
     allow_command: bool = True,
 ) -> AuthResult | None:
-    """
-    Resolve auth spec to token.
+    """Resolve auth spec to token.
 
     Supports:
     - env:VAR_NAME - read from environment variable (always allowed)

@@ -84,7 +84,7 @@ def _preinit_credential_volume() -> None:
 
 def _check_volume_has_credentials() -> bool:
     """
-    Check if the Docker volume already has valid OAuth credentials.
+    Check whether the Docker volume already has valid OAuth credentials.
 
     The volume is the source of truth. If it has credentials from a
     previous session, we don't need to copy from containers.

@@ -1,8 +1,7 @@
-"""CLI commands for plugin audit functionality.
+"""Provide CLI commands for plugin audit functionality.
 
-This module provides the `scc audit plugins` command for auditing
-installed Claude Code plugins, including manifest validation and
-MCP server/hooks discovery.
+Audit installed Claude Code plugins via the `scc audit plugins` command,
+including manifest validation and MCP server/hooks discovery.
 """
 
 from __future__ import annotations
@@ -26,8 +25,6 @@ from scc_cli.models.plugin_audit import (
     PluginAuditResult,
 )
 
-if TYPE_CHECKING:
-    pass
 
 console = Console()
 

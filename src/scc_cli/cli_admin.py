@@ -1,8 +1,4 @@
-"""
-CLI Admin Commands.
-
-Commands for system administration: doctor, update, statusline, status, and stats.
-"""
+"""Provide CLI commands for system administration: doctor, update, statusline, status, and stats."""
 
 import importlib.resources
 import json
@@ -318,8 +314,6 @@ def statusline_cmd(
         scc statusline --show       # Show current configuration
         scc statusline --uninstall  # Remove status line config
     """
-    claude_dir = Path.home() / ".claude"  # noqa: F841
-
     if show:
         # Show current configuration from Docker sandbox volume
         with Status(

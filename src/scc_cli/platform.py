@@ -1,7 +1,7 @@
 """
 Platform detection and cross-platform utilities.
 
-Handles detection of:
+Handle detection of:
 - Operating system (macOS, Linux, Windows, WSL2)
 - Path normalization across platforms
 - Performance warnings for suboptimal configurations
@@ -33,10 +33,9 @@ class Platform(Enum):
 
 
 def detect_platform() -> Platform:
-    """
-    Detect the current platform.
+    """Detect the current platform.
 
-    Returns the most specific platform identifier:
+    Return the most specific platform identifier:
     - WSL2 takes precedence over Linux
     - macOS, Windows, Linux detected by sys.platform
     """
@@ -54,8 +53,7 @@ def detect_platform() -> Platform:
 
 
 def is_wsl2() -> bool:
-    """
-    Detect if running in WSL2 environment.
+    """Detect if running in WSL2 environment.
 
     WSL2 has 'wsl2' in /proc/version (e.g., 'microsoft-standard-WSL2').
     WSL1 only has 'Microsoft' without 'wsl2' marker.
@@ -73,8 +71,7 @@ def is_wsl2() -> bool:
 
 
 def is_wsl1() -> bool:
-    """
-    Detect if running in WSL1 (legacy) environment.
+    """Detect if running in WSL1 (legacy) environment.
 
     WSL1 has 'Microsoft' in /proc/version but NOT 'wsl2'.
     """
@@ -124,8 +121,7 @@ def get_platform_name() -> str:
 
 
 def is_windows_mount_path(path: Path) -> bool:
-    """
-    Check if a path is on the Windows filesystem (via /mnt/c, /mnt/d, etc.).
+    """Check if a path is on the Windows filesystem (via /mnt/c, /mnt/d, etc.).
 
     In WSL2, paths like /mnt/c/Users/... are on the Windows filesystem
     and have significantly slower I/O performance.
@@ -144,12 +140,11 @@ def is_windows_mount_path(path: Path) -> bool:
 
 
 def normalize_path(path: str | Path) -> Path:
-    """
-    Normalize a path for the current platform.
+    """Normalize a path for the current platform.
 
-    - Expands ~ to home directory
-    - Resolves to absolute path
-    - Handles Windows/Unix path differences
+    - Expand ~ to home directory
+    - Resolve to absolute path
+    - Handle Windows/Unix path differences
     """
     if isinstance(path, str):
         path = Path(path)
@@ -164,8 +159,7 @@ def normalize_path(path: str | Path) -> Path:
 
 
 def get_recommended_workspace_base() -> Path:
-    """
-    Get the recommended workspace base directory for the platform.
+    """Get the recommended workspace base directory for the platform.
 
     - macOS/Linux: ~/projects
     - WSL2: ~/projects (inside WSL, not /mnt/c)
@@ -227,10 +221,9 @@ def get_home_directory() -> Path:
 
 
 def supports_unicode() -> bool:
-    """
-    Check if the terminal supports Unicode characters.
+    """Check if the terminal supports Unicode characters.
 
-    Returns True if UTF-8 encoding is available.
+    Return True if UTF-8 encoding is available.
     """
     encoding = sys.stdout.encoding
     if encoding:
@@ -242,10 +235,9 @@ def supports_unicode() -> bool:
 
 
 def supports_colors() -> bool:
-    """
-    Check if the terminal supports ANSI colors.
+    """Check if the terminal supports ANSI colors.
 
-    Checks various environment indicators.
+    Check various environment indicators.
     """
     # Rich handles this well, but we can do basic detection
     if os.environ.get("NO_COLOR"):
@@ -262,10 +254,9 @@ def supports_colors() -> bool:
 
 
 def get_terminal_size() -> tuple[int, int]:
-    """
-    Get terminal size (columns, rows).
+    """Get terminal size (columns, rows).
 
-    Returns (80, 24) as default if detection fails.
+    Return (80, 24) as default if detection fails.
     """
     try:
         size = os.get_terminal_size()
@@ -294,8 +285,7 @@ def is_wide_terminal(threshold: int = 110) -> bool:
 
 
 def get_config_dir() -> Path:
-    """
-    Get the platform-appropriate configuration directory.
+    """Get the platform-appropriate configuration directory.
 
     - macOS: ~/Library/Application Support/scc-cli
     - Linux/WSL2: ~/.config/scc-cli
@@ -317,8 +307,7 @@ def get_config_dir() -> Path:
 
 
 def get_cache_dir() -> Path:
-    """
-    Get the platform-appropriate cache directory.
+    """Get the platform-appropriate cache directory.
 
     - macOS: ~/Library/Caches/scc-cli
     - Linux/WSL2: ~/.cache/scc-cli
@@ -340,8 +329,7 @@ def get_cache_dir() -> Path:
 
 
 def get_data_dir() -> Path:
-    """
-    Get the platform-appropriate data directory.
+    """Get the platform-appropriate data directory.
 
     - macOS: ~/Library/Application Support/scc-cli
     - Linux/WSL2: ~/.local/share/scc-cli

@@ -1,8 +1,8 @@
 """
-High-level Docker sandbox launch functions and settings injection.
+Provide high-level Docker sandbox launch functions and settings injection.
 
-This module orchestrates the Docker sandbox lifecycle, combining
-primitives from core.py and credential management from credentials.py.
+Orchestrate the Docker sandbox lifecycle, combining primitives from
+core.py and credential management from credentials.py.
 """
 
 import json
@@ -237,7 +237,7 @@ def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
 
 def get_sandbox_settings() -> dict | None:
     """
-    Read current settings from the Docker sandbox volume.
+    Return current settings from the Docker sandbox volume.
 
     Returns:
         Settings dict or None if not found

@@ -1,8 +1,8 @@
 """
-Docker core operations: checks, commands, container lifecycle, and queries.
+Provide Docker core operations: checks, commands, container lifecycle, and queries.
 
-This module contains stateless Docker primitives that don't manage
-persistent state. For credential persistence, see credentials.py.
+Contain stateless Docker primitives that don't manage persistent state.
+For credential persistence, see credentials.py.
 """
 
 import datetime
@@ -43,7 +43,7 @@ class ContainerInfo:
 
 
 def _check_docker_installed() -> bool:
-    """Check if Docker is installed and in PATH."""
+    """Check whether Docker is installed and in PATH."""
     return shutil.which("docker") is not None
 
 
@@ -83,7 +83,7 @@ def check_docker_available() -> None:
 
 
 def check_docker_sandbox() -> bool:
-    """Check if Docker sandbox feature is available (Docker Desktop 4.50+)."""
+    """Check whether Docker sandbox feature is available (Docker Desktop 4.50+)."""
     if not _check_docker_installed():
         return False
     return run_command_bool(["docker", "sandbox", "--help"], timeout=10)
@@ -116,7 +116,7 @@ def generate_container_name(workspace: Path, branch: str | None = None) -> str:
 
 
 def container_exists(container_name: str) -> bool:
-    """Check if a container with the given name exists (running or stopped)."""
+    """Check whether a container with the given name exists (running or stopped)."""
     output = run_command(
         [
             "docker",
@@ -133,7 +133,7 @@ def container_exists(container_name: str) -> bool:
 
 
 def get_container_status(container_name: str) -> str | None:
-    """Get the status of a container (running, exited, etc.)."""
+    """Return the status of a container (running, exited, etc.)."""
     output = run_command(
         [
             "docker",
@@ -220,12 +220,12 @@ def build_command(
 
 
 def build_start_command(container_name: str) -> list[str]:
-    """Build command to resume an existing container."""
+    """Build command to resume an existing container and return it."""
     return ["docker", "start", "-ai", container_name]
 
 
 def run_detached(cmd: list[str]) -> subprocess.Popen:
-    """Run Docker command in background (for multiple worktrees)."""
+    """Run Docker command in background and return the process handle."""
     return subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,
@@ -253,12 +253,12 @@ def start_container(container_name: str) -> int:
 
 
 def stop_container(container_id: str) -> bool:
-    """Stop a running container."""
+    """Stop a running container and return success status."""
     return run_command_bool(["docker", "stop", container_id], timeout=30)
 
 
 def remove_container(container_name: str, force: bool = False) -> bool:
-    """Remove a container."""
+    """Remove a container and return success status."""
     cmd = ["docker", "rm"]
     if force:
         cmd.append("-f")
@@ -314,7 +314,7 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
 
 
 def list_scc_containers() -> list[ContainerInfo]:
-    """List all SCC-managed containers (running and stopped)."""
+    """Return all SCC-managed containers (running and stopped)."""
     try:
         result = subprocess.run(
             [
@@ -357,13 +357,10 @@ def list_scc_containers() -> list[ContainerInfo]:
 
 def list_running_sandboxes() -> list[ContainerInfo]:
     """
-    List running Claude Code sandboxes (created by Docker Desktop).
+    Return running Claude Code sandboxes (created by Docker Desktop).
 
-    Docker sandbox containers are identified by:
-    - Image: docker/sandbox-templates:claude-code
-    - Name pattern: claude-sandbox-*
-
-    Returns list of ContainerInfo objects.
+    Docker sandbox containers are identified by the sandbox image
+    (docker/sandbox-templates:claude-code).
     """
     try:
         # Filter by the Docker sandbox image

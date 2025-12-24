@@ -1,4 +1,9 @@
-"""Shared Rich panel components for consistent UI across the CLI."""
+"""
+Provide Rich panel components for consistent UI across the CLI.
+
+Define reusable panel factories for info, warning, success, and error messages
+with standardized styling and structure.
+"""
 
 from rich.panel import Panel
 from rich.table import Table
@@ -6,16 +11,15 @@ from rich.text import Text
 
 
 def create_info_panel(title: str, content: str, subtitle: str = "") -> Panel:
-    """
-    Create an info panel with cyan styling.
+    """Create an info panel with cyan styling.
 
     Args:
-        title: Panel title text
-        content: Main content text
-        subtitle: Optional dimmed subtitle text
+        title: Panel title text.
+        content: Main content text.
+        subtitle: Optional dimmed subtitle text.
 
     Returns:
-        Rich Panel with cyan border and styling
+        Rich Panel with cyan border and styling.
     """
     body = Text()
     body.append(content)
@@ -31,16 +35,15 @@ def create_info_panel(title: str, content: str, subtitle: str = "") -> Panel:
 
 
 def create_warning_panel(title: str, message: str, hint: str = "") -> Panel:
-    """
-    Create a warning panel with yellow styling.
+    """Create a warning panel with yellow styling.
 
     Args:
-        title: Panel title text (will have warning icon prepended)
-        message: Main warning message
-        hint: Optional action hint text
+        title: Panel title text (will have warning icon prepended).
+        message: Main warning message.
+        hint: Optional action hint text.
 
     Returns:
-        Rich Panel with yellow border and styling
+        Rich Panel with yellow border and styling.
     """
     body = Text()
     body.append(message, style="bold")
@@ -57,15 +60,14 @@ def create_warning_panel(title: str, message: str, hint: str = "") -> Panel:
 
 
 def create_success_panel(title: str, items: dict) -> Panel:
-    """
-    Create a success panel with key-value summary.
+    """Create a success panel with key-value summary.
 
     Args:
-        title: Panel title text (will have checkmark icon prepended)
-        items: Dictionary of key-value pairs to display
+        title: Panel title text (will have checkmark icon prepended).
+        items: Dictionary of key-value pairs to display.
 
     Returns:
-        Rich Panel with green border and key-value grid
+        Rich Panel with green border and key-value grid.
     """
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", no_wrap=True)
@@ -83,16 +85,15 @@ def create_success_panel(title: str, items: dict) -> Panel:
 
 
 def create_error_panel(title: str, message: str, hint: str = "") -> Panel:
-    """
-    Create an error panel with red styling.
+    """Create an error panel with red styling.
 
     Args:
-        title: Panel title text (will have error icon prepended)
-        message: Main error message
-        hint: Optional fix/action hint text
+        title: Panel title text (will have error icon prepended).
+        message: Main error message.
+        hint: Optional fix/action hint text.
 
     Returns:
-        Rich Panel with red border and styling
+        Rich Panel with red border and styling.
     """
     body = Text()
     body.append(message, style="bold")

@@ -1,6 +1,6 @@
 """Evaluation layer for SCC exception system.
 
-This module provides pure functions for evaluating configs and applying exceptions.
+Provide pure functions for evaluating configs and applying exceptions.
 All IO is isolated to the stores layer.
 """
 

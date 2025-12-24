@@ -34,8 +34,17 @@ EXIT_CODE_MAP = {
 
 
 def get_exit_code_for_exception(exc: Exception) -> int:
-    """Return the appropriate exit code for an exception type."""
-    # Walk up the MRO to find a matching exception type
+    """Return the appropriate exit code for an exception type.
+
+    Walk up the exception's MRO to find a matching type in EXIT_CODE_MAP.
+    Fall back to EXIT_ERROR if no specific mapping exists.
+
+    Args:
+        exc: The exception instance to map.
+
+    Returns:
+        The standardized exit code for the exception type.
+    """
     for cls in type(exc).__mro__:
         if cls.__name__ in EXIT_CODE_MAP:
             return EXIT_CODE_MAP[cls.__name__]

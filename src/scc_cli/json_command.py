@@ -1,7 +1,7 @@
 """
 JSON command decorator for first-class JSON output support.
 
-Provides a decorator that wraps command output in JSON envelopes.
+Provide a decorator that wraps command output in JSON envelopes.
 
 IMPORTANT: Commands using this decorator MUST explicitly declare these parameters:
     json_output: bool = typer.Option(False, "--json", help="Output as JSON")

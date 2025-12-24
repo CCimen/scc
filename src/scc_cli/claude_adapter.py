@@ -122,7 +122,7 @@ def resolve_marketplace_auth(
     SECURITY: Command execution is disabled by default to prevent arbitrary
     code execution from untrusted remote org configs.
 
-    Determines which standard env vars to also set based on marketplace type:
+    Determine which standard env vars to also set based on marketplace type:
     - gitlab: also set GITLAB_TOKEN
     - github: also set GITHUB_TOKEN
 
@@ -164,13 +164,13 @@ def resolve_marketplace_auth(
 def _build_source_object(marketplace: dict) -> dict:
     """Build Claude Code's source object from SCC marketplace config.
 
-    This handles the translation from SCC's org-config format to Claude's
+    Handle the translation from SCC's org-config format to Claude's
     extraKnownMarketplaces source format.
 
-    SCC type → Claude source type mapping:
-    - github → github (requires 'repo')
-    - gitlab → git (builds URL from 'host' and 'repo')
-    - https → url (requires 'url')
+    SCC type -> Claude source type mapping:
+    - github -> github (requires 'repo')
+    - gitlab -> git (builds URL from 'host' and 'repo')
+    - https -> url (requires 'url')
 
     Args:
         marketplace: SCC marketplace config dict with 'type' and type-specific fields
@@ -407,7 +407,7 @@ def _build_mcp_server_config(server: MCPServer) -> dict | None:
 def translate_mcp_server(server: MCPServer) -> tuple[str, dict] | tuple[None, None]:
     """Translate MCPServer to Claude Code format.
 
-    Returns a tuple of (server_name, config_dict) for use in
+    Return a tuple of (server_name, config_dict) for use in
     Claude Code's mcpServers settings.
 
     Args:
@@ -425,7 +425,7 @@ def translate_mcp_server(server: MCPServer) -> tuple[str, dict] | tuple[None, No
 def build_mcp_servers(effective_config: EffectiveConfig) -> dict:
     """Build MCP servers dict from EffectiveConfig.
 
-    Returns the mcpServers dict in Claude Code's format:
+    Return the mcpServers dict in Claude Code's format:
     {"server-name": {"type": "...", "url": "..."}, ...}
 
     Args:
@@ -454,17 +454,17 @@ def inject_credentials(
 ) -> None:
     """Inject marketplace credentials into Docker environment.
 
-    SECURITY: By default, checks SCC_ALLOW_REMOTE_COMMANDS env var to determine
+    SECURITY: By default, check SCC_ALLOW_REMOTE_COMMANDS env var to determine
     if command: auth is allowed. This prevents arbitrary code execution from
     untrusted remote org configs.
 
-    Uses setdefault to preserve any user-provided overrides.
+    Use setdefault to preserve any user-provided overrides.
 
     Args:
         marketplace: Marketplace config dict
         docker_env: Mutable dict to inject credentials into
         allow_command: Whether to allow command: auth specs. If None (default),
-            uses is_remote_command_allowed() to check env var. Pass True/False
+            use is_remote_command_allowed() to check env var. Pass True/False
             to override.
     """
     # Determine if command auth is allowed

@@ -1,7 +1,8 @@
 """
-CLI Org Admin Commands.
+Provide CLI commands for organization administration.
 
-Commands for validating and inspecting organization configurations.
+Validate and inspect organization configurations including schema validation
+and semantic checks.
 """
 
 import json

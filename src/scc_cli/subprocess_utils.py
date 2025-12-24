@@ -1,4 +1,9 @@
-"""Subprocess utilities for consistent error handling."""
+"""
+Provide subprocess utilities for consistent error handling.
+
+Define wrapper functions for subprocess execution with graceful timeout
+and missing executable handling.
+"""
 
 import shutil
 import subprocess
@@ -9,18 +14,17 @@ def run_command(
     timeout: int = 10,
     cwd: str | None = None,
 ) -> str | None:
-    """
-    Run command, return stdout if successful, None otherwise.
+    """Run command, return stdout if successful, None otherwise.
 
-    Handles timeouts and missing executables gracefully.
+    Handle timeouts and missing executables gracefully.
 
     Args:
-        cmd: Command and arguments as list of strings
-        timeout: Maximum seconds to wait for command
-        cwd: Working directory for command execution
+        cmd: Command and arguments as list of strings.
+        timeout: Maximum seconds to wait for command.
+        cwd: Working directory for command execution.
 
     Returns:
-        Stripped stdout on success, None on any failure
+        Stripped stdout on success, None on any failure.
     """
     # Pre-check: handle empty command list
     if not cmd:
@@ -50,16 +54,15 @@ def run_command_bool(
     timeout: int = 10,
     cwd: str | None = None,
 ) -> bool:
-    """
-    Run command, return True if exit code is 0.
+    """Run command, return True if exit code is 0.
 
     Args:
-        cmd: Command and arguments as list of strings
-        timeout: Maximum seconds to wait for command
-        cwd: Working directory for command execution
+        cmd: Command and arguments as list of strings.
+        timeout: Maximum seconds to wait for command.
+        cwd: Working directory for command execution.
 
     Returns:
-        True if command succeeded (exit code 0), False otherwise
+        True if command succeeded (exit code 0), False otherwise.
     """
     return run_command(cmd, timeout, cwd) is not None
 
@@ -69,16 +72,15 @@ def run_command_lines(
     timeout: int = 10,
     cwd: str | None = None,
 ) -> list[str]:
-    """
-    Run command, return stdout split into lines.
+    """Run command, return stdout split into lines.
 
     Args:
-        cmd: Command and arguments as list of strings
-        timeout: Maximum seconds to wait for command
-        cwd: Working directory for command execution
+        cmd: Command and arguments as list of strings.
+        timeout: Maximum seconds to wait for command.
+        cwd: Working directory for command execution.
 
     Returns:
-        List of output lines on success, empty list on failure
+        List of output lines on success, empty list on failure.
     """
     output = run_command(cmd, timeout, cwd)
     if output is None:

@@ -1,7 +1,7 @@
 """
 Remote config fetching with auth and caching.
 
-This module handles all HTTP concerns for fetching org config:
+Handle all HTTP concerns for fetching org config:
 - URL validation (HTTPS only)
 - Auth resolution (env:VAR, command:CMD)
 - ETag-based conditional fetching

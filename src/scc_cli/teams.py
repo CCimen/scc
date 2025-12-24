@@ -42,15 +42,15 @@ def list_teams(cfg: dict, org_config: dict | None = None) -> list[dict]:
 
 
 def get_team_details(team: str, cfg: dict, org_config: dict | None = None) -> dict | None:
-    """
-    Get detailed information for a specific team.
+    """Get detailed information for a specific team.
 
     Args:
-        team: Team/profile name
-        cfg: User config (used for legacy fallback)
+        team: Team/profile name.
+        cfg: User config (used for legacy fallback).
         org_config: Organization config. If provided, uses NEW architecture.
 
-    Returns None if team doesn't exist.
+    Returns:
+        Team details dict, or None if team doesn't exist.
     """
     # NEW architecture: use org_config for profiles
     if org_config is not None:
@@ -94,10 +94,9 @@ def get_team_details(team: str, cfg: dict, org_config: dict | None = None) -> di
 
 
 def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
-    """
-    Generate sandbox settings for a team profile.
+    """Generate sandbox settings for a team profile.
 
-    Returns settings.json content with extraKnownMarketplaces
+    Return settings.json content with extraKnownMarketplaces
     and enabledPlugins configured for Claude Code.
 
     This is the core function of the simplified architecture:
@@ -107,12 +106,12 @@ def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
     - Teams maintain their plugins in the marketplace repo
 
     Args:
-        team_name: Name of the team profile (e.g., "api-team")
-        cfg: Optional config dict. If None, loads from config file.
+        team_name: Name of the team profile (e.g., "api-team").
+        cfg: Optional config dict. If None, load from config file.
 
     Returns:
-        Dict with extraKnownMarketplaces and enabledPlugins for settings.json
-        Returns empty dict if team has no plugin configured.
+        Dict with extraKnownMarketplaces and enabledPlugins for settings.json.
+        Return empty dict if team has no plugin configured.
     """
     if cfg is None:
         cfg = config_module.load_config()
@@ -143,10 +142,14 @@ def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
 
 
 def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
-    """
-    Get the full plugin ID for a team (e.g., "api-team@sundsvall").
+    """Get the full plugin ID for a team (e.g., "api-team@sundsvall").
 
-    Returns None if team has no plugin configured.
+    Args:
+        team_name: Name of the team profile.
+        cfg: Optional config dict. If None, load from config file.
+
+    Returns:
+        Full plugin ID string, or None if team has no plugin configured.
     """
     if cfg is None:
         cfg = config_module.load_config()
@@ -168,22 +171,18 @@ def validate_team_profile(
     cfg: dict | None = None,
     org_config: dict | None = None,
 ) -> dict:
-    """
-    Validate a team profile configuration.
+    """Validate a team profile configuration.
 
     Args:
-        team_name: Name of the team/profile to validate
-        cfg: User config (deprecated, kept for backward compatibility)
+        team_name: Name of the team/profile to validate.
+        cfg: User config (deprecated, kept for backward compatibility).
         org_config: Organization config with profiles and marketplaces.
-            If provided, uses NEW architecture. If None, falls back to
+            If provided, use NEW architecture. If None, fall back to
             legacy behavior (reading profiles from cfg).
 
-    Returns dict with:
-        - valid: bool
-        - team: team name
-        - plugin: plugin name or None
-        - errors: list of validation errors
-        - warnings: list of warnings
+    Returns:
+        Dict with keys: valid (bool), team (str), plugin (str or None),
+        errors (list of str), warnings (list of str).
     """
     if cfg is None:
         cfg = config_module.load_config()
