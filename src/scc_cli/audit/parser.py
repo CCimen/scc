@@ -1,6 +1,6 @@
-"""Pure functions for parsing plugin manifest files.
+"""Provide pure functions for parsing plugin manifest files.
 
-This module provides parsing logic for:
+Implement parsing logic for:
 - .mcp.json files (MCP server definitions)
 - hooks/hooks.json files (hook definitions)
 

@@ -2,12 +2,12 @@
 Profile resolution and marketplace URL logic.
 
 Renamed from teams.py to better reflect profile resolution responsibilities.
-Supports new multi-marketplace architecture while maintaining backward compatibility
+Support new multi-marketplace architecture while maintaining backward compatibility
 with legacy single-marketplace config format.
 
 Key features:
 - HTTPS-only enforcement: All marketplace URLs must use HTTPS protocol.
-- Config inheritance: 3-layer merge (org defaults → team → project)
+- Config inheritance: 3-layer merge (org defaults -> team -> project)
 - Security boundaries: Blocked items (fnmatch patterns) never allowed
 - Delegation control: Org controls whether teams can delegate to projects
 """
@@ -136,10 +136,10 @@ class StdioValidationResult:
 
 def matches_blocked(item: str, blocked_patterns: list[str]) -> str | None:
     """
-    Check if item matches any blocked pattern using fnmatch.
+    Check whether item matches any blocked pattern using fnmatch.
 
-    Uses casefold() for case-insensitive matching. This is important because:
-    - casefold() handles Unicode edge cases (e.g., German ß → ss)
+    Use casefold() for case-insensitive matching. This is important because:
+    - casefold() handles Unicode edge cases (e.g., German ss -> ss)
     - Pattern "Malicious-*" should block "malicious-tool"
 
     Args:
@@ -164,10 +164,10 @@ def normalize_image_for_policy(ref: str) -> str:
     """
     Normalize Docker image reference for policy matching.
 
-    Handles implicit :latest tag - this is crucial for blocking unpinned images.
+    Handle implicit :latest tag - this is crucial for blocking unpinned images.
     For example, blocking "*:latest" should catch "ubuntu" (which implicitly uses :latest).
 
-    Phase 1 scope: Only handles implicit :latest normalization.
+    Phase 1 scope: Only handle implicit :latest normalization.
     NOT full OCI canonicalization (docker.io/library etc) - that's Phase 2.
 
     Args:
@@ -310,9 +310,9 @@ def _extract_domain(url: str) -> str:
 
 def is_team_delegated_for_plugins(org_config: dict, team_name: str | None) -> bool:
     """
-    Check if team is allowed to add additional plugins.
+    Check whether team is allowed to add additional plugins.
 
-    Uses fnmatch patterns from delegation.teams.allow_additional_plugins.
+    Use fnmatch patterns from delegation.teams.allow_additional_plugins.
     """
     if not team_name:
         return False
@@ -330,9 +330,9 @@ def is_team_delegated_for_plugins(org_config: dict, team_name: str | None) -> bo
 
 def is_team_delegated_for_mcp(org_config: dict, team_name: str | None) -> bool:
     """
-    Check if team is allowed to add MCP servers.
+    Check whether team is allowed to add MCP servers.
 
-    Uses fnmatch patterns from delegation.teams.allow_additional_mcp_servers.
+    Use fnmatch patterns from delegation.teams.allow_additional_mcp_servers.
     """
     if not team_name:
         return False
@@ -350,7 +350,7 @@ def is_team_delegated_for_mcp(org_config: dict, team_name: str | None) -> bool:
 
 def is_project_delegated(org_config: dict, team_name: str | None) -> tuple[bool, str]:
     """
-    Check if project-level additions are allowed.
+    Check whether project-level additions are allowed.
 
     TWO-LEVEL CHECK:
     1. Org-level: delegation.projects.inherit_team_delegation must be true
@@ -735,7 +735,7 @@ def list_profiles(org_config: dict) -> list[dict]:
     """
     List all available profiles from org config.
 
-    Returns list of profile dicts with name, description, plugin, and marketplace.
+    Return list of profile dicts with name, description, plugin, and marketplace.
     """
     profiles = org_config.get("profiles", {})
     result = []
@@ -757,7 +757,7 @@ def resolve_profile(org_config: dict, profile_name: str) -> dict:
     """
     Resolve profile by name, raise ValueError if not found.
 
-    Returns profile dict with name and all profile fields.
+    Return profile dict with name and all profile fields.
     """
     profiles = org_config.get("profiles", {})
 
@@ -773,8 +773,8 @@ def resolve_marketplace(org_config: dict[Any, Any], profile: dict[Any, Any]) -> 
     """
     Resolve marketplace for a profile.
 
-    Looks up marketplace by name from the marketplaces array.
-    Raises ValueError if marketplace not found.
+    Look up marketplace by name from the marketplaces array.
+    Raise ValueError if marketplace not found.
     """
     marketplace_name = profile.get("marketplace")
 
@@ -885,7 +885,7 @@ def list_teams(cfg: dict) -> list[dict]:
     """
     List available teams from configuration.
 
-    BACKWARD COMPATIBILITY: Wraps list_profiles() for legacy code.
+    BACKWARD COMPATIBILITY: Wrap list_profiles() for legacy code.
     """
     profiles = cfg.get("profiles", {})
 
@@ -906,8 +906,8 @@ def get_team_details(team: str, cfg: dict) -> dict | None:
     """
     Get detailed information for a specific team.
 
-    BACKWARD COMPATIBILITY: Supports legacy single marketplace format.
-    Returns None if team doesn't exist.
+    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
+    Return None if team doesn't exist.
     """
     profiles = cfg.get("profiles", {})
     team_info = profiles.get(team)
@@ -931,9 +931,9 @@ def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
     """
     Generate sandbox settings for a team profile.
 
-    BACKWARD COMPATIBILITY: Supports legacy single marketplace format.
+    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
 
-    Returns settings.json content with extraKnownMarketplaces
+    Return settings.json content with extraKnownMarketplaces
     and enabledPlugins configured for Claude Code.
     """
     if cfg is None:
@@ -968,8 +968,8 @@ def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
     """
     Get the full plugin ID for a team (e.g., "api-team@sundsvall").
 
-    BACKWARD COMPATIBILITY: Supports legacy single marketplace format.
-    Returns None if team has no plugin configured.
+    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
+    Return None if team has no plugin configured.
     """
     if cfg is None:
         cfg = config_module.load_config()
@@ -990,9 +990,9 @@ def validate_team_profile(team_name: str, cfg: dict | None = None) -> dict:
     """
     Validate a team profile configuration.
 
-    BACKWARD COMPATIBILITY: Supports legacy single marketplace format.
+    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
 
-    Returns dict with:
+    Return dict with:
         - valid: bool
         - team: team name
         - plugin: plugin name or None

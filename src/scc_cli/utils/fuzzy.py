@@ -1,9 +1,9 @@
-"""Fuzzy matching utilities for DX improvements.
+"""Provide fuzzy matching utilities for DX improvements.
 
-Provides fuzzy string matching to suggest corrections when users
+Offer fuzzy string matching to suggest corrections when users
 make typos or partial matches in CLI commands.
 
-Uses Levenshtein-based similarity for >80% threshold matching.
+Use Levenshtein-based similarity for >80% threshold matching.
 """
 
 from __future__ import annotations

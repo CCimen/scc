@@ -1,7 +1,7 @@
 """
-Team command group for SCC CLI.
+Define team management commands for SCC CLI.
 
-Provides structured team management:
+Provide structured team management:
 - scc team list      - List available teams
 - scc team current   - Show current team
 - scc team switch    - Switch to a different team

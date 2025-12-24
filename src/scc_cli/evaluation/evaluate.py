@@ -1,8 +1,8 @@
 """Bridge function to convert EffectiveConfig to EvaluationResult.
 
-This module provides the evaluate() function that converts the governance layer
-models (profiles.py) to the exception system models (evaluation/models.py)
-with proper BlockReason annotations.
+Provide the evaluate() function that converts the governance layer models
+(profiles.py) to the exception system models (evaluation/models.py) with
+proper BlockReason annotations.
 
 This is a pure function with no IO - all input comes from the EffectiveConfig
 parameter and output is a new EvaluationResult.

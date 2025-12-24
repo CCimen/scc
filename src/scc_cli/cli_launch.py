@@ -494,7 +494,15 @@ def _show_launch_panel(
     branch: str | None,
     is_resume: bool,
 ) -> None:
-    """Display beautiful launch info panel."""
+    """Display launch info panel with session details.
+
+    Args:
+        workspace: Path to the workspace directory, or None.
+        team: Team profile name, or None for base profile.
+        session_name: Optional session name for identification.
+        branch: Current git branch, or None if not in a git repo.
+        is_resume: True if resuming an existing container.
+    """
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", no_wrap=True)
     grid.add_column(style="white")
@@ -532,7 +540,11 @@ def _show_launch_panel(
 
 
 def _show_dry_run_panel(data: dict[str, Any]) -> None:
-    """Display dry run configuration preview."""
+    """Display dry run configuration preview.
+
+    Args:
+        data: Dictionary containing workspace, team, plugins, and ready_to_start status.
+    """
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", no_wrap=True)
     grid.add_column(style="white")
@@ -581,7 +593,19 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
 
 
 def interactive_start(cfg: dict) -> tuple:
-    """Interactive mode for starting Claude Code."""
+    """Guide user through interactive session setup.
+
+    Prompt for team selection, workspace source, optional worktree creation,
+    and session naming.
+
+    Args:
+        cfg: Application configuration dictionary containing workspace_base
+            and other settings.
+
+    Returns:
+        Tuple of (workspace, team, session_name, worktree_name). All values
+        may be None if user cancels at any step.
+    """
     ui.show_header(console)
 
     # Step 1: Select team

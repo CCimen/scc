@@ -1,12 +1,12 @@
 """
-Update checking for scc-cli CLI and organization config.
+Check for updates to scc-cli CLI and organization config.
 
 Two independent update mechanisms:
-1. CLI version: Checks PyPI (public, always accessible), throttled to once/24h
-2. Org config: Checks remote URL with ETag, throttled to TTL (1-6h typically)
+1. CLI version: Check PyPI (public, always accessible), throttle to once/24h
+2. Org config: Check remote URL with ETag, throttle to TTL (1-6h typically)
 
 Design principles:
-- Non-blocking: Update checks should not delay CLI startup
+- Non-blocking: Update checks do not delay CLI startup
 - Graceful degradation: Offline = use cache silently
 - Cache-first: Always prefer cached data over network errors
 - UX-friendly: Clear, non-intrusive update notifications
@@ -86,7 +86,7 @@ class UpdateCheckResult:
 
 def check_for_updates() -> UpdateInfo:
     """
-    Check PyPI for updates using stdlib urllib.
+    Check PyPI for updates using stdlib urllib and return update info.
 
     Returns:
         UpdateInfo with current version, latest version, and update status
@@ -108,7 +108,7 @@ def check_for_updates() -> UpdateInfo:
 
 
 def _get_current_version() -> str:
-    """Get the currently installed version."""
+    """Return the currently installed version."""
     try:
         return get_installed_version(PACKAGE_NAME)
     except PackageNotFoundError:
@@ -116,7 +116,7 @@ def _get_current_version() -> str:
 
 
 def _fetch_latest_from_pypi() -> str | None:
-    """Fetch latest version from PyPI JSON API (stdlib)."""
+    """Fetch and return the latest version from the PyPI JSON API."""
     try:
         with urllib.request.urlopen(PYPI_URL, timeout=REQUEST_TIMEOUT) as response:
             data = json.loads(response.read().decode("utf-8"))
@@ -128,7 +128,7 @@ def _fetch_latest_from_pypi() -> str | None:
 
 def _parse_version(v: str) -> tuple[tuple[int, ...], tuple[int, int] | None]:
     """
-    Parse version string into (numeric_parts, prerelease_info).
+    Parse a version string into (numeric_parts, prerelease_info).
 
     Examples:
         "1.0.0" -> ((1, 0, 0), None)
@@ -190,7 +190,7 @@ def _parse_version(v: str) -> tuple[tuple[int, ...], tuple[int, int] | None]:
 
 def _compare_versions(v1: str, v2: str) -> int:
     """
-    Compare versions with proper pre-release handling (stdlib, no packaging dep).
+    Compare two versions with proper pre-release handling.
 
     Pre-release versions (dev, alpha, beta, rc) are LESS than the final release.
     Example: 1.0.0rc1 < 1.0.0 < 1.0.1
@@ -224,7 +224,7 @@ def _detect_install_method() -> str:
     """
     Detect how the package was installed by checking the environment context.
 
-    Uses sys.prefix, environment variables, and path patterns to determine
+    Use sys.prefix, environment variables, and path patterns to determine
     the actual install method, not just which tools exist on the system.
 
     Returns one of: 'pipx', 'uv', 'pip', 'editable'
@@ -294,7 +294,7 @@ def _detect_install_method() -> str:
 
 def get_update_command(method: str) -> str:
     """
-    Return the appropriate update command for the install method.
+    Return the appropriate update command for the given install method.
 
     Args:
         method: One of 'pipx', 'uv_tool', 'uv', 'pip', 'editable'
@@ -318,7 +318,7 @@ def get_update_command(method: str) -> str:
 
 
 def _load_update_check_meta() -> dict[Any, Any]:
-    """Load update check metadata (timestamps for throttling)."""
+    """Load and return update check metadata (timestamps for throttling)."""
     if not UPDATE_CHECK_META_FILE.exists():
         return {}
     try:
@@ -328,13 +328,13 @@ def _load_update_check_meta() -> dict[Any, Any]:
 
 
 def _save_update_check_meta(meta: dict[str, Any]) -> None:
-    """Save update check metadata."""
+    """Save update check metadata to disk."""
     UPDATE_CHECK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     UPDATE_CHECK_META_FILE.write_text(json.dumps(meta, indent=2))
 
 
 def _should_check_cli_updates() -> bool:
-    """Check if enough time has passed since last CLI update check."""
+    """Return True if enough time has passed since last CLI update check."""
     meta = _load_update_check_meta()
     last_check_str = meta.get("cli_last_check")
 
@@ -351,14 +351,14 @@ def _should_check_cli_updates() -> bool:
 
 
 def _mark_cli_check_done() -> None:
-    """Update timestamp for CLI update check."""
+    """Update the timestamp for CLI update check."""
     meta = _load_update_check_meta()
     meta["cli_last_check"] = datetime.now(timezone.utc).isoformat()
     _save_update_check_meta(meta)
 
 
 def _should_check_org_config() -> bool:
-    """Check if enough time has passed since last org config check."""
+    """Return True if enough time has passed since last org config check."""
     meta = _load_update_check_meta()
     last_check_str = meta.get("org_config_last_check")
 
@@ -375,7 +375,7 @@ def _should_check_org_config() -> bool:
 
 
 def _mark_org_config_check_done() -> None:
-    """Update timestamp for org config check."""
+    """Update the timestamp for org config check."""
     meta = _load_update_check_meta()
     meta["org_config_last_check"] = datetime.now(timezone.utc).isoformat()
     _save_update_check_meta(meta)
@@ -392,11 +392,11 @@ def check_org_config_update(
     """
     Check for org config updates using ETag conditional fetch.
 
-    Scenarios:
-    - On corporate network: Fetches org config with auth token, updates cache
-    - Off VPN (offline): Uses cached config, skips update check silently
-    - Auth token expired/invalid: Uses cached config, shows warning
-    - Never fetched + offline: Returns 'no_cache' status
+    Handle these scenarios:
+    - On corporate network: Fetch org config with auth token, update cache
+    - Off VPN (offline): Use cached config, skip update check silently
+    - Auth token expired/invalid: Use cached config, show warning
+    - Never fetched + offline: Return 'no_cache' status
 
     Args:
         user_config: User config dict with organization_source
@@ -512,7 +512,7 @@ def check_all_updates(user_config: dict[str, Any], force: bool = False) -> Updat
     """
     Check for all available updates (CLI and org config).
 
-    This is the main entry point for update checking.
+    Use this as the main entry point for update checking.
 
     Args:
         user_config: User config dict
@@ -544,9 +544,9 @@ def render_update_notification(console: Console, result: UpdateCheckResult) -> N
     Render update notifications in a UX-friendly way.
 
     Design principles:
-    - Non-intrusive: Single line for most cases
+    - Non-intrusive: Use a single line for most cases
     - Actionable: Show exact command to run
-    - Quiet on success: No noise when everything is current
+    - Quiet on success: Produce no noise when everything is current
 
     Args:
         console: Rich Console instance
@@ -589,7 +589,7 @@ def render_update_notification(console: Console, result: UpdateCheckResult) -> N
 
 def render_update_status_panel(console: Console, result: UpdateCheckResult) -> None:
     """
-    Render detailed update status panel (for `scc update` command).
+    Render a detailed update status panel for the `scc update` command.
 
     Args:
         console: Rich Console instance
@@ -668,7 +668,7 @@ def render_update_status_panel(console: Console, result: UpdateCheckResult) -> N
 
 
 def _format_age(hours: float) -> str:
-    """Format age in hours to human-readable string."""
+    """Format an age in hours as a human-readable string."""
     if hours < 1:
         minutes = int(hours * 60)
         return f"{minutes} minute{'s' if minutes != 1 else ''}"

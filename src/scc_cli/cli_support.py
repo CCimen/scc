@@ -1,8 +1,8 @@
 """
-CLI Support Commands.
+Provide CLI commands for support and diagnostics.
 
-Commands for generating support bundles with diagnostic information.
-Includes secret and path redaction for safe sharing.
+Generate support bundles with diagnostic information. Include secret
+and path redaction for safe sharing.
 """
 
 import json

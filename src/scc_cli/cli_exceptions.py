@@ -1,16 +1,15 @@
-"""CLI commands for exception management.
+"""Provide CLI commands for exception management.
 
-This module provides commands for managing time-bounded exceptions that allow
-developers to unblock themselves from delegation failures while respecting
-security boundaries.
+Manage time-bounded exceptions that allow developers to unblock themselves
+from delegation failures while respecting security boundaries.
 
 Commands:
-- scc exceptions list: View active/expired exceptions
-- scc exceptions create: Create new exceptions
-- scc exceptions delete: Remove exceptions by ID
-- scc exceptions cleanup: Prune expired exceptions
-- scc exceptions reset: Clear exception stores
-- scc unblock: Quick command to unblock a denied target
+    scc exceptions list: View active/expired exceptions
+    scc exceptions create: Create new exceptions
+    scc exceptions delete: Remove exceptions by ID
+    scc exceptions cleanup: Prune expired exceptions
+    scc exceptions reset: Clear exception stores
+    scc unblock: Quick command to unblock a denied target
 """
 
 from __future__ import annotations

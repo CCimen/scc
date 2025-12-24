@@ -54,7 +54,19 @@ state = AppState()
 
 
 def handle_errors(func: F) -> F:
-    """Decorator to catch SCCError and render beautifully."""
+    """Catch SCCError exceptions and render user-friendly error output.
+
+    Wrap CLI command functions to provide consistent error handling:
+    - SCCError: Render with ui.render_error and exit with error's exit_code
+    - KeyboardInterrupt: Print cancellation message and exit 130
+    - Other exceptions: Show warning panel (or full traceback with --debug)
+
+    Args:
+        func: The CLI command function to wrap.
+
+    Returns:
+        Wrapped function with error handling.
+    """
 
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -97,7 +109,18 @@ def render_responsive_table(
     rows: list[list[str]],
     wide_columns: list[tuple[str, str]] | None = None,  # Extra columns for wide mode
 ) -> None:
-    """Render a table that adapts to terminal width."""
+    """Render a table that adapts to terminal width.
+
+    Display base columns on narrow terminals, adding extra columns when
+    terminal width exceeds WIDE_MODE_THRESHOLD.
+
+    Args:
+        title: Table title displayed above the table.
+        columns: Base columns as list of (header, style) tuples.
+        rows: Data rows where each row contains values for all columns
+            (base + wide). Extra values are ignored on narrow terminals.
+        wide_columns: Additional columns shown only on wide terminals.
+    """
     width = console.width
     wide_mode = width >= WIDE_MODE_THRESHOLD
 

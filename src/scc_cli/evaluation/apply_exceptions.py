@@ -1,7 +1,7 @@
-"""Pure functions for applying exceptions to evaluation results.
+"""Apply exceptions to evaluation results.
 
-This module contains the core exception application logic. All functions are pure
-(no IO) and operate on immutable data structures.
+Contain the core exception application logic. All functions are pure (no IO)
+and operate on immutable data structures.
 
 Key rules:
 - apply_policy_exceptions() can override ANY block (security or delegation)

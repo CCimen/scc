@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
 """
-SCC Init Command - Project configuration initialization.
+Define the SCC init command for project configuration initialization.
 
-Creates a .scc.yaml configuration file in a project directory with
+Create a .scc.yaml configuration file in a project directory with
 sensible defaults and helpful comments.
 """
 

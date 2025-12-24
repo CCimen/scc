@@ -1,7 +1,6 @@
-"""
-Centralized JSON envelope kind names to prevent drift.
+"""Define centralized JSON envelope kind names to prevent drift.
 
-All JSON envelope `kind` values must be defined here as enum members.
+Define all JSON envelope `kind` values here as enum members.
 This prevents inconsistencies like "TeamList" vs "TeamsList" across the codebase.
 
 Usage:
@@ -14,9 +13,9 @@ from enum import Enum
 
 
 class Kind(str, Enum):
-    """JSON envelope kind identifiers.
+    """Define JSON envelope kind identifiers.
 
-    Uses str mixin so enum values serialize directly to JSON without .value.
+    Inherit from str so enum values serialize directly to JSON without .value.
     Add new kinds here to ensure consistency across all commands.
     """
 

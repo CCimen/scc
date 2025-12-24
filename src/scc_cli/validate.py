@@ -1,8 +1,8 @@
 """
 Schema validation for organization configs.
 
-Provides offline-capable validation using bundled JSON schemas.
-Treats $schema field as documentation, not something to fetch at runtime.
+Provide offline-capable validation using bundled JSON schemas.
+Treat $schema field as documentation, not something to fetch at runtime.
 
 Key functions:
 - validate_org_config(): Validate org config against bundled schema

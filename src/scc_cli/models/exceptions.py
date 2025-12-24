@@ -1,8 +1,8 @@
-"""Exception system data models for SCC Phase 2.1.
+"""Define exception system data models for SCC Phase 2.1.
 
-This module provides the core data structures for the time-bounded
-exception system that lets developers unblock themselves from
-delegation failures while preserving security boundaries.
+Provide the core data structures for the time-bounded exception system
+that lets developers unblock themselves from delegation failures while
+preserving security boundaries.
 
 Key concepts:
 - BlockReason: Distinguishes SECURITY (policy-only override) from

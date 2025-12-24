@@ -6,7 +6,7 @@ Phase 1: User-level only.
 - Users see only their own stats
 - Manual aggregation via scc stats export
 
-This module handles:
+Handle:
 - Session start/end recording
 - Event JSONL file operations
 - Stats aggregation and reporting

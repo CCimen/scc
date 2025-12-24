@@ -1,5 +1,8 @@
 """
-UI components using Rich library.
+Provide terminal UI components using the Rich library.
+
+Render error panels, success messages, interactive prompts, and selection menus
+for the SCC CLI. All UI output is styled for a consistent user experience.
 """
 
 from pathlib import Path
@@ -20,9 +23,9 @@ def render_error(console: Console, error: "SCCError", debug: bool = False) -> No
     Render an error with user-friendly formatting.
 
     Philosophy: "One message, one action"
-    - Show what went wrong (user_message)
-    - Show what to do next (suggested_action)
-    - Show debug info only if --debug flag is used
+    - Display what went wrong (user_message)
+    - Display what to do next (suggested_action)
+    - Display debug info only if --debug flag is used
     """
 
     # Build error display
@@ -59,7 +62,7 @@ def render_error(console: Console, error: "SCCError", debug: bool = False) -> No
 
 
 def render_warning(console: Console, message: str, suggestion: str = "") -> None:
-    """Render a warning message."""
+    """Render a warning message panel to the console."""
     lines = [f"[bold]{message}[/bold]"]
     if suggestion:
         lines.append("")
@@ -78,7 +81,7 @@ def render_warning(console: Console, message: str, suggestion: str = "") -> None
 
 
 def render_success(console: Console, message: str, details: str = "") -> None:
-    """Render a success message."""
+    """Render a success message panel to the console."""
     lines = [f"[bold]{message}[/bold]"]
     if details:
         lines.append("")
@@ -117,12 +120,12 @@ LOGO_SIMPLE = """
 
 
 def show_header(console: Console) -> None:
-    """Display the application header."""
+    """Display the application header on the console."""
     console.print(LOGO_SIMPLE, style="cyan")
 
 
 def select_team(console: Console, cfg: dict[str, Any]) -> str | None:
-    """Interactive team selection."""
+    """Display an interactive team selection menu and return the chosen team."""
 
     teams: dict[str, Any] = cfg.get("profiles", {})
     team_list: list[str] = list(teams.keys())
@@ -154,7 +157,7 @@ def select_team(console: Console, cfg: dict[str, Any]) -> str | None:
 
 
 def select_workspace_source(console: Console, cfg: dict, team: str | None) -> str:
-    """Select where to get the workspace from."""
+    """Display a menu to select where to get the workspace from."""
 
     console.print("\n[bold cyan]Where is your project?[/bold cyan]\n")
 
@@ -195,7 +198,7 @@ def select_workspace_source(console: Console, cfg: dict, team: str | None) -> st
 
 
 def select_recent_workspace(console: Console, cfg: dict[str, Any]) -> str | None:
-    """Select from recent workspaces."""
+    """Display a menu to select from recent workspaces."""
     from . import sessions
 
     recent: list[dict[str, Any]] = sessions.list_recent(10)
@@ -232,7 +235,7 @@ def select_recent_workspace(console: Console, cfg: dict[str, Any]) -> str | None
 
 
 def select_team_repo(console: Console, cfg: dict[str, Any], team: str | None) -> str | None:
-    """Select from team's common repositories."""
+    """Display a menu to select from the team's common repositories."""
 
     team_config: dict[str, Any] = cfg.get("profiles", {}).get(team, {})
     repos: list[dict[str, Any]] = team_config.get("repositories", [])
@@ -282,7 +285,7 @@ def select_team_repo(console: Console, cfg: dict[str, Any], team: str | None) ->
 
 
 def prompt_custom_workspace(console: Console) -> str | None:
-    """Prompt for a custom workspace path."""
+    """Prompt the user to enter a custom workspace path."""
 
     path = Prompt.ask("\n[cyan]Enter workspace path[/cyan]")
 
@@ -302,14 +305,14 @@ def prompt_custom_workspace(console: Console) -> str | None:
 
 
 def prompt_repo_url(console: Console) -> str:
-    """Prompt for a Git repository URL."""
+    """Prompt the user to enter a Git repository URL."""
 
     url = Prompt.ask("\n[cyan]Repository URL (HTTPS or SSH)[/cyan]")
     return url
 
 
 def show_launch_info(console: Console, workspace: Path, team: str, session_name: str) -> None:
-    """Display info before launching Claude Code."""
+    """Display launch information before starting Claude Code."""
 
     console.print("\n")
 
@@ -330,7 +333,7 @@ def show_launch_info(console: Console, workspace: Path, team: str, session_name:
 
 
 def select_session(console: Console, sessions_list: list[dict]) -> dict | None:
-    """Interactive session selection from a list of sessions.
+    """Display an interactive session selection menu.
 
     Args:
         console: Rich console for output
@@ -375,7 +378,7 @@ def select_session(console: Console, sessions_list: list[dict]) -> dict | None:
 
 
 def show_worktree_options(console: Console, workspace: Path) -> str | None:
-    """Show worktree options during an active session."""
+    """Display worktree options menu during an active session."""
 
     console.print("\n[bold cyan]Worktree Options:[/bold cyan]\n")
 

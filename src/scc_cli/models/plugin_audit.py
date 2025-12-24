@@ -1,10 +1,10 @@
-"""Data models for plugin audit feature.
+"""Define data models for plugin audit feature.
 
-This module provides models for auditing Claude Code plugins,
-including manifest parsing results and status reporting.
+Provide models for auditing Claude Code plugins, including manifest
+parsing results and status reporting.
 
-The audit feature provides visibility into plugin components
-(MCP servers, hooks) without enforcing any policies.
+The audit feature gives visibility into plugin components (MCP servers,
+hooks) without enforcing any policies.
 """
 
 from __future__ import annotations

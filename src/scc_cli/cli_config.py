@@ -1,8 +1,4 @@
-"""
-CLI Configuration Commands.
-
-Commands for managing teams, config, and setup.
-"""
+"""Provide CLI commands for managing teams, configuration, and setup."""
 
 from pathlib import Path
 

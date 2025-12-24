@@ -1,6 +1,6 @@
-"""Data types for the doctor health check module.
+"""Define data types for the doctor health check module.
 
-Contains dataclasses for representing check results, validation results,
+Provide dataclasses for representing check results, validation results,
 and overall doctor diagnostic results.
 """
 
@@ -57,10 +57,10 @@ class DoctorResult:
 
     @property
     def error_count(self) -> int:
-        """Count of failed critical checks."""
+        """Return the count of failed critical checks."""
         return sum(1 for c in self.checks if not c.passed and c.severity == "error")
 
     @property
     def warning_count(self) -> int:
-        """Count of warnings."""
+        """Return the count of warnings."""
         return sum(1 for c in self.checks if not c.passed and c.severity == "warning")

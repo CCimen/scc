@@ -1,7 +1,6 @@
-"""
-SCC - Sandboxed Claude CLI
+"""SCC - Sandboxed Claude CLI.
 
-A command-line tool for safely running Claude Code in Docker sandboxes
+Provide a command-line tool for safely running Claude Code in Docker sandboxes
 with team-specific configurations and worktree management.
 """
 

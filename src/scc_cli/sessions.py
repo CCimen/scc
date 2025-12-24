@@ -1,7 +1,7 @@
 """
-Session management for Claude Code.
+Manage Claude Code sessions.
 
-Tracks recent sessions, workspaces, containers, and allows resuming.
+Track recent sessions, workspaces, containers, and enable resuming.
 
 Container Linking:
 - Sessions are linked to their Docker container names
@@ -36,12 +36,12 @@ class SessionRecord:
     created_at: str | None = None
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization."""
+        """Convert the record to a dictionary for JSON serialization."""
         return {k: v for k, v in asdict(self).items() if v is not None}
 
     @classmethod
     def from_dict(cls, data: dict) -> "SessionRecord":
-        """Create from dictionary."""
+        """Create a SessionRecord from a dictionary."""
         return cls(
             workspace=data.get("workspace", ""),
             team=data.get("team"),
@@ -60,7 +60,7 @@ class SessionRecord:
 
 def get_most_recent() -> dict | None:
     """
-    Get the most recently used session.
+    Return the most recently used session.
 
     Returns:
         Session dict with workspace, team, container_name, etc. or None if no sessions.
@@ -77,7 +77,7 @@ def get_most_recent() -> dict | None:
 
 def list_recent(limit: int = 10) -> list[dict]:
     """
-    List recent sessions with container and relative time info.
+    Return recent sessions with container and relative time info.
 
     Returns list of dicts with: name, workspace, team, last_used, container_name, branch
     """
@@ -132,7 +132,7 @@ def record_session(
     """
     Record a new session or update an existing one.
 
-    Sessions are keyed by workspace + branch combination.
+    Key sessions by workspace + branch combination.
     """
     sessions = _load_sessions()
     now = datetime.now().isoformat()
@@ -175,7 +175,7 @@ def update_session_container(
     """
     Update the container name for an existing session.
 
-    Called when a container is created for a session.
+    Call when a container is created for a session.
     """
     sessions = _load_sessions()
 
@@ -193,7 +193,7 @@ def find_session_by_container(container_name: str) -> dict | None:
     """
     Find a session by its container name.
 
-    Useful for resume operations.
+    Use for resume operations.
     """
     sessions = _load_sessions()
     for s in sessions:
@@ -209,7 +209,7 @@ def find_session_by_workspace(
     """
     Find a session by workspace and optionally branch.
 
-    Returns the most recent matching session.
+    Return the most recent matching session.
     """
     sessions = _load_sessions()
 
@@ -228,9 +228,9 @@ def get_container_for_workspace(
     branch: str | None = None,
 ) -> str | None:
     """
-    Get the container name for a workspace (and optionally branch).
+    Return the container name for a workspace (and optionally branch).
 
-    Returns None if no container has been recorded.
+    Return None if no container has been recorded.
     """
     session = find_session_by_workspace(workspace, branch)
     if session:
@@ -247,7 +247,7 @@ def clear_history() -> int:
     """
     Clear all session history.
 
-    Returns the number of sessions cleared.
+    Return the number of sessions cleared.
     """
     sessions = _load_sessions()
     count = len(sessions)
@@ -286,7 +286,7 @@ def prune_orphaned_sessions() -> int:
     """
     Remove sessions whose workspaces no longer exist.
 
-    Returns the number of sessions pruned.
+    Return the number of sessions pruned.
     """
     sessions = _load_sessions()
     original_count = len(sessions)
@@ -303,16 +303,16 @@ def prune_orphaned_sessions() -> int:
 
 
 def get_claude_sessions_dir() -> Path:
-    """Get the Claude Code sessions directory."""
+    """Return the Claude Code sessions directory."""
     # Claude Code stores sessions in its config directory
     return Path.home() / AGENT_CONFIG_DIR
 
 
 def get_claude_recent_sessions() -> list[dict[Any, Any]]:
     """
-    Try to get recent sessions from Claude Code's own storage.
+    Return recent sessions from Claude Code's own storage.
 
-    This reads from ~/.claude/ if available.
+    Read from ~/.claude/ if available.
     Note: Claude Code's session format may change; this is best-effort.
     """
     claude_dir = get_claude_sessions_dir()
@@ -335,7 +335,7 @@ def get_claude_recent_sessions() -> list[dict[Any, Any]]:
 
 
 def _load_sessions() -> list[dict[Any, Any]]:
-    """Load sessions from the config file."""
+    """Load and return sessions from the config file."""
     sessions_file = config.SESSIONS_FILE
 
     if sessions_file.exists():
@@ -350,7 +350,7 @@ def _load_sessions() -> list[dict[Any, Any]]:
 
 
 def _save_sessions(sessions: list[dict]) -> None:
-    """Save sessions to the config file."""
+    """Save the sessions list to the config file."""
     sessions_file = config.SESSIONS_FILE
 
     # Ensure parent directory exists
@@ -361,7 +361,7 @@ def _save_sessions(sessions: list[dict]) -> None:
 
 
 def format_relative_time(dt: datetime) -> str:
-    """Format a datetime as relative time (e.g., '2h ago')."""
+    """Format a datetime as a relative time string (e.g., '2h ago')."""
     now = datetime.now()
     diff = now - dt
 

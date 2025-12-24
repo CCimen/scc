@@ -1,14 +1,14 @@
 """
 Configuration management.
 
-This module handles LOCAL user configuration only.
+Handle LOCAL user configuration only.
 Organization config is fetched remotely (see remote.py).
 
 Config structure:
 - ~/.config/scc/config.json - User preferences and org source URL
 - ~/.cache/scc/ - Cache directory (regenerable)
 
-Migration from ~/.config/scc-cli/ to ~/.config/scc/ is handled automatically.
+Migrate from ~/.config/scc-cli/ to ~/.config/scc/ automatically when needed.
 """
 
 import json

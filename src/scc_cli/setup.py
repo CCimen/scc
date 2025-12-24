@@ -41,7 +41,7 @@ WELCOME_BANNER = """
 
 
 def show_welcome(console: Console) -> None:
-    """Display the welcome banner."""
+    """Display the welcome banner on the console."""
     console.print()
     console.print(WELCOME_BANNER)
 
@@ -52,7 +52,7 @@ def show_welcome(console: Console) -> None:
 
 
 def prompt_has_org_config(console: Console) -> bool:
-    """Ask if user has an organization config URL.
+    """Prompt the user to confirm if they have an organization config URL.
 
     Returns:
         True if user has org config URL, False for standalone mode.
@@ -65,9 +65,9 @@ def prompt_has_org_config(console: Console) -> bool:
 
 
 def prompt_org_url(console: Console) -> str:
-    """Prompt for organization config URL.
+    """Prompt the user to enter the organization config URL.
 
-    Validates that URL is HTTPS. Rejects HTTP URLs.
+    Validate that URL is HTTPS. Reject HTTP URLs.
 
     Returns:
         Valid HTTPS URL string.
@@ -97,7 +97,7 @@ def prompt_org_url(console: Console) -> str:
 
 
 def prompt_auth_method(console: Console) -> str | None:
-    """Prompt for authentication method.
+    """Prompt the user to select an authentication method.
 
     Options:
     1. Environment variable (env:VAR)
@@ -141,7 +141,7 @@ def prompt_auth_method(console: Console) -> str | None:
 
 
 def fetch_and_validate_org_config(console: Console, url: str, auth: str | None) -> dict | None:
-    """Fetch and validate organization config from URL.
+    """Fetch and validate the organization config from a URL.
 
     Args:
         console: Rich console for output
@@ -180,7 +180,7 @@ def fetch_and_validate_org_config(console: Console, url: str, auth: str | None) 
 
 
 def prompt_profile_selection(console: Console, org_config: dict) -> str | None:
-    """Prompt user to select a profile from org config.
+    """Prompt the user to select a profile from the org config.
 
     Args:
         console: Rich console for output
@@ -243,7 +243,7 @@ def prompt_profile_selection(console: Console, org_config: dict) -> str | None:
 
 
 def prompt_hooks_enablement(console: Console) -> bool:
-    """Prompt user about git hooks installation.
+    """Prompt the user about git hooks installation.
 
     Returns:
         True if hooks should be enabled, False otherwise.
@@ -274,7 +274,7 @@ def save_setup_config(
     hooks_enabled: bool,
     standalone: bool = False,
 ) -> None:
-    """Save setup configuration to user config file.
+    """Save the setup configuration to the user config file.
 
     Args:
         console: Rich console for output
@@ -323,7 +323,7 @@ def show_setup_complete(
     profile: str | None = None,
     standalone: bool = False,
 ) -> None:
-    """Display setup completion message.
+    """Display the setup completion message.
 
     Args:
         console: Rich console for output
@@ -371,7 +371,7 @@ def run_setup_wizard(console: Console) -> bool:
     """Run the interactive setup wizard.
 
     Flow:
-    1. Ask if user has org config URL
+    1. Prompt if user has org config URL
     2. If yes: fetch config, handle auth, select profile
     3. If no: standalone mode
     4. Configure hooks
@@ -459,7 +459,7 @@ def run_non_interactive_setup(
     auth: str | None = None,
     standalone: bool = False,
 ) -> bool:
-    """Run non-interactive setup with CLI arguments.
+    """Run non-interactive setup using CLI arguments.
 
     Args:
         console: Rich console for output
@@ -524,9 +524,9 @@ def run_non_interactive_setup(
 
 
 def is_setup_needed() -> bool:
-    """Check if first-run setup is needed.
+    """Check if first-run setup is needed and return the result.
 
-    Returns True if:
+    Return True if:
     - Config directory doesn't exist
     - Config file doesn't exist
     - config_version field is missing
@@ -545,8 +545,8 @@ def is_setup_needed() -> bool:
 def maybe_run_setup(console: Console) -> bool:
     """Run setup if needed, otherwise return True.
 
-    Call this at the start of commands that require configuration.
-    Returns True if ready to proceed, False if setup failed.
+    Call at the start of commands that require configuration.
+    Return True if ready to proceed, False if setup failed.
     """
     if not is_setup_needed():
         return True
@@ -566,7 +566,7 @@ def maybe_run_setup(console: Console) -> bool:
 def reset_setup(console: Console) -> None:
     """Reset setup configuration to defaults.
 
-    Used when user wants to reconfigure.
+    Use when user wants to reconfigure.
     """
     console.print()
     console.print("[bold yellow]Resetting configuration...[/bold yellow]")

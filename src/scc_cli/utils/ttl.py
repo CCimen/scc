@@ -1,6 +1,6 @@
-"""TTL parsing and expiration utilities for SCC Phase 2.1.
+"""Provide TTL parsing and expiration utilities for SCC Phase 2.1.
 
-This module handles parsing of time-bounded exception durations:
+Handle parsing of time-bounded exception durations:
 - TTL format: 30m, 2h, 8h, 1d
 - RFC3339 timestamps: 2025-12-21T17:00:00+01:00
 - Time-of-day: HH:MM (next occurrence)

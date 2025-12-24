@@ -1,6 +1,6 @@
-"""Fix-it command generation utilities.
+"""Provide fix-it command generation utilities.
 
-Generates ready-to-copy commands for blocked or denied items,
+Generate ready-to-copy commands for blocked or denied items,
 helping users quickly unblock themselves.
 
 Two types of fix-it commands:

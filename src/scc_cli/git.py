@@ -68,8 +68,7 @@ class WorktreeInfo:
 
 
 def check_git_available() -> None:
-    """
-    Check if Git is installed and available.
+    """Check if Git is installed and available.
 
     Raises:
         GitNotFoundError: Git is not installed or not in PATH
@@ -203,8 +202,7 @@ exit 0
 
 
 def is_worktree(path: Path) -> bool:
-    """
-    Check if the path is a git worktree (not the main repository).
+    """Check if the path is a git worktree (not the main repository).
 
     Worktrees have a `.git` file (not directory) containing a gitdir pointer.
     """
@@ -213,13 +211,13 @@ def is_worktree(path: Path) -> bool:
 
 
 def get_worktree_main_repo(worktree_path: Path) -> Path | None:
-    """
-    Get the main repository path for a worktree.
+    """Get the main repository path for a worktree.
 
-    Parses the `.git` file to find the gitdir pointer and resolves
+    Parse the `.git` file to find the gitdir pointer and resolve
     back to the main repo location.
 
-    Returns None if not a worktree or cannot determine main repo.
+    Returns:
+        Main repository path, or None if not a worktree or cannot determine.
     """
     git_file = worktree_path / ".git"
 
@@ -250,11 +248,10 @@ def get_worktree_main_repo(worktree_path: Path) -> Path | None:
 
 
 def get_workspace_mount_path(workspace: Path) -> tuple[Path, bool]:
-    """
-    Determine the optimal path to mount for Docker sandbox.
+    """Determine the optimal path to mount for Docker sandbox.
 
-    For worktrees: returns the common parent containing both repo and worktrees folder.
-    For regular repos: returns the workspace path as-is.
+    For worktrees, return the common parent containing both repo and worktrees folder.
+    For regular repos, return the workspace path as-is.
 
     This ensures git worktrees have access to the main repo's .git folder.
     The gitdir pointer in worktrees uses absolute paths, so Docker must mount
@@ -264,8 +261,9 @@ def get_workspace_mount_path(workspace: Path) -> tuple[Path, bool]:
         Tuple of (mount_path, is_expanded) where is_expanded=True if we expanded
         the mount scope beyond the original workspace (for user awareness).
 
-    Note: Docker sandbox uses "mirrored mounting" - the path inside the container
-    matches the host path, so absolute gitdir pointers will resolve correctly.
+    Note:
+        Docker sandbox uses "mirrored mounting" - the path inside the container
+        matches the host path, so absolute gitdir pointers will resolve correctly.
     """
     if not is_worktree(workspace):
         return workspace, False
@@ -447,11 +445,17 @@ def get_uncommitted_files(path: Path) -> list[str]:
 
 
 def check_branch_safety(path: Path, console: Console) -> bool:
-    """
-    Check if current branch is safe for Claude Code work.
+    """Check if current branch is safe for Claude Code work.
 
-    Displays a visual "speed bump" for protected branches with
+    Display a visual "speed bump" for protected branches with
     interactive options to create a feature branch or continue.
+
+    Args:
+        path: Path to the git repository.
+        console: Rich console for output.
+
+    Returns:
+        True if safe to proceed, False if user cancelled.
     """
     if not is_git_repo(path):
         return True
@@ -558,22 +562,21 @@ def create_worktree(
     base_branch: str | None = None,
     console: Console | None = None,
 ) -> Path:
-    """
-    Create a new git worktree with visual progress feedback.
+    """Create a new git worktree with visual progress feedback.
 
     Args:
-        repo_path: Path to the main repository
-        name: Feature name for the worktree
-        base_branch: Branch to base the worktree on (default: main/master)
-        console: Rich console for output
+        repo_path: Path to the main repository.
+        name: Feature name for the worktree.
+        base_branch: Branch to base the worktree on (default: main/master).
+        console: Rich console for output.
 
     Returns:
-        Path to the created worktree
+        Path to the created worktree.
 
     Raises:
-        NotAGitRepoError: Path is not a git repository
-        WorktreeExistsError: Worktree already exists
-        WorktreeCreationError: Failed to create worktree
+        NotAGitRepoError: Path is not a git repository.
+        WorktreeExistsError: Worktree already exists.
+        WorktreeCreationError: Failed to create worktree.
     """
     if console is None:
         console = Console()
@@ -646,8 +649,7 @@ def create_worktree(
 
 
 def _fetch_branch(repo_path: Path, branch: str) -> None:
-    """
-    Fetch a branch from origin.
+    """Fetch a branch from origin.
 
     Raises:
         WorktreeCreationError: If fetch fails (network error, branch not found, etc.)
@@ -714,15 +716,14 @@ def _create_worktree_dir(
 
 
 def list_worktrees(repo_path: Path, console: Console | None = None) -> list[WorktreeInfo]:
-    """
-    List all worktrees for a repository with beautiful table display.
+    """List all worktrees for a repository with beautiful table display.
 
     Args:
-        repo_path: Path to the repository
-        console: Rich console for output (if None, returns data only)
+        repo_path: Path to the repository.
+        console: Rich console for output (if None, return data only).
 
     Returns:
-        List of WorktreeInfo objects
+        List of WorktreeInfo objects.
     """
     worktrees = _get_worktrees_data(repo_path)
 
@@ -733,10 +734,9 @@ def list_worktrees(repo_path: Path, console: Console | None = None) -> list[Work
 
 
 def render_worktrees(worktrees: list[WorktreeInfo], console: Console) -> None:
-    """
-    Public interface to render worktrees with beautiful formatting.
+    """Render worktrees with beautiful formatting.
 
-    Used by cli.py for consistent styling across the application.
+    Public interface used by cli.py for consistent styling across the application.
     """
     _render_worktrees_table(worktrees, console)
 
@@ -878,10 +878,9 @@ def cleanup_worktree(
     skip_confirm: bool = False,
     dry_run: bool = False,
 ) -> bool:
-    """
-    Clean up a worktree with safety checks and visual feedback.
+    """Clean up a worktree with safety checks and visual feedback.
 
-    Shows uncommitted changes before deletion to prevent accidental data loss.
+    Show uncommitted changes before deletion to prevent accidental data loss.
 
     Args:
         repo_path: Path to the main repository.
@@ -1054,13 +1053,15 @@ def _run_install_cmd(
 
 
 def install_dependencies(path: Path, console: Console | None = None) -> None:
-    """
-    Detect and install project dependencies.
+    """Detect and install project dependencies.
 
-    Supports: Node.js (npm/yarn/pnpm/bun), Python (pip/poetry/uv),
-    Java (Maven/Gradle)
+    Support Node.js (npm/yarn/pnpm/bun), Python (pip/poetry/uv), and
+    Java (Maven/Gradle). Warn user if any install fails rather than
+    silently ignoring.
 
-    Warns user if any install fails rather than silently ignoring.
+    Args:
+        path: Path to the project directory.
+        console: Rich console for output (optional).
     """
     # Node.js
     if (path / "package.json").exists():
@@ -1100,19 +1101,18 @@ def install_dependencies(path: Path, console: Console | None = None) -> None:
 
 
 def clone_repo(url: str, base_path: str, console: Console | None = None) -> str:
-    """
-    Clone a repository with progress feedback.
+    """Clone a repository with progress feedback.
 
     Args:
-        url: Repository URL (HTTPS or SSH)
-        base_path: Base directory for cloning
-        console: Rich console for output
+        url: Repository URL (HTTPS or SSH).
+        base_path: Base directory for cloning.
+        console: Rich console for output.
 
     Returns:
-        Path to the cloned repository
+        Path to the cloned repository.
 
     Raises:
-        CloneError: Failed to clone repository
+        CloneError: Failed to clone repository.
     """
     if console is None:
         console = Console()
@@ -1172,7 +1172,14 @@ def clone_repo(url: str, base_path: str, console: Console | None = None) -> str:
 
 
 def install_hooks(console: Console) -> None:
-    """Install global git hooks for branch protection."""
+    """Install global git hooks for branch protection.
+
+    Configure the global core.hooksPath and install a pre-push hook
+    that prevents direct pushes to protected branches.
+
+    Args:
+        console: Rich console for output.
+    """
 
     hooks_dir = Path.home() / ".config" / "git" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)

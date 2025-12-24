@@ -1,8 +1,8 @@
 """
 JSON output mode infrastructure.
 
-Provides context management for JSON output mode with automatic stderr suppression.
-Uses ContextVar for thread-safe, async-compatible state isolation.
+Provide context management for JSON output mode with automatic stderr suppression.
+Use ContextVar for thread-safe, async-compatible state isolation.
 
 Usage:
     from scc_cli.output_mode import json_output_mode, is_json_mode, print_json, print_human
