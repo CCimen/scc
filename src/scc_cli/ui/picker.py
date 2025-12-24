@@ -389,7 +389,7 @@ def _run_single_select_picker(
     with Live(
         render(),
         console=console,
-        refresh_per_second=0,
+        refresh_per_second=4,  # Required > 0, we use manual refresh
         transient=True,
     ) as live:
         while True:

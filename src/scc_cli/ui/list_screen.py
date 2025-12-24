@@ -233,7 +233,7 @@ class ListScreen(Generic[T]):
         with Live(
             self._render(),
             console=self._console,
-            refresh_per_second=0,  # Manual refresh only
+            refresh_per_second=4,  # Required > 0, we use manual refresh
             transient=True,  # Clear on exit
         ) as live:
             while True:

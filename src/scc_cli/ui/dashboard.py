@@ -181,7 +181,7 @@ class Dashboard:
         with Live(
             self._render(),
             console=self._console,
-            refresh_per_second=0,
+            refresh_per_second=4,  # Required > 0, we use manual refresh
             transient=True,
         ) as live:
             while True:
