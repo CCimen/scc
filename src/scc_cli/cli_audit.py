@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import typer
 from rich import box
@@ -24,7 +23,6 @@ from scc_cli.models.plugin_audit import (
     ManifestStatus,
     PluginAuditResult,
 )
-
 
 console = Console()
 
