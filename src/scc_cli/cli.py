@@ -30,7 +30,6 @@ from .cli_common import console, state
 from .cli_config import (
     config_cmd,
     setup_cmd,
-    teams_cmd,
 )
 from .cli_exceptions import exceptions_app, unblock_cmd
 from .cli_init import init_cmd
@@ -166,7 +165,6 @@ app.command(name="prune", rich_help_panel=PANEL_SESSION)(prune_cmd)
 
 # Configuration commands
 app.add_typer(team_app, name="team", rich_help_panel=PANEL_CONFIG)
-app.command(name="teams", hidden=True)(teams_cmd)  # Deprecated alias
 app.command(name="setup", rich_help_panel=PANEL_CONFIG)(setup_cmd)
 app.command(name="config", rich_help_panel=PANEL_CONFIG)(config_cmd)
 app.command(name="init", rich_help_panel=PANEL_CONFIG)(init_cmd)

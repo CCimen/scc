@@ -37,10 +37,12 @@ class FooterHint:
     Attributes:
         key: The key or key combination (e.g., "↑↓", "Enter", "q").
         action: Description of what the key does (e.g., "navigate", "select").
+        dimmed: Whether to show this hint as dimmed/disabled (e.g., standalone mode).
     """
 
     key: str
     action: str
+    dimmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -130,12 +132,15 @@ class ChromeConfig:
         )
 
     @classmethod
-    def for_dashboard(cls, tabs: list[str], active: int) -> ChromeConfig:
+    def for_dashboard(
+        cls, tabs: list[str], active: int, *, standalone: bool = False
+    ) -> ChromeConfig:
         """Create standard config for dashboard view.
 
         Args:
             tabs: List of tab names.
             active: Index of active tab (0-based).
+            standalone: If True, dim the "t teams" hint (not available without org).
 
         Returns:
             ChromeConfig with dashboard hints.
@@ -150,7 +155,7 @@ class ChromeConfig:
                 FooterHint("↑↓", "navigate"),
                 FooterHint("Tab", "switch tab"),
                 FooterHint("Enter", "details"),
-                FooterHint("t", "teams"),
+                FooterHint("t", "teams", dimmed=standalone),
                 FooterHint("q", "quit"),
                 FooterHint("?", "help"),
             ),
@@ -287,9 +292,15 @@ class Chrome:
         for i, hint in enumerate(self.config.footer_hints):
             if i > 0:
                 text.append(" │ ", style="dim")
-            text.append(hint.key, style="cyan bold")
-            text.append(" ", style="dim")
-            text.append(hint.action, style="dim")
+            # Dimmed hints (e.g., teams in standalone mode) show in strike-through dim
+            if hint.dimmed:
+                text.append(hint.key, style="dim strike")
+                text.append(" ", style="dim")
+                text.append(hint.action, style="dim strike")
+            else:
+                text.append(hint.key, style="cyan bold")
+                text.append(" ", style="dim")
+                text.append(hint.action, style="dim")
         return text
 
 

@@ -249,9 +249,7 @@ class ProfileNotFoundError(ConfigError):
 
     profile_name: str = ""
     user_message: str = field(default="")
-    suggested_action: str = field(
-        default="Run 'scc teams' to see available profiles or 'scc teams --sync' to update"
-    )
+    suggested_action: str = field(default="Run 'scc team list' to see available profiles")
 
     def __post_init__(self) -> None:
         if not self.user_message and self.profile_name:

@@ -186,8 +186,10 @@ class TestDashboardQuitBehavior:
 
         assert result is False
 
-    def test_cancel_action_returns_false(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """CANCEL action causes _handle_action to return False."""
+    def test_cancel_action_without_filter_is_noop(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """CANCEL action without active filter returns None (no-op)."""
         state = DashboardState(
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
@@ -198,7 +200,28 @@ class TestDashboardQuitBehavior:
         cancel_action = Action(action_type=ActionType.CANCEL, state_changed=True)
         result = dashboard._handle_action(cancel_action)
 
-        assert result is False
+        # ESC without filter is no-op (doesn't exit)
+        assert result is None
+
+    def test_cancel_action_with_filter_clears_filter(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """CANCEL action with active filter clears filter and returns True."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=mock_tab_data,
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+        )
+        # Set up a filter
+        state.list_state.filter_query = "test"
+        dashboard = Dashboard(state)
+
+        cancel_action = Action(action_type=ActionType.CANCEL, state_changed=True)
+        result = dashboard._handle_action(cancel_action)
+
+        # ESC clears filter and requests refresh
+        assert result is True
+        assert dashboard.state.list_state.filter_query == ""
 
     def test_tab_next_action_switches_tab(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
         """TAB_NEXT action switches to next tab."""
@@ -415,6 +438,194 @@ class TestCLIDashboardIntegration:
             from scc_cli.ui.gate import is_interactive_allowed
 
             assert not is_interactive_allowed()
+
+
+class TestDashboardStandaloneMode:
+    """Test dashboard behavior in standalone mode."""
+
+    @pytest.fixture
+    def mock_tab_data(self) -> dict[DashboardTab, TabData]:
+        """Create minimal mock tab data."""
+        return {
+            tab: TabData(
+                tab=tab,
+                title=tab.display_name,
+                items=[ListItem(value="test", label="Test", description="")],
+                count_active=1,
+                count_total=1,
+            )
+            for tab in DashboardTab
+        }
+
+    def test_team_switch_in_standalone_shows_message(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """TEAM_SWITCH in standalone mode sets status message instead of raising."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=mock_tab_data,
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+        )
+        dashboard = Dashboard(state)
+
+        with patch("scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=True):
+            from scc_cli.ui.keys import ActionType
+
+            team_action = Action(action_type=ActionType.TEAM_SWITCH, state_changed=True)
+            result = dashboard._handle_action(team_action)
+
+            # Should return True (refresh) and set status message
+            assert result is True
+            assert dashboard.state.status_message is not None
+            assert "org mode" in dashboard.state.status_message
+            assert "scc setup" in dashboard.state.status_message
+
+    def test_status_message_cleared_on_next_action(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Status message is cleared when user performs any action."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=mock_tab_data,
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+            status_message="Test message",
+        )
+        dashboard = Dashboard(state)
+
+        # Any action should clear the message
+        down_action = Action(action_type=ActionType.NAVIGATE_DOWN, state_changed=True)
+        dashboard._handle_action(down_action)
+
+        assert dashboard.state.status_message is None
+
+    def test_enter_on_team_row_in_standalone_shows_message(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Enter on Team row in standalone mode shows guidance message."""
+        # Override Status tab with Team item
+        mock_tab_data[DashboardTab.STATUS] = TabData(
+            tab=DashboardTab.STATUS,
+            title="Status",
+            items=[ListItem(value="team", label="Team", description="No team")],
+            count_active=1,
+            count_total=1,
+        )
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=mock_tab_data,
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+        )
+        dashboard = Dashboard(state)
+
+        with patch("scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=True):
+            select_action = Action(action_type=ActionType.SELECT, state_changed=True)
+            result = dashboard._handle_action(select_action)
+
+            assert result is True
+            assert dashboard.state.status_message is not None
+            assert "org mode" in dashboard.state.status_message
+
+    def test_chrome_config_dims_teams_hint_in_standalone(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """ChromeConfig dims 't teams' hint when in standalone mode."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=mock_tab_data,
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+        )
+        dashboard = Dashboard(state)
+
+        with patch("scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=True):
+            config = dashboard._get_chrome_config()
+
+            # Find the teams hint and verify it's dimmed
+            teams_hint = next(h for h in config.footer_hints if h.action == "teams")
+            assert teams_hint.dimmed is True
+
+    def test_chrome_config_undimmed_teams_in_org_mode(
+        self, mock_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """ChromeConfig shows normal 't teams' hint when org mode is configured."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=mock_tab_data,
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+        )
+        dashboard = Dashboard(state)
+
+        with patch(
+            "scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=False
+        ):
+            config = dashboard._get_chrome_config()
+
+            # Find the teams hint and verify it's not dimmed
+            teams_hint = next(h for h in config.footer_hints if h.action == "teams")
+            assert teams_hint.dimmed is False
+
+
+class TestStatusTabDrillDown:
+    """Test Status tab drill-down behavior."""
+
+    @pytest.fixture
+    def status_tab_data(self) -> dict[DashboardTab, TabData]:
+        """Create tab data with Status tab containing resource items."""
+        return {
+            DashboardTab.STATUS: TabData(
+                tab=DashboardTab.STATUS,
+                title="Status",
+                items=[
+                    ListItem(value="team", label="Team", description="platform"),
+                    ListItem(value="containers", label="Containers", description="2/3"),
+                    ListItem(value="sessions", label="Sessions", description="5"),
+                ],
+                count_active=3,
+                count_total=3,
+            ),
+            DashboardTab.CONTAINERS: TabData(
+                tab=DashboardTab.CONTAINERS,
+                title="Containers",
+                items=[ListItem(value="c1", label="container-1", description="Up")],
+                count_active=1,
+                count_total=1,
+            ),
+            DashboardTab.SESSIONS: TabData(
+                tab=DashboardTab.SESSIONS,
+                title="Sessions",
+                items=[],
+                count_active=0,
+                count_total=0,
+            ),
+            DashboardTab.WORKTREES: TabData(
+                tab=DashboardTab.WORKTREES,
+                title="Worktrees",
+                items=[],
+                count_active=0,
+                count_total=0,
+            ),
+        }
+
+    def test_drill_down_clears_filter(
+        self, status_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Drill-down from Status tab clears the filter query."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=status_tab_data,
+            list_state=ListState(items=status_tab_data[DashboardTab.STATUS].items),
+        )
+        # Set filter to "cont" (only Containers matches) and cursor to 0 (first filtered item)
+        state.list_state.filter_query = "cont"
+        state.list_state.cursor = 0  # Containers is at index 0 in filtered list
+        dashboard = Dashboard(state)
+
+        select_action = Action(action_type=ActionType.SELECT, state_changed=True)
+        result = dashboard._handle_action(select_action)
+
+        assert result is True
+        assert dashboard.state.active_tab == DashboardTab.CONTAINERS
+        # Filter should be cleared after drill-down
+        assert dashboard.state.list_state.filter_query == ""
 
 
 class TestTabDataLoading:

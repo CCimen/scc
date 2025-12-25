@@ -500,49 +500,6 @@ class TestTeamInfo:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Deprecated Alias Tests
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestDeprecatedAliases:
-    """Tests for deprecated command aliases."""
-
-    def test_teams_command_shows_deprecation_warning(self, mock_config, mock_org_config):
-        """'scc teams' should show deprecation warning."""
-        with (
-            patch("scc_cli.cli_config.config.load_config", return_value=mock_config),
-            patch(
-                "scc_cli.cli_config.config.load_cached_org_config",
-                return_value=mock_org_config,
-            ),
-        ):
-            result = runner.invoke(app, ["teams"])
-            # Deprecation warning should go to stderr, but CliRunner captures both
-            # The command should still work but show the warning
-            assert result.exit_code == 0
-            # The warning is in stderr, not stdout for JSON cleanliness
-            # We just verify the command works
-            assert "platform" in result.output or "Available" in result.output
-
-    def test_teams_command_suppresses_warning_with_env_var(
-        self, mock_config, mock_org_config, monkeypatch
-    ):
-        """SCC_NO_DEPRECATION_WARN=1 should suppress deprecation warning."""
-        monkeypatch.setenv("SCC_NO_DEPRECATION_WARN", "1")
-        with (
-            patch("scc_cli.cli_config.config.load_config", return_value=mock_config),
-            patch(
-                "scc_cli.cli_config.config.load_cached_org_config",
-                return_value=mock_org_config,
-            ),
-        ):
-            result = runner.invoke(app, ["teams"])
-            assert result.exit_code == 0
-            # Warning should be suppressed
-            assert "DEPRECATION" not in result.output
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # JSON Envelope Contract Tests
 # ═══════════════════════════════════════════════════════════════════════════════
 

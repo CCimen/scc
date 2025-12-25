@@ -176,6 +176,18 @@ class ListState(Generic[T]):
         self.scroll_offset = 0
         return True
 
+    def clear_filter(self) -> bool:
+        """Clear the entire filter query.
+
+        Returns True if filter was cleared, False if already empty.
+        """
+        if not self.filter_query:
+            return False
+        self.filter_query = ""
+        self.cursor = 0
+        self.scroll_offset = 0
+        return True
+
 
 class ListScreen(Generic[T]):
     """Core navigation engine for list-based UI.

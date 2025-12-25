@@ -357,60 +357,6 @@ class TestSessionWorkflow:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Workflow 4: Teams Listing → Profile Information
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestTeamsWorkflow:
-    """Integration tests for teams listing workflow."""
-
-    def test_teams_list_from_cached_config(self, full_config_environment, sample_org_config):
-        """Teams command should list profiles from cached org config."""
-        cache_dir = full_config_environment["cache_dir"]
-        org_config_file = cache_dir / "org_config.json"
-        org_config_file.write_text(json.dumps(sample_org_config))
-
-        with (
-            patch("scc_cli.cli_config.config.load_config") as mock_load_config,
-            patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
-            patch("scc_cli.profiles.list_profiles") as mock_list,
-        ):
-            mock_load_config.return_value = {
-                "organization_source": {"url": "https://gitlab.test.org/config.json"},
-            }
-            mock_list.return_value = [
-                {"name": "platform", "description": "Platform team"},
-                {"name": "api", "description": "API team"},
-            ]
-
-            result = runner.invoke(app, ["teams"])
-
-        assert result.exit_code == 0
-
-    def test_teams_sync_forces_refresh(self, full_config_environment, sample_org_config):
-        """Teams --sync should force refresh from remote."""
-        with (
-            patch("scc_cli.cli_config.config.load_config") as mock_load_config,
-            patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.profiles.list_profiles") as mock_list,
-        ):
-            mock_load_config.return_value = {
-                "organization_source": {"url": "https://gitlab.test.org/config.json"},
-            }
-            mock_remote.return_value = sample_org_config
-            mock_list.return_value = [
-                {"name": "platform", "description": "Platform team"},
-            ]
-
-            runner.invoke(app, ["teams", "--sync"])
-
-        # Should have called load_org_config with force_refresh=True
-        if mock_remote.called:
-            call_kwargs = mock_remote.call_args[1]
-            assert call_kwargs.get("force_refresh") is True
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Workflow 5: Doctor Health Checks
 # ═══════════════════════════════════════════════════════════════════════════════
 

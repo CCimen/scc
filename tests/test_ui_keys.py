@@ -334,3 +334,96 @@ class TestTeamSwitchConsistency:
         # We verify the action type is correct when 't' is pressed.
         action = map_key_to_action("t")
         assert action.action_type == ActionType.TEAM_SWITCH
+
+
+class TestFilterModeKeyBehavior:
+    """Test key behavior changes when filter is active.
+
+    When a user is typing in the filter field, certain keys that normally
+    trigger actions should instead be treated as filter characters.
+
+    Bug fix: https://github.com/... - typing "start" caused unexpected exit
+    because "t" triggered TEAM_SWITCH instead of being added to filter.
+    """
+
+    def test_t_becomes_filter_char_when_filter_active(self) -> None:
+        """'t' is treated as filter char when filter_active=True.
+
+        Regression test: Typing "start" should not trigger TEAM_SWITCH
+        when the user is typing in the filter field.
+        """
+        action = map_key_to_action("t", enable_filter=True, filter_active=True)
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "t"
+        assert action.should_exit is False
+
+    def test_t_triggers_team_switch_when_filter_not_active(self) -> None:
+        """'t' triggers TEAM_SWITCH when filter is not active."""
+        action = map_key_to_action("t", enable_filter=True, filter_active=False)
+        assert action.action_type == ActionType.TEAM_SWITCH
+
+    def test_j_becomes_filter_char_when_filter_active(self) -> None:
+        """'j' is treated as filter char when filter_active=True."""
+        action = map_key_to_action("j", enable_filter=True, filter_active=True)
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "j"
+
+    def test_k_becomes_filter_char_when_filter_active(self) -> None:
+        """'k' is treated as filter char when filter_active=True."""
+        action = map_key_to_action("k", enable_filter=True, filter_active=True)
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "k"
+
+    def test_j_navigates_down_when_filter_not_active(self) -> None:
+        """'j' triggers NAVIGATE_DOWN when filter is not active."""
+        action = map_key_to_action("j", enable_filter=True, filter_active=False)
+        assert action.action_type == ActionType.NAVIGATE_DOWN
+
+    def test_k_navigates_up_when_filter_not_active(self) -> None:
+        """'k' triggers NAVIGATE_UP when filter is not active."""
+        action = map_key_to_action("k", enable_filter=True, filter_active=False)
+        assert action.action_type == ActionType.NAVIGATE_UP
+
+    def test_a_becomes_filter_char_when_filter_active(self) -> None:
+        """'a' is treated as filter char when filter_active=True."""
+        action = map_key_to_action("a", enable_filter=True, filter_active=True)
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "a"
+
+    def test_a_toggles_all_when_filter_not_active(self) -> None:
+        """'a' triggers TOGGLE_ALL when filter is not active."""
+        action = map_key_to_action("a", enable_filter=True, filter_active=False)
+        assert action.action_type == ActionType.TOGGLE_ALL
+
+    def test_regular_chars_always_filter_when_enabled(self) -> None:
+        """Regular printable chars are always filter chars when enabled.
+
+        Characters not in the special key map should become filter chars
+        regardless of filter_active state (they start the filter).
+        """
+        # These chars are not in DEFAULT_KEY_MAP, so they become filter chars
+        # Exclude: j,k,t,q,a,? which are mapped to actions
+        for char in "bcdefghilmnoprsuvwxyz":
+            action = map_key_to_action(char, enable_filter=True, filter_active=False)
+            assert action.action_type == ActionType.FILTER_CHAR, f"'{char}' should be filter char"
+            assert action.filter_char == char
+
+    def test_typing_start_produces_correct_sequence(self) -> None:
+        """Typing 'start' should produce 5 FILTER_CHAR actions.
+
+        Simulates the exact bug scenario: user types 's', 't', 'a', 'r', 't'.
+        """
+        expected_chars = "start"
+
+        # First char: filter not yet active (no content in filter)
+        first_action = map_key_to_action("s", enable_filter=True, filter_active=False)
+        assert first_action.action_type == ActionType.FILTER_CHAR
+        assert first_action.filter_char == "s"
+
+        # Subsequent chars: filter is now active
+        for char in "tart":
+            action = map_key_to_action(char, enable_filter=True, filter_active=True)
+            assert action.action_type == ActionType.FILTER_CHAR, (
+                f"'{char}' should be filter char when filter_active=True"
+            )
+            assert action.filter_char == char

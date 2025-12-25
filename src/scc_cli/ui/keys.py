@@ -195,9 +195,10 @@ def map_key_to_action(
         >>> action.custom_key
         's'
     """
-    # Priority 1: When filter is active, j/k become filter characters
+    # Priority 1: When filter is active, certain mapped keys become filter characters
     # (user is typing, arrow keys still work for navigation)
-    if filter_active and enable_filter and key in ("j", "k"):
+    # j/k = vim navigation, t = team switch, a = toggle all - all filterable when typing
+    if filter_active and enable_filter and key in ("j", "k", "t", "a"):
         return Action(
             action_type=ActionType.FILTER_CHAR,
             filter_char=key,

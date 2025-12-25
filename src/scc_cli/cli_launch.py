@@ -14,7 +14,7 @@ for maintainability and testability.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import typer
 from rich.panel import Panel
@@ -40,6 +40,13 @@ from .kinds import Kind
 from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 from .ui.picker import TeamSwitchRequested, pick_context
+from .ui.wizard import (
+    BACK,
+    WorkspaceSource,
+    pick_recent_workspace,
+    pick_team_repo,
+    pick_workspace_source,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper Functions (extracted for maintainability)
@@ -194,7 +201,7 @@ def _configure_team_settings(team: str | None, cfg: dict) -> None:
                 create_warning_panel(
                     "Team Not Found",
                     f"No team profile named '{team}'.",
-                    "Run 'scc teams' to see available profiles",
+                    "Run 'scc team list' to see available profiles",
                 )
             )
             raise typer.Exit(1)
@@ -697,38 +704,50 @@ def interactive_start(cfg: dict) -> tuple:
         team = ui.select_team(console, cfg)
 
     # Step 2: Select workspace source (with back navigation support)
+    # Using new wizard pickers with clean BACK semantics:
+    # - Top-level: None = cancel wizard
+    # - Sub-screens: BACK = go back, never None
     workspace: str | None = None
 
-    while workspace is None:
-        workspace_source = ui.select_workspace_source(console, cfg, team)
+    # Check if team has repositories configured
+    team_config = cfg.get("profiles", {}).get(team, {}) if team else {}
+    team_repos: list[dict[str, Any]] = team_config.get("repositories", [])
+    has_team_repos = bool(team_repos)
 
-        if workspace_source == "cancel":
+    while workspace is None:
+        # Top-level picker: None = cancel
+        source = pick_workspace_source(has_team_repos=has_team_repos, team=team)
+
+        if source is None:
             return None, None, None, None
 
-        if workspace_source == "recent":
-            result = ui.select_recent_workspace(console, cfg)
-            if result == "back":
-                continue  # Go back to source menu
-            workspace = result
-        elif workspace_source == "team_repos":
-            result = ui.select_team_repo(console, cfg, team)
-            if result == "back":
-                continue  # Go back to source menu
-            workspace = result
-        elif workspace_source == "custom":
+        if source == WorkspaceSource.RECENT:
+            recent = sessions.list_recent(10)
+            result = pick_recent_workspace(recent)
+            if result is BACK:
+                continue  # Go back to source picker
+            workspace = cast(str, result)  # Type narrowing after BACK check
+
+        elif source == WorkspaceSource.TEAM_REPOS:
+            workspace_base = cfg.get("workspace_base", "~/projects")
+            result = pick_team_repo(team_repos, workspace_base)
+            if result is BACK:
+                continue  # Go back to source picker
+            workspace = cast(str, result)  # Type narrowing after BACK check
+
+        elif source == WorkspaceSource.CUSTOM:
             workspace = ui.prompt_custom_workspace(console)
             # Empty input means go back
             if workspace is None:
                 continue
-        elif workspace_source == "clone":
+
+        elif source == WorkspaceSource.CLONE:
             repo_url = ui.prompt_repo_url(console)
             if repo_url:
                 workspace = git.clone_repo(repo_url, cfg.get("workspace_base", "~/projects"))
             # Empty URL means go back
             if workspace is None:
                 continue
-        else:
-            return None, None, None, None
 
     # Step 3: Worktree option
     worktree_name = None

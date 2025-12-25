@@ -27,6 +27,8 @@ from rich.console import Console, RenderableType
 from rich.live import Live
 from rich.text import Text
 
+# Import config for standalone mode detection
+from .. import config as scc_config
 from .chrome import Chrome, ChromeConfig
 from .keys import Action, ActionType, KeyReader, TeamSwitchRequested
 from .list_screen import ListItem, ListState
@@ -102,11 +104,13 @@ class DashboardState:
         active_tab: Currently active tab.
         tabs: Mapping from tab to its data.
         list_state: Navigation state for the current tab's list.
+        status_message: Transient message to display (cleared on next action).
     """
 
     active_tab: DashboardTab
     tabs: dict[DashboardTab, TabData]
     list_state: ListState[str]
+    status_message: str | None = None
 
     @property
     def current_tab_data(self) -> TabData:
@@ -185,13 +189,16 @@ class Dashboard:
             transient=True,
         ) as live:
             while True:
-                action = reader.read(filter_active=bool(self.state.list_state.filter_query))
+                # Filter always active so "Type to filter..." works immediately
+                action = reader.read(filter_active=True)
 
                 result = self._handle_action(action)
                 if result is False:
                     return
 
-                if action.state_changed:
+                # Refresh if action changed state OR handler requests refresh
+                needs_refresh = result is True or action.state_changed
+                if needs_refresh:
                     live.update(self._render(), refresh=True)
 
     def _render(self) -> RenderableType:
@@ -209,23 +216,29 @@ class Dashboard:
 
         if not filtered:
             text.append("No items", style="dim italic")
-            return text
+        else:
+            for i, item in enumerate(visible):
+                actual_index = self.state.list_state.scroll_offset + i
+                is_cursor = actual_index == self.state.list_state.cursor
 
-        for i, item in enumerate(visible):
-            actual_index = self.state.list_state.scroll_offset + i
-            is_cursor = actual_index == self.state.list_state.cursor
+                if is_cursor:
+                    text.append("❯ ", style="cyan bold")
+                else:
+                    text.append("  ")
 
-            if is_cursor:
-                text.append("❯ ", style="cyan bold")
-            else:
-                text.append("  ")
+                label_style = "bold" if is_cursor else ""
+                text.append(item.label, style=label_style)
 
-            label_style = "bold" if is_cursor else ""
-            text.append(item.label, style=label_style)
+                if item.description:
+                    text.append(f"  {item.description}", style="dim")
 
-            if item.description:
-                text.append(f"  {item.description}", style="dim")
+                text.append("\n")
 
+        # Render status message if present (transient toast)
+        if self.state.status_message:
+            text.append("\n")
+            text.append("ℹ ", style="yellow")
+            text.append(self.state.status_message, style="yellow")
             text.append("\n")
 
         return text
@@ -234,15 +247,22 @@ class Dashboard:
         """Get chrome configuration for current state."""
         tab_names = [tab.display_name for tab in _TAB_ORDER]
         active_index = _TAB_ORDER.index(self.state.active_tab)
+        standalone = scc_config.is_standalone_mode()
 
-        return ChromeConfig.for_dashboard(tab_names, active_index)
+        return ChromeConfig.for_dashboard(tab_names, active_index, standalone=standalone)
 
     def _handle_action(self, action: Action[None]) -> bool | None:
-        """Handle an action and return False to exit.
+        """Handle an action and update state.
 
         Returns:
-            False to exit dashboard, None to continue.
+            True to force refresh (state changed by us, not action).
+            False to exit dashboard.
+            None to continue (refresh only if action.state_changed).
         """
+        # Clear any transient status message on new action
+        if self.state.status_message:
+            self.state.status_message = None
+
         match action.action_type:
             case ActionType.NAVIGATE_UP:
                 self.state.list_state.move_cursor(-1)
@@ -263,10 +283,51 @@ class Dashboard:
             case ActionType.FILTER_DELETE:
                 self.state.list_state.delete_filter_char()
 
-            case ActionType.CANCEL | ActionType.QUIT:
+            case ActionType.CANCEL:
+                # ESC: clear filter if active, otherwise no-op
+                # (Future: close overlay first if open)
+                if self.state.list_state.filter_query:
+                    self.state.list_state.clear_filter()
+                    return True  # Refresh to show unfiltered list
+                return None  # No-op
+
+            case ActionType.QUIT:
                 return False
 
+            case ActionType.SELECT:
+                # On Status tab, Enter triggers different actions based on item
+                if self.state.active_tab == DashboardTab.STATUS:
+                    current = self.state.list_state.current_item
+                    if current:
+                        # Team row: same behavior as 't' key
+                        if current.value == "team":
+                            if scc_config.is_standalone_mode():
+                                self.state.status_message = (
+                                    "Teams require org mode. Run `scc setup` to configure."
+                                )
+                                return True  # Refresh to show message
+                            raise TeamSwitchRequested()
+
+                        # Resource rows: drill down to corresponding tab
+                        tab_mapping: dict[str, DashboardTab] = {
+                            "containers": DashboardTab.CONTAINERS,
+                            "sessions": DashboardTab.SESSIONS,
+                            "worktrees": DashboardTab.WORKTREES,
+                        }
+                        target_tab = tab_mapping.get(current.value)
+                        if target_tab:
+                            # Clear filter on drill-down (avoids confusion)
+                            self.state.list_state.clear_filter()
+                            self.state = self.state.switch_tab(target_tab)
+                            return True  # Refresh to show new tab
+
             case ActionType.TEAM_SWITCH:
+                # In standalone mode, show guidance instead of switching
+                if scc_config.is_standalone_mode():
+                    self.state.status_message = (
+                        "Teams require org mode. Run `scc setup` to configure."
+                    )
+                    return True  # Refresh to show message
                 # Bubble up to orchestrator for consistent team switching
                 raise TeamSwitchRequested()
 

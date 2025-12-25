@@ -6,7 +6,7 @@ for the SCC CLI. All UI output is styled for a consistent user experience.
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from rich import box
 from rich.console import Console
@@ -154,134 +154,6 @@ def select_team(console: Console, cfg: dict[str, Any]) -> str | None:
     console.print(f"\n[green]✓ Selected: {selected}[/green]")
 
     return selected
-
-
-def select_workspace_source(console: Console, cfg: dict, team: str | None) -> str:
-    """Display a menu to select where to get the workspace from."""
-
-    console.print("\n[bold cyan]Where is your project?[/bold cyan]\n")
-
-    options = [
-        ("recent", "📂 Recent workspaces", "Continue working on a previous project"),
-        ("custom", "📁 Enter path", "Specify a local directory path"),
-        ("clone", "🔗 Clone repository", "Clone a Git repository"),
-    ]
-
-    # Add team repos if available
-    team_config = cfg.get("profiles", {}).get(team, {})
-    if team_config.get("repositories"):
-        options.insert(1, ("team_repos", "🏢 Team repositories", "Choose from team's common repos"))
-
-    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-    table.add_column("Option", style="yellow", width=4)
-    table.add_column("Name", style="cyan")
-    table.add_column("Description", style="white")
-
-    for i, (key, name, desc) in enumerate(options, 1):
-        table.add_row(f"[{i}]", name, desc)
-
-    table.add_row("[0]", "❌ Cancel", "Exit without starting")
-
-    console.print(table)
-
-    valid_choices = [str(i) for i in range(0, len(options) + 1)]
-    choice = IntPrompt.ask(
-        "\n[cyan]Select option[/cyan]",
-        default=1,
-        choices=valid_choices,
-    )
-
-    if choice == 0:
-        return "cancel"
-
-    return options[choice - 1][0]
-
-
-def select_recent_workspace(console: Console, cfg: dict[str, Any]) -> str | None:
-    """Display a menu to select from recent workspaces."""
-    from . import sessions
-
-    recent: list[dict[str, Any]] = sessions.list_recent(10)
-
-    if not recent:
-        console.print("[yellow]No recent workspaces found.[/yellow]")
-        return prompt_custom_workspace(console)
-
-    console.print("\n[bold cyan]Recent workspaces:[/bold cyan]\n")
-
-    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-    table.add_column("Option", style="yellow", width=4)
-    table.add_column("Workspace", style="cyan")
-    table.add_column("Last Used", style="white")
-
-    for i, session in enumerate(recent, 1):
-        table.add_row(f"[{i}]", session["workspace"], session["last_used"])
-
-    table.add_row("[0]", "← Back", "")
-
-    console.print(table)
-
-    valid_choices = [str(i) for i in range(0, len(recent) + 1)]
-    choice = IntPrompt.ask(
-        "\n[cyan]Select workspace[/cyan]",
-        default=1,
-        choices=valid_choices,
-    )
-
-    if choice == 0:
-        return "back"  # Signal to go back to previous menu, not exit
-
-    return cast(str, recent[choice - 1]["workspace"])
-
-
-def select_team_repo(console: Console, cfg: dict[str, Any], team: str | None) -> str | None:
-    """Display a menu to select from the team's common repositories."""
-
-    team_config: dict[str, Any] = cfg.get("profiles", {}).get(team, {})
-    repos: list[dict[str, Any]] = team_config.get("repositories", [])
-
-    if not repos:
-        console.print("[yellow]No team repositories configured.[/yellow]")
-        return prompt_custom_workspace(console)
-
-    console.print("\n[bold cyan]Team repositories:[/bold cyan]\n")
-
-    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-    table.add_column("Option", style="yellow", width=4)
-    table.add_column("Repository", style="cyan")
-    table.add_column("Description", style="white")
-
-    for i, repo in enumerate(repos, 1):
-        name = repo.get("name", repo.get("url", "Unknown"))
-        desc = repo.get("description", "")
-        table.add_row(f"[{i}]", name, desc)
-
-    table.add_row("[0]", "← Back", "")
-
-    console.print(table)
-
-    valid_choices = [str(i) for i in range(0, len(repos) + 1)]
-    choice = IntPrompt.ask(
-        "\n[cyan]Select repository[/cyan]",
-        default=1,
-        choices=valid_choices,
-    )
-
-    if choice == 0:
-        return "back"  # Signal to go back to previous menu, not exit
-
-    selected_repo = repos[choice - 1]
-
-    # Check if already cloned locally
-    local_path: str | None = selected_repo.get("local_path")
-    if local_path and Path(local_path).expanduser().exists():
-        return local_path
-
-    # Need to clone
-    from . import git
-
-    workspace_base = cfg.get("workspace_base", "~/projects")
-    return git.clone_repo(selected_repo["url"], workspace_base)
 
 
 def prompt_custom_workspace(console: Console) -> str | None:
