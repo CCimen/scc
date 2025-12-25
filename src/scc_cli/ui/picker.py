@@ -36,6 +36,7 @@ Global hotkeys:
 from __future__ import annotations
 
 from collections.abc import Sequence
+from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from rich.console import Console
@@ -54,7 +55,7 @@ from .keys import ActionType, KeyReader, TeamSwitchRequested
 from .list_screen import ListItem, ListMode, ListScreen, ListState
 
 # Re-export for backwards compatibility
-__all__ = ["TeamSwitchRequested"]
+__all__ = ["QuickResumeResult", "TeamSwitchRequested"]
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -63,6 +64,20 @@ if TYPE_CHECKING:
 
 # Type variable for generic picker return types
 T = TypeVar("T")
+
+
+class QuickResumeResult(Enum):
+    """Result of the Quick Resume picker interaction.
+
+    This enum distinguishes between three distinct user intents:
+    - SELECTED: User pressed Enter to resume the highlighted context
+    - NEW_SESSION: User pressed Esc to skip resume and start fresh
+    - CANCELLED: User pressed q to cancel the entire wizard
+    """
+
+    SELECTED = "selected"
+    NEW_SESSION = "new_session"
+    CANCELLED = "cancelled"
 
 
 def pick_team(
@@ -311,11 +326,63 @@ def pick_context(
     )
 
 
+def pick_context_quick_resume(
+    contexts: Sequence[WorkContext],
+    *,
+    title: str = "Recent Contexts",
+    subtitle: str | None = None,
+    standalone: bool = False,
+) -> tuple[QuickResumeResult, WorkContext | None]:
+    """Show Quick Resume picker with 3-way result semantics.
+
+    This picker distinguishes between three user intents:
+    - Enter: Resume the selected context (SELECTED)
+    - Esc: Skip resume, start a new session (NEW_SESSION)
+    - q: Cancel the entire wizard (CANCELLED)
+
+    Args:
+        contexts: Sequence of WorkContext objects.
+        title: Title shown in chrome header.
+        subtitle: Optional subtitle (defaults to showing Esc hint).
+        standalone: If True, dim the "t teams" hint (not available without org).
+
+    Returns:
+        Tuple of (QuickResumeResult, selected WorkContext or None).
+
+    Example:
+        >>> from scc_cli.contexts import load_recent_contexts
+        >>> from scc_cli.ui.picker import pick_context_quick_resume, QuickResumeResult
+        >>>
+        >>> contexts = load_recent_contexts(limit=10)
+        >>> result, context = pick_context_quick_resume(contexts, standalone=True)
+        >>> match result:
+        ...     case QuickResumeResult.SELECTED:
+        ...         resume_session(context)
+        ...     case QuickResumeResult.NEW_SESSION:
+        ...         start_new_session()
+        ...     case QuickResumeResult.CANCELLED:
+        ...         return  # Exit wizard
+    """
+    if not contexts:
+        return (QuickResumeResult.NEW_SESSION, None)
+
+    # Convert contexts to list items using formatter
+    items = [format_context(context) for context in contexts]
+
+    return _run_quick_resume_picker(
+        items=items,
+        title=title,
+        subtitle=subtitle,
+        standalone=standalone,
+    )
+
+
 def _run_single_select_picker(
     items: list[ListItem[T]],
     *,
     title: str,
     subtitle: str | None = None,
+    standalone: bool = False,
 ) -> T | None:
     """Run the interactive single-selection picker loop.
 
@@ -329,6 +396,7 @@ def _run_single_select_picker(
         items: List items to display.
         title: Title for chrome header.
         subtitle: Optional subtitle.
+        standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
         Value from selected item, or None if cancelled.
@@ -381,7 +449,8 @@ def _run_single_select_picker(
         body: Text, title: str, subtitle: str | None, filter_query: str
     ) -> RenderableType:
         """Wrap body content in chrome."""
-        config = ChromeConfig.for_picker(title, subtitle)
+        # Capture `standalone` from outer scope for proper footer hint dimming
+        config = ChromeConfig.for_picker(title, subtitle, standalone=standalone)
         chrome = Chrome(config)
         return chrome.render(body, search_query=filter_query)
 
@@ -414,6 +483,126 @@ def _run_single_select_picker(
 
                 case ActionType.TEAM_SWITCH:
                     # Signal caller to redirect to team selection
+                    raise TeamSwitchRequested()
+
+                case ActionType.FILTER_CHAR:
+                    if action.filter_char:
+                        state.add_filter_char(action.filter_char)
+
+                case ActionType.FILTER_DELETE:
+                    state.delete_filter_char()
+
+            if action.state_changed:
+                live.update(render(), refresh=True)
+
+
+def _run_quick_resume_picker(
+    items: list[ListItem[T]],
+    *,
+    title: str,
+    subtitle: str | None = None,
+    standalone: bool = False,
+) -> tuple[QuickResumeResult, T | None]:
+    """Run the Quick Resume picker with 3-way result semantics.
+
+    Unlike the standard single-select picker, this distinguishes between:
+    - Enter: Resume the selected context (SELECTED)
+    - Esc: Skip resume, continue to project source (NEW_SESSION)
+    - q: Cancel the entire wizard (CANCELLED)
+
+    Args:
+        items: List items to display (recent contexts).
+        title: Title for chrome header.
+        subtitle: Optional subtitle.
+        standalone: If True, dim the "t teams" hint (not available without org).
+
+    Returns:
+        Tuple of (QuickResumeResult, selected_value or None).
+    """
+    if not items:
+        return (QuickResumeResult.NEW_SESSION, None)
+
+    console = Console()
+    state = ListState(items=items)
+    reader = KeyReader(enable_filter=True)
+
+    def render() -> RenderableType:
+        """Render current picker state."""
+        body = Text()
+        visible = state.visible_items
+
+        if not state.filtered_items:
+            body.append("No matches", style="dim italic")
+            return _wrap_quick_resume_chrome(body, title, subtitle, state.filter_query)
+
+        for i, item in enumerate(visible):
+            actual_index = state.scroll_offset + i
+            is_cursor = actual_index == state.cursor
+
+            # Cursor indicator
+            if is_cursor:
+                body.append("❯ ", style="cyan bold")
+            else:
+                body.append("  ")
+
+            # Label with governance styling
+            label_style = "bold" if is_cursor else ""
+            if item.governance_status == "blocked":
+                label_style += " red"
+            elif item.governance_status == "warning":
+                label_style += " yellow"
+
+            body.append(item.label, style=label_style.strip())
+
+            # Description
+            if item.description:
+                body.append(f"  {item.description}", style="dim")
+
+            body.append("\n")
+
+        return _wrap_quick_resume_chrome(body, title, subtitle, state.filter_query)
+
+    def _wrap_quick_resume_chrome(
+        body: Text, title: str, subtitle: str | None, filter_query: str
+    ) -> RenderableType:
+        """Wrap body content in Quick Resume chrome with truthful hints."""
+        config = ChromeConfig.for_quick_resume(title, subtitle, standalone=standalone)
+        chrome = Chrome(config)
+        return chrome.render(body, search_query=filter_query)
+
+    # Run the picker loop with 3-way key handling
+    with Live(
+        render(),
+        console=console,
+        auto_refresh=False,
+        transient=True,
+    ) as live:
+        while True:
+            action = reader.read(filter_active=bool(state.filter_query))
+
+            match action.action_type:
+                case ActionType.NAVIGATE_UP:
+                    state.move_cursor(-1)
+
+                case ActionType.NAVIGATE_DOWN:
+                    state.move_cursor(1)
+
+                case ActionType.SELECT:
+                    # Enter = resume selected context
+                    current = state.current_item
+                    if current is not None:
+                        return (QuickResumeResult.SELECTED, current.value)
+                    return (QuickResumeResult.NEW_SESSION, None)
+
+                case ActionType.CANCEL:
+                    # Esc = skip resume, continue to project source
+                    return (QuickResumeResult.NEW_SESSION, None)
+
+                case ActionType.QUIT:
+                    # q = cancel entire wizard
+                    return (QuickResumeResult.CANCELLED, None)
+
+                case ActionType.TEAM_SWITCH:
                     raise TeamSwitchRequested()
 
                 case ActionType.FILTER_CHAR:

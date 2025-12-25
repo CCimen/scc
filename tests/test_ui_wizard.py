@@ -20,10 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from scc_cli.ui.wizard import (
     BACK,
@@ -353,7 +350,15 @@ class TestNormalizePath:
         # Create a path that is definitely longer than 50 chars after ~ normalization
         # ~/very/deeply/nested/directory/structure/to/final/project = ~55+ chars
         long_path = str(
-            home / "very" / "deeply" / "nested" / "directory" / "structure" / "to" / "final" / "project"
+            home
+            / "very"
+            / "deeply"
+            / "nested"
+            / "directory"
+            / "structure"
+            / "to"
+            / "final"
+            / "project"
         )
 
         result = _normalize_path(long_path)

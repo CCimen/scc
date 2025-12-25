@@ -178,6 +178,8 @@ def _run_subscreen_picker(
     items: list[ListItem[T]],
     title: str,
     subtitle: str | None = None,
+    *,
+    standalone: bool = False,
 ) -> T | _BackSentinel:
     """Run picker for sub-screens. Converts Esc/q → BACK.
 
@@ -188,11 +190,12 @@ def _run_subscreen_picker(
         items: List items to display (first item should be "← Back").
         title: Title for chrome header.
         subtitle: Optional subtitle.
+        standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
         Selected item value, or BACK if user pressed Esc/q.
     """
-    result = _run_single_select_picker(items, title=title, subtitle=subtitle)
+    result = _run_single_select_picker(items, title=title, subtitle=subtitle, standalone=standalone)
     if result is None:
         return BACK
     return result
@@ -206,6 +209,8 @@ def _run_subscreen_picker(
 def pick_workspace_source(
     has_team_repos: bool = False,
     team: str | None = None,
+    *,
+    standalone: bool = False,
 ) -> WorkspaceSource | None:
     """Show picker for workspace source selection.
 
@@ -215,6 +220,7 @@ def pick_workspace_source(
     Args:
         has_team_repos: Whether team repositories are available.
         team: Current team name (shown in subtitle if set).
+        standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
         Selected WorkspaceSource, or None if cancelled.
@@ -262,6 +268,7 @@ def pick_workspace_source(
         items=items,
         title="Where is your project?",
         subtitle=subtitle,
+        standalone=standalone,
     )
 
 
@@ -272,6 +279,8 @@ def pick_workspace_source(
 
 def pick_recent_workspace(
     recent: list[dict[str, Any]],
+    *,
+    standalone: bool = False,
 ) -> str | _BackSentinel:
     """Show picker for recent workspace selection.
 
@@ -279,6 +288,7 @@ def pick_recent_workspace(
 
     Args:
         recent: List of recent session dicts with 'workspace' and 'last_used' keys.
+        standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
         Selected workspace path, or BACK to go to previous screen.
@@ -315,6 +325,7 @@ def pick_recent_workspace(
         items=items,
         title="Recent Workspaces",
         subtitle=subtitle,
+        standalone=standalone,
     )
 
 
@@ -326,6 +337,8 @@ def pick_recent_workspace(
 def pick_team_repo(
     repos: list[dict[str, Any]],
     workspace_base: str = "~/projects",
+    *,
+    standalone: bool = False,
 ) -> str | _BackSentinel:
     """Show picker for team repository selection.
 
@@ -337,6 +350,7 @@ def pick_team_repo(
     Args:
         repos: List of repo dicts with 'name', 'url', optional 'description', 'local_path'.
         workspace_base: Base directory for cloning new repos.
+        standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
         Workspace path (existing or newly cloned), or BACK to go to previous screen.
@@ -373,6 +387,7 @@ def pick_team_repo(
         items=items,
         title="Team Repositories",
         subtitle=subtitle,
+        standalone=standalone,
     )
 
     # Handle BACK

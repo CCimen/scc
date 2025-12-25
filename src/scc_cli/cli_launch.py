@@ -39,7 +39,11 @@ from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
-from .ui.picker import TeamSwitchRequested, pick_context
+from .ui.picker import (
+    QuickResumeResult,
+    TeamSwitchRequested,
+    pick_context_quick_resume,
+)
 from .ui.wizard import (
     BACK,
     WorkspaceSource,
@@ -615,14 +619,14 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
     console.print()
 
 
-def interactive_start(cfg: dict) -> tuple:
+def interactive_start(cfg: dict, *, skip_quick_resume: bool = False) -> tuple:
     """Guide user through interactive session setup.
 
     Prompt for team selection, workspace source, optional worktree creation,
     and session naming.
 
     The flow prioritizes quick resume by showing recent contexts first:
-    1. Recent Contexts (quick resume) - if contexts exist
+    1. Recent Contexts (quick resume) - if contexts exist and skip_quick_resume=False
     2. Team selection - if no context selected (skipped in standalone mode)
     3. Workspace source selection
     4. Worktree creation (optional)
@@ -631,6 +635,10 @@ def interactive_start(cfg: dict) -> tuple:
     Args:
         cfg: Application configuration dictionary containing workspace_base
             and other settings.
+        skip_quick_resume: If True, bypass the Quick Resume picker and go
+            directly to project source selection. Used when starting from
+            dashboard empty states (no_containers, no_sessions) where resume
+            doesn't make sense.
 
     Returns:
         Tuple of (workspace, team, session_name, worktree_name). All values
@@ -646,32 +654,46 @@ def interactive_start(cfg: dict) -> tuple:
     available_teams = teams.list_teams(cfg, org_config)
 
     # Step 0: Recent Contexts (quick resume)
+    # Skip when: entering from dashboard empty state (skip_quick_resume=True)
     # User can press 't' to switch teams (raises TeamSwitchRequested → skip to Step 1)
-    recent_contexts = load_recent_contexts(limit=10)
-    if recent_contexts:
-        try:
-            selected_context = pick_context(
-                recent_contexts,
-                title="Quick Resume",
-                subtitle="Select a recent context, 't' for teams, or Esc for new session",
-            )
-            if selected_context is not None:
-                # User selected a context - return immediately with its data
-                return (
-                    str(selected_context.worktree_path),
-                    selected_context.team,
-                    selected_context.last_session_id,
-                    None,  # worktree_name - not creating new worktree
+    if not skip_quick_resume:
+        recent_contexts = load_recent_contexts(limit=10)
+        if recent_contexts:
+            try:
+                result, selected_context = pick_context_quick_resume(
+                    recent_contexts,
+                    title="Quick Resume",
+                    standalone=standalone_mode,
                 )
-            # User cancelled (Esc) - continue with normal wizard flow
+
+                match result:
+                    case QuickResumeResult.SELECTED:
+                        # User pressed Enter - resume selected context
+                        if selected_context is not None:
+                            return (
+                                str(selected_context.worktree_path),
+                                selected_context.team,
+                                selected_context.last_session_id,
+                                None,  # worktree_name - not creating new worktree
+                            )
+
+                    case QuickResumeResult.NEW_SESSION:
+                        # User pressed Esc - continue with normal wizard flow
+                        console.print()
+
+                    case QuickResumeResult.CANCELLED:
+                        # User pressed q - cancel entire wizard
+                        return (None, None, None, None)
+
+            except TeamSwitchRequested:
+                # User pressed 't' - skip to team selection (Step 1)
+                console.print()
+        else:
+            # First-time hint: no recent contexts yet
+            console.print(
+                "[dim]💡 Tip: Your recent contexts will appear here for quick resume[/dim]"
+            )
             console.print()
-        except TeamSwitchRequested:
-            # User pressed 't' - skip to team selection (Step 1)
-            console.print()
-    else:
-        # First-time hint: no recent contexts yet
-        console.print("[dim]💡 Tip: Your recent contexts will appear here for quick resume[/dim]")
-        console.print()
 
     # Step 1: Select team (mode-aware handling)
     team: str | None = None
@@ -716,24 +738,26 @@ def interactive_start(cfg: dict) -> tuple:
 
     while workspace is None:
         # Top-level picker: None = cancel
-        source = pick_workspace_source(has_team_repos=has_team_repos, team=team)
+        source = pick_workspace_source(
+            has_team_repos=has_team_repos, team=team, standalone=standalone_mode
+        )
 
         if source is None:
             return None, None, None, None
 
         if source == WorkspaceSource.RECENT:
             recent = sessions.list_recent(10)
-            result = pick_recent_workspace(recent)
-            if result is BACK:
+            picker_result = pick_recent_workspace(recent, standalone=standalone_mode)
+            if picker_result is BACK:
                 continue  # Go back to source picker
-            workspace = cast(str, result)  # Type narrowing after BACK check
+            workspace = cast(str, picker_result)  # Type narrowing after BACK check
 
         elif source == WorkspaceSource.TEAM_REPOS:
             workspace_base = cfg.get("workspace_base", "~/projects")
-            result = pick_team_repo(team_repos, workspace_base)
-            if result is BACK:
+            picker_result = pick_team_repo(team_repos, workspace_base, standalone=standalone_mode)
+            if picker_result is BACK:
                 continue  # Go back to source picker
-            workspace = cast(str, result)  # Type narrowing after BACK check
+            workspace = cast(str, picker_result)  # Type narrowing after BACK check
 
         elif source == WorkspaceSource.CUSTOM:
             workspace = ui.prompt_custom_workspace(console)
@@ -768,3 +792,74 @@ def interactive_start(cfg: dict) -> tuple:
     )
 
     return workspace, team, session_name, worktree_name
+
+
+def run_start_wizard_flow(*, skip_quick_resume: bool = False) -> bool:
+    """Run the interactive start wizard and launch sandbox.
+
+    This is the shared entrypoint for starting sessions from both the CLI
+    (scc start with no args) and the dashboard (Enter on empty containers).
+
+    The function runs outside any Rich Live context to avoid nested Live
+    conflicts. It handles the complete flow:
+    1. Run interactive wizard to get user selections
+    2. If user cancels, return False
+    3. Otherwise, validate and launch the sandbox
+
+    Args:
+        skip_quick_resume: If True, bypass the Quick Resume picker and go
+            directly to project source selection. Used when starting from
+            dashboard empty states where "resume" doesn't make sense.
+
+    Returns:
+        True if sandbox was launched successfully.
+        False if user cancelled or an error occurred.
+    """
+    # Step 1: First-run detection
+    if setup.is_setup_needed():
+        if not setup.maybe_run_setup(console):
+            return False
+
+    cfg = config.load_config()
+
+    # Step 2: Run interactive wizard
+    workspace, team, session_name, worktree_name = interactive_start(
+        cfg, skip_quick_resume=skip_quick_resume
+    )
+
+    # User cancelled at some point
+    if workspace is None:
+        return False
+
+    try:
+        # Step 3: Docker availability check
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+            docker.check_docker_available()
+
+        # Step 4: Workspace validation
+        workspace_path = _validate_and_resolve_workspace(workspace)
+
+        # Step 5: Workspace preparation (worktree, deps, git safety)
+        workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps=False)
+
+        # Step 6: Team configuration
+        _configure_team_settings(team, cfg)
+
+        # Step 7: Resolve mount path and branch
+        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+
+        # Step 8: Launch sandbox (fresh start, not resume)
+        _launch_sandbox(
+            workspace_path=workspace_path,
+            mount_path=mount_path,
+            team=team,
+            session_name=session_name,
+            current_branch=current_branch,
+            should_continue_session=False,  # Fresh start
+            fresh=False,
+        )
+        return True
+
+    except Exception as e:
+        console.print(f"[red]Error launching sandbox: {e}[/red]")
+        return False

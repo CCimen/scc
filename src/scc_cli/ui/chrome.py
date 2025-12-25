@@ -76,7 +76,12 @@ class ChromeConfig:
 
     @classmethod
     def for_picker(
-        cls, title: str, subtitle: str | None = None, *, item_count: int | None = None
+        cls,
+        title: str,
+        subtitle: str | None = None,
+        *,
+        item_count: int | None = None,
+        standalone: bool = False,
     ) -> ChromeConfig:
         """Create standard config for single-select pickers.
 
@@ -85,6 +90,7 @@ class ChromeConfig:
             subtitle: Optional subtitle text. If not provided and item_count is,
                 generates "{item_count} available".
             item_count: Deprecated, use subtitle instead. Number of available items.
+            standalone: If True, dim the "t teams" hint (not available without org).
 
         Returns:
             ChromeConfig with standard picker hints.
@@ -99,7 +105,7 @@ class ChromeConfig:
             footer_hints=(
                 FooterHint("↑↓", "navigate"),
                 FooterHint("Enter", "select"),
-                FooterHint("t", "teams"),
+                FooterHint("t", "teams", dimmed=standalone),
                 FooterHint("Esc", "cancel"),
             ),
         )
@@ -132,8 +138,47 @@ class ChromeConfig:
         )
 
     @classmethod
+    def for_quick_resume(
+        cls, title: str, subtitle: str | None = None, *, standalone: bool = False
+    ) -> ChromeConfig:
+        """Create config for Quick Resume picker with truthful hints.
+
+        The Quick Resume picker has unique semantics:
+        - Enter: Resume the selected context
+        - Esc: Skip resume, start a new session
+        - q: Cancel the entire wizard
+
+        Args:
+            title: Picker title (typically "Quick Resume").
+            subtitle: Optional subtitle (defaults to hint about Esc/q).
+            standalone: If True, dim the "t teams" hint (not available without org).
+
+        Returns:
+            ChromeConfig with Quick Resume-specific hints.
+        """
+        return cls(
+            title=title,
+            subtitle=subtitle or "Esc for new session · q to cancel",
+            show_tabs=False,
+            show_search=True,
+            footer_hints=(
+                FooterHint("↑↓", "navigate"),
+                FooterHint("Enter", "resume"),
+                FooterHint("Esc", "new session"),
+                FooterHint("q", "cancel"),
+                FooterHint("t", "teams", dimmed=standalone),
+            ),
+        )
+
+    @classmethod
     def for_dashboard(
-        cls, tabs: list[str], active: int, *, standalone: bool = False
+        cls,
+        tabs: list[str],
+        active: int,
+        *,
+        standalone: bool = False,
+        details_open: bool = False,
+        custom_hints: tuple[FooterHint, ...] | None = None,
     ) -> ChromeConfig:
         """Create standard config for dashboard view.
 
@@ -141,24 +186,43 @@ class ChromeConfig:
             tabs: List of tab names.
             active: Index of active tab (0-based).
             standalone: If True, dim the "t teams" hint (not available without org).
+            details_open: If True, show "Esc close" instead of "Enter details".
+            custom_hints: Optional custom footer hints to override defaults.
+                When provided, these hints are used instead of the standard set.
 
         Returns:
             ChromeConfig with dashboard hints.
         """
-        return cls(
-            title="SCC Dashboard",
-            show_tabs=True,
-            tabs=tuple(tabs),
-            active_tab_index=active,
-            show_search=True,
-            footer_hints=(
+        # Use custom hints if provided
+        if custom_hints is not None:
+            footer_hints = custom_hints
+        # Otherwise fall back to standard hints based on details state
+        elif details_open:
+            footer_hints = (
+                FooterHint("↑↓", "navigate"),
+                FooterHint("Esc", "close"),
+                FooterHint("Tab", "switch tab"),
+                FooterHint("t", "teams", dimmed=standalone),
+                FooterHint("q", "quit"),
+                FooterHint("?", "help"),
+            )
+        else:
+            footer_hints = (
                 FooterHint("↑↓", "navigate"),
                 FooterHint("Tab", "switch tab"),
                 FooterHint("Enter", "details"),
                 FooterHint("t", "teams", dimmed=standalone),
                 FooterHint("q", "quit"),
                 FooterHint("?", "help"),
-            ),
+            )
+
+        return cls(
+            title="SCC Dashboard",
+            show_tabs=True,
+            tabs=tuple(tabs),
+            active_tab_index=active,
+            show_search=True,
+            footer_hints=footer_hints,
         )
 
     def with_context(self, context_label: str) -> ChromeConfig:

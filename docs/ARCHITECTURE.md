@@ -227,6 +227,7 @@ graph TD
         UIChrome[chrome.py]:::ui
         UIKeys[keys.py]:::ui
         UIHelp[help.py]:::ui
+        UIWizard[wizard.py]:::ui
     end
 
     subgraph Core[Core & Config]
@@ -276,7 +277,9 @@ graph TD
     Main --> UIDash
 
     Launch --> UIPicker
+    Launch --> UIWizard
     Worktree --> UIPicker
+    UIWizard --> UIPicker
 
     UIDash --> UIList
     UIPicker --> UIList
@@ -329,7 +332,7 @@ graph TD
     Git --> Constants
 ```
 
-This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services, Teal = interactive UI. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output). The `ui/` package provides interactive terminal experiences with consistent chrome, keybindings, and behavior patterns.
+This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services, Teal = interactive UI. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output). The `ui/` package provides interactive terminal experiences with consistent chrome, keybindings, and behavior patterns. The `wizard.py` module adds start wizard pickers with BACK sentinel navigation for nested screen flows.
 
 Module responsibilities:
 
@@ -359,9 +362,10 @@ Module responsibilities:
 | `ui/` | Interactive terminal experiences (package) | Non-TTY output |
 | `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Rendering, business logic |
 | `ui/list_screen.py` | Core navigation engine, state management, key handling | Domain logic |
-| `ui/picker.py` | Domain-specific selection workflows (team, session, container) | Navigation internals |
-| `ui/dashboard.py` | Tabbed navigation for main SCC view | Selection workflows |
-| `ui/chrome.py` | Layout rendering primitives (headers, footers, hints) | State management |
+| `ui/picker.py` | Selection workflows, Quick Resume with 3-way results, chrome factory | Navigation internals |
+| `ui/dashboard.py` | Tabbed navigation, intent exceptions, toast messages | Selection workflows |
+| `ui/wizard.py` | Start wizard pickers with BACK navigation, workspace source selection | Chrome, list internals |
+| `ui/chrome.py` | Layout primitives (headers, footers, hints), standalone mode dimming | State management |
 | `ui/keys.py` | Key mapping internals, action dispatch | Rendering |
 | `ui/help.py` | Mode-aware help overlay | Key handling |
 

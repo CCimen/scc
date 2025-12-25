@@ -295,6 +295,8 @@ class TestTeamSwitchConsistency:
 
     def test_dashboard_handles_team_switch(self) -> None:
         """Dashboard handles TEAM_SWITCH by raising TeamSwitchRequested."""
+        from unittest.mock import patch
+
         from scc_cli.ui.dashboard import Dashboard, DashboardState, DashboardTab, TabData
         from scc_cli.ui.list_screen import ListItem, ListState
 
@@ -317,12 +319,14 @@ class TestTeamSwitchConsistency:
         # Create a TEAM_SWITCH action
         action: Action[None] = Action(action_type=ActionType.TEAM_SWITCH)
 
-        # Should raise TeamSwitchRequested, not silently no-op
-        try:
-            dashboard._handle_action(action)
-            raise AssertionError("Expected TeamSwitchRequested to be raised")
-        except TeamSwitchRequested:
-            pass  # Expected behavior
+        # Mock is_standalone_mode to return False (org mode)
+        # In org mode, TEAM_SWITCH should raise TeamSwitchRequested
+        with patch("scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=False):
+            try:
+                dashboard._handle_action(action)
+                raise AssertionError("Expected TeamSwitchRequested to be raised")
+            except TeamSwitchRequested:
+                pass  # Expected behavior
 
     def test_picker_handles_team_switch(self) -> None:
         """Picker handles TEAM_SWITCH by raising TeamSwitchRequested.
@@ -413,8 +417,6 @@ class TestFilterModeKeyBehavior:
 
         Simulates the exact bug scenario: user types 's', 't', 'a', 'r', 't'.
         """
-        expected_chars = "start"
-
         # First char: filter not yet active (no content in filter)
         first_action = map_key_to_action("s", enable_filter=True, filter_active=False)
         assert first_action.action_type == ActionType.FILTER_CHAR

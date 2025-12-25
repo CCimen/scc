@@ -8,9 +8,11 @@ Test Categories:
 
 from __future__ import annotations
 
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
+from rich.console import Console, RenderableType
 
 from scc_cli.ui.dashboard import (
     Dashboard,
@@ -18,9 +20,17 @@ from scc_cli.ui.dashboard import (
     DashboardTab,
     TabData,
     _load_all_tab_data,
+    _prepare_for_nested_ui,
 )
 from scc_cli.ui.keys import Action, ActionType
 from scc_cli.ui.list_screen import ListItem, ListState
+
+
+def _render_to_str(renderable: RenderableType) -> str:
+    """Render a Rich object to a plain string for test assertions."""
+    console = Console(file=StringIO(), force_terminal=False, width=120)
+    console.print(renderable)
+    return console.file.getvalue()  # type: ignore[union-attr]
 
 
 class TestDashboardTabNavigation:
@@ -554,9 +564,7 @@ class TestDashboardStandaloneMode:
         )
         dashboard = Dashboard(state)
 
-        with patch(
-            "scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=False
-        ):
+        with patch("scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=False):
             config = dashboard._get_chrome_config()
 
             # Find the teams hint and verify it's not dimmed
@@ -605,9 +613,7 @@ class TestStatusTabDrillDown:
             ),
         }
 
-    def test_drill_down_clears_filter(
-        self, status_tab_data: dict[DashboardTab, TabData]
-    ) -> None:
+    def test_drill_down_clears_filter(self, status_tab_data: dict[DashboardTab, TabData]) -> None:
         """Drill-down from Status tab clears the filter query."""
         state = DashboardState(
             active_tab=DashboardTab.STATUS,
@@ -648,3 +654,476 @@ class TestTabDataLoading:
                         assert DashboardTab.CONTAINERS in tabs
                         assert DashboardTab.SESSIONS in tabs
                         assert DashboardTab.WORKTREES in tabs
+
+
+class TestDetailsPane:
+    """Test details pane toggle and state behavior (Phase 2A)."""
+
+    @pytest.fixture
+    def resource_tab_data(self) -> dict[DashboardTab, TabData]:
+        """Create tab data with items on resource tabs."""
+        return {
+            DashboardTab.STATUS: TabData(
+                tab=DashboardTab.STATUS,
+                title="Status",
+                items=[ListItem(value="team", label="Team", description="platform")],
+                count_active=1,
+                count_total=1,
+            ),
+            DashboardTab.CONTAINERS: TabData(
+                tab=DashboardTab.CONTAINERS,
+                title="Containers",
+                items=[
+                    ListItem(value="c1", label="scc-main", description="Up 2h"),
+                    ListItem(value="c2", label="scc-dev", description="Exited"),
+                ],
+                count_active=1,
+                count_total=2,
+            ),
+            DashboardTab.SESSIONS: TabData(
+                tab=DashboardTab.SESSIONS,
+                title="Sessions",
+                items=[ListItem(value="s1", label="session-1", description="platform")],
+                count_active=1,
+                count_total=1,
+            ),
+            DashboardTab.WORKTREES: TabData(
+                tab=DashboardTab.WORKTREES,
+                title="Worktrees",
+                items=[ListItem(value="w1", label="main", description="main branch")],
+                count_active=0,
+                count_total=1,
+            ),
+        }
+
+    @pytest.fixture
+    def placeholder_tab_data(self) -> dict[DashboardTab, TabData]:
+        """Create tab data with placeholder items (empty state)."""
+        return {
+            DashboardTab.STATUS: TabData(
+                tab=DashboardTab.STATUS,
+                title="Status",
+                items=[ListItem(value="team", label="Team", description="platform")],
+                count_active=1,
+                count_total=1,
+            ),
+            DashboardTab.CONTAINERS: TabData(
+                tab=DashboardTab.CONTAINERS,
+                title="Containers",
+                items=[
+                    ListItem(
+                        value="no_containers",
+                        label="No containers",
+                        description="Run 'scc start' to create one",
+                    )
+                ],
+                count_active=0,
+                count_total=0,
+            ),
+            DashboardTab.SESSIONS: TabData(
+                tab=DashboardTab.SESSIONS,
+                title="Sessions",
+                items=[
+                    ListItem(value="error", label="Error", description="Unable to load sessions")
+                ],
+                count_active=0,
+                count_total=0,
+            ),
+            DashboardTab.WORKTREES: TabData(
+                tab=DashboardTab.WORKTREES,
+                title="Worktrees",
+                items=[
+                    ListItem(
+                        value="no_git",
+                        label="Not available",
+                        description="Not in a git repository",
+                    )
+                ],
+                count_active=0,
+                count_total=0,
+            ),
+        }
+
+    def test_enter_on_resource_tab_opens_details(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Enter on a resource tab (not Status) opens details pane."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+        )
+        dashboard = Dashboard(state)
+
+        assert dashboard.state.details_open is False
+
+        select_action = Action(action_type=ActionType.SELECT, state_changed=True)
+        result = dashboard._handle_action(select_action)
+
+        assert result is True
+        assert dashboard.state.details_open is True
+
+    def test_enter_when_details_open_closes_details(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Enter when details already open toggles it closed."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+            details_open=True,
+        )
+        dashboard = Dashboard(state)
+
+        select_action = Action(action_type=ActionType.SELECT, state_changed=True)
+        result = dashboard._handle_action(select_action)
+
+        assert result is True
+        assert dashboard.state.details_open is False
+
+    def test_esc_closes_details_before_clearing_filter(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """ESC precedence: close details first, then clear filter."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+            details_open=True,
+        )
+        state.list_state.filter_query = "scc"
+        dashboard = Dashboard(state)
+
+        cancel_action = Action(action_type=ActionType.CANCEL, state_changed=True)
+        result = dashboard._handle_action(cancel_action)
+
+        # First ESC closes details, filter remains
+        assert result is True
+        assert dashboard.state.details_open is False
+        assert dashboard.state.list_state.filter_query == "scc"
+
+        # Second ESC clears filter
+        result = dashboard._handle_action(cancel_action)
+        assert result is True
+        assert dashboard.state.list_state.filter_query == ""
+
+    def test_enter_on_startable_placeholder_raises_start_requested(
+        self, placeholder_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Enter on startable placeholder (no_containers, no_sessions) raises StartRequested."""
+        from scc_cli.ui.keys import StartRequested
+
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=placeholder_tab_data,
+            list_state=ListState(items=placeholder_tab_data[DashboardTab.CONTAINERS].items),
+        )
+        dashboard = Dashboard(state)
+
+        assert dashboard.state.is_placeholder_selected() is True
+
+        select_action = Action(action_type=ActionType.SELECT, state_changed=True)
+
+        # Startable placeholders (no_containers, no_sessions) raise StartRequested
+        # to signal orchestrator to run the start wizard
+        with pytest.raises(StartRequested) as exc_info:
+            dashboard._handle_action(select_action)
+
+        assert exc_info.value.return_to == "CONTAINERS"  # Tab name for restoration
+        assert exc_info.value.reason == "no_containers"  # Context for logging
+
+    def test_enter_on_non_startable_placeholder_shows_tip(self) -> None:
+        """Enter on non-startable placeholder (no_worktrees, no_git) shows tip message."""
+        # Create a worktree tab with no_worktrees placeholder
+        worktree_items = [ListItem(value="no_worktrees", label="No worktrees")]
+        tab_data = {
+            DashboardTab.STATUS: TabData(
+                tab=DashboardTab.STATUS, title="Status", items=[], count_active=0, count_total=0
+            ),
+            DashboardTab.CONTAINERS: TabData(
+                tab=DashboardTab.CONTAINERS,
+                title="Containers",
+                items=[],
+                count_active=0,
+                count_total=0,
+            ),
+            DashboardTab.SESSIONS: TabData(
+                tab=DashboardTab.SESSIONS, title="Sessions", items=[], count_active=0, count_total=0
+            ),
+            DashboardTab.WORKTREES: TabData(
+                tab=DashboardTab.WORKTREES,
+                title="Worktrees",
+                items=worktree_items,
+                count_active=0,
+                count_total=0,
+            ),
+        }
+
+        state = DashboardState(
+            active_tab=DashboardTab.WORKTREES,
+            tabs=tab_data,
+            list_state=ListState(items=worktree_items),
+        )
+        dashboard = Dashboard(state)
+
+        select_action = Action(action_type=ActionType.SELECT, state_changed=True)
+        result = dashboard._handle_action(select_action)
+
+        # Non-startable placeholders show a tip (not raising StartRequested)
+        assert result is True  # State changed (status_message set)
+        assert dashboard.state.details_open is False
+        assert dashboard.state.status_message is not None
+        assert "git" in dashboard.state.status_message.lower()  # Contains git guidance
+
+    def test_is_placeholder_selected_detects_placeholders(
+        self, placeholder_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """is_placeholder_selected() returns True for all known placeholder values."""
+        placeholder_values = ["no_containers", "no_sessions", "no_worktrees", "no_git", "error"]
+
+        for placeholder in placeholder_values:
+            state = DashboardState(
+                active_tab=DashboardTab.CONTAINERS,
+                tabs=placeholder_tab_data,
+                list_state=ListState(items=[ListItem(value=placeholder, label="Test")]),
+            )
+            assert state.is_placeholder_selected() is True, f"Failed for {placeholder}"
+
+    def test_is_placeholder_selected_false_for_real_items(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """is_placeholder_selected() returns False for real container/session items."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+        )
+        assert state.is_placeholder_selected() is False
+
+    def test_navigation_with_details_open_updates_cursor(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Arrow navigation works when details are open (cursor moves)."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+            details_open=True,
+        )
+        dashboard = Dashboard(state)
+
+        assert dashboard.state.list_state.cursor == 0
+
+        down_action = Action(action_type=ActionType.NAVIGATE_DOWN, state_changed=True)
+        dashboard._handle_action(down_action)
+
+        assert dashboard.state.list_state.cursor == 1
+        # Details should still be open
+        assert dashboard.state.details_open is True
+
+    def test_filter_with_details_open_still_works(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Filtering works when details are open (non-modal behavior)."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+            details_open=True,
+        )
+        dashboard = Dashboard(state)
+
+        filter_action = Action(
+            action_type=ActionType.FILTER_CHAR,
+            state_changed=True,
+            filter_char="d",
+        )
+        dashboard._handle_action(filter_action)
+
+        # Filter should work
+        assert dashboard.state.list_state.filter_query == "d"
+        # Details should still be open
+        assert dashboard.state.details_open is True
+
+    # Phase 2B: Responsive rendering tests
+
+    def test_status_tab_auto_hides_details_in_chrome(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Status tab has no actionable items - no Enter hint in footer."""
+        state = DashboardState(
+            active_tab=DashboardTab.STATUS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.STATUS].items),
+            details_open=True,  # State says open, but render rule hides it
+        )
+        dashboard = Dashboard(state)
+
+        config = dashboard._get_chrome_config()
+
+        # Status tab has no details pane - no Enter actions in footer
+        hint_actions = [h.action for h in config.footer_hints]
+        assert "close" not in hint_actions
+        assert "details" not in hint_actions
+        # Standard navigation and global hints still present
+        assert "navigate" in hint_actions
+        assert "refresh" in hint_actions
+
+    def test_resource_tab_shows_esc_close_when_details_open(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Resource tab with details_open shows 'Esc close' in footer hints."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+            details_open=True,
+        )
+        dashboard = Dashboard(state)
+
+        config = dashboard._get_chrome_config()
+
+        # Footer hints should show "Esc close"
+        hint_keys = [h.key for h in config.footer_hints]
+        hint_actions = [h.action for h in config.footer_hints]
+        assert "Esc" in hint_keys
+        assert "close" in hint_actions
+
+    def test_startable_placeholder_shows_enter_start_hint(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Startable placeholder shows 'Enter start' in footer hints."""
+        # Create container data with startable placeholder
+        placeholder_items: list[ListItem[str]] = [
+            ListItem(value="no_containers", label="No containers", description="Start one"),
+        ]
+        tab_data = dict(resource_tab_data)
+        tab_data[DashboardTab.CONTAINERS] = TabData(
+            tab=DashboardTab.CONTAINERS,
+            title="Containers",
+            items=placeholder_items,
+            count_active=0,
+            count_total=0,
+        )
+
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=tab_data,
+            list_state=ListState(items=placeholder_items),
+        )
+        dashboard = Dashboard(state)
+
+        config = dashboard._get_chrome_config()
+
+        # Footer hints should show "Enter start" for startable placeholder
+        hint_actions = [h.action for h in config.footer_hints]
+        assert "start" in hint_actions
+        assert "details" not in hint_actions
+
+    def test_details_content_derived_from_current_item(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Details content is derived from current_item, not cached."""
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
+            details_open=True,
+        )
+        dashboard = Dashboard(state)
+
+        # Get details for first item
+        details_1 = dashboard._render_details_pane()
+
+        # Move cursor to second item
+        state.list_state.cursor = 1
+
+        # Get details again - should be different (derived from current_item)
+        details_2 = dashboard._render_details_pane()
+
+        # The details should have different rendered content
+        assert _render_to_str(details_1) != _render_to_str(details_2)
+
+    def test_filter_changes_selection_updates_details(
+        self, resource_tab_data: dict[DashboardTab, TabData]
+    ) -> None:
+        """Filter changes affect selection which updates details (regression test)."""
+        # Add more items to Containers for meaningful filtering
+        containers_items = [
+            ListItem(value="c1", label="scc-main", description="Up 2h"),
+            ListItem(value="c2", label="scc-dev", description="Exited"),
+            ListItem(value="c3", label="other-container", description="Up 1h"),
+        ]
+        resource_tab_data[DashboardTab.CONTAINERS] = TabData(
+            tab=DashboardTab.CONTAINERS,
+            title="Containers",
+            items=containers_items,
+            count_active=2,
+            count_total=3,
+        )
+
+        state = DashboardState(
+            active_tab=DashboardTab.CONTAINERS,
+            tabs=resource_tab_data,
+            list_state=ListState(items=containers_items),
+            details_open=True,
+        )
+        dashboard = Dashboard(state)
+
+        # Current item should be first item
+        current_before = dashboard.state.list_state.current_item
+        assert current_before is not None
+        assert current_before.label == "scc-main"
+
+        # Apply filter that matches only "other-container"
+        state.list_state.filter_query = "other"
+        state.list_state.cursor = 0  # Filter resets cursor
+
+        # After filtering, current item should be "other-container"
+        current_after = dashboard.state.list_state.current_item
+        assert current_after is not None
+        assert current_after.label == "other-container"
+
+        # Details pane content should now show the new item
+        details = dashboard._render_details_pane()
+        # The details should reference "other-container"
+        assert "other-container" in _render_to_str(details)
+
+
+class TestTerminalHygiene:
+    """Tests for terminal state management functions."""
+
+    def test_prepare_for_nested_ui_shows_cursor(self) -> None:
+        """_prepare_for_nested_ui should restore cursor visibility."""
+        console = MagicMock()
+
+        _prepare_for_nested_ui(console)
+
+        console.show_cursor.assert_called_once_with(True)
+        console.print.assert_called_once()
+
+    def test_prepare_for_nested_ui_handles_tcflush_errors(self) -> None:
+        """_prepare_for_nested_ui should not crash on tcflush errors."""
+        import io
+        import termios
+
+        console = MagicMock()
+
+        # Test with termios.error (non-Unix)
+        with patch("termios.tcflush", side_effect=termios.error("not a tty")):
+            _prepare_for_nested_ui(console)  # Should not raise
+
+        # Test with OSError (redirected stdin)
+        with patch("termios.tcflush", side_effect=OSError("bad file descriptor")):
+            _prepare_for_nested_ui(console)  # Should not raise
+
+        # Test with ValueError (mock stdin)
+        with patch("termios.tcflush", side_effect=ValueError("mock stdin")):
+            _prepare_for_nested_ui(console)  # Should not raise
+
+        # Test with io.UnsupportedOperation (special mock without fileno)
+        with patch("termios.tcflush", side_effect=io.UnsupportedOperation("no fileno")):
+            _prepare_for_nested_ui(console)  # Should not raise
+
+        # All calls should have completed without raising
+        assert console.show_cursor.call_count == 4

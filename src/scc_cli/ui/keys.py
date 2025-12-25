@@ -45,6 +45,43 @@ class TeamSwitchRequested(Exception):  # noqa: N818
     pass
 
 
+class StartRequested(Exception):  # noqa: N818
+    """Raised when user wants to start a new session from dashboard.
+
+    This is a control flow signal (like TeamSwitchRequested) that allows
+    the dashboard to request the start wizard without coupling to CLI logic.
+
+    The orchestrator (run_dashboard) catches this and runs the start flow.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "CONTAINERS").
+            Uses enum .name (stable identifier), not .value (display string).
+        reason: Context for logging/toast (e.g., "no_containers").
+    """
+
+    def __init__(self, return_to: str = "", reason: str = "") -> None:
+        self.return_to = return_to
+        self.reason = reason
+        super().__init__(reason)
+
+
+class RefreshRequested(Exception):  # noqa: N818
+    """Raised when user requests data refresh via 'r' key.
+
+    This is a control flow signal that allows the dashboard to request
+    a data reload without directly calling data loading functions.
+
+    The orchestrator catches this and reloads tab data.
+
+    Attributes:
+        return_to: Tab name to restore after refresh.
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -66,6 +103,7 @@ class ActionType(Enum):
     TAB_NEXT = auto()  # Tab
     TAB_PREV = auto()  # Shift+Tab
     TEAM_SWITCH = auto()  # 't' - switch to team selection
+    REFRESH = auto()  # 'r' - reload data
     CUSTOM = auto()  # Action key defined by caller
 
 
@@ -92,6 +130,8 @@ class Action(Generic[T]):
 
 # Default key mappings for navigation and common actions.
 # These are shared across all list modes.
+# NOTE: Dashboard-specific keys like 'r' (refresh) should NOT be here.
+# They are handled explicitly in the Dashboard component.
 DEFAULT_KEY_MAP: dict[str, ActionType] = {
     # Arrow key navigation
     readchar.key.UP: ActionType.NAVIGATE_UP,
@@ -154,6 +194,7 @@ def is_printable(key: str) -> bool:
 
     # Exclude keys with special bindings
     # (they'll be handled by the key map first)
+    # NOTE: 'r' is NOT here - it's a filterable char. Dashboard handles 'r' explicitly.
     special_keys = {"q", "?", "a", "j", "k", " ", "t"}
     return key not in special_keys
 
