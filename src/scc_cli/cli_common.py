@@ -14,7 +14,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from . import ui
+from . import ui_legacy as ui
 from .errors import SCCError
 from .panels import create_warning_panel
 

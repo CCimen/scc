@@ -207,6 +207,7 @@ graph TD
     classDef gov fill:#f3e5f5,stroke:#7b1fa2
     classDef audit fill:#fbe9e7,stroke:#d84315
     classDef runtime fill:#e8f5e9,stroke:#2e7d32
+    classDef ui fill:#e0f2f1,stroke:#00695c
 
     subgraph CLI[CLI Layer]
         Main[cli.py]:::cli
@@ -216,6 +217,17 @@ graph TD
         Admin[cli_admin.py]:::cli
         ExcCLI[cli_exceptions.py]:::cli
         AuditCLI[cli_audit.py]:::cli
+    end
+
+    subgraph UIPkg[ui/]
+        UIGate[gate.py]:::ui
+        UIList[list_screen.py]:::ui
+        UIPicker[picker.py]:::ui
+        UIDash[dashboard.py]:::ui
+        UIChrome[chrome.py]:::ui
+        UIKeys[keys.py]:::ui
+        UIHelp[help.py]:::ui
+        UIWizard[wizard.py]:::ui
     end
 
     subgraph Core[Core & Config]
@@ -262,6 +274,20 @@ graph TD
     Main --> Admin
     Main --> ExcCLI
     Main --> AuditCLI
+    Main --> UIDash
+
+    Launch --> UIPicker
+    Launch --> UIWizard
+    Worktree --> UIPicker
+    UIWizard --> UIPicker
+
+    UIDash --> UIList
+    UIPicker --> UIList
+    UIList --> UIChrome
+    UIList --> UIKeys
+    UIList --> UIHelp
+    UIPicker --> UIGate
+    UIDash --> UIGate
 
     Launch --> DockerLaunch
     Launch --> Config
@@ -306,7 +332,7 @@ graph TD
     Git --> Constants
 ```
 
-This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output).
+This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services, Teal = interactive UI. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output). The `ui/` package provides interactive terminal experiences with consistent chrome, keybindings, and behavior patterns. The `wizard.py` module adds start wizard pickers with BACK sentinel navigation for nested screen flows.
 
 Module responsibilities:
 
@@ -333,6 +359,15 @@ Module responsibilities:
 | `stores/exception_store.py` | JSON read/write, backup-on-corrupt, prune expired | Business logic |
 | `audit/parser.py` | JSON manifest parsing, error extraction | File I/O |
 | `audit/reader.py` | Plugin discovery, manifest file reading | Parsing logic |
+| `ui/` | Interactive terminal experiences (package) | Non-TTY output |
+| `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Rendering, business logic |
+| `ui/list_screen.py` | Core navigation engine, state management, key handling | Domain logic |
+| `ui/picker.py` | Selection workflows, Quick Resume with 3-way results, chrome factory | Navigation internals |
+| `ui/dashboard.py` | Tabbed navigation, intent exceptions, toast messages | Selection workflows |
+| `ui/wizard.py` | Start wizard pickers with BACK navigation, workspace source selection | Chrome, list internals |
+| `ui/chrome.py` | Layout primitives (headers, footers, hints), standalone mode dimming | State management |
+| `ui/keys.py` | Key mapping internals, action dispatch | Rendering |
+| `ui/help.py` | Mode-aware help overlay | Key handling |
 
 The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
 
@@ -644,6 +679,7 @@ Security boundaries from org config override everything.
 ~/.cache/scc/
     org_config.json          # Cached remote config
     cache_meta.json          # ETags, timestamps
+    contexts.json            # Recent work contexts
     update_check_meta.json   # Update check throttling
     usage.jsonl              # Session usage events
 

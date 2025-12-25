@@ -1,8 +1,11 @@
 """Tests for teams module."""
 
+from __future__ import annotations
+
 import pytest
 
 from scc_cli import teams
+from scc_cli.teams import TeamInfo
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Fixtures
@@ -565,3 +568,207 @@ class TestConfigIntegration:
         result = teams.validate_team_profile("test-team")
         assert result["valid"] is True
         assert result["plugin"] == "test-plugin"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for TeamInfo dataclass
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTeamInfoDataclass:
+    """Tests for TeamInfo dataclass attributes and defaults."""
+
+    def test_teaminfo_required_field(self) -> None:
+        """TeamInfo requires name field."""
+        team = TeamInfo(name="platform")
+        assert team.name == "platform"
+
+    def test_teaminfo_optional_fields_have_defaults(self) -> None:
+        """TeamInfo optional fields have sensible defaults."""
+        team = TeamInfo(name="platform")
+        assert team.description == ""
+        assert team.plugin is None
+        assert team.marketplace is None
+        assert team.marketplace_type is None
+        assert team.marketplace_repo is None
+        assert team.credential_status is None
+
+    def test_teaminfo_all_fields(self) -> None:
+        """TeamInfo accepts all fields."""
+        team = TeamInfo(
+            name="platform",
+            description="Platform team",
+            plugin="platform-plugin",
+            marketplace="internal",
+            marketplace_type="gitlab",
+            marketplace_repo="org/plugins",
+            credential_status="valid",
+        )
+        assert team.name == "platform"
+        assert team.description == "Platform team"
+        assert team.plugin == "platform-plugin"
+        assert team.marketplace == "internal"
+        assert team.marketplace_type == "gitlab"
+        assert team.marketplace_repo == "org/plugins"
+        assert team.credential_status == "valid"
+
+
+class TestTeamInfoFromDict:
+    """Tests for TeamInfo.from_dict() class method."""
+
+    def test_from_dict_minimal(self) -> None:
+        """from_dict creates TeamInfo with minimal dict."""
+        data = {"name": "platform"}
+        team = TeamInfo.from_dict(data)
+        assert team.name == "platform"
+        assert team.description == ""
+        assert team.plugin is None
+
+    def test_from_dict_full(self) -> None:
+        """from_dict creates TeamInfo with all fields."""
+        data = {
+            "name": "platform",
+            "description": "Platform team",
+            "plugin": "platform-plugin",
+            "marketplace": "internal",
+            "marketplace_type": "gitlab",
+            "marketplace_repo": "org/plugins",
+            "credential_status": "expired",
+        }
+        team = TeamInfo.from_dict(data)
+        assert team.name == "platform"
+        assert team.description == "Platform team"
+        assert team.plugin == "platform-plugin"
+        assert team.marketplace == "internal"
+        assert team.marketplace_type == "gitlab"
+        assert team.marketplace_repo == "org/plugins"
+        assert team.credential_status == "expired"
+
+    def test_from_dict_missing_name_uses_unknown(self) -> None:
+        """from_dict uses 'unknown' for missing name."""
+        data: dict = {}
+        team = TeamInfo.from_dict(data)
+        assert team.name == "unknown"
+
+    def test_from_dict_ignores_extra_fields(self) -> None:
+        """from_dict ignores unknown fields in dict."""
+        data = {"name": "platform", "unknown_field": "value", "extra": 123}
+        team = TeamInfo.from_dict(data)
+        assert team.name == "platform"
+        # Should not raise and should not have extra attrs
+
+
+class TestTeamInfoToListItem:
+    """Tests for TeamInfo.to_list_item() method."""
+
+    def test_to_list_item_basic(self) -> None:
+        """to_list_item returns ListItem with correct label."""
+        team = TeamInfo(name="platform", description="Platform team")
+        item = team.to_list_item()
+
+        assert item.label == "platform"
+        assert item.description == "Platform team"
+        assert item.value is team
+        assert item.governance_status is None
+
+    def test_to_list_item_current_team_indicator(self) -> None:
+        """to_list_item marks current team with checkmark."""
+        team = TeamInfo(name="platform", description="Platform team")
+        item = team.to_list_item(current_team="platform")
+
+        assert item.label == "✓ platform"
+
+    def test_to_list_item_not_current_team(self) -> None:
+        """to_list_item without checkmark when not current."""
+        team = TeamInfo(name="platform", description="Platform team")
+        item = team.to_list_item(current_team="other-team")
+
+        assert item.label == "platform"
+        assert "✓" not in item.label
+
+    def test_to_list_item_expired_credentials(self) -> None:
+        """to_list_item shows blocked status for expired credentials."""
+        team = TeamInfo(
+            name="platform",
+            description="Platform team",
+            credential_status="expired",
+        )
+        item = team.to_list_item()
+
+        assert item.governance_status == "blocked"
+        assert "(credentials expired)" in item.description
+
+    def test_to_list_item_expiring_credentials(self) -> None:
+        """to_list_item shows warning status for expiring credentials."""
+        team = TeamInfo(
+            name="platform",
+            description="Platform team",
+            credential_status="expiring",
+        )
+        item = team.to_list_item()
+
+        assert item.governance_status == "warning"
+        assert "(credentials expiring)" in item.description
+
+    def test_to_list_item_valid_credentials_no_warning(self) -> None:
+        """to_list_item shows no warning for valid credentials."""
+        team = TeamInfo(
+            name="platform",
+            description="Platform team",
+            credential_status="valid",
+        )
+        item = team.to_list_item()
+
+        assert item.governance_status is None
+        assert "credentials" not in item.description
+
+    def test_to_list_item_empty_description(self) -> None:
+        """to_list_item handles empty description."""
+        team = TeamInfo(name="platform")
+        item = team.to_list_item()
+
+        assert item.description == ""
+
+    def test_to_list_item_value_is_team_instance(self) -> None:
+        """to_list_item sets value to TeamInfo instance."""
+        team = TeamInfo(name="platform")
+        item = team.to_list_item()
+
+        assert item.value is team
+        assert isinstance(item.value, TeamInfo)
+
+
+class TestTeamInfoIntegration:
+    """Integration tests for TeamInfo with other teams functions."""
+
+    def test_from_dict_with_list_teams_output(self, sample_config) -> None:
+        """TeamInfo.from_dict works with list_teams output."""
+        team_dicts = teams.list_teams(sample_config)
+
+        for team_dict in team_dicts:
+            team_info = TeamInfo.from_dict(team_dict)
+            assert team_info.name == team_dict["name"]
+            assert team_info.description == team_dict.get("description", "")
+            assert team_info.plugin == team_dict.get("plugin")
+
+    def test_from_dict_with_get_team_details_output(self, sample_config) -> None:
+        """TeamInfo.from_dict works with get_team_details output."""
+        team_dict = teams.get_team_details("ai-teamet", sample_config)
+        assert team_dict is not None
+
+        team_info = TeamInfo.from_dict(team_dict)
+        assert team_info.name == "ai-teamet"
+        assert team_info.marketplace == "sundsvall"
+        assert team_info.marketplace_repo == "sundsvall/claude-plugins-marketplace"
+
+    def test_roundtrip_to_list_item(self, sample_config) -> None:
+        """Full roundtrip: dict -> TeamInfo -> ListItem."""
+        team_dict = teams.get_team_details("ai-teamet", sample_config)
+        assert team_dict is not None
+
+        team_info = TeamInfo.from_dict(team_dict)
+        item = team_info.to_list_item(current_team="ai-teamet")
+
+        assert item.label == "✓ ai-teamet"
+        assert isinstance(item.value, TeamInfo)
+        assert item.value.name == "ai-teamet"

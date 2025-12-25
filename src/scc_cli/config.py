@@ -232,8 +232,12 @@ def set_selected_profile(profile: str) -> None:
 def is_standalone_mode() -> bool:
     """Check if SCC is running in standalone mode (no organization).
 
+    Standalone mode means no organization config is active. This is the case when:
+    1. The `standalone` flag is explicitly set to True, OR
+    2. No organization_source URL is configured (fresh install, solo dev)
+
     Returns:
-        True if standalone mode is enabled
+        True if standalone mode is enabled (no org config)
     """
     config = load_user_config()
 
@@ -246,7 +250,8 @@ def is_standalone_mode() -> bool:
     if org_source and org_source.get("url"):
         return False
 
-    return False
+    # No org configured → default to standalone (solo dev / fresh install)
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

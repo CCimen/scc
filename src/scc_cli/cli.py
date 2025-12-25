@@ -30,7 +30,6 @@ from .cli_common import console, state
 from .cli_config import (
     config_cmd,
     setup_cmd,
-    teams_cmd,
 )
 from .cli_exceptions import exceptions_app, unblock_cmd
 from .cli_init import init_cmd
@@ -42,6 +41,7 @@ from .cli_support import support_app
 from .cli_team import team_app
 from .cli_worktree import (
     container_app,
+    context_app,
     list_cmd,
     prune_cmd,
     session_app,
@@ -105,27 +105,36 @@ def main_callback(
         )
         raise typer.Exit()
 
-    # If no command provided and not showing version, invoke start
-    # NOTE: Must pass ALL defaults explicitly - ctx.invoke() doesn't resolve
-    # typer.Argument/Option defaults, it passes raw ArgumentInfo/OptionInfo objects
+    # If no command provided and not showing version, show dashboard or invoke start
     if ctx.invoked_subcommand is None:
-        ctx.invoke(
-            start,
-            workspace=None,
-            team=None,
-            session_name=None,
-            resume=False,
-            select=False,
-            continue_session=False,
-            worktree_name=None,
-            fresh=False,
-            install_deps=False,
-            offline=False,
-            standalone=False,
-            dry_run=False,
-            json_output=False,
-            pretty=False,
-        )
+        from .ui.gate import is_interactive_allowed
+
+        if is_interactive_allowed():
+            # Interactive TTY - show the dashboard
+            from .ui.dashboard import run_dashboard
+
+            run_dashboard()
+        else:
+            # Non-interactive - invoke start with defaults
+            # NOTE: Must pass ALL defaults explicitly - ctx.invoke() doesn't resolve
+            # typer.Argument/Option defaults, it passes raw ArgumentInfo/OptionInfo
+            ctx.invoke(
+                start,
+                workspace=None,
+                team=None,
+                session_name=None,
+                resume=False,
+                select=False,
+                continue_session=False,
+                worktree_name=None,
+                fresh=False,
+                install_deps=False,
+                offline=False,
+                standalone=False,
+                dry_run=False,
+                json_output=False,
+                pretty=False,
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -156,7 +165,6 @@ app.command(name="prune", rich_help_panel=PANEL_SESSION)(prune_cmd)
 
 # Configuration commands
 app.add_typer(team_app, name="team", rich_help_panel=PANEL_CONFIG)
-app.command(name="teams", hidden=True)(teams_cmd)  # Deprecated alias
 app.command(name="setup", rich_help_panel=PANEL_CONFIG)(setup_cmd)
 app.command(name="config", rich_help_panel=PANEL_CONFIG)(config_cmd)
 app.command(name="init", rich_help_panel=PANEL_CONFIG)(init_cmd)
@@ -186,6 +194,7 @@ app.add_typer(org_app, name="org", rich_help_panel=PANEL_GOVERNANCE)
 # Symmetric alias apps (Phase 8)
 app.add_typer(session_app, name="session", rich_help_panel=PANEL_WORKSPACE)
 app.add_typer(container_app, name="container", rich_help_panel=PANEL_WORKSPACE)
+app.add_typer(context_app, name="context", rich_help_panel=PANEL_WORKSPACE)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

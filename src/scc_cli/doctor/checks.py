@@ -766,7 +766,7 @@ def check_cache_readable() -> CheckResult:
                 name="Org Cache",
                 passed=False,
                 message=f"Cannot read cache file: {e}",
-                fix_hint="Run 'scc teams --sync' to refresh",
+                fix_hint="Run 'scc setup' to refresh organization config",
                 severity="error",
             )
 
@@ -783,7 +783,7 @@ def check_cache_readable() -> CheckResult:
     fix_hint += "Hints:\n"
     for hint in hints:
         fix_hint += f"  • {hint}\n"
-    fix_hint += "Fix: Run 'scc teams --sync' to refresh cache"
+    fix_hint += "Fix: Run 'scc setup' to refresh organization config"
 
     return CheckResult(
         name="Org Cache",
@@ -816,7 +816,7 @@ def check_cache_ttl_status() -> CheckResult | None:
             name="Cache TTL",
             passed=False,
             message="Cache metadata is corrupted",
-            fix_hint="Run 'scc teams --sync' to refresh",
+            fix_hint="Run 'scc setup' to refresh organization config",
             severity="warning",
         )
 
@@ -851,7 +851,7 @@ def check_cache_ttl_status() -> CheckResult | None:
                 name="Cache TTL",
                 passed=False,
                 message=f"Cache expired {hours:.1f} hours ago",
-                fix_hint="Run 'scc teams --sync' to refresh",
+                fix_hint="Run 'scc setup' to refresh organization config",
                 severity="warning",
             )
     except (ValueError, TypeError):
@@ -859,7 +859,7 @@ def check_cache_ttl_status() -> CheckResult | None:
             name="Cache TTL",
             passed=False,
             message="Invalid expiration date in cache metadata",
-            fix_hint="Run 'scc teams --sync' to refresh",
+            fix_hint="Run 'scc setup' to refresh organization config",
             severity="warning",
         )
 

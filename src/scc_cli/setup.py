@@ -357,7 +357,7 @@ def show_setup_complete(
     console.print("[bold white]Get started:[/bold white]")
     console.print()
     console.print("  [cyan]scc start ~/project[/cyan]     [dim]Start Claude Code[/dim]")
-    console.print("  [cyan]scc teams[/cyan]               [dim]List available teams[/dim]")
+    console.print("  [cyan]scc team list[/cyan]          [dim]List available teams[/dim]")
     console.print("  [cyan]scc doctor[/cyan]              [dim]Check system health[/dim]")
     console.print()
 

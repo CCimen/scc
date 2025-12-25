@@ -253,37 +253,12 @@ class TestSessionsCommand:
         ]
         with (
             patch("scc_cli.cli_worktree.sessions.list_recent", return_value=mock_sessions),
-            patch("scc_cli.cli_worktree.ui.select_session") as mock_select,
+            patch("scc_cli.cli_worktree.pick_session") as mock_select,
         ):
             mock_select.return_value = mock_sessions[0]
             runner.invoke(app, ["sessions", "--select"])
-        # Should have called select_session for interactive picker
+        # Should have called pick_session for interactive picker
         mock_select.assert_called_once()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for teams command with profiles integration
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestTeamsCommand:
-    """Tests for teams command using profiles module."""
-
-    def test_teams_sync_fetches_from_remote(self):
-        """Should fetch org config from remote when --sync."""
-        with (
-            patch("scc_cli.cli_config.config.load_config") as mock_cfg,
-            patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.profiles.list_profiles") as mock_list,
-        ):
-            mock_cfg.return_value = {"organization_source": {"url": "https://example.org"}}
-            mock_remote.return_value = {"profiles": {"dev": {}}}
-            mock_list.return_value = [{"name": "dev", "description": "Dev team"}]
-            runner.invoke(app, ["teams", "--sync"])
-        # Should call load_org_config with force_refresh=True
-        if mock_remote.called:
-            call_kwargs = mock_remote.call_args[1]
-            assert call_kwargs.get("force_refresh") is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -627,57 +602,6 @@ class TestStatuslineCommand:
             patch("scc_cli.cli_admin.docker.inject_file_to_sandbox_volume", return_value=True),
         ):
             result = runner.invoke(app, ["statusline", "--uninstall"])
-
-        assert result.exit_code == 0
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for teams command detail view
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestTeamsCommandDetails:
-    """Tests for teams command detailed views."""
-
-    def test_teams_shows_specific_team(self):
-        """Should show details for specific team."""
-        mock_team_details = {
-            "name": "ai-team",
-            "description": "AI development team",
-            "plugin": "ai-tools",
-        }
-        with (
-            patch("scc_cli.cli_config.config.load_config", return_value={}),
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=None),
-            patch("scc_cli.cli_config.teams.get_team_details", return_value=mock_team_details),
-        ):
-            result = runner.invoke(app, ["teams", "ai-team"])
-
-        assert result.exit_code == 0
-
-    def test_teams_shows_all_teams(self):
-        """Should list all available teams."""
-        mock_teams = [
-            {"name": "team-a", "description": "Team A", "plugin": None},
-            {"name": "team-b", "description": "Team B", "plugin": "plugin-b"},
-        ]
-        with (
-            patch("scc_cli.cli_config.config.load_config", return_value={}),
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=None),
-            patch("scc_cli.cli_config.teams.list_teams", return_value=mock_teams),
-        ):
-            result = runner.invoke(app, ["teams"])
-
-        assert result.exit_code == 0
-
-    def test_teams_no_teams_configured(self):
-        """Should show message when no teams configured."""
-        with (
-            patch("scc_cli.cli_config.config.load_config", return_value={}),
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=None),
-            patch("scc_cli.cli_config.teams.list_teams", return_value=[]),
-        ):
-            result = runner.invoke(app, ["teams"])
 
         assert result.exit_code == 0
 

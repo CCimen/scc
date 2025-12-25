@@ -57,6 +57,7 @@ from .core import (
     list_running_sandboxes,
     list_scc_containers,
     remove_container,
+    resume_container,
     run_detached,
     start_container,
     stop_container,
@@ -97,6 +98,7 @@ __all__ = [
     "start_container",
     "stop_container",
     "remove_container",
+    "resume_container",
     "run_detached",
     # Command building
     "build_command",

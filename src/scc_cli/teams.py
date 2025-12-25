@@ -5,9 +5,107 @@ Simplified architecture: SCC generates extraKnownMarketplaces + enabledPlugins,
 Claude Code handles plugin fetching, installation, and updates natively.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from . import config as config_module
+
+if TYPE_CHECKING:
+    from .ui.list_screen import ListItem
+
+
+@dataclass
+class TeamInfo:
+    """Information about a team profile.
+
+    Provides a typed representation of team data for use in the UI layer.
+    Use from_dict() to construct from raw config dicts, and to_list_item()
+    to convert for display in pickers.
+
+    Attributes:
+        name: Team/profile name (unique identifier).
+        description: Human-readable team description.
+        plugin: Optional plugin name for the team.
+        marketplace: Optional marketplace name.
+        marketplace_type: Optional marketplace type (e.g., "github").
+        marketplace_repo: Optional marketplace repository path.
+        credential_status: Credential state ("valid", "expired", "expiring", None).
+    """
+
+    name: str
+    description: str = ""
+    plugin: str | None = None
+    marketplace: str | None = None
+    marketplace_type: str | None = None
+    marketplace_repo: str | None = None
+    credential_status: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TeamInfo:
+        """Create TeamInfo from a dict representation.
+
+        Args:
+            data: Dict with team fields (from list_teams or get_team_details).
+
+        Returns:
+            TeamInfo dataclass instance.
+        """
+        return cls(
+            name=data.get("name", "unknown"),
+            description=data.get("description", ""),
+            plugin=data.get("plugin"),
+            marketplace=data.get("marketplace"),
+            marketplace_type=data.get("marketplace_type"),
+            marketplace_repo=data.get("marketplace_repo"),
+            credential_status=data.get("credential_status"),
+        )
+
+    def to_list_item(self, *, current_team: str | None = None) -> ListItem[TeamInfo]:
+        """Convert to ListItem for display in pickers.
+
+        Args:
+            current_team: Currently selected team name (marked with indicator).
+
+        Returns:
+            ListItem suitable for ListScreen display.
+
+        Example:
+            >>> team = TeamInfo(name="platform", description="Platform team")
+            >>> item = team.to_list_item(current_team="platform")
+            >>> item.label
+            '✓ platform'
+        """
+        from .ui.list_screen import ListItem
+
+        is_current = current_team is not None and self.name == current_team
+
+        # Build label with current indicator
+        label = f"✓ {self.name}" if is_current else self.name
+
+        # Check for credential/governance status
+        governance_status: str | None = None
+        if self.credential_status == "expired":
+            governance_status = "blocked"
+        elif self.credential_status == "expiring":
+            governance_status = "warning"
+
+        # Build description parts
+        desc_parts: list[str] = []
+        if self.description:
+            desc_parts.append(self.description)
+        if self.credential_status == "expired":
+            desc_parts.append("(credentials expired)")
+        elif self.credential_status == "expiring":
+            desc_parts.append("(credentials expiring)")
+
+        return ListItem(
+            value=self,
+            label=label,
+            description="  ".join(desc_parts),
+            governance_status=governance_status,
+        )
 
 
 def list_teams(cfg: dict, org_config: dict | None = None) -> list[dict]:

@@ -4,7 +4,7 @@ Define team management commands for SCC CLI.
 Provide structured team management:
 - scc team list      - List available teams
 - scc team current   - Show current team
-- scc team switch    - Switch to a different team
+- scc team switch    - Switch to a different team (interactive picker)
 - scc team info      - Show detailed team information
 
 All commands support --json output with proper envelopes.
@@ -22,6 +22,8 @@ from .json_command import json_command
 from .kinds import Kind
 from .output_mode import is_json_mode, print_human
 from .panels import create_warning_panel
+from .ui.gate import InteractivityContext
+from .ui.picker import TeamSwitchRequested, pick_team
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Team App Definition
@@ -232,61 +234,66 @@ def team_switch(
         )
         return {"success": False, "error": "no_teams_available", "previous": None, "current": None}
 
-    # Interactive mode if no team specified
-    if team_name is None:
-        if non_interactive:
+    # Get current team for picker display
+    current = cfg.get("selected_profile")
+
+    # Resolve team name (explicit arg, picker, or error)
+    resolved_name: str | None = team_name
+
+    if resolved_name is None:
+        # Create interactivity context from flags
+        ctx = InteractivityContext.create(
+            json_mode=is_json_mode(),
+            no_interactive=non_interactive,
+        )
+
+        if ctx.allows_prompt():
+            # Show interactive picker
+            try:
+                selected_team = pick_team(available_teams, current_team=current)
+                if selected_team is None:
+                    # User cancelled - exit cleanly
+                    return {
+                        "success": False,
+                        "cancelled": True,
+                        "previous": current,
+                        "current": None,
+                    }
+                resolved_name = selected_team["name"]
+            except TeamSwitchRequested:
+                # Already in team picker - treat as cancel
+                return {"success": False, "cancelled": True, "previous": current, "current": None}
+        else:
+            # Non-interactive mode with no team specified
             raise typer.BadParameter(
                 "Team name required in non-interactive mode. "
                 f"Available: {', '.join(t['name'] for t in available_teams)}"
             )
 
-        # Show picker
-        import sys
-
-        if sys.stdin.isatty():
-            print_human("[bold]Select a team:[/bold]")
-            for i, team in enumerate(available_teams, 1):
-                desc = team.get("description", "")
-                if len(desc) > 50:
-                    desc = desc[:47] + "..."
-                print_human(f"  [{i}] {team['name']}: {desc}")
-
-            print_human()
-            choice = typer.prompt("Enter number", type=int)
-            if 1 <= choice <= len(available_teams):
-                team_name = available_teams[choice - 1]["name"]
-            else:
-                raise typer.BadParameter(f"Invalid choice: {choice}")
-        else:
-            raise typer.BadParameter(
-                "Team name required when not running interactively. "
-                f"Available: {', '.join(t['name'] for t in available_teams)}"
-            )
-
-    # Validate team exists
+    # Validate team exists (when name provided directly as arg)
     team_names = [t["name"] for t in available_teams]
-    if team_name not in team_names:
+    if resolved_name not in team_names:
         print_human(
-            f"[red]Team '{team_name}' not found.[/red]\n"
+            f"[red]Team '{resolved_name}' not found.[/red]\n"
             f"[dim]Available: {', '.join(team_names)}[/dim]"
         )
-        return {"success": False, "error": "team_not_found", "team": team_name}
+        return {"success": False, "error": "team_not_found", "team": resolved_name}
 
     # Get previous team
     previous = cfg.get("selected_profile")
 
     # Switch team
-    cfg["selected_profile"] = team_name
+    cfg["selected_profile"] = resolved_name
     config.save_user_config(cfg)
 
-    print_human(f"[green]✓ Switched to team: {team_name}[/green]")
-    if previous and previous != team_name:
+    print_human(f"[green]✓ Switched to team: {resolved_name}[/green]")
+    if previous and previous != resolved_name:
         print_human(f"[dim]Previous: {previous}[/dim]")
 
     return {
         "success": True,
         "previous": previous,
-        "current": team_name,
+        "current": resolved_name,
     }
 
 

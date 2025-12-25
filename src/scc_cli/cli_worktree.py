@@ -12,7 +12,7 @@ import typer
 from rich.prompt import Confirm
 from rich.status import Status
 
-from . import deps, docker, git, sessions, ui
+from . import contexts, deps, docker, git, sessions
 from .cli_common import console, handle_errors, render_responsive_table
 from .cli_helpers import ConfirmItems, confirm_action
 from .constants import WORKTREE_BRANCH_PREFIX
@@ -21,6 +21,8 @@ from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .ui.gate import InteractivityContext
+from .ui.picker import TeamSwitchRequested, pick_containers, pick_session, pick_worktree
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Worktree App
@@ -124,10 +126,17 @@ def worktree_create_cmd(
 @handle_errors
 def worktree_list_cmd(
     workspace: str = typer.Argument(".", help="Path to the repository"),
+    interactive: bool = typer.Option(
+        False, "-i", "--interactive", help="Interactive mode: select a worktree to work with"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
-    """List all worktrees for a repository."""
+    """List all worktrees for a repository.
+
+    With -i/--interactive, select a worktree and print its path
+    (useful for piping: cd $(scc worktree list -i))
+    """
     # --pretty implies --json
     if pretty:
         json_output = True
@@ -158,6 +167,21 @@ def worktree_list_cmd(
                 "Create one with: scc worktree create <repo> <name>",
             )
         )
+        return
+
+    # Interactive mode: use worktree picker
+    if interactive:
+        try:
+            selected = pick_worktree(
+                worktree_list,
+                title="Select Worktree",
+                subtitle=f"{len(worktree_list)} worktrees in {workspace_path.name}",
+            )
+            if selected:
+                # Print just the path for scripting: cd $(scc worktree list -i)
+                print(selected.path)
+        except TeamSwitchRequested:
+            console.print("[dim]Use 'scc team switch' to change teams[/dim]")
         return
 
     # Use the beautiful worktree rendering from git.py
@@ -212,10 +236,17 @@ def sessions_cmd(
 
     # Interactive picker mode
     if select and recent:
-        selected = ui.select_session(console, recent)
-        if selected:
-            console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
-            console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        try:
+            selected = pick_session(
+                recent,
+                title="Select Session",
+                subtitle=f"{len(recent)} recent sessions",
+            )
+            if selected:
+                console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
+                console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        except TeamSwitchRequested:
+            console.print("[dim]Use 'scc team switch' to change teams[/dim]")
         return
 
     if not recent:
@@ -256,9 +287,75 @@ def sessions_cmd(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _list_interactive(containers: list) -> None:
+    """Run interactive container list with action keys.
+
+    Allows user to navigate containers and press action keys:
+    - s: Stop the selected container
+    - r: Resume the selected container
+    - Enter: Show container details
+
+    Args:
+        containers: List of ContainerInfo objects.
+    """
+    from .ui.formatters import format_container
+    from .ui.list_screen import ListMode, ListScreen
+
+    # Convert to list items
+    items = [format_container(c) for c in containers]
+
+    # Define action handlers
+    def stop_container_action(item: Any) -> None:
+        """Stop the selected container."""
+        container = item.value
+        with Status(f"[cyan]Stopping {container.name}...[/cyan]", console=console):
+            success = docker.stop_container(container.id)
+        if success:
+            console.print(f"[green]✓ Stopped: {container.name}[/green]")
+        else:
+            console.print(f"[red]✗ Failed to stop: {container.name}[/red]")
+
+    def resume_container_action(item: Any) -> None:
+        """Resume the selected container."""
+        container = item.value
+        with Status(f"[cyan]Resuming {container.name}...[/cyan]", console=console):
+            success = docker.resume_container(container.id)
+        if success:
+            console.print(f"[green]✓ Resumed: {container.name}[/green]")
+        else:
+            console.print(f"[red]✗ Failed to resume: {container.name}[/red]")
+
+    # Create screen with action handlers
+    screen = ListScreen(
+        items,
+        title="Containers",
+        mode=ListMode.ACTIONABLE,
+        custom_actions={
+            "s": stop_container_action,
+            "r": resume_container_action,
+        },
+    )
+
+    # Run the screen (actions execute via callbacks, returns None)
+    screen.run()
+
+    console.print("[dim]Actions: s=stop, r=resume, q=quit[/dim]")
+
+
 @handle_errors
-def list_cmd() -> None:
-    """List all SCC-managed Docker containers."""
+def list_cmd(
+    interactive: bool = typer.Option(
+        False, "-i", "--interactive", help="Interactive mode: select container and take action"
+    ),
+) -> None:
+    """List all SCC-managed Docker containers.
+
+    With -i/--interactive, enter actionable mode where you can select a container
+    and press action keys:
+    - s: Stop the container
+    - r: Resume the container
+    - Enter: Select and show details
+    """
     with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
         containers = docker.list_scc_containers()
 
@@ -272,7 +369,12 @@ def list_cmd() -> None:
         )
         return
 
-    # Build rows
+    # Interactive mode: use ACTIONABLE list screen
+    if interactive:
+        _list_interactive(containers)
+        return
+
+    # Build rows for table display
     rows = []
     for c in containers:
         # Color status based on state
@@ -303,16 +405,20 @@ def list_cmd() -> None:
     )
 
     console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")
+    console.print("[dim]Or use: scc list -i for interactive mode[/dim]")
 
 
 @handle_errors
 def stop_cmd(
     container: str = typer.Argument(
         None,
-        help="Container name or ID to stop (omit to stop all running)",
+        help="Container name or ID to stop (omit for interactive picker)",
     ),
     all_containers: bool = typer.Option(
         False, "--all", "-a", help="Stop all running Claude Code sandboxes"
+    ),
+    interactive: bool = typer.Option(
+        False, "-i", "--interactive", help="Use multi-select picker to choose containers"
     ),
     yes: bool = typer.Option(
         False, "-y", "--yes", help="Skip confirmation prompt when stopping multiple containers"
@@ -321,7 +427,8 @@ def stop_cmd(
     """Stop running Docker sandbox(es).
 
     Examples:
-        scc stop                         # Stop all running sandboxes (prompts if >1)
+        scc stop                         # Interactive picker if multiple running
+        scc stop -i                      # Force interactive multi-select picker
         scc stop claude-sandbox-2025...  # Stop specific container
         scc stop --all                   # Stop all (explicit)
         scc stop --yes                   # Stop all without confirmation
@@ -375,8 +482,30 @@ def stop_cmd(
             raise typer.Exit(1)
         return
 
-    # Stop all running containers - prompt for confirmation if multiple
-    if len(running) > 1:
+    # Determine which containers to stop
+    to_stop = running
+
+    # Interactive picker mode: when -i flag OR multiple containers without --all/--yes
+    ctx = InteractivityContext.create(json_mode=False, no_interactive=False)
+    use_picker = interactive or (len(running) > 1 and not all_containers and not yes)
+
+    if use_picker and ctx.allows_prompt():
+        # Use multi-select picker
+        try:
+            selected = pick_containers(
+                running,
+                title="Stop Containers",
+                subtitle=f"{len(running)} running",
+            )
+            if not selected:
+                console.print("[dim]No containers selected.[/dim]")
+                return
+            to_stop = selected
+        except TeamSwitchRequested:
+            console.print("[dim]Use 'scc team switch' to change teams[/dim]")
+            return
+    elif len(running) > 1 and not yes:
+        # Fallback to confirmation prompt (non-TTY or --all without --yes)
         try:
             confirm_action(
                 yes=yes,
@@ -390,11 +519,11 @@ def stop_cmd(
             console.print("[dim]Aborted.[/dim]")
             return
 
-    console.print(f"[cyan]Stopping {len(running)} container(s)...[/cyan]")
+    console.print(f"[cyan]Stopping {len(to_stop)} container(s)...[/cyan]")
 
     stopped = []
     failed = []
-    for c in running:
+    for c in to_stop:
         with Status(f"[cyan]Stopping {c.name}...[/cyan]", console=console):
             if docker.stop_container(c.id):
                 stopped.append(c.name)
@@ -574,10 +703,17 @@ def session_list_cmd(
 
     # Interactive picker mode
     if select and recent:
-        selected = ui.select_session(console, recent)
-        if selected:
-            console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
-            console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        try:
+            selected = pick_session(
+                recent,
+                title="Select Session",
+                subtitle=f"{len(recent)} recent sessions",
+            )
+            if selected:
+                console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
+                console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+        except TeamSwitchRequested:
+            console.print("[dim]Use 'scc team switch' to change teams[/dim]")
         return
 
     if not recent:
@@ -664,3 +800,66 @@ def container_list_cmd() -> None:
     )
 
     console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Context App (Work Context Management)
+# ─────────────────────────────────────────────────────────────────────────────
+
+context_app = typer.Typer(
+    name="context",
+    help="Work context management commands.",
+    no_args_is_help=True,
+)
+
+
+@context_app.command("clear")
+@handle_errors
+def context_clear_cmd(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """Clear all recent work contexts from cache.
+
+    Use this command when the Recent Contexts list shows stale or
+    incorrect entries that you want to reset.
+
+    Examples:
+        scc context clear           # With confirmation prompt
+        scc context clear --yes     # Skip confirmation
+    """
+    cache_path = contexts._get_contexts_path()
+
+    # Show current count
+    current_count = len(contexts.load_recent_contexts())
+    if current_count == 0:
+        console.print(
+            create_info_panel(
+                "No Contexts",
+                "No work contexts to clear.",
+                "Contexts are created when you run: scc start <workspace>",
+            )
+        )
+        return
+
+    # Confirm unless --yes (improved what/why/next confirmation)
+    if not yes:
+        console.print(
+            f"[yellow]This will remove {current_count} context(s) from {cache_path}[/yellow]"
+        )
+        if not Confirm.ask("Continue?"):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    # Clear and report
+    cleared = contexts.clear_contexts()
+
+    console.print(
+        create_success_panel(
+            "Contexts Cleared",
+            {
+                "Removed": f"{cleared} work context(s)",
+                "Cache file": str(cache_path),
+            },
+        )
+    )
+    console.print("[dim]Run 'scc start' to repopulate.[/dim]")
