@@ -140,7 +140,9 @@ def prompt_auth_method(console: Console) -> str | None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def fetch_and_validate_org_config(console: Console, url: str, auth: str | None) -> dict | None:
+def fetch_and_validate_org_config(
+    console: Console, url: str, auth: str | None
+) -> dict[str, Any] | None:
     """Fetch and validate the organization config from a URL.
 
     Args:
@@ -179,7 +181,7 @@ def fetch_and_validate_org_config(console: Console, url: str, auth: str | None) 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def prompt_profile_selection(console: Console, org_config: dict) -> str | None:
+def prompt_profile_selection(console: Console, org_config: dict[str, Any]) -> str | None:
     """Prompt the user to select a profile from the org config.
 
     Args:

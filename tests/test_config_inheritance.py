@@ -17,7 +17,7 @@ from scc_cli import validate
 def valid_v2_org_config():
     """Create a valid v2 organization config with all features."""
     return {
-        "schema_version": "2.0.0",
+        "schema_version": "1.0.0",
         "organization": {
             "name": "Sundsvall Municipality",
             "id": "sundsvall",
@@ -81,7 +81,7 @@ def valid_v2_org_config():
 def minimal_v2_org_config():
     """Create a minimal valid v2 config with only required fields."""
     return {
-        "schema_version": "2.0.0",
+        "schema_version": "1.0.0",
         "organization": {
             "name": "Minimal Org",
             "id": "minimal-org",
@@ -94,13 +94,13 @@ def minimal_v2_org_config():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestLoadBundledSchemaV2:
-    """Tests for loading v2 schema."""
+class TestLoadBundledSchemaV1:
+    """Tests for loading v1 schema."""
 
-    def test_load_bundled_schema_v2(self):
-        """Should load v2 schema from package resources."""
-        schema = validate.load_bundled_schema("v2")
-        assert schema["$id"] == "https://scc-cli.dev/schemas/org-v2.json"
+    def test_load_bundled_schema_v1(self):
+        """Should load v1 schema from package resources."""
+        schema = validate.load_bundled_schema("v1")
+        assert schema["$id"] == "https://scc-cli.dev/schemas/org-v1.json"
         assert "organization" in schema["properties"]
         assert "security" in schema["properties"]
         assert "delegation" in schema["properties"]
@@ -117,32 +117,32 @@ class TestV2SchemaSecurityValidation:
 
     def test_validate_valid_security_block(self, valid_v2_org_config):
         """Valid security block should pass validation."""
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_security_blocked_plugins_must_be_array(self, valid_v2_org_config):
         """Security blocked_plugins must be an array."""
         valid_v2_org_config["security"]["blocked_plugins"] = "not-an-array"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
         assert any("blocked_plugins" in e for e in errors)
 
     def test_validate_security_blocked_plugins_items_must_be_strings(self, valid_v2_org_config):
         """Security blocked_plugins items must be strings."""
         valid_v2_org_config["security"]["blocked_plugins"] = [123, True]
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_security_blocked_mcp_servers_must_be_array(self, valid_v2_org_config):
         """Security blocked_mcp_servers must be an array."""
         valid_v2_org_config["security"]["blocked_mcp_servers"] = "not-an-array"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_security_blocked_base_images_must_be_array(self, valid_v2_org_config):
         """Security blocked_base_images must be an array."""
         valid_v2_org_config["security"]["blocked_base_images"] = "not-an-array"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
 
@@ -156,25 +156,25 @@ class TestV2SchemaDefaultsValidation:
 
     def test_validate_valid_defaults_block(self, valid_v2_org_config):
         """Valid defaults block should pass validation."""
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_defaults_session_timeout_positive(self, valid_v2_org_config):
         """Session timeout_hours must be positive."""
         valid_v2_org_config["defaults"]["session"]["timeout_hours"] = 0
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_defaults_session_timeout_reasonable_max(self, valid_v2_org_config):
         """Session timeout_hours must be reasonable (max 24 hours)."""
         valid_v2_org_config["defaults"]["session"]["timeout_hours"] = 100
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_defaults_network_policy_enum(self, valid_v2_org_config):
         """Network policy must be valid enum value."""
         valid_v2_org_config["defaults"]["network_policy"] = "invalid-policy"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
         assert any("network_policy" in e for e in errors)
 
@@ -189,19 +189,19 @@ class TestV2SchemaDelegationValidation:
 
     def test_validate_valid_delegation_block(self, valid_v2_org_config):
         """Valid delegation block should pass validation."""
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_delegation_teams_plugins_must_be_array(self, valid_v2_org_config):
         """Team delegation allow_additional_plugins must be an array."""
         valid_v2_org_config["delegation"]["teams"]["allow_additional_plugins"] = "not-an-array"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_delegation_projects_inherit_must_be_bool(self, valid_v2_org_config):
         """Project delegation inherit_team_delegation must be boolean."""
         valid_v2_org_config["delegation"]["projects"]["inherit_team_delegation"] = "yes"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
 
@@ -215,7 +215,7 @@ class TestV2SchemaProfilesValidation:
 
     def test_validate_valid_profile_with_delegation(self, valid_v2_org_config):
         """Valid profile with delegation should pass validation."""
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_profile_delegation_must_be_boolean(self, valid_v2_org_config):
@@ -223,13 +223,13 @@ class TestV2SchemaProfilesValidation:
         valid_v2_org_config["profiles"]["urban-planning"]["delegation"][
             "allow_project_overrides"
         ] = "yes"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_profile_additional_plugins_must_be_array(self, valid_v2_org_config):
         """Profile additional_plugins must be an array."""
         valid_v2_org_config["profiles"]["urban-planning"]["additional_plugins"] = "gis-tools"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_profile_mcp_server_requires_name_type_url(self, valid_v2_org_config):
@@ -237,7 +237,7 @@ class TestV2SchemaProfilesValidation:
         valid_v2_org_config["profiles"]["urban-planning"]["additional_mcp_servers"] = [
             {"name": "missing-type-and-url"}
         ]
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_profile_mcp_server_type_enum(self, valid_v2_org_config):
@@ -245,7 +245,7 @@ class TestV2SchemaProfilesValidation:
         valid_v2_org_config["profiles"]["urban-planning"]["additional_mcp_servers"] = [
             {"name": "test", "type": "invalid-type", "url": "https://example.com"}
         ]
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
 
@@ -259,25 +259,25 @@ class TestV2SchemaStatsValidation:
 
     def test_validate_valid_stats_block(self, valid_v2_org_config):
         """Valid stats block should pass validation."""
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_stats_enabled_must_be_boolean(self, valid_v2_org_config):
         """Stats enabled must be boolean."""
         valid_v2_org_config["stats"]["enabled"] = "yes"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_stats_user_identity_mode_enum(self, valid_v2_org_config):
         """Stats user_identity_mode must be valid enum."""
         valid_v2_org_config["stats"]["user_identity_mode"] = "invalid-mode"
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
     def test_validate_stats_retention_days_positive(self, valid_v2_org_config):
         """Stats retention_days must be positive."""
         valid_v2_org_config["stats"]["retention_days"] = 0
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert len(errors) >= 1
 
 
@@ -291,34 +291,25 @@ class TestV2SchemaEdgeCases:
 
     def test_validate_minimal_v2_config(self, minimal_v2_org_config):
         """Minimal v2 config should be valid."""
-        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v1")
         assert errors == []
-
-    def test_validate_v2_requires_schema_version_2(self):
-        """V2 schema should require schema_version starting with 2."""
-        config = {
-            "schema_version": "1.0.0",  # Wrong major version
-            "organization": {"name": "Test", "id": "test"},
-        }
-        errors = validate.validate_org_config(config, schema_version="v2")
-        assert len(errors) >= 1
 
     def test_validate_empty_security_block_is_valid(self, minimal_v2_org_config):
         """Empty security block should be valid (uses defaults)."""
         minimal_v2_org_config["security"] = {}
-        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_empty_delegation_block_is_valid(self, minimal_v2_org_config):
         """Empty delegation block should be valid (uses defaults)."""
         minimal_v2_org_config["delegation"] = {}
-        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v1")
         assert errors == []
 
     def test_validate_empty_stats_block_is_valid(self, minimal_v2_org_config):
         """Empty stats block should be valid (uses defaults)."""
         minimal_v2_org_config["stats"] = {}
-        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(minimal_v2_org_config, schema_version="v1")
         assert errors == []
 
 
@@ -329,12 +320,6 @@ class TestV2SchemaEdgeCases:
 
 class TestSchemaVersionDetection:
     """Tests for detecting and handling schema versions."""
-
-    def test_detect_schema_version_v2(self):
-        """Should detect v2 schema from schema_version field."""
-        config = {"schema_version": "2.0.0"}
-        version = validate.detect_schema_version(config)
-        assert version == "v2"
 
     def test_detect_schema_version_v1(self):
         """Should detect v1 schema from schema_version field."""
@@ -377,7 +362,7 @@ class TestDelegationHierarchy:
         ] = True
 
         # Config should still be valid - this is a business logic rule, not schema
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
         # Note: The actual enforcement of this rule happens in compute_effective_config()
 
@@ -388,7 +373,7 @@ class TestDelegationHierarchy:
             "allow_project_overrides"
         ] = False
 
-        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v2")
+        errors = validate.validate_org_config(valid_v2_org_config, schema_version="v1")
         assert errors == []
 
 

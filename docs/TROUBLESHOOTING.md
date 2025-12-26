@@ -318,6 +318,130 @@ scc start ~/repo --offline
 
 This only works if you've successfully fetched the config before.
 
+## Federated Team Config Issues
+
+### Trust Violation Error
+
+**Symptom**: `scc team switch` or `scc start` fails with "Trust violation for team 'X'"
+
+**Diagnosis**:
+```bash
+scc team validate --team <name>
+```
+
+**Possible causes**:
+
+1. **Team defines marketplaces without permission**
+   - Error: "Team defines marketplaces but trust grant has allow_additional_marketplaces=False"
+   - Solution: Ask org admin to set `allow_additional_marketplaces: true` in the team's trust grant
+
+2. **Marketplace source doesn't match allowed patterns**
+   - Error: "Marketplace source 'github.com/X' doesn't match any allowed pattern"
+   - Solution: Either update `marketplace_source_patterns` to allow the source, or use an allowed source
+
+3. **Marketplace name collision**
+   - Error: "Team marketplace 'shared' conflicts with org-defined marketplace"
+   - Solution: Rename the team's marketplace to avoid collision with org or implicit marketplaces
+
+### Team Config Fetch Failed
+
+**Symptom**: `scc start` fails with "Failed to fetch config for team 'X'"
+
+**Diagnosis**:
+```bash
+scc org update --team <name>
+```
+
+**Possible causes**:
+
+1. **Network unreachable**
+   - Check internet connection
+   - For GitHub sources: verify repository access permissions
+   - For Git sources: verify SSH keys or credentials
+
+2. **Repository not found**
+   - Verify owner/repo spelling in `config_source`
+   - For private repos: ensure proper authentication
+
+3. **Branch doesn't exist**
+   - Check if specified branch exists in the repository
+   - Remove `branch` field to use default branch
+
+4. **Path not found**
+   - Verify `path` field points to valid location in repo
+   - Default is `""` (repo root) which expects `team-config.json`
+
+**Workaround**: If cached config exists (<7 days old), SCC will use it with a warning:
+```bash
+scc start ~/repo --team platform
+# Warning: Using cached config (2 days old)
+```
+
+### Stale Team Config Warning
+
+**Symptom**: Warning "Using cached team config (X days old)" on every command
+
+**Cause**: Team config fetch is failing but cache is still valid (<7 days)
+
+**Diagnosis**:
+```bash
+scc org update --team <name>
+```
+
+This shows the actual fetch error.
+
+**Solutions**:
+1. Fix the fetch error (network, auth, repo access)
+2. Ask team admin to verify the config source is still valid
+3. Cache will expire after 7 days if not refreshed
+
+### Expired Team Config Cache
+
+**Symptom**: "Team config cache expired (>7 days) and fetch failed"
+
+**Cause**: No network access and cached config is too old to use safely.
+
+**Solution**: You must be online to refresh the team config:
+```bash
+scc org update --team <name>
+```
+
+There is no `--offline` workaround for expired caches. This is intentional - using very old team configs could bypass recent org security updates.
+
+### inherit_org_marketplaces Conflict
+
+**Symptom**: "Team has inherit_org_marketplaces=false but defaults.enabled_plugins reference org marketplaces"
+
+**Cause**: The org config has `defaults.enabled_plugins` that reference plugins from org-defined marketplaces (e.g., `plugin@shared`), but the team's trust has `inherit_org_marketplaces: false`.
+
+**Solutions**:
+1. Set `inherit_org_marketplaces: true` in the team's trust grant
+2. Remove the conflicting plugins from `defaults.enabled_plugins`
+3. Move the plugins to a marketplace the team can access
+
+### Team Validation Failed
+
+**Symptom**: `scc team validate` reports issues
+
+**Common issues**:
+
+1. **Plugin blocked by security**
+   - Team's plugins match org `security.blocked_plugins` patterns
+   - Solution: Remove blocked plugins from team config
+
+2. **Marketplace source rejected**
+   - Team's marketplace sources don't match trust patterns
+   - Solution: Use approved sources or request pattern update
+
+3. **Invalid JSON in external config**
+   - The team-config.json has syntax errors
+   - Solution: Validate JSON syntax in the team's config repository
+
+Run validation with verbose output:
+```bash
+scc team validate --team <name> --verbose
+```
+
 ## Docker Not Running
 
 **Symptom**: "Cannot connect to Docker daemon"

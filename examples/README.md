@@ -1,26 +1,169 @@
 # SCC Organization Config Examples
 
-Configuration examples for different security postures and organizational needs. These examples progress from beginner to advanced, helping you understand how to configure SCC for your organization.
+Ready-to-use configuration templates for SCC (Sandboxed Code CLI). Copy the example that best matches your needs and customize it.
+
+---
+
+## Quick Start
+
+**New to SCC?** Start here:
+
+```bash
+# 1. Copy a skeleton template
+cp examples/06-github-federated-skeleton.json org-config.json
+
+# 2. Edit with your organization details
+# - Change "your-org" to your GitHub organization
+# - Update organization name, id, and contact
+
+# 3. Validate
+scc config explain org-config.json
+```
+
+---
+
+## Which Example Should I Use?
+
+| Your Situation | Use This | Why |
+|----------------|----------|-----|
+| First time setting up SCC | `01-quickstart-minimal.json` | Minimal, secure defaults |
+| Multiple teams, same org | `02-org-teams-delegation.json` | Team profiles with delegation |
+| Regulated industry (finance, healthcare) | `03-org-strict-security.json` | Maximum security controls |
+| Need local CLI tools via MCP | `04-org-stdio-hardened.json` | Secure stdio configuration |
+| Teams manage their own configs | `06-github-federated-skeleton.json` | GitHub-only federation |
+| Private GitLab + public GitHub plugins | `07-hybrid-gitlab-github-skeleton.json` | Mixed source federation |
+| **Swedish municipality / public sector** | `08-sundsvall-kommun-org.json` | Real-world reference config |
+| See all available options | `99-complete-reference.json` | Reference only (not for production) |
+
+---
 
 ## Learning Progression
 
-Follow this order to learn SCC governance incrementally:
+Build your understanding step by step:
 
 | Level | File | What You Learn |
 |-------|------|----------------|
 | 🟢 Beginner | `01-quickstart-minimal.json` | Basic structure, secure defaults |
-| 🟡 Intermediate | `02-org-teams-delegation.json` | Multi-team setup, delegation, tech stack profiles |
-| 🔴 Advanced | `03-org-strict-security.json` | Locked-down configs for regulated industries |
-| 🔴 Advanced | `04-org-stdio-hardened.json` | Local MCP tools with security controls |
-| 📚 Reference | `99-complete-reference.json` | All fields documented (not for production use) |
+| 🟡 Intermediate | `02-org-teams-delegation.json` | Multi-team setup, delegation, profiles |
+| 🔴 Advanced | `03-org-strict-security.json` | Locked-down configs for compliance |
+| 🔴 Advanced | `04-org-stdio-hardened.json` | Local MCP tools with security |
+| 🔴 Advanced | `05-org-federated-teams.json` | Complete federated example |
+| 🟣 Skeleton | `06-github-federated-skeleton.json` | GitHub-only federation template |
+| 🟣 Skeleton | `07-hybrid-gitlab-github-skeleton.json` | GitLab + GitHub hybrid template |
+| 🏛️ Real-World | `08-sundsvall-kommun-org.json` | Swedish municipality with real teams |
+| 🏛️ Real-World | `08-sundsvall-ai-team-config.json` | AI team's federated config |
+| 📚 Reference | `99-complete-reference.json` | All fields documented |
+| 📚 Reference | `team-config-example.json` | External team config format |
 
-## Quick Start
+---
 
-Start with `01-quickstart-minimal.json` for a minimal working configuration with secure defaults. Copy and customize for your organization.
+## Skeleton Templates (Copy These)
 
-## Examples by Use Case
+### 06-github-federated-skeleton.json
+**Best for**: Organizations using GitHub for everything
 
-### 01-quickstart-minimal.json - Getting Started
+```
+Your Org (GitHub)
+├── org-config repo (this file)
+├── shared-plugins repo (marketplace)
+├── platform-team-config repo (federated team config)
+└── backend-team-config repo (federated team config)
+```
+
+**Features**:
+- All sources are GitHub repos
+- Platform team can define additional marketplaces
+- Backend team inherits org marketplaces only
+- Frontend team uses inline config (no federation)
+
+**Customize**:
+1. Replace `your-org` with your GitHub organization name
+2. Create the team config repos on GitHub
+3. Adjust trust grants per team's needs
+
+### 07-hybrid-gitlab-github-skeleton.json
+**Best for**: Organizations with private GitLab for configs, public GitHub for plugins
+
+```
+Your Org
+├── GitLab (private) → team configs
+│   ├── teams/platform-config.git (SSH clone)
+│   └── teams/backend-config.git (HTTPS)
+└── GitHub (public) → plugins/marketplaces
+    └── your-company/public-plugins
+```
+
+**Features**:
+- Team configs stored on private GitLab (SSH or HTTPS)
+- Shared plugins on public GitHub
+- Contractors limited to GitHub public only
+- Security team uses inline config (maximum control)
+
+**Customize**:
+1. Replace `gitlab.your-company.com` with your GitLab domain
+2. Replace `your-company` with your GitHub organization
+3. Adjust `marketplace_source_patterns` to match your repos
+
+---
+
+## Real-World Reference: Sundsvalls kommun
+
+### 08-sundsvall-kommun-org.json
+**Best for**: Swedish municipalities, public sector organizations, or anyone wanting a complete real-world example
+
+This is a production-ready configuration based on actual team structures:
+
+```
+Sundsvalls kommun (GitHub: sundsvalls-kommun)
+├── scc-org-config           ← This config file
+├── scc-shared-plugins       ← Shared marketplace
+└── ai-team-scc-config       ← AI team's federated config
+```
+
+**Teams:**
+
+| Team | Tech Stack | Federation | Why |
+|------|------------|------------|-----|
+| **Dept44** | Spring Boot, Java, WSO2 | Inline | Core infrastructure, needs org control |
+| **Draken** | React, Next.js, TypeScript | Inline | Ärendehantering (case management) |
+| **Hydran** | React, Next.js, TypeScript | Inline | Verksamhetssystem |
+| **AI-team** | Python FastAPI, SvelteKit | Federated | LLM/inference work, needs rapid iteration |
+
+**Key design decisions:**
+
+1. **Dept44 is NOT federated** - Backend/API infrastructure teams need tight governance
+2. **AI-team IS federated** - They iterate fast on tooling for LLM inference work
+3. **Draken & Hydran allow project overrides** - Frontend teams can customize per-project
+4. **Only Dept44 and AI-team can add MCP servers** - Infrastructure teams have those needs
+5. **90-day stats retention** - Public sector may need audit trails
+
+**GitHub structure to replicate:**
+```bash
+# Create the organization repos
+gh repo create sundsvalls-kommun/scc-org-config --public
+gh repo create sundsvalls-kommun/scc-shared-plugins --public
+gh repo create sundsvalls-kommun/ai-team-scc-config --public
+gh repo create sundsvalls-kommun/ai-team-plugins --public
+```
+
+### 08-sundsvall-ai-team-config.json
+**Best for**: Understanding what the AI team stores in their federated config
+
+This file would be in the `ai-team-scc-config` repo:
+- Enables Python/FastAPI/Svelte plugins from shared marketplace
+- Defines their own `ai-tools` marketplace for LLM-specific plugins
+- Disables Java plugins (not relevant for their stack)
+
+**Customize for your AI team:**
+- Add prompt engineering and LLM integration plugins
+- Reference your inference tooling helpers
+- Disable plugins your team doesn't need
+
+---
+
+## Example Details
+
+### 01-quickstart-minimal.json
 **Best for**: First-time setup, testing, small teams
 
 - Minimal configuration with secure defaults
@@ -28,125 +171,150 @@ Start with `01-quickstart-minimal.json` for a minimal working configuration with
 - Disables stdio MCP servers (security best practice)
 - Single "default" profile for all users
 
-### 02-org-teams-delegation.json - Multi-Team Organizations
-**Best for**: Organizations with multiple dev teams using different tech stacks
+### 02-org-teams-delegation.json
+**Best for**: Organizations with multiple dev teams
 
-Demonstrates profiles for common technology archetypes:
-- **frontend-react**: Next.js, React, TypeScript teams
-- **backend-java**: Spring Boot, Java microservices teams
-- **dotnet-sql**: .NET/C# with SQL Server teams
-- **python-data**: FastAPI, Python, AI/ML teams
-- **platform**: Infrastructure/DevOps teams
+Profiles for common technology stacks:
+- **frontend-react**: Next.js, React, TypeScript
+- **backend-java**: Spring Boot, Java, Kotlin
+- **dotnet-sql**: .NET Core, C#, SQL Server
+- **python-data**: FastAPI, Python, ML/AI
+- **platform**: Terraform, Kubernetes, DevOps
 
-Each profile shows:
-- Stack-specific MCP server integrations
-- Team-specific plugin allowlists
-- Appropriate delegation settings
-
-**Map your teams**: Rename profiles to match your team names (e.g., `frontend-react` → `draken-team`).
-
-### 03-org-strict-security.json - High Security
-**Best for**: Regulated industries, financial services, healthcare, government
+### 03-org-strict-security.json
+**Best for**: Regulated industries (finance, healthcare, government)
 
 - Empty delegation arrays (no team additions allowed)
 - Blocks experimental, beta, and dev tools
 - Network policy defaults to `corp-proxy-only`
-- Compliance team profile with `isolated` network policy
-- 8-hour session timeout with no auto-resume
+- 8-hour session timeout, no auto-resume
 
-### 04-org-stdio-hardened.json - Local Tool Access
-**Best for**: Teams needing local CLI tools via MCP with security controls
+### 04-org-stdio-hardened.json
+**Best for**: Teams needing local CLI tools via MCP
 
 - Enables `allow_stdio_mcp: true` (use with caution)
 - Restricts executable paths via `allowed_stdio_prefixes`
-- Shows both local-only and hybrid (local + remote) profiles
+- Shows both local-only and hybrid profiles
 
-### 99-complete-reference.json - Documentation Reference
-**Best for**: Understanding all available configuration options
+### 05-org-federated-teams.json
+**Best for**: Reference for all federation patterns
 
-- Shows every field with example values
-- Demonstrates all three MCP server types (sse, http, stdio)
-- **Not intended for production use** - too permissive
+Comprehensive example showing:
+- GitHub source (`source: "github"`)
+- Git source (`source: "git"` for GitLab SSH)
+- URL source (`source: "url"` for HTTPS endpoints)
+- Various trust grant configurations
+
+---
 
 ## Key Concepts
 
-### Security Boundaries (Org-Level)
-The `security` block defines hard limits that **no team can override**:
+### Security Boundaries (Cannot Be Overridden)
 
 ```json
 "security": {
-    "blocked_plugins": ["*-experimental"],     // Always blocked
-    "blocked_mcp_servers": ["*.untrusted.com"], // Always blocked
-    "blocked_base_images": ["*:latest"],        // Always blocked
-    "allow_stdio_mcp": false                    // Disable local executables
+    "blocked_plugins": ["*-experimental"],
+    "blocked_mcp_servers": ["*.untrusted.com"],
+    "blocked_base_images": ["*:latest"],
+    "allow_stdio_mcp": false
 }
 ```
 
+These are **hard blocks**. No team or project can bypass them.
+
 ### Delegation (What Teams Can Add)
-The `delegation` block controls what teams can add **beyond defaults**:
 
 ```json
 "delegation": {
     "teams": {
-        "allow_additional_plugins": ["team-*"],      // Teams can add team-* plugins
-        "allow_additional_mcp_servers": ["backend"], // Only backend profile can add servers
-        "allow_network_override": ["corp-proxy-only"] // Can switch to proxy mode
+        "allow_additional_plugins": ["*"],
+        "allow_additional_mcp_servers": ["platform", "backend"]
     }
 }
 ```
 
-**Key distinction**:
-- `security.blocked_*` = Hard blocks, cannot be overridden
-- `delegation.allow_*` = Soft limits, can be relaxed via exceptions
+- `["*"]` = any team can add
+- `["platform", "backend"]` = only these teams can add
 
-### Profiles (Team-Specific Settings)
-Each profile defines settings for a specific team or role:
+### Federated Team Config
 
+Teams can manage their own plugins in external repositories:
+
+**Org config** (defines where team config lives):
 ```json
 "profiles": {
-    "backend-java": {
-        "description": "Backend teams using Spring Boot",
-        "additional_plugins": ["team-java-tools"],
-        "additional_mcp_servers": [...],
-        "network_policy": "corp-proxy-only"
+    "platform": {
+        "config_source": {
+            "source": "github",
+            "owner": "your-org",
+            "repo": "platform-team-config"
+        },
+        "trust": {
+            "inherit_org_marketplaces": true,
+            "allow_additional_marketplaces": true,
+            "marketplace_source_patterns": ["github.com/your-org/**"]
+        }
     }
 }
 ```
 
-## Technology Stack Mapping
-
-Map the archetype profiles to your organization's teams:
-
-| Archetype | Tech Stack | Example Teams |
-|-----------|-----------|---------------|
-| `frontend-react` | Next.js, React, TypeScript, Svelte | UI teams, web app teams |
-| `backend-java` | Spring Boot, Java, Kotlin | API teams, microservices |
-| `dotnet-sql` | .NET Core, C#, SQL Server | Enterprise app teams |
-| `python-data` | FastAPI, Python, ML/AI | Data science, ML teams |
-| `platform` | Terraform, Kubernetes | DevOps, SRE teams |
-
-## Validation
-
-Validate your config before deploying:
-
-```bash
-# Explain config with effective policies
-scc config explain your-config.json
-
-# Check doctor output for issues
-scc doctor
+**Team config** (stored in external repo):
+```json
+{
+    "schema_version": 1,
+    "enabled_plugins": ["my-tool@team-marketplace"],
+    "disabled_plugins": ["legacy-tool"],
+    "marketplaces": {
+        "team-marketplace": {
+            "source": "github",
+            "owner": "your-org",
+            "repo": "team-plugins"
+        }
+    }
+}
 ```
 
-## Schema Version
+### Trust Grants Explained
 
-All examples use schema version 2.0.0 and are validated against `src/scc_cli/schemas/org-v2.schema.json`.
+| Setting | Default | Effect |
+|---------|---------|--------|
+| `inherit_org_marketplaces` | `true` | Team can use org-defined marketplaces |
+| `allow_additional_marketplaces` | `false` | Team can define their own marketplaces |
+| `marketplace_source_patterns` | `[]` | URL patterns for allowed marketplace sources |
 
-## Next Steps
+---
 
-1. Copy the example closest to your needs
-2. Rename to `org-config.json`
-3. Customize organization name, id, and contact
-4. Adjust security blocks for your policies
-5. Create profiles matching your team structure
-6. Validate with `scc config explain`
-7. Deploy to your config repository
+## Validation Commands
+
+```bash
+# Validate config structure and show effective policies
+scc config explain org-config.json
+
+# Check system health and prerequisites
+scc doctor
+
+# Show current team and config status
+scc status
+```
+
+---
+
+## Schema Information
+
+All examples use:
+- **Schema Version**: `1.0.0`
+- **Schema File**: `src/scc_cli/schemas/org-v1.schema.json`
+- **Team Config Schema**: `src/scc_cli/schemas/team-config.v1.schema.json`
+
+---
+
+## Setup Checklist
+
+1. [ ] Copy the skeleton that matches your setup
+2. [ ] Update organization name, id, and contact
+3. [ ] Replace placeholder org/repo names with real values
+4. [ ] Define security blocks for your policies
+5. [ ] Create team profiles for your organization
+6. [ ] Set up external repos for federated teams (if applicable)
+7. [ ] Validate with `scc config explain`
+8. [ ] Host config and share URL with your team

@@ -308,7 +308,7 @@ def _extract_domain(url: str) -> str:
     return parsed.netloc or url
 
 
-def is_team_delegated_for_plugins(org_config: dict, team_name: str | None) -> bool:
+def is_team_delegated_for_plugins(org_config: dict[str, Any], team_name: str | None) -> bool:
     """
     Check whether team is allowed to add additional plugins.
 
@@ -328,7 +328,7 @@ def is_team_delegated_for_plugins(org_config: dict, team_name: str | None) -> bo
     return False
 
 
-def is_team_delegated_for_mcp(org_config: dict, team_name: str | None) -> bool:
+def is_team_delegated_for_mcp(org_config: dict[str, Any], team_name: str | None) -> bool:
     """
     Check whether team is allowed to add MCP servers.
 
@@ -348,7 +348,7 @@ def is_team_delegated_for_mcp(org_config: dict, team_name: str | None) -> bool:
     return False
 
 
-def is_project_delegated(org_config: dict, team_name: str | None) -> tuple[bool, str]:
+def is_project_delegated(org_config: dict[str, Any], team_name: str | None) -> tuple[bool, str]:
     """
     Check whether project-level additions are allowed.
 
@@ -391,9 +391,9 @@ def is_project_delegated(org_config: dict, team_name: str | None) -> tuple[bool,
 
 
 def compute_effective_config(
-    org_config: dict,
+    org_config: dict[str, Any],
     team_name: str,
-    project_config: dict | None = None,
+    project_config: dict[str, Any] | None = None,
     workspace_path: str | Path | None = None,
 ) -> EffectiveConfig:
     """
@@ -731,7 +731,7 @@ def compute_effective_config(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def list_profiles(org_config: dict) -> list[dict]:
+def list_profiles(org_config: dict[str, Any]) -> list[dict[str, Any]]:
     """
     List all available profiles from org config.
 
@@ -753,7 +753,7 @@ def list_profiles(org_config: dict) -> list[dict]:
     return result
 
 
-def resolve_profile(org_config: dict, profile_name: str) -> dict:
+def resolve_profile(org_config: dict[str, Any], profile_name: str) -> dict[str, Any]:
     """
     Resolve profile by name, raise ValueError if not found.
 
@@ -805,7 +805,7 @@ def _normalize_repo_path(repo: str) -> str:
     return repo
 
 
-def get_marketplace_url(marketplace: dict) -> str:
+def get_marketplace_url(marketplace: dict[str, Any]) -> str:
     """
     Resolve marketplace to HTTPS URL.
 
@@ -881,7 +881,7 @@ def get_marketplace_url(marketplace: dict) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def list_teams(cfg: dict) -> list[dict]:
+def list_teams(cfg: dict[str, Any]) -> list[dict[str, Any]]:
     """
     List available teams from configuration.
 
@@ -902,7 +902,7 @@ def list_teams(cfg: dict) -> list[dict]:
     return teams
 
 
-def get_team_details(team: str, cfg: dict) -> dict | None:
+def get_team_details(team: str, cfg: dict[str, Any]) -> dict[str, Any] | None:
     """
     Get detailed information for a specific team.
 
@@ -927,7 +927,7 @@ def get_team_details(team: str, cfg: dict) -> dict | None:
     }
 
 
-def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
+def get_team_sandbox_settings(team_name: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Generate sandbox settings for a team profile.
 
@@ -964,7 +964,7 @@ def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
     }
 
 
-def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
+def get_team_plugin_id(team_name: str, cfg: dict[str, Any] | None = None) -> str | None:
     """
     Get the full plugin ID for a team (e.g., "api-team@sundsvall").
 
@@ -986,7 +986,7 @@ def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
     return f"{plugin_name}@{marketplace_name}"
 
 
-def validate_team_profile(team_name: str, cfg: dict | None = None) -> dict:
+def validate_team_profile(team_name: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Validate a team profile configuration.
 

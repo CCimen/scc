@@ -1,0 +1,134 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "organization": {
+        "name": "Federated Teams Organization",
+        "id": "federated-org",
+        "contact": "platform@example.com"
+    },
+    "security": {
+        "blocked_plugins": [
+            "malicious-*",
+            "*-deprecated",
+            "*-experimental"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com",
+            "localhost:*"
+        ],
+        "blocked_base_images": [
+            "*:latest"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "core-utils",
+            "shared-linter@shared"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "marketplaces": {
+        "shared": {
+            "source": "github",
+            "owner": "example-org",
+            "repo": "shared-plugins"
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": [
+                "platform",
+                "frontend",
+                "backend"
+            ]
+        }
+    },
+    "profiles": {
+        "platform": {
+            "description": "Platform team - config managed in external GitHub repo",
+            "config_source": {
+                "source": "github",
+                "owner": "example-org",
+                "repo": "platform-team-config",
+                "branch": "main",
+                "path": ""
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/example-org/**",
+                    "github.com/approved-vendors/**"
+                ]
+            }
+        },
+        "frontend": {
+            "description": "Frontend team - config managed in GitLab repo",
+            "config_source": {
+                "source": "git",
+                "url": "git@gitlab.example.com:teams/frontend-config.git",
+                "branch": "main",
+                "path": "scc"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/example-org/**",
+                    "gitlab.example.com/teams/**"
+                ]
+            }
+        },
+        "backend": {
+            "description": "Backend team - config from HTTPS endpoint",
+            "config_source": {
+                "source": "url",
+                "url": "https://configs.example.com/teams/backend/team-config.json",
+                "headers": {
+                    "Authorization": "Bearer ${CONFIG_API_TOKEN}"
+                }
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": false
+            }
+        },
+        "contractor": {
+            "description": "Contractor team - strict trust controls, isolated marketplaces",
+            "config_source": {
+                "source": "github",
+                "owner": "contractor-org",
+                "repo": "scc-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": false,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/contractor-org/approved-*"
+                ]
+            }
+        },
+        "security": {
+            "description": "Security team - inline config, no federation (most restrictive)",
+            "additional_plugins": [
+                "security-scanner",
+                "vulnerability-check"
+            ],
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 30
+    }
+}

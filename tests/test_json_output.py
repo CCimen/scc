@@ -8,6 +8,31 @@ These tests define the contract for the JSON output system.
 from datetime import datetime
 from unittest.mock import patch
 
+import pytest
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fixtures
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture(autouse=True)
+def reset_output_mode_state():
+    """Reset output mode state before and after each test.
+
+    This prevents state leakage from other tests that set pretty_mode
+    via set_pretty_mode() without resetting it.
+    """
+    from scc_cli.output_mode import _json_mode, _pretty_mode
+
+    # Reset before test
+    _pretty_mode.set(False)
+    _json_mode.set(False)
+    yield
+    # Reset after test (cleanup)
+    _pretty_mode.set(False)
+    _json_mode.set(False)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exit Codes Tests
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -6,7 +6,8 @@ import typer
 
 from . import config, profiles, setup
 from .cli_common import console, handle_errors
-from .panels import create_info_panel
+from .panels import create_error_panel, create_info_panel
+from .source_resolver import ResolveError, resolve_source
 from .stores.exception_store import RepoStore, UserStore
 from .utils.ttl import format_relative
 
@@ -30,10 +31,18 @@ config_app = typer.Typer(
 def setup_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick setup with defaults"),
     reset: bool = typer.Option(False, "--reset", help="Reset configuration"),
-    org_url: str | None = typer.Option(
-        None, "--org-url", help="Organization config URL (for non-interactive)"
+    org: str | None = typer.Option(
+        None,
+        "--org",
+        help="Organization source (URL or shorthand like github:org/repo)",
     ),
-    team: str | None = typer.Option(None, "--team", "-t", help="Team profile to select"),
+    org_url: str | None = typer.Option(
+        None, "--org-url", help="Organization config URL (deprecated, use --org)"
+    ),
+    profile: str | None = typer.Option(None, "--profile", "-p", help="Profile/team to select"),
+    team: str | None = typer.Option(
+        None, "--team", "-t", help="Team profile to select (alias for --profile)"
+    ),
     auth: str | None = typer.Option(None, "--auth", help="Auth spec (env:VAR or command:CMD)"),
     standalone: bool = typer.Option(
         False, "--standalone", help="Standalone mode (no organization)"
@@ -44,18 +53,40 @@ def setup_cmd(
     Examples:
         scc setup                                    # Interactive wizard
         scc setup --standalone                       # Standalone mode
-        scc setup --org-url <url> --team dev         # Non-interactive
+        scc setup --org github:acme/config --profile dev  # Non-interactive with shorthand
+        scc setup --org-url <url> --team dev         # Non-interactive (legacy)
     """
     if reset:
         setup.reset_setup(console)
         return
 
-    # Non-interactive mode if org_url or standalone specified
-    if org_url or standalone:
+    # Handle --profile/--team alias (prefer --profile)
+    selected_profile = profile or team
+
+    # Handle --org/--org-url (prefer --org)
+    resolved_url: str | None = None
+    if org:
+        # Resolve shorthand to URL
+        result = resolve_source(org)
+        if isinstance(result, ResolveError):
+            console.print(
+                create_error_panel(
+                    "Invalid Source",
+                    result.message,
+                    hint=result.suggestion or "",
+                )
+            )
+            raise typer.Exit(1)
+        resolved_url = result.resolved_url
+    elif org_url:
+        resolved_url = org_url
+
+    # Non-interactive mode if org source or standalone specified
+    if resolved_url or standalone:
         success = setup.run_non_interactive_setup(
             console,
-            org_url=org_url,
-            team=team,
+            org_url=resolved_url,
+            team=selected_profile,
             auth=auth,
             standalone=standalone,
         )

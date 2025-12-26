@@ -25,7 +25,7 @@ from scc_cli import profiles
 def org_config_with_blocks() -> dict[str, Any]:
     """Org config with blocked patterns for testing."""
     return {
-        "schema_version": "2.0.0",
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "security": {
             "blocked_plugins": ["Malicious-*", "evil-*"],
@@ -214,7 +214,7 @@ class TestStdioFeatureGate:
         Then: Server appears in blocked_items with reason "stdio MCP disabled by org policy"
         """
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             # Note: no security.allow_stdio_mcp
             "profiles": {
@@ -237,7 +237,7 @@ class TestStdioFeatureGate:
     def test_stdio_allowed_when_enabled(self):
         """stdio servers allowed when allow_stdio_mcp is True."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {"allow_stdio_mcp": True},
         }
@@ -261,7 +261,7 @@ class TestStdioPathValidation:
         Then: Server blocked with "stdio command must be absolute path"
         """
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {"allow_stdio_mcp": True},
         }
@@ -286,7 +286,7 @@ class TestStdioPathValidation:
         - /usr/local/bin/../../bin/evil → /usr/bin/evil (escapes prefix!)
         """
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {
                 "allow_stdio_mcp": True,
@@ -314,7 +314,7 @@ class TestStdioPathValidation:
         Then: Server is allowed
         """
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {
                 "allow_stdio_mcp": True,
@@ -349,7 +349,7 @@ class TestStdioPathValidation:
     def test_stdio_no_prefixes_allows_any_absolute(self, tmp_path):
         """When no prefixes configured, any absolute path is allowed."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {"allow_stdio_mcp": True},
             # Note: no allowed_stdio_prefixes
@@ -373,7 +373,7 @@ class TestStdioPathValidation:
         the command runs in a container with different filesystem.
         """
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {"allow_stdio_mcp": True},
         }
@@ -434,7 +434,7 @@ additional_plugins:
         Then: Appears in denied_additions (not blocked_items)
         """
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "security": {},  # No blocked patterns
             "delegation": {

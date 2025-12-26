@@ -1,0 +1,108 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "organization": {
+        "name": "Hybrid Org (GitLab + GitHub)",
+        "id": "hybrid-org",
+        "contact": "devops@your-company.com"
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-deprecated",
+            "malicious-*"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com",
+            "localhost:*"
+        ],
+        "blocked_base_images": [
+            "*:latest"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "core-utils",
+            "standard-linter@public-shared"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "marketplaces": {
+        "public-shared": {
+            "source": "github",
+            "owner": "your-company",
+            "repo": "public-plugins"
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": ["platform", "backend"]
+        }
+    },
+    "profiles": {
+        "platform": {
+            "description": "Platform team - config on private GitLab, plugins on public GitHub",
+            "config_source": {
+                "source": "git",
+                "url": "git@gitlab.your-company.com:teams/platform-config.git",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/your-company/**",
+                    "gitlab.your-company.com/teams/**"
+                ]
+            }
+        },
+        "backend": {
+            "description": "Backend team - HTTPS GitLab with auth token",
+            "config_source": {
+                "source": "git",
+                "url": "https://gitlab.your-company.com/teams/backend-config.git",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/your-company/**"
+                ]
+            }
+        },
+        "contractors": {
+            "description": "Contractor team - restricted trust, GitHub public only",
+            "config_source": {
+                "source": "github",
+                "owner": "contractor-org",
+                "repo": "scc-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": false
+            }
+        },
+        "security": {
+            "description": "Security team - inline config, no federation (most control)",
+            "additional_plugins": [
+                "security-scanner@public-shared"
+            ],
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 30
+    }
+}

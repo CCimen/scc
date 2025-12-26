@@ -35,12 +35,12 @@ class SessionRecord:
     last_used: str | None = None
     created_at: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert the record to a dictionary for JSON serialization."""
         return {k: v for k, v in asdict(self).items() if v is not None}
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SessionRecord":
+    def from_dict(cls, data: dict[str, Any]) -> "SessionRecord":
         """Create a SessionRecord from a dictionary."""
         return cls(
             workspace=data.get("workspace", ""),
@@ -58,7 +58,7 @@ class SessionRecord:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def get_most_recent() -> dict | None:
+def get_most_recent() -> dict[str, Any] | None:
     """
     Return the most recently used session.
 
@@ -75,7 +75,7 @@ def get_most_recent() -> dict | None:
     return sessions[0]
 
 
-def list_recent(limit: int = 10) -> list[dict]:
+def list_recent(limit: int = 10) -> list[dict[str, Any]]:
     """
     Return recent sessions with container and relative time info.
 
@@ -114,7 +114,7 @@ def list_recent(limit: int = 10) -> list[dict]:
     return result
 
 
-def _generate_session_name(session: dict) -> str:
+def _generate_session_name(session: dict[str, Any]) -> str:
     """Generate a display name for a session without an explicit name."""
     workspace = session.get("workspace", "")
     if workspace:
@@ -189,7 +189,7 @@ def update_session_container(
     _save_sessions(sessions)
 
 
-def find_session_by_container(container_name: str) -> dict | None:
+def find_session_by_container(container_name: str) -> dict[str, Any] | None:
     """
     Find a session by its container name.
 
@@ -205,7 +205,7 @@ def find_session_by_container(container_name: str) -> dict | None:
 def find_session_by_workspace(
     workspace: str,
     branch: str | None = None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """
     Find a session by workspace and optionally branch.
 
@@ -349,7 +349,7 @@ def _load_sessions() -> list[dict[Any, Any]]:
     return []
 
 
-def _save_sessions(sessions: list[dict]) -> None:
+def _save_sessions(sessions: list[dict[str, Any]]) -> None:
     """Save the sessions list to the config file."""
     sessions_file = config.SESSIONS_FILE
 

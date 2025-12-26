@@ -1,0 +1,21 @@
+{
+    "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
+    "schema_version": 1,
+    "enabled_plugins": [
+        "python-tools@sundsvall-shared",
+        "fastapi-helper@sundsvall-shared",
+        "svelte-tools@sundsvall-shared",
+        "prompt-engineering@ai-tools",
+        "llm-integration@ai-tools"
+    ],
+    "disabled_plugins": [
+        "java-*"
+    ],
+    "marketplaces": {
+        "ai-tools": {
+            "source": "github",
+            "owner": "sundsvalls-kommun",
+            "repo": "ai-team-plugins"
+        }
+    }
+}

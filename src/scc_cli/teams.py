@@ -108,7 +108,9 @@ class TeamInfo:
         )
 
 
-def list_teams(cfg: dict, org_config: dict | None = None) -> list[dict]:
+def list_teams(
+    cfg: dict[str, Any], org_config: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     """List available teams from configuration.
 
     Args:
@@ -139,7 +141,9 @@ def list_teams(cfg: dict, org_config: dict | None = None) -> list[dict]:
     return teams
 
 
-def get_team_details(team: str, cfg: dict, org_config: dict | None = None) -> dict | None:
+def get_team_details(
+    team: str, cfg: dict[str, Any], org_config: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
     """Get detailed information for a specific team.
 
     Args:
@@ -191,7 +195,7 @@ def get_team_details(team: str, cfg: dict, org_config: dict | None = None) -> di
         }
 
 
-def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
+def get_team_sandbox_settings(team_name: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     """Generate sandbox settings for a team profile.
 
     Return settings.json content with extraKnownMarketplaces
@@ -239,7 +243,7 @@ def get_team_sandbox_settings(team_name: str, cfg: dict | None = None) -> dict:
     }
 
 
-def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
+def get_team_plugin_id(team_name: str, cfg: dict[str, Any] | None = None) -> str | None:
     """Get the full plugin ID for a team (e.g., "api-team@sundsvall").
 
     Args:
@@ -266,9 +270,9 @@ def get_team_plugin_id(team_name: str, cfg: dict | None = None) -> str | None:
 
 def validate_team_profile(
     team_name: str,
-    cfg: dict | None = None,
-    org_config: dict | None = None,
-) -> dict:
+    cfg: dict[str, Any] | None = None,
+    org_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Validate a team profile configuration.
 
     Args:

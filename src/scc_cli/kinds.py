@@ -24,6 +24,7 @@ class Kind(str, Enum):
     TEAM_INFO = "TeamInfo"
     TEAM_CURRENT = "TeamCurrent"
     TEAM_SWITCH = "TeamSwitch"
+    TEAM_VALIDATE = "TeamValidate"
 
     # Status/Doctor
     STATUS = "Status"
@@ -41,6 +42,12 @@ class Kind(str, Enum):
     # Org admin
     ORG_VALIDATION = "OrgValidation"
     ORG_SCHEMA = "OrgSchema"
+    ORG_STATUS = "OrgStatus"
+    ORG_IMPORT = "OrgImport"
+    ORG_IMPORT_PREVIEW = "OrgImportPreview"
+    ORG_INIT = "OrgInit"
+    ORG_TEMPLATE_LIST = "OrgTemplateList"
+    ORG_UPDATE = "OrgUpdate"
 
     # Support
     SUPPORT_BUNDLE = "SupportBundle"

@@ -18,7 +18,7 @@ import json
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import requests
@@ -132,7 +132,7 @@ def resolve_auth(auth_spec: str | None, *, from_remote: bool = False) -> str | N
 
 def fetch_org_config(
     url: str, auth: str | None, etag: str | None = None
-) -> tuple[dict | None, str | None, int]:
+) -> tuple[dict[str, Any] | None, str | None, int]:
     """Fetch org config from URL with ETag support.
 
     Args:
@@ -192,7 +192,9 @@ def fetch_org_config(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def save_to_cache(org_config: dict, source_url: str, etag: str | None, ttl_hours: int) -> None:
+def save_to_cache(
+    org_config: dict[str, Any], source_url: str, etag: str | None, ttl_hours: int
+) -> None:
     """Save org config to cache with metadata.
 
     Args:
@@ -232,7 +234,7 @@ def save_to_cache(org_config: dict, source_url: str, etag: str | None, ttl_hours
     meta_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
 
 
-def load_from_cache() -> tuple[dict | None, dict | None]:
+def load_from_cache() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Load cached org config and metadata.
 
     Returns:
@@ -253,7 +255,7 @@ def load_from_cache() -> tuple[dict | None, dict | None]:
         return (None, None)
 
 
-def is_cache_valid(meta: dict | None) -> bool:
+def is_cache_valid(meta: dict[str, Any] | None) -> bool:
     """Check if cache is within TTL.
 
     Args:
@@ -285,8 +287,8 @@ def is_cache_valid(meta: dict | None) -> bool:
 
 
 def load_org_config(
-    user_config: dict, force_refresh: bool = False, offline: bool = False
-) -> dict | None:
+    user_config: dict[str, Any], force_refresh: bool = False, offline: bool = False
+) -> dict[str, Any] | None:
     """Load organization config from cache or remote.
 
     This is the main entry point for getting org config.

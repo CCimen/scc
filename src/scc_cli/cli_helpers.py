@@ -189,9 +189,9 @@ class AuditRecord:
     ticket: str | None = None
     expires_in: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | None]:
         """Convert to dictionary for JSON serialization."""
-        result = {
+        result: dict[str, str | None] = {
             "timestamp": self.timestamp.isoformat(),
             "command": self.command,
             "actor": self.actor,

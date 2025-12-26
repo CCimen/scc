@@ -235,7 +235,7 @@ def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
         return False
 
 
-def get_sandbox_settings() -> dict | None:
+def get_sandbox_settings() -> dict[str, Any] | None:
     """
     Return current settings from the Docker sandbox volume.
 
@@ -265,7 +265,7 @@ def get_sandbox_settings() -> dict | None:
     return None
 
 
-def inject_settings(settings: dict) -> bool:
+def inject_settings(settings: dict[str, Any]) -> bool:
     """
     Inject pre-built settings into the Docker sandbox volume.
 
@@ -295,7 +295,7 @@ def inject_settings(settings: dict) -> bool:
     )
 
 
-def inject_team_settings(team_name: str, org_config: dict | None = None) -> bool:
+def inject_team_settings(team_name: str, org_config: dict[str, Any] | None = None) -> bool:
     """
     Inject team-specific settings into the Docker sandbox volume.
 
@@ -349,7 +349,7 @@ def inject_team_settings(team_name: str, org_config: dict | None = None) -> bool
 
 def launch_with_org_config(
     workspace: Path,
-    org_config: dict,
+    org_config: dict[str, Any],
     team: str,
     continue_session: bool = False,
     resume: bool = False,
@@ -411,7 +411,7 @@ def launch_with_org_config(
 
 def launch_with_org_config_v2(
     workspace: Path,
-    org_config: dict,
+    org_config: dict[str, Any],
     team: str,
     continue_session: bool = False,
     resume: bool = False,

@@ -11,6 +11,7 @@ UI Philosophy:
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -609,7 +610,7 @@ def create_worktree(
     console.print()
 
     # Multi-step progress
-    steps = [
+    steps: list[tuple[str, Callable[[], None]]] = [
         ("Fetching latest changes", lambda: _fetch_branch(repo_path, base_branch)),
         (
             "Creating worktree",

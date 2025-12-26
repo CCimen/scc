@@ -1,0 +1,91 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "organization": {
+        "name": "Your Organization Name",
+        "id": "your-org-id",
+        "contact": "platform@your-org.com"
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-deprecated"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com"
+        ],
+        "blocked_base_images": [
+            "*:latest"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "core-utils"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "marketplaces": {
+        "shared": {
+            "source": "github",
+            "owner": "your-org",
+            "repo": "shared-plugins"
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": ["platform", "backend"]
+        }
+    },
+    "profiles": {
+        "platform": {
+            "description": "Platform team - manages infrastructure and shared tooling",
+            "config_source": {
+                "source": "github",
+                "owner": "your-org",
+                "repo": "platform-team-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/your-org/**"
+                ]
+            }
+        },
+        "backend": {
+            "description": "Backend team - API and microservices development",
+            "config_source": {
+                "source": "github",
+                "owner": "your-org",
+                "repo": "backend-team-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": false
+            }
+        },
+        "frontend": {
+            "description": "Frontend team - inline config (no federation)",
+            "additional_plugins": [
+                "react-tools@shared",
+                "typescript-helper@shared"
+            ],
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 30
+    }
+}
