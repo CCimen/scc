@@ -235,7 +235,7 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
     # Get selected profile/team
     team = config.get_selected_profile()
     if not team:
-        console.print("[red]No team selected. Run 'scc team select <team>' first.[/red]")
+        console.print("[red]No team selected. Run 'scc team switch <name>' first.[/red]")
         raise typer.Exit(1)
 
     # Determine workspace path
