@@ -252,8 +252,10 @@ def matches_pattern(plugin_ref: str, pattern: str) -> bool:
     if not plugin_ref or not pattern:
         return False
 
-    # Use fnmatch for glob-style matching
-    return fnmatch.fnmatch(plugin_ref, pattern)
+    # Use fnmatch for glob-style matching with case-insensitive comparison
+    # Documentation requires Unicode-aware casefolding for security patterns
+    # to prevent bypass attempts using case variations (e.g., "MALICIOUS-*" vs "malicious-*")
+    return fnmatch.fnmatch(plugin_ref.casefold(), pattern.casefold())
 
 
 def matches_any_pattern(plugin_ref: str, patterns: list[str]) -> str | None:
@@ -366,6 +368,11 @@ def fnmatch_with_globstar(text: str, pattern: str) -> bool:
         return False
 
     import re
+
+    # Apply Unicode-aware casefolding for case-insensitive matching
+    # This prevents bypass attempts using case variations in URL patterns
+    text = text.casefold()
+    pattern = pattern.casefold()
 
     # Convert glob pattern to regex
     # Key insight: * must NOT cross / boundaries, ** CAN cross them
