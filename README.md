@@ -390,8 +390,9 @@ scc stop && scc prune --yes
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) - system design, module structure, data flow
-- [Governance](docs/GOVERNANCE.md) - delegation model, security boundaries, config examples
+- [Governance](docs/GOVERNANCE.md) - delegation model, security boundaries
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - common problems and solutions
+- [Examples](examples/) - ready-to-use organization config templates
 - [Development](CLAUDE.md) - contributing guidelines, TDD methodology
 
 ## Development
