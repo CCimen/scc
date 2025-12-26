@@ -198,12 +198,18 @@ class TestMatchesPattern:
         assert matches_pattern("code-review@internal", "other@internal") is False
         assert matches_pattern("code-review@internal", "code-review@other") is False
 
-    def test_case_sensitive(self) -> None:
-        """Pattern matching is case-sensitive."""
+    def test_case_insensitive(self) -> None:
+        """Pattern matching is case-insensitive per ARCHITECTURE.md and GOVERNANCE.md.
+
+        Uses Unicode-aware casefolding to prevent bypass attempts via case variation.
+        """
         from scc_cli.marketplace.normalize import matches_pattern
 
-        assert matches_pattern("Tool@Internal", "tool@internal") is False
+        # All case variations should match
+        assert matches_pattern("Tool@Internal", "tool@internal") is True
         assert matches_pattern("Tool@Internal", "Tool@Internal") is True
+        assert matches_pattern("tool@internal", "TOOL@INTERNAL") is True
+        assert matches_pattern("MALICIOUS-tool@shared", "malicious-*") is True
 
     def test_special_characters(self) -> None:
         """Handles special characters in names."""
