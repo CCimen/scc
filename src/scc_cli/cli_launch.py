@@ -37,6 +37,7 @@ from .errors import NotAGitRepoError, WorkspaceNotFoundError
 from .exit_codes import EXIT_CONFIG
 from .json_output import build_envelope
 from .kinds import Kind
+from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 from .ui.picker import (
@@ -62,7 +63,7 @@ def _resolve_session_selection(
     team: str | None,
     resume: bool,
     select: bool,
-    cfg: dict,
+    cfg: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """
     Handle session selection logic for --select, --resume, and interactive modes.
@@ -186,7 +187,7 @@ def _prepare_workspace(
     return workspace_path
 
 
-def _configure_team_settings(team: str | None, cfg: dict) -> None:
+def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     """
     Validate team profile and inject settings into Docker sandbox.
 
@@ -211,6 +212,78 @@ def _configure_team_settings(team: str | None, cfg: dict) -> None:
             raise typer.Exit(1)
 
         docker.inject_team_settings(team, org_config=org_config)
+
+
+def _sync_marketplace_settings(
+    workspace_path: Path | None,
+    team: str | None,
+    org_config_url: str | None = None,
+) -> SyncResult | None:
+    """
+    Sync marketplace settings for the workspace.
+
+    Orchestrates the full marketplace pipeline:
+    1. Compute effective plugins for team
+    2. Materialize required marketplaces
+    3. Render and merge settings
+    4. Write settings.local.json
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        team: Selected team profile name.
+        org_config_url: URL of the org config (for tracking).
+
+    Returns:
+        SyncResult with details, or None if no sync needed.
+
+    Raises:
+        typer.Exit: If marketplace sync fails critically.
+    """
+    if workspace_path is None or team is None:
+        return None
+
+    org_config = config.load_cached_org_config()
+    if org_config is None:
+        return None
+
+    with Status("[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner="dots"):
+        try:
+            result = sync_marketplace_settings(
+                project_dir=workspace_path,
+                org_config_data=org_config,
+                team_id=team,
+                org_config_url=org_config_url,
+            )
+
+            # Display any warnings
+            if result.warnings:
+                console.print()
+                for warning in result.warnings:
+                    console.print(f"[yellow]{warning}[/yellow]")
+                console.print()
+
+            # Log success
+            if result.plugins_enabled:
+                console.print(
+                    f"[green]✓ Enabled {len(result.plugins_enabled)} team plugin(s)[/green]"
+                )
+            if result.marketplaces_materialized:
+                console.print(
+                    f"[green]✓ Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
+                )
+
+            return result
+
+        except SyncError as e:
+            console.print(
+                create_warning_panel(
+                    "Marketplace Sync Failed",
+                    str(e),
+                    "Team plugins may not be available. Use --dry-run to diagnose.",
+                )
+            )
+            # Non-fatal: continue without marketplace sync
+            return None
 
 
 def _resolve_mount_and_branch(workspace_path: Path | None) -> tuple[Path | None, str | None]:
@@ -467,7 +540,10 @@ def start(
     if not dry_run:
         _configure_team_settings(team, cfg)
 
-    # ── Step 6.5: Handle --dry-run (preview without launching) ────────────────
+        # ── Step 6.5: Sync marketplace settings ────────────────────────────────
+        _sync_marketplace_settings(workspace_path, team)
+
+    # ── Step 6.6: Handle --dry-run (preview without launching) ────────────────
     if dry_run:
         org_config = config.load_cached_org_config()
         project_config = None  # TODO: Load from .scc.yaml if present
@@ -619,7 +695,9 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
     console.print()
 
 
-def interactive_start(cfg: dict, *, skip_quick_resume: bool = False) -> tuple:
+def interactive_start(
+    cfg: dict[str, Any], *, skip_quick_resume: bool = False
+) -> tuple[str | None, str | None, str | None, str | None]:
     """Guide user through interactive session setup.
 
     Prompt for team selection, workspace source, optional worktree creation,
@@ -844,6 +922,9 @@ def run_start_wizard_flow(*, skip_quick_resume: bool = False) -> bool:
 
         # Step 6: Team configuration
         _configure_team_settings(team, cfg)
+
+        # Step 6.5: Sync marketplace settings
+        _sync_marketplace_settings(workspace_path, team)
 
         # Step 7: Resolve mount path and branch
         mount_path, current_branch = _resolve_mount_and_branch(workspace_path)

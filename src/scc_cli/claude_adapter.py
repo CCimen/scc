@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from scc_cli.auth import is_remote_command_allowed
 from scc_cli.auth import resolve_auth as _resolve_auth_impl
@@ -114,7 +114,7 @@ def resolve_auth_with_name(
 
 
 def resolve_marketplace_auth(
-    marketplace: dict,
+    marketplace: dict[str, Any],
     allow_command: bool = False,
 ) -> AuthResult | None:
     """Resolve marketplace auth spec to AuthResult.
@@ -161,7 +161,7 @@ def resolve_marketplace_auth(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _build_source_object(marketplace: dict) -> dict:
+def _build_source_object(marketplace: dict[str, Any]) -> dict[str, Any]:
     """Build Claude Code's source object from SCC marketplace config.
 
     Handle the translation from SCC's org-config format to Claude's
@@ -235,7 +235,9 @@ def _build_source_object(marketplace: dict) -> dict:
         )
 
 
-def build_claude_settings(profile: dict, marketplace: dict, org_id: str | None) -> dict:
+def build_claude_settings(
+    profile: dict[str, Any], marketplace: dict[str, Any], org_id: str | None
+) -> dict[str, Any]:
     """Build Claude Code settings payload.
 
     This is the ONLY function that knows Claude Code's settings format.
@@ -280,7 +282,7 @@ def build_claude_settings(profile: dict, marketplace: dict, org_id: str | None) 
     }
 
 
-def get_settings_file_content(settings: dict) -> str:
+def get_settings_file_content(settings: dict[str, Any]) -> str:
     """Serialize settings for injection into container.
 
     Args:
@@ -300,8 +302,8 @@ def get_settings_file_content(settings: dict) -> str:
 def build_settings_from_effective_config(
     effective_config: EffectiveConfig,
     org_id: str | None = None,
-    marketplace: dict | None = None,
-) -> dict:
+    marketplace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build Claude Code settings from EffectiveConfig.
 
     This function translates the governance-aware EffectiveConfig
@@ -318,7 +320,7 @@ def build_settings_from_effective_config(
         Settings dict ready for injection into Claude Code
     """
 
-    settings: dict = {}
+    settings: dict[str, Any] = {}
 
     # Build enabled plugins list
     marketplace_key = org_id or "default"
@@ -331,7 +333,7 @@ def build_settings_from_effective_config(
 
     # Build MCP servers config
     if effective_config.mcp_servers:
-        mcp_servers: dict = {}
+        mcp_servers: dict[str, Any] = {}
         for server in effective_config.mcp_servers:
             server_config = _build_mcp_server_config(server)
             if server_config:
@@ -351,7 +353,7 @@ def build_settings_from_effective_config(
     return settings
 
 
-def _build_mcp_server_config(server: MCPServer) -> dict | None:
+def _build_mcp_server_config(server: MCPServer) -> dict[str, Any] | None:
     """Build Claude Code MCP server config from MCPServer dataclass.
 
     Claude Code MCP format (Dec 2024):
@@ -368,7 +370,7 @@ def _build_mcp_server_config(server: MCPServer) -> dict | None:
     if server.type == "sse":
         if not server.url:
             return None
-        config: dict = {
+        config: dict[str, Any] = {
             "type": "sse",
             "url": server.url,
         }
@@ -404,7 +406,7 @@ def _build_mcp_server_config(server: MCPServer) -> dict | None:
         return None
 
 
-def translate_mcp_server(server: MCPServer) -> tuple[str, dict] | tuple[None, None]:
+def translate_mcp_server(server: MCPServer) -> tuple[str, dict[str, Any]] | tuple[None, None]:
     """Translate MCPServer to Claude Code format.
 
     Return a tuple of (server_name, config_dict) for use in
@@ -422,7 +424,7 @@ def translate_mcp_server(server: MCPServer) -> tuple[str, dict] | tuple[None, No
     return server.name, config
 
 
-def build_mcp_servers(effective_config: EffectiveConfig) -> dict:
+def build_mcp_servers(effective_config: EffectiveConfig) -> dict[str, Any]:
     """Build MCP servers dict from EffectiveConfig.
 
     Return the mcpServers dict in Claude Code's format:
@@ -434,7 +436,7 @@ def build_mcp_servers(effective_config: EffectiveConfig) -> dict:
     Returns:
         Dict mapping server names to their configurations
     """
-    mcp_servers: dict = {}
+    mcp_servers: dict[str, Any] = {}
     for server in effective_config.mcp_servers:
         name, config = translate_mcp_server(server)
         if name and config:
@@ -448,7 +450,7 @@ def build_mcp_servers(effective_config: EffectiveConfig) -> dict:
 
 
 def inject_credentials(
-    marketplace: dict,
+    marketplace: dict[str, Any],
     docker_env: MutableMapping[str, str],
     allow_command: bool | None = None,
 ) -> None:

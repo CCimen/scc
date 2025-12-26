@@ -359,6 +359,19 @@ Module responsibilities:
 | `stores/exception_store.py` | JSON read/write, backup-on-corrupt, prune expired | Business logic |
 | `audit/parser.py` | JSON manifest parsing, error extraction | File I/O |
 | `audit/reader.py` | Plugin discovery, manifest file reading | Parsing logic |
+| `marketplace/` | Plugin governance and marketplace management (package) | Plugin content |
+| `marketplace/schema.py` | Pydantic models for org config, team profiles, config sources, trust grants | Business logic |
+| `marketplace/compute.py` | Effective plugin computation (inline and federated teams), 6-step precedence | HTTP, file I/O |
+| `marketplace/resolve.py` | EffectiveConfig resolution orchestrator, Phase 1 format adapter | HTTP directly |
+| `marketplace/trust.py` | Trust validation, marketplace source pattern matching, security violations | HTTP, caching |
+| `marketplace/team_fetch.py` | Team config fetching (GitHub, Git, URL sources), fallback handling | Business logic |
+| `marketplace/team_cache.py` | Team config caching, TTL/staleness management, cache metadata | Fetching logic |
+| `marketplace/normalize.py` | URL normalization, plugin pattern matching, globstar support | HTTP |
+| `marketplace/materialize.py` | Marketplace cloning and local materialization | Pattern matching |
+| `marketplace/render.py` | Settings rendering and conflict checking | Materialization |
+| `marketplace/constants.py` | Marketplace-specific constants (implicit marketplaces, exit codes) | Business logic |
+| `marketplace/managed.py` | Managed state persistence for marketplace operations | Plugin logic |
+| `marketplace/sync.py` | Synchronization of marketplace state | Conflict detection |
 | `ui/` | Interactive terminal experiences (package) | Non-TTY output |
 | `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Rendering, business logic |
 | `ui/list_screen.py` | Core navigation engine, state management, key handling | Domain logic |
@@ -370,6 +383,171 @@ Module responsibilities:
 | `ui/help.py` | Mode-aware help overlay | Key handling |
 
 The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
+
+## Marketplace & Federation
+
+The `marketplace/` package provides organization-level plugin governance with support for both inline and federated team configurations.
+
+### Plugin Governance Model
+
+```mermaid
+graph TB
+    subgraph Sources[Plugin Sources]
+        Org[Org Marketplaces<br/>github, git, url, directory]
+        Implicit[Implicit Marketplaces<br/>claude-plugins-official]
+        Team[Team Marketplaces<br/>if trust allows]
+    end
+
+    subgraph Resolution[Plugin Resolution]
+        Compute[compute_effective_plugins]
+        Blocked[Security Block Check]
+        Allowed[allowed_plugins Filter]
+        Disabled[disabled_plugins Filter]
+    end
+
+    subgraph Output[Effective Plugins]
+        Enabled[enabled_plugins]
+        BlockedList[blocked_plugins]
+        NotAllowed[not_allowed_plugins]
+        DisabledList[disabled_plugins]
+    end
+
+    Org --> Compute
+    Implicit --> Compute
+    Team --> Compute
+    Compute --> Blocked
+    Blocked --> Allowed
+    Allowed --> Disabled
+    Disabled --> Enabled
+    Blocked --> BlockedList
+    Allowed --> NotAllowed
+    Disabled --> DisabledList
+```
+
+### Marketplace Sources
+
+Organizations define marketplaces using four source types:
+
+| Source Type | Example | Use Case |
+|-------------|---------|----------|
+| `github` | `owner: "org", repo: "plugins"` | Public/private GitHub repos |
+| `git` | `url: "git@gitlab.com:org/plugins.git"` | Any Git hosting (GitLab, Bitbucket) |
+| `url` | `url: "https://plugins.example.com/"` | HTTPS-hosted plugin directories |
+| `directory` | `path: "/local/plugins"` | Local development/testing |
+
+Implicit marketplaces (`claude-plugins-official`, `claude-code-plugins`) are always available without explicit declaration.
+
+### Federated Team Configs
+
+Teams can store their configuration externally instead of inline in the org config. This enables team leads to manage plugins without org config changes.
+
+```mermaid
+graph LR
+    subgraph OrgConfig[Org Config]
+        Profile[Team Profile<br/>config_source + trust]
+    end
+
+    subgraph External[External Source]
+        GitHub[GitHub Repo]
+        Git[Git Repo]
+        URL[HTTPS URL]
+    end
+
+    subgraph Resolution[Resolution]
+        Fetch[fetch_team_config]
+        Cache[Team Config Cache<br/>TTL: 24h, Max Stale: 7d]
+        Validate[Trust Validation]
+    end
+
+    subgraph Output[Effective Config]
+        Plugins[enabled_plugins]
+        Marketplaces[effective_marketplaces]
+    end
+
+    Profile -->|config_source| Fetch
+    GitHub --> Fetch
+    Git --> Fetch
+    URL --> Fetch
+    Fetch --> Cache
+    Cache --> Validate
+    Profile -->|trust| Validate
+    Validate --> Plugins
+    Validate --> Marketplaces
+```
+
+#### Config Source Types
+
+Federated teams specify where their config lives:
+
+```yaml
+profiles:
+  platform:
+    config_source:
+      source: github
+      owner: "myorg"
+      repo: "platform-team-config"
+      path: ""           # Root of repo (default)
+      branch: "main"     # Optional, defaults to default branch
+    trust:
+      inherit_org_marketplaces: true
+      allow_additional_marketplaces: true
+      marketplace_source_patterns:
+        - "github.com/myorg/**"
+```
+
+#### Trust Grants
+
+Organizations control what federated teams can do via trust grants:
+
+| Trust Field | Default | Effect |
+|-------------|---------|--------|
+| `inherit_org_marketplaces` | `true` | Team can use org's marketplace definitions |
+| `allow_additional_marketplaces` | `false` | Team can define their own marketplaces |
+| `marketplace_source_patterns` | `[]` | URL patterns (with `**` globstar) for allowed team marketplace sources |
+
+Trust validation is two-layer:
+1. **Layer 1**: Can team define marketplaces at all? (`allow_additional_marketplaces`)
+2. **Layer 2**: Does each marketplace source match allowed patterns? (`marketplace_source_patterns`)
+
+#### Plugin Precedence (6-Step)
+
+For federated teams, plugin computation follows this precedence:
+
+1. **Start with org defaults.enabled_plugins** (baseline from org config)
+2. **Add team config enabled_plugins** (from external config)
+3. **Apply team config disabled_plugins** (team can disable specific plugins)
+4. **Apply org defaults.disabled_plugins** (org-wide disabled patterns)
+5. **SKIP allowed_plugins** (federated teams are trusted, not subject to inline restrictions)
+6. **Block by org security.blocked_plugins** (ALWAYS enforced, cannot be bypassed)
+
+### Caching Strategy
+
+Team configs are cached for offline resilience:
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `DEFAULT_TTL` | 24 hours | How long before checking for updates |
+| `MAX_STALE_AGE` | 7 days | Maximum age before refusing to use cache |
+
+Fetch behavior:
+- **Fresh cache (<24h)**: Use cached config directly
+- **Stale cache (24h-7d)**: Try fetch, fallback to cache with warning
+- **Expired cache (>7d)**: Network required, fetch or fail
+
+Security rules from the org config are **always applied** to cached team configs at runtime. Updating `security.blocked_plugins` in org config immediately affects all teams, even those using cached configs.
+
+### CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `scc team info` | Display team config with federation info |
+| `scc team validate` | Validate team config against org security |
+| `scc org update --team <name>` | Refresh specific team's cached config |
+| `scc org update --all-teams` | Refresh all federated team configs |
+
+### Backwards Compatibility
+
+Teams without `config_source` continue to work unchanged (inline configuration). The `EffectiveConfig.to_phase1_format()` method provides an adapter for Phase 1 code that expects the `(EffectivePlugins, marketplaces)` tuple format.
 
 ## Output Infrastructure
 

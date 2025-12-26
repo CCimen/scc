@@ -287,7 +287,7 @@ def sessions_cmd(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _list_interactive(containers: list) -> None:
+def _list_interactive(containers: list[docker.ContainerInfo]) -> None:
     """Run interactive container list with action keys.
 
     Allows user to navigate containers and press action keys:

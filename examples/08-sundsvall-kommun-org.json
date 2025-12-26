@@ -1,0 +1,107 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "organization": {
+        "name": "Sundsvalls kommun",
+        "id": "sundsvalls-kommun",
+        "contact": "it-utveckling@sundsvall.se"
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-deprecated",
+            "*-beta",
+            "malicious-*"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com",
+            "localhost:*"
+        ],
+        "blocked_base_images": [
+            "*:latest"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "defaults": {
+        "allowed_plugins": [
+            "code-quality@sundsvall-shared",
+            "git-workflow@sundsvall-shared"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 10,
+            "auto_resume": true
+        }
+    },
+    "marketplaces": {
+        "sundsvall-shared": {
+            "source": "github",
+            "owner": "sundsvalls-kommun",
+            "repo": "scc-shared-plugins"
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": ["dept44", "ai-team"],
+            "allow_network_override": ["corp-proxy-only"]
+        }
+    },
+    "profiles": {
+        "dept44": {
+            "description": "Backend/API-team - Spring Boot, Java, WSO2 microservices",
+            "additional_plugins": [
+                "spring-boot-helper@sundsvall-shared",
+                "java-analyzer@sundsvall-shared",
+                "openapi-designer@sundsvall-shared"
+            ],
+            "network_policy": "corp-proxy-only",
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        },
+        "draken": {
+            "description": "Ärendehanteringssystem - React, Next.js, TypeScript",
+            "additional_plugins": [
+                "react-tools@sundsvall-shared",
+                "nextjs-helper@sundsvall-shared",
+                "typescript-strict@sundsvall-shared"
+            ],
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "hydran": {
+            "description": "Verksamhetssystem - React, Next.js, TypeScript",
+            "additional_plugins": [
+                "react-tools@sundsvall-shared",
+                "nextjs-helper@sundsvall-shared",
+                "typescript-strict@sundsvall-shared"
+            ],
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "ai-team": {
+            "description": "AI/LLM-integration - Python FastAPI backend, SvelteKit frontend",
+            "config_source": {
+                "source": "github",
+                "owner": "sundsvalls-kommun",
+                "repo": "ai-team-scc-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/sundsvalls-kommun/**"
+                ]
+            }
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 90
+    }
+}

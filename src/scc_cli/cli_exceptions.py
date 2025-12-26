@@ -18,15 +18,17 @@ import json
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from . import config, profiles
 from .cli_common import handle_errors
 from .cli_helpers import create_audit_record, require_reason_for_governance
+from .evaluation import EvaluationResult, evaluate
 from .models.exceptions import AllowTargets
 from .models.exceptions import Exception as SccException
 from .stores.exception_store import RepoStore, UserStore
@@ -507,26 +509,36 @@ def exceptions_reset(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class MockEvalResult:
-    """Placeholder for evaluation result with denied items.
-
-    This will be replaced with the real EvaluationResult when we integrate
-    with the config evaluation pipeline.
-    """
-
-    def __init__(self) -> None:
-        self.denied_additions: list[Any] = []
-        self.blocked_items: list[Any] = []
-
-
-def get_current_denials() -> MockEvalResult:
+def get_current_denials() -> EvaluationResult:
     """Get current evaluation result with denied items.
 
-    This is a placeholder - in real implementation, this would call
-    the evaluation pipeline to get currently blocked/denied items.
+    Connects to the config evaluation pipeline to get currently
+    blocked/denied items based on the user's team profile and workspace.
+
+    Returns:
+        EvaluationResult with blocked_items and denied_additions populated
+        from the effective config evaluation. Returns empty result if
+        in standalone mode or no team is selected.
     """
-    # This will be implemented when we integrate with config evaluation
-    return MockEvalResult()
+    org_config = config.load_cached_org_config()
+    if not org_config:
+        # Standalone mode - nothing is denied
+        return EvaluationResult()
+
+    team = config.get_selected_profile()
+    if not team:
+        # No team selected - nothing is denied
+        return EvaluationResult()
+
+    # Compute effective config for current workspace
+    effective = profiles.compute_effective_config(
+        org_config=org_config,
+        team_name=team,
+        workspace_path=Path.cwd(),
+    )
+
+    # Convert to evaluation result with proper types
+    return evaluate(effective)
 
 
 @handle_errors

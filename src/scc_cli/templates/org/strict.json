@@ -1,0 +1,38 @@
+{
+  "$schema": "https://scc-cli.dev/schemas/org-v1.json",
+  "schema_version": "{{SCHEMA_VERSION}}",
+  "min_cli_version": "{{MIN_CLI_VERSION}}",
+  "organization": {
+    "name": "{{ORG_NAME}}",
+    "id": "{{ORG_NAME}}",
+    "contact": "security@{{ORG_DOMAIN}}"
+  },
+  "marketplaces": [
+    {
+      "name": "{{ORG_NAME}}-secure",
+      "type": "github",
+      "repo": "{{ORG_NAME}}/claude-plugins-secure",
+      "ref": "v1.0.0",
+      "auth": "env:GITHUB_TOKEN"
+    }
+  ],
+  "defaults": {
+    "profile": "restricted",
+    "cache_ttl_hours": 1
+  },
+  "profiles": {
+    "restricted": {
+      "description": "Restricted access - security-audited plugins only"
+    },
+    "approved": {
+      "description": "Approved plugins for general development",
+      "plugin": "approved-base",
+      "marketplace": "{{ORG_NAME}}-secure"
+    },
+    "audit": {
+      "description": "Audit and compliance team",
+      "plugin": "audit-tools",
+      "marketplace": "{{ORG_NAME}}-secure"
+    }
+  }
+}

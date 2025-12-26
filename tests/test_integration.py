@@ -47,7 +47,13 @@ def full_config_environment(tmp_path, monkeypatch):
 
 @pytest.fixture
 def sample_org_config():
-    """Create a sample org config for testing."""
+    """Create a sample org config for testing.
+
+    Uses the current v1 schema format with proper fields:
+    - security: Hard boundaries (blocked plugins, images, MCP servers)
+    - defaults: allowed_plugins, network_policy, session
+    - profiles: description, additional_plugins, delegation
+    """
     return {
         "$schema": "https://scc-cli.dev/schemas/org-v1.json",
         "schema_version": "1.0.0",
@@ -57,31 +63,29 @@ def sample_org_config():
             "id": "test-org",
             "contact": "devops@test.org",
         },
-        "marketplaces": [
-            {
-                "name": "internal",
-                "type": "gitlab",
-                "host": "gitlab.test.org",
-                "repo": "group/plugins",
-                "ref": "main",
-                "auth": "env:GITLAB_TOKEN",
-            }
-        ],
+        "security": {
+            "blocked_plugins": ["*-experimental"],
+            "blocked_mcp_servers": [],
+            "blocked_base_images": ["*:latest"],
+            "allow_stdio_mcp": False,
+        },
+        "defaults": {
+            "allowed_plugins": ["*"],
+            "network_policy": "unrestricted",
+            "session": {
+                "timeout_hours": 10,
+                "auto_resume": True,
+            },
+        },
         "profiles": {
             "platform": {
                 "description": "Platform team (Python, FastAPI)",
-                "plugin": "platform",
-                "marketplace": "internal",
+                "additional_plugins": ["python-tools", "fastapi-helper"],
             },
             "api": {
                 "description": "API team (Java, Spring Boot)",
-                "plugin": "api",
-                "marketplace": "internal",
+                "additional_plugins": ["java-analyzer", "spring-boot-helper"],
             },
-        },
-        "defaults": {
-            "profile": "platform",
-            "cache_ttl_hours": 24,
         },
     }
 
@@ -592,23 +596,44 @@ class TestDepsWorkflow:
 class TestDataFlowIntegration:
     """Tests verifying data flows correctly between modules."""
 
-    def test_org_config_flows_to_claude_adapter(self, full_config_environment, sample_org_config):
-        """Org config should flow through profiles to claude_adapter correctly."""
-        from scc_cli import profiles
-        from scc_cli.claude_adapter import build_claude_settings
+    def test_org_config_flows_to_effective_plugins(self, full_config_environment):
+        """Org config should flow correctly through Phase 2 marketplace API.
 
-        # Resolve profile from org config
-        profile = profiles.resolve_profile(sample_org_config, "platform")
-        marketplace = profiles.resolve_marketplace(sample_org_config, profile)
-        org_id = sample_org_config["organization"]["id"]
+        This test verifies the modern integration flow:
+        OrganizationConfig → compute_effective_plugins() → EffectivePlugins
+        """
+        from scc_cli.marketplace.compute import compute_effective_plugins
+        from scc_cli.marketplace.schema import (
+            DefaultsConfig,
+            OrganizationConfig,
+            TeamProfile,
+        )
 
-        # Build Claude settings
-        settings = build_claude_settings(profile, marketplace, org_id)
+        # Create config using Phase 2 Pydantic models
+        config = OrganizationConfig(
+            name="Test Organization",
+            schema_version=1,
+            defaults=DefaultsConfig(
+                enabled_plugins=["code-quality@default"],
+            ),
+            profiles={
+                "platform": TeamProfile(
+                    name="Platform Team",
+                    description="Platform team (Python, FastAPI)",
+                    additional_plugins=["python-tools", "fastapi-helper"],
+                ),
+            },
+        )
 
-        # Verify settings structure
-        assert "extraKnownMarketplaces" in settings
-        assert "test-org" in settings["extraKnownMarketplaces"]
-        assert settings["enabledPlugins"] == ["platform@test-org"]
+        # Compute effective plugins for the platform team
+        effective = compute_effective_plugins(config, team_id="platform")
+
+        # Verify plugins are merged correctly (defaults + team additional)
+        # Note: Plugins without explicit marketplace get @claude-plugins-official suffix
+        assert "code-quality@default" in effective.enabled
+        assert "python-tools@claude-plugins-official" in effective.enabled
+        assert "fastapi-helper@claude-plugins-official" in effective.enabled
+        assert effective.blocked == []
 
     def test_session_record_persists_correctly(self, full_config_environment):
         """Session recording should persist and be retrievable."""

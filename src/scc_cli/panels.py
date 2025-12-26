@@ -59,7 +59,7 @@ def create_warning_panel(title: str, message: str, hint: str = "") -> Panel:
     )
 
 
-def create_success_panel(title: str, items: dict) -> Panel:
+def create_success_panel(title: str, items: dict[str, str]) -> Panel:
     """Create a success panel with key-value summary.
 
     Args:

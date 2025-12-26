@@ -52,7 +52,7 @@ def mcp_server_stdio() -> dict[str, Any]:
 def org_config_with_mcp() -> dict[str, Any]:
     """Org config with MCP servers in defaults and profiles."""
     return {
-        "schema_version": "2.0.0",
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "security": {
             "blocked_mcp_servers": ["*.untrusted.com", "malicious-*"],
@@ -118,7 +118,7 @@ class TestMCPServerSchemaValidation:
     def test_valid_sse_server(self, mcp_server_sse):
         """Should validate SSE type MCP server in profile."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "profiles": {
                 "test-team": {
@@ -128,13 +128,13 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should not raise - returns empty list on valid config
-        result = validate.validate_org_config(org_config, schema_version="v2")
+        result = validate.validate_org_config(org_config, schema_version="v1")
         assert result == [] or result is None
 
     def test_valid_stdio_server(self, mcp_server_stdio):
         """Should validate stdio type MCP server in profile."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "profiles": {
                 "test-team": {
@@ -144,13 +144,13 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should not raise - returns empty list on valid config
-        result = validate.validate_org_config(org_config, schema_version="v2")
+        result = validate.validate_org_config(org_config, schema_version="v1")
         assert result == [] or result is None
 
     def test_sse_requires_url(self):
         """SSE type should require url field."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "profiles": {
                 "test-team": {
@@ -162,13 +162,13 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should return validation errors
-        result = validate.validate_org_config(org_config, schema_version="v2")
+        result = validate.validate_org_config(org_config, schema_version="v1")
         assert result and len(result) > 0
 
     def test_stdio_requires_command(self):
         """Stdio type should require command field."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "profiles": {
                 "test-team": {
@@ -180,13 +180,13 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should return validation errors
-        result = validate.validate_org_config(org_config, schema_version="v2")
+        result = validate.validate_org_config(org_config, schema_version="v1")
         assert result and len(result) > 0
 
     def test_invalid_type_rejected(self):
         """Should reject invalid MCP server types."""
         org_config = {
-            "schema_version": "2.0.0",
+            "schema_version": "1.0.0",
             "organization": {"name": "Test", "id": "test"},
             "profiles": {
                 "test-team": {
@@ -198,7 +198,7 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should return validation errors
-        result = validate.validate_org_config(org_config, schema_version="v2")
+        result = validate.validate_org_config(org_config, schema_version="v1")
         assert result and len(result) > 0
 
 
@@ -212,7 +212,7 @@ class TestMCPServerInProfiles:
 
     def test_profile_can_have_mcp_servers(self, org_config_with_mcp):
         """Profile should be able to define MCP servers."""
-        result = validate.validate_org_config(org_config_with_mcp, schema_version="v2")
+        result = validate.validate_org_config(org_config_with_mcp, schema_version="v1")
         assert result == [] or result is None
 
     def test_profile_mcp_servers_inherit_from_defaults(self, org_config_with_mcp, tmp_path):

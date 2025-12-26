@@ -93,7 +93,7 @@ def _get_usage_file() -> Path:
     return CACHE_DIR / USAGE_FILE
 
 
-def _write_event(event: dict) -> None:
+def _write_event(event: dict[str, Any]) -> None:
     """Append an event to the JSONL file.
 
     Args:
@@ -146,7 +146,7 @@ def record_session_start(
     project_name: str,
     team_name: str | None,
     expected_duration_hours: int,
-    stats_config: dict | None = None,
+    stats_config: dict[str, Any] | None = None,
 ) -> None:
     """Record a session start event.
 
@@ -192,7 +192,7 @@ def record_session_end(
     session_id: str,
     actual_duration_minutes: int,
     exit_status: str = "clean",
-    stats_config: dict | None = None,
+    stats_config: dict[str, Any] | None = None,
 ) -> None:
     """Record a session end event.
 
@@ -279,8 +279,8 @@ def get_stats(days: int | None = None) -> StatsReport:
         period_start = datetime.min
 
     # Filter events by period
-    session_starts: dict[str, dict] = {}
-    session_ends: dict[str, dict] = {}
+    session_starts: dict[str, dict[str, Any]] = {}
+    session_ends: dict[str, dict[str, Any]] = {}
 
     for event in events:
         event_time_str = event.get("timestamp")

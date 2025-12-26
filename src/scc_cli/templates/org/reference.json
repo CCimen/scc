@@ -1,0 +1,74 @@
+{
+  "$schema": "https://scc-cli.dev/schemas/org-v1.json",
+  "schema_version": "{{SCHEMA_VERSION}}",
+  "min_cli_version": "{{MIN_CLI_VERSION}}",
+  "organization": {
+    "name": "{{ORG_NAME}}",
+    "id": "{{ORG_NAME}}",
+    "contact": "admin@{{ORG_DOMAIN}}"
+  },
+  "marketplaces": [
+    {
+      "name": "github-public",
+      "type": "github",
+      "repo": "{{ORG_NAME}}/claude-plugins-marketplace",
+      "ref": "main",
+      "auth": null
+    },
+    {
+      "name": "github-private",
+      "type": "github",
+      "repo": "{{ORG_NAME}}/claude-plugins-private",
+      "ref": "v1.0.0",
+      "auth": "env:GITHUB_TOKEN"
+    },
+    {
+      "name": "gitlab-self-hosted",
+      "type": "gitlab",
+      "host": "gitlab.{{ORG_DOMAIN}}",
+      "repo": "devtools/plugins",
+      "ref": "main",
+      "auth": "env:GITLAB_TOKEN"
+    },
+    {
+      "name": "custom-https",
+      "type": "https",
+      "url": "https://plugins.{{ORG_DOMAIN}}/marketplace.json",
+      "auth": "env:CUSTOM_API_KEY"
+    }
+  ],
+  "defaults": {
+    "profile": "base",
+    "cache_ttl_hours": 24
+  },
+  "profiles": {
+    "base": {
+      "description": "Default profile without plugins - safe baseline"
+    },
+    "platform": {
+      "description": "Platform engineering with infrastructure tools",
+      "plugin": "platform-tools",
+      "marketplace": "github-public"
+    },
+    "backend": {
+      "description": "Backend development with API and database tools",
+      "plugin": "backend-tools",
+      "marketplace": "github-public"
+    },
+    "frontend": {
+      "description": "Frontend development with UI component tools",
+      "plugin": "frontend-tools",
+      "marketplace": "github-public"
+    },
+    "security": {
+      "description": "Security team with audit and scanning tools",
+      "plugin": "security-tools",
+      "marketplace": "github-private"
+    },
+    "devops": {
+      "description": "DevOps with CI/CD and deployment tools",
+      "plugin": "devops-tools",
+      "marketplace": "gitlab-self-hosted"
+    }
+  }
+}

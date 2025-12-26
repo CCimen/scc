@@ -95,6 +95,76 @@ A project can only add resources if:
 2. The team itself is delegated for that resource type
 3. The resource doesn't match any security block
 
+### Federated Teams (External Config Sources)
+
+Teams can store their configuration in an external repository instead of inline in the org config. This enables team leads to manage their plugins independently:
+
+```yaml
+profiles:
+  platform:
+    description: "Platform team with external config"
+    config_source:
+      source: github
+      owner: "myorg"
+      repo: "platform-team-config"
+      branch: "main"
+    trust:
+      inherit_org_marketplaces: true
+      allow_additional_marketplaces: true
+      marketplace_source_patterns:
+        - "github.com/myorg/**"
+```
+
+#### Config Source Types
+
+| Type | Example | Use Case |
+|------|---------|----------|
+| `github` | `owner: "org", repo: "config"` | GitHub repositories (public/private) |
+| `git` | `url: "git@gitlab.com:org/config.git"` | Any Git hosting (GitLab, Bitbucket) |
+| `url` | `url: "https://configs.example.com/team.json"` | HTTPS-hosted config files |
+
+#### Trust Grants
+
+Organizations control what federated teams can do via trust grants:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `inherit_org_marketplaces` | `true` | Team can use marketplaces defined in org config |
+| `allow_additional_marketplaces` | `false` | Team can define their own marketplace sources |
+| `marketplace_source_patterns` | `[]` | URL patterns for allowed team marketplace sources |
+
+Trust validation uses two layers:
+1. **Permission Check**: Does `allow_additional_marketplaces` allow team to define marketplaces?
+2. **Source Validation**: Does each marketplace URL match `marketplace_source_patterns`?
+
+#### URL Pattern Matching
+
+Patterns support glob syntax with `**` for path matching:
+
+| Pattern | Matches |
+|---------|---------|
+| `github.com/myorg/**` | Any repo under myorg GitHub organization |
+| `*.internal.com/**` | Any path on any internal subdomain |
+| `github.com/myorg/approved-*` | Only repos starting with "approved-" |
+
+#### Marketplace Name Collisions
+
+Team-defined marketplaces cannot conflict with:
+- **Org marketplaces**: Names defined in org config's `marketplaces` section
+- **Implicit marketplaces**: `claude-plugins-official`
+
+If a collision is detected, the config is rejected with a clear error message.
+
+#### When inherit_org_marketplaces is false
+
+If a team sets `inherit_org_marketplaces: false`, they won't have access to org-defined marketplaces. This creates a potential conflict if `defaults.enabled_plugins` references plugins from those marketplaces.
+
+SCC validates this at config resolution time and rejects configurations where:
+- Team has `inherit_org_marketplaces: false`
+- Org defaults reference plugins from org marketplaces (e.g., `plugin@shared-marketplace`)
+
+**Fix**: Either set `inherit_org_marketplaces: true` or remove conflicting plugins from org defaults.
+
 ## What Gets Merged
 
 ### Plugins
@@ -194,6 +264,83 @@ additional_plugins: ["project-linter"]
 ```
 
 Result: effective plugins = `["base-plugin", "team-tool", "project-linter"]`. All additions were delegated and nothing was blocked.
+
+### Example 5: Federated Team with Trust Grants
+
+Organization config with federated team:
+```yaml
+marketplaces:
+  shared:
+    source: github
+    owner: "myorg"
+    repo: "shared-plugins"
+
+profiles:
+  platform:
+    description: "Platform team - config managed externally"
+    config_source:
+      source: github
+      owner: "myorg"
+      repo: "platform-config"
+      branch: "main"
+    trust:
+      inherit_org_marketplaces: true
+      allow_additional_marketplaces: true
+      marketplace_source_patterns:
+        - "github.com/myorg/**"
+```
+
+External team config (in `platform-config` repo):
+```yaml
+enabled_plugins:
+  - "platform-tools@team-internal"
+  - "monitoring@shared"
+
+marketplaces:
+  team-internal:
+    source: github
+    owner: "myorg"
+    repo: "platform-internal-plugins"
+
+disabled_plugins:
+  - "legacy-tool"  # Disable something from org defaults
+```
+
+Result:
+- Team can use `shared` marketplace (inherited from org)
+- Team can define `team-internal` marketplace (allowed by trust, matches pattern)
+- Team can reference plugins from both marketplaces
+- Team can disable plugins from org defaults
+- Org security rules still apply to all plugins
+
+### Example 6: Federated Team Trust Violation
+
+Organization config:
+```yaml
+profiles:
+  contractor:
+    config_source:
+      source: url
+      url: "https://contractor-configs.example.com/team.json"
+    trust:
+      inherit_org_marketplaces: true
+      allow_additional_marketplaces: true
+      marketplace_source_patterns:
+        - "github.com/approved-vendors/**"
+```
+
+External team config tries to use unauthorized source:
+```yaml
+marketplaces:
+  unauthorized:
+    source: github
+    owner: "random-org"
+    repo: "plugins"
+```
+
+Result: **Trust violation error**. The marketplace source `github.com/random-org/plugins` doesn't match the allowed pattern `github.com/approved-vendors/**`.
+
+**Fix**: Either update `marketplace_source_patterns` to allow the source, or use an approved source.
 
 ## MCP Server Configuration
 
@@ -350,3 +497,17 @@ When setting up organization config:
 4. Configure `delegation.teams` to control which teams can add resources
 5. Create team profiles with appropriate `allow_project_overrides` settings
 6. Test with `scc config explain` to verify effective configuration
+
+### For Federated Teams
+
+Additional considerations for teams with external config sources:
+
+1. Define `config_source` with appropriate source type (github, git, or url)
+2. Configure trust grants carefully:
+   - `inherit_org_marketplaces: true` unless team needs complete isolation
+   - `allow_additional_marketplaces: false` for maximum control, `true` for team autonomy
+   - `marketplace_source_patterns` - use specific patterns, avoid overly permissive wildcards
+3. Ensure `defaults.enabled_plugins` doesn't conflict with `inherit_org_marketplaces: false` teams
+4. Test federation with `scc team validate` before deployment
+5. Use `scc org update --team <name>` to refresh cached configs after team changes
+6. Monitor cache staleness - configs older than 7 days require network access

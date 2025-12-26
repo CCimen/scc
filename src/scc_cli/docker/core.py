@@ -47,12 +47,13 @@ def _check_docker_installed() -> bool:
     return shutil.which("docker") is not None
 
 
-def _parse_version(version_string: str) -> tuple:
+def _parse_version(version_string: str) -> tuple[int, int, int]:
     """Parse version string into comparable tuple."""
     # Extract version number from strings like "Docker version 27.5.1, build..."
     match = re.search(r"(\d+)\.(\d+)\.(\d+)", version_string)
     if match:
-        return tuple(int(x) for x in match.groups())
+        major, minor, patch = (int(x) for x in match.groups())
+        return (major, minor, patch)
     return (0, 0, 0)
 
 
@@ -224,7 +225,7 @@ def build_start_command(container_name: str) -> list[str]:
     return ["docker", "start", "-ai", container_name]
 
 
-def run_detached(cmd: list[str]) -> subprocess.Popen:
+def run_detached(cmd: list[str]) -> subprocess.Popen[bytes]:
     """Run Docker command in background and return the process handle."""
     return subprocess.Popen(
         cmd,

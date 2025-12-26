@@ -14,7 +14,7 @@ from scc_cli import validate
 
 @pytest.fixture
 def valid_org_config():
-    """Create a valid organization config."""
+    """Create a valid organization config matching v1 schema."""
     return {
         "schema_version": "1.0.0",
         "min_cli_version": "1.0.0",
@@ -23,38 +23,24 @@ def valid_org_config():
             "id": "test-org",
             "contact": "devops@test.org",
         },
-        "marketplaces": [
-            {
-                "name": "internal",
-                "type": "gitlab",
-                "host": "gitlab.test.org",
-                "repo": "group/claude-marketplace",
-                "ref": "main",
-                "auth": "env:GITLAB_TOKEN",
-            },
-            {
-                "name": "public",
-                "type": "github",
-                "repo": "test-org/public-plugins",
-                "ref": "main",
-                "auth": None,
-            },
-        ],
+        "security": {
+            "blocked_plugins": ["malicious-*"],
+            "blocked_mcp_servers": ["*.untrusted.com"],
+            "blocked_base_images": ["*:latest"],
+        },
         "profiles": {
             "backend": {
                 "description": "Backend team",
-                "plugin": "backend",
-                "marketplace": "internal",
+                "additional_plugins": ["backend-tools"],
             },
             "frontend": {
                 "description": "Frontend team",
-                "plugin": "frontend",
-                "marketplace": "public",
+                "additional_plugins": ["frontend-tools"],
             },
         },
         "defaults": {
-            "profile": "backend",
-            "cache_ttl_hours": 24,
+            "allowed_plugins": ["core-*"],
+            "network_policy": "unrestricted",
         },
     }
 
@@ -63,6 +49,7 @@ def valid_org_config():
 def minimal_org_config():
     """Create a minimal valid organization config."""
     return {
+        "schema_version": "1.0.0",
         "organization": {
             "name": "Minimal Org",
             "id": "minimal-org",
@@ -150,15 +137,15 @@ class TestValidateOrgConfig:
         assert len(errors) >= 1
         assert any("schema_version" in e for e in errors)
 
-    def test_validate_invalid_marketplace_type(self, valid_org_config):
-        """Invalid marketplace type should return error."""
-        valid_org_config["marketplaces"][0]["type"] = "invalid"
+    def test_validate_invalid_network_policy(self, valid_org_config):
+        """Invalid network_policy value should return error."""
+        valid_org_config["defaults"]["network_policy"] = "invalid-policy"
         errors = validate.validate_org_config(valid_org_config)
         assert len(errors) >= 1
 
-    def test_validate_invalid_auth_format(self, valid_org_config):
-        """Invalid auth format should return error."""
-        valid_org_config["marketplaces"][0]["auth"] = "invalid:format:extra"
+    def test_validate_invalid_blocked_plugins_type(self, valid_org_config):
+        """Invalid blocked_plugins type should return error."""
+        valid_org_config["security"]["blocked_plugins"] = "not-a-list"
         errors = validate.validate_org_config(valid_org_config)
         assert len(errors) >= 1
 
@@ -166,11 +153,11 @@ class TestValidateOrgConfig:
         """Validation errors should include path to error location."""
         config = {
             "organization": {"name": "Test", "id": "test"},
-            "marketplaces": [{"name": "bad", "type": "invalid"}],
+            "defaults": {"network_policy": "invalid-value"},
         }
         errors = validate.validate_org_config(config)
-        # Should include path like "marketplaces/0/type"
-        assert any("marketplace" in e.lower() for e in errors)
+        # Should include path like "defaults/network_policy"
+        assert any("defaults" in e.lower() or "network_policy" in e.lower() for e in errors)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

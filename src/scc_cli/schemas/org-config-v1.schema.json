@@ -1,0 +1,238 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://scc.sundsvall.se/schemas/org-config.v1.json",
+  "title": "SCC Organization Configuration",
+  "description": "Schema for organization-wide plugin governance and marketplace configuration",
+  "type": "object",
+  "required": ["name", "schema_version"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Organization display name"
+    },
+    "schema_version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Schema version for forward compatibility"
+    },
+    "marketplaces": {
+      "type": "object",
+      "description": "Named marketplace sources (key = marketplace name)",
+      "additionalProperties": {
+        "$ref": "#/$defs/MarketplaceSource"
+      }
+    },
+    "defaults": {
+      "$ref": "#/$defs/DefaultsConfig"
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Team profiles (key = profile name)",
+      "additionalProperties": {
+        "$ref": "#/$defs/TeamProfile"
+      }
+    },
+    "security": {
+      "$ref": "#/$defs/SecurityConfig"
+    }
+  },
+  "$defs": {
+    "MarketplaceSource": {
+      "oneOf": [
+        { "$ref": "#/$defs/MarketplaceSourceGitHub" },
+        { "$ref": "#/$defs/MarketplaceSourceGit" },
+        { "$ref": "#/$defs/MarketplaceSourceURL" },
+        { "$ref": "#/$defs/MarketplaceSourceDirectory" }
+      ]
+    },
+    "MarketplaceSourceGitHub": {
+      "type": "object",
+      "required": ["source", "owner", "repo"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "github"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$",
+          "description": "GitHub organization or user name"
+        },
+        "repo": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._-]+$",
+          "description": "GitHub repository name"
+        },
+        "branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Git branch to use"
+        },
+        "path": {
+          "type": "string",
+          "default": "/",
+          "description": "Path within repository to marketplace root"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "HTTP headers for authentication (supports env var expansion)"
+        }
+      }
+    },
+    "MarketplaceSourceGit": {
+      "type": "object",
+      "required": ["source", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "git"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^(https://|git@)",
+          "description": "Git clone URL (HTTPS or SSH)"
+        },
+        "branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Git branch to use"
+        },
+        "path": {
+          "type": "string",
+          "default": "/",
+          "description": "Path within repository to marketplace root"
+        }
+      }
+    },
+    "MarketplaceSourceURL": {
+      "type": "object",
+      "required": ["source", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "url"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "description": "HTTPS URL to marketplace manifest (HTTP forbidden)"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "HTTP headers for authentication (supports env var expansion)"
+        },
+        "materialization_mode": {
+          "type": "string",
+          "enum": ["self_contained", "metadata_only", "best_effort"],
+          "default": "self_contained",
+          "description": "How to fetch marketplace content"
+        }
+      }
+    },
+    "MarketplaceSourceDirectory": {
+      "type": "object",
+      "required": ["source", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "directory"
+        },
+        "path": {
+          "type": "string",
+          "description": "Local filesystem path (absolute or relative to org config)"
+        }
+      }
+    },
+    "DefaultsConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled_plugins": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Plugins enabled for all teams by default"
+        },
+        "disabled_plugins": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns for plugins disabled by default"
+        },
+        "extra_marketplaces": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Marketplaces exposed to all teams (for browsing, not auto-enabling)"
+        }
+      }
+    },
+    "TeamProfile": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Team display name"
+        },
+        "description": {
+          "type": "string",
+          "default": "",
+          "description": "Team description for UI display"
+        },
+        "additional_plugins": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Plugins to add beyond org defaults"
+        },
+        "disabled_plugins": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns for plugins to remove from defaults"
+        },
+        "allowed_plugins": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "default": null,
+          "description": "Allowlist (null = allow all, [] = allow none)"
+        },
+        "extra_marketplaces": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional marketplaces for this team"
+        }
+      }
+    },
+    "SecurityConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocked_plugins": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns for plugins blocked org-wide"
+        },
+        "blocked_reason": {
+          "type": "string",
+          "default": "Blocked by organization policy",
+          "description": "Message shown when plugin is blocked"
+        },
+        "allow_implicit_marketplaces": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to allow claude-plugins-official"
+        }
+      }
+    }
+  }
+}

@@ -135,7 +135,7 @@ def migrate_config_if_needed() -> bool:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def deep_merge(base: dict, override: dict) -> dict:
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """
     Deep merge override into base.
 
@@ -161,7 +161,7 @@ def _deep_copy(d: dict[Any, Any]) -> dict[Any, Any]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def load_user_config() -> dict:
+def load_user_config() -> dict[str, Any]:
     """
     Load user configuration from ~/.config/scc/config.json.
 
@@ -185,7 +185,7 @@ def load_user_config() -> dict:
     return config
 
 
-def save_user_config(config: dict) -> None:
+def save_user_config(config: dict[str, Any]) -> None:
     """
     Save user configuration to ~/.config/scc/config.json.
 
@@ -354,17 +354,17 @@ def get_recent_workspaces(limit: int = 10) -> list[Any]:
 # that imports from config module
 
 
-def load_config() -> dict:
+def load_config() -> dict[str, Any]:
     """Alias for load_user_config (backward compatibility)."""
     return load_user_config()
 
 
-def save_config(config: dict) -> None:
+def save_config(config: dict[str, Any]) -> None:
     """Alias for save_user_config (backward compatibility)."""
     save_user_config(config)
 
 
-def get_team_config(team: str) -> dict | None:
+def get_team_config(team: str) -> dict[str, Any] | None:
     """Get configuration for a specific team (stub for compatibility).
 
     Note: Team config now comes from remote org config, not local config.
@@ -393,7 +393,7 @@ INTERNAL_DEFAULTS = USER_CONFIG_DEFAULTS
 DEFAULT_CONFIG = USER_CONFIG_DEFAULTS.copy()
 
 
-def load_org_config() -> dict | None:
+def load_org_config() -> dict[str, Any] | None:
     """Deprecated: Org config is now fetched remotely.
 
     Use remote.load_org_config() instead.
@@ -401,7 +401,7 @@ def load_org_config() -> dict | None:
     return None
 
 
-def save_org_config(org_config: dict) -> None:
+def save_org_config(org_config: dict[str, Any]) -> None:
     """Deprecated: Org config is now remote.
 
     This function is a no-op for backward compatibility.
@@ -449,7 +449,7 @@ def load_cached_org_config() -> dict[Any, Any] | None:
         return None
 
 
-def load_teams_config() -> dict:
+def load_teams_config() -> dict[str, Any]:
     """Alias for load_user_config (backward compatibility)."""
     return load_user_config()
 
@@ -462,7 +462,7 @@ def load_teams_config() -> dict:
 PROJECT_CONFIG_FILE = ".scc.yaml"
 
 
-def read_project_config(workspace_path: str | Path) -> dict | None:
+def read_project_config(workspace_path: str | Path) -> dict[str, Any] | None:
     """Read project configuration from .scc.yaml file.
 
     Args:
@@ -506,10 +506,10 @@ def read_project_config(workspace_path: str | Path) -> dict | None:
     # Validate schema
     _validate_project_config_schema(config)
 
-    return cast(dict, config)
+    return cast(dict[str, Any], config)
 
 
-def _validate_project_config_schema(config: dict) -> None:
+def _validate_project_config_schema(config: dict[str, Any]) -> None:
     """Validate project config schema.
 
     Args:

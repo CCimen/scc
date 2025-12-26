@@ -1,0 +1,19 @@
+{
+  "$schema": "https://scc-cli.dev/schemas/org-v1.json",
+  "schema_version": "{{SCHEMA_VERSION}}",
+  "min_cli_version": "{{MIN_CLI_VERSION}}",
+  "organization": {
+    "name": "{{ORG_NAME}}",
+    "id": "{{ORG_NAME}}",
+    "contact": "admin@{{ORG_DOMAIN}}"
+  },
+  "defaults": {
+    "profile": "base",
+    "cache_ttl_hours": 24
+  },
+  "profiles": {
+    "base": {
+      "description": "Default profile with no plugins"
+    }
+  }
+}

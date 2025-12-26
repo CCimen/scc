@@ -235,23 +235,6 @@ class TestOrgSchema:
         assert output["apiVersion"] == "scc.cli/v1"
         assert "schema" in output["data"]
 
-    def test_schema_v2_version(self, capsys) -> None:
-        """schema --version v2 should print v2 schema."""
-        from scc_cli.cli_org import org_schema_cmd
-
-        try:
-            org_schema_cmd(
-                schema_version="v2",
-                json_output=False,
-                pretty=False,
-            )
-        except click.exceptions.Exit:
-            pass
-
-        captured = capsys.readouterr()
-        schema = json.loads(captured.out)
-        assert schema is not None
-
     def test_schema_invalid_version(self) -> None:
         """schema with invalid version should fail."""
         from scc_cli.cli_org import org_schema_cmd

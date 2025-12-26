@@ -6,6 +6,7 @@ Provide structured team management:
 - scc team current   - Show current team
 - scc team switch    - Switch to a different team (interactive picker)
 - scc team info      - Show detailed team information
+- scc team validate  - Validate team configuration (plugins, security, cache)
 
 All commands support --json output with proper envelopes.
 """
@@ -20,10 +21,114 @@ from . import config, teams
 from .cli_common import console, handle_errors, render_responsive_table
 from .json_command import json_command
 from .kinds import Kind
+from .marketplace.compute import TeamNotFoundError
+from .marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
+from .marketplace.schema import OrganizationConfig
+from .marketplace.team_fetch import TeamFetchResult, fetch_team_config
+from .marketplace.trust import TrustViolationError
 from .output_mode import is_json_mode, print_human
 from .panels import create_warning_panel
 from .ui.gate import InteractivityContext
 from .ui.picker import TeamSwitchRequested, pick_team
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Federation Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _get_config_source_from_raw(
+    org_config: dict[str, Any] | None, team_name: str
+) -> dict[str, Any] | None:
+    """Extract config_source from raw org_config dict for a team.
+
+    Args:
+        org_config: Raw org config dict (or None)
+        team_name: Team profile name
+
+    Returns:
+        Raw config_source dict if team is federated, None if inline or not found
+    """
+    if org_config is None:
+        return None
+
+    profiles = org_config.get("profiles", {})
+    if not profiles or team_name not in profiles:
+        return None
+
+    profile = profiles[team_name]
+    if not isinstance(profile, dict):
+        return None
+
+    return profile.get("config_source")
+
+
+def _parse_config_source(raw_source: dict[str, Any]) -> Any:
+    """Parse raw config_source dict into ConfigSource model.
+
+    The org config uses a nested structure like:
+        {"github": {"owner": "...", "repo": "..."}}
+
+    The Pydantic models use a flat structure with a discriminator field:
+        {"source": "github", "owner": "...", "repo": "..."}
+
+    This function bridges the two formats.
+
+    Args:
+        raw_source: Raw config_source dict from org config
+
+    Returns:
+        Parsed ConfigSource model (ConfigSourceGitHub, ConfigSourceGit, or ConfigSourceURL)
+
+    Raises:
+        ValueError: If config_source format is invalid
+    """
+    from .marketplace.schema import (
+        ConfigSourceGit,
+        ConfigSourceGitHub,
+        ConfigSourceURL,
+    )
+
+    # Config source is a dict with a single key indicating type
+    # Add the discriminator field when parsing
+    if "github" in raw_source:
+        config_data = {**raw_source["github"], "source": "github"}
+        return ConfigSourceGitHub.model_validate(config_data)
+    elif "git" in raw_source:
+        config_data = {**raw_source["git"], "source": "git"}
+        return ConfigSourceGit.model_validate(config_data)
+    elif "url" in raw_source:
+        config_data = {**raw_source["url"], "source": "url"}
+        return ConfigSourceURL.model_validate(config_data)
+    else:
+        raise ValueError(f"Unknown config_source type: {list(raw_source.keys())}")
+
+
+def _fetch_federated_team_config(
+    org_config: dict[str, Any] | None, team_name: str
+) -> TeamFetchResult | None:
+    """Fetch team config if team is federated, return None if inline.
+
+    This eagerly fetches the team config to prime the cache when
+    switching to a federated team.
+
+    Args:
+        org_config: Raw org config dict
+        team_name: Team name to fetch config for
+
+    Returns:
+        TeamFetchResult if federated team, None if inline
+    """
+    raw_source = _get_config_source_from_raw(org_config, team_name)
+    if raw_source is None:
+        return None
+
+    try:
+        config_source = _parse_config_source(raw_source)
+        return fetch_team_config(config_source, team_name)
+    except ValueError:
+        # Invalid config_source format - treat as inline
+        return None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Team App Definition
@@ -286,15 +391,40 @@ def team_switch(
     cfg["selected_profile"] = resolved_name
     config.save_user_config(cfg)
 
+    # Check if team is federated and fetch config to prime cache
+    fetch_result = _fetch_federated_team_config(org_config, resolved_name)
+    is_federated = fetch_result is not None
+
     print_human(f"[green]✓ Switched to team: {resolved_name}[/green]")
     if previous and previous != resolved_name:
         print_human(f"[dim]Previous: {previous}[/dim]")
 
-    return {
+    # Display federation status
+    if fetch_result is not None:
+        if fetch_result.success:
+            print_human(f"[dim]Federated config synced from {fetch_result.source_url}[/dim]")
+        else:
+            print_human(f"[yellow]⚠ Could not sync federated config: {fetch_result.error}[/yellow]")
+
+    # Build response with federation metadata
+    response: dict[str, Any] = {
         "success": True,
         "previous": previous,
         "current": resolved_name,
+        "is_federated": is_federated,
     }
+
+    if is_federated and fetch_result is not None:
+        response["source_type"] = fetch_result.source_type
+        response["source_url"] = fetch_result.source_url
+        if fetch_result.commit_sha:
+            response["commit_sha"] = fetch_result.commit_sha
+        if fetch_result.etag:
+            response["etag"] = fetch_result.etag
+        if not fetch_result.success:
+            response["fetch_error"] = fetch_result.error
+
+    return response
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -313,12 +443,47 @@ def team_info(
     """Show detailed information for a specific team profile.
 
     Displays team description, plugin configuration, marketplace info,
-    and other team-specific settings.
+    federation status (federated vs inline), config source, and trust grants.
     """
     cfg = config.load_user_config()
     org_config = config.load_cached_org_config()
 
     details = teams.get_team_details(team_name, cfg, org_config=org_config)
+
+    # Detect if team is federated (has config_source)
+    raw_source = _get_config_source_from_raw(org_config, team_name)
+    is_federated = raw_source is not None
+
+    # Get config source description for federated teams
+    config_source_display: str | None = None
+    if is_federated and raw_source is not None:
+        if "github" in raw_source:
+            gh = raw_source["github"]
+            config_source_display = f"github.com/{gh.get('owner', '?')}/{gh.get('repo', '?')}"
+        elif "git" in raw_source:
+            git = raw_source["git"]
+            url = git.get("url", "")
+            # Normalize for display
+            if url.startswith("https://"):
+                url = url[8:]
+            elif url.startswith("git@"):
+                url = url[4:].replace(":", "/", 1)
+            if url.endswith(".git"):
+                url = url[:-4]
+            config_source_display = url
+        elif "url" in raw_source:
+            url = raw_source["url"].get("url", "")
+            if url.startswith("https://"):
+                url = url[8:]
+            config_source_display = url
+
+    # Get trust grants for federated teams
+    trust_grants: dict[str, Any] | None = None
+    if is_federated and org_config:
+        profiles = org_config.get("profiles", {})
+        profile = profiles.get(team_name, {})
+        if isinstance(profile, dict):
+            trust_grants = profile.get("trust")
 
     if not details:
         if not is_json_mode():
@@ -342,6 +507,14 @@ def team_info(
 
         grid.add_row("Description:", details.get("description", "-"))
 
+        # Show federation mode
+        if is_federated:
+            grid.add_row("Mode:", "[cyan]federated[/cyan]")
+            if config_source_display:
+                grid.add_row("Config Source:", config_source_display)
+        else:
+            grid.add_row("Mode:", "[dim]inline[/dim]")
+
         plugin = details.get("plugin")
         if plugin:
             marketplace = details.get("marketplace", "sundsvall")
@@ -350,6 +523,20 @@ def team_info(
                 grid.add_row("Marketplace:", details.get("marketplace_repo", "-"))
         else:
             grid.add_row("Plugin:", "[dim]None (base profile)[/dim]")
+
+        # Show trust grants for federated teams
+        if trust_grants:
+            grid.add_row("", "")
+            grid.add_row("[bold]Trust Grants:[/bold]", "")
+            inherit = trust_grants.get("inherit_org_marketplaces", True)
+            allow_add = trust_grants.get("allow_additional_marketplaces", False)
+            grid.add_row(
+                "  Inherit Org Marketplaces:", "[green]yes[/green]" if inherit else "[red]no[/red]"
+            )
+            grid.add_row(
+                "  Allow Additional Marketplaces:",
+                "[green]yes[/green]" if allow_add else "[red]no[/red]",
+            )
 
         # Show validation warnings
         if validation.get("warnings"):
@@ -369,9 +556,11 @@ def team_info(
         console.print()
         console.print(f"[dim]Use: scc start -t {team_name} to use this profile[/dim]")
 
-    return {
+    # Build response with federation metadata
+    response: dict[str, Any] = {
         "team": team_name,
         "found": True,
+        "is_federated": is_federated,
         "profile": {
             "name": details.get("name"),
             "description": details.get("description"),
@@ -386,3 +575,257 @@ def team_info(
             "errors": validation.get("errors", []),
         },
     }
+
+    # Add federation details for federated teams
+    if is_federated:
+        response["config_source"] = config_source_display
+        if trust_grants:
+            response["trust"] = trust_grants
+
+    return response
+
+
+@team_app.command("validate")
+@json_command(Kind.TEAM_VALIDATE)
+@handle_errors
+def team_validate(
+    team_name: str = typer.Argument(..., help="Team name to validate"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
+) -> dict[str, Any]:
+    """Validate team configuration and show effective plugins.
+
+    Resolves the team configuration (inline or federated) and validates:
+    - Plugin security compliance (blocked_plugins patterns)
+    - Plugin allowlists (allowed_plugins patterns)
+    - Marketplace trust grants (for federated teams)
+    - Cache freshness status (for federated teams)
+
+    Use --verbose to see detailed validation information including
+    individual blocked/disabled plugins and their reasons.
+    """
+    org_config_data = config.load_cached_org_config()
+    if not org_config_data:
+        if not is_json_mode():
+            console.print(
+                create_warning_panel(
+                    "No Org Config",
+                    "No organization configuration found.",
+                    "Run 'scc setup' to configure your organization",
+                )
+            )
+        return {
+            "team": team_name,
+            "valid": False,
+            "error": "No organization configuration found",
+        }
+
+    # Parse org config
+    try:
+        org_config = OrganizationConfig.model_validate(org_config_data)
+    except Exception as e:
+        if not is_json_mode():
+            console.print(
+                create_warning_panel(
+                    "Invalid Org Config",
+                    f"Organization configuration is invalid: {e}",
+                    "Run 'scc org update' to refresh your configuration",
+                )
+            )
+        return {
+            "team": team_name,
+            "valid": False,
+            "error": f"Invalid org config: {e}",
+        }
+
+    # Resolve effective config (validates team exists, trust, security)
+    try:
+        effective = resolve_effective_config(org_config, team_name)
+    except TeamNotFoundError as e:
+        if not is_json_mode():
+            console.print(
+                create_warning_panel(
+                    "Team Not Found",
+                    f"Team '{team_name}' not found in org config.",
+                    f"Available teams: {', '.join(e.available_teams[:5])}",
+                )
+            )
+        return {
+            "team": team_name,
+            "valid": False,
+            "error": f"Team not found: {team_name}",
+            "available_teams": e.available_teams,
+        }
+    except TrustViolationError as e:
+        if not is_json_mode():
+            console.print(
+                create_warning_panel(
+                    "Trust Violation",
+                    f"Team configuration violates trust policy: {e.violation}",
+                    "Check team config_source and trust grants in org config",
+                )
+            )
+        return {
+            "team": team_name,
+            "valid": False,
+            "error": f"Trust violation: {e.violation}",
+            "team_name": e.team_name,
+        }
+    except ConfigFetchError as e:
+        if not is_json_mode():
+            console.print(
+                create_warning_panel(
+                    "Config Fetch Failed",
+                    f"Failed to fetch config for team '{e.team_id}' from {e.source_type}",
+                    str(e),  # Includes remediation hint
+                )
+            )
+        return {
+            "team": team_name,
+            "valid": False,
+            "error": str(e),
+            "source_type": e.source_type,
+            "source_url": e.source_url,
+        }
+
+    # Determine overall validity
+    is_valid = not effective.has_security_violations
+
+    # Human output
+    if not is_json_mode():
+        _render_validation_result(effective, verbose)
+
+    # Build JSON response
+    response: dict[str, Any] = {
+        "team": team_name,
+        "valid": is_valid,
+        "is_federated": effective.is_federated,
+        "enabled_plugins_count": effective.plugin_count,
+        "blocked_plugins_count": len(effective.blocked_plugins),
+        "disabled_plugins_count": len(effective.disabled_plugins),
+        "not_allowed_plugins_count": len(effective.not_allowed_plugins),
+    }
+
+    # Add federation metadata
+    if effective.is_federated:
+        response["config_source"] = effective.source_description
+        if effective.config_commit_sha:
+            response["config_commit_sha"] = effective.config_commit_sha
+        if effective.config_etag:
+            response["config_etag"] = effective.config_etag
+
+    # Add cache status
+    if effective.used_cached_config:
+        response["used_cached_config"] = True
+        response["cache_is_stale"] = effective.cache_is_stale
+        if effective.staleness_warning:
+            response["staleness_warning"] = effective.staleness_warning
+
+    # Add verbose details
+    if verbose or json_output or pretty:
+        response["enabled_plugins"] = sorted(effective.enabled_plugins)
+        response["blocked_plugins"] = [
+            {"plugin_id": bp.plugin_id, "reason": bp.reason, "pattern": bp.pattern}
+            for bp in effective.blocked_plugins
+        ]
+        response["disabled_plugins"] = effective.disabled_plugins
+        response["not_allowed_plugins"] = effective.not_allowed_plugins
+        response["extra_marketplaces"] = effective.extra_marketplaces
+
+    return response
+
+
+def _render_validation_result(effective: EffectiveConfig, verbose: bool) -> None:
+    """Render validation result to terminal.
+
+    Args:
+        effective: Resolved effective configuration
+        verbose: Whether to show detailed output
+    """
+    console.print()
+
+    # Header with validation status
+    if effective.has_security_violations:
+        status = "[red]FAILED[/red]"
+        border_style = "red"
+    else:
+        status = "[green]PASSED[/green]"
+        border_style = "green"
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column()
+
+    # Basic info
+    grid.add_row("Status:", status)
+    grid.add_row(
+        "Mode:", "[cyan]federated[/cyan]" if effective.is_federated else "[dim]inline[/dim]"
+    )
+
+    if effective.is_federated:
+        grid.add_row("Config Source:", effective.source_description)
+        if effective.config_commit_sha:
+            grid.add_row("Commit SHA:", effective.config_commit_sha[:8])
+
+    # Cache status
+    if effective.used_cached_config:
+        cache_status = (
+            "[yellow]stale[/yellow]" if effective.cache_is_stale else "[green]fresh[/green]"
+        )
+        grid.add_row("Cache:", cache_status)
+        if effective.staleness_warning:
+            grid.add_row("", f"[dim]{effective.staleness_warning}[/dim]")
+
+    grid.add_row("", "")
+
+    # Plugin summary
+    grid.add_row("Enabled Plugins:", f"[green]{effective.plugin_count}[/green]")
+    if effective.blocked_plugins:
+        grid.add_row("Blocked Plugins:", f"[red]{len(effective.blocked_plugins)}[/red]")
+    if effective.disabled_plugins:
+        grid.add_row("Disabled Plugins:", f"[yellow]{len(effective.disabled_plugins)}[/yellow]")
+    if effective.not_allowed_plugins:
+        grid.add_row("Not Allowed:", f"[yellow]{len(effective.not_allowed_plugins)}[/yellow]")
+
+    # Verbose details
+    if verbose:
+        grid.add_row("", "")
+        if effective.enabled_plugins:
+            grid.add_row("[bold]Enabled:[/bold]", "")
+            for plugin in sorted(effective.enabled_plugins):
+                grid.add_row("", f"  [green]✓[/green] {plugin}")
+
+        if effective.blocked_plugins:
+            grid.add_row("[bold]Blocked:[/bold]", "")
+            for bp in effective.blocked_plugins:
+                grid.add_row("", f"  [red]✗[/red] {bp.plugin_id}")
+                grid.add_row("", f"    [dim]Reason: {bp.reason}[/dim]")
+                grid.add_row("", f"    [dim]Pattern: {bp.pattern}[/dim]")
+
+        if effective.disabled_plugins:
+            grid.add_row("[bold]Disabled:[/bold]", "")
+            for plugin in effective.disabled_plugins:
+                grid.add_row("", f"  [yellow]○[/yellow] {plugin}")
+
+        if effective.not_allowed_plugins:
+            grid.add_row("[bold]Not Allowed:[/bold]", "")
+            for plugin in effective.not_allowed_plugins:
+                grid.add_row("", f"  [yellow]○[/yellow] {plugin}")
+
+    panel = Panel(
+        grid,
+        title=f"[bold cyan]Team Validation: {effective.team_id}[/bold cyan]",
+        border_style=border_style,
+        padding=(1, 2),
+    )
+    console.print(panel)
+
+    # Hint
+    if not verbose and (
+        effective.blocked_plugins or effective.disabled_plugins or effective.not_allowed_plugins
+    ):
+        console.print()
+        console.print("[dim]Use --verbose for detailed plugin information[/dim]")
+
+    console.print()

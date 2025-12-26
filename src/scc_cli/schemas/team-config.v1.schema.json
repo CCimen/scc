@@ -1,0 +1,163 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://scc-cli.dev/schemas/team-config.v1.json",
+    "title": "SCC Team Config v1",
+    "description": "Schema for external team configuration files (Phase 2: Federated Team Configs)",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "JSON Schema reference URL"
+        },
+        "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "description": "Schema version (must be 1)"
+        },
+        "enabled_plugins": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "Plugins enabled by this team config (format: plugin-name@marketplace)"
+        },
+        "disabled_plugins": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "Glob patterns for plugins to disable (removes from org defaults)"
+        },
+        "marketplaces": {
+            "type": "object",
+            "description": "Team-defined marketplace sources (key = marketplace name)",
+            "additionalProperties": {
+                "$ref": "#/$defs/MarketplaceSource"
+            },
+            "default": {}
+        }
+    },
+    "required": ["schema_version"],
+    "additionalProperties": false,
+    "$defs": {
+        "MarketplaceSource": {
+            "description": "Discriminated union for marketplace source types",
+            "oneOf": [
+                {"$ref": "#/$defs/MarketplaceSourceGitHub"},
+                {"$ref": "#/$defs/MarketplaceSourceGit"},
+                {"$ref": "#/$defs/MarketplaceSourceURL"},
+                {"$ref": "#/$defs/MarketplaceSourceDirectory"}
+            ]
+        },
+        "MarketplaceSourceGitHub": {
+            "type": "object",
+            "description": "GitHub repository marketplace source",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "github",
+                    "description": "Source type discriminator"
+                },
+                "owner": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$",
+                    "description": "GitHub organization or user name"
+                },
+                "repo": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9._-]+$",
+                    "description": "GitHub repository name"
+                },
+                "branch": {
+                    "type": "string",
+                    "default": "main",
+                    "description": "Git branch to use"
+                },
+                "path": {
+                    "type": "string",
+                    "default": "/",
+                    "description": "Path within repository to marketplace root"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "HTTP headers for authentication (supports ${VAR} expansion)"
+                }
+            },
+            "required": ["source", "owner", "repo"],
+            "additionalProperties": false
+        },
+        "MarketplaceSourceGit": {
+            "type": "object",
+            "description": "Generic Git repository marketplace source",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "git",
+                    "description": "Source type discriminator"
+                },
+                "url": {
+                    "type": "string",
+                    "pattern": "^(https://|git@)",
+                    "description": "Git clone URL (HTTPS or SSH)"
+                },
+                "branch": {
+                    "type": "string",
+                    "default": "main",
+                    "description": "Git branch to use"
+                },
+                "path": {
+                    "type": "string",
+                    "default": "/",
+                    "description": "Path within repository to marketplace root"
+                }
+            },
+            "required": ["source", "url"],
+            "additionalProperties": false
+        },
+        "MarketplaceSourceURL": {
+            "type": "object",
+            "description": "URL-based marketplace source (HTTPS only)",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "url",
+                    "description": "Source type discriminator"
+                },
+                "url": {
+                    "type": "string",
+                    "pattern": "^https://",
+                    "description": "HTTPS URL to marketplace manifest (HTTP forbidden)"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "HTTP headers for authentication (supports ${VAR} expansion)"
+                },
+                "materialization_mode": {
+                    "type": "string",
+                    "enum": ["self_contained", "metadata_only", "best_effort"],
+                    "default": "self_contained",
+                    "description": "How to fetch marketplace content"
+                }
+            },
+            "required": ["source", "url"],
+            "additionalProperties": false
+        },
+        "MarketplaceSourceDirectory": {
+            "type": "object",
+            "description": "Local directory marketplace source",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "directory",
+                    "description": "Source type discriminator"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Local filesystem path (absolute or relative to org config)"
+                }
+            },
+            "required": ["source", "path"],
+            "additionalProperties": false
+        }
+    }
+}

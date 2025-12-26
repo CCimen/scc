@@ -204,7 +204,7 @@ def show_launch_info(console: Console, workspace: Path, team: str, session_name:
     console.print("\n[yellow]Starting Docker sandbox...[/yellow]\n")
 
 
-def select_session(console: Console, sessions_list: list[dict]) -> dict | None:
+def select_session(console: Console, sessions_list: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Display an interactive session selection menu.
 
     Args:
