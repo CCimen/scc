@@ -130,14 +130,19 @@ def _write_policy_to_dir(policy: dict[str, Any], target_dir: Path) -> Path | Non
             os.close(fd)
 
         os.chmod(temp_path, 0o600)  # User read/write only
-        temp_path.rename(policy_path)
+        temp_path.replace(policy_path)  # Atomic replace (cross-platform)
 
-        # fsync directory to ensure rename is durable
-        dir_fd = os.open(target_dir, os.O_RDONLY | os.O_DIRECTORY)
+        # fsync directory to ensure replace is durable
+        # O_DIRECTORY may not exist on all platforms (e.g., Windows)
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
         try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+            dir_fd = os.open(target_dir, flags)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass  # Directory fsync is best-effort
 
         return policy_path.resolve()  # Return absolute path
     except OSError:
@@ -148,6 +153,19 @@ def _write_policy_to_dir(policy: dict[str, Any], target_dir: Path) -> Path | Non
         except OSError:
             pass
         return None
+
+
+def _get_fallback_policy_dir() -> Path:
+    """Get fallback directory for policy files.
+
+    Uses home-based path instead of tempfile.gettempdir() because:
+    - On macOS, /var/folders/... is often NOT Docker-shareable by default
+    - Home directory (/Users/... on macOS, /home/... on Linux) is always shared
+
+    Returns:
+        Path under user's home that's reliably Docker-mountable.
+    """
+    return Path.home() / ".cache" / "scc-policy-fallback"
 
 
 def write_safety_net_policy_to_host(policy: dict[str, Any]) -> Path | None:
@@ -161,12 +179,12 @@ def write_safety_net_policy_to_host(policy: dict[str, Any]) -> Path | None:
         or None on failure.
 
     Note:
-        Uses atomic write (temp file + rename) to prevent partial reads
+        Uses atomic write (temp file + replace) to prevent partial reads
         if container starts while file is being written.
         Returns resolved absolute path for Docker Desktop compatibility.
 
-        If cache dir write fails, falls back to a temp dir under a Docker-shareable
-        location (e.g., /tmp/scc-policy-fallback/) to ensure "always mount" behavior.
+        If cache dir write fails, falls back to ~/.cache/scc-policy-fallback/
+        which is reliably Docker-shareable (under /Users on macOS, /home on Linux).
     """
     # Primary: try cache directory (user's standard cache location)
     cache_dir = get_cache_dir().resolve()
@@ -177,10 +195,9 @@ def write_safety_net_policy_to_host(policy: dict[str, Any]) -> Path | None:
         _cleanup_fallback_policy_files()
         return result
 
-    # Fallback: try temp directory under Docker-shareable location
-    # On macOS: /tmp is under /private/tmp which is Docker-shareable
-    # On Linux/WSL2: /tmp is always available
-    fallback_dir = Path(tempfile.gettempdir()).resolve() / "scc-policy-fallback"
+    # Fallback: use home-based path (always Docker-shareable)
+    # Avoid tempfile.gettempdir() - on macOS it's /var/folders which may not be shared
+    fallback_dir = _get_fallback_policy_dir()
     return _write_policy_to_dir(policy, fallback_dir)
 
 
@@ -190,7 +207,7 @@ def _cleanup_fallback_policy_files() -> None:
     Called after successful cache dir write to clean up any stale fallback files.
     Failures are silently ignored - this is purely optional hygiene.
     """
-    fallback_dir = Path(tempfile.gettempdir()).resolve() / "scc-policy-fallback"
+    fallback_dir = _get_fallback_policy_dir()
     fallback_file = fallback_dir / SAFETY_NET_POLICY_FILENAME
     try:
         fallback_file.unlink(missing_ok=True)
