@@ -12,13 +12,11 @@ import tempfile
 from pathlib import Path
 from typing import Any, cast
 
-from .. import stats
 from ..config import get_cache_dir
 from ..constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT, SANDBOX_DATA_VOLUME
 from ..errors import SandboxLaunchError
 from .core import (
     build_command,
-    check_docker_available,
     validate_container_filename,
 )
 from .credentials import (
