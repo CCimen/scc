@@ -391,9 +391,25 @@ scc stop && scc prune --yes
 
 - [Architecture](docs/ARCHITECTURE.md) - system design, module structure, data flow
 - [Governance](docs/GOVERNANCE.md) - delegation model, security boundaries
+- [Marketplace](docs/MARKETPLACE.md) - plugin distribution and official plugins
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - common problems and solutions
 - [Examples](examples/) - ready-to-use organization config templates
 - [Development](CLAUDE.md) - contributing guidelines, TDD methodology
+
+### Official Plugins
+
+The [sandboxed-code-plugins](https://github.com/CCimen/sandboxed-code-plugins) repository contains official SCC plugins distributed via the marketplace system.
+
+#### scc-safety-net (Recommended)
+
+AI coding assistants can accidentally run destructive git commands. The **scc-safety-net** plugin intercepts and blocks commands that could destroy remote history or uncommitted work:
+
+- `git push --force` → blocked (use `--force-with-lease` instead)
+- `git reset --hard` → blocked (destroys uncommitted changes)
+- `git branch -D` → blocked (use `-d` for safe delete)
+- `git clean -f` → blocked (use `-n` for dry-run first)
+
+We recommend enabling this plugin for all teams. See [MARKETPLACE.md](docs/MARKETPLACE.md) for setup instructions.
 
 ## Development
 

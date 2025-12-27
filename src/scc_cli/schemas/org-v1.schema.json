@@ -187,6 +187,49 @@
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Absolute path prefixes where stdio commands must reside. If not set, any absolute path is allowed (when allow_stdio_mcp is true). Uses realpath + commonpath for secure validation."
+                },
+                "safety_net": {
+                    "type": "object",
+                    "description": "Configuration for scc-safety-net plugin (blocks destructive git commands)",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["block", "warn", "allow"],
+                            "default": "block",
+                            "description": "Action mode: block (stop execution), warn (show warning but allow), allow (no checks)"
+                        },
+                        "block_force_push": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Block git push --force and +refspec force pushes"
+                        },
+                        "block_reset_hard": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Block git reset --hard (destroys uncommitted changes)"
+                        },
+                        "block_branch_force_delete": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Block git branch -D (force delete without merge check)"
+                        },
+                        "block_checkout_restore": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Block git checkout -- <file> and git restore <file> (discards file changes)"
+                        },
+                        "block_clean": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Block git clean -f (deletes untracked files)"
+                        },
+                        "block_stash_destructive": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Block git stash drop/clear (permanently loses stashed work)"
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "additionalProperties": false
