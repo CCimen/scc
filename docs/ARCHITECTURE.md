@@ -197,6 +197,63 @@ Credential flow:
 - Injected into container via Docker environment variables
 - Never written to disk or printed in logs
 
+### Safety-Net Policy Injection
+
+The safety-net plugin provides an additional security layer that blocks destructive git commands. Organizations configure this in their org config, and SCC injects the policy into containers using a read-only bind mount.
+
+```mermaid
+flowchart LR
+    subgraph host ["Host (SCC)"]
+        OrgConfig["org_config.json<br/>security.safety_net"]
+        Extract["Extract policy"]
+        PolicyFile["~/.cache/scc/<br/>effective_policy.json"]
+    end
+
+    subgraph container ["Container"]
+        EnvVar["$SCC_POLICY_PATH"]
+        Plugin["scc-safety-net<br/>plugin"]
+        Claude["Claude Code"]
+    end
+
+    OrgConfig --> Extract
+    Extract -->|"atomic write"| PolicyFile
+    PolicyFile -->|"-v :ro mount"| EnvVar
+    EnvVar --> Plugin
+    Plugin -->|"blocks dangerous<br/>git commands"| Claude
+
+    style PolicyFile fill:#fff9c4
+    style EnvVar fill:#e8f5e9
+```
+
+**How it works:**
+
+1. **Policy extraction**: SCC reads `security.safety_net` from org config at launch time
+2. **Atomic file write**: Policy is written to `~/.cache/scc/effective_policy.json` using temp file + rename pattern (crash-safe)
+3. **Read-only mount**: File is mounted into container with `:ro` flag (kernel-enforced, cannot be bypassed with sudo)
+4. **Environment variable**: `SCC_POLICY_PATH` tells the plugin where to find the policy
+5. **Fail-safe default**: If no policy is configured, defaults to `{"action": "block"}` (strictest mode)
+
+**Why read-only bind mount?**
+
+The `:ro` flag is kernel-enforced at the VFS layer. Even with `sudo` inside the container, write attempts fail with `EROFS` (Read-only file system). This ensures the AI cannot modify or circumvent the safety policy.
+
+**Configuration example:**
+
+```json
+{
+  "security": {
+    "safety_net": {
+      "action": "block",
+      "block_force_push": true,
+      "block_reset_hard": true,
+      "block_branch_force_delete": true
+    }
+  }
+}
+```
+
+See [MARKETPLACE.md](./MARKETPLACE.md) for full configuration options and the scc-safety-net plugin documentation.
+
 ## Module Design
 
 ```mermaid

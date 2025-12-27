@@ -76,8 +76,6 @@ from .launch import (
     inject_file_to_sandbox_volume,
     inject_settings,
     inject_team_settings,
-    launch_with_org_config,
-    launch_with_org_config_v2,
     run,
     run_sandbox,
 )
@@ -120,8 +118,6 @@ __all__ = [
     "run",
     "run_sandbox",
     "get_or_create_container",
-    "launch_with_org_config",
-    "launch_with_org_config_v2",
     # Re-exported for test patching compatibility
     "run_command",
     "run_command_bool",

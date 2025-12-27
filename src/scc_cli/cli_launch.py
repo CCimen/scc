@@ -332,7 +332,12 @@ def _launch_sandbox(
     Execute the Docker sandbox with all configurations applied.
 
     Handles container creation, session recording, and process handoff.
+    Safety-net policy from org config is extracted and mounted read-only.
     """
+    # Load org config for safety-net policy injection
+    # This is already cached by _configure_team_settings(), so it's a fast read
+    org_config = config.load_cached_org_config()
+
     # Prepare sandbox volume for credential persistence
     docker.prepare_sandbox_volume_for_credentials()
 
@@ -380,7 +385,8 @@ def _launch_sandbox(
         is_resume=is_resume,
     )
 
-    docker.run(docker_cmd)
+    # Pass org_config for safety-net policy injection (mounted read-only)
+    docker.run(docker_cmd, org_config=org_config)
 
 
 def _extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | None:

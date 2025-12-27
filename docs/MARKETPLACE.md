@@ -99,6 +99,20 @@ The plugin reads policy from `security.safety_net` in your org config:
 | `block_clean` | `true` | Block `git clean -f` |
 | `block_stash_destructive` | `true` | Block `git stash drop/clear` |
 
+**How policy injection works:**
+
+When you start a sandbox, SCC extracts the `security.safety_net` section from your org config and mounts it read-only inside the container at `$SCC_POLICY_PATH`.
+
+> **Note:** The current plugin version (v1.0) uses hardcoded safety rules. Policy file support (reading `$SCC_POLICY_PATH` for custom `action`, `block_force_push`, etc.) will be enabled in a future plugin release.
+
+Key behaviors:
+- **Always mounted**: The policy file is always present, even without org config (defaults to `{"action": "block"}`)
+- **Read-only enforcement**: The mount uses Docker's `:ro` flag, which is kernel-enforced and cannot be bypassed with `sudo`
+- **Fail-safe default**: If no policy is configured, the plugin defaults to block mode
+- **No container recreation**: Changing your org policy takes effect on the next sandbox start
+
+This architecture ensures the AI cannot modify or circumvent the safety policy.
+
 **Checking status:**
 
 Inside Claude Code, run `/scc-safety-net:status` to see the effective policy.

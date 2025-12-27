@@ -12,7 +12,7 @@ import typer
 from rich.prompt import Confirm
 from rich.status import Status
 
-from . import contexts, deps, docker, git, sessions
+from . import config, contexts, deps, docker, git, sessions
 from .cli_common import console, handle_errors, render_responsive_table
 from .cli_helpers import ConfirmItems, confirm_action
 from .constants import WORKTREE_BRANCH_PREFIX
@@ -119,7 +119,9 @@ def worktree_create_cmd(
                 workspace=worktree_path,
                 branch=f"{WORKTREE_BRANCH_PREFIX}{name}",
             )
-            docker.run(docker_cmd)
+            # Load org config for safety-net policy injection
+            org_config = config.load_cached_org_config()
+            docker.run(docker_cmd, org_config=org_config)
 
 
 @worktree_app.command("list")

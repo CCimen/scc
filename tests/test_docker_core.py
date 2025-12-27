@@ -587,23 +587,38 @@ class TestRun:
     Note: We test error handling, not Docker daemon behavior.
     Credential persistence is now handled by the wrapper script in build_command(),
     eliminating the previous fork/sleep workaround.
+
+    Tests that patch os.name to "nt" must also mock write_safety_net_policy_to_host
+    because the policy writer uses get_cache_dir() which is platform-specific.
     """
 
     def test_raises_sandbox_launch_error_on_file_not_found(self):
         """Should raise SandboxLaunchError when command not found."""
-        with patch("os.name", "nt"):  # Windows path for easier testing
-            with patch("subprocess.run", side_effect=FileNotFoundError()):
-                with pytest.raises(SandboxLaunchError) as exc_info:
-                    docker.run(["nonexistent-cmd"])
+        with (
+            patch("os.name", "nt"),  # Windows path for easier testing
+            patch(
+                "scc_cli.docker.launch.write_safety_net_policy_to_host",
+                return_value=None,
+            ),
+            patch("subprocess.run", side_effect=FileNotFoundError()),
+        ):
+            with pytest.raises(SandboxLaunchError) as exc_info:
+                docker.run(["nonexistent-cmd"])
 
-                assert "not found" in str(exc_info.value).lower()
+            assert "not found" in str(exc_info.value).lower()
 
     def test_raises_sandbox_launch_error_on_os_error(self):
         """Should raise SandboxLaunchError on OS error."""
-        with patch("os.name", "nt"):  # Windows path for easier testing
-            with patch("subprocess.run", side_effect=OSError("Permission denied")):
-                with pytest.raises(SandboxLaunchError):
-                    docker.run(["docker", "sandbox", "run"])
+        with (
+            patch("os.name", "nt"),  # Windows path for easier testing
+            patch(
+                "scc_cli.docker.launch.write_safety_net_policy_to_host",
+                return_value=None,
+            ),
+            patch("subprocess.run", side_effect=OSError("Permission denied")),
+        ):
+            with pytest.raises(SandboxLaunchError):
+                docker.run(["docker", "sandbox", "run"])
 
     def test_windows_uses_subprocess_run(self):
         """On Windows, should use subprocess.run instead of execvp."""
@@ -612,6 +627,10 @@ class TestRun:
 
         with (
             patch("os.name", "nt"),
+            patch(
+                "scc_cli.docker.launch.write_safety_net_policy_to_host",
+                return_value=None,
+            ),
             patch("subprocess.run", return_value=mock_result) as mock_subprocess,
         ):
             result = docker.run(["docker", "sandbox", "run"])
