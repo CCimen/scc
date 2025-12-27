@@ -7,6 +7,7 @@ For credential persistence, see credentials.py.
 
 import datetime
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -220,7 +221,8 @@ def build_command(
         container_policy_path = f"{SANDBOX_DATA_MOUNT}/{SAFETY_NET_POLICY_FILENAME}"
         # -v host_path:container_path:ro  ← Kernel-enforced read-only
         # Even sudo inside container cannot bypass `:ro` - requires CAP_SYS_ADMIN
-        cmd.extend(["-v", f"{policy_host_path}:{container_policy_path}:ro"])
+        # Use os.fspath() to reliably convert Path to string
+        cmd.extend(["-v", f"{os.fspath(policy_host_path)}:{container_policy_path}:ro"])
         # Set SCC_POLICY_PATH env var so plugin knows where to read policy
         cmd.extend(["-e", f"SCC_POLICY_PATH={container_policy_path}"])
 
