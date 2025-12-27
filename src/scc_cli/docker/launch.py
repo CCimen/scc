@@ -8,15 +8,15 @@ core.py and credential management from credentials.py.
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, cast
 
-from .. import stats
-from ..constants import SANDBOX_DATA_VOLUME
+from ..config import get_cache_dir
+from ..constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT, SANDBOX_DATA_VOLUME
 from ..errors import SandboxLaunchError
 from .core import (
     build_command,
-    check_docker_available,
     validate_container_filename,
 )
 from .credentials import (
@@ -26,17 +26,198 @@ from .credentials import (
     _sync_credentials_from_existing_containers,
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Safety Net Policy Injection
+# ─────────────────────────────────────────────────────────────────────────────
 
-def run(cmd: list[str], ensure_credentials: bool = True) -> int:
+# Default policy for when no org config exists (fail-safe to block mode)
+DEFAULT_SAFETY_NET_POLICY: dict[str, Any] = {"action": "block"}
+
+# Valid action values (prevents typo → weird behavior)
+VALID_SAFETY_NET_ACTIONS: frozenset[str] = frozenset({"block", "warn", "allow"})
+
+# Container path for policy (constant derived from mount point)
+CONTAINER_POLICY_PATH = f"{SANDBOX_DATA_MOUNT}/{SAFETY_NET_POLICY_FILENAME}"
+
+
+def extract_safety_net_policy(org_config: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Extract safety_net policy from org config for container injection.
+
+    Args:
+        org_config: The resolved organization configuration, or None.
+
+    Returns:
+        The safety_net policy dict if present, None otherwise.
     """
-    Execute the Docker command (legacy interface).
+    if org_config is None:
+        return None
+    security = org_config.get("security")
+    if not isinstance(security, dict):
+        return None
+    safety_net = security.get("safety_net")
+    if not isinstance(safety_net, dict):
+        return None
+    return safety_net
+
+
+def validate_safety_net_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    """Validate and sanitize safety net policy, fail-closed on invalid values.
+
+    Args:
+        policy: Raw policy dict from org config.
+
+    Returns:
+        Validated policy dict. Invalid 'action' values default to 'block'.
+    """
+    result = dict(policy)  # shallow copy
+    action = result.get("action", "block")
+    if action not in VALID_SAFETY_NET_ACTIONS:
+        result["action"] = "block"  # fail-closed on typo
+    return result
+
+
+def get_effective_safety_net_policy(org_config: dict[str, Any] | None) -> dict[str, Any]:
+    """Get the safety net policy, falling back to default if not configured.
+
+    Always returns a policy dict - never None. This ensures the mount is always
+    present, avoiding sandbox reuse issues when policy is added later.
+
+    Args:
+        org_config: The resolved organization configuration, or None.
+
+    Returns:
+        The validated safety_net policy dict from org config, or DEFAULT_SAFETY_NET_POLICY.
+    """
+    custom_policy = extract_safety_net_policy(org_config)
+    if custom_policy is not None:
+        return validate_safety_net_policy(custom_policy)
+    return DEFAULT_SAFETY_NET_POLICY
+
+
+def _write_policy_to_dir(policy: dict[str, Any], target_dir: Path) -> Path | None:
+    """Write policy to a specific directory with atomic pattern.
+
+    Uses temp file + rename pattern for atomicity. Even if the process crashes
+    mid-write, readers will see either the old file or the complete new file.
+
+    Args:
+        policy: Policy dict to write.
+        target_dir: Directory to write to.
+
+    Returns:
+        The absolute path to the policy file on success, None on failure.
+    """
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    except OSError:
+        return None
+
+    policy_path = target_dir / SAFETY_NET_POLICY_FILENAME
+    content = json.dumps(policy, indent=2)
+
+    try:
+        # Atomic write: temp file → fsync → rename → fsync dir
+        fd, temp_path_str = tempfile.mkstemp(
+            dir=target_dir,
+            prefix=".policy_",
+            suffix=".tmp",
+        )
+        temp_path = Path(temp_path_str)
+        try:
+            os.write(fd, content.encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+        os.chmod(temp_path, 0o600)  # User read/write only
+        temp_path.rename(policy_path)
+
+        # fsync directory to ensure rename is durable
+        dir_fd = os.open(target_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+        return policy_path.resolve()  # Return absolute path
+    except OSError:
+        # Clean up temp file if it exists
+        try:
+            if "temp_path" in locals():
+                temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
+
+def write_safety_net_policy_to_host(policy: dict[str, Any]) -> Path | None:
+    """Write safety net policy to host cache with atomic write pattern.
+
+    Args:
+        policy: The safety_net policy dict to write.
+
+    Returns:
+        The absolute host path to the policy file (resolved for Docker Desktop),
+        or None on failure.
+
+    Note:
+        Uses atomic write (temp file + rename) to prevent partial reads
+        if container starts while file is being written.
+        Returns resolved absolute path for Docker Desktop compatibility.
+
+        If cache dir write fails, falls back to a temp dir under a Docker-shareable
+        location (e.g., /tmp/scc-policy-fallback/) to ensure "always mount" behavior.
+    """
+    # Primary: try cache directory (user's standard cache location)
+    cache_dir = get_cache_dir().resolve()
+    result = _write_policy_to_dir(policy, cache_dir)
+
+    if result is not None:
+        # Optional hygiene: delete old fallback files on success
+        _cleanup_fallback_policy_files()
+        return result
+
+    # Fallback: try temp directory under Docker-shareable location
+    # On macOS: /tmp is under /private/tmp which is Docker-shareable
+    # On Linux/WSL2: /tmp is always available
+    fallback_dir = Path(tempfile.gettempdir()).resolve() / "scc-policy-fallback"
+    return _write_policy_to_dir(policy, fallback_dir)
+
+
+def _cleanup_fallback_policy_files() -> None:
+    """Remove old fallback policy files (optional hygiene).
+
+    Called after successful cache dir write to clean up any stale fallback files.
+    Failures are silently ignored - this is purely optional hygiene.
+    """
+    fallback_dir = Path(tempfile.gettempdir()).resolve() / "scc-policy-fallback"
+    fallback_file = fallback_dir / SAFETY_NET_POLICY_FILENAME
+    try:
+        fallback_file.unlink(missing_ok=True)
+        # Also try to remove the directory if empty
+        if fallback_dir.exists() and not any(fallback_dir.iterdir()):
+            fallback_dir.rmdir()
+    except OSError:
+        pass  # Silently ignore - this is optional hygiene
+
+
+def run(
+    cmd: list[str],
+    ensure_credentials: bool = True,
+    org_config: dict[str, Any] | None = None,
+) -> int:
+    """
+    Execute the Docker command with optional org configuration.
 
     This is a thin wrapper that calls run_sandbox() with extracted parameters.
-    Kept for backwards compatibility with existing callers.
+    When org_config is provided, the security.safety_net policy is extracted
+    and mounted read-only into the container for the scc-safety-net plugin.
 
     Args:
         cmd: Command to execute (must be docker sandbox run format)
         ensure_credentials: If True, use detached→symlink→exec pattern
+        org_config: Organization config dict. If provided, safety-net policy
+            is extracted and mounted. If None, default fail-safe policy is used.
 
     Raises:
         SandboxLaunchError: If Docker command fails to start
@@ -61,6 +242,7 @@ def run(cmd: list[str], ensure_credentials: bool = True) -> int:
         continue_session=continue_session,
         resume=resume,
         ensure_credentials=ensure_credentials,
+        org_config=org_config,
     )
 
 
@@ -69,6 +251,7 @@ def run_sandbox(
     continue_session: bool = False,
     resume: bool = False,
     ensure_credentials: bool = True,
+    org_config: dict[str, Any] | None = None,
 ) -> int:
     """
     Run Claude in a Docker sandbox with credential persistence.
@@ -87,6 +270,9 @@ def run_sandbox(
         continue_session: Pass -c flag to Claude
         resume: Pass --resume flag to Claude
         ensure_credentials: If True, create credential symlinks
+        org_config: Organization config dict. If provided, security.safety_net
+            policy is extracted and mounted read-only into container for the
+            scc-safety-net plugin. If None, a default fail-safe policy is used.
 
     Returns:
         Exit code from Docker process
@@ -95,6 +281,15 @@ def run_sandbox(
         SandboxLaunchError: If Docker command fails to start
     """
     try:
+        # ALWAYS write policy file and get host path (even without org config)
+        # This ensures the mount is present from first launch, avoiding
+        # sandbox reuse issues when safety-net is enabled later.
+        # If no org config, uses default {"action": "block"} (fail-safe).
+        effective_policy = get_effective_safety_net_policy(org_config)
+        policy_host_path = write_safety_net_policy_to_host(effective_policy)
+        # Note: policy_host_path may be None if write failed - build_command
+        # will handle this gracefully (no mount, plugin uses internal defaults)
+
         if os.name != "nt" and ensure_credentials:
             # STEP 1: Sync credentials from existing containers to volume
             # This copies credentials from project A's container when starting project B
@@ -104,7 +299,11 @@ def run_sandbox(
             _preinit_credential_volume()
 
             # STEP 3: Start container in DETACHED mode (no Claude running yet)
-            detached_cmd = build_command(workspace=workspace, detached=True)
+            detached_cmd = build_command(
+                workspace=workspace,
+                detached=True,
+                policy_host_path=policy_host_path,
+            )
             result = subprocess.run(
                 detached_cmd,
                 capture_output=True,
@@ -155,11 +354,13 @@ def run_sandbox(
 
         else:
             # Non-credential mode or Windows: use legacy flow
+            # Policy injection still applies - mount is always present
             cmd = build_command(
                 workspace=workspace,
                 continue_session=continue_session,
                 resume=resume,
                 detached=False,
+                policy_host_path=policy_host_path,
             )
 
             if os.name != "nt":
@@ -345,196 +546,6 @@ def inject_team_settings(team_name: str, org_config: dict[str, Any] | None = Non
             return True
 
         return inject_settings(team_settings)
-
-
-def launch_with_org_config(
-    workspace: Path,
-    org_config: dict[str, Any],
-    team: str,
-    continue_session: bool = False,
-    resume: bool = False,
-) -> None:
-    """
-    Launch Docker sandbox with team profile from remote org config.
-
-    This is the main orchestration function for the new architecture:
-    1. Resolves profile and marketplace from org_config (via profiles.py)
-    2. Builds Claude Code settings (via claude_adapter.py)
-    3. Injects settings into sandbox volume
-    4. Launches Docker sandbox
-
-    docker.py is "dumb" - it delegates all Claude Code format knowledge
-    to claude_adapter.py and profile resolution to profiles.py.
-
-    Args:
-        workspace: Path to workspace directory
-        org_config: Remote organization config dict
-        team: Team profile name
-        continue_session: Pass -c flag to Claude
-        resume: Pass --resume flag to Claude
-
-    Raises:
-        ValueError: If team/profile not found in org_config
-        DockerNotFoundError: If Docker not available
-        SandboxLaunchError: If sandbox fails to start
-    """
-    from .. import claude_adapter, profiles
-
-    # Check Docker is available
-    check_docker_available()
-
-    # Resolve profile from org config (raises ValueError if not found)
-    profile = profiles.resolve_profile(org_config, team)
-
-    # Resolve marketplace for the profile
-    marketplace = profiles.resolve_marketplace(org_config, profile)
-
-    # Get org_id for namespacing
-    org_id = org_config.get("organization", {}).get("id")
-
-    # Build Claude Code settings using the adapter
-    settings = claude_adapter.build_claude_settings(profile, marketplace, org_id)
-
-    # Inject settings into sandbox volume
-    inject_settings(settings)
-
-    # Build and run the Docker sandbox command
-    cmd = build_command(
-        workspace=workspace,
-        continue_session=continue_session,
-        resume=resume,
-    )
-
-    # Run the sandbox
-    run(cmd)
-
-
-def launch_with_org_config_v2(
-    workspace: Path,
-    org_config: dict[str, Any],
-    team: str,
-    continue_session: bool = False,
-    resume: bool = False,
-    is_offline: bool = False,
-    cache_age_hours: int | None = None,
-) -> None:
-    """
-    Launch Docker sandbox with v2 config inheritance.
-
-    This is the v2 orchestration function that supports:
-    - 3-layer config inheritance (org → team → project)
-    - Security boundary enforcement (blocked items)
-    - Delegation rules (denied additions)
-    - Offline mode with stale cache warnings
-
-    Args:
-        workspace: Path to workspace directory
-        org_config: Remote organization config dict (v2 schema)
-        team: Team profile name
-        continue_session: Pass -c flag to Claude
-        resume: Pass --resume flag to Claude
-        is_offline: Whether operating in offline mode
-        cache_age_hours: Age of cached config in hours (for staleness warning)
-
-    Raises:
-        PolicyViolationError: If blocked plugins are detected
-        ValueError: If team/profile not found in org_config
-        DockerNotFoundError: If Docker not available
-    """
-    from .. import claude_adapter, profiles
-    from ..errors import PolicyViolationError
-
-    # Check Docker is available
-    check_docker_available()
-
-    # Compute effective config with 3-layer inheritance
-    # This handles org defaults → team profile → project .scc.yaml
-    effective = profiles.compute_effective_config(
-        org_config=org_config,
-        team_name=team,
-        workspace_path=workspace,
-    )
-
-    # Check for security violations (blocked items = hard failure)
-    if effective.blocked_items:
-        # Raise error for first blocked item
-        blocked = effective.blocked_items[0]
-        raise PolicyViolationError(
-            item=blocked.item,
-            blocked_by=blocked.blocked_by,
-        )
-
-    # Warn about denied additions (soft failure - continue but warn)
-    if effective.denied_additions:
-        from scc_cli.utils.fixit import generate_unblock_command
-
-        for denied in effective.denied_additions:
-            print(f"⚠️  '{denied.item}' was denied: {denied.reason}")
-            # Add fix-it command - make it stand out
-            fix_cmd = generate_unblock_command(denied.item, "plugin")
-            print(f"   → To unblock: {fix_cmd}")
-
-    # Warn about stale cache when offline
-    if is_offline and cache_age_hours is not None and cache_age_hours > 24:
-        print(f"⚠️  Running offline with stale config cache ({cache_age_hours}h old)")
-
-    # Get org_id for namespacing
-    org_id = org_config.get("organization", {}).get("id")
-
-    # Get marketplace info if available
-    marketplace = None
-    try:
-        profile = profiles.resolve_profile(org_config, team)
-        marketplace = profiles.resolve_marketplace(org_config, profile)
-    except (ValueError, KeyError):
-        pass
-
-    # Build Claude Code settings using the v2 adapter
-    settings = claude_adapter.build_settings_from_effective_config(
-        effective_config=effective,
-        org_id=org_id,
-        marketplace=marketplace,
-    )
-
-    # Inject settings into sandbox volume
-    inject_settings(settings)
-
-    # Build and run the Docker sandbox command
-    cmd = build_command(
-        workspace=workspace,
-        continue_session=continue_session,
-        resume=resume,
-    )
-
-    # Record session start for usage stats
-    # NOTE: session_end cannot be recorded on Unix because os.execvp replaces
-    # the process. Incomplete sessions are tracked by the stats module.
-    # Stats errors are non-fatal - launch must always proceed.
-    try:
-        # Get stats config from org config (may be None for defaults)
-        stats_config = org_config.get("stats")
-
-        # Get expected duration from session config (default 8 hours)
-        expected_duration = effective.session_config.timeout_hours or 8
-
-        # Generate session ID
-        session_id = stats.generate_session_id()
-
-        # Record session start
-        stats.record_session_start(
-            session_id=session_id,
-            project_name=workspace.name,
-            team_name=team,
-            expected_duration_hours=expected_duration,
-            stats_config=stats_config,
-        )
-    except Exception:
-        # Stats recording failure must never block launch
-        # Silently continue - user can still use scc without stats
-        pass
-
-    # Run the sandbox
-    run(cmd)
 
 
 def get_or_create_container(

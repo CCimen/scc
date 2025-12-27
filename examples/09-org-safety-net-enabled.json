@@ -1,0 +1,78 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "min_cli_version": "1.3.0",
+    "organization": {
+        "name": "Safety-First Corp",
+        "id": "safety-first-corp",
+        "contact": "devops@example.com"
+    },
+    "marketplaces": {
+        "sandboxed-code-official": {
+            "source": "github",
+            "owner": "CCimen",
+            "repo": "sandboxed-code-plugins"
+        }
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-beta"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com"
+        ],
+        "blocked_base_images": [
+            "*:latest",
+            "*:dev"
+        ],
+        "allow_stdio_mcp": false,
+        "safety_net": {
+            "action": "block",
+            "block_force_push": true,
+            "block_reset_hard": true,
+            "block_branch_force_delete": true,
+            "block_checkout_restore": true,
+            "block_clean": true,
+            "block_stash_destructive": true
+        }
+    },
+    "defaults": {
+        "enabled_plugins": [
+            "scc-safety-net@sandboxed-code-official"
+        ],
+        "network_policy": "unrestricted",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": []
+        },
+        "projects": {
+            "inherit_team_delegation": true
+        }
+    },
+    "profiles": {
+        "engineering": {
+            "description": "Engineering team with safety-net protection",
+            "additional_plugins": [
+                "scc-safety-net@sandboxed-code-official"
+            ]
+        },
+        "platform": {
+            "description": "Platform team - safety-net in warn mode for experienced users",
+            "additional_plugins": [
+                "scc-safety-net@sandboxed-code-official"
+            ]
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 90
+    }
+}

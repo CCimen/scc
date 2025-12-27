@@ -37,6 +37,10 @@ SANDBOX_DATA_VOLUME = "docker-claude-sandbox-data"
 # Mount point inside the container for the data volume
 SANDBOX_DATA_MOUNT = "/mnt/claude-data"
 
+# Safety net policy injection
+# This is the filename for the extracted security.safety_net blob (NOT full org config)
+SAFETY_NET_POLICY_FILENAME = "effective_policy.json"
+
 # Credential file paths (relative to agent home directory)
 CREDENTIAL_PATHS = (
     f"/home/agent/{AGENT_CONFIG_DIR}/.credentials.json",

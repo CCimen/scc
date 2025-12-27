@@ -176,6 +176,7 @@ def build_command(
     continue_session: bool = False,
     resume: bool = False,
     detached: bool = False,
+    policy_host_path: Path | None = None,
 ) -> list[str]:
     """
     Build the docker sandbox run command.
@@ -187,6 +188,9 @@ def build_command(
         continue_session: Pass -c flag to Claude (ignored in detached mode)
         resume: Pass --resume flag to Claude (ignored in detached mode)
         detached: Create container without running agent (-d flag)
+        policy_host_path: Host path to safety net policy file to bind-mount read-only.
+            If provided, mounts at /mnt/claude-data/effective_policy.json:ro
+            and sets SCC_POLICY_PATH env var for the plugin.
 
     Returns:
         Command as list of strings
@@ -195,12 +199,30 @@ def build_command(
         - Agent `claude` is ALWAYS included, even in detached mode
         - Session flags passed via docker exec in detached mode (see run_sandbox)
     """
+    from ..constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT
+
     cmd = ["docker", "sandbox", "run"]
 
     # Detached mode: create container without running Claude interactively
     # This allows us to create symlinks BEFORE Claude starts
     if detached:
         cmd.append("-d")
+
+    # Add read-only bind mount for safety net policy (kernel-enforced security)
+    # This MUST be added before the agent name in the command
+    #
+    # Design note: We mount the FILE directly (not a directory) because:
+    # - Containers are ephemeral (recreated each `scc start`)
+    # - Policy is written before container creation, so new containers get current policy
+    # - If we ever support container reuse or hot-reload, switch to directory mount
+    #   (file mounts pin to inode; atomic rename would be invisible to running container)
+    if policy_host_path is not None:
+        container_policy_path = f"{SANDBOX_DATA_MOUNT}/{SAFETY_NET_POLICY_FILENAME}"
+        # -v host_path:container_path:ro  ← Kernel-enforced read-only
+        # Even sudo inside container cannot bypass `:ro` - requires CAP_SYS_ADMIN
+        cmd.extend(["-v", f"{policy_host_path}:{container_policy_path}:ro"])
+        # Set SCC_POLICY_PATH env var so plugin knows where to read policy
+        cmd.extend(["-e", f"SCC_POLICY_PATH={container_policy_path}"])
 
     # Add workspace mount
     if workspace:

@@ -33,6 +33,7 @@ scc config explain org-config.json
 | Teams manage their own configs | `06-github-federated-skeleton.json` | GitHub-only federation |
 | Private GitLab + public GitHub plugins | `07-hybrid-gitlab-github-skeleton.json` | Mixed source federation |
 | **Swedish municipality / public sector** | `08-sundsvall-kommun-org.json` | Real-world reference config |
+| **Protect git history with safety-net** | `09-org-safety-net-enabled.json` | Marketplace plugin with git protection |
 | See all available options | `99-complete-reference.json` | Reference only (not for production) |
 
 ---
@@ -52,6 +53,7 @@ Build your understanding step by step:
 | 🟣 Skeleton | `07-hybrid-gitlab-github-skeleton.json` | GitLab + GitHub hybrid template |
 | 🏛️ Real-World | `08-sundsvall-kommun-org.json` | Swedish municipality with real teams |
 | 🏛️ Real-World | `08-sundsvall-ai-team-config.json` | AI team's federated config |
+| 🔒 Plugin | `09-org-safety-net-enabled.json` | Marketplace plugin with git protection |
 | 📚 Reference | `99-complete-reference.json` | All fields documented |
 | 📚 Reference | `team-config-example.json` | External team config format |
 
@@ -204,6 +206,17 @@ Comprehensive example showing:
 - Git source (`source: "git"` for GitLab SSH)
 - URL source (`source: "url"` for HTTPS endpoints)
 - Various trust grant configurations
+
+### 09-org-safety-net-enabled.json
+**Best for**: Teams wanting to protect git history from accidental destructive commands
+
+Demonstrates the [scc-safety-net](https://github.com/CCimen/sandboxed-code-plugins/tree/main/scc-safety-net) marketplace plugin:
+- Enables the official marketplace (`sandboxed-code-official`)
+- Enables `scc-safety-net` plugin for all teams
+- Configures `security.safety_net` policy settings
+- Blocks force pushes, hard resets, and other destructive git commands
+
+See [docs/MARKETPLACE.md](../docs/MARKETPLACE.md) for full plugin documentation.
 
 ---
 

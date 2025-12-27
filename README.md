@@ -17,38 +17,157 @@
 
 ---
 
-Run Claude Code in Docker sandboxes with organization-managed team profiles and git worktree support.
+Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (Anthropic's AI coding CLI) in Docker sandboxes with organization-managed team profiles and git worktree support.
 
-SCC isolates AI execution in containers, enforces branch safety, and lets organizations distribute Claude plugins through a central configuration. Developers get standardized setups without manual configuration.
+SCC isolates AI execution in containers, enforces branch safety, and prevents destructive git commands. Organizations distribute plugins through a central config—developers get standardized setups without manual configuration.
 
 ## 30-Second Guide
 
+**Requires:** Python 3.10+, Docker Desktop 4.50+, Git 2.30+
+
 ```bash
 pip install scc-cli      # Install
-scc setup                # Configure (interactive wizard)
+scc setup                # Configure (paste your org URL, pick your team)
 scc start ~/project      # Launch Claude Code in sandbox
 ```
 
-Run `scc doctor` if something goes wrong.
+Run `scc doctor` to verify your environment or troubleshoot issues.
 
-### How It Works
+---
 
-```mermaid
-flowchart LR
-    subgraph source ["Code Source"]
-        Repo["Your Repo"]
-        WT["Worktree (optional)"]
-    end
-    Session["Session: Persistent history"]
-    Container["Container: Ephemeral sandbox"]
-    Repo --> Session
-    WT -.->|"branch isolation"| Session
-    Session --> Container
-    classDef optional stroke-dasharray: 5 5,stroke:#888
-    class WT optional
+### Find Your Path
+
+| You are... | Start here |
+|------------|------------|
+| **Developer** joining a team | [Developer Onboarding](#developer-onboarding) — 4 commands to start coding |
+| **Team Lead** setting up your team | [Team Setup](#team-setup) — manage plugins in your own repo |
+| **Org Admin** configuring security | [Organization Setup](#organization-setup) — control what's allowed org-wide |
+
+---
+
+### Developer Onboarding
+
+**New to a team?** You'll be coding in under 2 minutes:
+
+```bash
+pip install scc-cli                    # 1. Install
+scc setup                              # 2. Paste org URL, pick your team
+scc start ~/project                    # 3. Start coding in sandbox
 ```
 
-> Sessions persist across restarts. Containers are recreated each launch.
+**What you get automatically:**
+- Your team's approved plugins and MCP servers
+- Organization security policies (applied automatically)
+- Git safety hooks that prevent destructive commands
+- Isolated git worktrees (your main branch stays clean while Claude experiments)
+
+**What you never need to do:**
+- Edit config files manually
+- Download or configure plugins
+- Worry about security settings
+
+---
+
+### Who Controls What
+
+| Setting | Org Admin | Team Lead | Developer |
+|---------|:---------:|:---------:|:---------:|
+| Block dangerous plugins/servers | ✅ **Sets** | ❌ Cannot override | ❌ Cannot override |
+| Default plugins for all teams | ✅ **Sets** | — | — |
+| Team-specific plugins | ✅ Approves | ✅ **Chooses** | — |
+| Project-local config (.scc.yaml) | ✅ Can restrict | ✅ Can restrict | ✅ **Extends** |
+| Safety-net policy (block/warn) | ✅ **Sets** | ❌ Cannot override | ❌ Cannot override |
+
+Organization security blocks cannot be overridden by teams or developers.
+
+*"Approves" = teams can only select from org-allowed marketplaces; blocks always apply. "Extends" = can add plugins/settings, cannot remove org defaults.*
+
+---
+
+### Organization Setup
+
+Org admins create a single JSON config that controls security for all teams:
+
+```json
+{
+  "organization": { "name": "Acme Corp", "id": "acme" },
+  "security": {
+    "blocked_plugins": ["*malicious*"],
+    "blocked_mcp_servers": ["*.untrusted.com"],
+    "safety_net": { "action": "block" }
+  },
+  "profiles": {
+    "backend": { "plugins": ["java-tools"] },
+    "frontend": { "plugins": ["react-tools"] }
+  }
+}
+```
+
+Host this anywhere: GitHub, GitLab, S3, or any HTTPS URL. Private repos work with token auth.
+
+**What you control:**
+- Which plugins and MCP servers are blocked (glob patterns)
+- Default plugins all teams get
+- Which teams exist and what they can customize
+- Whether teams can add their own marketplaces
+- Safety-net behavior: `block`, `warn`, or `allow` destructive git commands
+
+See [examples/](examples/) for complete org configs and [GOVERNANCE.md](docs/GOVERNANCE.md) for delegation rules.
+
+---
+
+### Team Setup
+
+Teams can manage their plugins **two ways**:
+
+**Option A: Inline (simple)** — Team config lives in the org config file.
+```json
+"profiles": {
+  "backend": {
+    "plugins": ["java-tools", "spring-boot"]
+  }
+}
+```
+
+**Option B: Team Repo (GitOps)** — Team maintains their own config repo.
+```json
+"profiles": {
+  "backend": {
+    "config_source": {
+      "type": "github",
+      "owner": "acme",
+      "repo": "backend-team-scc-config"
+    }
+  }
+}
+```
+
+With Option B, team leads can update plugins via PRs to their own repo—no org admin approval needed for allowed additions. SCC reads `scc-team.json` from the repo root.
+
+**Config precedence:** Org defaults → Team profile → Project `.scc.yaml` (additive merge; blocks apply after merge).
+
+**Trust boundaries:** Org admins control whether teams can add marketplaces and from which sources. Security blocks always apply regardless of team config.
+
+---
+
+### Safety-Net Plugin
+
+AI assistants can accidentally run destructive git commands. The **scc-safety-net** plugin blocks them:
+
+| Blocked Command | Why It's Dangerous | Safe Alternative |
+|-----------------|-------------------|------------------|
+| `git push --force` | Destroys remote history | `--force-with-lease` |
+| `git reset --hard` | Loses uncommitted work | `git stash` |
+| `git branch -D` | Deletes without merge check | `git branch -d` |
+| `git clean -f` | Deletes untracked files | `git clean -n` (dry-run) |
+
+**How it works:**
+1. Org admin enables it: `"enabled_plugins": ["scc-safety-net@sandboxed-code-official"]`
+2. Configure enforcement mode: `"security": { "safety_net": { "action": "block" } }` (or `"warn"`)
+3. Policy is mounted read-only into container
+4. Plugin intercepts commands before execution
+
+See [MARKETPLACE.md](docs/MARKETPLACE.md) for all configuration options.
 
 ## Installation
 
@@ -391,9 +510,25 @@ scc stop && scc prune --yes
 
 - [Architecture](docs/ARCHITECTURE.md) - system design, module structure, data flow
 - [Governance](docs/GOVERNANCE.md) - delegation model, security boundaries
+- [Marketplace](docs/MARKETPLACE.md) - plugin distribution and official plugins
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - common problems and solutions
 - [Examples](examples/) - ready-to-use organization config templates
 - [Development](CLAUDE.md) - contributing guidelines, TDD methodology
+
+### Official Plugins
+
+The [sandboxed-code-plugins](https://github.com/CCimen/sandboxed-code-plugins) repository contains official SCC plugins distributed via the marketplace system.
+
+#### scc-safety-net (Recommended)
+
+AI coding assistants can accidentally run destructive git commands. The **scc-safety-net** plugin intercepts and blocks commands that could destroy remote history or uncommitted work:
+
+- `git push --force` → blocked (use `--force-with-lease` instead)
+- `git reset --hard` → blocked (destroys uncommitted changes)
+- `git branch -D` → blocked (use `-d` for safe delete)
+- `git clean -f` → blocked (use `-n` for dry-run first)
+
+We recommend enabling this plugin for all teams. See [MARKETPLACE.md](docs/MARKETPLACE.md) for setup instructions.
 
 ## Development
 
