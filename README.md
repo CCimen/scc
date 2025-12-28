@@ -21,6 +21,8 @@ Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (Anthropic's A
 
 SCC isolates AI execution in containers, enforces branch safety, and prevents destructive git commands. Organizations distribute plugins through a central config—developers get standardized setups without manual configuration.
 
+> **Plugin Marketplace:** Extend Claude with the [official plugin marketplace](https://github.com/CCimen/sandboxed-code-plugins). Start with [**scc-safety-net**](#safety-net-plugin) to block destructive git commands like `push --force`.
+
 ## 30-Second Guide
 
 **Requires:** Python 3.10+, Docker Desktop 4.50+, Git 2.30+
@@ -42,6 +44,7 @@ Run `scc doctor` to verify your environment or troubleshoot issues.
 | **Developer** joining a team | [Developer Onboarding](#developer-onboarding) — 4 commands to start coding |
 | **Team Lead** setting up your team | [Team Setup](#team-setup) — manage plugins in your own repo |
 | **Org Admin** configuring security | [Organization Setup](#organization-setup) — control what's allowed org-wide |
+| Exploring **plugins** | [Plugin Marketplace](docs/MARKETPLACE.md) — official plugins & safety tools |
 
 ---
 
@@ -515,20 +518,12 @@ scc stop && scc prune --yes
 - [Examples](examples/) - ready-to-use organization config templates
 - [Development](CLAUDE.md) - contributing guidelines, TDD methodology
 
-### Official Plugins
+### Official Plugin Marketplace
 
-The [sandboxed-code-plugins](https://github.com/CCimen/sandboxed-code-plugins) repository contains official SCC plugins distributed via the marketplace system.
+Official plugins: [sandboxed-code-plugins](https://github.com/CCimen/sandboxed-code-plugins)
 
-#### scc-safety-net (Recommended)
-
-AI coding assistants can accidentally run destructive git commands. The **scc-safety-net** plugin intercepts and blocks commands that could destroy remote history or uncommitted work:
-
-- `git push --force` → blocked (use `--force-with-lease` instead)
-- `git reset --hard` → blocked (destroys uncommitted changes)
-- `git branch -D` → blocked (use `-d` for safe delete)
-- `git clean -f` → blocked (use `-n` for dry-run first)
-
-We recommend enabling this plugin for all teams. See [MARKETPLACE.md](docs/MARKETPLACE.md) for setup instructions.
+Recommended: [**scc-safety-net**](#safety-net-plugin) — blocks destructive git commands
+Full docs: [MARKETPLACE.md](docs/MARKETPLACE.md)
 
 ## Development
 
