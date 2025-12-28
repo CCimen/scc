@@ -49,6 +49,19 @@ class CacheNotFoundError(Exception):
     pass
 
 
+class ConfigValidationError(Exception):
+    """Raised when org config fails validation.
+
+    This is raised when either:
+    - Structural validation fails (JSON Schema errors)
+    - Semantic validation fails (governance invariant violations)
+
+    Invalid configs are never cached to prevent polluting the cache.
+    """
+
+    pass
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # URL Validation
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -282,6 +295,56 @@ def is_cache_valid(meta: dict[str, Any] | None) -> bool:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Validation Gate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _validate_org_config(config: dict[str, Any]) -> None:
+    """Validate org config structurally and semantically.
+
+    This is the Validation Gate pattern - called BEFORE caching to ensure
+    invalid configs never pollute the cache.
+
+    Two-step validation:
+    1. Structural: JSON Schema validation (required fields, types, patterns)
+    2. Semantic: Governance invariants (enabled ⊆ allowed, enabled ∩ blocked = ∅)
+
+    Args:
+        config: Organization config dict to validate
+
+    Raises:
+        ConfigValidationError: If either validation step fails
+    """
+    # Import here to avoid circular dependencies at module load time
+    from scc_cli.validate import InvariantViolation, validate_config_invariants
+    from scc_cli.validate import validate_org_config as validate_schema
+
+    # Step 1: Structural validation (JSON Schema)
+    schema_errors = validate_schema(config)
+    if schema_errors:
+        # Format errors for user-friendly message
+        error_summary = "; ".join(schema_errors[:3])  # Show first 3 errors
+        if len(schema_errors) > 3:
+            error_summary += f" (+{len(schema_errors) - 3} more)"
+        raise ConfigValidationError(
+            f"Organization config failed schema validation: {error_summary}"
+        )
+
+    # Step 2: Semantic validation (governance invariants)
+    violations: list[InvariantViolation] = validate_config_invariants(config)
+    errors = [v for v in violations if v.severity == "error"]
+    if errors:
+        # Format violations for user-friendly message
+        error_messages = [v.message for v in errors[:3]]  # Show first 3
+        error_summary = "; ".join(error_messages)
+        if len(errors) > 3:
+            error_summary += f" (+{len(errors) - 3} more)"
+        raise ConfigValidationError(
+            f"Organization config failed invariant validation: {error_summary}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main Entry Point
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -342,9 +405,13 @@ def load_org_config(
     if status == 304 and cached_config is not None:
         return cached_config
 
-    # Success - save to cache and return
+    # Success - validate BEFORE caching (Validation Gate pattern)
     if status == 200 and config is not None:
-        # Get TTL from config defaults or use 24 hours
+        # Validate config - raises ConfigValidationError if invalid
+        # This prevents invalid configs from polluting the cache
+        _validate_org_config(config)
+
+        # Only cache after validation passes
         ttl_hours = config.get("defaults", {}).get("cache_ttl_hours", 24)
         save_to_cache(config, url, new_etag, ttl_hours)
         return config

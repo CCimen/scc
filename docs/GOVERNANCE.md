@@ -60,6 +60,54 @@ These use glob patterns (fnmatch) with case-insensitive matching. If a plugin ma
 
 Untagged images are normalized to `:latest` before matching. `ubuntu` becomes `ubuntu:latest`, which would be blocked by `*:latest`.
 
+## Plugin Allowlist (`allowed_plugins`)
+
+The `defaults.allowed_plugins` field controls which plugins can be enabled. This is a **governance whitelist** (what's permitted), not to be confused with `enabled_plugins` (what's active).
+
+### Semantics
+
+| Value | Meaning | Effect |
+|-------|---------|--------|
+| **Missing/undefined** | Unrestricted | All plugins allowed (runtime default) |
+| **`[]` (empty array)** | Deny all | No plugins allowed - explicit lockdown |
+| **`["*"]`** | Explicit unrestricted | All plugins allowed via fnmatch wildcard |
+| **Patterns** | Specific whitelist | Only matching plugins allowed |
+
+### Examples
+
+```yaml
+# Unrestricted - all plugins allowed (implicit default)
+defaults: {}
+
+# Explicit unrestricted - all plugins allowed (explicit configuration)
+defaults:
+  allowed_plugins: ["*"]
+
+# Deny all - no plugins allowed (lockdown mode)
+defaults:
+  allowed_plugins: []
+
+# Specific whitelist - only matching plugins allowed
+defaults:
+  allowed_plugins:
+    - "*@internal"           # Any plugin from internal marketplace
+    - "code-review@*"        # code-review from any marketplace
+    - "approved-tool@official"  # Specific plugin from specific marketplace
+```
+
+### Invariant Rules
+
+SCC enforces two invariants at config validation:
+
+1. **`enabled ⊆ allowed`**: Enabled plugins must be in the allowed list
+2. **`enabled ∩ blocked = ∅`**: Enabled plugins must not be blocked by security
+
+If these invariants are violated, config validation fails with a clear error message.
+
+### Federated Team Exception
+
+Federated teams (those with `config_source`) **skip `allowed_plugins` filtering**. They are trusted via `trust` grants instead. This enables team autonomy while maintaining security through marketplace source patterns.
+
 ## Delegation
 
 Organizations control what teams can add. Teams control what projects can add.
@@ -493,7 +541,9 @@ When setting up organization config:
 2. Configure stdio MCP policy:
    - `security.allow_stdio_mcp` - false by default, enable only if needed
    - `security.allowed_stdio_prefixes` - restrict to trusted paths when enabled
-3. Set `defaults.allowed_plugins` for baseline tools everyone gets
+3. Configure plugin governance and defaults:
+   - `defaults.allowed_plugins` - whitelist filter (omit for unrestricted, `[]` for deny-all)
+   - `defaults.enabled_plugins` - baseline tools everyone gets
 4. Configure `delegation.teams` to control which teams can add resources
 5. Create team profiles with appropriate `allow_project_overrides` settings
 6. Test with `scc config explain` to verify effective configuration

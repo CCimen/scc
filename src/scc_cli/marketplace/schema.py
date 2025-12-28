@@ -283,13 +283,26 @@ class DefaultsConfig(BaseModel):
 
     These settings apply to all teams unless overridden.
 
+    Semantics for allowed_plugins:
+        - None (missing): Unrestricted - all plugins allowed
+        - []: Deny all - no plugins allowed
+        - ["*"]: Explicit unrestricted via wildcard
+        - ["pattern@marketplace"]: Specific whitelist with fnmatch patterns
+
     Example:
         >>> defaults = DefaultsConfig(
         ...     enabled_plugins=["code-review@internal"],
         ...     disabled_plugins=["debug-*"],
+        ...     allowed_plugins=["*@internal"],  # Only internal marketplace
         ... )
     """
 
+    # Governance field
+    allowed_plugins: list[str] | None = Field(
+        default=None,
+        description="Allowed plugins (None=unrestricted, []=deny all, ['*']=explicit unrestricted)",
+    )
+    # Activation fields
     enabled_plugins: list[str] = Field(
         default_factory=list,
         description="Plugins enabled for all teams by default",

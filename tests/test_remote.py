@@ -672,3 +672,153 @@ class TestFingerprint:
         meta = json.loads(meta_file.read_text())
 
         assert meta["org_config"]["fingerprint"] == expected_fingerprint
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for Validation Gate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestValidationGate:
+    """Tests for validation gate at config loading entry point.
+
+    The validation gate validates configs both structurally (JSON Schema)
+    and semantically (governance invariants) BEFORE caching.
+    """
+
+    @responses.activate
+    def test_valid_config_passes_validation_gate(
+        self, sample_org_config, temp_cache_dir, monkeypatch
+    ):
+        """Valid config should pass validation gate and be cached."""
+        monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
+
+        url = "https://example.org/config.json"
+        responses.add(
+            responses.GET,
+            url,
+            json=sample_org_config,
+            status=200,
+            headers={"ETag": '"test-etag"'},
+        )
+
+        user_config = {"organization_source": {"url": url, "auth": None}}
+        config = remote.load_org_config(user_config)
+
+        # Config should be returned
+        assert config is not None
+        assert config["organization"]["name"] == "Test Organization"
+
+        # Config should be cached
+        cache_file = temp_cache_dir / "org_config.json"
+        assert cache_file.exists()
+
+    @responses.activate
+    def test_schema_error_raises_config_validation_error(self, temp_cache_dir, monkeypatch):
+        """Config with schema errors should raise ConfigValidationError."""
+        monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
+
+        # Config missing required 'organization' field
+        invalid_config = {
+            "schema_version": "1.0.0",
+            # Missing 'organization' - required by schema
+        }
+
+        url = "https://example.org/config.json"
+        responses.add(
+            responses.GET,
+            url,
+            json=invalid_config,
+            status=200,
+        )
+
+        user_config = {"organization_source": {"url": url, "auth": None}}
+
+        with pytest.raises(remote.ConfigValidationError) as exc_info:
+            remote.load_org_config(user_config)
+
+        # Error should mention schema validation
+        assert (
+            "schema" in str(exc_info.value).lower() or "organization" in str(exc_info.value).lower()
+        )
+
+        # Invalid config should NOT be cached
+        cache_file = temp_cache_dir / "org_config.json"
+        assert not cache_file.exists()
+
+    @responses.activate
+    def test_invariant_violation_raises_config_validation_error(self, temp_cache_dir, monkeypatch):
+        """Config with invariant violations should raise ConfigValidationError."""
+        monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
+
+        # Config that violates enabled ⊆ allowed invariant
+        invalid_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+            "defaults": {
+                "enabled_plugins": ["plugin-a@marketplace"],
+                "allowed_plugins": [],  # Empty = nothing allowed, but plugin-a enabled
+            },
+        }
+
+        url = "https://example.org/config.json"
+        responses.add(
+            responses.GET,
+            url,
+            json=invalid_config,
+            status=200,
+        )
+
+        user_config = {"organization_source": {"url": url, "auth": None}}
+
+        with pytest.raises(remote.ConfigValidationError) as exc_info:
+            remote.load_org_config(user_config)
+
+        # Error should mention invariant violation
+        assert (
+            "invariant" in str(exc_info.value).lower() or "allowed" in str(exc_info.value).lower()
+        )
+
+        # Invalid config should NOT be cached
+        cache_file = temp_cache_dir / "org_config.json"
+        assert not cache_file.exists()
+
+    @responses.activate
+    def test_blocked_plugin_violation_raises_error(self, temp_cache_dir, monkeypatch):
+        """Config with enabled plugin matching blocked pattern should raise error."""
+        monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
+
+        # Config that violates enabled ∩ blocked = ∅ invariant
+        invalid_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+            "defaults": {
+                "enabled_plugins": ["malicious-plugin@marketplace"],
+                # allowed_plugins missing = unrestricted
+            },
+            "security": {
+                "blocked_plugins": ["malicious-*"],
+            },
+        }
+
+        url = "https://example.org/config.json"
+        responses.add(
+            responses.GET,
+            url,
+            json=invalid_config,
+            status=200,
+        )
+
+        user_config = {"organization_source": {"url": url, "auth": None}}
+
+        with pytest.raises(remote.ConfigValidationError) as exc_info:
+            remote.load_org_config(user_config)
+
+        # Error should mention blocked plugin
+        assert (
+            "blocked" in str(exc_info.value).lower() or "malicious" in str(exc_info.value).lower()
+        )
+
+        # Invalid config should NOT be cached
+        cache_file = temp_cache_dir / "org_config.json"
+        assert not cache_file.exists()
