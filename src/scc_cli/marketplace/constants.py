@@ -76,19 +76,6 @@ MANIFEST_FILE: Final[str] = ".manifest.json"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Schema Constants
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Current org config schema version
-ORG_CONFIG_SCHEMA_VERSION: Final[int] = 1
-
-# Bundled schema filename (relative to scc_cli/schemas/)
-# Note: org-v1.schema.json is the existing governance schema
-# org-config-v1.schema.json is the marketplace plugin management schema
-ORG_CONFIG_SCHEMA_FILE: Final[str] = "org-config-v1.schema.json"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # TTL and Caching
 # ─────────────────────────────────────────────────────────────────────────────
 

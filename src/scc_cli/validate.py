@@ -5,9 +5,8 @@ Provide offline-capable validation using bundled JSON schemas.
 Treat $schema field as documentation, not something to fetch at runtime.
 
 Key functions:
-- validate_org_config(): Validate org config against bundled schema
-- validate_marketplace_org_config(): Validate marketplace org config
-- check_marketplace_names(): Check org marketplaces don't shadow IMPLICIT_MARKETPLACES
+- validate_org_config(): Validate org config against bundled schema (org-v1.schema.json)
+- validate_config_invariants(): Validate governance invariants (enabled ⊆ allowed, enabled ∩ blocked = ∅)
 - check_version_compatibility(): Unified version compatibility gate
 - check_schema_version(): Check schema version compatibility
 - check_min_cli_version(): Check CLI meets minimum version requirement
@@ -18,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from jsonschema import Draft7Validator
 
@@ -26,6 +25,26 @@ from .constants import CLI_VERSION, CURRENT_SCHEMA_VERSION, SUPPORTED_SCHEMA_VER
 
 if TYPE_CHECKING:
     pass
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Invariant Validation Types
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class InvariantViolation:
+    """Result of a config invariant check.
+
+    Attributes:
+        rule: The invariant rule that was violated (e.g., "enabled_must_be_allowed").
+        message: Human-readable description of the violation.
+        severity: "error" for hard failures, "warning" for advisory.
+    """
+
+    rule: str
+    message: str
+    severity: Literal["error", "warning"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -337,119 +356,100 @@ def check_version_compatibility(config: dict[str, Any]) -> VersionCompatibility:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Marketplace Config Validation
+# Config Invariant Validation
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def load_marketplace_schema() -> dict[Any, Any]:
-    """Load the marketplace org config schema from package resources.
+def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolation]:
+    """Validate governance invariants on raw dict config.
 
-    Returns:
-        Schema dict for marketplace org config validation.
+    This function checks semantic constraints that JSON Schema cannot express:
+    - enabled plugins must be subset of allowed (enabled ⊆ allowed)
+    - enabled plugins must not be blocked (enabled ∩ blocked = ∅)
 
-    Raises:
-        FileNotFoundError: If schema file doesn't exist.
-    """
-    schema_file = files("scc_cli.schemas").joinpath("org-config-v1.schema.json")
-    try:
-        content = schema_file.read_text()
-        return cast(dict[Any, Any], json.loads(content))
-    except FileNotFoundError:
-        raise FileNotFoundError("Marketplace org config schema not found")
-
-
-def validate_marketplace_org_config(config: dict[str, Any]) -> list[str]:
-    """Validate marketplace org config against bundled schema.
-
-    This validates the marketplace plugin management schema, which is separate
-    from the governance org config schema.
+    Called AFTER Pydantic structural validation passes in the Validation Gate.
+    Works on raw dicts because that's what the CLI uses throughout.
 
     Args:
-        config: Marketplace organization config dict to validate.
+        config: Organization config dict (raw, not Pydantic model).
 
     Returns:
-        List of error strings. Empty list means config is valid.
+        List of InvariantViolation objects. Empty list means all invariants satisfied.
 
-    Example:
-        >>> config = {"name": "Test", "schema_version": 1, "marketplaces": {}}
-        >>> errors = validate_marketplace_org_config(config)
-        >>> errors
+    Semantics for allowed_plugins:
+        - Missing/None: unrestricted (all plugins allowed)
+        - []: deny all (no plugins allowed)
+        - ["*"]: explicit unrestricted (all plugins allowed via wildcard)
+        - ["pattern@marketplace"]: specific whitelist with fnmatch patterns
+
+    Examples:
+        >>> config = {"defaults": {"enabled_plugins": ["a@mp"]}}
+        >>> validate_config_invariants(config)  # Missing allowed = unrestricted
         []
-    """
-    schema = load_marketplace_schema()
-    validator = Draft7Validator(schema)
 
-    errors = []
-    for error in validator.iter_errors(config):
-        # Include config path for easy debugging
-        path = "/".join(str(p) for p in error.path) or "(root)"
-        errors.append(f"{path}: {error.message}")
-
-    return errors
-
-
-def check_marketplace_names(
-    org_marketplaces: dict[str, Any],
-    implicit_marketplaces: frozenset[str] | None = None,
-) -> list[str]:
-    """Check that org marketplace names don't shadow implicit marketplaces.
-
-    Implicit marketplaces (like 'claude-plugins-official') are built-in and
-    should never be shadowed by org-defined marketplaces.
-
-    Args:
-        org_marketplaces: Dict of org-defined marketplace configurations.
-        implicit_marketplaces: Set of implicit marketplace names. If None,
-            uses IMPLICIT_MARKETPLACES from constants.
-
-    Returns:
-        List of error strings for shadowed marketplace names.
-
-    Example:
-        >>> check_marketplace_names({"claude-plugins-official": {...}})
-        ["Marketplace 'claude-plugins-official' shadows implicit marketplace"]
+        >>> config = {"defaults": {"enabled_plugins": ["a@mp"], "allowed_plugins": []}}
+        >>> violations = validate_config_invariants(config)  # Empty = deny all
+        >>> len(violations) == 1 and violations[0].rule == "enabled_must_be_allowed"
+        True
     """
     # Import here to avoid circular dependency
-    from scc_cli.marketplace.constants import IMPLICIT_MARKETPLACES
+    from scc_cli.marketplace.normalize import matches_pattern
 
-    if implicit_marketplaces is None:
-        implicit_marketplaces = IMPLICIT_MARKETPLACES
+    violations: list[InvariantViolation] = []
 
-    errors = []
-    for name in org_marketplaces.keys():
-        if name in implicit_marketplaces:
-            errors.append(f"Marketplace '{name}' shadows implicit marketplace")
+    # Extract config sections with safe defaults
+    defaults = config.get("defaults", {})
+    enabled = defaults.get("enabled_plugins", [])
+    allowed = defaults.get("allowed_plugins")  # None = unrestricted
 
-    return errors
+    security = config.get("security", {})
+    blocked = security.get("blocked_plugins", [])
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Invariant 1: enabled ⊆ allowed (enabled plugins must be in allowed list)
+    # ─────────────────────────────────────────────────────────────────────────
+    if allowed is not None:
+        if allowed == []:
+            # Empty array = nothing allowed (explicit deny all)
+            for plugin in enabled:
+                violations.append(
+                    InvariantViolation(
+                        rule="enabled_must_be_allowed",
+                        message=(
+                            f"Plugin '{plugin}' is enabled but allowed_plugins is empty "
+                            "(nothing allowed)"
+                        ),
+                        severity="error",
+                    )
+                )
+        elif allowed != ["*"]:
+            # Specific whitelist - check each enabled plugin against patterns
+            for plugin in enabled:
+                if not any(matches_pattern(plugin, pattern) for pattern in allowed):
+                    violations.append(
+                        InvariantViolation(
+                            rule="enabled_must_be_allowed",
+                            message=f"Plugin '{plugin}' is enabled but not in allowed list",
+                            severity="error",
+                        )
+                    )
+        # If allowed == ["*"], all plugins are allowed (explicit unrestricted)
 
-def validate_marketplace_org_config_full(config: dict[str, Any]) -> list[str]:
-    """Full validation of marketplace org config including semantic checks.
+    # ─────────────────────────────────────────────────────────────────────────
+    # Invariant 2: enabled ∩ blocked = ∅ (enabled must not be blocked)
+    # ─────────────────────────────────────────────────────────────────────────
+    for plugin in enabled:
+        for pattern in blocked:
+            if matches_pattern(plugin, pattern):
+                violations.append(
+                    InvariantViolation(
+                        rule="enabled_not_blocked",
+                        message=(
+                            f"Plugin '{plugin}' is enabled but matches blocked pattern '{pattern}'"
+                        ),
+                        severity="error",
+                    )
+                )
+                break  # One match is enough to flag this plugin
 
-    Combines schema validation with semantic checks like:
-    - Marketplace names not shadowing implicit marketplaces
-    - Plugin references in defaults/profiles are well-formed
-
-    Args:
-        config: Marketplace organization config dict to validate.
-
-    Returns:
-        List of all error strings (schema + semantic).
-
-    Example:
-        >>> config = {"name": "Test", "schema_version": 1, "marketplaces": {}}
-        >>> errors = validate_marketplace_org_config_full(config)
-        >>> errors
-        []
-    """
-    errors = []
-
-    # Schema validation
-    errors.extend(validate_marketplace_org_config(config))
-
-    # Semantic checks (only if schema is valid enough to have marketplaces)
-    marketplaces = config.get("marketplaces", {})
-    if isinstance(marketplaces, dict):
-        errors.extend(check_marketplace_names(marketplaces))
-
-    return errors
+    return violations

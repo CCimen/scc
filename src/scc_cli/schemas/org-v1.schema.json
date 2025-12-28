@@ -248,6 +248,28 @@
                     "items": {"type": "string"},
                     "description": "Default allowed MCP server patterns"
                 },
+                "enabled_plugins": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Baseline enabled plugins for all teams (plugin@marketplace format)"
+                },
+                "disabled_plugins": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Plugins explicitly disabled (overrides enabled_plugins)"
+                },
+                "extra_marketplaces": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Additional marketplace names to include (references top-level marketplaces)"
+                },
+                "cache_ttl_hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 168,
+                    "default": 24,
+                    "description": "Organization config cache TTL in hours (1-168, default 24)"
+                },
                 "network_policy": {
                     "type": "string",
                     "enum": ["corp-proxy-only", "unrestricted", "isolated"],

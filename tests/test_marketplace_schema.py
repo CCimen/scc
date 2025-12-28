@@ -255,6 +255,7 @@ class TestDefaultsConfig:
         assert defaults.enabled_plugins == []
         assert defaults.disabled_plugins == []
         assert defaults.extra_marketplaces == []
+        assert defaults.allowed_plugins is None  # None = unrestricted
 
     def test_defaults_with_plugins(self) -> None:
         """Defaults with enabled and disabled plugins."""
@@ -267,6 +268,70 @@ class TestDefaultsConfig:
         )
         assert len(defaults.enabled_plugins) == 2
         assert "debug-*" in defaults.disabled_plugins
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Task 7: Targeted field tests for allowed_plugins governance semantics
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def test_allowed_plugins_none_means_unrestricted(self) -> None:
+        """None allowed_plugins means no restrictions (runtime default).
+
+        Semantic: Missing/None = all plugins are allowed (unrestricted).
+        This is the most permissive setting.
+        """
+        from scc_cli.marketplace.schema import DefaultsConfig
+
+        defaults = DefaultsConfig(allowed_plugins=None)
+        assert defaults.allowed_plugins is None
+
+    def test_allowed_plugins_empty_list_means_deny_all(self) -> None:
+        """Empty allowed_plugins list means no plugins are allowed (deny all).
+
+        Semantic: [] = explicit deny-all, blocks all plugins.
+        This is the most restrictive setting.
+        """
+        from scc_cli.marketplace.schema import DefaultsConfig
+
+        defaults = DefaultsConfig(allowed_plugins=[])
+        assert defaults.allowed_plugins == []
+
+    def test_allowed_plugins_wildcard_means_explicit_unrestricted(self) -> None:
+        """Wildcard ["*"] means explicit unrestricted (allow all).
+
+        Semantic: ["*"] = explicit allow-all via fnmatch pattern.
+        Functionally equivalent to None but explicitly configured.
+        """
+        from scc_cli.marketplace.schema import DefaultsConfig
+
+        defaults = DefaultsConfig(allowed_plugins=["*"])
+        assert defaults.allowed_plugins == ["*"]
+
+    def test_allowed_plugins_specific_patterns(self) -> None:
+        """Allowed plugins can contain specific patterns.
+
+        Semantic: Specific patterns create a whitelist filter.
+        Only plugins matching at least one pattern are allowed.
+        """
+        from scc_cli.marketplace.schema import DefaultsConfig
+
+        defaults = DefaultsConfig(
+            allowed_plugins=["*@internal", "code-review@*", "approved-tool@official"]
+        )
+        assert defaults.allowed_plugins is not None
+        assert len(defaults.allowed_plugins) == 3
+        assert "*@internal" in defaults.allowed_plugins
+
+    def test_extra_marketplaces_is_list_of_strings(self) -> None:
+        """extra_marketplaces accepts list of marketplace names (not dicts).
+
+        Semantic: List of marketplace name references (strings).
+        These reference marketplaces defined at org level - prevents shadow IT.
+        """
+        from scc_cli.marketplace.schema import DefaultsConfig
+
+        defaults = DefaultsConfig(extra_marketplaces=["official", "internal", "experimental"])
+        assert defaults.extra_marketplaces == ["official", "internal", "experimental"]
+        assert all(isinstance(mp, str) for mp in defaults.extra_marketplaces)
 
 
 class TestTeamProfile:
@@ -295,7 +360,8 @@ class TestTeamProfile:
             extra_marketplaces=["security-tools"],
         )
         assert profile.name == "Security Team"
-        assert len(profile.allowed_plugins) == 2  # type: ignore[arg-type]
+        assert profile.allowed_plugins is not None
+        assert len(profile.allowed_plugins) == 2
 
     def test_allowed_plugins_null_means_allow_all(self) -> None:
         """null allowed_plugins means no restrictions."""
@@ -310,6 +376,17 @@ class TestTeamProfile:
 
         profile = TeamProfile(name="Locked Team", allowed_plugins=[])
         assert profile.allowed_plugins == []
+
+    def test_allowed_plugins_wildcard_means_allow_all(self) -> None:
+        """Wildcard ["*"] means explicit unrestricted (allow all).
+
+        Semantic: ["*"] = explicit allow-all via fnmatch pattern.
+        Functionally equivalent to None but explicitly configured.
+        """
+        from scc_cli.marketplace.schema import TeamProfile
+
+        profile = TeamProfile(name="Open Team", allowed_plugins=["*"])
+        assert profile.allowed_plugins == ["*"]
 
 
 class TestSecurityConfig:
