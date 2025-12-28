@@ -332,6 +332,92 @@ class TestBuildCommand:
         assert "-d" not in cmd
         assert "claude" in cmd
 
+    # ───────────────────────────────────────────────────────────────────────────
+    # Safety-net policy mount tests
+    # ───────────────────────────────────────────────────────────────────────────
+
+    def test_policy_mount_when_path_provided(self, tmp_path):
+        """When policy_host_path is provided, should include -v mount flag."""
+        policy_file = tmp_path / "effective_policy.json"
+        policy_file.write_text('{"action": "block"}')
+
+        cmd = docker.build_command(policy_host_path=policy_file)
+
+        assert "-v" in cmd
+        # Find the -v argument and verify it includes the host path
+        v_idx = cmd.index("-v")
+        mount_arg = cmd[v_idx + 1]
+        assert str(policy_file) in mount_arg
+
+    def test_policy_env_var_when_path_provided(self, tmp_path):
+        """When policy_host_path is provided, should set SCC_POLICY_PATH env var."""
+        policy_file = tmp_path / "effective_policy.json"
+        policy_file.write_text('{"action": "warn"}')
+
+        cmd = docker.build_command(policy_host_path=policy_file)
+
+        assert "-e" in cmd
+        e_idx = cmd.index("-e")
+        env_arg = cmd[e_idx + 1]
+        assert env_arg.startswith("SCC_POLICY_PATH=")
+        # Should point to container path, not host path
+        assert "/mnt/claude-data/effective_policy.json" in env_arg
+
+    def test_no_policy_mount_when_path_none(self):
+        """When policy_host_path is None, should not include policy mount."""
+        cmd = docker.build_command(policy_host_path=None)
+
+        # No -v for policy (test_no_explicit_volume_mount covers general case)
+        # But let's be explicit: no SCC_POLICY_PATH env var should be set
+        if "-e" in cmd:
+            e_idx = cmd.index("-e")
+            env_arg = cmd[e_idx + 1]
+            assert "SCC_POLICY_PATH" not in env_arg
+
+    def test_policy_mount_is_read_only(self, tmp_path):
+        """Policy mount should have :ro suffix for kernel-enforced read-only."""
+        policy_file = tmp_path / "effective_policy.json"
+        policy_file.write_text('{"action": "block"}')
+
+        cmd = docker.build_command(policy_host_path=policy_file)
+
+        v_idx = cmd.index("-v")
+        mount_arg = cmd[v_idx + 1]
+        # Mount format: host_path:container_path:ro
+        assert mount_arg.endswith(":ro"), f"Mount should end with :ro, got: {mount_arg}"
+
+    def test_policy_path_handles_path_object(self, tmp_path):
+        """Policy path should work with pathlib.Path objects via os.fspath()."""
+        from pathlib import Path
+
+        policy_file = tmp_path / "effective_policy.json"
+        policy_file.write_text('{"action": "allow"}')
+
+        # Explicitly pass as Path object (not string)
+        cmd = docker.build_command(policy_host_path=Path(policy_file))
+
+        v_idx = cmd.index("-v")
+        mount_arg = cmd[v_idx + 1]
+        # Should contain the resolved path string
+        assert str(policy_file) in mount_arg
+
+    def test_policy_mount_with_workspace(self, tmp_path):
+        """Policy mount should work alongside workspace mount."""
+        workspace = tmp_path / "project"
+        workspace.mkdir()
+        policy_file = tmp_path / "effective_policy.json"
+        policy_file.write_text('{"action": "block"}')
+
+        cmd = docker.build_command(workspace=workspace, policy_host_path=policy_file)
+
+        # Both -w (workspace) and -v (policy) should be present
+        assert "-w" in cmd
+        assert "-v" in cmd
+        # Policy mount should come before claude agent
+        v_idx = cmd.index("-v")
+        claude_idx = cmd.index("claude")
+        assert v_idx < claude_idx, "Policy mount should come before claude agent"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for build_start_command (pure function)
