@@ -67,12 +67,14 @@ def validate_safety_net_policy(policy: dict[str, Any]) -> dict[str, Any]:
         policy: Raw policy dict from org config.
 
     Returns:
-        Validated policy dict. Invalid 'action' values default to 'block'.
+        Validated policy dict. Missing or invalid 'action' values default to 'block'.
+        The result always contains an 'action' key.
     """
     result = dict(policy)  # shallow copy
-    action = result.get("action", "block")
-    if action not in VALID_SAFETY_NET_ACTIONS:
-        result["action"] = "block"  # fail-closed on typo
+    action = result.get("action")
+    # Always set action: either keep valid value or default to "block" (fail-closed)
+    if action is None or action not in VALID_SAFETY_NET_ACTIONS:
+        result["action"] = "block"  # fail-closed on missing or invalid
     return result
 
 
