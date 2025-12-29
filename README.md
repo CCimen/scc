@@ -174,6 +174,10 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 | `scc start <path>` | Start Claude Code in sandbox for specific path |
 | `scc start --resume` | Resume most recent session (no UI) |
 | `scc start --select` | Show session picker to choose which session to resume |
+| `scc start --standalone` | Launch without organization config (no team profile) |
+| `scc start --offline` | Use cached org config only (no network) |
+| `scc start --dry-run` | Preview launch configuration without starting container |
+| `scc start --dry-run --json` | Output launch config as JSON (for CI/automation) |
 | `scc setup` | Configure organization connection |
 | `scc stop` | Stop running sandbox(es) |
 | `scc doctor` | Check system health |
