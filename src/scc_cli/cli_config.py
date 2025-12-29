@@ -6,6 +6,7 @@ import typer
 
 from . import config, profiles, setup
 from .cli_common import console, handle_errors
+from .exit_codes import EXIT_USAGE
 from .panels import create_error_panel, create_info_panel
 from .source_resolver import ResolveError, resolve_source
 from .stores.exception_store import RepoStore, UserStore
@@ -47,6 +48,12 @@ def setup_cmd(
     standalone: bool = typer.Option(
         False, "--standalone", help="Standalone mode (no organization)"
     ),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        "--no-interactive",
+        help="Fail fast instead of prompting for missing setup inputs",
+    ),
 ) -> None:
     """Run initial setup wizard.
 
@@ -80,6 +87,16 @@ def setup_cmd(
         resolved_url = result.resolved_url
     elif org_url:
         resolved_url = org_url
+
+    if non_interactive and not (resolved_url or standalone):
+        console.print(
+            create_error_panel(
+                "Missing Setup Inputs",
+                "Non-interactive setup requires --org or --standalone.",
+                hint="Provide --org <source> or use interactive setup without --non-interactive.",
+            )
+        )
+        raise typer.Exit(EXIT_USAGE)
 
     # Non-interactive mode if org source or standalone specified
     if resolved_url or standalone:

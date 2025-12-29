@@ -10,11 +10,13 @@ Assert OUTCOMES (state changed), not mock call counts.
 """
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from scc_cli import git
+from scc_cli.errors import WorktreeCreationError
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures - Real Git Repos
@@ -356,7 +358,7 @@ class TestCreateWorktree:
         """Worktree should be created at expected path."""
         console = MagicMock()
         console.status.return_value.__enter__ = MagicMock()
-        console.status.return_value.__exit__ = MagicMock()
+        console.status.return_value.__exit__ = MagicMock(return_value=False)
 
         # Mock _fetch_branch since temp repos don't have remotes
         with (
@@ -378,7 +380,7 @@ class TestCreateWorktree:
         """Created branch should have claude/ prefix."""
         console = MagicMock()
         console.status.return_value.__enter__ = MagicMock()
-        console.status.return_value.__exit__ = MagicMock()
+        console.status.return_value.__exit__ = MagicMock(return_value=False)
 
         # Mock _fetch_branch since temp repos don't have remotes
         with (
@@ -395,6 +397,32 @@ class TestCreateWorktree:
         # Verify branch has claude/ prefix
         branch = git.get_current_branch(worktree_path)
         assert branch.startswith("claude/")
+
+    def test_cleans_up_on_dependency_failure(self, temp_git_repo: Path) -> None:
+        """Failed dependency install should clean up the worktree."""
+        console = MagicMock()
+        console.status.return_value.__enter__ = MagicMock()
+        console.status.return_value.__exit__ = MagicMock(return_value=False)
+
+        worktree_path = temp_git_repo.parent / f"{temp_git_repo.name}-worktrees" / "fail"
+
+        def fake_create_worktree(*_args, **_kwargs) -> None:
+            worktree_path.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch("scc_cli.git._fetch_branch"),
+            patch("scc_cli.git._create_worktree_dir", side_effect=fake_create_worktree),
+            patch(
+                "scc_cli.git.install_dependencies",
+                side_effect=WorktreeCreationError(name="fail"),
+            ) as mock_install,
+        ):
+            with pytest.raises(WorktreeCreationError):
+                git.create_worktree(temp_git_repo, "fail", console=console)
+
+        assert mock_install.called
+
+        assert not worktree_path.exists()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

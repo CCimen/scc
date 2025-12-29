@@ -336,6 +336,7 @@ def pick_context_quick_resume(
     subtitle: str | None = None,
     standalone: bool = False,
     current_branch: str | None = None,
+    context_label: str | None = None,
 ) -> tuple[QuickResumeResult, WorkContext | None]:
     """Show Quick Resume picker with 4-way result semantics.
 
@@ -352,6 +353,7 @@ def pick_context_quick_resume(
         standalone: If True, dim the "t teams" hint (not available without org).
         current_branch: Current git branch from CWD, used to highlight
             contexts matching this branch with a ★ indicator.
+        context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
         Tuple of (QuickResumeResult, selected WorkContext or None).
@@ -395,6 +397,7 @@ def pick_context_quick_resume(
         title=title,
         subtitle=subtitle,
         standalone=standalone,
+        context_label=context_label,
     )
 
 
@@ -429,6 +432,7 @@ def _run_single_select_picker(
     subtitle: str | None = None,
     standalone: bool = False,
     allow_back: bool = False,
+    context_label: str | None = None,
 ) -> T | None:
     """Run the interactive single-selection picker loop.
 
@@ -445,6 +449,7 @@ def _run_single_select_picker(
         standalone: If True, dim the "t teams" hint (not available without org).
         allow_back: If True, Esc returns BACK sentinel (for sub-screens).
             If False, Esc returns None (for top-level screens).
+        context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
         Value from selected item, BACK if allow_back and Esc pressed, or None if quit.
@@ -499,6 +504,8 @@ def _run_single_select_picker(
         """Wrap body content in chrome."""
         # Capture `standalone` from outer scope for proper footer hint dimming
         config = ChromeConfig.for_picker(title, subtitle, standalone=standalone)
+        if context_label:
+            config = config.with_context(context_label)
         chrome = Chrome(config)
         return chrome.render(body, search_query=filter_query)
 
@@ -560,6 +567,7 @@ def _run_quick_resume_picker(
     title: str,
     subtitle: str | None = None,
     standalone: bool = False,
+    context_label: str | None = None,
 ) -> tuple[QuickResumeResult, T | None]:
     """Run the Quick Resume picker with 4-way result semantics.
 
@@ -574,6 +582,7 @@ def _run_quick_resume_picker(
         title: Title for chrome header.
         subtitle: Optional subtitle.
         standalone: If True, dim the "t teams" hint (not available without org).
+        context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
         Tuple of (QuickResumeResult, selected_value or None).
@@ -626,6 +635,8 @@ def _run_quick_resume_picker(
     ) -> RenderableType:
         """Wrap body content in Quick Resume chrome with truthful hints."""
         config = ChromeConfig.for_quick_resume(title, subtitle, standalone=standalone)
+        if context_label:
+            config = config.with_context(context_label)
         chrome = Chrome(config)
         return chrome.render(body, search_query=filter_query)
 

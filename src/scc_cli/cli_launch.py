@@ -13,6 +13,7 @@ The main `start()` function delegates to focused helper functions
 for maintainability and testability.
 """
 
+import sys
 from pathlib import Path
 from typing import Any, cast
 
@@ -34,11 +35,11 @@ from .cli_common import (
 from .constants import WORKTREE_BRANCH_PREFIX
 from .contexts import WorkContext, load_recent_contexts, normalize_path, record_context
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
-from .exit_codes import EXIT_CONFIG, EXIT_USAGE
+from .exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
 from .json_output import build_envelope
 from .kinds import Kind
 from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
-from .output_mode import json_output_mode, print_json, set_pretty_mode
+from .output_mode import json_output_mode, print_human, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 from .ui.gate import is_interactive_allowed
 from .ui.picker import (
@@ -68,7 +69,8 @@ def _resolve_session_selection(
     *,
     json_mode: bool = False,
     standalone_override: bool = False,
-) -> tuple[str | None, str | None, str | None, str | None]:
+    no_interactive: bool = False,
+) -> tuple[str | None, str | None, str | None, str | None, bool]:
     """
     Handle session selection logic for --select, --resume, and interactive modes.
 
@@ -82,19 +84,24 @@ def _resolve_session_selection(
         standalone_override: Whether --standalone flag is set (overrides config).
 
     Returns:
-        Tuple of (workspace, team, session_name, worktree_name)
+        Tuple of (workspace, team, session_name, worktree_name, cancelled)
         If user cancels or no session found, workspace will be None.
+        cancelled is True only for explicit user cancellation.
 
     Raises:
         typer.Exit: If interactive mode required but not allowed (non-TTY, CI, --json).
     """
     session_name = None
     worktree_name = None
+    cancelled = False
 
     # Interactive mode if no workspace provided and no session flags
     if workspace is None and not resume and not select:
         # Check TTY gating before entering interactive mode
-        if not is_interactive_allowed(json_mode=json_mode):
+        if not is_interactive_allowed(
+            json_mode=json_mode,
+            no_interactive_flag=no_interactive,
+        ):
             console.print(
                 "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
                 "[dim]Provide a workspace path: scc start /path/to/project[/dim]",
@@ -104,12 +111,17 @@ def _resolve_session_selection(
         workspace, team, session_name, worktree_name = interactive_start(
             cfg, standalone_override=standalone_override
         )
-        return workspace, team, session_name, worktree_name
+        if workspace is None:
+            return None, team, None, None, True
+        return workspace, team, session_name, worktree_name, False
 
     # Handle --select: interactive session picker
     if select and workspace is None:
         # Check TTY gating before showing session picker
-        if not is_interactive_allowed(json_mode=json_mode):
+        if not is_interactive_allowed(
+            json_mode=json_mode,
+            no_interactive_flag=no_interactive,
+        ):
             console.print(
                 "[red]Error:[/red] --select requires a terminal (TTY).\n"
                 "[dim]Use --resume to auto-select most recent session.[/dim]",
@@ -118,18 +130,20 @@ def _resolve_session_selection(
             raise typer.Exit(EXIT_USAGE)
         recent_sessions = sessions.list_recent(limit=10)
         if not recent_sessions:
-            console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None
+            if not json_mode:
+                console.print("[yellow]No recent sessions found.[/yellow]")
+            return None, team, None, None, False
         selected = ui.select_session(console, recent_sessions)
         if selected is None:
-            return None, team, None, None
+            return None, team, None, None, True
         workspace = selected.get("workspace")
         if not team:
             team = selected.get("team")
         # --standalone overrides any team from session (standalone means no team)
         if standalone_override:
             team = None
-        console.print(f"[dim]Selected: {workspace}[/dim]")
+        if not json_mode:
+            console.print(f"[dim]Selected: {workspace}[/dim]")
 
     # Handle --resume: auto-select most recent session
     elif resume and workspace is None:
@@ -141,15 +155,19 @@ def _resolve_session_selection(
             # --standalone overrides any team from session (standalone means no team)
             if standalone_override:
                 team = None
-            console.print(f"[dim]Resuming: {workspace}[/dim]")
+            if not json_mode:
+                console.print(f"[dim]Resuming: {workspace}[/dim]")
         else:
-            console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None
+            if not json_mode:
+                console.print("[yellow]No recent sessions found.[/yellow]")
+            return None, team, None, None, False
 
-    return workspace, team, session_name, worktree_name
+    return workspace, team, session_name, worktree_name, cancelled
 
 
-def _validate_and_resolve_workspace(workspace: str | None) -> Path | None:
+def _validate_and_resolve_workspace(
+    workspace: str | None, *, no_interactive: bool = False
+) -> Path | None:
     """
     Validate workspace path and handle platform-specific warnings.
 
@@ -169,17 +187,25 @@ def _validate_and_resolve_workspace(workspace: str | None) -> Path | None:
     if platform_module.is_wsl2():
         is_optimal, warning = platform_module.check_path_performance(workspace_path)
         if not is_optimal and warning:
-            console.print()
-            console.print(
-                create_warning_panel(
-                    "Performance Warning",
-                    "Your workspace is on the Windows filesystem.",
-                    "For better performance, move to ~/projects inside WSL.",
-                )
+            print_human(
+                "[yellow]Warning:[/yellow] Workspace is on the Windows filesystem."
+                " Performance may be slow.",
+                file=sys.stderr,
+                highlight=False,
             )
-            console.print()
-            if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
-                raise typer.Exit()
+            if is_interactive_allowed(no_interactive_flag=no_interactive):
+                console.print()
+                console.print(
+                    create_warning_panel(
+                        "Performance Warning",
+                        "Your workspace is on the Windows filesystem.",
+                        "For better performance, move to ~/projects inside WSL.",
+                    )
+                )
+                console.print()
+                if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
+                    console.print("[dim]Cancelled.[/dim]")
+                    raise typer.Exit(EXIT_CANCELLED)
 
     return workspace_path
 
@@ -225,6 +251,74 @@ def _prepare_workspace(
         git.check_branch_safety(workspace_path, console)
 
     return workspace_path
+
+
+def _resolve_workspace_team(
+    workspace_path: Path | None,
+    team: str | None,
+    cfg: dict[str, Any],
+    *,
+    json_mode: bool = False,
+    standalone: bool = False,
+) -> str | None:
+    """Resolve team selection using workspace pinning when available.
+
+    Prefers explicit team, then workspace-pinned team, then global selected profile.
+    Prompts if pinned team differs from the global profile in interactive mode.
+    """
+    if standalone or workspace_path is None:
+        return team
+
+    if team:
+        return team
+
+    pinned_team = config.get_workspace_team_from_config(cfg, workspace_path)
+    selected_profile = cfg.get("selected_profile")
+
+    if pinned_team and selected_profile and pinned_team != selected_profile:
+        if is_interactive_allowed(json_mode=json_mode):
+            message = (
+                f"Workspace '{workspace_path}' was last used with team '{pinned_team}'."
+                " Use that team for this session?"
+            )
+            if Confirm.ask(message, default=True):
+                return pinned_team
+            return selected_profile
+
+        if not json_mode:
+            print_human(
+                "[yellow]Notice:[/yellow] "
+                f"Workspace '{workspace_path}' was last used with team '{pinned_team}'. "
+                "Using it. Pass --team to override.",
+                file=sys.stderr,
+                highlight=False,
+            )
+        return pinned_team
+
+    if pinned_team:
+        return pinned_team
+
+    return selected_profile
+
+
+def _warn_if_non_worktree(workspace_path: Path | None, *, json_mode: bool = False) -> None:
+    """Warn when running from a main repo without a worktree."""
+    if json_mode or workspace_path is None:
+        return
+
+    if not git.is_git_repo(workspace_path):
+        return
+
+    if git.is_worktree(workspace_path):
+        return
+
+    print_human(
+        "[yellow]Tip:[/yellow] You're working in the main repo. "
+        "For isolation, try: scc worktree create . <feature> or "
+        "scc start --worktree <feature>",
+        file=sys.stderr,
+        highlight=False,
+    )
 
 
 def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
@@ -426,10 +520,27 @@ def _launch_sandbox(
         try:
             record_context(context)
         except (OSError, ValueError) as e:
-            # Log to stderr only in debug mode, don't interrupt user flow
             import logging
 
+            print_human(
+                "[yellow]Warning:[/yellow] Could not save Quick Resume context.",
+                highlight=False,
+            )
+            print_human(f"[dim]{e}[/dim]", highlight=False)
             logging.debug(f"Failed to record context for Quick Resume: {e}")
+
+        if team:
+            try:
+                config.set_workspace_team(str(workspace_path), team)
+            except (OSError, ValueError) as e:
+                import logging
+
+                print_human(
+                    "[yellow]Warning:[/yellow] Could not save workspace team preference.",
+                    highlight=False,
+                )
+                print_human(f"[dim]{e}[/dim]", highlight=False)
+                logging.debug(f"Failed to store workspace team mapping: {e}")
 
     # Show launch info and execute
     _show_launch_panel(
@@ -446,13 +557,13 @@ def _launch_sandbox(
 
 def _extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | None:
     """Extract container name from docker command for session tracking."""
-    if "--name" in docker_cmd:
-        try:
-            name_idx = docker_cmd.index("--name") + 1
-            return docker_cmd[name_idx]
-        except (ValueError, IndexError):
-            pass
-    elif is_resume and docker_cmd:
+    for idx, arg in enumerate(docker_cmd):
+        if arg == "--name" and idx + 1 < len(docker_cmd):
+            return docker_cmd[idx + 1]
+        if arg.startswith("--name="):
+            return arg.split("=", 1)[1]
+
+    if is_resume and docker_cmd:
         # For resume, container name is the last arg
         if docker_cmd[-1].startswith("scc-"):
             return docker_cmd[-1]
@@ -488,23 +599,25 @@ def build_dry_run_data(
     plugins: list[dict[str, Any]] = []
     blocked_items: list[str] = []
 
-    # Extract plugins from org config if team is specified
     if org_config and team:
-        profiles = org_config.get("profiles", [])
-        for profile in profiles:
-            if profile.get("name") == team:
-                profile_plugins = profile.get("plugins", [])
-                for plugin in profile_plugins:
-                    plugins.append({"name": plugin.get("name", "unknown"), "source": "team"})
+        from . import profiles
 
-    # Extract plugins from project config
-    if project_config:
-        project_plugins = project_config.get("plugins", [])
-        for plugin in project_plugins:
-            if isinstance(plugin, dict):
-                plugins.append({"name": plugin.get("name", "unknown"), "source": "project"})
-            elif isinstance(plugin, str):
-                plugins.append({"name": plugin, "source": "project"})
+        workspace_for_project = None if project_config is not None else workspace_path
+        effective = profiles.compute_effective_config(
+            org_config,
+            team,
+            project_config=project_config,
+            workspace_path=workspace_for_project,
+        )
+
+        for plugin in sorted(effective.plugins):
+            plugins.append({"name": plugin, "source": "resolved"})
+
+        for blocked in effective.blocked_items:
+            if blocked.blocked_by:
+                blocked_items.append(f"{blocked.item} (blocked by '{blocked.blocked_by}')")
+            else:
+                blocked_items.append(blocked.item)
 
     return {
         "workspace": str(workspace_path),
@@ -557,6 +670,12 @@ def start(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        "--no-interactive",
+        help="Fail fast if interactive input would be required",
+    ),
 ) -> None:
     """
     Start Claude Code in a Docker sandbox.
@@ -598,7 +717,7 @@ def start(
         resume = True
 
     # ── Step 2: Session selection (interactive, --select, --resume) ──────────
-    workspace, team, session_name, worktree_name = _resolve_session_selection(
+    workspace, team, session_name, worktree_name, cancelled = _resolve_session_selection(
         workspace=workspace,
         team=team,
         resume=resume,
@@ -606,21 +725,41 @@ def start(
         cfg=cfg,
         json_mode=(json_output or pretty),
         standalone_override=standalone,
+        no_interactive=non_interactive,
     )
-    if workspace is None and (select or resume):
-        raise typer.Exit(1)
     if workspace is None:
-        raise typer.Exit()
+        if cancelled:
+            if not json_output and not pretty:
+                console.print("[dim]Cancelled.[/dim]")
+            raise typer.Exit(EXIT_CANCELLED)
+        if select or resume:
+            raise typer.Exit(EXIT_ERROR)
+        raise typer.Exit(EXIT_CANCELLED)
 
     # ── Step 3: Docker availability check ────────────────────────────────────
     with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
         docker.check_docker_available()
 
     # ── Step 4: Workspace validation and platform checks ─────────────────────
-    workspace_path = _validate_and_resolve_workspace(workspace)
+    workspace_path = _validate_and_resolve_workspace(workspace, no_interactive=non_interactive)
+    if workspace_path is None:
+        if not json_output and not pretty:
+            console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(EXIT_CANCELLED)
+    if not workspace_path.exists():
+        raise WorkspaceNotFoundError(path=str(workspace_path))
 
     # ── Step 5: Workspace preparation (worktree, deps, git safety) ───────────
     workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps)
+
+    # ── Step 5.5: Resolve team from workspace pinning ────────────────────────
+    team = _resolve_workspace_team(
+        workspace_path,
+        team,
+        cfg,
+        json_mode=(json_output or pretty),
+        standalone=standalone,
+    )
 
     # ── Step 6: Team configuration ───────────────────────────────────────────
     # Skip team config in standalone mode (no org config to apply)
@@ -663,6 +802,8 @@ def start(
             _show_dry_run_panel(dry_run_data)
 
         raise typer.Exit(0)
+
+    _warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 
     # ── Step 7: Resolve mount path and branch for worktrees ──────────────────
     mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
@@ -837,6 +978,13 @@ def interactive_start(
     # CLI --standalone flag overrides config setting
     standalone_mode = standalone_override or config.is_standalone_mode()
 
+    active_team_label = cfg.get("selected_profile")
+    if standalone_mode:
+        active_team_label = "standalone"
+    elif not active_team_label:
+        active_team_label = "none"
+    active_team_context = f"Team: {active_team_label}"
+
     # Get available teams (from org config if available)
     org_config = config.load_cached_org_config()
     available_teams = teams.list_teams(cfg, org_config)
@@ -855,6 +1003,7 @@ def interactive_start(
                     recent_contexts,
                     title="Quick Resume",
                     standalone=standalone_mode,
+                    context_label=active_team_context,
                 )
 
                 match result:
@@ -872,9 +1021,8 @@ def interactive_start(
                         # User pressed Esc - go back if we can (Dashboard context)
                         if allow_back:
                             return (BACK, None, None, None)  # type: ignore[return-value]
-                        # CLI context: no previous screen, treat as skip
-                        user_dismissed_quick_resume = True
-                        console.print()
+                        # CLI context: no previous screen, treat as cancel
+                        return (None, None, None, None)
 
                     case QuickResumeResult.NEW_SESSION:
                         # User pressed 'n' - continue with normal wizard flow
@@ -936,6 +1084,9 @@ def interactive_start(
 
         # Step 2: Select workspace source (with back navigation support)
         workspace: str | None = None
+        team_context_label = active_team_context
+        if team:
+            team_context_label = f"Team: {team}"
 
         # Check if team has repositories configured (must be inside mega-loop since team can change)
         team_config = cfg.get("profiles", {}).get(team, {}) if team else {}
@@ -953,6 +1104,7 @@ def interactive_start(
                         team=team,
                         standalone=standalone_mode,
                         allow_back=allow_back or (team is not None),
+                        context_label=team_context_label,
                     )
 
                     # Handle three-state return contract
@@ -982,7 +1134,11 @@ def interactive_start(
 
                     elif source == WorkspaceSource.RECENT:
                         recent = sessions.list_recent(10)
-                        picker_result = pick_recent_workspace(recent, standalone=standalone_mode)
+                        picker_result = pick_recent_workspace(
+                            recent,
+                            standalone=standalone_mode,
+                            context_label=team_context_label,
+                        )
                         if picker_result is None:
                             return (None, None, None, None)  # User pressed q - quit wizard
                         if picker_result is BACK:
@@ -992,7 +1148,10 @@ def interactive_start(
                     elif source == WorkspaceSource.TEAM_REPOS:
                         workspace_base = cfg.get("workspace_base", "~/projects")
                         picker_result = pick_team_repo(
-                            team_repos, workspace_base, standalone=standalone_mode
+                            team_repos,
+                            workspace_base,
+                            standalone=standalone_mode,
+                            context_label=team_context_label,
                         )
                         if picker_result is None:
                             return (None, None, None, None)  # User pressed q - quit wizard
@@ -1063,6 +1222,7 @@ def interactive_start(
                         title=f"Resume session in {Path(workspace).name}?",
                         subtitle="Existing sessions found for this workspace",
                         standalone=standalone_mode,
+                        context_label=f"Team: {team or active_team_label}",
                     )
                     # Note: TeamSwitchRequested bubbles up to mega-loop handler
 

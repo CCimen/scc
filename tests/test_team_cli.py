@@ -240,6 +240,8 @@ class TestTeamSwitch:
             result = runner.invoke(app, ["team", "switch", "frontend"])
             assert result.exit_code == 0
             assert "frontend" in result.output
+            assert "frontend-tools" in result.output
+            assert "sundsvall" in result.output
             assert saved_config.get("selected_profile") == "frontend"
 
     def test_team_switch_invalid_team(self, mock_config, mock_org_config):

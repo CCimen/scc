@@ -23,14 +23,17 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
-from .cli_common import console
+from rich.console import Console
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Context Variables (Thread-safe, Async-compatible)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _json_mode: ContextVar[bool] = ContextVar("json_mode", default=False)
+_json_command_mode: ContextVar[bool] = ContextVar("json_command_mode", default=False)
 _pretty_mode: ContextVar[bool] = ContextVar("pretty_mode", default=False)
+
+console = Console()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -58,6 +61,20 @@ def json_output_mode() -> Generator[None, None, None]:
 
 
 @contextmanager
+def json_command_mode() -> Generator[None, None, None]:
+    """Context manager for JSON command handling.
+
+    This signals that errors should be handled by json_command instead of
+    the generic error handler, allowing consistent JSON envelopes.
+    """
+    token = _json_command_mode.set(True)
+    try:
+        yield
+    finally:
+        _json_command_mode.reset(token)
+
+
+@contextmanager
 def pretty_output_mode() -> Generator[None, None, None]:
     """Context manager for pretty-printed JSON output.
 
@@ -78,6 +95,11 @@ def pretty_output_mode() -> Generator[None, None, None]:
 def is_json_mode() -> bool:
     """Check if JSON output mode is active."""
     return _json_mode.get()
+
+
+def is_json_command_mode() -> bool:
+    """Check if JSON command handling mode is active."""
+    return _json_command_mode.get()
 
 
 def is_pretty_mode() -> bool:

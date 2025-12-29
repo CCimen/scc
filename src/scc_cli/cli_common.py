@@ -16,6 +16,8 @@ from rich.table import Table
 
 from . import ui_legacy as ui
 from .errors import SCCError
+from .exit_codes import EXIT_CANCELLED
+from .output_mode import is_json_command_mode, is_json_mode
 from .panels import create_warning_panel
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -37,6 +39,7 @@ WIDE_MODE_THRESHOLD = 110
 # ─────────────────────────────────────────────────────────────────────────────
 
 console = Console()
+err_console = Console(stderr=True)
 
 
 class AppState:
@@ -73,20 +76,29 @@ def handle_errors(func: F) -> F:
         try:
             return func(*args, **kwargs)
         except SCCError as e:
-            ui.render_error(console, e, debug=state.debug)
+            if is_json_command_mode():
+                raise
+            target_console = err_console if is_json_mode() else console
+            ui.render_error(target_console, e, debug=state.debug)
             raise typer.Exit(e.exit_code)
         except KeyboardInterrupt:
-            console.print("\n[dim]Operation cancelled.[/dim]")
-            raise typer.Exit(130)
+            if is_json_command_mode():
+                raise
+            target_console = err_console if is_json_mode() else console
+            target_console.print("\n[dim]Operation cancelled.[/dim]")
+            raise typer.Exit(EXIT_CANCELLED)
         except (typer.Exit, SystemExit):
             # Let typer exits pass through
             raise
         except Exception as e:
+            if is_json_command_mode():
+                raise
             # Unexpected errors
+            target_console = err_console if is_json_mode() else console
             if state.debug:
-                console.print_exception()
+                target_console.print_exception()
             else:
-                console.print(
+                target_console.print(
                     create_warning_panel(
                         "Unexpected Error",
                         str(e),

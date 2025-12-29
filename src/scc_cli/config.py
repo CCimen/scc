@@ -47,6 +47,7 @@ USER_CONFIG_DEFAULTS = {
     "organization_source": None,  # Set during setup: {"url": "...", "auth": "..."}
     "selected_profile": None,
     "standalone": False,
+    "workspace_team_map": {},
     "cache": {
         "enabled": True,
         "ttl_hours": 24,
@@ -222,6 +223,48 @@ def set_selected_profile(profile: str) -> None:
     config = load_user_config()
     config["selected_profile"] = profile
     save_user_config(config)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Workspace Team Pinning
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _normalize_workspace_key(workspace: str | Path) -> str:
+    """Normalize workspace path for stable config keys."""
+    path = Path(workspace).expanduser()
+    try:
+        return str(path.resolve(strict=False))
+    except OSError:
+        return str(path.absolute())
+
+
+def get_workspace_team_from_config(cfg: dict[str, Any], workspace: str | Path) -> str | None:
+    """Get the pinned team for a workspace from a loaded config dict."""
+    mapping = cfg.get("workspace_team_map", {})
+    if not isinstance(mapping, dict):
+        return None
+    return mapping.get(_normalize_workspace_key(workspace))
+
+
+def set_workspace_team(workspace: str | Path, team: str | None) -> None:
+    """Persist the last-used team for a workspace.
+
+    If team is None, removes any existing mapping.
+    """
+    cfg = load_user_config()
+    mapping = cfg.get("workspace_team_map")
+    if not isinstance(mapping, dict):
+        mapping = {}
+        cfg["workspace_team_map"] = mapping
+
+    key = _normalize_workspace_key(workspace)
+    if team:
+        mapping[key] = team
+    else:
+        mapping.pop(key, None)
+
+    save_user_config(cfg)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

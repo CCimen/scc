@@ -36,6 +36,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .utils.locks import file_lock, lock_path
+
 # Schema version for future migration support
 SCHEMA_VERSION = 1
 
@@ -254,50 +256,52 @@ def record_context(context: WorkContext) -> None:
     Args:
         context: The context to record.
     """
-    raw_data = _load_contexts_raw()
-    existing = [WorkContext.from_dict(d) for d in raw_data]
+    lock_file = lock_path("contexts")
+    with file_lock(lock_file):
+        raw_data = _load_contexts_raw()
+        existing = [WorkContext.from_dict(d) for d in raw_data]
 
-    # Normalize the incoming context paths
-    normalized = WorkContext(
-        team=context.team,
-        repo_root=normalize_path(context.repo_root),
-        worktree_path=normalize_path(context.worktree_path),
-        worktree_name=context.worktree_name,
-        branch=context.branch,  # Preserve branch for Quick Resume display
-        last_session_id=context.last_session_id,
-        last_used=datetime.now(timezone.utc).isoformat(),
-        pinned=context.pinned,
-    )
+        # Normalize the incoming context paths
+        normalized = WorkContext(
+            team=context.team,
+            repo_root=normalize_path(context.repo_root),
+            worktree_path=normalize_path(context.worktree_path),
+            worktree_name=context.worktree_name,
+            branch=context.branch,  # Preserve branch for Quick Resume display
+            last_session_id=context.last_session_id,
+            last_used=datetime.now(timezone.utc).isoformat(),
+            pinned=context.pinned,
+        )
 
-    # Find and update or append
-    key = normalized.unique_key
-    found = False
-    for i, ctx in enumerate(existing):
-        if ctx.unique_key == key:
-            existing[i] = _merge_contexts(ctx, normalized)
-            found = True
-            break
+        # Find and update or append
+        key = normalized.unique_key
+        found = False
+        for i, ctx in enumerate(existing):
+            if ctx.unique_key == key:
+                existing[i] = _merge_contexts(ctx, normalized)
+                found = True
+                break
 
-    if not found:
-        existing.append(normalized)
+        if not found:
+            existing.append(normalized)
 
-    # Sort by recency and trim to MAX_CONTEXTS
-    # Keep pinned contexts even if they're old
-    pinned = [c for c in existing if c.pinned]
-    unpinned = [c for c in existing if not c.pinned]
+        # Sort by recency and trim to MAX_CONTEXTS
+        # Keep pinned contexts even if they're old
+        pinned = [c for c in existing if c.pinned]
+        unpinned = [c for c in existing if not c.pinned]
 
-    # Sort both lists by recency for consistent ordering
-    pinned.sort(key=lambda c: _parse_dt(c.last_used), reverse=True)
-    unpinned.sort(key=lambda c: _parse_dt(c.last_used), reverse=True)
+        # Sort both lists by recency for consistent ordering
+        pinned.sort(key=lambda c: _parse_dt(c.last_used), reverse=True)
+        unpinned.sort(key=lambda c: _parse_dt(c.last_used), reverse=True)
 
-    # Trim unpinned to fit within MAX_CONTEXTS (minus pinned count)
-    max_unpinned = MAX_CONTEXTS - len(pinned)
-    if max_unpinned < 0:
-        max_unpinned = 0
-    unpinned = unpinned[:max_unpinned]
+        # Trim unpinned to fit within MAX_CONTEXTS (minus pinned count)
+        max_unpinned = MAX_CONTEXTS - len(pinned)
+        if max_unpinned < 0:
+            max_unpinned = 0
+        unpinned = unpinned[:max_unpinned]
 
-    final = pinned + unpinned
-    _save_contexts_raw([c.to_dict() for c in final])
+        final = pinned + unpinned
+        _save_contexts_raw([c.to_dict() for c in final])
 
 
 def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> bool | None:
@@ -312,25 +316,27 @@ def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> b
         New pinned status (True if now pinned, False if unpinned),
         or None if context not found.
     """
-    # Load all contexts as WorkContext objects (normalizes paths once)
-    contexts = [WorkContext.from_dict(d) for d in _load_contexts_raw()]
-    key = (team, normalize_path(repo_root), normalize_path(worktree_path))
+    lock_file = lock_path("contexts")
+    with file_lock(lock_file):
+        # Load all contexts as WorkContext objects (normalizes paths once)
+        contexts = [WorkContext.from_dict(d) for d in _load_contexts_raw()]
+        key = (team, normalize_path(repo_root), normalize_path(worktree_path))
 
-    for i, ctx in enumerate(contexts):
-        if ctx.unique_key == key:
-            # Create new context with toggled pinned status
-            contexts[i] = WorkContext(
-                team=ctx.team,
-                repo_root=ctx.repo_root,
-                worktree_path=ctx.worktree_path,
-                worktree_name=ctx.worktree_name,
-                branch=ctx.branch,  # Preserve branch metadata
-                last_session_id=ctx.last_session_id,
-                last_used=ctx.last_used,
-                pinned=not ctx.pinned,
-            )
-            _save_contexts_raw([c.to_dict() for c in contexts])
-            return contexts[i].pinned
+        for i, ctx in enumerate(contexts):
+            if ctx.unique_key == key:
+                # Create new context with toggled pinned status
+                contexts[i] = WorkContext(
+                    team=ctx.team,
+                    repo_root=ctx.repo_root,
+                    worktree_path=ctx.worktree_path,
+                    worktree_name=ctx.worktree_name,
+                    branch=ctx.branch,  # Preserve branch metadata
+                    last_session_id=ctx.last_session_id,
+                    last_used=ctx.last_used,
+                    pinned=not ctx.pinned,
+                )
+                _save_contexts_raw([c.to_dict() for c in contexts])
+                return contexts[i].pinned
 
     return None
 
@@ -341,10 +347,12 @@ def clear_contexts() -> int:
     Returns:
         Number of contexts cleared.
     """
-    raw_data = _load_contexts_raw()
-    count = len(raw_data)
-    _save_contexts_raw([])
-    return count
+    lock_file = lock_path("contexts")
+    with file_lock(lock_file):
+        raw_data = _load_contexts_raw()
+        count = len(raw_data)
+        _save_contexts_raw([])
+        return count
 
 
 def get_context_for_path(worktree_path: str | Path, team: str | None = None) -> WorkContext | None:

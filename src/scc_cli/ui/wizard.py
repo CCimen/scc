@@ -168,6 +168,7 @@ def _run_subscreen_picker(
     subtitle: str | None = None,
     *,
     standalone: bool = False,
+    context_label: str | None = None,
 ) -> T | _BackSentinel | None:
     """Run picker for sub-screens with three-state return contract.
 
@@ -186,7 +187,12 @@ def _run_subscreen_picker(
     """
     # Pass allow_back=True so picker distinguishes Esc (BACK) from q (None)
     result = _run_single_select_picker(
-        items, title=title, subtitle=subtitle, standalone=standalone, allow_back=True
+        items,
+        title=title,
+        subtitle=subtitle,
+        standalone=standalone,
+        allow_back=True,
+        context_label=context_label,
     )
     # Three-state contract:
     # - T value: user selected an item
@@ -237,6 +243,7 @@ def pick_workspace_source(
     *,
     standalone: bool = False,
     allow_back: bool = False,
+    context_label: str | None = None,
 ) -> WorkspaceSource | _BackSentinel | None:
     """Show picker for workspace source selection.
 
@@ -247,19 +254,20 @@ def pick_workspace_source(
 
     Args:
         has_team_repos: Whether team repositories are available.
-        team: Current team name (shown in subtitle if set).
+        team: Current team name (used for context label if not provided).
         standalone: If True, dim the "t teams" hint (not available without org).
         allow_back: If True, Esc returns BACK (for sub-screen context like Dashboard).
             If False, Esc returns None (for top-level CLI context).
+        context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
         Selected WorkspaceSource, BACK if allow_back and Esc pressed, or None if quit.
     """
     # Build subtitle based on context
-    if team:
-        subtitle = f"Team: {team}"
-    else:
-        subtitle = "Pick a project source"
+    subtitle = "Pick a project source"
+    resolved_context_label = context_label
+    if resolved_context_label is None and team:
+        resolved_context_label = f"Team: {team}"
 
     # Build items list - start with CWD option if valid
     items: list[ListItem[WorkspaceSource]] = []
@@ -316,6 +324,7 @@ def pick_workspace_source(
         subtitle=subtitle,
         standalone=standalone,
         allow_back=allow_back,
+        context_label=resolved_context_label,
     )
 
 
@@ -328,6 +337,7 @@ def pick_recent_workspace(
     recent: list[dict[str, Any]],
     *,
     standalone: bool = False,
+    context_label: str | None = None,
 ) -> str | _BackSentinel | None:
     """Show picker for recent workspace selection.
 
@@ -339,6 +349,7 @@ def pick_recent_workspace(
     Args:
         recent: List of recent session dicts with 'workspace' and 'last_used' keys.
         standalone: If True, dim the "t teams" hint (not available without org).
+        context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
         Selected workspace path, BACK if Esc pressed, or None if q pressed (quit).
@@ -376,6 +387,7 @@ def pick_recent_workspace(
         title="Recent Workspaces",
         subtitle=subtitle,
         standalone=standalone,
+        context_label=context_label,
     )
 
 
@@ -389,6 +401,7 @@ def pick_team_repo(
     workspace_base: str = "~/projects",
     *,
     standalone: bool = False,
+    context_label: str | None = None,
 ) -> str | _BackSentinel | None:
     """Show picker for team repository selection.
 
@@ -404,6 +417,7 @@ def pick_team_repo(
         repos: List of repo dicts with 'name', 'url', optional 'description', 'local_path'.
         workspace_base: Base directory for cloning new repos.
         standalone: If True, dim the "t teams" hint (not available without org).
+        context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
         Workspace path (existing or newly cloned), BACK if Esc pressed, or None if q pressed.
@@ -441,6 +455,7 @@ def pick_team_repo(
         title="Team Repositories",
         subtitle=subtitle,
         standalone=standalone,
+        context_label=context_label,
     )
 
     # Handle quit (q pressed)

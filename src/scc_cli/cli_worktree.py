@@ -17,9 +17,9 @@ from .cli_common import console, handle_errors, render_responsive_table
 from .cli_helpers import ConfirmItems, confirm_action
 from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
-from .json_output import build_envelope
+from .json_command import json_command
 from .kinds import Kind
-from .output_mode import json_output_mode, print_json, set_pretty_mode
+from .output_mode import is_json_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
 from .ui.gate import InteractivityContext
 from .ui.picker import TeamSwitchRequested, pick_containers, pick_session, pick_worktree
@@ -125,6 +125,7 @@ def worktree_create_cmd(
 
 
 @worktree_app.command("list")
+@json_command(Kind.WORKTREE_LIST)
 @handle_errors
 def worktree_list_cmd(
     workspace: str = typer.Argument(".", help="Path to the repository"),
@@ -133,17 +134,12 @@ def worktree_list_cmd(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
-) -> None:
+) -> dict[str, Any]:
     """List all worktrees for a repository.
 
     With -i/--interactive, select a worktree and print its path
     (useful for piping: cd $(scc worktree list -i))
     """
-    # --pretty implies --json
-    if pretty:
-        json_output = True
-        set_pretty_mode(True)
-
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
@@ -151,15 +147,12 @@ def worktree_list_cmd(
 
     worktree_list = git.list_worktrees(workspace_path)
 
-    # JSON output mode
-    if json_output:
-        with json_output_mode():
-            # Convert WorktreeInfo dataclasses to dicts for JSON serialization
-            worktree_dicts = [asdict(wt) for wt in worktree_list]
-            data = build_worktree_list_data(worktree_dicts, str(workspace_path))
-            envelope = build_envelope(Kind.WORKTREE_LIST, data=data)
-            print_json(envelope)
-            raise typer.Exit(0)
+    # Convert WorktreeInfo dataclasses to dicts for JSON serialization
+    worktree_dicts = [asdict(wt) for wt in worktree_list]
+    data = build_worktree_list_data(worktree_dicts, str(workspace_path))
+
+    if is_json_mode():
+        return data
 
     if not worktree_list:
         console.print(
@@ -188,6 +181,8 @@ def worktree_list_cmd(
 
     # Use the beautiful worktree rendering from git.py
     git.render_worktrees(worktree_list, console)
+
+    return data
 
 
 @worktree_app.command("remove")

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -25,6 +26,8 @@ import requests
 
 from scc_cli.auth import is_remote_command_allowed
 from scc_cli.auth import resolve_auth as _resolve_auth_impl
+from scc_cli.output_mode import print_human
+from scc_cli.utils.locks import file_lock, lock_path
 
 if TYPE_CHECKING:
     pass
@@ -216,35 +219,37 @@ def save_to_cache(
         etag: ETag from server response
         ttl_hours: Cache time-to-live in hours
     """
-    # Ensure cache directory exists
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    lock_file = lock_path("org-config-cache")
+    with file_lock(lock_file):
+        # Ensure cache directory exists
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save org config with restrictive permissions (owner read/write only)
-    config_file = CACHE_DIR / "org_config.json"
-    config_content = json.dumps(org_config, indent=2)
-    config_file.write_text(config_content)
-    config_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
+        # Save org config with restrictive permissions (owner read/write only)
+        config_file = CACHE_DIR / "org_config.json"
+        config_content = json.dumps(org_config, indent=2)
+        config_file.write_text(config_content)
+        config_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
 
-    # Calculate fingerprint (SHA256 of cached bytes)
-    fingerprint = hashlib.sha256(config_file.read_bytes()).hexdigest()
+        # Calculate fingerprint (SHA256 of cached bytes)
+        fingerprint = hashlib.sha256(config_file.read_bytes()).hexdigest()
 
-    # Calculate expiry time
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(hours=ttl_hours)
+        # Calculate expiry time
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=ttl_hours)
 
-    # Save metadata
-    meta = {
-        "org_config": {
-            "source_url": source_url,
-            "fetched_at": now.isoformat(),
-            "expires_at": expires_at.isoformat(),
-            "etag": etag,
-            "fingerprint": fingerprint,
+        # Save metadata
+        meta = {
+            "org_config": {
+                "source_url": source_url,
+                "fetched_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "etag": etag,
+                "fingerprint": fingerprint,
+            }
         }
-    }
-    meta_file = CACHE_DIR / "cache_meta.json"
-    meta_file.write_text(json.dumps(meta, indent=2))
-    meta_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
+        meta_file = CACHE_DIR / "cache_meta.json"
+        meta_file.write_text(json.dumps(meta, indent=2))
+        meta_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600 - owner read/write only
 
 
 def load_from_cache() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -260,12 +265,14 @@ def load_from_cache() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     if not config_file.exists() or not meta_file.exists():
         return (None, None)
 
-    try:
-        config = json.loads(config_file.read_text())
-        meta = json.loads(meta_file.read_text())
-        return (config, meta)
-    except (json.JSONDecodeError, OSError):
-        return (None, None)
+    lock_file = lock_path("org-config-cache")
+    with file_lock(lock_file):
+        try:
+            config = json.loads(config_file.read_text())
+            meta = json.loads(meta_file.read_text())
+            return (config, meta)
+        except (json.JSONDecodeError, OSError):
+            return (None, None)
 
 
 def is_cache_valid(meta: dict[str, Any] | None) -> bool:
@@ -288,6 +295,8 @@ def is_cache_valid(meta: dict[str, Any] | None) -> bool:
 
     try:
         expires_at = datetime.fromisoformat(expires_at_str)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         return now < expires_at
     except (ValueError, TypeError):
@@ -410,6 +419,11 @@ def load_org_config(
         # Validate config - raises ConfigValidationError if invalid
         # This prevents invalid configs from polluting the cache
         _validate_org_config(config)
+        from scc_cli.validate import check_version_compatibility
+
+        compatibility = check_version_compatibility(config)
+        if not compatibility.compatible:
+            raise ConfigValidationError(compatibility.blocking_error or "Config incompatible")
 
         # Only cache after validation passes
         ttl_hours = config.get("defaults", {}).get("cache_ttl_hours", 24)
@@ -418,6 +432,11 @@ def load_org_config(
 
     # Fetch failed - return stale cache if available (with warning)
     if cached_config is not None:
+        print_human(
+            "[yellow]Warning:[/yellow] Failed to refresh org config; using cached config.",
+            file=sys.stderr,
+            highlight=False,
+        )
         return cached_config
 
     # No cache and fetch failed - return None
