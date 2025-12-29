@@ -151,6 +151,29 @@ def clean_env(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def isolate_xdg_paths(tmp_path: Path, monkeypatch):
+    """Isolate XDG paths for ALL tests to prevent cache pollution.
+
+    This autouse fixture ensures that all tests write to temporary directories
+    instead of the user's real ~/.cache/scc/ or ~/.config/scc/. This is critical
+    for modules like contexts.py that read XDG_CACHE_HOME directly from env vars.
+
+    Without this, tests that call record_context() would pollute the user's
+    real session/context cache with fake test paths.
+    """
+    # Set XDG environment variables to temp directories
+    xdg_cache = tmp_path / ".cache"
+    xdg_config = tmp_path / ".config"
+    xdg_cache.mkdir(parents=True, exist_ok=True)
+    xdg_config.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(xdg_cache))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config))
+
+    yield
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Testing Fixtures
 # ═══════════════════════════════════════════════════════════════════════════════

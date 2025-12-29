@@ -419,25 +419,54 @@ class TestDashboardFiltering:
 
 
 class TestCLIDashboardIntegration:
-    """Test CLI integration with dashboard."""
+    """Test CLI integration with dashboard.
 
-    def test_cli_shows_dashboard_in_interactive_mode(self) -> None:
-        """CLI shows dashboard when interactive mode is allowed."""
-        # Patch at the source module where the functions are defined
-        with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
-            with patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard:
+    Context-aware routing (Phase 7):
+    - If CWD is a valid workspace → invoke start
+    - If CWD is NOT a valid workspace → show dashboard
+    """
+
+    def test_cli_shows_dashboard_when_no_workspace_detected(self) -> None:
+        """CLI shows dashboard when NOT in a valid workspace (e.g., $HOME)."""
+        # Mock _is_valid_workspace to return False (no workspace context)
+        # Patch at the source module where the function is defined
+        with patch("scc_cli.ui.wizard._is_valid_workspace", return_value=False):
+            with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
+                with patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard:
+                    # Import after patching
+                    from scc_cli.cli import main_callback
+
+                    # Create a mock context with no invoked subcommand
+                    mock_ctx = MagicMock()
+                    mock_ctx.invoked_subcommand = None
+
+                    # Call the callback - should show dashboard
+                    main_callback(mock_ctx, debug=False, version=False, interactive=False)
+
+                    # Verify dashboard was called
+                    mock_dashboard.assert_called_once()
+
+    def test_cli_invokes_start_when_workspace_detected(self) -> None:
+        """CLI invokes start when in a valid workspace (git repo, .scc.yaml)."""
+        # Mock _is_valid_workspace to return True (valid workspace context)
+        # Patch at the source module where the function is defined
+        with patch("scc_cli.ui.wizard._is_valid_workspace", return_value=True):
+            with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
                 # Import after patching
                 from scc_cli.cli import main_callback
 
-                # Create a mock context with no invoked subcommand
+                # Create a mock context with invoke method
                 mock_ctx = MagicMock()
                 mock_ctx.invoked_subcommand = None
 
-                # Call the callback - it should invoke run_dashboard
-                main_callback(mock_ctx, debug=False, version=False)
+                # Call the callback - should invoke start
+                main_callback(mock_ctx, debug=False, version=False, interactive=False)
 
-                # Verify dashboard was called
-                mock_dashboard.assert_called_once()
+                # Verify start was invoked (via ctx.invoke)
+                mock_ctx.invoke.assert_called_once()
+                # Check that workspace was passed (CWD)
+                call_kwargs = mock_ctx.invoke.call_args.kwargs
+                assert call_kwargs["workspace"] is not None
 
     def test_cli_invokes_start_in_non_interactive_mode(self) -> None:
         """CLI invokes start command when non-interactive."""

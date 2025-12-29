@@ -83,6 +83,12 @@ def main_callback(
         help="Show version and exit.",
         is_eager=True,
     ),
+    interactive: bool = typer.Option(
+        False,
+        "-i",
+        "--interactive",
+        help="Force interactive workspace picker (shortcut for 'scc start -i').",
+    ),
 ) -> None:
     """
     [bold cyan]SCC[/bold cyan] - Sandboxed Claude CLI
@@ -105,22 +111,69 @@ def main_callback(
         )
         raise typer.Exit()
 
-    # If no command provided and not showing version, show dashboard or invoke start
+    # If no command provided and not showing version, use context-aware routing
     if ctx.invoked_subcommand is None:
+        from pathlib import Path
+
         from .ui.gate import is_interactive_allowed
+        from .ui.wizard import _is_valid_workspace
+
+        # Context detection: check if CWD is a valid workspace
+        cwd = Path.cwd()
+        workspace_detected = _is_valid_workspace(cwd)
 
         if is_interactive_allowed():
-            # Interactive TTY - show the dashboard
-            from .ui.dashboard import run_dashboard
+            if interactive:
+                # -i flag: force interactive workspace picker via start -i
+                ctx.invoke(
+                    start,
+                    workspace=None,
+                    team=None,
+                    session_name=None,
+                    resume=False,
+                    select=False,
+                    continue_session=False,
+                    worktree_name=None,
+                    fresh=False,
+                    install_deps=False,
+                    offline=False,
+                    standalone=False,
+                    dry_run=False,
+                    json_output=False,
+                    pretty=False,
+                )
+            elif workspace_detected:
+                # User is in a valid workspace → use smart start flow
+                # This shows Quick Resume (if sessions exist) or launches immediately
+                ctx.invoke(
+                    start,
+                    workspace=str(cwd),
+                    team=None,
+                    session_name=None,
+                    resume=False,
+                    select=False,
+                    continue_session=False,
+                    worktree_name=None,
+                    fresh=False,
+                    install_deps=False,
+                    offline=False,
+                    standalone=False,
+                    dry_run=False,
+                    json_output=False,
+                    pretty=False,
+                )
+            else:
+                # No workspace context (e.g., $HOME) → show dashboard
+                from .ui.dashboard import run_dashboard
 
-            run_dashboard()
+                run_dashboard()
         else:
             # Non-interactive - invoke start with defaults
             # NOTE: Must pass ALL defaults explicitly - ctx.invoke() doesn't resolve
             # typer.Argument/Option defaults, it passes raw ArgumentInfo/OptionInfo
             ctx.invoke(
                 start,
-                workspace=None,
+                workspace=str(cwd) if workspace_detected else None,
                 team=None,
                 session_name=None,
                 resume=False,

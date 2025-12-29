@@ -1,14 +1,19 @@
-"""Wizard-specific pickers with BACK navigation support.
+"""Wizard-specific pickers with three-state navigation support.
 
 This module provides picker functions for the interactive start wizard,
-with proper back-navigation support for nested screens. It follows a
-clean separation:
+with proper navigation support for nested screens. All pickers follow
+a three-state return contract:
 
-- Top-level screens: Esc/q returns None (cancel wizard)
-- Sub-screens: Esc/q returns BACK (go to previous screen)
+- Success: Returns the selected value (WorkspaceSource, str path, etc.)
+- Back: Returns BACK sentinel (Esc pressed - go to previous screen)
+- Quit: Returns None (q pressed - exit app entirely)
 
 The BACK sentinel provides type-safe back navigation that callers can
 check with identity comparison: `if result is BACK`.
+
+Top-level vs Sub-screen behavior:
+- Top-level (pick_workspace_source with allow_back=False): Esc returns None
+- Sub-screens (pick_recent_workspace, pick_team_repo): Esc returns BACK, q returns None
 
 Example:
     >>> from scc_cli.ui.wizard import (
@@ -19,12 +24,14 @@ Example:
     >>> while True:
     ...     source = pick_workspace_source(team="platform")
     ...     if source is None:
-    ...         break  # User cancelled
+    ...         break  # User pressed q or Esc at top level - quit
     ...
     ...     if source == WorkspaceSource.RECENT:
     ...         workspace = pick_recent_workspace(recent_sessions)
+    ...         if workspace is None:
+    ...             break  # User pressed q - quit app
     ...         if workspace is BACK:
-    ...             continue  # Go back to source picker
+    ...             continue  # User pressed Esc - go back to source picker
     ...         return workspace  # Got a valid path
 """
 
@@ -33,8 +40,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
+from .keys import BACK, _BackSentinel
 from .list_screen import ListItem
 from .picker import _run_single_select_picker
 
@@ -46,27 +54,6 @@ T = TypeVar("T")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# BACK Sentinel
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class _BackSentinel:
-    """Sentinel class for back navigation.
-
-    Use identity comparison: `if result is BACK`
-    """
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "BACK"
-
-
-BACK: Final[_BackSentinel] = _BackSentinel()
-"""Sentinel value indicating user wants to go back to previous screen."""
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Workspace Source Enum
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -74,6 +61,7 @@ BACK: Final[_BackSentinel] = _BackSentinel()
 class WorkspaceSource(Enum):
     """Options for where to get the workspace from."""
 
+    CURRENT_DIR = "current_dir"  # Use current working directory
     RECENT = "recent"
     TEAM_REPOS = "team_repos"
     CUSTOM = "custom"
@@ -180,11 +168,12 @@ def _run_subscreen_picker(
     subtitle: str | None = None,
     *,
     standalone: bool = False,
-) -> T | _BackSentinel:
-    """Run picker for sub-screens. Converts Esc/q → BACK.
+) -> T | _BackSentinel | None:
+    """Run picker for sub-screens with three-state return contract.
 
-    Unlike the standard picker which returns None on cancel,
-    sub-screen pickers return BACK to indicate "go to previous screen".
+    Sub-screen pickers distinguish between:
+    - Esc (go back to previous screen) → BACK sentinel
+    - q (quit app entirely) → None
 
     Args:
         items: List items to display (first item should be "← Back").
@@ -193,11 +182,16 @@ def _run_subscreen_picker(
         standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
-        Selected item value, or BACK if user pressed Esc/q.
+        Selected item value, BACK if Esc pressed, or None if q pressed (quit).
     """
-    result = _run_single_select_picker(items, title=title, subtitle=subtitle, standalone=standalone)
-    if result is None:
-        return BACK
+    # Pass allow_back=True so picker distinguishes Esc (BACK) from q (None)
+    result = _run_single_select_picker(
+        items, title=title, subtitle=subtitle, standalone=standalone, allow_back=True
+    )
+    # Three-state contract:
+    # - T value: user selected an item
+    # - BACK: user pressed Esc (go back)
+    # - None: user pressed q (quit app)
     return result
 
 
@@ -206,24 +200,60 @@ def _run_subscreen_picker(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _is_valid_workspace(path: Path) -> bool:
+    """Check if a directory looks like a valid workspace.
+
+    A valid workspace must have at least one of:
+    - .git directory or file (for worktrees)
+    - .scc.yaml config file
+
+    Random directories (like $HOME) are NOT valid workspaces.
+
+    Args:
+        path: Directory to check.
+
+    Returns:
+        True if directory exists and has workspace markers.
+    """
+    if not path.is_dir():
+        return False
+
+    # Check for git (directory or file for worktrees)
+    git_path = path / ".git"
+    if git_path.exists():
+        return True
+
+    # Check for SCC config
+    if (path / ".scc.yaml").exists():
+        return True
+
+    # No workspace markers found - not a valid workspace
+    return False
+
+
 def pick_workspace_source(
     has_team_repos: bool = False,
     team: str | None = None,
     *,
     standalone: bool = False,
-) -> WorkspaceSource | None:
+    allow_back: bool = False,
+) -> WorkspaceSource | _BackSentinel | None:
     """Show picker for workspace source selection.
 
-    This is the top-level picker in the start wizard. Esc/q cancels
-    the entire wizard (returns None).
+    Three-state return contract:
+    - Success: Returns WorkspaceSource (user selected an option)
+    - Back: Returns BACK sentinel (user pressed Esc, only if allow_back=True)
+    - Quit: Returns None (user pressed q)
 
     Args:
         has_team_repos: Whether team repositories are available.
         team: Current team name (shown in subtitle if set).
         standalone: If True, dim the "t teams" hint (not available without org).
+        allow_back: If True, Esc returns BACK (for sub-screen context like Dashboard).
+            If False, Esc returns None (for top-level CLI context).
 
     Returns:
-        Selected WorkspaceSource, or None if cancelled.
+        Selected WorkspaceSource, BACK if allow_back and Esc pressed, or None if quit.
     """
     # Build subtitle based on context
     if team:
@@ -231,14 +261,30 @@ def pick_workspace_source(
     else:
         subtitle = "Pick a project source"
 
-    # Build items list
-    items: list[ListItem[WorkspaceSource]] = [
+    # Build items list - start with CWD option if valid
+    items: list[ListItem[WorkspaceSource]] = []
+
+    # Check if current directory is a valid workspace
+    cwd = Path.cwd()
+    if _is_valid_workspace(cwd):
+        # Show CWD name (last path component)
+        cwd_name = cwd.name or str(cwd)
+        items.append(
+            ListItem(
+                label="📍 Use current directory",
+                description=cwd_name,
+                value=WorkspaceSource.CURRENT_DIR,
+            )
+        )
+
+    # Add standard options
+    items.append(
         ListItem(
             label="📂 Recent workspaces",
             description="Continue working on previous project",
             value=WorkspaceSource.RECENT,
-        ),
-    ]
+        )
+    )
 
     if has_team_repos:
         items.append(
@@ -269,6 +315,7 @@ def pick_workspace_source(
         title="Where is your project?",
         subtitle=subtitle,
         standalone=standalone,
+        allow_back=allow_back,
     )
 
 
@@ -281,17 +328,20 @@ def pick_recent_workspace(
     recent: list[dict[str, Any]],
     *,
     standalone: bool = False,
-) -> str | _BackSentinel:
+) -> str | _BackSentinel | None:
     """Show picker for recent workspace selection.
 
-    This is a sub-screen picker. Esc/q returns BACK (not None).
+    This is a sub-screen picker with three-state return contract:
+    - str: User selected a workspace path
+    - BACK: User pressed Esc (go back to previous screen)
+    - None: User pressed q (quit app entirely)
 
     Args:
         recent: List of recent session dicts with 'workspace' and 'last_used' keys.
         standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
-        Selected workspace path, or BACK to go to previous screen.
+        Selected workspace path, BACK if Esc pressed, or None if q pressed (quit).
     """
     # Build items with "← Back" first
     items: list[ListItem[str | _BackSentinel]] = [
@@ -339,10 +389,13 @@ def pick_team_repo(
     workspace_base: str = "~/projects",
     *,
     standalone: bool = False,
-) -> str | _BackSentinel:
+) -> str | _BackSentinel | None:
     """Show picker for team repository selection.
 
-    This is a sub-screen picker. Esc/q returns BACK (not None).
+    This is a sub-screen picker with three-state return contract:
+    - str: User selected a repo (returns existing local_path or newly cloned path)
+    - BACK: User pressed Esc (go back to previous screen)
+    - None: User pressed q (quit app entirely)
 
     If the selected repo has a local_path that exists, returns that path.
     Otherwise, clones the repository and returns the new path.
@@ -353,7 +406,7 @@ def pick_team_repo(
         standalone: If True, dim the "t teams" hint (not available without org).
 
     Returns:
-        Workspace path (existing or newly cloned), or BACK to go to previous screen.
+        Workspace path (existing or newly cloned), BACK if Esc pressed, or None if q pressed.
     """
     # Build items with "← Back" first
     items: list[ListItem[dict[str, Any] | _BackSentinel]] = [
@@ -390,7 +443,11 @@ def pick_team_repo(
         standalone=standalone,
     )
 
-    # Handle BACK
+    # Handle quit (q pressed)
+    if result is None:
+        return None
+
+    # Handle BACK (Esc pressed)
     if result is BACK:
         return BACK
 

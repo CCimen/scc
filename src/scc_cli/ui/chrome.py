@@ -105,8 +105,9 @@ class ChromeConfig:
             footer_hints=(
                 FooterHint("↑↓", "navigate"),
                 FooterHint("Enter", "select"),
+                FooterHint("Esc", "back"),
+                FooterHint("q", "quit"),
                 FooterHint("t", "teams", dimmed=standalone),
-                FooterHint("Esc", "cancel"),
             ),
         )
 
@@ -132,8 +133,9 @@ class ChromeConfig:
                 FooterHint("Space", "toggle"),
                 FooterHint("a", "toggle all"),
                 FooterHint("Enter", "confirm"),
+                FooterHint("Esc", "back"),
+                FooterHint("q", "quit"),
                 FooterHint("t", "teams"),
-                FooterHint("Esc", "cancel"),
             ),
         )
 
@@ -141,16 +143,17 @@ class ChromeConfig:
     def for_quick_resume(
         cls, title: str, subtitle: str | None = None, *, standalone: bool = False
     ) -> ChromeConfig:
-        """Create config for Quick Resume picker with truthful hints.
+        """Create config for Quick Resume picker with consistent key hints.
 
-        The Quick Resume picker has unique semantics:
+        The Quick Resume picker follows the standard TUI key contract:
         - Enter: Resume the selected context
-        - Esc: Skip resume, start a new session
-        - q: Cancel the entire wizard
+        - n: Explicitly start a new session (skip resume)
+        - Esc: Back/dismiss (cancel wizard from this screen)
+        - q: Quit app
 
         Args:
             title: Picker title (typically "Quick Resume").
-            subtitle: Optional subtitle (defaults to hint about Esc/q).
+            subtitle: Optional subtitle (defaults to hint about n/Esc).
             standalone: If True, dim the "t teams" hint (not available without org).
 
         Returns:
@@ -158,14 +161,15 @@ class ChromeConfig:
         """
         return cls(
             title=title,
-            subtitle=subtitle or "Esc for new session · q to cancel",
+            subtitle=subtitle or "n for new session · Esc to go back",
             show_tabs=False,
             show_search=True,
             footer_hints=(
                 FooterHint("↑↓", "navigate"),
                 FooterHint("Enter", "resume"),
-                FooterHint("Esc", "new session"),
-                FooterHint("q", "cancel"),
+                FooterHint("n", "new session"),
+                FooterHint("Esc", "back"),
+                FooterHint("q", "quit"),
                 FooterHint("t", "teams", dimmed=standalone),
             ),
         )

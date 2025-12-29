@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 from scc_cli.ui.keys import Action, ActionType
 from scc_cli.ui.list_screen import ListItem
 from scc_cli.ui.picker import (
+    QuickResumeResult,
+    _get_running_workspaces,
     _run_single_select_picker,
     pick_container,
     pick_containers,
@@ -561,3 +563,180 @@ class TestPickerIntegration:
             # Multiple teams
             pick_team([{"name": "a"}, {"name": "b"}])
             assert "2 teams" in mock_picker.call_args.kwargs["subtitle"]
+
+
+class TestGetRunningWorkspaces:
+    """Test _get_running_workspaces() helper function."""
+
+    def test_returns_running_container_workspaces(self) -> None:
+        """Returns set of workspace paths from running containers."""
+        mock_containers = [
+            MagicMock(workspace="/code/project-a", status="Up 2 hours"),
+            MagicMock(workspace="/code/project-b", status="Up 5 minutes"),
+        ]
+
+        with patch("scc_cli.docker.list_scc_containers", return_value=mock_containers):
+            result = _get_running_workspaces()
+
+        assert result == {"/code/project-a", "/code/project-b"}
+
+    def test_excludes_stopped_containers(self) -> None:
+        """Excludes containers that are not running."""
+        mock_containers = [
+            MagicMock(workspace="/code/running", status="Up 2 hours"),
+            MagicMock(workspace="/code/stopped", status="Exited (0) 1 hour ago"),
+            MagicMock(workspace="/code/created", status="Created"),
+        ]
+
+        with patch("scc_cli.docker.list_scc_containers", return_value=mock_containers):
+            result = _get_running_workspaces()
+
+        assert result == {"/code/running"}
+
+    def test_excludes_containers_without_workspace(self) -> None:
+        """Excludes containers with no workspace path."""
+        mock_containers = [
+            MagicMock(workspace="/code/project", status="Up 2 hours"),
+            MagicMock(workspace=None, status="Up 1 hour"),
+            MagicMock(workspace="", status="Up 30 minutes"),
+        ]
+
+        with patch("scc_cli.docker.list_scc_containers", return_value=mock_containers):
+            result = _get_running_workspaces()
+
+        assert result == {"/code/project"}
+
+    def test_returns_empty_set_on_docker_error(self) -> None:
+        """Returns empty set when Docker is not available."""
+        with patch(
+            "scc_cli.docker.list_scc_containers",
+            side_effect=Exception("Docker not available"),
+        ):
+            result = _get_running_workspaces()
+
+        assert result == set()
+
+    def test_returns_empty_set_when_no_containers(self) -> None:
+        """Returns empty set when no containers exist."""
+        with patch("scc_cli.docker.list_scc_containers", return_value=[]):
+            result = _get_running_workspaces()
+
+        assert result == set()
+
+    def test_returns_empty_set_on_import_error(self) -> None:
+        """Returns empty set gracefully when docker module import fails."""
+        with patch(
+            "scc_cli.docker.list_scc_containers",
+            side_effect=ImportError("No module named docker"),
+        ):
+            result = _get_running_workspaces()
+
+        assert result == set()
+
+
+class TestQuickResumeCurrentBranch:
+    """Test pick_context_quick_resume current_branch highlighting."""
+
+    def test_current_branch_highlights_matching_context(self) -> None:
+        """Context matching current_branch gets is_current_branch=True."""
+        from pathlib import Path
+
+        from scc_cli.contexts import WorkContext
+        from scc_cli.ui.formatters import format_context
+
+        ctx = WorkContext(
+            team="platform",
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="feature-auth",
+        )
+
+        # Simulate the logic in pick_context_quick_resume
+        current_branch = "feature-auth"
+        is_current = current_branch is not None and ctx.worktree_name == current_branch
+
+        item = format_context(ctx, is_current_branch=is_current)
+
+        assert "★" in item.label
+        assert item.metadata["current_branch"] == "yes"
+
+    def test_current_branch_no_highlight_when_different(self) -> None:
+        """Context not matching current_branch gets is_current_branch=False."""
+        from pathlib import Path
+
+        from scc_cli.contexts import WorkContext
+        from scc_cli.ui.formatters import format_context
+
+        ctx = WorkContext(
+            team="platform",
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="main",
+        )
+
+        # Simulate the logic in pick_context_quick_resume
+        current_branch = "feature-auth"
+        is_current = current_branch is not None and ctx.worktree_name == current_branch
+
+        item = format_context(ctx, is_current_branch=is_current)
+
+        assert "★" not in item.label
+        assert item.metadata["current_branch"] == "no"
+
+    def test_current_branch_none_no_highlights(self) -> None:
+        """When current_branch is None, no contexts are highlighted."""
+        from pathlib import Path
+
+        from scc_cli.contexts import WorkContext
+        from scc_cli.ui.formatters import format_context
+
+        ctx = WorkContext(
+            team="platform",
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="main",
+        )
+
+        # Simulate the logic in pick_context_quick_resume
+        current_branch = None
+        is_current = current_branch is not None and ctx.worktree_name == current_branch
+
+        item = format_context(ctx, is_current_branch=is_current)
+
+        assert "★" not in item.label
+        assert item.metadata["current_branch"] == "no"
+
+    def test_pick_context_quick_resume_accepts_current_branch(self) -> None:
+        """pick_context_quick_resume accepts current_branch parameter."""
+        from pathlib import Path
+
+        from scc_cli.contexts import WorkContext
+        from scc_cli.ui.picker import pick_context_quick_resume
+
+        contexts = [
+            WorkContext(
+                team="platform",
+                repo_root=Path("/code/api"),
+                worktree_path=Path("/code/api"),
+                worktree_name="main",
+            ),
+        ]
+
+        # Mock the picker and container check to avoid terminal interaction
+        with patch("scc_cli.docker.list_scc_containers", return_value=[]):
+            with patch("scc_cli.ui.picker._run_quick_resume_picker") as mock_picker:
+                mock_picker.return_value = (QuickResumeResult.CANCELLED, None)
+
+                # Should not raise - current_branch is a valid parameter
+                pick_context_quick_resume(
+                    contexts,
+                    title="Quick Resume",
+                    current_branch="main",
+                )
+
+                # Verify format_context was called with is_current_branch=True
+                mock_picker.assert_called_once()
+                items = mock_picker.call_args.kwargs["items"]
+                assert len(items) == 1
+                # The item should have ★ indicator since worktree_name == current_branch
+                assert "★" in items[0].label

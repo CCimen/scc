@@ -38,6 +38,7 @@ from .keys import (
     ActionType,
     KeyReader,
     RefreshRequested,
+    SessionResumeRequested,
     StartRequested,
     TeamSwitchRequested,
 )
@@ -709,7 +710,25 @@ class Dashboard:
                             self.state = self.state.switch_tab(target_tab)
                             return True  # Refresh to show new tab
                 else:
-                    # Resource tabs: toggle details pane
+                    # Resource tabs handling
+                    current = self.state.list_state.current_item
+
+                    # Sessions tab: Enter resumes the selected session
+                    if (
+                        self.state.active_tab == DashboardTab.SESSIONS
+                        and current
+                        and not self.state.is_placeholder_selected()
+                    ):
+                        # Real session item → resume it
+                        if isinstance(current.value, dict) and not current.value.get(
+                            "_placeholder"
+                        ):
+                            raise SessionResumeRequested(
+                                session=current.value,
+                                return_to=self.state.active_tab.name,
+                            )
+
+                    # Other resource tabs (Containers, Worktrees): toggle details pane
                     if self.state.details_open:
                         # Close details
                         self.state.details_open = False
@@ -720,7 +739,6 @@ class Dashboard:
                         return True
                     else:
                         # Placeholder or empty state: handle appropriately
-                        current = self.state.list_state.current_item
                         if current:
                             # Check if this is a startable placeholder
                             # (containers/sessions empty → user can start a new session)
@@ -1197,9 +1215,14 @@ def run_dashboard() -> None:
             # User pressed Enter on startable placeholder
             # Execute start flow OUTSIDE Rich Live (critical: avoids nested Live)
             restore_tab = start_req.return_to
-            completed = _handle_start_flow(start_req.reason)
-            if not completed:
-                # User cancelled the wizard - show toast on dashboard reload
+            result = _handle_start_flow(start_req.reason)
+
+            if result is None:
+                # User pressed q: quit app entirely
+                break
+
+            if result is False:
+                # User pressed Esc: go back to dashboard, show toast
                 toast_message = "Start cancelled"
             # Loop continues to reload dashboard with fresh data
 
@@ -1207,6 +1230,19 @@ def run_dashboard() -> None:
             # User pressed 'r' - just reload data
             restore_tab = refresh_req.return_to
             # Loop continues with fresh data (no additional action needed)
+
+        except SessionResumeRequested as resume_req:
+            # User pressed Enter on a session item → resume it
+            restore_tab = resume_req.return_to
+            success = _handle_session_resume(resume_req.session)
+
+            if not success:
+                # Resume failed (e.g., missing workspace) - show toast
+                toast_message = "Session resume failed"
+            else:
+                # Successfully launched - exit dashboard
+                # (container is running, user is now in Claude)
+                break
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -1281,19 +1317,25 @@ def _handle_team_switch() -> None:
         console.print(f"[red]Error switching team: {e}[/red]")
 
 
-def _handle_start_flow(reason: str) -> bool:
+def _handle_start_flow(reason: str) -> bool | None:
     """Handle start flow request from dashboard.
 
     Runs the interactive start wizard and launches a sandbox if user completes it.
     Executes OUTSIDE Rich Live context (the dashboard has already exited
     via the exception unwind before this is called).
 
+    Three-state return contract:
+    - True: Sandbox launched successfully
+    - False: User pressed Esc (back to dashboard)
+    - None: User pressed q (quit app entirely)
+
     Args:
         reason: Why the start flow was triggered (e.g., "no_containers", "no_sessions").
             Used for logging/analytics and to determine skip_quick_resume.
 
     Returns:
-        True if wizard completed successfully, False if cancelled.
+        True if wizard completed successfully, False if user wants to go back,
+        None if user wants to quit entirely.
     """
     from ..cli_launch import run_start_wizard_flow
 
@@ -1310,5 +1352,103 @@ def _handle_start_flow(reason: str) -> bool:
         console.print("[dim]Starting your first session...[/dim]")
     console.print()
 
-    # Run the wizard (handles its own errors internally)
-    return run_start_wizard_flow(skip_quick_resume=skip_quick_resume)
+    # Run the wizard with allow_back=True for dashboard context
+    # Returns: True (success), False (Esc/back), None (q/quit)
+    return run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
+
+
+def _handle_session_resume(session: dict[str, Any]) -> bool:
+    """Handle session resume request from dashboard.
+
+    Resumes an existing session by launching the Docker container with
+    the stored workspace, team, and branch configuration.
+
+    This function executes OUTSIDE Rich Live context (the dashboard has
+    already exited via the exception unwind before this is called).
+
+    Args:
+        session: Session dict containing workspace, team, branch, container_name, etc.
+
+    Returns:
+        True if session was resumed successfully, False if resume failed
+        (e.g., workspace no longer exists).
+    """
+    from pathlib import Path
+
+    from rich.status import Status
+
+    from .. import config, docker
+    from ..cli_launch import (
+        _configure_team_settings,
+        _launch_sandbox,
+        _resolve_mount_and_branch,
+        _sync_marketplace_settings,
+        _validate_and_resolve_workspace,
+    )
+
+    console = Console()
+    _prepare_for_nested_ui(console)
+
+    # Extract session info
+    workspace = session.get("workspace", "")
+    team = session.get("team")  # May be None for standalone
+    session_name = session.get("name")
+    branch = session.get("branch")
+
+    if not workspace:
+        console.print("[red]Session has no workspace path[/red]")
+        return False
+
+    # Validate workspace still exists
+    workspace_path = Path(workspace)
+    if not workspace_path.exists():
+        console.print(f"[red]Workspace no longer exists: {workspace}[/red]")
+        console.print("[dim]The session may have been deleted or moved.[/dim]")
+        return False
+
+    try:
+        # Docker availability check
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+            docker.check_docker_available()
+
+        # Validate and resolve workspace
+        workspace_path = _validate_and_resolve_workspace(str(workspace_path))
+
+        # Configure team settings
+        cfg = config.load_config()
+        _configure_team_settings(team, cfg)
+
+        # Sync marketplace settings
+        _sync_marketplace_settings(workspace_path, team)
+
+        # Resolve mount path and branch
+        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+
+        # Use session's stored branch if available (more accurate than detected)
+        if branch:
+            current_branch = branch
+
+        # Show resume info
+        workspace_name = workspace_path.name
+        console.print(f"[cyan]Resuming session:[/cyan] {workspace_name}")
+        if team:
+            console.print(f"[dim]Team: {team}[/dim]")
+        if current_branch:
+            console.print(f"[dim]Branch: {current_branch}[/dim]")
+        console.print()
+
+        # Launch sandbox with resume flag
+        _launch_sandbox(
+            workspace_path=workspace_path,
+            mount_path=mount_path,
+            team=team,
+            session_name=session_name,
+            current_branch=current_branch,
+            should_continue_session=True,  # Resume existing container
+            fresh=False,
+        )
+        return True
+
+    except Exception as e:
+        console.print(f"[red]Error resuming session: {e}[/red]")
+        return False

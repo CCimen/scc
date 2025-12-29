@@ -150,6 +150,7 @@ class TestSelectFlag:
     def test_select_shows_session_picker(self, mock_sessions_list, mock_session):
         """--select should trigger the session picker UI."""
         with (
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
@@ -178,6 +179,7 @@ class TestSelectFlag:
     def test_select_short_flag_works(self, mock_sessions_list, mock_session):
         """-s short flag should work like --select."""
         with (
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
@@ -205,6 +207,7 @@ class TestSelectFlag:
     def test_select_without_sessions_shows_message(self):
         """--select with no sessions should show appropriate message."""
         with (
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=[]),
@@ -218,6 +221,7 @@ class TestSelectFlag:
     def test_select_user_cancels_exits_gracefully(self, mock_sessions_list):
         """--select should exit gracefully when user cancels picker."""
         with (
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
@@ -319,6 +323,7 @@ class TestFlagMutualExclusivity:
     def test_resume_and_select_are_mutually_exclusive(self, mock_session, mock_sessions_list):
         """Using both --resume and --select should error or pick one."""
         with (
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session),
@@ -346,3 +351,124 @@ class TestFlagMutualExclusivity:
         # For now, we'll just ensure it doesn't crash
         # The implementation will decide the exact behavior
         assert result.exit_code in (0, 1, 2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for smart workspace detection (Phase 3)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.skip(reason="Phase 3 feature: auto-detection at scc start not yet implemented")
+class TestSmartWorkspaceDetection:
+    """Smart detection should auto-select workspace when run from git repo."""
+
+    def test_auto_detects_workspace_from_git_repo(self, mock_session):
+        """Running 'scc start' from git repo should auto-detect workspace."""
+        detected_path = "/home/user/project"
+        with (
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            # Smart detection returns detected workspace
+            patch(
+                "scc_cli.cli_launch.git.detect_workspace_root",
+                return_value=(mock_session["workspace"], detected_path),
+            ) as mock_detect,
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker", "run"], False),
+            ),
+            patch("scc_cli.cli_launch.docker.run"),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(mock_session["workspace"], False),
+            ),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            result = runner.invoke(app, ["start"])
+
+        # Should have called detect_workspace_root
+        mock_detect.assert_called_once()
+        # Should succeed (launches with detected workspace)
+        assert result.exit_code == 0
+
+    def test_no_detection_non_tty_shows_error(self):
+        """Running 'scc start' in non-git dir without TTY should error."""
+        with (
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            # Smart detection returns None (not in a git repo)
+            patch(
+                "scc_cli.cli_launch.git.detect_workspace_root",
+                return_value=(None, "/home/user/random"),
+            ),
+            # Non-TTY environment
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=False),
+        ):
+            result = runner.invoke(app, ["start"])
+
+        # Should error with helpful message
+        assert result.exit_code != 0
+        output = strip_ansi(result.output.lower())
+        assert "workspace" in output or "detected" in output
+
+    def test_interactive_flag_bypasses_detection(self, mock_sessions_list):
+        """The -i flag should force interactive mode even when workspace can be detected."""
+        with (
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            # Detection would succeed, but should not be called when -i is used
+            patch(
+                "scc_cli.cli_launch.git.detect_workspace_root",
+                return_value=("/home/user/project", "/home/user/project"),
+            ) as mock_detect,
+            patch("scc_cli.cli_launch.config.is_standalone_mode", return_value=True),
+            patch("scc_cli.cli_launch.config.load_cached_org_config", return_value=None),
+            patch("scc_cli.cli_launch.teams.list_teams", return_value=[]),
+            patch("scc_cli.cli_launch.load_recent_contexts", return_value=[]),
+            # User selects workspace via picker
+            patch("scc_cli.cli_launch.pick_workspace_source", return_value=None),
+        ):
+            result = runner.invoke(app, ["start", "-i"])
+
+        # With -i flag, detection should NOT be called (workspace cleared to None)
+        mock_detect.assert_not_called()
+        # User cancelled (returned None from picker)
+        assert result.exit_code == 0
+
+    def test_detection_feedback_shown_on_success(self, mock_session):
+        """Auto-detected workspace should show brief feedback message."""
+        detected_path = "/home/user/my-project"
+        with (
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch(
+                "scc_cli.cli_launch.git.detect_workspace_root",
+                return_value=(detected_path, detected_path),
+            ),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch(
+                "scc_cli.cli_launch.docker.get_or_create_container",
+                return_value=(["docker", "run"], False),
+            ),
+            patch("scc_cli.cli_launch.docker.run"),
+            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(detected_path, False),
+            ),
+            patch("scc_cli.cli_launch.git.check_branch_safety"),
+            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            result = runner.invoke(app, ["start"])
+
+        # Should show detection feedback (unless --json)
+        output = strip_ansi(result.output.lower())
+        assert "detected" in output or "my-project" in output

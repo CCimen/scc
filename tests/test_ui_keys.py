@@ -106,6 +106,11 @@ class TestActionKeyMapping:
         action = map_key_to_action("t")
         assert action.action_type == ActionType.TEAM_SWITCH
 
+    def test_n_maps_to_new_session(self) -> None:
+        """'n' key maps to NEW_SESSION action."""
+        action = map_key_to_action("n")
+        assert action.action_type == ActionType.NEW_SESSION
+
 
 class TestPrintableCharacterHandling:
     """Test printable character handling for type-to-filter."""
@@ -132,8 +137,8 @@ class TestPrintableCharacterHandling:
 
     def test_special_keys_not_printable(self) -> None:
         """Keys with special meanings are not treated as filter chars."""
-        # 'j', 'k', 'q', 'a', '?', 't' all have special meanings
-        for key in ["j", "k", "q", "a", "?", "t"]:
+        # 'j', 'k', 'q', 'a', '?', 't', 'n' all have special meanings
+        for key in ["j", "k", "q", "a", "?", "t", "n"]:
             action = map_key_to_action(key)
             assert action.action_type != ActionType.FILTER_CHAR
 
@@ -399,6 +404,22 @@ class TestFilterModeKeyBehavior:
         action = map_key_to_action("a", enable_filter=True, filter_active=False)
         assert action.action_type == ActionType.TOGGLE_ALL
 
+    def test_n_becomes_filter_char_when_filter_active(self) -> None:
+        """'n' is treated as filter char when filter_active=True.
+
+        Regression test: Typing words containing 'n' (like 'container')
+        should not trigger NEW_SESSION when the user is typing in the filter field.
+        """
+        action = map_key_to_action("n", enable_filter=True, filter_active=True)
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "n"
+        assert action.should_exit is False
+
+    def test_n_triggers_new_session_when_filter_not_active(self) -> None:
+        """'n' triggers NEW_SESSION when filter is not active."""
+        action = map_key_to_action("n", enable_filter=True, filter_active=False)
+        assert action.action_type == ActionType.NEW_SESSION
+
     def test_regular_chars_always_filter_when_enabled(self) -> None:
         """Regular printable chars are always filter chars when enabled.
 
@@ -406,8 +427,8 @@ class TestFilterModeKeyBehavior:
         regardless of filter_active state (they start the filter).
         """
         # These chars are not in DEFAULT_KEY_MAP, so they become filter chars
-        # Exclude: j,k,t,q,a,? which are mapped to actions
-        for char in "bcdefghilmnoprsuvwxyz":
+        # Exclude: j,k,t,q,a,?,n which are mapped to actions
+        for char in "bcdefghilmoprsuvwxyz":
             action = map_key_to_action(char, enable_filter=True, filter_active=False)
             assert action.action_type == ActionType.FILTER_CHAR, f"'{char}' should be filter char"
             assert action.filter_char == char

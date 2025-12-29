@@ -880,6 +880,33 @@ scc setup
 
 ### Start Session
 
+SCC supports both explicit and auto-detected workspace launching:
+
+**Explicit start:**
+```
+scc start ~/repo --team platform
+→ Use specified workspace path
+→ Load config and launch
+```
+
+**Smart start (auto-detection):**
+```
+scc                      # or: scc start
+→ Detect workspace root from current directory
+  1. git rev-parse --show-toplevel (works for repos and worktrees)
+  2. Parent-walk for .scc.yaml
+  3. Parent-walk for .git directory or file
+→ If found: auto-select workspace, print brief header
+→ If sessions exist for workspace: show Quick Resume picker
+→ If no sessions: launch immediately
+```
+
+**Quick Resume picker:**
+- Shows recent sessions for the detected workspace
+- Visual indicators: 📌 pinned, ★ current branch, 🟢 running, ⚫ stopped
+- Keyboard: Enter=select, n=new session, Esc=back, q=quit
+
+**Full launch flow:**
 ```
 scc start ~/repo --team platform
 → Check org config TTL (refresh if stale)
