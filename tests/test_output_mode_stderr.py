@@ -1,15 +1,11 @@
 """Tests for output_mode stderr routing."""
 
 import sys
-from io import StringIO
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from scc_cli.output_mode import (
     console,
     err_console,
-    is_json_mode,
     json_output_mode,
     print_human,
 )

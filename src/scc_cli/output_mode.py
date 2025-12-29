@@ -17,8 +17,8 @@ Usage:
     print_human("Processing...")  # Only prints if not in JSON mode
 """
 
-import sys
 import json
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
