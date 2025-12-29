@@ -260,6 +260,7 @@ def _resolve_workspace_team(
     *,
     json_mode: bool = False,
     standalone: bool = False,
+    no_interactive: bool = False,
 ) -> str | None:
     """Resolve team selection using workspace pinning when available.
 
@@ -276,7 +277,7 @@ def _resolve_workspace_team(
     selected_profile = cfg.get("selected_profile")
 
     if pinned_team and selected_profile and pinned_team != selected_profile:
-        if is_interactive_allowed(json_mode=json_mode):
+        if is_interactive_allowed(json_mode=json_mode, no_interactive_flag=no_interactive):
             message = (
                 f"Workspace '{workspace_path}' was last used with team '{pinned_team}'."
                 " Use that team for this session?"
@@ -759,6 +760,7 @@ def start(
         cfg,
         json_mode=(json_output or pretty),
         standalone=standalone,
+        no_interactive=non_interactive,
     )
 
     # ── Step 6: Team configuration ───────────────────────────────────────────

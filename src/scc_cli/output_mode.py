@@ -17,11 +17,12 @@ Usage:
     print_human("Processing...")  # Only prints if not in JSON mode
 """
 
+import sys
 import json
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, TextIO
 
 from rich.console import Console
 
@@ -33,7 +34,10 @@ _json_mode: ContextVar[bool] = ContextVar("json_mode", default=False)
 _json_command_mode: ContextVar[bool] = ContextVar("json_command_mode", default=False)
 _pretty_mode: ContextVar[bool] = ContextVar("pretty_mode", default=False)
 
+# Console instances for stdout and stderr
+# Rich Console requires file= in constructor, not in print()
 console = Console()
+err_console = Console(stderr=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -124,7 +128,7 @@ def set_pretty_mode(value: bool) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def print_human(message: str, **kwargs: Any) -> None:
+def print_human(message: str, file: TextIO | None = None, **kwargs: Any) -> None:
     """Print human-readable output.
 
     This is a no-op when JSON mode is active, ensuring clean JSON output
@@ -132,10 +136,15 @@ def print_human(message: str, **kwargs: Any) -> None:
 
     Args:
         message: The message to print (Rich markup supported)
+        file: Output target. Use sys.stderr for warnings/errors.
+            Note: Rich Console requires file in constructor, not print(),
+            so we use a separate err_console for stderr output.
         **kwargs: Additional arguments passed to console.print()
     """
     if not is_json_mode():
-        console.print(message, **kwargs)
+        # Select appropriate console based on file parameter
+        target = err_console if file is sys.stderr else console
+        target.print(message, **kwargs)
 
 
 def print_json(envelope: dict[str, Any]) -> None:
