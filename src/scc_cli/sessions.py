@@ -34,6 +34,7 @@ class SessionRecord:
     branch: str | None = None
     last_used: str | None = None
     created_at: str | None = None
+    schema_version: int = 1  # For future migration support
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the record to a dictionary for JSON serialization."""
@@ -50,6 +51,7 @@ class SessionRecord:
             branch=data.get("branch"),
             last_used=data.get("last_used"),
             created_at=data.get("created_at"),
+            schema_version=data.get("schema_version", 1),
         )
 
 
@@ -334,15 +336,44 @@ def get_claude_recent_sessions() -> list[dict[Any, Any]]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _migrate_legacy_sessions(sessions: list[dict[Any, Any]]) -> list[dict[Any, Any]]:
+    """Migrate legacy session records to current format.
+
+    Migrations performed:
+    - team == "base" → team = None (standalone mode)
+
+    This allows sessions created with the old hardcoded "base" fallback
+    to be safely loaded without causing "Team Not Found" errors.
+
+    Args:
+        sessions: List of raw session dicts from JSON.
+
+    Returns:
+        Migrated session list (same list, mutated in place).
+    """
+    for session in sessions:
+        # Migration: "base" was never a real team, treat as standalone
+        if session.get("team") == "base":
+            session["team"] = None
+
+    return sessions
+
+
 def _load_sessions() -> list[dict[Any, Any]]:
-    """Load and return sessions from the config file."""
+    """Load and return sessions from the config file.
+
+    Performs legacy migrations on load to handle sessions saved
+    with older schema versions.
+    """
     sessions_file = config.SESSIONS_FILE
 
     if sessions_file.exists():
         try:
             with open(sessions_file) as f:
                 data = json.load(f)
-            return cast(list[dict[Any, Any]], data.get("sessions", []))
+            sessions = cast(list[dict[Any, Any]], data.get("sessions", []))
+            # Apply migrations for legacy sessions
+            return _migrate_legacy_sessions(sessions)
         except (OSError, json.JSONDecodeError):
             pass
 

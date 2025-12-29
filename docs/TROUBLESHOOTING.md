@@ -512,6 +512,63 @@ scc sessions
 scc start ~/repo --fresh
 ```
 
+## Quick Resume Not Showing Sessions
+
+**Symptom**: Running `scc` shows "no sessions" when you expected Quick Resume
+
+**Diagnosis**:
+```bash
+scc sessions
+```
+
+**Possible causes**:
+
+1. **Wrong directory** - Quick Resume only shows sessions for the detected workspace
+   - Run `scc` from inside your git repository
+   - Or specify the path explicitly: `scc start ~/project`
+
+2. **Workspace detection failed** - Not in a git repo or worktree
+   ```bash
+   git rev-parse --show-toplevel  # Should show repo root
+   ```
+
+3. **Sessions for different branch/worktree** - Quick Resume shows all sessions for the workspace
+   - Look for the ★ indicator marking sessions matching your current branch
+
+**Solution**: Use `--select` to see all available sessions:
+```bash
+scc start --select
+```
+
+## Keyboard Shortcuts Not Working
+
+**Symptom**: Keys don't respond as expected in Quick Resume or other pickers
+
+**Expected keyboard behavior**:
+- `Enter` — Select/resume session
+- `n` — Start new session
+- `Esc` — Go back to previous screen
+- `q` — Quit application
+- `↑/↓` or `j/k` — Navigate list
+
+**Possible causes**:
+
+1. **Non-interactive terminal** - Pickers require a TTY
+   ```bash
+   # This won't work in scripts:
+   echo "" | scc start
+
+   # Use explicit flags for CI:
+   scc start --resume     # Resume without UI
+   scc start ~/repo       # Explicit path without UI
+   ```
+
+2. **Terminal emulator issues** - Some terminals intercept keys
+   - Try a different terminal (iTerm2, Windows Terminal, etc.)
+
+3. **SSH session** - Remote terminals may have key mapping differences
+   - Ensure `TERM` is set correctly: `echo $TERM`
+
 ## Stats Show "Incomplete"
 
 **Symptom**: `scc stats` shows sessions marked incomplete

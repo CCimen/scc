@@ -6,9 +6,11 @@ These tests define the contract for the --dry-run functionality.
 """
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import click
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Dry Run Basic Behavior Tests
@@ -337,3 +339,76 @@ class TestDryRunExitCodes:
                             exit_code = e.exit_code
 
         assert exit_code == 0
+
+
+@pytest.mark.skip(reason="Phase 5 feature: _print_workspace_header not yet implemented")
+class TestPrintWorkspaceHeader:
+    """Test _print_workspace_header() function."""
+
+    def test_prints_workspace_and_team(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Shows workspace name and team."""
+        from scc_cli.cli_launch import _print_workspace_header
+
+        with patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"):
+            _print_workspace_header(tmp_path, team="platform")
+
+        # Rich output goes to console, so we capture it via capsys
+        # The output should contain workspace name and team
+        captured = capsys.readouterr()
+        # Rich console defaults to stderr for some terminals
+        output = captured.out + captured.err
+        assert "platform" in output.lower() or tmp_path.name in output
+
+    def test_prints_standalone_when_no_team(self, tmp_path: Path) -> None:
+        """Shows 'standalone' when team is None."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from scc_cli.cli_launch import _print_workspace_header
+
+        # Capture output by patching console
+        output = StringIO()
+        with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
+            with patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"):
+                _print_workspace_header(tmp_path, team=None)
+
+        result = output.getvalue()
+        assert "standalone" in result.lower()
+
+    def test_prints_branch_when_available(self, tmp_path: Path) -> None:
+        """Shows branch info when in a git repo."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from scc_cli.cli_launch import _print_workspace_header
+
+        output = StringIO()
+        with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
+            with patch("scc_cli.cli_launch.git.get_current_branch", return_value="feature-x"):
+                _print_workspace_header(tmp_path, team="dev")
+
+        result = output.getvalue()
+        assert "feature-x" in result
+
+    def test_handles_no_branch_gracefully(self, tmp_path: Path) -> None:
+        """Works without branch info (non-git directory)."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from scc_cli.cli_launch import _print_workspace_header
+
+        output = StringIO()
+        with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
+            with patch(
+                "scc_cli.cli_launch.git.get_current_branch", side_effect=Exception("Not a git repo")
+            ):
+                _print_workspace_header(tmp_path, team="dev")
+
+        result = output.getvalue()
+        # Should still print workspace info without branch indicator "(branch:"
+        assert "(branch:" not in result

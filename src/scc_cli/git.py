@@ -94,6 +94,57 @@ def is_git_repo(path: Path) -> bool:
     return run_command_bool(["git", "-C", str(path), "rev-parse", "--git-dir"], timeout=5)
 
 
+def detect_workspace_root(start_dir: Path) -> tuple[Path | None, Path]:
+    """Detect the workspace root from a starting directory.
+
+    This function implements smart workspace detection for use cases where
+    the user runs `scc start` from a subdirectory or git worktree.
+
+    Resolution order:
+    1) git rev-parse --show-toplevel (works for subdirs + worktrees)
+    2) Parent-walk for .scc.yaml (repo root config marker)
+    3) Parent-walk for .git (directory OR file - worktree-safe)
+    4) None (no workspace detected)
+
+    Args:
+        start_dir: The directory to start detection from (usually cwd).
+
+    Returns:
+        Tuple of (root, start_cwd) where:
+        - root: The detected workspace root, or None if not found
+        - start_cwd: The original start_dir (preserved for container cwd)
+    """
+    start_dir = start_dir.resolve()
+
+    # Priority 1: Use git rev-parse --show-toplevel (handles subdirs + worktrees)
+    if check_git_installed():
+        toplevel = run_command(
+            ["git", "-C", str(start_dir), "rev-parse", "--show-toplevel"],
+            timeout=5,
+        )
+        if toplevel:
+            return (Path(toplevel.strip()), start_dir)
+
+    # Priority 2: Parent-walk for .scc.yaml (SCC project marker)
+    current = start_dir
+    while current != current.parent:
+        scc_config = current / ".scc.yaml"
+        if scc_config.is_file():
+            return (current, start_dir)
+        current = current.parent
+
+    # Priority 3: Parent-walk for .git (directory OR file - worktree-safe)
+    current = start_dir
+    while current != current.parent:
+        git_marker = current / ".git"
+        if git_marker.exists():  # Works for both directory and file
+            return (current, start_dir)
+        current = current.parent
+
+    # No workspace detected
+    return (None, start_dir)
+
+
 def is_protected_branch(branch: str) -> bool:
     """Check if branch is protected.
 

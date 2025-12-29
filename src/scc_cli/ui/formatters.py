@@ -231,14 +231,24 @@ def format_worktree(worktree: WorktreeInfo) -> ListItem[WorktreeInfo]:
     )
 
 
-def format_context(context: WorkContext) -> ListItem[WorkContext]:
+def format_context(
+    context: WorkContext,
+    *,
+    is_running: bool | None = None,
+    is_current_branch: bool | None = None,
+) -> ListItem[WorkContext]:
     """Format a work context for display in a picker.
 
     Shows the context's display_label (team · repo · worktree) with
-    pinned indicator and relative time since last used.
+    pinned indicator, status indicator, current branch indicator, and
+    relative time since last used.
 
     Args:
         context: Work context to format.
+        is_running: Whether the context's container is running.
+            True = show 🟢 (running), False = show ⚫ (stopped), None = no indicator.
+        is_current_branch: Whether this context matches the current git branch.
+            True = show ★ indicator, False/None = no indicator.
 
     Returns:
         ListItem suitable for ListScreen display.
@@ -256,9 +266,34 @@ def format_context(context: WorkContext) -> ListItem[WorkContext]:
         >>> item = format_context(ctx)
         >>> item.label
         '📌 platform · api · main'
+        >>> item = format_context(ctx, is_running=True)
+        >>> '🟢' in item.label
+        True
+        >>> item = format_context(ctx, is_current_branch=True)
+        >>> '★' in item.label
+        True
     """
-    # Build label with pinned indicator
-    label = f"📌 {context.display_label}" if context.pinned else context.display_label
+    # Build label parts
+    parts: list[str] = []
+
+    # Add pinned indicator
+    if context.pinned:
+        parts.append("📌")
+
+    # Add current branch indicator (matches CWD branch)
+    if is_current_branch is True:
+        parts.append("★")
+
+    # Add status indicator (running/stopped)
+    if is_running is True:
+        parts.append("🟢")
+    elif is_running is False:
+        parts.append("⚫")
+
+    # Add display label
+    parts.append(context.display_label)
+
+    label = " ".join(parts)
 
     # Build description parts
     desc_parts: list[str] = []
@@ -282,6 +317,10 @@ def format_context(context: WorkContext) -> ListItem[WorkContext]:
             "worktree": context.worktree_name,
             "path": str(context.worktree_path),
             "pinned": "yes" if context.pinned else "no",
+            "running": "yes" if is_running else "no" if is_running is False else "",
+            "current_branch": (
+                "yes" if is_current_branch else "no" if is_current_branch is False else ""
+            ),
         },
     )
 

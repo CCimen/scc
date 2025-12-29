@@ -30,10 +30,23 @@ SCC isolates AI execution in containers, enforces branch safety, and prevents de
 ```bash
 pip install scc-cli      # Install
 scc setup                # Configure (paste your org URL, pick your team)
-scc start ~/project      # Launch Claude Code in sandbox
+cd ~/project && scc      # Auto-detect workspace and launch (or scc start ~/project)
 ```
 
 Run `scc doctor` to verify your environment or troubleshoot issues.
+
+### Smart Start Flow
+
+When you run `scc` or `scc start` from inside a git repository:
+- **Auto-detects workspace** from your current directory
+- **Shows Quick Resume** if you have recent sessions for this workspace
+- **Prints brief context** (workspace name, branch, team) before launching
+
+**Keyboard shortcuts in interactive mode:**
+- `Enter` — Select/resume session
+- `n` — Start new session
+- `Esc` — Go back
+- `q` — Quit
 
 ---
 
@@ -155,9 +168,17 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 
 | Command | Description |
 |---------|-------------|
-| `scc` | Interactive mode with recent workspaces |
+| `scc` | Smart start: auto-detect workspace, show Quick Resume, or launch |
+| `scc start` | Same as `scc` — auto-detects workspace from CWD |
+| `scc start -i` | Force workspace picker (ignore current folder) |
+| `scc start <path>` | Start Claude Code in sandbox for specific path |
+| `scc start --resume` | Resume most recent session (no UI) |
+| `scc start --select` | Show session picker to choose which session to resume |
+| `scc start --standalone` | Launch without organization config (no team profile) |
+| `scc start --offline` | Use cached org config only (no network) |
+| `scc start --dry-run` | Preview launch configuration without starting container |
+| `scc start --dry-run --json` | Output launch config as JSON (for CI/automation) |
 | `scc setup` | Configure organization connection |
-| `scc start <path>` | Start Claude Code in sandbox |
 | `scc stop` | Stop running sandbox(es) |
 | `scc doctor` | Check system health |
 | `scc team list` | List team profiles |

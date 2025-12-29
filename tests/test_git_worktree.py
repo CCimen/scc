@@ -292,3 +292,152 @@ class TestGetWorkspaceMountPath:
             # Common parent should be /home/user/projects (depth 4, allowed)
             assert mount_path == fake_base
             assert is_expanded is True
+
+
+class TestDetectWorkspaceRoot:
+    """Tests for detect_workspace_root() smart detection."""
+
+    def test_detects_git_repo_from_subdir(self, tmp_path):
+        """Detects workspace root when running from a subdirectory."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a git repo with a subdirectory
+        repo = tmp_path / "myproject"
+        repo.mkdir()
+        git_dir = repo / ".git"
+        git_dir.mkdir()
+        subdir = repo / "src" / "components"
+        subdir.mkdir(parents=True)
+
+        # Detect from subdirectory
+        root, start_cwd = detect_workspace_root(subdir)
+
+        assert root == repo
+        assert start_cwd == subdir.resolve()
+
+    def test_detects_git_repo_at_root(self, tmp_path):
+        """Returns repo root when already at repo root."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a git repo
+        repo = tmp_path / "myproject"
+        repo.mkdir()
+        git_dir = repo / ".git"
+        git_dir.mkdir()
+
+        root, start_cwd = detect_workspace_root(repo)
+
+        assert root == repo
+        assert start_cwd == repo.resolve()
+
+    def test_detects_scc_yaml_project(self, tmp_path):
+        """Detects workspace via .scc.yaml when git not available."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a non-git project with .scc.yaml
+        project = tmp_path / "myproject"
+        project.mkdir()
+        scc_config = project / ".scc.yaml"
+        scc_config.write_text("# SCC project config")
+        subdir = project / "lib"
+        subdir.mkdir()
+
+        # Mock git not being available
+        with patch("scc_cli.git.check_git_installed", return_value=False):
+            root, start_cwd = detect_workspace_root(subdir)
+
+        assert root == project
+        assert start_cwd == subdir.resolve()
+
+    def test_detects_git_file_worktree(self, tmp_path):
+        """Detects workspace when .git is a file (worktree)."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a worktree (has .git file, not directory)
+        worktree = tmp_path / "feature-worktree"
+        worktree.mkdir()
+        git_file = worktree / ".git"
+        git_file.write_text("gitdir: /path/to/main/.git/worktrees/feature")
+        subdir = worktree / "src"
+        subdir.mkdir()
+
+        # Mock git not being available to test fallback to .git file detection
+        with patch("scc_cli.git.check_git_installed", return_value=False):
+            root, start_cwd = detect_workspace_root(subdir)
+
+        assert root == worktree
+        assert start_cwd == subdir.resolve()
+
+    def test_returns_none_for_non_workspace(self, tmp_path):
+        """Returns None when no workspace markers found."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a plain directory with no git or scc markers
+        plain_dir = tmp_path / "random"
+        plain_dir.mkdir()
+        nested = plain_dir / "deep" / "path"
+        nested.mkdir(parents=True)
+
+        with patch("scc_cli.git.check_git_installed", return_value=False):
+            root, start_cwd = detect_workspace_root(nested)
+
+        assert root is None
+        assert start_cwd == nested.resolve()
+
+    def test_prefers_git_over_scc_yaml(self, tmp_path):
+        """Git detection takes priority over .scc.yaml."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a project with both git and scc.yaml
+        project = tmp_path / "myproject"
+        project.mkdir()
+        git_dir = project / ".git"
+        git_dir.mkdir()
+        scc_config = project / ".scc.yaml"
+        scc_config.write_text("# SCC config")
+        subdir = project / "src"
+        subdir.mkdir()
+
+        root, start_cwd = detect_workspace_root(subdir)
+
+        # Should detect via git (priority 1)
+        assert root == project
+        assert start_cwd == subdir.resolve()
+
+    def test_scc_yaml_at_parent_dir(self, tmp_path):
+        """Detects .scc.yaml in parent directory."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create nested structure with .scc.yaml at top
+        project = tmp_path / "bigproject"
+        project.mkdir()
+        scc_config = project / ".scc.yaml"
+        scc_config.write_text("# SCC config")
+        deep = project / "packages" / "core" / "src"
+        deep.mkdir(parents=True)
+
+        with patch("scc_cli.git.check_git_installed", return_value=False):
+            root, start_cwd = detect_workspace_root(deep)
+
+        assert root == project
+        assert start_cwd == deep.resolve()
+
+    def test_resolves_symlinks(self, tmp_path):
+        """Resolves symbolic links in start directory."""
+        from scc_cli.git import detect_workspace_root
+
+        # Create a git repo
+        real_project = tmp_path / "real_project"
+        real_project.mkdir()
+        git_dir = real_project / ".git"
+        git_dir.mkdir()
+
+        # Create a symlink to the project
+        link = tmp_path / "project_link"
+        link.symlink_to(real_project)
+
+        root, start_cwd = detect_workspace_root(link)
+
+        # start_cwd should be resolved (real path)
+        assert root == real_project
+        assert start_cwd == real_project  # Symlink resolved

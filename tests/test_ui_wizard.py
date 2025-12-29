@@ -3,7 +3,7 @@
 Test Categories:
 - BACK sentinel behavior (identity, repr)
 - Top-level picker: Esc/q → None (cancel wizard)
-- Sub-screen pickers: Esc/q → BACK (never None)
+- Sub-screen pickers: Esc → BACK, q → None (three-state contract)
 - pick_workspace_source() - Top-level workspace source selection
 - pick_recent_workspace() - Sub-screen recent workspaces
 - pick_team_repo() - Sub-screen team repositories
@@ -12,7 +12,9 @@ Test Categories:
 
 Golden Navigation Contract:
 - Top-level screens: Esc/q cancels entire wizard (returns None)
-- Sub-screens: Esc/q goes back to previous screen (returns BACK)
+- Sub-screens (three-state):
+  - Esc: goes back to previous screen (returns BACK)
+  - q: quits app entirely (returns None)
 - "← Back" menu item always returns BACK
 """
 
@@ -26,6 +28,7 @@ from scc_cli.ui.wizard import (
     BACK,
     WorkspaceSource,
     _format_relative_time,
+    _is_valid_workspace,
     _normalize_path,
     pick_recent_workspace,
     pick_team_repo,
@@ -61,10 +64,17 @@ class TestWorkspaceSourceEnum:
 
     def test_enum_values(self) -> None:
         """WorkspaceSource has expected values."""
+        assert WorkspaceSource.CURRENT_DIR.value == "current_dir"
         assert WorkspaceSource.RECENT.value == "recent"
         assert WorkspaceSource.TEAM_REPOS.value == "team_repos"
         assert WorkspaceSource.CUSTOM.value == "custom"
         assert WorkspaceSource.CLONE.value == "clone"
+
+    def test_current_dir_enum_exists(self) -> None:
+        """WorkspaceSource.CURRENT_DIR is defined for CWD option."""
+        # This value is used when user selects "Use current directory"
+        assert hasattr(WorkspaceSource, "CURRENT_DIR")
+        assert WorkspaceSource.CURRENT_DIR.value == "current_dir"
 
 
 class TestPickWorkspaceSourceTopLevel:
@@ -162,34 +172,225 @@ class TestPickWorkspaceSourceTopLevel:
             assert len(subtitle) > 0
 
 
+class TestPickWorkspaceSourceWithAllowBack:
+    """Test pick_workspace_source() three-state return contract.
+
+    When allow_back=True (used from Dashboard context):
+    - Esc → BACK (go back to Dashboard)
+    - q → None (quit app entirely)
+    - Selection → WorkspaceSource value
+
+    When allow_back=False (default, CLI context):
+    - Esc → None (cancel wizard)
+    - q → None (cancel wizard)
+    - Selection → WorkspaceSource value
+    """
+
+    def test_allow_back_false_escape_returns_none(self) -> None:
+        """With allow_back=False (default), Esc returns None."""
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            mock_picker.return_value = None  # Simulates Esc
+
+            result = pick_workspace_source(allow_back=False)
+
+            assert result is None
+            assert result is not BACK
+
+    def test_allow_back_true_escape_returns_back(self) -> None:
+        """With allow_back=True, Esc returns BACK sentinel."""
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            mock_picker.return_value = BACK  # Simulates Esc with allow_back
+
+            result = pick_workspace_source(allow_back=True)
+
+            assert result is BACK
+            assert result is not None
+
+    def test_allow_back_passed_to_underlying_picker(self) -> None:
+        """allow_back parameter is passed to _run_single_select_picker."""
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            mock_picker.return_value = None
+
+            pick_workspace_source(allow_back=True)
+
+            call_args = mock_picker.call_args
+            assert call_args.kwargs.get("allow_back") is True
+
+    def test_selection_works_regardless_of_allow_back(self) -> None:
+        """Valid selection returns WorkspaceSource regardless of allow_back."""
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            mock_picker.return_value = WorkspaceSource.RECENT
+
+            result_with_back = pick_workspace_source(allow_back=True)
+            result_without_back = pick_workspace_source(allow_back=False)
+
+            assert result_with_back == WorkspaceSource.RECENT
+            assert result_without_back == WorkspaceSource.RECENT
+
+
+class TestPickWorkspaceSourceCurrentDir:
+    """Test pick_workspace_source() CWD detection and option.
+
+    When CWD is a valid workspace (has .git or .scc.yaml):
+    - "Use current directory" option appears first in list
+    - Selecting it returns WorkspaceSource.CURRENT_DIR
+    """
+
+    def test_cwd_option_shown_when_valid_workspace(self, tmp_path: Path) -> None:
+        """CWD option shown when current directory is valid workspace."""
+        # Create a valid workspace with .git
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+
+        with patch("scc_cli.ui.wizard.Path.cwd", return_value=tmp_path):
+            with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+                mock_picker.return_value = None
+                pick_workspace_source()
+
+                call_args = mock_picker.call_args
+                items = call_args.kwargs["items"]
+                values = [item.value for item in items]
+
+                assert WorkspaceSource.CURRENT_DIR in values
+
+    def test_cwd_option_is_first_when_valid(self, tmp_path: Path) -> None:
+        """CWD option appears first in list when valid."""
+        # Create a valid workspace with .git
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+
+        with patch("scc_cli.ui.wizard.Path.cwd", return_value=tmp_path):
+            with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+                mock_picker.return_value = None
+                pick_workspace_source()
+
+                call_args = mock_picker.call_args
+                items = call_args.kwargs["items"]
+
+                # First item should be CURRENT_DIR
+                assert items[0].value == WorkspaceSource.CURRENT_DIR
+                assert "current" in items[0].label.lower()
+
+    def test_cwd_option_shows_directory_name(self, tmp_path: Path) -> None:
+        """CWD option shows current directory name in description."""
+        # Create a valid workspace with .git
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+
+        with patch("scc_cli.ui.wizard.Path.cwd", return_value=tmp_path):
+            with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+                mock_picker.return_value = None
+                pick_workspace_source()
+
+                call_args = mock_picker.call_args
+                items = call_args.kwargs["items"]
+
+                # First item description should contain dir name
+                assert tmp_path.name in items[0].description
+
+    def test_cwd_option_not_shown_for_non_workspace(self, tmp_path: Path) -> None:
+        """CWD option not shown when current directory is not a workspace."""
+        # tmp_path has no .git or .scc.yaml, so it's NOT a valid workspace
+        # The "Use current directory" option should NOT appear
+        with patch("scc_cli.ui.wizard.Path.cwd", return_value=tmp_path):
+            with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+                mock_picker.return_value = None
+                pick_workspace_source()
+
+                call_args = mock_picker.call_args
+                items = call_args.kwargs["items"]
+                values = [item.value for item in items]
+
+                # Non-workspace directory should NOT show CWD option
+                assert WorkspaceSource.CURRENT_DIR not in values
+
+    def test_selecting_cwd_returns_current_dir_enum(self) -> None:
+        """Selecting CWD option returns WorkspaceSource.CURRENT_DIR."""
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            mock_picker.return_value = WorkspaceSource.CURRENT_DIR
+
+            result = pick_workspace_source()
+
+            assert result == WorkspaceSource.CURRENT_DIR
+
+
+class TestIsValidWorkspace:
+    """Test _is_valid_workspace() helper function."""
+
+    def test_valid_with_git_directory(self, tmp_path: Path) -> None:
+        """Directory with .git directory is valid workspace."""
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+
+        assert _is_valid_workspace(tmp_path) is True
+
+    def test_valid_with_git_file(self, tmp_path: Path) -> None:
+        """Directory with .git file (worktree) is valid workspace."""
+        git_file = tmp_path / ".git"
+        git_file.write_text("gitdir: /path/to/main/.git/worktrees/branch")
+
+        assert _is_valid_workspace(tmp_path) is True
+
+    def test_valid_with_scc_yaml(self, tmp_path: Path) -> None:
+        """Directory with .scc.yaml is valid workspace."""
+        scc_config = tmp_path / ".scc.yaml"
+        scc_config.write_text("version: 1")
+
+        assert _is_valid_workspace(tmp_path) is True
+
+    def test_invalid_for_directory_without_markers(self, tmp_path: Path) -> None:
+        """Directory without .git or .scc.yaml is NOT a valid workspace."""
+        # tmp_path exists but has no .git or .scc.yaml
+        # Random directories (like $HOME) should NOT be treated as workspaces
+        assert _is_valid_workspace(tmp_path) is False
+
+    def test_invalid_for_non_existent_directory(self, tmp_path: Path) -> None:
+        """Non-existent directory is not valid."""
+        non_existent = tmp_path / "does_not_exist"
+
+        assert _is_valid_workspace(non_existent) is False
+
+    def test_invalid_for_file(self, tmp_path: Path) -> None:
+        """File (not directory) is not valid workspace."""
+        file_path = tmp_path / "some_file.txt"
+        file_path.write_text("content")
+
+        assert _is_valid_workspace(file_path) is False
+
+
 class TestPickRecentWorkspaceSubScreen:
     """Test pick_recent_workspace() - sub-screen picker.
 
-    Golden rule: Sub-screens return BACK on cancel (Esc/q), never None.
+    Three-state contract for sub-screens:
+    - Esc: returns BACK (go back to previous screen)
+    - q: returns None (quit app entirely)
+    - Selection: returns workspace path string
     """
 
     def test_escape_returns_back(self) -> None:
-        """Esc on sub-screen returns BACK (not None)."""
+        """Esc on sub-screen returns BACK (go back to previous screen)."""
         recent = [{"workspace": "/project", "last_used": "2025-01-01T00:00:00Z"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = None  # Simulates Esc
+            # With allow_back=True, underlying picker returns BACK for Esc
+            mock_picker.return_value = BACK
 
             result = pick_recent_workspace(recent)
 
             assert result is BACK
             assert result is not None
 
-    def test_quit_returns_back(self) -> None:
-        """Q on sub-screen returns BACK (not None)."""
+    def test_quit_returns_none(self) -> None:
+        """Q on sub-screen returns None (quit app entirely)."""
         recent = [{"workspace": "/project", "last_used": "2025-01-01T00:00:00Z"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = None  # Simulates q
+            # With allow_back=True, underlying picker returns None for q
+            mock_picker.return_value = None
 
             result = pick_recent_workspace(recent)
 
-            assert result is BACK
+            assert result is None
 
     def test_back_menu_item_returns_back(self) -> None:
         """Selecting '← Back' menu item returns BACK."""
@@ -246,31 +447,36 @@ class TestPickRecentWorkspaceSubScreen:
 class TestPickTeamRepoSubScreen:
     """Test pick_team_repo() - sub-screen picker.
 
-    Golden rule: Sub-screens return BACK on cancel (Esc/q), never None.
+    Three-state contract for sub-screens:
+    - Esc: returns BACK (go back to previous screen)
+    - q: returns None (quit app entirely)
+    - Selection: returns workspace path string
     """
 
     def test_escape_returns_back(self) -> None:
-        """Esc on sub-screen returns BACK (not None)."""
+        """Esc on sub-screen returns BACK (go back to previous screen)."""
         repos = [{"name": "api", "url": "https://github.com/org/api"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = None  # Simulates Esc
+            # With allow_back=True, underlying picker returns BACK for Esc
+            mock_picker.return_value = BACK
 
             result = pick_team_repo(repos)
 
             assert result is BACK
             assert result is not None
 
-    def test_quit_returns_back(self) -> None:
-        """Q on sub-screen returns BACK (not None)."""
+    def test_quit_returns_none(self) -> None:
+        """Q on sub-screen returns None (quit app entirely)."""
         repos = [{"name": "api", "url": "https://github.com/org/api"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = None  # Simulates q
+            # With allow_back=True, underlying picker returns None for q
+            mock_picker.return_value = None
 
             result = pick_team_repo(repos)
 
-            assert result is BACK
+            assert result is None
 
     def test_back_menu_item_returns_back(self) -> None:
         """Selecting '← Back' menu item returns BACK."""
@@ -455,12 +661,13 @@ class TestNavigationContract:
     """Golden tests for the navigation contract.
 
     These tests protect the fundamental navigation semantics:
-    - Top-level: cancel → None
-    - Sub-screen: cancel → BACK
+    - Top-level (allow_back=False): cancel → None
+    - Top-level (allow_back=True): Esc → BACK, q → None
+    - Sub-screen: Esc → BACK, q → None (three-state contract)
     """
 
     def test_top_level_cancel_is_none_not_back(self) -> None:
-        """CRITICAL: Top-level cancel must be None, never BACK."""
+        """CRITICAL: Top-level cancel (allow_back=False) must be None, never BACK."""
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             mock_picker.return_value = None
 
@@ -469,37 +676,53 @@ class TestNavigationContract:
             assert result is None
             assert result is not BACK
 
-    def test_subscreen_cancel_is_back_not_none(self) -> None:
-        """CRITICAL: Sub-screen cancel must be BACK, never None."""
+    def test_subscreen_escape_returns_back(self) -> None:
+        """CRITICAL: Sub-screen Esc must return BACK (go back to previous)."""
         recent = [{"workspace": "/tmp", "last_used": "2025-01-01T00:00:00Z"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = None
+            # With allow_back=True, underlying picker returns BACK for Esc
+            mock_picker.return_value = BACK
 
             result = pick_recent_workspace(recent)
 
             assert result is BACK
             assert result is not None
 
-    def test_back_sentinel_distinguishes_cancel_from_data(self) -> None:
-        """BACK sentinel allows type-safe distinction from valid data."""
-        # This test documents the expected usage pattern
+    def test_subscreen_quit_returns_none(self) -> None:
+        """CRITICAL: Sub-screen q must return None (quit app entirely)."""
+        recent = [{"workspace": "/tmp", "last_used": "2025-01-01T00:00:00Z"}]
 
-        # Simulating wizard flow
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            # With allow_back=True, underlying picker returns None for q
+            mock_picker.return_value = None
+
+            result = pick_recent_workspace(recent)
+
+            assert result is None
+
+    def test_back_sentinel_distinguishes_back_from_quit(self) -> None:
+        """BACK sentinel allows type-safe distinction from quit (None)."""
+        # This test documents the three-state contract usage pattern
+
+        # Simulating wizard flow with proper three-state handling
         def wizard_step() -> str | None:
-            """Outer wizard returns None on cancel, str on success."""
+            """Outer wizard returns None on quit/cancel, str on success."""
             with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
                 mock_picker.return_value = WorkspaceSource.RECENT
                 source = pick_workspace_source()
 
                 if source is None:
-                    return None  # User cancelled wizard
+                    return None  # User cancelled wizard (Esc or q at top level)
 
                 if source == WorkspaceSource.RECENT:
-                    mock_picker.return_value = None  # Simulate Esc
+                    # Simulate Esc on sub-screen → BACK
+                    mock_picker.return_value = BACK
                     result = pick_recent_workspace(
                         [{"workspace": "/tmp", "last_used": "2025-01-01T00:00:00Z"}]
                     )
+                    if result is None:
+                        return None  # User pressed q - quit app
                     if result is BACK:
                         # Go back to source picker (handled by outer loop)
                         return None  # For this test, just return None
@@ -510,3 +733,29 @@ class TestNavigationContract:
         # The pattern works - no type errors, clear semantics
         outcome = wizard_step()
         assert outcome is None  # BACK was handled correctly
+
+    def test_three_state_contract_with_allow_back(self) -> None:
+        """CRITICAL: With allow_back=True, picker returns three distinct values.
+
+        This test documents the three-state contract:
+        - WorkspaceSource: User selected an option (Success)
+        - BACK: User pressed Esc (go back to previous screen)
+        - None: User pressed q (quit app entirely)
+        """
+        with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+            # Test 1: Selection returns WorkspaceSource
+            mock_picker.return_value = WorkspaceSource.RECENT
+            result = pick_workspace_source(allow_back=True)
+            assert isinstance(result, WorkspaceSource)
+            assert result == WorkspaceSource.RECENT
+
+            # Test 2: Esc returns BACK (via picker returning BACK)
+            mock_picker.return_value = BACK
+            result = pick_workspace_source(allow_back=True)
+            assert result is BACK
+            assert result is not None
+
+            # Test 3: q returns None (via picker returning None)
+            # Note: This requires the underlying picker to distinguish,
+            # but from wizard's perspective, None means quit
+            # The actual None case is tested in TestPickWorkspaceSourceTopLevel

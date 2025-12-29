@@ -61,6 +61,36 @@ class TestWorkContext:
         )
         assert ctx.display_label == "platform · api-service · feature-auth"
 
+    def test_team_label_returns_team_name(self) -> None:
+        """team_label returns team name when set."""
+        ctx = WorkContext(
+            team="platform",
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="main",
+        )
+        assert ctx.team_label == "platform"
+
+    def test_team_label_returns_standalone_when_none(self) -> None:
+        """team_label returns 'standalone' when team is None."""
+        ctx = WorkContext(
+            team=None,
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="main",
+        )
+        assert ctx.team_label == "standalone"
+
+    def test_display_label_standalone_mode(self) -> None:
+        """Display label shows 'standalone' for team=None."""
+        ctx = WorkContext(
+            team=None,
+            repo_root=Path("/home/user/my-project"),
+            worktree_path=Path("/home/user/my-project"),
+            worktree_name="main",
+        )
+        assert ctx.display_label == "standalone · my-project · main"
+
     def test_unique_key_property(self) -> None:
         """Unique key is (team, repo_root, worktree_path)."""
         ctx = WorkContext(
@@ -105,6 +135,23 @@ class TestWorkContext:
         assert ctx.last_session_id is None
         assert ctx.pinned is False
         # last_used should have a default
+
+    def test_standalone_context_serialization_roundtrip(self) -> None:
+        """Standalone context (team=None) serializes and deserializes correctly."""
+        original = WorkContext(
+            team=None,
+            repo_root=Path("/code/personal-project"),
+            worktree_path=Path("/code/personal-project"),
+            worktree_name="main",
+            last_session_id="sess-standalone",
+        )
+        data = original.to_dict()
+        assert data["team"] is None  # Explicitly None in JSON
+
+        restored = WorkContext.from_dict(data)
+        assert restored.team is None
+        assert restored.team_label == "standalone"
+        assert restored.display_label == "standalone · personal-project · main"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

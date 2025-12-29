@@ -32,7 +32,8 @@ class TestChromeConfigFactoryMethods:
         assert "navigate" in hint_actions
         assert "select" in hint_actions
         assert "teams" in hint_actions
-        assert "cancel" in hint_actions
+        assert "back" in hint_actions
+        assert "quit" in hint_actions
 
     def test_for_picker_includes_item_count_in_subtitle(self) -> None:
         """for_picker() includes item count in subtitle when using deprecated item_count."""

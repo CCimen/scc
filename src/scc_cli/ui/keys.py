@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import readchar
 
@@ -82,6 +82,25 @@ class RefreshRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class SessionResumeRequested(Exception):  # noqa: N818
+    """Raised when user presses Enter on a session to resume it.
+
+    This is a control flow signal that allows the dashboard to request
+    resuming a specific session without coupling to CLI logic.
+
+    The orchestrator (run_dashboard) catches this and calls the resume flow.
+
+    Attributes:
+        session: Session dict containing workspace, team, name, etc.
+        return_to: Tab name to restore after flow (e.g., "SESSIONS").
+    """
+
+    def __init__(self, session: dict[str, Any], return_to: str = "") -> None:
+        self.session = session
+        self.return_to = return_to
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -104,7 +123,33 @@ class ActionType(Enum):
     TAB_PREV = auto()  # Shift+Tab
     TEAM_SWITCH = auto()  # 't' - switch to team selection
     REFRESH = auto()  # 'r' - reload data
+    NEW_SESSION = auto()  # 'n' - start new session (explicit action)
     CUSTOM = auto()  # Action key defined by caller
+    NOOP = auto()  # Unrecognized key - no action
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BACK Sentinel for navigation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class _BackSentinel:
+    """Sentinel class for back navigation.
+
+    Use identity comparison: `if result is BACK`
+
+    This sentinel signals that the user wants to go back to the previous screen
+    (pressed Esc), as opposed to quitting the application entirely (pressed q).
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "BACK"
+
+
+BACK: _BackSentinel = _BackSentinel()
+"""Sentinel value indicating user wants to go back to previous screen."""
 
 
 @dataclass
@@ -155,6 +200,8 @@ DEFAULT_KEY_MAP: dict[str, ActionType] = {
     readchar.key.BACKSPACE: ActionType.FILTER_DELETE,
     # Team switching
     "t": ActionType.TEAM_SWITCH,
+    # New session (explicit action in Quick Resume)
+    "n": ActionType.NEW_SESSION,
 }
 
 
@@ -195,7 +242,7 @@ def is_printable(key: str) -> bool:
     # Exclude keys with special bindings
     # (they'll be handled by the key map first)
     # NOTE: 'r' is NOT here - it's a filterable char. Dashboard handles 'r' explicitly.
-    special_keys = {"q", "?", "a", "j", "k", " ", "t"}
+    special_keys = {"q", "?", "a", "j", "k", " ", "t", "n"}
     return key not in special_keys
 
 
@@ -238,8 +285,8 @@ def map_key_to_action(
     """
     # Priority 1: When filter is active, certain mapped keys become filter characters
     # (user is typing, arrow keys still work for navigation)
-    # j/k = vim navigation, t = team switch, a = toggle all - all filterable when typing
-    if filter_active and enable_filter and key in ("j", "k", "t", "a"):
+    # j/k = vim navigation, t = team switch, a = toggle all, n = new session - all filterable when typing
+    if filter_active and enable_filter and key in ("j", "k", "t", "a", "n"):
         return Action(
             action_type=ActionType.FILTER_CHAR,
             filter_char=key,
@@ -273,7 +320,7 @@ def map_key_to_action(
         )
 
     # No action - key not recognized
-    return Action(action_type=ActionType.NAVIGATE_UP, state_changed=False)
+    return Action(action_type=ActionType.NOOP, state_changed=False)
 
 
 class KeyReader:

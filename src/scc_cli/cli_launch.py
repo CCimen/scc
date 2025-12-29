@@ -32,14 +32,15 @@ from .cli_common import (
     handle_errors,
 )
 from .constants import WORKTREE_BRANCH_PREFIX
-from .contexts import WorkContext, load_recent_contexts, record_context
+from .contexts import WorkContext, load_recent_contexts, normalize_path, record_context
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
-from .exit_codes import EXIT_CONFIG
+from .exit_codes import EXIT_CONFIG, EXIT_USAGE
 from .json_output import build_envelope
 from .kinds import Kind
 from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from .output_mode import json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .ui.gate import is_interactive_allowed
 from .ui.picker import (
     QuickResumeResult,
     TeamSwitchRequested,
@@ -64,24 +65,57 @@ def _resolve_session_selection(
     resume: bool,
     select: bool,
     cfg: dict[str, Any],
+    *,
+    json_mode: bool = False,
+    standalone_override: bool = False,
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """
     Handle session selection logic for --select, --resume, and interactive modes.
 
+    Args:
+        workspace: Workspace path from command line.
+        team: Team name from command line.
+        resume: Whether --resume flag is set.
+        select: Whether --select flag is set.
+        cfg: Loaded configuration.
+        json_mode: Whether --json output is requested (blocks interactive).
+        standalone_override: Whether --standalone flag is set (overrides config).
+
     Returns:
         Tuple of (workspace, team, session_name, worktree_name)
         If user cancels or no session found, workspace will be None.
+
+    Raises:
+        typer.Exit: If interactive mode required but not allowed (non-TTY, CI, --json).
     """
     session_name = None
     worktree_name = None
 
     # Interactive mode if no workspace provided and no session flags
     if workspace is None and not resume and not select:
-        workspace, team, session_name, worktree_name = interactive_start(cfg)
+        # Check TTY gating before entering interactive mode
+        if not is_interactive_allowed(json_mode=json_mode):
+            console.print(
+                "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
+                "[dim]Provide a workspace path: scc start /path/to/project[/dim]",
+                highlight=False,
+            )
+            raise typer.Exit(EXIT_USAGE)
+        workspace, team, session_name, worktree_name = interactive_start(
+            cfg, standalone_override=standalone_override
+        )
         return workspace, team, session_name, worktree_name
 
     # Handle --select: interactive session picker
     if select and workspace is None:
+        # Check TTY gating before showing session picker
+        if not is_interactive_allowed(json_mode=json_mode):
+            console.print(
+                "[red]Error:[/red] --select requires a terminal (TTY).\n"
+                "[dim]Use --resume to auto-select most recent session.[/dim]",
+                highlight=False,
+            )
+            raise typer.Exit(EXIT_USAGE)
         recent_sessions = sessions.list_recent(limit=10)
         if not recent_sessions:
             console.print("[yellow]No recent sessions found.[/yellow]")
@@ -92,6 +126,9 @@ def _resolve_session_selection(
         workspace = selected.get("workspace")
         if not team:
             team = selected.get("team")
+        # --standalone overrides any team from session (standalone means no team)
+        if standalone_override:
+            team = None
         console.print(f"[dim]Selected: {workspace}[/dim]")
 
     # Handle --resume: auto-select most recent session
@@ -101,6 +138,9 @@ def _resolve_session_selection(
             workspace = recent_session.get("workspace")
             if not team:
                 team = recent_session.get("team")
+            # --standalone overrides any team from session (standalone means no team)
+            if standalone_override:
+                team = None
             console.print(f"[dim]Resuming: {workspace}[/dim]")
         else:
             console.print("[yellow]No recent sessions found.[/yellow]")
@@ -191,6 +231,11 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     """
     Validate team profile and inject settings into Docker sandbox.
 
+    IMPORTANT: This function must remain cache-only (no network calls).
+    It's called in offline mode where only cached org config is available.
+    If you need to add network operations, gate them with an offline check
+    or move them to _sync_marketplace_settings() which is already offline-aware.
+
     Raises:
         typer.Exit: If team profile is not found.
     """
@@ -198,6 +243,7 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
         return
 
     with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
+        # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
 
         validation = teams.validate_team_profile(team, cfg, org_config=org_config)
@@ -368,13 +414,22 @@ def _launch_sandbox(
         repo_root = git.get_worktree_main_repo(workspace_path) or workspace_path
         worktree_name = workspace_path.name
         context = WorkContext(
-            team=team or "base",
+            team=team,  # Keep None for standalone mode (don't use "base")
             repo_root=repo_root,
             worktree_path=workspace_path,
             worktree_name=worktree_name,
+            branch=current_branch,  # For Quick Resume branch highlighting
             last_session_id=session_name,
         )
-        record_context(context)
+        # Context recording is best-effort - failure should never block sandbox launch
+        # (Quick Resume is a convenience feature, not critical path)
+        try:
+            record_context(context)
+        except (OSError, ValueError) as e:
+            # Log to stderr only in debug mode, don't interrupt user flow
+            import logging
+
+            logging.debug(f"Failed to record context for Quick Resume: {e}")
 
     # Show launch info and execute
     _show_launch_panel(
@@ -508,8 +563,31 @@ def start(
 
     If no arguments provided, launches interactive mode.
     """
+    # ── Step 0: Handle --standalone mode (skip org config entirely) ───────────
+    if standalone:
+        # In standalone mode, never ask for team and never load org config
+        team = None
+        if not json_output and not pretty:
+            console.print("[dim]Running in standalone mode (no organization config)[/dim]")
+
+    # ── Step 0.5: Handle --offline mode (cache-only, fail fast) ───────────────
+    if offline and not standalone:
+        # Check if cached org config exists
+        cached = config.load_cached_org_config()
+        if cached is None:
+            console.print(
+                "[red]Error:[/red] --offline requires cached organization config.\n"
+                "[dim]Run 'scc setup' first to cache your org config.[/dim]",
+                highlight=False,
+            )
+            raise typer.Exit(EXIT_CONFIG)
+        if not json_output and not pretty:
+            console.print("[dim]Using cached organization config (offline mode)[/dim]")
+
     # ── Step 1: First-run detection ──────────────────────────────────────────
-    if setup.is_setup_needed():
+    # Skip setup wizard in standalone mode (no org config needed)
+    # Skip in offline mode (can't fetch remote - already validated cache exists)
+    if not standalone and not offline and setup.is_setup_needed():
         if not setup.maybe_run_setup(console):
             raise typer.Exit(1)
 
@@ -526,6 +604,8 @@ def start(
         resume=resume,
         select=select,
         cfg=cfg,
+        json_mode=(json_output or pretty),
+        standalone_override=standalone,
     )
     if workspace is None and (select or resume):
         raise typer.Exit(1)
@@ -543,11 +623,15 @@ def start(
     workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps)
 
     # ── Step 6: Team configuration ───────────────────────────────────────────
-    if not dry_run:
+    # Skip team config in standalone mode (no org config to apply)
+    # In offline mode, team config still applies from cached org config
+    if not dry_run and not standalone:
         _configure_team_settings(team, cfg)
 
         # ── Step 6.5: Sync marketplace settings ────────────────────────────────
-        _sync_marketplace_settings(workspace_path, team)
+        # Skip sync in offline mode (can't fetch remote data)
+        if not offline:
+            _sync_marketplace_settings(workspace_path, team)
 
     # ── Step 6.6: Handle --dry-run (preview without launching) ────────────────
     if dry_run:
@@ -623,7 +707,7 @@ def _show_launch_panel(
             display_path = "..." + display_path[-PATH_TRUNCATE_LENGTH:]
         grid.add_row("Workspace:", display_path)
 
-    grid.add_row("Team:", team or "base")
+    grid.add_row("Team:", team or "standalone")
 
     if branch:
         grid.add_row("Branch:", branch)
@@ -665,7 +749,7 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
     grid.add_row("Workspace:", workspace)
 
     # Team
-    grid.add_row("Team:", data.get("team") or "base")
+    grid.add_row("Team:", data.get("team") or "standalone")
 
     # Plugins
     plugins = data.get("plugins", [])
@@ -702,7 +786,11 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
 
 
 def interactive_start(
-    cfg: dict[str, Any], *, skip_quick_resume: bool = False
+    cfg: dict[str, Any],
+    *,
+    skip_quick_resume: bool = False,
+    allow_back: bool = False,
+    standalone_override: bool = False,
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Guide user through interactive session setup.
 
@@ -710,11 +798,19 @@ def interactive_start(
     and session naming.
 
     The flow prioritizes quick resume by showing recent contexts first:
-    1. Recent Contexts (quick resume) - if contexts exist and skip_quick_resume=False
-    2. Team selection - if no context selected (skipped in standalone mode)
-    3. Workspace source selection
-    4. Worktree creation (optional)
-    5. Session naming (optional)
+    0. Global Quick Resume - if contexts exist and skip_quick_resume=False
+    1. Team selection - if no context selected (skipped in standalone mode)
+    2. Workspace source selection
+    2.5. Workspace-scoped Quick Resume - if contexts exist for selected workspace
+    3. Worktree creation (optional)
+    4. Session naming (optional)
+
+    Navigation Semantics:
+    - 'q' anywhere: Quit wizard entirely (returns None)
+    - Esc at Step 0: BACK to dashboard (if allow_back) or skip to Step 1
+    - Esc at Step 2: Go back to Step 1 (if team exists) or BACK to dashboard
+    - Esc at Step 2.5: Go back to Step 2 workspace picker
+    - 't' anywhere: Restart at Step 1 (team selection)
 
     Args:
         cfg: Application configuration dictionary containing workspace_base
@@ -723,21 +819,32 @@ def interactive_start(
             directly to project source selection. Used when starting from
             dashboard empty states (no_containers, no_sessions) where resume
             doesn't make sense.
+        allow_back: If True, Esc at top level returns BACK sentinel instead
+            of None. Used when called from Dashboard to enable return to
+            dashboard on Esc.
+        standalone_override: If True, force standalone mode regardless of
+            config. Used when --standalone CLI flag is passed.
 
     Returns:
-        Tuple of (workspace, team, session_name, worktree_name). All values
-        may be None if user cancels at any step.
+        Tuple of (workspace, team, session_name, worktree_name).
+        - Success: (path, team, session, worktree) with path always set
+        - Cancel: (None, None, None, None) if user pressed q
+        - Back: (BACK, None, None, None) if allow_back and user pressed Esc
     """
     ui.show_header(console)
 
     # Determine mode: standalone vs organization
-    standalone_mode = config.is_standalone_mode()
+    # CLI --standalone flag overrides config setting
+    standalone_mode = standalone_override or config.is_standalone_mode()
 
     # Get available teams (from org config if available)
     org_config = config.load_cached_org_config()
     available_teams = teams.list_teams(cfg, org_config)
 
-    # Step 0: Recent Contexts (quick resume)
+    # Track if user dismissed global Quick Resume (to skip workspace-scoped QR)
+    user_dismissed_quick_resume = False
+
+    # Step 0: Global Quick Resume
     # Skip when: entering from dashboard empty state (skip_quick_resume=True)
     # User can press 't' to switch teams (raises TeamSwitchRequested → skip to Step 1)
     if not skip_quick_resume:
@@ -761,8 +868,17 @@ def interactive_start(
                                 None,  # worktree_name - not creating new worktree
                             )
 
+                    case QuickResumeResult.BACK:
+                        # User pressed Esc - go back if we can (Dashboard context)
+                        if allow_back:
+                            return (BACK, None, None, None)  # type: ignore[return-value]
+                        # CLI context: no previous screen, treat as skip
+                        user_dismissed_quick_resume = True
+                        console.print()
+
                     case QuickResumeResult.NEW_SESSION:
-                        # User pressed Esc - continue with normal wizard flow
+                        # User pressed 'n' - continue with normal wizard flow
+                        user_dismissed_quick_resume = True
                         console.print()
 
                     case QuickResumeResult.CANCELLED:
@@ -771,6 +887,8 @@ def interactive_start(
 
             except TeamSwitchRequested:
                 # User pressed 't' - skip to team selection (Step 1)
+                # Reset Quick Resume dismissal so new team's contexts are shown
+                user_dismissed_quick_resume = False
                 console.print()
         else:
             # First-time hint: no recent contexts yet
@@ -779,83 +897,215 @@ def interactive_start(
             )
             console.print()
 
-    # Step 1: Select team (mode-aware handling)
-    team: str | None = None
+    # ─────────────────────────────────────────────────────────────────────────
+    # MEGA-LOOP: Wraps Steps 1-2.5 to handle 't' key (TeamSwitchRequested)
+    # When user presses 't' anywhere, we restart from Step 1 (team selection)
+    # ─────────────────────────────────────────────────────────────────────────
+    while True:
+        # Step 1: Select team (mode-aware handling)
+        team: str | None = None
 
-    if standalone_mode:
-        # P0.1: Standalone mode - skip team picker entirely
-        # Solo devs don't need team selection friction
-        console.print("[dim]Running in standalone mode (no organization config)[/dim]")
-        console.print()
-    elif not available_teams:
-        # P0.2: Org mode with no teams configured - exit with clear error
-        # Get org URL for context in error message
-        user_cfg = config.load_user_config()
-        org_source = user_cfg.get("organization_source", {})
-        org_url = org_source.get("url", "unknown")
+        if standalone_mode:
+            # P0.1: Standalone mode - skip team picker entirely
+            # Solo devs don't need team selection friction
+            # Only print banner if detected from config (CLI --standalone already printed in start())
+            if not standalone_override:
+                console.print("[dim]Running in standalone mode (no organization config)[/dim]")
+            console.print()
+        elif not available_teams:
+            # P0.2: Org mode with no teams configured - exit with clear error
+            # Get org URL for context in error message
+            user_cfg = config.load_user_config()
+            org_source = user_cfg.get("organization_source", {})
+            org_url = org_source.get("url", "unknown")
 
-        console.print()
-        console.print(
-            create_warning_panel(
-                "No Teams Configured",
-                f"Organization config from: {org_url}\n"
-                "No team profiles are defined in this organization.",
-                "Contact your admin to add profiles, or use: scc start --standalone",
+            console.print()
+            console.print(
+                create_warning_panel(
+                    "No Teams Configured",
+                    f"Organization config from: {org_url}\n"
+                    "No team profiles are defined in this organization.",
+                    "Contact your admin to add profiles, or use: scc start --standalone",
+                )
             )
-        )
-        console.print()
-        raise typer.Exit(EXIT_CONFIG)
-    else:
-        # Normal flow: org mode with teams available
-        team = ui.select_team(console, cfg)
+            console.print()
+            raise typer.Exit(EXIT_CONFIG)
+        else:
+            # Normal flow: org mode with teams available
+            team = ui.select_team(console, cfg)
 
-    # Step 2: Select workspace source (with back navigation support)
-    # Using new wizard pickers with clean BACK semantics:
-    # - Top-level: None = cancel wizard
-    # - Sub-screens: BACK = go back, never None
-    workspace: str | None = None
+        # Step 2: Select workspace source (with back navigation support)
+        workspace: str | None = None
 
-    # Check if team has repositories configured
-    team_config = cfg.get("profiles", {}).get(team, {}) if team else {}
-    team_repos: list[dict[str, Any]] = team_config.get("repositories", [])
-    has_team_repos = bool(team_repos)
+        # Check if team has repositories configured (must be inside mega-loop since team can change)
+        team_config = cfg.get("profiles", {}).get(team, {}) if team else {}
+        team_repos: list[dict[str, Any]] = team_config.get("repositories", [])
+        has_team_repos = bool(team_repos)
 
-    while workspace is None:
-        # Top-level picker: None = cancel
-        source = pick_workspace_source(
-            has_team_repos=has_team_repos, team=team, standalone=standalone_mode
-        )
+        try:
+            # Outer loop: allows Step 2.5 to go BACK to Step 2 (workspace picker)
+            while True:
+                # Step 2: Workspace selection loop
+                while workspace is None:
+                    # Top-level picker: supports three-state contract
+                    source = pick_workspace_source(
+                        has_team_repos=has_team_repos,
+                        team=team,
+                        standalone=standalone_mode,
+                        allow_back=allow_back or (team is not None),
+                    )
 
-        if source is None:
-            return None, None, None, None
+                    # Handle three-state return contract
+                    if source is BACK:
+                        if team is not None:
+                            # Esc in org mode: go back to Step 1 (team selection)
+                            raise TeamSwitchRequested()  # Will be caught by mega-loop
+                        elif allow_back:
+                            # Esc in standalone mode with allow_back: return to dashboard
+                            return (BACK, None, None, None)  # type: ignore[return-value]
+                        else:
+                            # Esc in standalone CLI mode: cancel wizard
+                            return (None, None, None, None)
 
-        if source == WorkspaceSource.RECENT:
-            recent = sessions.list_recent(10)
-            picker_result = pick_recent_workspace(recent, standalone=standalone_mode)
-            if picker_result is BACK:
-                continue  # Go back to source picker
-            workspace = cast(str, picker_result)  # Type narrowing after BACK check
+                    if source is None:
+                        # q pressed: quit entirely
+                        return (None, None, None, None)
 
-        elif source == WorkspaceSource.TEAM_REPOS:
-            workspace_base = cfg.get("workspace_base", "~/projects")
-            picker_result = pick_team_repo(team_repos, workspace_base, standalone=standalone_mode)
-            if picker_result is BACK:
-                continue  # Go back to source picker
-            workspace = cast(str, picker_result)  # Type narrowing after BACK check
+                    if source == WorkspaceSource.CURRENT_DIR:
+                        # Detect workspace root from CWD (handles subdirs + worktrees)
+                        detected_root, _start_cwd = git.detect_workspace_root(Path.cwd())
+                        if detected_root:
+                            workspace = str(detected_root)
+                        else:
+                            # Fall back to CWD if no workspace root detected
+                            workspace = str(Path.cwd())
 
-        elif source == WorkspaceSource.CUSTOM:
-            workspace = ui.prompt_custom_workspace(console)
-            # Empty input means go back
-            if workspace is None:
-                continue
+                    elif source == WorkspaceSource.RECENT:
+                        recent = sessions.list_recent(10)
+                        picker_result = pick_recent_workspace(recent, standalone=standalone_mode)
+                        if picker_result is None:
+                            return (None, None, None, None)  # User pressed q - quit wizard
+                        if picker_result is BACK:
+                            continue  # User pressed Esc - go back to source picker
+                        workspace = cast(str, picker_result)
 
-        elif source == WorkspaceSource.CLONE:
-            repo_url = ui.prompt_repo_url(console)
-            if repo_url:
-                workspace = git.clone_repo(repo_url, cfg.get("workspace_base", "~/projects"))
-            # Empty URL means go back
-            if workspace is None:
-                continue
+                    elif source == WorkspaceSource.TEAM_REPOS:
+                        workspace_base = cfg.get("workspace_base", "~/projects")
+                        picker_result = pick_team_repo(
+                            team_repos, workspace_base, standalone=standalone_mode
+                        )
+                        if picker_result is None:
+                            return (None, None, None, None)  # User pressed q - quit wizard
+                        if picker_result is BACK:
+                            continue  # User pressed Esc - go back to source picker
+                        workspace = cast(str, picker_result)
+
+                    elif source == WorkspaceSource.CUSTOM:
+                        workspace = ui.prompt_custom_workspace(console)
+                        # Empty input means go back
+                        if workspace is None:
+                            continue
+
+                    elif source == WorkspaceSource.CLONE:
+                        repo_url = ui.prompt_repo_url(console)
+                        if repo_url:
+                            workspace = git.clone_repo(
+                                repo_url, cfg.get("workspace_base", "~/projects")
+                            )
+                        # Empty URL means go back
+                        if workspace is None:
+                            continue
+
+                # ─────────────────────────────────────────────────────────────────
+                # Step 2.5: Workspace-scoped Quick Resume
+                # After selecting a workspace, check if existing contexts exist
+                # and offer to resume one instead of starting fresh
+                # ─────────────────────────────────────────────────────────────────
+                normalized_workspace = normalize_path(workspace)
+
+                # Smart filter: Match contexts related to this workspace AND team
+                workspace_contexts = []
+                for ctx in load_recent_contexts(limit=30):
+                    # Filter by team in org mode (prevents cross-team resume confusion)
+                    if team is not None and ctx.team != team:
+                        continue
+
+                    # Case 1: Exact worktree match (fastest check)
+                    if ctx.worktree_path == normalized_workspace:
+                        workspace_contexts.append(ctx)
+                        continue
+
+                    # Case 2: User picked repo root - show all worktree contexts for this repo
+                    if ctx.repo_root == normalized_workspace:
+                        workspace_contexts.append(ctx)
+                        continue
+
+                    # Case 3: User picked a subdir - match if inside a known worktree/repo
+                    try:
+                        if normalized_workspace.is_relative_to(ctx.worktree_path):
+                            workspace_contexts.append(ctx)
+                            continue
+                        if normalized_workspace.is_relative_to(ctx.repo_root):
+                            workspace_contexts.append(ctx)
+                    except ValueError:
+                        # is_relative_to raises ValueError if paths are on different drives
+                        pass
+
+                # Skip workspace-scoped Quick Resume if user already dismissed global Quick Resume
+                if workspace_contexts and not user_dismissed_quick_resume:
+                    console.print()
+
+                    # Use flag pattern for control flow (avoid continue inside match block)
+                    go_back_to_workspace = False
+
+                    result, selected_context = pick_context_quick_resume(
+                        workspace_contexts,
+                        title=f"Resume session in {Path(workspace).name}?",
+                        subtitle="Existing sessions found for this workspace",
+                        standalone=standalone_mode,
+                    )
+                    # Note: TeamSwitchRequested bubbles up to mega-loop handler
+
+                    match result:
+                        case QuickResumeResult.SELECTED:
+                            # User wants to resume - return context info immediately
+                            if selected_context is not None:
+                                return (
+                                    str(selected_context.worktree_path),
+                                    selected_context.team,
+                                    selected_context.last_session_id,
+                                    None,  # worktree_name - not creating new worktree
+                                )
+
+                        case QuickResumeResult.NEW_SESSION:
+                            # User pressed 'n' - continue with fresh session
+                            pass  # Fall through to break below
+
+                        case QuickResumeResult.BACK:
+                            # User pressed Esc - go back to workspace picker (Step 2)
+                            go_back_to_workspace = True
+
+                        case QuickResumeResult.CANCELLED:
+                            # User pressed q - cancel entire wizard
+                            return (None, None, None, None)
+
+                    # Handle flag-based control flow outside match block
+                    if go_back_to_workspace:
+                        workspace = None
+                        continue  # Continue outer loop to re-enter Step 2
+
+                # No contexts or user dismissed global Quick Resume - proceed to Step 3
+                break  # Exit outer loop (Step 2 + 2.5)
+
+        except TeamSwitchRequested:
+            # User pressed 't' somewhere - restart at Step 1 (team selection)
+            # Reset Quick Resume dismissal so new team's contexts are shown
+            user_dismissed_quick_resume = False
+            console.print()
+            continue  # Continue mega-loop
+
+        # Successfully got a workspace - exit mega-loop
+        break
 
     # Step 3: Worktree option
     worktree_name = None
@@ -878,7 +1128,9 @@ def interactive_start(
     return workspace, team, session_name, worktree_name
 
 
-def run_start_wizard_flow(*, skip_quick_resume: bool = False) -> bool:
+def run_start_wizard_flow(
+    *, skip_quick_resume: bool = False, allow_back: bool = False
+) -> bool | None:
     """Run the interactive start wizard and launch sandbox.
 
     This is the shared entrypoint for starting sessions from both the CLI
@@ -887,33 +1139,43 @@ def run_start_wizard_flow(*, skip_quick_resume: bool = False) -> bool:
     The function runs outside any Rich Live context to avoid nested Live
     conflicts. It handles the complete flow:
     1. Run interactive wizard to get user selections
-    2. If user cancels, return False
+    2. If user cancels, return False/None
     3. Otherwise, validate and launch the sandbox
 
     Args:
         skip_quick_resume: If True, bypass the Quick Resume picker and go
             directly to project source selection. Used when starting from
             dashboard empty states where "resume" doesn't make sense.
+        allow_back: If True, Esc returns BACK sentinel (for dashboard context).
+            If False, Esc returns None (for CLI context).
 
     Returns:
         True if sandbox was launched successfully.
-        False if user cancelled or an error occurred.
+        False if user pressed Esc to go back (only when allow_back=True).
+        None if user pressed q to quit or an error occurred.
     """
     # Step 1: First-run detection
     if setup.is_setup_needed():
         if not setup.maybe_run_setup(console):
-            return False
+            return None  # Error during setup
 
     cfg = config.load_config()
 
     # Step 2: Run interactive wizard
+    # Note: standalone_override=False (default) is correct here - dashboard path
+    # doesn't have CLI flags, so we rely on config.is_standalone_mode() inside
+    # interactive_start() to detect standalone mode from user's config file.
     workspace, team, session_name, worktree_name = interactive_start(
-        cfg, skip_quick_resume=skip_quick_resume
+        cfg, skip_quick_resume=skip_quick_resume, allow_back=allow_back
     )
 
-    # User cancelled at some point
+    # Three-state return handling:
+    # - workspace is BACK → user pressed Esc (go back to dashboard)
+    # - workspace is None → user pressed q (quit app)
+    if workspace is BACK:
+        return False  # Go back to dashboard
     if workspace is None:
-        return False
+        return None  # Quit app
 
     try:
         # Step 3: Docker availability check

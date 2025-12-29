@@ -43,6 +43,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.text import Text
 
+from ..contexts import normalize_path
 from .chrome import Chrome, ChromeConfig
 from .formatters import (
     format_container,
@@ -51,7 +52,7 @@ from .formatters import (
     format_team,
     format_worktree,
 )
-from .keys import ActionType, KeyReader, TeamSwitchRequested
+from .keys import BACK, ActionType, KeyReader, TeamSwitchRequested
 from .list_screen import ListItem, ListMode, ListScreen, ListState
 
 # Re-export for backwards compatibility
@@ -69,14 +70,16 @@ T = TypeVar("T")
 class QuickResumeResult(Enum):
     """Result of the Quick Resume picker interaction.
 
-    This enum distinguishes between three distinct user intents:
+    This enum distinguishes between four distinct user intents:
     - SELECTED: User pressed Enter to resume the highlighted context
-    - NEW_SESSION: User pressed Esc to skip resume and start fresh
-    - CANCELLED: User pressed q to cancel the entire wizard
+    - NEW_SESSION: User pressed 'n' to explicitly start a new session
+    - BACK: User pressed Esc to go back to the previous screen
+    - CANCELLED: User pressed 'q' to quit the application entirely
     """
 
     SELECTED = "selected"
     NEW_SESSION = "new_session"
+    BACK = "back"
     CANCELLED = "cancelled"
 
 
@@ -332,12 +335,14 @@ def pick_context_quick_resume(
     title: str = "Recent Contexts",
     subtitle: str | None = None,
     standalone: bool = False,
+    current_branch: str | None = None,
 ) -> tuple[QuickResumeResult, WorkContext | None]:
-    """Show Quick Resume picker with 3-way result semantics.
+    """Show Quick Resume picker with 4-way result semantics.
 
-    This picker distinguishes between three user intents:
+    This picker distinguishes between four user intents:
     - Enter: Resume the selected context (SELECTED)
-    - Esc: Skip resume, start a new session (NEW_SESSION)
+    - n: Explicitly start a new session (NEW_SESSION)
+    - Esc: Go back to previous screen (BACK)
     - q: Cancel the entire wizard (CANCELLED)
 
     Args:
@@ -345,6 +350,8 @@ def pick_context_quick_resume(
         title: Title shown in chrome header.
         subtitle: Optional subtitle (defaults to showing Esc hint).
         standalone: If True, dim the "t teams" hint (not available without org).
+        current_branch: Current git branch from CWD, used to highlight
+            contexts matching this branch with a ★ indicator.
 
     Returns:
         Tuple of (QuickResumeResult, selected WorkContext or None).
@@ -360,14 +367,28 @@ def pick_context_quick_resume(
         ...         resume_session(context)
         ...     case QuickResumeResult.NEW_SESSION:
         ...         start_new_session()
+        ...     case QuickResumeResult.BACK:
+        ...         continue  # Go back to previous screen
         ...     case QuickResumeResult.CANCELLED:
         ...         return  # Exit wizard
     """
     if not contexts:
         return (QuickResumeResult.NEW_SESSION, None)
 
-    # Convert contexts to list items using formatter
-    items = [format_context(context) for context in contexts]
+    # Query running containers for status indicators
+    running_workspaces = _get_running_workspaces()
+
+    # Convert contexts to list items with status and branch indicators
+    items = [
+        format_context(
+            context,
+            is_running=str(context.worktree_path) in running_workspaces,
+            is_current_branch=(
+                current_branch is not None and context.worktree_name == current_branch
+            ),
+        )
+        for context in contexts
+    ]
 
     return _run_quick_resume_picker(
         items=items,
@@ -377,12 +398,37 @@ def pick_context_quick_resume(
     )
 
 
+def _get_running_workspaces() -> set[str]:
+    """Get set of workspace paths with running containers.
+
+    Paths are normalized (resolved symlinks, expanded ~) via normalize_path()
+    to ensure consistent comparison with context.worktree_path.
+
+    Returns an empty set if Docker is not available or on error.
+    This allows the picker to work without Docker status indicators.
+    """
+    try:
+        from ..docker import list_scc_containers
+
+        containers = list_scc_containers()
+        # Normalize paths using the same function as WorkContext for consistency
+        return {
+            str(normalize_path(c.workspace))
+            for c in containers
+            if c.workspace and c.status.startswith("Up")
+        }
+    except Exception:
+        # Docker not available or error - return empty set
+        return set()
+
+
 def _run_single_select_picker(
     items: list[ListItem[T]],
     *,
     title: str,
     subtitle: str | None = None,
     standalone: bool = False,
+    allow_back: bool = False,
 ) -> T | None:
     """Run the interactive single-selection picker loop.
 
@@ -390,16 +436,18 @@ def _run_single_select_picker(
     - Rendering the list with chrome
     - Processing keyboard input
     - Managing navigation and filtering state
-    - Returning selection on Enter or None on cancel
+    - Returning selection on Enter, BACK on Esc (if allow_back), or None on quit
 
     Args:
         items: List items to display.
         title: Title for chrome header.
         subtitle: Optional subtitle.
         standalone: If True, dim the "t teams" hint (not available without org).
+        allow_back: If True, Esc returns BACK sentinel (for sub-screens).
+            If False, Esc returns None (for top-level screens).
 
     Returns:
-        Value from selected item, or None if cancelled.
+        Value from selected item, BACK if allow_back and Esc pressed, or None if quit.
     """
     if not items:
         return None
@@ -478,7 +526,14 @@ def _run_single_select_picker(
                         return current.value
                     return None
 
-                case ActionType.CANCEL | ActionType.QUIT:
+                case ActionType.CANCEL:
+                    # Esc: back to previous screen (if allowed) or cancel
+                    if allow_back:
+                        return BACK  # type: ignore[return-value]
+                    return None
+
+                case ActionType.QUIT:
+                    # q: always quit entirely
                     return None
 
                 case ActionType.TEAM_SWITCH:
@@ -492,6 +547,9 @@ def _run_single_select_picker(
                 case ActionType.FILTER_DELETE:
                     state.delete_filter_char()
 
+                case ActionType.NOOP:
+                    pass  # Unrecognized key - no action needed
+
             if action.state_changed:
                 live.update(render(), refresh=True)
 
@@ -503,11 +561,12 @@ def _run_quick_resume_picker(
     subtitle: str | None = None,
     standalone: bool = False,
 ) -> tuple[QuickResumeResult, T | None]:
-    """Run the Quick Resume picker with 3-way result semantics.
+    """Run the Quick Resume picker with 4-way result semantics.
 
     Unlike the standard single-select picker, this distinguishes between:
     - Enter: Resume the selected context (SELECTED)
-    - Esc: Skip resume, continue to project source (NEW_SESSION)
+    - n: Explicitly start a new session (NEW_SESSION)
+    - Esc: Go back to previous screen (BACK)
     - q: Cancel the entire wizard (CANCELLED)
 
     Args:
@@ -594,12 +653,16 @@ def _run_quick_resume_picker(
                         return (QuickResumeResult.SELECTED, current.value)
                     return (QuickResumeResult.NEW_SESSION, None)
 
-                case ActionType.CANCEL:
-                    # Esc = skip resume, continue to project source
+                case ActionType.NEW_SESSION:
+                    # n = explicitly start new session (skip resume)
                     return (QuickResumeResult.NEW_SESSION, None)
 
+                case ActionType.CANCEL:
+                    # Esc = go back to previous screen
+                    return (QuickResumeResult.BACK, None)
+
                 case ActionType.QUIT:
-                    # q = cancel entire wizard
+                    # q = quit app entirely
                     return (QuickResumeResult.CANCELLED, None)
 
                 case ActionType.TEAM_SWITCH:
@@ -611,6 +674,9 @@ def _run_quick_resume_picker(
 
                 case ActionType.FILTER_DELETE:
                     state.delete_filter_char()
+
+                case ActionType.NOOP:
+                    pass  # Unrecognized key - no action needed
 
             if action.state_changed:
                 live.update(render(), refresh=True)

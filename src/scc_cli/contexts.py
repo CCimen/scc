@@ -52,7 +52,7 @@ def _parse_dt(s: str) -> datetime:
         return datetime.fromtimestamp(0, tz=timezone.utc)
 
 
-def _normalize_path(p: str | Path) -> Path:
+def normalize_path(p: str | Path) -> Path:
     """Normalize a path for consistent comparison.
 
     Uses strict=False to avoid errors on non-existent paths while still
@@ -75,19 +75,27 @@ class WorkContext:
     that a developer was working in.
 
     Attributes:
-        team: The team profile name (e.g., "platform", "data").
+        team: The team profile name (e.g., "platform", "data"), or None for standalone mode.
         repo_root: Absolute path to the repository root.
         worktree_path: Absolute path to the worktree (may equal repo_root for main).
-        worktree_name: Human-readable worktree name (e.g., "main", "feature-auth").
+        worktree_name: Directory name of the worktree (stable identifier).
+        branch: Git branch name at time of last use (metadata, can change).
         last_session_id: Optional session ID from last work in this context.
         last_used: When this context was last used (ISO format string).
         pinned: Whether this context is pinned to the top of the list.
+
+    Note:
+        worktree_name is the directory name (stable), while branch is metadata
+        that can change. Display uses branch (if available) with worktree_name
+        as fallback. This prevents context records from becoming "lost" when
+        a user switches branches within the same worktree.
     """
 
-    team: str
+    team: str | None
     repo_root: Path
     worktree_path: Path
     worktree_name: str
+    branch: str | None = None
     last_session_id: str | None = None
     last_used: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     pinned: bool = False
@@ -98,12 +106,23 @@ class WorkContext:
         return self.repo_root.name
 
     @property
-    def display_label(self) -> str:
-        """Format for display in lists: 'team · repo · worktree'."""
-        return f"{self.team} · {self.repo_name} · {self.worktree_name}"
+    def team_label(self) -> str:
+        """Return team name or 'standalone' for display."""
+        return self.team if self.team else "standalone"
 
     @property
-    def unique_key(self) -> tuple[str, Path, Path]:
+    def display_label(self) -> str:
+        """Format for display in lists: 'team · repo · branch/worktree'.
+
+        Uses branch name if available, otherwise falls back to worktree directory name.
+        This provides meaningful labels (branch names) while maintaining stability
+        (directory names don't change when branches switch).
+        """
+        name = self.branch or self.worktree_name
+        return f"{self.team_label} · {self.repo_name} · {name}"
+
+    @property
+    def unique_key(self) -> tuple[str | None, Path, Path]:
         """Unique identifier for deduplication: (team, repo_root, worktree_path)."""
         return (self.team, self.repo_root, self.worktree_path)
 
@@ -114,6 +133,7 @@ class WorkContext:
             "repo_root": str(self.repo_root),
             "worktree_path": str(self.worktree_path),
             "worktree_name": self.worktree_name,
+            "branch": self.branch,
             "last_session_id": self.last_session_id,
             "last_used": self.last_used,
             "pinned": self.pinned,
@@ -121,12 +141,16 @@ class WorkContext:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WorkContext:
-        """Create from dictionary (JSON deserialization)."""
+        """Create from dictionary (JSON deserialization).
+
+        Handles backward compatibility for contexts without branch field.
+        """
         return cls(
             team=data["team"],
-            repo_root=_normalize_path(data["repo_root"]),
-            worktree_path=_normalize_path(data["worktree_path"]),
+            repo_root=normalize_path(data["repo_root"]),
+            worktree_path=normalize_path(data["worktree_path"]),
             worktree_name=data["worktree_name"],
+            branch=data.get("branch"),  # Optional, may not exist in old records
             last_session_id=data.get("last_session_id"),
             last_used=data.get("last_used", datetime.now(timezone.utc).isoformat()),
             pinned=data.get("pinned", False),
@@ -205,13 +229,14 @@ def load_recent_contexts(limit: int = 10) -> list[WorkContext]:
 def _merge_contexts(existing: WorkContext, incoming: WorkContext) -> WorkContext:
     """Merge incoming context update with existing context.
 
-    Preserves pinned status, updates timestamps and session info.
+    Preserves pinned status, updates timestamps, session info, and branch.
     """
     return WorkContext(
         team=incoming.team,
         repo_root=incoming.repo_root,
         worktree_path=incoming.worktree_path,
         worktree_name=incoming.worktree_name,
+        branch=incoming.branch or existing.branch,  # Prefer new, fallback to existing
         last_session_id=incoming.last_session_id or existing.last_session_id,
         last_used=datetime.now(timezone.utc).isoformat(),
         pinned=existing.pinned,  # Preserve pinned status
@@ -235,9 +260,10 @@ def record_context(context: WorkContext) -> None:
     # Normalize the incoming context paths
     normalized = WorkContext(
         team=context.team,
-        repo_root=_normalize_path(context.repo_root),
-        worktree_path=_normalize_path(context.worktree_path),
+        repo_root=normalize_path(context.repo_root),
+        worktree_path=normalize_path(context.worktree_path),
         worktree_name=context.worktree_name,
+        branch=context.branch,  # Preserve branch for Quick Resume display
         last_session_id=context.last_session_id,
         last_used=datetime.now(timezone.utc).isoformat(),
         pinned=context.pinned,
@@ -288,7 +314,7 @@ def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> b
     """
     # Load all contexts as WorkContext objects (normalizes paths once)
     contexts = [WorkContext.from_dict(d) for d in _load_contexts_raw()]
-    key = (team, _normalize_path(repo_root), _normalize_path(worktree_path))
+    key = (team, normalize_path(repo_root), normalize_path(worktree_path))
 
     for i, ctx in enumerate(contexts):
         if ctx.unique_key == key:
@@ -298,6 +324,7 @@ def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> b
                 repo_root=ctx.repo_root,
                 worktree_path=ctx.worktree_path,
                 worktree_name=ctx.worktree_name,
+                branch=ctx.branch,  # Preserve branch metadata
                 last_session_id=ctx.last_session_id,
                 last_used=ctx.last_used,
                 pinned=not ctx.pinned,
@@ -332,7 +359,7 @@ def get_context_for_path(worktree_path: str | Path, team: str | None = None) -> 
     Returns:
         Matching context or None.
     """
-    normalized = _normalize_path(worktree_path)
+    normalized = normalize_path(worktree_path)
     contexts = load_recent_contexts(limit=MAX_CONTEXTS)
 
     for ctx in contexts:
