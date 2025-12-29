@@ -4,6 +4,7 @@ Tests HTTP fetching, auth resolution, and caching for organization configs.
 Uses the `responses` library for HTTP mocking.
 """
 
+import copy
 import hashlib
 import json
 import os
@@ -441,6 +442,15 @@ class TestIsCacheValid:
 
         assert remote.is_cache_valid(meta) is False
 
+    def test_cache_valid_with_naive_datetime(self):
+        """Naive datetime should be treated as UTC for cache validity."""
+        future_time = datetime.now().replace(microsecond=0)
+        future_time = future_time.replace(year=future_time.year + 1)
+
+        meta = {"org_config": {"expires_at": future_time.isoformat()}}
+
+        assert remote.is_cache_valid(meta) is True
+
     def test_cache_missing_expires_at(self):
         """Should return False if expires_at is missing."""
         meta = {"org_config": {}}
@@ -478,6 +488,32 @@ class TestLoadOrgConfig:
         config = remote.load_org_config(user_config)
 
         assert config is None
+
+    def test_fetch_failure_with_cache_warns_and_returns_cache(self, sample_org_config):
+        """Fetch failure should warn and fall back to stale cache."""
+        user_config = {
+            "organization_source": {
+                "url": "https://example.org/config.json",
+                "auth": None,
+            },
+        }
+        meta = {
+            "org_config": {
+                "etag": '"etag"',
+                "expires_at": "2020-01-01T00:00:00+00:00",
+            }
+        }
+
+        with (
+            mock.patch("scc_cli.remote.load_from_cache", return_value=(sample_org_config, meta)),
+            mock.patch("scc_cli.remote.is_cache_valid", return_value=False),
+            mock.patch("scc_cli.remote.fetch_org_config", return_value=(None, None, -2)),
+            mock.patch("scc_cli.remote.print_human") as mock_print,
+        ):
+            config = remote.load_org_config(user_config)
+
+        assert config == sample_org_config
+        mock_print.assert_called()
 
     @responses.activate
     def test_fetches_from_remote_when_cache_expired(
@@ -712,6 +748,33 @@ class TestValidationGate:
         # Config should be cached
         cache_file = temp_cache_dir / "org_config.json"
         assert cache_file.exists()
+
+    @responses.activate
+    def test_incompatible_min_cli_version_raises(
+        self, sample_org_config, temp_cache_dir, monkeypatch
+    ):
+        """Incompatible min_cli_version should raise ConfigValidationError."""
+        monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
+
+        incompatible = copy.deepcopy(sample_org_config)
+        incompatible["min_cli_version"] = "99.0.0"
+
+        url = "https://example.org/config.json"
+        responses.add(
+            responses.GET,
+            url,
+            json=incompatible,
+            status=200,
+            headers={"ETag": '"test-etag"'},
+        )
+
+        user_config = {"organization_source": {"url": url, "auth": None}}
+
+        with pytest.raises(remote.ConfigValidationError):
+            remote.load_org_config(user_config)
+
+        cache_file = temp_cache_dir / "org_config.json"
+        assert not cache_file.exists()
 
     @responses.activate
     def test_schema_error_raises_config_validation_error(self, temp_cache_dir, monkeypatch):

@@ -154,6 +154,56 @@ scc config explain --workspace /path/to/project
 
 Each setting shows its source (org.defaults, team.X, project) and any blocked or denied items.
 
+### Team & Workspace Behavior
+
+SCC supports multi-project workflows where different workspaces may be associated with different teams.
+
+#### Workspace-Team Pinning
+
+When you launch a session, SCC remembers which team was used:
+
+```
+~/.config/scc/config.json:
+{
+  "workspace_team_map": {
+    "/home/user/backend-api": "platform",
+    "/home/user/frontend-app": "web-team"
+  }
+}
+```
+
+On subsequent launches:
+1. If workspace has a pinned team different from global selection, SCC prompts for confirmation
+2. Interactive mode shows the pinned team context in picker headers
+3. The mapping updates automatically when you switch teams in a workspace
+
+#### Session-Only Team Override
+
+The `--team` flag affects only the current session without changing your global default:
+
+```bash
+scc start --team security ~/project    # Uses security team for this session only
+scc team show                          # Still shows original global team
+```
+
+This is useful for:
+- Testing with different team configs
+- Quick switches without disrupting muscle memory
+- CI/CD with explicit team targeting
+
+#### Config Precedence
+
+Settings are resolved in order (later overrides earlier):
+
+1. **Defaults** — Built-in SCC defaults
+2. **Organization config** — Remote org policies (`security`, `defaults`, `delegation`)
+3. **Team profile** — Team-specific plugins/servers (within delegation limits)
+4. **Project config** — `.scc.yaml` additions (within delegation limits)
+5. **Environment** — `SCC_*` environment variables
+6. **Flags** — CLI flags (`--team`, `--standalone`, `--offline`)
+
+Security blocks are applied at merge time and cannot be overridden by any layer.
+
 ## Security Model
 
 Docker provides process isolation, not containment of a malicious model.
@@ -623,6 +673,7 @@ All commands use consistent exit codes defined in `exit_codes.py`:
 | 4 | `EXIT_VALIDATION` | Validation failed |
 | 5 | `EXIT_PREREQ` | Prerequisites not met |
 | 6 | `EXIT_GOVERNANCE` | Blocked by governance policy |
+| 130 | `EXIT_CANCELLED` | User cancelled operation (Esc/Ctrl+C) |
 
 ### JSON Envelope
 

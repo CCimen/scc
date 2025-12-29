@@ -105,11 +105,7 @@ class TestDryRunTeamConfig:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        mock_org = {
-            "profiles": [
-                {"name": "platform", "description": "Platform team"},
-            ]
-        }
+        mock_org = {"profiles": {"platform": {"description": "Platform team"}}}
 
         with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
             with patch(
@@ -262,14 +258,14 @@ class TestBuildDryRunData:
         from scc_cli.cli_launch import build_dry_run_data
 
         mock_org = {
-            "profiles": [
-                {
-                    "name": "platform",
-                    "plugins": [
-                        {"name": "github-copilot"},
-                    ],
+            "delegation": {"teams": {"allow_additional_plugins": ["*"]}},
+            "profiles": {
+                "platform": {
+                    "additional_plugins": [
+                        "github-copilot",
+                    ]
                 }
-            ]
+            },
         }
 
         result = build_dry_run_data(

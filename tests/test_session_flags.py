@@ -15,6 +15,7 @@ import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
+from scc_cli.exit_codes import EXIT_CANCELLED, EXIT_USAGE
 
 runner = CliRunner()
 
@@ -229,9 +230,8 @@ class TestSelectFlag:
         ):
             result = runner.invoke(app, ["start", "--select"])
 
-        # User cancellation with --select exits with code 1 (explicit flag, no session selected)
-        # This differs from interactive mode which exits 0 on cancel
-        assert result.exit_code == 1
+        # User cancellation should exit with EXIT_CANCELLED
+        assert result.exit_code == EXIT_CANCELLED
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -415,6 +415,18 @@ class TestSmartWorkspaceDetection:
         assert result.exit_code != 0
         output = strip_ansi(result.output.lower())
         assert "workspace" in output or "detected" in output
+
+    def test_non_interactive_flag_requires_workspace(self):
+        """--non-interactive should fail fast when interactive input is needed."""
+        with (
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=False) as mock_allowed,
+        ):
+            result = runner.invoke(app, ["start", "--non-interactive"])
+
+        assert result.exit_code == EXIT_USAGE
+        assert mock_allowed.call_args.kwargs.get("no_interactive_flag") is True
 
     def test_interactive_flag_bypasses_detection(self, mock_sessions_list):
         """The -i flag should force interactive mode even when workspace can be detected."""

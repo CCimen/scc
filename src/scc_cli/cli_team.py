@@ -399,6 +399,16 @@ def team_switch(
     if previous and previous != resolved_name:
         print_human(f"[dim]Previous: {previous}[/dim]")
 
+    details = teams.get_team_details(resolved_name, cfg, org_config=org_config)
+    if details:
+        description = details.get("description")
+        plugin = details.get("plugin") or "none"
+        marketplace = details.get("marketplace") or "default"
+        if description:
+            print_human(f"[dim]Description:[/dim] {description}")
+        print_human(f"[dim]Plugin:[/dim] {plugin}")
+        print_human(f"[dim]Marketplace:[/dim] {marketplace}")
+
     # Display federation status
     if fetch_result is not None:
         if fetch_result.success:

@@ -16,7 +16,7 @@ from unittest.mock import patch
 import click
 import pytest
 
-from scc_cli.git import WorktreeInfo
+from scc_cli.git import WorktreeInfo, render_worktrees
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for Worktree CLI Structure
@@ -233,6 +233,18 @@ class TestWorktreeList:
         output = json.loads(captured.out)
         assert output["data"]["worktrees"] == []
         assert output["data"]["count"] == 0
+
+    def test_render_worktrees_detached_branch_shows_label(self) -> None:
+        """Detached worktrees should show a 'detached' label instead of blank."""
+        from rich.console import Console
+
+        console = Console(record=True, width=120)
+        worktrees = [WorktreeInfo(path="/repo", branch="", status="")]
+
+        render_worktrees(worktrees, console)
+
+        output = console.export_text()
+        assert "detached" in output.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

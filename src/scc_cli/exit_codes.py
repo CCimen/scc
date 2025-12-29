@@ -19,6 +19,9 @@ EXIT_VALIDATION = 4  # Validation failed (schema, semantic checks)
 EXIT_PREREQ = 5  # Prerequisites not met (Docker, Git)
 EXIT_GOVERNANCE = 6  # Blocked by governance policy
 
+# Cancellation (SIGINT convention)
+EXIT_CANCELLED = 130  # User cancelled operation (SIGINT)
+
 # Map exception types to exit codes (for json_command decorator)
 # Note: Import from errors module only when needed to avoid circular imports
 EXIT_CODE_MAP = {

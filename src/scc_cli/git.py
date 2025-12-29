@@ -37,6 +37,7 @@ from .panels import (
     create_warning_panel,
 )
 from .subprocess_utils import run_command, run_command_bool, run_command_lines
+from .utils.locks import file_lock, lock_path
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants
@@ -644,60 +645,84 @@ def create_worktree(
     worktree_base = repo_path.parent / f"{repo_path.name}-worktrees"
     worktree_path = worktree_base / safe_name
 
-    # Check if already exists
-    if worktree_path.exists():
-        raise WorktreeExistsError(path=str(worktree_path))
+    lock_file = lock_path("worktree", repo_path)
+    with file_lock(lock_file):
+        # Check if already exists
+        if worktree_path.exists():
+            raise WorktreeExistsError(path=str(worktree_path))
 
-    # Determine base branch
-    if not base_branch:
-        base_branch = get_default_branch(repo_path)
+        # Determine base branch
+        if not base_branch:
+            base_branch = get_default_branch(repo_path)
 
-    console.print()
-    console.print(
-        create_info_panel(
-            "Creating Worktree", f"Feature: {safe_name}", f"Location: {worktree_path}"
+        console.print()
+        console.print(
+            create_info_panel(
+                "Creating Worktree", f"Feature: {safe_name}", f"Location: {worktree_path}"
+            )
         )
-    )
-    console.print()
+        console.print()
 
-    # Multi-step progress
-    steps: list[tuple[str, Callable[[], None]]] = [
-        ("Fetching latest changes", lambda: _fetch_branch(repo_path, base_branch)),
-        (
-            "Creating worktree",
-            lambda: _create_worktree_dir(
-                repo_path, worktree_path, branch_name, base_branch, worktree_base
-            ),
-        ),
-        ("Installing dependencies", lambda: install_dependencies(worktree_path, console)),
-    ]
+        worktree_created = False
 
-    for step_name, step_func in steps:
-        with console.status(f"[cyan]{step_name}...[/cyan]", spinner="dots"):
-            try:
-                step_func()
-            except subprocess.CalledProcessError as e:
+        def _install_deps() -> None:
+            success = install_dependencies(worktree_path, console)
+            if not success:
                 raise WorktreeCreationError(
                     name=safe_name,
-                    command=" ".join(e.cmd) if hasattr(e, "cmd") else None,
-                    stderr=e.stderr.decode() if e.stderr else None,
+                    user_message="Dependency install failed for the new worktree",
+                    suggested_action="Install dependencies manually and retry if needed",
                 )
-        console.print(f"  [green]✓[/green] {step_name}")
 
-    console.print()
-    console.print(
-        create_success_panel(
-            "Worktree Ready",
-            {
-                "Path": str(worktree_path),
-                "Branch": branch_name,
-                "Base": base_branch,
-                "Next": f"cd {worktree_path}",
-            },
+        # Multi-step progress
+        steps: list[tuple[str, Callable[[], None]]] = [
+            ("Fetching latest changes", lambda: _fetch_branch(repo_path, base_branch)),
+            (
+                "Creating worktree",
+                lambda: _create_worktree_dir(
+                    repo_path, worktree_path, branch_name, base_branch, worktree_base
+                ),
+            ),
+            ("Installing dependencies", _install_deps),
+        ]
+
+        try:
+            for step_name, step_func in steps:
+                with console.status(f"[cyan]{step_name}...[/cyan]", spinner="dots"):
+                    try:
+                        step_func()
+                    except subprocess.CalledProcessError as e:
+                        raise WorktreeCreationError(
+                            name=safe_name,
+                            command=" ".join(e.cmd) if hasattr(e, "cmd") else None,
+                            stderr=e.stderr.decode() if e.stderr else None,
+                        )
+                console.print(f"  [green]✓[/green] {step_name}")
+                if step_name == "Creating worktree":
+                    worktree_created = True
+        except KeyboardInterrupt:
+            if worktree_created or worktree_path.exists():
+                _cleanup_partial_worktree(repo_path, worktree_path)
+            raise
+        except WorktreeCreationError:
+            if worktree_created or worktree_path.exists():
+                _cleanup_partial_worktree(repo_path, worktree_path)
+            raise
+
+        console.print()
+        console.print(
+            create_success_panel(
+                "Worktree Ready",
+                {
+                    "Path": str(worktree_path),
+                    "Branch": branch_name,
+                    "Base": base_branch,
+                    "Next": f"cd {worktree_path}",
+                },
+            )
         )
-    )
 
-    return worktree_path
+        return worktree_path
 
 
 def _fetch_branch(repo_path: Path, branch: str) -> None:
@@ -714,10 +739,58 @@ def _fetch_branch(repo_path: Path, branch: str) -> None:
     )
     if result.returncode != 0:
         error_msg = result.stderr.strip() if result.stderr else "Unknown fetch error"
+        lower = error_msg.lower()
+        user_message = f"Failed to fetch branch '{branch}'"
+        suggested_action = "Check the branch name and your network connection"
+
+        if "couldn't find remote ref" in lower or "remote ref" in lower and "not found" in lower:
+            user_message = f"Branch '{branch}' not found on origin"
+            suggested_action = "Check the branch name or fetch remote branches"
+        elif "could not resolve host" in lower or "failed to connect" in lower:
+            user_message = "Network error while fetching from origin"
+            suggested_action = "Check your network or VPN connection"
+        elif "permission denied" in lower or "authentication" in lower:
+            user_message = "Authentication error while fetching from origin"
+            suggested_action = "Check your git credentials and remote access"
+
         raise WorktreeCreationError(
             name=branch,
-            debug_context=f"Failed to fetch branch '{branch}': {error_msg}",
+            user_message=user_message,
+            suggested_action=suggested_action,
+            command=f"git -C {repo_path} fetch origin {branch}",
+            stderr=error_msg,
         )
+
+
+def _cleanup_partial_worktree(repo_path: Path, worktree_path: Path) -> None:
+    """Best-effort cleanup for partially created worktrees."""
+    try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "worktree",
+                "remove",
+                "--force",
+                str(worktree_path),
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+
+    shutil.rmtree(worktree_path, ignore_errors=True)
+
+    try:
+        subprocess.run(
+            ["git", "-C", str(repo_path), "worktree", "prune"],
+            capture_output=True,
+            timeout=30,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
 
 
 def _create_worktree_dir(
@@ -882,17 +955,17 @@ def _render_worktrees_table(worktrees: list[WorktreeInfo], console: Console) -> 
 
     for idx, wt in enumerate(worktrees, 1):
         # Style the branch name
-        wt.branch or Text("detached", style="yellow")
-        is_protected = wt.branch in PROTECTED_BRANCHES
+        is_detached = not wt.branch
+        is_protected = wt.branch in PROTECTED_BRANCHES if wt.branch else False
+        branch_value = wt.branch or "detached"
 
-        if is_protected:
-            branch_display = Text()
-            branch_display.append(wt.branch, style="yellow")
+        if is_protected or is_detached:
+            branch_display = Text(branch_value, style="yellow")
         else:
-            branch_display = Text(wt.branch, style="cyan")
+            branch_display = Text(branch_value, style="cyan")
 
         # Determine status
-        status = wt.status or "active"
+        status = wt.status or ("detached" if is_detached else "active")
         if is_protected:
             status = "protected"
 
@@ -1104,7 +1177,7 @@ def _run_install_cmd(
         return False
 
 
-def install_dependencies(path: Path, console: Console | None = None) -> None:
+def install_dependencies(path: Path, console: Console | None = None) -> bool:
     """Detect and install project dependencies.
 
     Support Node.js (npm/yarn/pnpm/bun), Python (pip/poetry/uv), and
@@ -1115,6 +1188,8 @@ def install_dependencies(path: Path, console: Console | None = None) -> None:
         path: Path to the project directory.
         console: Rich console for output (optional).
     """
+    success = True
+
     # Node.js
     if (path / "package.json").exists():
         if (path / "pnpm-lock.yaml").exists():
@@ -1126,25 +1201,44 @@ def install_dependencies(path: Path, console: Console | None = None) -> None:
         else:
             cmd = ["npm", "install"]
 
-        _run_install_cmd(cmd, path, console, timeout=300)
+        success = _run_install_cmd(cmd, path, console, timeout=300) and success
 
     # Python
     if (path / "pyproject.toml").exists():
         if shutil.which("poetry"):
-            _run_install_cmd(["poetry", "install"], path, console, timeout=300)
+            success = (
+                _run_install_cmd(["poetry", "install"], path, console, timeout=300) and success
+            )
         elif shutil.which("uv"):
-            _run_install_cmd(["uv", "pip", "install", "-e", "."], path, console, timeout=300)
+            success = (
+                _run_install_cmd(["uv", "pip", "install", "-e", "."], path, console, timeout=300)
+                and success
+            )
     elif (path / "requirements.txt").exists():
-        _run_install_cmd(["pip", "install", "-r", "requirements.txt"], path, console, timeout=300)
+        success = (
+            _run_install_cmd(
+                ["pip", "install", "-r", "requirements.txt"],
+                path,
+                console,
+                timeout=300,
+            )
+            and success
+        )
 
     # Java/Maven
     if (path / "pom.xml").exists():
-        _run_install_cmd(["mvn", "dependency:resolve"], path, console, timeout=600)
+        success = (
+            _run_install_cmd(["mvn", "dependency:resolve"], path, console, timeout=600) and success
+        )
 
     # Java/Gradle
     if (path / "build.gradle").exists() or (path / "build.gradle.kts").exists():
         gradle_cmd = "./gradlew" if (path / "gradlew").exists() else "gradle"
-        _run_install_cmd([gradle_cmd, "dependencies"], path, console, timeout=600)
+        success = (
+            _run_install_cmd([gradle_cmd, "dependencies"], path, console, timeout=600) and success
+        )
+
+    return success
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

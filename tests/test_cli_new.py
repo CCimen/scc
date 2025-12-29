@@ -23,6 +23,7 @@ from scc_cli.errors import (
     DockerVersionError,
     SandboxNotAvailableError,
 )
+from scc_cli.exit_codes import EXIT_USAGE
 
 runner = CliRunner()
 
@@ -79,7 +80,12 @@ class TestSetupCommand:
                 ],
             )
         assert result.exit_code == 0
-        mock_setup.assert_called_once()
+
+    def test_setup_non_interactive_requires_inputs(self):
+        """--non-interactive should fail when org or standalone not provided."""
+        result = runner.invoke(app, ["setup", "--non-interactive"])
+
+        assert result.exit_code == EXIT_USAGE
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

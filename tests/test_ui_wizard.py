@@ -148,16 +148,16 @@ class TestPickWorkspaceSourceTopLevel:
 
             assert WorkspaceSource.TEAM_REPOS not in values
 
-    def test_subtitle_shows_team_name(self) -> None:
-        """Subtitle shows team name when provided."""
+    def test_context_label_shows_team_name(self) -> None:
+        """Context label shows team name when provided."""
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             mock_picker.return_value = None
             pick_workspace_source(team="platform")
 
             call_args = mock_picker.call_args
-            subtitle = call_args.kwargs["subtitle"]
+            context_label = call_args.kwargs["context_label"]
 
-            assert "platform" in subtitle.lower()
+            assert context_label == "Team: platform"
 
     def test_subtitle_default_without_team(self) -> None:
         """Subtitle has default when no team specified."""
@@ -168,8 +168,7 @@ class TestPickWorkspaceSourceTopLevel:
             call_args = mock_picker.call_args
             subtitle = call_args.kwargs["subtitle"]
 
-            assert subtitle is not None
-            assert len(subtitle) > 0
+            assert subtitle == "Pick a project source"
 
 
 class TestPickWorkspaceSourceWithAllowBack:

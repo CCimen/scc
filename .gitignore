@@ -54,3 +54,8 @@ CLAUDE.md
 .claude/
 .specify/
 specs/
+.code/
+
+# Local development directories
+plugindocs/
+safetypluginclone/

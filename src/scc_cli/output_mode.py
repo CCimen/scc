@@ -18,19 +18,26 @@ Usage:
 """
 
 import json
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, TextIO
 
-from .cli_common import console
+from rich.console import Console
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Context Variables (Thread-safe, Async-compatible)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _json_mode: ContextVar[bool] = ContextVar("json_mode", default=False)
+_json_command_mode: ContextVar[bool] = ContextVar("json_command_mode", default=False)
 _pretty_mode: ContextVar[bool] = ContextVar("pretty_mode", default=False)
+
+# Console instances for stdout and stderr
+# Rich Console requires file= in constructor, not in print()
+console = Console()
+err_console = Console(stderr=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -58,6 +65,20 @@ def json_output_mode() -> Generator[None, None, None]:
 
 
 @contextmanager
+def json_command_mode() -> Generator[None, None, None]:
+    """Context manager for JSON command handling.
+
+    This signals that errors should be handled by json_command instead of
+    the generic error handler, allowing consistent JSON envelopes.
+    """
+    token = _json_command_mode.set(True)
+    try:
+        yield
+    finally:
+        _json_command_mode.reset(token)
+
+
+@contextmanager
 def pretty_output_mode() -> Generator[None, None, None]:
     """Context manager for pretty-printed JSON output.
 
@@ -78,6 +99,11 @@ def pretty_output_mode() -> Generator[None, None, None]:
 def is_json_mode() -> bool:
     """Check if JSON output mode is active."""
     return _json_mode.get()
+
+
+def is_json_command_mode() -> bool:
+    """Check if JSON command handling mode is active."""
+    return _json_command_mode.get()
 
 
 def is_pretty_mode() -> bool:
@@ -102,7 +128,7 @@ def set_pretty_mode(value: bool) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def print_human(message: str, **kwargs: Any) -> None:
+def print_human(message: str, file: TextIO | None = None, **kwargs: Any) -> None:
     """Print human-readable output.
 
     This is a no-op when JSON mode is active, ensuring clean JSON output
@@ -110,10 +136,15 @@ def print_human(message: str, **kwargs: Any) -> None:
 
     Args:
         message: The message to print (Rich markup supported)
+        file: Output target. Use sys.stderr for warnings/errors.
+            Note: Rich Console requires file in constructor, not print(),
+            so we use a separate err_console for stderr output.
         **kwargs: Additional arguments passed to console.print()
     """
     if not is_json_mode():
-        console.print(message, **kwargs)
+        # Select appropriate console based on file parameter
+        target = err_console if file is sys.stderr else console
+        target.print(message, **kwargs)
 
 
 def print_json(envelope: dict[str, Any]) -> None:

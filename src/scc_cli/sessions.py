@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from . import config
 from .constants import AGENT_CONFIG_DIR
+from .utils.locks import file_lock, lock_path
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Data Classes
@@ -136,37 +137,39 @@ def record_session(
 
     Key sessions by workspace + branch combination.
     """
-    sessions = _load_sessions()
-    now = datetime.now().isoformat()
+    lock_file = lock_path("sessions")
+    with file_lock(lock_file):
+        sessions = _load_sessions()
+        now = datetime.now().isoformat()
 
-    # Find existing session for this workspace+branch
-    existing_idx = None
-    for idx, s in enumerate(sessions):
-        if s.get("workspace") == workspace and s.get("branch") == branch:
-            existing_idx = idx
-            break
+        # Find existing session for this workspace+branch
+        existing_idx = None
+        for idx, s in enumerate(sessions):
+            if s.get("workspace") == workspace and s.get("branch") == branch:
+                existing_idx = idx
+                break
 
-    record = SessionRecord(
-        workspace=workspace,
-        team=team,
-        name=session_name,
-        container_name=container_name,
-        branch=branch,
-        last_used=now,
-        created_at=(
-            sessions[existing_idx].get("created_at", now) if existing_idx is not None else now
-        ),
-    )
+        record = SessionRecord(
+            workspace=workspace,
+            team=team,
+            name=session_name,
+            container_name=container_name,
+            branch=branch,
+            last_used=now,
+            created_at=(
+                sessions[existing_idx].get("created_at", now) if existing_idx is not None else now
+            ),
+        )
 
-    if existing_idx is not None:
-        # Update existing
-        sessions[existing_idx] = record.to_dict()
-    else:
-        # Add new
-        sessions.insert(0, record.to_dict())
+        if existing_idx is not None:
+            # Update existing
+            sessions[existing_idx] = record.to_dict()
+        else:
+            # Add new
+            sessions.insert(0, record.to_dict())
 
-    _save_sessions(sessions)
-    return record
+        _save_sessions(sessions)
+        return record
 
 
 def update_session_container(
@@ -179,16 +182,18 @@ def update_session_container(
 
     Call when a container is created for a session.
     """
-    sessions = _load_sessions()
+    lock_file = lock_path("sessions")
+    with file_lock(lock_file):
+        sessions = _load_sessions()
 
-    for s in sessions:
-        if s.get("workspace") == workspace:
-            if branch is None or s.get("branch") == branch:
-                s["container_name"] = container_name
-                s["last_used"] = datetime.now().isoformat()
-                break
+        for s in sessions:
+            if s.get("workspace") == workspace:
+                if branch is None or s.get("branch") == branch:
+                    s["container_name"] = container_name
+                    s["last_used"] = datetime.now().isoformat()
+                    break
 
-    _save_sessions(sessions)
+        _save_sessions(sessions)
 
 
 def find_session_by_container(container_name: str) -> dict[str, Any] | None:
@@ -251,10 +256,12 @@ def clear_history() -> int:
 
     Return the number of sessions cleared.
     """
-    sessions = _load_sessions()
-    count = len(sessions)
-    _save_sessions([])
-    return count
+    lock_file = lock_path("sessions")
+    with file_lock(lock_file):
+        sessions = _load_sessions()
+        count = len(sessions)
+        _save_sessions([])
+        return count
 
 
 def remove_session(workspace: str, branch: str | None = None) -> bool:
@@ -268,20 +275,22 @@ def remove_session(workspace: str, branch: str | None = None) -> bool:
     Returns:
         True if session was found and removed
     """
-    sessions = _load_sessions()
-    original_count = len(sessions)
+    lock_file = lock_path("sessions")
+    with file_lock(lock_file):
+        sessions = _load_sessions()
+        original_count = len(sessions)
 
-    if branch:
-        sessions = [
-            s
-            for s in sessions
-            if not (s.get("workspace") == workspace and s.get("branch") == branch)
-        ]
-    else:
-        sessions = [s for s in sessions if s.get("workspace") != workspace]
+        if branch:
+            sessions = [
+                s
+                for s in sessions
+                if not (s.get("workspace") == workspace and s.get("branch") == branch)
+            ]
+        else:
+            sessions = [s for s in sessions if s.get("workspace") != workspace]
 
-    _save_sessions(sessions)
-    return len(sessions) < original_count
+        _save_sessions(sessions)
+        return len(sessions) < original_count
 
 
 def prune_orphaned_sessions() -> int:
@@ -290,13 +299,15 @@ def prune_orphaned_sessions() -> int:
 
     Return the number of sessions pruned.
     """
-    sessions = _load_sessions()
-    original_count = len(sessions)
+    lock_file = lock_path("sessions")
+    with file_lock(lock_file):
+        sessions = _load_sessions()
+        original_count = len(sessions)
 
-    valid_sessions = [s for s in sessions if Path(s.get("workspace", "")).expanduser().exists()]
+        valid_sessions = [s for s in sessions if Path(s.get("workspace", "")).expanduser().exists()]
 
-    _save_sessions(valid_sessions)
-    return original_count - len(valid_sessions)
+        _save_sessions(valid_sessions)
+        return original_count - len(valid_sessions)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

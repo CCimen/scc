@@ -29,6 +29,7 @@ import typer
 
 from .errors import ConfigError, PolicyViolationError, PrerequisiteError, SCCError
 from .exit_codes import (
+    EXIT_CANCELLED,
     EXIT_CONFIG,
     EXIT_ERROR,
     EXIT_GOVERNANCE,
@@ -38,7 +39,7 @@ from .exit_codes import (
 )
 from .json_output import build_envelope
 from .kinds import Kind
-from .output_mode import _pretty_mode, json_output_mode, print_json
+from .output_mode import _pretty_mode, json_command_mode, json_output_mode, print_json
 
 # Type variable for decorated functions
 F = TypeVar("F", bound=Callable[..., Any])
@@ -119,7 +120,7 @@ def json_command(kind: Kind) -> Callable[[F], F]:
                 _pretty_mode.set(True)
 
             if json_output:
-                with json_output_mode():
+                with json_output_mode(), json_command_mode():
                     try:
                         # Call the wrapped function
                         result = func(**kwargs)
@@ -132,6 +133,16 @@ def json_command(kind: Kind) -> Callable[[F], F]:
                     except typer.Exit:
                         # Re-raise typer exits (including our own)
                         raise
+
+                    except KeyboardInterrupt:
+                        envelope = build_envelope(
+                            kind,
+                            data={},
+                            ok=False,
+                            errors=["Cancelled"],
+                        )
+                        print_json(envelope)
+                        raise typer.Exit(EXIT_CANCELLED)
 
                     except Exception as e:
                         # Map exception to exit code

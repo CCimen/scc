@@ -178,6 +178,7 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 | `scc start --offline` | Use cached org config only (no network) |
 | `scc start --dry-run` | Preview launch configuration without starting container |
 | `scc start --dry-run --json` | Output launch config as JSON (for CI/automation) |
+| `scc start --non-interactive` | Fail fast instead of prompting (for CI/scripts) |
 | `scc setup` | Configure organization connection |
 | `scc stop` | Stop running sandbox(es) |
 | `scc doctor` | Check system health |
@@ -248,6 +249,71 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 - [Marketplace](docs/MARKETPLACE.md) — plugin distribution and safety-net
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — common problems and solutions
 - [Examples](examples/) — ready-to-use organization config templates
+
+---
+
+## Automation & CI
+
+SCC supports non-interactive operation for CI/CD pipelines and scripting.
+
+### Exit Codes
+
+| Code | Name | Meaning |
+|------|------|---------|
+| 0 | `EXIT_SUCCESS` | Operation completed successfully |
+| 1 | `EXIT_ERROR` | General error |
+| 2 | `EXIT_USAGE` | Invalid command-line usage |
+| 3 | `EXIT_CONFIG` | Configuration error |
+| 4 | `EXIT_VALIDATION` | Validation failure |
+| 5 | `EXIT_PREREQ` | Missing prerequisites |
+| 6 | `EXIT_GOVERNANCE` | Blocked by security policy |
+| 130 | `EXIT_CANCELLED` | User cancelled (Esc/Ctrl+C) |
+
+### JSON Output
+
+Use `--json` for machine-readable output:
+
+```bash
+# Preview launch configuration
+scc start --dry-run --json
+
+# List teams as JSON
+scc team list --json
+
+# Explain config with JSON envelope
+scc config explain --json
+```
+
+JSON envelope format:
+```json
+{
+  "apiVersion": "scc.cli/v1",
+  "kind": "StartDryRun",
+  "metadata": { "timestamp": "...", "version": "..." },
+  "status": { "ok": true },
+  "data": { ... }
+}
+```
+
+### Non-Interactive Mode
+
+Use `--non-interactive` to fail fast instead of prompting:
+
+```bash
+# CI pipeline: fail if workspace not specified
+scc start --non-interactive ~/project
+
+# Require explicit team selection
+scc start --non-interactive --team backend ~/project
+
+# Combine with JSON for full automation
+scc start --dry-run --json --non-interactive ~/project
+```
+
+When `--non-interactive` is set:
+- Missing required inputs cause immediate failure (exit 2)
+- No TUI pickers or prompts are displayed
+- Errors are returned as JSON when `--json` is also set
 
 ---
 
