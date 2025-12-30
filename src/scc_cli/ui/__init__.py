@@ -79,6 +79,15 @@ from .picker import (
     pick_worktree,
 )
 
+# Prompts: Simple Rich-based user input utilities
+from .prompts import (
+    prompt_custom_workspace,
+    prompt_repo_url,
+    render_error,
+    select_session,
+    select_team,
+)
+
 # =============================================================================
 # Package metadata
 # =============================================================================
@@ -106,4 +115,10 @@ __all__ = [
     "ListMode",
     "ListScreen",
     "ListState",
+    # Prompts: Simple Rich-based user input utilities
+    "prompt_custom_workspace",
+    "prompt_repo_url",
+    "render_error",
+    "select_session",
+    "select_team",
 ]

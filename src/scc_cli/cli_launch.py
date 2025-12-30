@@ -25,7 +25,6 @@ from rich.table import Table
 
 from . import config, deps, docker, git, sessions, setup, teams
 from . import platform as platform_module
-from . import ui_legacy as ui
 from .cli_common import (
     MAX_DISPLAY_PATH_LENGTH,
     PATH_TRUNCATE_LENGTH,
@@ -41,11 +40,18 @@ from .kinds import Kind
 from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from .output_mode import json_output_mode, print_human, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .theme import Colors, get_brand_header
 from .ui.gate import is_interactive_allowed
 from .ui.picker import (
     QuickResumeResult,
     TeamSwitchRequested,
     pick_context_quick_resume,
+)
+from .ui.prompts import (
+    prompt_custom_workspace,
+    prompt_repo_url,
+    select_session,
+    select_team,
 )
 from .ui.wizard import (
     BACK,
@@ -133,7 +139,7 @@ def _resolve_session_selection(
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
             return None, team, None, None, False
-        selected = ui.select_session(console, recent_sessions)
+        selected = select_session(console, recent_sessions)
         if selected is None:
             return None, team, None, None, True
         workspace = selected.get("workspace")
@@ -982,7 +988,7 @@ def interactive_start(
         - Cancel: (None, None, None, None) if user pressed q
         - Back: (BACK, None, None, None) if allow_back and user pressed Esc
     """
-    ui.show_header(console)
+    console.print(get_brand_header(), style=Colors.BRAND)
 
     # Determine mode: standalone vs organization
     # CLI --standalone flag overrides config setting
@@ -1090,7 +1096,7 @@ def interactive_start(
             raise typer.Exit(EXIT_CONFIG)
         else:
             # Normal flow: org mode with teams available
-            team = ui.select_team(console, cfg)
+            team = select_team(console, cfg)
 
         # Step 2: Select workspace source (with back navigation support)
         workspace: str | None = None
@@ -1170,13 +1176,13 @@ def interactive_start(
                         workspace = cast(str, picker_result)
 
                     elif source == WorkspaceSource.CUSTOM:
-                        workspace = ui.prompt_custom_workspace(console)
+                        workspace = prompt_custom_workspace(console)
                         # Empty input means go back
                         if workspace is None:
                             continue
 
                     elif source == WorkspaceSource.CLONE:
-                        repo_url = ui.prompt_repo_url(console)
+                        repo_url = prompt_repo_url(console)
                         if repo_url:
                             workspace = git.clone_repo(
                                 repo_url, cfg.get("workspace_base", "~/projects")
