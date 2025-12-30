@@ -330,11 +330,24 @@ graph TD
         UIGate[gate.py]:::ui
         UIList[list_screen.py]:::ui
         UIPicker[picker.py]:::ui
-        UIDash[dashboard.py]:::ui
+        subgraph DashPkg[dashboard/]
+            DashInit[__init__.py]:::ui
+            DashCore[_dashboard.py]:::ui
+            DashModels[models.py]:::ui
+            DashLoaders[loaders.py]:::ui
+            DashOrch[orchestrator.py]:::ui
+        end
         UIChrome[chrome.py]:::ui
         UIKeys[keys.py]:::ui
         UIHelp[help.py]:::ui
         UIWizard[wizard.py]:::ui
+        UIBrand[branding.py]:::ui
+    end
+
+    subgraph Output[Output & Theme]
+        Console[console.py]:::core
+        Theme[theme.py]:::core
+        Panels[panels.py]:::core
     end
 
     subgraph Core[Core & Config]
@@ -381,20 +394,27 @@ graph TD
     Main --> Admin
     Main --> ExcCLI
     Main --> AuditCLI
-    Main --> UIDash
+    Main --> DashCore
 
     Launch --> UIPicker
     Launch --> UIWizard
     Worktree --> UIPicker
     UIWizard --> UIPicker
 
-    UIDash --> UIList
+    DashCore --> UIList
+    DashCore --> DashLoaders
+    DashCore --> DashOrch
+    DashOrch --> DashModels
+    DashLoaders --> DashModels
     UIPicker --> UIList
     UIList --> UIChrome
     UIList --> UIKeys
     UIList --> UIHelp
     UIPicker --> UIGate
-    UIDash --> UIGate
+    DashCore --> UIGate
+    DashCore --> Console
+    UIChrome --> Theme
+    Panels --> Theme
 
     Launch --> DockerLaunch
     Launch --> Config
@@ -439,7 +459,7 @@ graph TD
     Git --> Constants
 ```
 
-This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services, Teal = interactive UI. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output). The `ui/` package provides interactive terminal experiences with consistent chrome, keybindings, and behavior patterns. The `wizard.py` module adds start wizard pickers with BACK sentinel navigation for nested screen flows.
+This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services, Teal = interactive UI. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output). The `ui/` package provides interactive terminal experiences with consistent chrome, keybindings, and behavior patterns. The `ui/dashboard/` package contains four submodules: `_dashboard.py` (core Dashboard class), `models.py` (DashboardState, TabData), `loaders.py` (tab data loading), and `orchestrator.py` (event loop and action dispatch). The `wizard.py` module adds start wizard pickers with BACK sentinel navigation for nested screen flows. The Output & Theme subgraph contains `console.py` (TerminalCaps detection, stream contract enforcement), `theme.py` (design tokens, unicode fallbacks), and `panels.py` (styled panel factories).
 
 Module responsibilities:
 
@@ -479,15 +499,23 @@ Module responsibilities:
 | `marketplace/constants.py` | Marketplace-specific constants (implicit marketplaces, exit codes) | Business logic |
 | `marketplace/managed.py` | Managed state persistence for marketplace operations | Plugin logic |
 | `marketplace/sync.py` | Synchronization of marketplace state | Conflict detection |
+| `console.py` | TerminalCaps detection, stream contract enforcement (stdout=JSON, stderr=Rich), `get_err_console()` factory, `human_status()` wrapper | Business logic |
+| `theme.py` | Design tokens (Colors, Borders, Indicators, Spinners), unicode fallbacks, Rich theme integration | I/O, rendering |
+| `panels.py` | Styled panel factories (`create_error_panel`, `create_success_panel`, etc.) | Business logic |
 | `ui/` | Interactive terminal experiences (package) | Non-TTY output |
 | `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Rendering, business logic |
 | `ui/list_screen.py` | Core navigation engine, state management, key handling | Domain logic |
 | `ui/picker.py` | Selection workflows, Quick Resume with 3-way results, chrome factory | Navigation internals |
-| `ui/dashboard.py` | Tabbed navigation, intent exceptions, toast messages | Selection workflows |
+| `ui/dashboard/` | Tabbed dashboard with container/session management (package) | Selection workflows |
+| `ui/dashboard/_dashboard.py` | Core Dashboard class, tab rendering, two-step Enter key flow | Tab loading, orchestration |
+| `ui/dashboard/models.py` | Data structures (DashboardState, TabData, TabType) | Business logic |
+| `ui/dashboard/loaders.py` | Tab data loading functions (containers, sessions, worktrees) | Rendering |
+| `ui/dashboard/orchestrator.py` | Event loop, action dispatch, intent exception handling | Tab data loading |
 | `ui/wizard.py` | Start wizard pickers with BACK navigation, workspace source selection | Chrome, list internals |
 | `ui/chrome.py` | Layout primitives (headers, footers, hints), standalone mode dimming | State management |
-| `ui/keys.py` | Key mapping internals, action dispatch | Rendering |
+| `ui/keys.py` | Key mapping internals, action dispatch, KEYBINDING_DOCS | Rendering |
 | `ui/help.py` | Mode-aware help overlay | Key handling |
+| `ui/branding.py` | ASCII art header with unicode/ASCII fallback | Business logic |
 
 The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
 
@@ -749,6 +777,48 @@ When extending commands with JSON support:
 2. **Stdout is reserved** — in JSON mode, stdout contains only the envelope
 3. **Stderr for humans** — warnings/progress go to stderr via `print_human()`
 4. **Exit codes matter** — CI tools rely on consistent exit codes; use the constants
+
+### Stream Contract
+
+SCC enforces a strict stream separation contract for reliable CI/automation integration:
+
+| Mode | stdout | stderr |
+|------|--------|--------|
+| `--json` | Valid JSON envelope only | Empty (all output suppressed) |
+| Human | Empty | All Rich UI output (panels, spinners, prompts) |
+
+This enables clean piping: `scc start --dry-run --json | jq .` works without pollution.
+
+**Terminal Capability Detection**
+
+The `TerminalCaps` dataclass in `console.py` centralizes all terminal capability checks:
+
+```python
+@dataclass(frozen=True)
+class TerminalCaps:
+    can_render: bool    # stderr TTY + not JSON mode (panels/tables OK)
+    can_animate: bool   # can_render + TERM != dumb (spinners/progress OK)
+    can_prompt: bool    # stdin TTY + not JSON + not CI + not --no-interactive
+    colors: bool        # NO_COLOR/FORCE_COLOR + stderr TTY check
+    unicode: bool       # encoding + platform heuristics
+```
+
+**Key Patterns**:
+
+- **`get_err_console()`** — Factory function returning stderr-bound Console with theme
+- **`human_status()`** — Context manager that degrades gracefully (spinner → static text → no-op)
+- **`Indicators.get()`** — Symbol lookup with `unicode` parameter for graceful fallback
+
+**Graceful Degradation**:
+
+```
+TTY + animate  → Rich spinners and progress bars
+TTY + !animate → Static "→ message..." / "✓ done" text
+Non-TTY        → Plain text status lines
+JSON mode      → Complete silence (no output)
+```
+
+All UI modules use `get_err_console()` instead of `Console()` to ensure stream contract compliance.
 
 ## Usage Stats
 
