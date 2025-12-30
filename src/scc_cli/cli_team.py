@@ -32,6 +32,35 @@ from .ui.gate import InteractivityContext
 from .ui.picker import TeamSwitchRequested, pick_team
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Display Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _format_plugins_for_display(plugins: list[str], max_display: int = 2) -> str:
+    """Format a list of plugins for table/summary display.
+
+    Args:
+        plugins: List of plugin identifiers (e.g., ["plugin@marketplace", ...])
+        max_display: Maximum number of plugins to show before truncating
+
+    Returns:
+        Formatted string like "plugin1, plugin2 +3 more" or "-" if empty
+    """
+    if not plugins:
+        return "-"
+
+    if len(plugins) <= max_display:
+        # Show all plugin names (without marketplace suffix for brevity)
+        names = [p.split("@")[0] for p in plugins]
+        return ", ".join(names)
+    else:
+        # Show first N and count of remaining
+        names = [p.split("@")[0] for p in plugins[:max_display]]
+        remaining = len(plugins) - max_display
+        return f"{', '.join(names)} +{remaining} more"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Federation Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -196,7 +225,7 @@ def team_list(
             {
                 "name": team["name"],
                 "description": team.get("description", ""),
-                "plugin": team.get("plugin"),
+                "plugins": team.get("plugins", []),
                 "is_current": team["name"] == current,
             }
         )
@@ -234,8 +263,9 @@ def team_list(
             if not verbose and len(desc) > 40:
                 desc = desc[:37] + "..."
 
-            plugin = team.get("plugin") or "-"
-            rows.append([name, desc, plugin])
+            plugins = team.get("plugins", [])
+            plugins_display = _format_plugins_for_display(plugins)
+            rows.append([name, desc, plugins_display])
 
         render_responsive_table(
             title="Available Team Profiles",
@@ -245,7 +275,7 @@ def team_list(
             ],
             rows=rows,
             wide_columns=[
-                ("Plugin", "yellow"),
+                ("Plugins", "yellow"),
             ],
         )
 
@@ -300,15 +330,16 @@ def team_current(
     print_human(f"[bold cyan]Current team:[/bold cyan] {current}")
     if details.get("description"):
         print_human(f"[dim]{details['description']}[/dim]")
-    if details.get("plugin"):
-        print_human(f"[dim]Plugin: {details['plugin']}[/dim]")
+    plugins = details.get("plugins", [])
+    if plugins:
+        print_human(f"[dim]Plugins: {_format_plugins_for_display(plugins)}[/dim]")
 
     return {
         "team": current,
         "profile": {
             "name": details.get("name"),
             "description": details.get("description"),
-            "plugin": details.get("plugin"),
+            "plugins": plugins,
             "marketplace": details.get("marketplace"),
         },
     }
@@ -419,11 +450,11 @@ def team_switch(
     details = teams.get_team_details(resolved_name, cfg, org_config=org_config)
     if details:
         description = details.get("description")
-        plugin = details.get("plugin") or "none"
+        plugins = details.get("plugins", [])
         marketplace = details.get("marketplace") or "default"
         if description:
             print_human(f"[dim]Description:[/dim] {description}")
-        print_human(f"[dim]Plugin:[/dim] {plugin}")
+        print_human(f"[dim]Plugins:[/dim] {_format_plugins_for_display(plugins)}")
         print_human(f"[dim]Marketplace:[/dim] {marketplace}")
 
     # Display federation status
@@ -542,14 +573,15 @@ def team_info(
         else:
             grid.add_row("Mode:", "[dim]inline[/dim]")
 
-        plugin = details.get("plugin")
-        if plugin:
-            marketplace = details.get("marketplace", "sundsvall")
-            grid.add_row("Plugin:", f"{plugin}@{marketplace}")
+        plugins = details.get("plugins", [])
+        if plugins:
+            # Show all plugins with full identifiers
+            plugins_display = ", ".join(plugins)
+            grid.add_row("Plugins:", plugins_display)
             if details.get("marketplace_repo"):
                 grid.add_row("Marketplace:", details.get("marketplace_repo", "-"))
         else:
-            grid.add_row("Plugin:", "[dim]None (base profile)[/dim]")
+            grid.add_row("Plugins:", "[dim]None (base profile)[/dim]")
 
         # Show trust grants for federated teams
         if trust_grants:
@@ -591,7 +623,7 @@ def team_info(
         "profile": {
             "name": details.get("name"),
             "description": details.get("description"),
-            "plugin": details.get("plugin"),
+            "plugins": details.get("plugins", []),
             "marketplace": details.get("marketplace"),
             "marketplace_type": details.get("marketplace_type"),
             "marketplace_repo": details.get("marketplace_repo"),

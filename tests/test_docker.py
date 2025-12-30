@@ -298,7 +298,7 @@ class TestTeamSettingsIntegration:
             "profiles": {
                 "ai-teamet": {
                     "description": "AI platform development",
-                    "plugin": "ai-teamet",
+                    "additional_plugins": ["ai-teamet@sundsvall"],
                 },
             },
         }
@@ -332,7 +332,7 @@ class TestTeamSettingsIntegration:
             "profiles": {
                 "base": {
                     "description": "Default profile",
-                    "plugin": None,
+                    "additional_plugins": [],
                 },
             },
         }

@@ -37,16 +37,17 @@ def mock_org_config():
         "profiles": {
             "platform": {
                 "description": "Platform team configuration",
-                "plugin": "platform-tools",
+                "additional_plugins": ["platform-tools@sundsvall"],
                 "marketplace": "sundsvall",
             },
             "frontend": {
                 "description": "Frontend team configuration",
-                "plugin": "frontend-tools",
+                "additional_plugins": ["frontend-tools@sundsvall"],
                 "marketplace": "sundsvall",
             },
             "base": {
                 "description": "Base configuration without plugins",
+                "additional_plugins": [],
             },
         },
         "marketplaces": [

@@ -33,9 +33,17 @@ def cli_runner() -> CliRunner:
 def sample_teams() -> list[dict]:
     """Sample list of teams for testing."""
     return [
-        {"name": "backend", "description": "Backend development team", "plugin": "backend-tools"},
-        {"name": "frontend", "description": "Frontend development team", "plugin": "frontend-kit"},
-        {"name": "platform", "description": "Platform engineering", "plugin": None},
+        {
+            "name": "backend",
+            "description": "Backend development team",
+            "plugins": ["backend-tools@marketplace"],
+        },
+        {
+            "name": "frontend",
+            "description": "Frontend development team",
+            "plugins": ["frontend-kit@marketplace"],
+        },
+        {"name": "platform", "description": "Platform engineering", "plugins": []},
     ]
 
 
@@ -212,7 +220,7 @@ class TestTeamCurrent:
         team_details = {
             "name": "backend",
             "description": "Backend development team",
-            "plugin": "backend-tools",
+            "plugins": ["backend-tools@marketplace"],
         }
 
         with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
@@ -259,7 +267,7 @@ class TestTeamCurrent:
         team_details = {
             "name": "backend",
             "description": "Backend development team",
-            "plugin": "backend-tools",
+            "plugins": ["backend-tools@marketplace"],
             "marketplace": "internal",
         }
 
@@ -272,7 +280,7 @@ class TestTeamCurrent:
         data = json.loads(result.stdout)
         assert data["status"]["ok"] is True
         assert data["data"]["team"] == "backend"
-        assert data["data"]["profile"]["plugin"] == "backend-tools"
+        assert data["data"]["profile"]["plugins"] == ["backend-tools@marketplace"]
 
     def test_current_json_no_team(self, cli_runner: CliRunner, user_config_no_team: dict) -> None:
         """--json with no team should return null team."""
@@ -413,7 +421,7 @@ class TestTeamInfo:
         team_details = {
             "name": "backend",
             "description": "Backend development team",
-            "plugin": "backend-tools",
+            "plugins": ["backend-tools@marketplace"],
             "marketplace": "internal",
             "marketplace_repo": "https://github.com/acme/plugins",
         }
@@ -429,7 +437,7 @@ class TestTeamInfo:
 
         assert result.exit_code == 0
         assert "backend" in result.stdout.lower()
-        assert "backend-tools" in result.stdout or "plugin" in result.stdout.lower()
+        assert "backend-tools" in result.stdout or "plugins" in result.stdout.lower()
 
     def test_info_team_not_found(self, cli_runner: CliRunner, user_config_with_team: dict) -> None:
         """Should show not found for missing team."""
@@ -453,7 +461,7 @@ class TestTeamInfo:
         team_details = {
             "name": "backend",
             "description": "Backend team",
-            "plugin": "missing-plugin",
+            "plugins": ["missing-plugin@marketplace"],
         }
         validation = {
             "valid": True,
@@ -482,7 +490,7 @@ class TestTeamInfo:
         team_details = {
             "name": "backend",
             "description": "Backend development team",
-            "plugin": "backend-tools",
+            "plugins": ["backend-tools@marketplace"],
             "marketplace": "internal",
             "marketplace_type": "github",
             "marketplace_repo": "https://github.com/acme/plugins",
@@ -501,7 +509,7 @@ class TestTeamInfo:
         data = json.loads(result.stdout)
         assert data["status"]["ok"] is True
         assert data["data"]["found"] is True
-        assert data["data"]["profile"]["plugin"] == "backend-tools"
+        assert data["data"]["profile"]["plugins"] == ["backend-tools@marketplace"]
         assert data["data"]["validation"]["valid"] is True
 
     def test_info_json_output_not_found(
@@ -547,7 +555,7 @@ class TestTeamCommandEdgeCases:
             {
                 "name": "test",
                 "description": "A" * 100,  # Very long description
-                "plugin": None,
+                "plugins": [],
             }
         ]
 
@@ -570,7 +578,7 @@ class TestTeamCommandEdgeCases:
             {
                 "name": "test",
                 "description": "A" * 100,  # Very long description
-                "plugin": None,
+                "plugins": [],
             }
         ]
 
@@ -607,7 +615,7 @@ class TestTeamCommandEdgeCases:
         team_details = {
             "name": "platform",
             "description": "Platform engineering",
-            "plugin": None,  # No plugin
+            "plugins": [],  # No plugins
         }
         validation = {"valid": True, "warnings": [], "errors": []}
 
@@ -669,8 +677,8 @@ class TestTeamSwitchFederated:
     def sample_teams_with_federated(self) -> list[dict]:
         """Sample list of teams including federated team."""
         return [
-            {"name": "backend", "description": "Backend team (inline)", "plugin": None},
-            {"name": "frontend", "description": "Frontend team (federated)", "plugin": None},
+            {"name": "backend", "description": "Backend team (inline)", "plugins": []},
+            {"name": "frontend", "description": "Frontend team (federated)", "plugins": []},
         ]
 
     def test_switch_to_inline_team_does_not_fetch(

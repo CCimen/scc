@@ -23,19 +23,19 @@ def sample_config():
         "profiles": {
             "base": {
                 "description": "Default profile - no team plugin",
-                "plugin": None,
+                "additional_plugins": [],
             },
             "ai-teamet": {
                 "description": "AI platform development (Svelte, Python, DDD)",
-                "plugin": "ai-teamet",
+                "additional_plugins": ["ai-teamet@sundsvall"],
             },
             "team-evolution": {
                 "description": ".NET/C# Metakatalogen development",
-                "plugin": "team-evolution",
+                "additional_plugins": ["team-evolution@sundsvall"],
             },
             "draken": {
                 "description": "Ärendehanteringssystem development",
-                "plugin": "draken",
+                "additional_plugins": ["draken@sundsvall"],
             },
         },
     }
@@ -48,7 +48,7 @@ def minimal_config():
         "profiles": {
             "test-team": {
                 "description": "Test team",
-                "plugin": "test-plugin",
+                "additional_plugins": ["test-plugin@sundsvall"],
             },
         },
     }
@@ -84,17 +84,17 @@ class TestListTeams:
         ai_team = next(t for t in result if t["name"] == "ai-teamet")
         assert ai_team["description"] == "AI platform development (Svelte, Python, DDD)"
 
-    def test_list_teams_includes_plugin_name(self, sample_config):
-        """list_teams should include plugin name."""
+    def test_list_teams_includes_plugins(self, sample_config):
+        """list_teams should include plugins list."""
         result = teams.list_teams(sample_config)
         ai_team = next(t for t in result if t["name"] == "ai-teamet")
-        assert ai_team["plugin"] == "ai-teamet"
+        assert ai_team["plugins"] == ["ai-teamet@sundsvall"]
 
-    def test_list_teams_handles_no_plugin(self, sample_config):
-        """list_teams should handle teams with no plugin."""
+    def test_list_teams_handles_no_plugins(self, sample_config):
+        """list_teams should handle teams with no plugins."""
         result = teams.list_teams(sample_config)
         base_team = next(t for t in result if t["name"] == "base")
-        assert base_team["plugin"] is None
+        assert base_team["plugins"] == []
 
     def test_list_teams_empty_config(self, empty_config):
         """list_teams should return empty list for empty config."""
@@ -121,7 +121,7 @@ class TestGetTeamDetails:
         assert result is not None
         assert result["name"] == "ai-teamet"
         assert result["description"] == "AI platform development (Svelte, Python, DDD)"
-        assert result["plugin"] == "ai-teamet"
+        assert result["plugins"] == ["ai-teamet@sundsvall"]
         assert result["marketplace"] == "sundsvall"
         assert result["marketplace_repo"] == "sundsvall/claude-plugins-marketplace"
 
@@ -131,11 +131,11 @@ class TestGetTeamDetails:
         assert result is None
 
     def test_get_team_details_base_team(self, sample_config):
-        """get_team_details should handle base team with no plugin."""
+        """get_team_details should handle base team with no plugins."""
         result = teams.get_team_details("base", sample_config)
         assert result is not None
         assert result["name"] == "base"
-        assert result["plugin"] is None
+        assert result["plugins"] == []
 
     def test_get_team_details_empty_config(self, empty_config):
         """get_team_details should return None for empty config."""
@@ -209,7 +209,7 @@ class TestGetTeamSandboxSettings:
             "profiles": {
                 "test-team": {
                     "description": "Test",
-                    "plugin": "my-plugin",
+                    "additional_plugins": ["my-plugin@custom-marketplace"],
                 },
             },
         }
@@ -251,7 +251,7 @@ class TestGetTeamPluginId:
         assert result is None
 
     def test_plugin_id_custom_marketplace(self):
-        """get_team_plugin_id should use custom marketplace name."""
+        """get_team_plugin_id should return first plugin from list."""
         custom_config = {
             "marketplace": {
                 "name": "custom-mkt",
@@ -259,7 +259,7 @@ class TestGetTeamPluginId:
             },
             "profiles": {
                 "test-team": {
-                    "plugin": "test-plugin",
+                    "additional_plugins": ["test-plugin@custom-mkt"],
                 },
             },
         }
@@ -280,7 +280,7 @@ class TestValidateTeamProfile:
         result = teams.validate_team_profile("ai-teamet", sample_config)
         assert result["valid"] is True
         assert result["team"] == "ai-teamet"
-        assert result["plugin"] == "ai-teamet"
+        assert result["plugins"] == ["ai-teamet@sundsvall"]
         assert result["errors"] == []
 
     def test_validate_nonexistent_team(self, sample_config):
@@ -296,19 +296,19 @@ class TestValidateTeamProfile:
         assert len(result["warnings"]) == 0  # base is explicitly allowed to have no plugin
 
     def test_validate_team_without_plugin_warns(self):
-        """validate_team_profile should warn for non-base team without plugin."""
+        """validate_team_profile should warn for non-base team without plugins."""
         config = {
             "marketplace": {"repo": "org/plugins"},
             "profiles": {
                 "empty-team": {
-                    "description": "Team with no plugin",
-                    "plugin": None,
+                    "description": "Team with no plugins",
+                    "additional_plugins": [],
                 },
             },
         }
         result = teams.validate_team_profile("empty-team", config)
         assert result["valid"] is True  # Still valid, just a warning
-        assert any("no plugin configured" in w for w in result["warnings"])
+        assert any("no plugins configured" in w for w in result["warnings"])
 
     def test_validate_missing_marketplace_repo_warns(self):
         """validate_team_profile should warn for missing marketplace repo."""
@@ -316,7 +316,7 @@ class TestValidateTeamProfile:
             "marketplace": {},  # No repo
             "profiles": {
                 "test-team": {
-                    "plugin": "test-plugin",
+                    "additional_plugins": ["test-plugin"],
                 },
             },
         }
@@ -329,7 +329,7 @@ class TestValidateTeamProfile:
         result = teams.validate_team_profile("ai-teamet", sample_config)
         assert "valid" in result
         assert "team" in result
-        assert "plugin" in result
+        assert "plugins" in result
         assert "errors" in result
         assert "warnings" in result
 
@@ -376,17 +376,17 @@ def sample_org_config():
         "profiles": {
             "platform": {
                 "description": "Platform team (Python, FastAPI)",
-                "plugin": "platform",
+                "additional_plugins": ["platform@internal"],
                 "marketplace": "internal",
             },
             "api": {
                 "description": "API team (Java, Spring Boot)",
-                "plugin": "api",
+                "additional_plugins": ["api@public"],
                 "marketplace": "public",
             },
             "base": {
-                "description": "Base profile - no plugin",
-                "plugin": None,
+                "description": "Base profile - no plugins",
+                "additional_plugins": [],
             },
         },
     }
@@ -434,7 +434,7 @@ class TestGetTeamDetailsWithOrgConfig:
         assert result is not None
         assert result["name"] == "platform"
         assert result["description"] == "Platform team (Python, FastAPI)"
-        assert result["plugin"] == "platform"
+        assert result["plugins"] == ["platform@internal"]
         assert result["marketplace"] == "internal"
         assert result["marketplace_type"] == "gitlab"
         assert result["marketplace_repo"] == "devops/claude-plugins"
@@ -470,7 +470,7 @@ class TestValidateTeamProfileWithOrgConfig:
 
         assert result["valid"] is True
         assert result["team"] == "platform"
-        assert result["plugin"] == "platform"
+        assert result["plugins"] == ["platform@internal"]
         assert result["errors"] == []
 
     def test_validate_nonexistent_in_org_config(self, sample_org_config):
@@ -483,11 +483,10 @@ class TestValidateTeamProfileWithOrgConfig:
     def test_validate_marketplace_not_found_warning(self):
         """validate_team_profile should warn when marketplace not found in org_config."""
         org_config = {
-            "marketplaces": [],  # No marketplaces defined
+            "marketplaces": {},  # No marketplaces defined
             "profiles": {
                 "test-team": {
-                    "plugin": "test-plugin",
-                    "marketplace": "missing-marketplace",
+                    "additional_plugins": ["test-plugin@missing-marketplace"],
                 },
             },
         }
@@ -509,7 +508,7 @@ class TestValidateTeamProfileWithOrgConfig:
         result = teams.validate_team_profile("ai-teamet", cfg=sample_config, org_config=None)
 
         assert result["valid"] is True
-        assert result["plugin"] == "ai-teamet"
+        assert result["plugins"] == ["ai-teamet@sundsvall"]
 
 
 class TestConfigIntegration:
@@ -528,7 +527,7 @@ class TestConfigIntegration:
             "profiles": {
                 "ai-teamet": {
                     "description": "AI team",
-                    "plugin": "ai-teamet",
+                    "additional_plugins": ["ai-teamet@sundsvall"],
                 },
             },
         }
@@ -545,7 +544,7 @@ class TestConfigIntegration:
         test_config = {
             "marketplace": {"name": "sundsvall"},
             "profiles": {
-                "test-team": {"plugin": "test-plugin"},
+                "test-team": {"additional_plugins": ["test-plugin@sundsvall"]},
             },
         }
         config.save_config(test_config)
@@ -560,14 +559,14 @@ class TestConfigIntegration:
         test_config = {
             "marketplace": {"name": "sundsvall", "repo": "org/plugins"},
             "profiles": {
-                "test-team": {"plugin": "test-plugin"},
+                "test-team": {"additional_plugins": ["test-plugin@sundsvall"]},
             },
         }
         config.save_config(test_config)
 
         result = teams.validate_team_profile("test-team")
         assert result["valid"] is True
-        assert result["plugin"] == "test-plugin"
+        assert result["plugins"] == ["test-plugin@sundsvall"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -587,7 +586,7 @@ class TestTeamInfoDataclass:
         """TeamInfo optional fields have sensible defaults."""
         team = TeamInfo(name="platform")
         assert team.description == ""
-        assert team.plugin is None
+        assert team.plugins == []
         assert team.marketplace is None
         assert team.marketplace_type is None
         assert team.marketplace_repo is None
@@ -598,7 +597,7 @@ class TestTeamInfoDataclass:
         team = TeamInfo(
             name="platform",
             description="Platform team",
-            plugin="platform-plugin",
+            plugins=["platform-plugin"],
             marketplace="internal",
             marketplace_type="gitlab",
             marketplace_repo="org/plugins",
@@ -606,7 +605,7 @@ class TestTeamInfoDataclass:
         )
         assert team.name == "platform"
         assert team.description == "Platform team"
-        assert team.plugin == "platform-plugin"
+        assert team.plugins == ["platform-plugin"]
         assert team.marketplace == "internal"
         assert team.marketplace_type == "gitlab"
         assert team.marketplace_repo == "org/plugins"
@@ -622,14 +621,14 @@ class TestTeamInfoFromDict:
         team = TeamInfo.from_dict(data)
         assert team.name == "platform"
         assert team.description == ""
-        assert team.plugin is None
+        assert team.plugins == []
 
     def test_from_dict_full(self) -> None:
         """from_dict creates TeamInfo with all fields."""
         data = {
             "name": "platform",
             "description": "Platform team",
-            "plugin": "platform-plugin",
+            "plugins": ["platform-plugin"],
             "marketplace": "internal",
             "marketplace_type": "gitlab",
             "marketplace_repo": "org/plugins",
@@ -638,7 +637,7 @@ class TestTeamInfoFromDict:
         team = TeamInfo.from_dict(data)
         assert team.name == "platform"
         assert team.description == "Platform team"
-        assert team.plugin == "platform-plugin"
+        assert team.plugins == ["platform-plugin"]
         assert team.marketplace == "internal"
         assert team.marketplace_type == "gitlab"
         assert team.marketplace_repo == "org/plugins"
@@ -749,7 +748,7 @@ class TestTeamInfoIntegration:
             team_info = TeamInfo.from_dict(team_dict)
             assert team_info.name == team_dict["name"]
             assert team_info.description == team_dict.get("description", "")
-            assert team_info.plugin == team_dict.get("plugin")
+            assert team_info.plugins == team_dict.get("plugins", [])
 
     def test_from_dict_with_get_team_details_output(self, sample_config) -> None:
         """TeamInfo.from_dict works with get_team_details output."""
