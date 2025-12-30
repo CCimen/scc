@@ -23,6 +23,7 @@ from ..keys import (
     RefreshRequested,
     SessionResumeRequested,
     StartRequested,
+    StatuslineInstallRequested,
     TeamSwitchRequested,
 )
 from ..list_screen import ListState
@@ -114,6 +115,17 @@ def run_dashboard() -> None:
                 # Successfully launched - exit dashboard
                 # (container is running, user is now in Claude)
                 break
+
+        except StatuslineInstallRequested as statusline_req:
+            # User pressed 'y' on statusline row - install statusline
+            restore_tab = statusline_req.return_to
+            success = _handle_statusline_install()
+
+            if success:
+                toast_message = "Statusline installed successfully"
+            else:
+                toast_message = "Statusline installation failed"
+            # Loop continues to reload dashboard with fresh data
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -334,4 +346,45 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
 
     except Exception as e:
         console.print(f"[red]Error resuming session: {e}[/red]")
+        return False
+
+
+def _handle_statusline_install() -> bool:
+    """Handle statusline installation request from dashboard.
+
+    Installs the Claude Code statusline enhancement using the same logic
+    as `scc statusline`. Works cross-platform (Windows, macOS, Linux).
+
+    Returns:
+        True if statusline was installed successfully, False otherwise.
+    """
+    from rich.status import Status
+
+    from ...cli_admin import install_statusline
+    from ...theme import Spinners
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    console.print("[cyan]Installing statusline...[/cyan]")
+    console.print()
+
+    try:
+        with Status(
+            "[cyan]Configuring statusline...[/cyan]",
+            console=console,
+            spinner=Spinners.DOCKER,
+        ):
+            result = install_statusline()
+
+        if result:
+            console.print("[green]✓ Statusline installed successfully![/green]")
+            console.print("[dim]Press any key to continue...[/dim]")
+        else:
+            console.print("[yellow]Statusline installation completed with warnings[/yellow]")
+
+        return result
+
+    except Exception as e:
+        console.print(f"[red]Error installing statusline: {e}[/red]")
         return False

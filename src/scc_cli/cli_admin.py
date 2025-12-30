@@ -22,6 +22,63 @@ from .panels import create_info_panel, create_success_panel, create_warning_pane
 from .theme import Spinners
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Statusline Installation Helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def install_statusline() -> bool:
+    """Install the statusline script into the Docker sandbox volume.
+
+    This is a pure helper function that performs the statusline installation
+    without any console output. Can be called from CLI commands or the
+    dashboard orchestrator.
+
+    The installation injects:
+    1. The statusline.sh script into /mnt/claude-data/scc-statusline.sh
+    2. Updates settings.json with statusLine configuration
+
+    Works cross-platform (Windows, macOS, Linux) as it uses Docker volume
+    injection which runs an Alpine container to write files.
+
+    Returns:
+        True if installation succeeded, False otherwise.
+    """
+    # Get the status line script from package resources
+    try:
+        template_files = importlib.resources.files("scc_cli.templates")
+        script_content = (template_files / "statusline.sh").read_text()
+    except (FileNotFoundError, TypeError):
+        # Fallback: read from relative path during development
+        dev_path = Path(__file__).parent / "templates" / "statusline.sh"
+        if dev_path.exists():
+            script_content = dev_path.read_text()
+        else:
+            return False
+
+    # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
+    script_ok = docker.inject_file_to_sandbox_volume("scc-statusline.sh", script_content)
+    if not script_ok:
+        return False
+
+    # Get existing settings from Docker volume (if any)
+    existing_settings = docker.get_sandbox_settings() or {}
+
+    # Add statusline config (path inside container)
+    existing_settings["statusLine"] = {
+        "type": "command",
+        "command": "/mnt/claude-data/scc-statusline.sh",
+        "padding": 0,
+    }
+
+    # Inject settings into Docker volume
+    settings_ok = docker.inject_file_to_sandbox_volume(
+        "settings.json", json.dumps(existing_settings, indent=2)
+    )
+
+    return script_ok and settings_ok
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Admin App
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -385,48 +442,14 @@ def statusline_cmd(
         # SCC philosophy: Everything stays in Docker sandbox, not on host
         # Inject statusline script and settings into Docker sandbox volume
 
-        # Get the status line script from package resources
-        try:
-            template_files = importlib.resources.files("scc_cli.templates")
-            script_content = (template_files / "statusline.sh").read_text()
-        except (FileNotFoundError, TypeError):
-            # Fallback: read from relative path during development
-            dev_path = Path(__file__).parent / "templates" / "statusline.sh"
-            if dev_path.exists():
-                script_content = dev_path.read_text()
-            else:
-                console.print(
-                    create_warning_panel(
-                        "Template Not Found",
-                        "Could not find statusline.sh template.",
-                    )
-                )
-                raise typer.Exit(1)
-
         with Status(
             "[cyan]Injecting statusline into Docker sandbox...[/cyan]",
             console=console,
             spinner=Spinners.DOCKER,
         ):
-            # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
-            script_ok = docker.inject_file_to_sandbox_volume("scc-statusline.sh", script_content)
+            success = install_statusline()
 
-            # Get existing settings from Docker volume (if any)
-            existing_settings = docker.get_sandbox_settings() or {}
-
-            # Add statusline config (path inside container)
-            existing_settings["statusLine"] = {
-                "type": "command",
-                "command": "/mnt/claude-data/scc-statusline.sh",
-                "padding": 0,
-            }
-
-            # Inject settings into Docker volume
-            settings_ok = docker.inject_file_to_sandbox_volume(
-                "settings.json", json.dumps(existing_settings, indent=2)
-            )
-
-        if script_ok and settings_ok:
+        if success:
             console.print(
                 create_success_panel(
                     "Status Line Installed (Docker Sandbox)",

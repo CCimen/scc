@@ -45,6 +45,23 @@ class TeamSwitchRequested(Exception):  # noqa: N818
     pass
 
 
+class StatuslineInstallRequested(Exception):  # noqa: N818
+    """Raised when user confirms statusline installation.
+
+    This is a control flow signal that allows the dashboard to request
+    statusline installation without coupling to CLI logic.
+
+    The orchestrator (run_dashboard) catches this and runs the install flow.
+
+    Attributes:
+        return_to: Tab name to restore after flow.
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
 class StartRequested(Exception):  # noqa: N818
     """Raised when user wants to start a new session from dashboard.
 
