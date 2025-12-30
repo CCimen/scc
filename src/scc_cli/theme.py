@@ -187,6 +187,8 @@ class Indicators:
         "CURSOR": ("❯", ">"),
         "ARROW": ("→", "->"),
         "BULLET": ("•", "*"),
+        "SCROLL_UP": ("↑", "^"),
+        "SCROLL_DOWN": ("↓", "v"),
         # Progress
         "PENDING": ("⏳", "..."),
         "SPINNER": ("◌", "o"),

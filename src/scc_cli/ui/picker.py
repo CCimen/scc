@@ -44,6 +44,7 @@ from rich.live import Live
 from rich.text import Text
 
 from ..contexts import normalize_path
+from ..theme import Indicators
 from .chrome import Chrome, ChromeConfig
 from .formatters import (
     format_container,
@@ -477,7 +478,7 @@ def _run_single_select_picker(
 
             # Cursor indicator
             if is_cursor:
-                body.append("❯ ", style="cyan bold")
+                body.append(f"{Indicators.get('CURSOR')} ", style="cyan bold")
             else:
                 body.append("  ")
 
@@ -609,7 +610,7 @@ def _run_quick_resume_picker(
 
             # Cursor indicator
             if is_cursor:
-                body.append("❯ ", style="cyan bold")
+                body.append(f"{Indicators.get('CURSOR')} ", style="cyan bold")
             else:
                 body.append("  ")
 

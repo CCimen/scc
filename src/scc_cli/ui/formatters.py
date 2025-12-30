@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..docker.core import ContainerInfo
 from ..git import WorktreeInfo
+from ..theme import Indicators
 from .list_screen import ListItem
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ def format_team(
     is_current = current_team is not None and name == current_team
 
     # Build label with current indicator
-    label = f"✓ {name}" if is_current else name
+    label = f"{Indicators.get('PASS')} {name}" if is_current else name
 
     # Check for credential/governance status
     governance_status: str | None = None
@@ -206,7 +207,7 @@ def format_worktree(worktree: WorktreeInfo) -> ListItem[WorktreeInfo]:
     dir_name = Path(worktree.path).name
 
     # Build label with current indicator
-    label = f"✓ {dir_name}" if worktree.is_current else dir_name
+    label = f"{Indicators.get('PASS')} {dir_name}" if worktree.is_current else dir_name
 
     # Build description parts
     desc_parts: list[str] = []

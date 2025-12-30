@@ -32,6 +32,7 @@ from rich.text import Text
 
 # Import config for standalone mode detection
 from .. import config as scc_config
+from ..theme import Indicators
 from .chrome import Chrome, ChromeConfig, FooterHint
 from .keys import (
     Action,
@@ -311,7 +312,7 @@ class Dashboard:
                 is_cursor = actual_index == self.state.list_state.cursor
 
                 if is_cursor:
-                    text.append("❯ ", style="cyan bold")
+                    text.append(f"{Indicators.get('CURSOR')} ", style="cyan bold")
                 else:
                     text.append("  ")
 

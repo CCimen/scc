@@ -29,6 +29,8 @@ from rich.console import Console, RenderableType
 from rich.live import Live
 from rich.text import Text
 
+from scc_cli.theme import Indicators
+
 from .chrome import Chrome, ChromeConfig
 from .keys import Action, ActionType, KeyReader, TeamSwitchRequested
 
@@ -294,14 +296,14 @@ class ListScreen(Generic[T]):
 
             # Build line with cursor indicator
             if is_cursor:
-                text.append("❯ ", style="cyan bold")
+                text.append(f"{Indicators.get('CURSOR')} ", style="cyan bold")
             else:
                 text.append("  ")
 
             # Selection checkbox for multi-select
             if self.mode == ListMode.MULTI_SELECT:
                 if is_selected:
-                    text.append("[✓] ", style="green")
+                    text.append(f"[{Indicators.get('PASS')}] ", style="green")
                 else:
                     text.append("[ ] ", style="dim")
 
@@ -328,9 +330,9 @@ class ListScreen(Generic[T]):
 
         # Scroll indicators
         if self.state.scroll_offset > 0:
-            text.append("↑ more above\n", style="dim")
+            text.append(f"{Indicators.get('SCROLL_UP')} more above\n", style="dim")
         if self.state.scroll_offset + self.state.viewport_height < len(filtered):
-            text.append("↓ more below\n", style="dim")
+            text.append(f"{Indicators.get('SCROLL_DOWN')} more below\n", style="dim")
 
         return text
 
