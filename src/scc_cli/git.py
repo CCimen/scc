@@ -96,6 +96,100 @@ def is_git_repo(path: Path) -> bool:
     return run_command_bool(["git", "-C", str(path), "rev-parse", "--git-dir"], timeout=5)
 
 
+def has_commits(path: Path) -> bool:
+    """Check if the git repository has at least one commit.
+
+    This is important for worktree operations, which require at least
+    one commit to function properly.
+
+    Args:
+        path: Path to the git repository.
+
+    Returns:
+        True if the repository has at least one commit, False otherwise.
+    """
+    if not is_git_repo(path):
+        return False
+    # rev-parse HEAD fails if there are no commits
+    return run_command_bool(["git", "-C", str(path), "rev-parse", "HEAD"], timeout=5)
+
+
+def init_repo(path: Path) -> bool:
+    """Initialize a new git repository.
+
+    Args:
+        path: Path where to initialize the repository.
+
+    Returns:
+        True if initialization succeeded, False otherwise.
+    """
+    result = run_command(["git", "-C", str(path), "init"], timeout=10)
+    return result is not None
+
+
+def create_empty_initial_commit(path: Path) -> tuple[bool, str | None]:
+    """Create an empty initial commit to enable worktree operations.
+
+    Worktrees require at least one commit to function. This creates a
+    minimal empty commit without staging any files, following the
+    principle of not mutating user files without consent.
+
+    Args:
+        path: Path to the git repository.
+
+    Returns:
+        Tuple of (success, error_message). If success is False,
+        error_message contains details (e.g., git identity not configured).
+    """
+    result = run_command(
+        [
+            "git",
+            "-C",
+            str(path),
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Initial commit",
+        ],
+        timeout=10,
+    )
+    if result is None:
+        # Check if it's a git identity issue
+        name_check = run_command(["git", "-C", str(path), "config", "user.name"], timeout=5)
+        email_check = run_command(["git", "-C", str(path), "config", "user.email"], timeout=5)
+        if not name_check or not email_check:
+            return (
+                False,
+                "Git identity not configured. Run:\n"
+                "  git config --global user.name 'Your Name'\n"
+                "  git config --global user.email 'you@example.com'",
+            )
+        return (False, "Failed to create initial commit")
+    return (True, None)
+
+
+def has_remote(path: Path, remote_name: str = "origin") -> bool:
+    """Check if the repository has a specific remote configured.
+
+    This is used to determine whether fetch operations should be attempted.
+    Freshly initialized repositories have no remotes.
+
+    Args:
+        path: Path to the git repository.
+        remote_name: Name of the remote to check (default: "origin").
+
+    Returns:
+        True if the remote exists, False otherwise.
+    """
+    if not is_git_repo(path):
+        return False
+    result = run_command(
+        ["git", "-C", str(path), "remote", "get-url", remote_name],
+        timeout=5,
+    )
+    return result is not None
+
+
 def detect_workspace_root(start_dir: Path) -> tuple[Path | None, Path]:
     """Detect the workspace root from a starting directory.
 
@@ -450,8 +544,23 @@ def get_current_branch(path: Path) -> str | None:
 
 
 def get_default_branch(path: Path) -> str:
-    """Get the default branch (main or master)."""
-    # Try to get from remote HEAD
+    """Get the default branch for worktree creation.
+
+    Resolution order:
+    1. Current branch (respects user's git init.defaultBranch config)
+    2. Remote origin HEAD (for cloned repositories)
+    3. Check if main or master exists locally
+    4. Fallback to "main"
+
+    This order ensures freshly initialized repos use their actual branch
+    name rather than assuming "main".
+    """
+    # Priority 1: Use current branch (best for local-only repos)
+    current = get_current_branch(path)
+    if current:
+        return current
+
+    # Priority 2: Try to get from remote HEAD (for cloned repos)
     output = run_command(
         ["git", "-C", str(path), "symbolic-ref", "refs/remotes/origin/HEAD"],
         timeout=5,
@@ -459,7 +568,7 @@ def get_default_branch(path: Path) -> str:
     if output:
         return output.split("/")[-1]
 
-    # Fallback: check if main or master exists
+    # Priority 3: Check if main or master exists locally
     for branch in ["main", "master"]:
         if run_command_bool(
             ["git", "-C", str(path), "rev-parse", "--verify", branch],
@@ -677,17 +786,24 @@ def create_worktree(
                     suggested_action="Install dependencies manually and retry if needed",
                 )
 
-        # Multi-step progress
-        steps: list[tuple[str, Callable[[], None]]] = [
-            ("Fetching latest changes", lambda: _fetch_branch(repo_path, base_branch)),
-            (
-                "Creating worktree",
-                lambda: _create_worktree_dir(
-                    repo_path, worktree_path, branch_name, base_branch, worktree_base
+        # Multi-step progress - conditionally include fetch if remote exists
+        steps: list[tuple[str, Callable[[], None]]] = []
+
+        # Only fetch if the repository has a remote origin
+        if has_remote(repo_path):
+            steps.append(("Fetching latest changes", lambda: _fetch_branch(repo_path, base_branch)))
+
+        steps.extend(
+            [
+                (
+                    "Creating worktree",
+                    lambda: _create_worktree_dir(
+                        repo_path, worktree_path, branch_name, base_branch, worktree_base
+                    ),
                 ),
-            ),
-            ("Installing dependencies", _install_deps),
-        ]
+                ("Installing dependencies", _install_deps),
+            ]
+        )
 
         try:
             for step_name, step_func in steps:

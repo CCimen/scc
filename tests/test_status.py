@@ -242,15 +242,14 @@ class TestStatusVerboseMode:
             "selected_profile": "platform",
         }
         mock_org = {
-            "profiles": [
-                {
-                    "name": "platform",
+            "profiles": {
+                "platform": {
                     "delegation": {
                         "allow_additional_plugins": True,
                         "allow_additional_mcp_servers": False,
                     },
                 }
-            ]
+            }
         }
 
         with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):

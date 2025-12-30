@@ -1300,7 +1300,59 @@ def interactive_start(
         "[cyan]Create a worktree for isolated feature development?[/cyan]",
         default=False,
     ):
-        worktree_name = Prompt.ask("[cyan]Feature/worktree name[/cyan]")
+        workspace_path = Path(workspace)
+        can_create_worktree = True
+
+        # Check if directory is a git repository
+        if not git.is_git_repo(workspace_path):
+            console.print()
+            if Confirm.ask(
+                "[yellow]⚠️ Not a git repository. Initialize git?[/yellow]",
+                default=False,
+            ):
+                if git.init_repo(workspace_path):
+                    console.print(
+                        f"  [green]{Indicators.get('PASS')}[/green] Initialized git repository"
+                    )
+                else:
+                    console.print(f"  [red]{Indicators.get('FAIL')}[/red] Failed to initialize git")
+                    can_create_worktree = False
+            else:
+                # User declined git init - can't create worktree
+                console.print(
+                    f"  [dim]{Indicators.get('INFO')}[/dim] "
+                    "Skipping worktree (requires git repository)"
+                )
+                can_create_worktree = False
+
+        # Check if repository has commits (worktree requires at least one)
+        if can_create_worktree and git.is_git_repo(workspace_path):
+            if not git.has_commits(workspace_path):
+                console.print()
+                if Confirm.ask(
+                    "[yellow]⚠️ Worktree requires initial commit. "
+                    "Create empty initial commit?[/yellow]",
+                    default=True,
+                ):
+                    success, error_msg = git.create_empty_initial_commit(workspace_path)
+                    if success:
+                        console.print(
+                            f"  [green]{Indicators.get('PASS')}[/green] Created initial commit"
+                        )
+                    else:
+                        console.print(f"  [red]{Indicators.get('FAIL')}[/red] {error_msg}")
+                        can_create_worktree = False
+                else:
+                    # User declined empty commit - can't create worktree
+                    console.print(
+                        f"  [dim]{Indicators.get('INFO')}[/dim] "
+                        "Skipping worktree (requires initial commit)"
+                    )
+                    can_create_worktree = False
+
+        # Only ask for worktree name if we have a valid git repo with commits
+        if can_create_worktree:
+            worktree_name = Prompt.ask("[cyan]Feature/worktree name[/cyan]")
 
     # Step 4: Session name
     session_name = (
