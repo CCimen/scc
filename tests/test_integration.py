@@ -269,6 +269,28 @@ class TestStartWorkflow:
         # Should have processed without error
         assert result.exit_code == 0 or "api" in result.output.lower()
 
+    def test_cancel_at_protected_branch_prompt_exits(self, full_config_environment, git_workspace):
+        """Cancelling at protected branch prompt should exit with EXIT_CANCELLED."""
+        from scc_cli.exit_codes import EXIT_CANCELLED
+
+        with (
+            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            # Simulate user cancelling at protected branch prompt
+            patch("scc_cli.cli_launch.git.check_branch_safety", return_value=False),
+            patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"),
+            patch(
+                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                return_value=(git_workspace, False),
+            ),
+        ):
+            result = runner.invoke(app, ["start", str(git_workspace)])
+
+        # Should exit with cancellation code
+        assert result.exit_code == EXIT_CANCELLED
+        assert "cancelled" in result.output.lower()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Workflow 3: Session Management → Continue Previous Session
