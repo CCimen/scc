@@ -25,12 +25,13 @@ def _load_status_tab_data() -> TabData:
     - Current team and organization info
     - Sync status with remote config
     - Resource counts for quick overview
+    - Optional enhancements (statusline)
 
     Returns:
         TabData with status summary items.
     """
     # Import here to avoid circular imports
-    from ... import config, sessions
+    from ... import config, docker, sessions
     from ...docker import core as docker_core
 
     items: list[ListItem[str]] = []
@@ -129,6 +130,31 @@ def _load_status_tab_data() -> TabData:
                 description="Error loading sessions",
             )
         )
+
+    # Check statusline status (optional enhancement)
+    try:
+        settings = docker.get_sandbox_settings()
+        has_statusline = settings is not None and "statusLine" in settings
+        if has_statusline:
+            items.append(
+                ListItem(
+                    value="statusline_installed",
+                    label="Statusline",
+                    description="✓ Installed",
+                )
+            )
+        else:
+            items.append(
+                ListItem(
+                    value="statusline_not_installed",
+                    label="Statusline",
+                    description="Not installed - Enter to install",
+                    governance_status="warning",
+                )
+            )
+    except Exception:
+        # Docker not available - don't show statusline option
+        pass
 
     return TabData(
         tab=DashboardTab.STATUS,

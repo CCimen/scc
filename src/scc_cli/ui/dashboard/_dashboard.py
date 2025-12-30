@@ -32,6 +32,7 @@ from ..keys import (
     RefreshRequested,
     SessionResumeRequested,
     StartRequested,
+    StatuslineInstallRequested,
     TeamSwitchRequested,
 )
 from ..list_screen import ListItem
@@ -69,7 +70,10 @@ class Dashboard:
         # Use custom_keys for dashboard-specific actions that aren't in DEFAULT_KEY_MAP
         # This allows 'r' to be a filter char in pickers but REFRESH in dashboard
         # 'n' (new session) is also screen-specific to avoid global key conflicts
-        reader = KeyReader(custom_keys={"r": "refresh", "n": "new_session"}, enable_filter=True)
+        reader = KeyReader(
+            custom_keys={"r": "refresh", "n": "new_session"},
+            enable_filter=True,
+        )
 
         with Live(
             self._render(),
@@ -570,6 +574,10 @@ class Dashboard:
                             self.state.list_state.clear_filter()
                             self.state = self.state.switch_tab(target_tab)
                             return True  # Refresh to show new tab
+
+                        # Statusline row: Enter triggers installation
+                        if current.value == "statusline_not_installed":
+                            raise StatuslineInstallRequested(return_to=self.state.active_tab.name)
                 else:
                     # Resource tabs handling (Containers, Worktrees, Sessions)
                     current = self.state.list_state.current_item
