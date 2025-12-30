@@ -388,24 +388,18 @@ class Dashboard:
                 "or run `scc start <path>` from the terminal."
             ),
             # Session placeholders (first-time user friendly)
-            "no_sessions": (
-                "No sessions recorded yet. Press 'n' to create your first session!"
-            ),
+            "no_sessions": ("No sessions recorded yet. Press 'n' to create your first session!"),
             # Worktree placeholders
             "no_worktrees": (
                 "Not in a git repository. Navigate to a git repo to see worktrees, "
                 "or run `git init` to initialize one."
             ),
-            "no_git": (
-                "Not in a git repository. Run `git init` or clone a repo first."
-            ),
+            "no_git": ("Not in a git repository. Run `git init` or clone a repo first."),
             # Error placeholders (actionable doctor suggestion)
             "error": (
                 "Unable to load data. Run `scc doctor` to check Docker status and diagnose issues."
             ),
-            "config_error": (
-                "Configuration issue detected. Run `scc doctor` to diagnose and fix."
-            ),
+            "config_error": ("Configuration issue detected. Run `scc doctor` to diagnose and fix."),
         }
 
         # Extract placeholder key from dict if needed

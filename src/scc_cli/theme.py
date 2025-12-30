@@ -61,7 +61,9 @@ def _supports_unicode_for_stream(stream: "TextIO") -> bool:
         return True
 
     # Check locale environment variables as fallback (LC_ALL > LC_CTYPE > LANG)
-    locale_var = os.environ.get("LC_ALL") or os.environ.get("LC_CTYPE") or os.environ.get("LANG", "")
+    locale_var = (
+        os.environ.get("LC_ALL") or os.environ.get("LC_CTYPE") or os.environ.get("LANG", "")
+    )
     return "utf-8" in locale_var.lower() or "utf8" in locale_var.lower()
 
 

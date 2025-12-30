@@ -57,7 +57,9 @@ def render_error(console: Console, error: "SCCError", debug: bool = False) -> No
         lines.append(f"[{Colors.SECONDARY}]{error.debug_context}[/{Colors.SECONDARY}]")
     elif error.debug_context and not debug:
         lines.append("")
-        lines.append(f"[{Colors.SECONDARY}]Run with --debug for technical details[/{Colors.SECONDARY}]")
+        lines.append(
+            f"[{Colors.SECONDARY}]Run with --debug for technical details[/{Colors.SECONDARY}]"
+        )
 
     # Create panel with error styling
     panel = Panel(

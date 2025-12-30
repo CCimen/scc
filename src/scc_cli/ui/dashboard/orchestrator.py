@@ -12,9 +12,12 @@ that exit the Rich Live context before handling nested UI components.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ...console import get_err_console
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 from ..keys import (
     RefreshRequested,

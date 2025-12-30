@@ -507,7 +507,9 @@ class TestDashboardStandaloneMode:
         )
         dashboard = Dashboard(state)
 
-        with patch("scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=True):
+        with patch(
+            "scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=True
+        ):
             from scc_cli.ui.keys import ActionType
 
             team_action = Action(action_type=ActionType.TEAM_SWITCH, state_changed=True)
@@ -556,7 +558,9 @@ class TestDashboardStandaloneMode:
         )
         dashboard = Dashboard(state)
 
-        with patch("scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=True):
+        with patch(
+            "scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=True
+        ):
             select_action = Action(action_type=ActionType.SELECT, state_changed=True)
             result = dashboard._handle_action(select_action)
 
@@ -575,7 +579,9 @@ class TestDashboardStandaloneMode:
         )
         dashboard = Dashboard(state)
 
-        with patch("scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=True):
+        with patch(
+            "scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=True
+        ):
             config = dashboard._get_chrome_config()
 
             # Find the teams hint and verify it's dimmed
@@ -593,7 +599,9 @@ class TestDashboardStandaloneMode:
         )
         dashboard = Dashboard(state)
 
-        with patch("scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=False):
+        with patch(
+            "scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=False
+        ):
             config = dashboard._get_chrome_config()
 
             # Find the teams hint and verify it's not dimmed

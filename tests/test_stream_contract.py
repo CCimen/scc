@@ -23,7 +23,9 @@ if TYPE_CHECKING:
     pass
 
 
-def run_scc(*args: str, env_override: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def run_scc(
+    *args: str, env_override: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run the SCC CLI and capture output.
 
     Args:
@@ -109,9 +111,7 @@ class TestHumanModeStreamContract:
         result = run_scc("doctor", env_override={"TERM": "dumb"})
 
         assert result.stdout == "", (
-            f"Human mode leaked to stdout:\n"
-            f"stdout: {result.stdout!r}\n"
-            f"stderr: {result.stderr!r}"
+            f"Human mode leaked to stdout:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
         )
 
     @pytest.mark.xfail(
@@ -126,14 +126,12 @@ class TestHumanModeStreamContract:
         # Accept both Unicode and ASCII indicators
         has_content = bool(result.stderr.strip())
         has_diagnostic_indicator = any(
-            indicator in result.stderr
-            for indicator in ["OK", "FAIL", "WARN"]
+            indicator in result.stderr for indicator in ["OK", "FAIL", "WARN"]
         )
 
         assert has_content, "Human mode stderr is empty"
         assert has_diagnostic_indicator, (
-            f"Human mode stderr missing expected indicators:\n"
-            f"stderr: {result.stderr!r}"
+            f"Human mode stderr missing expected indicators:\nstderr: {result.stderr!r}"
         )
 
 

@@ -27,7 +27,7 @@ from rich.text import Text
 from ..theme import Indicators
 
 if TYPE_CHECKING:
-    from rich.console import RenderableType
+    from rich.console import Console, RenderableType
 
 
 class HelpMode(Enum):

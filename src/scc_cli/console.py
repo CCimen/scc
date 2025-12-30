@@ -122,7 +122,9 @@ def _supports_unicode_for_stream(stream: TextIO) -> bool:
         return True
 
     # Check locale environment variables as fallback (LC_ALL > LC_CTYPE > LANG)
-    locale_var = os.environ.get("LC_ALL") or os.environ.get("LC_CTYPE") or os.environ.get("LANG", "")
+    locale_var = (
+        os.environ.get("LC_ALL") or os.environ.get("LC_CTYPE") or os.environ.get("LANG", "")
+    )
     return "utf-8" in locale_var.lower() or "utf8" in locale_var.lower()
 
 
@@ -193,7 +195,11 @@ class TerminalCaps:
             # can_prompt requires BOTH stdin AND stderr to be TTYs:
             # - stdin: for reading user input
             # - stderr: for displaying prompts (Rich prompts go to stderr)
-            can_prompt=stdin_tty and stderr_tty and not json_mode and not _is_ci_environment() and not no_interactive,
+            can_prompt=stdin_tty
+            and stderr_tty
+            and not json_mode
+            and not _is_ci_environment()
+            and not no_interactive,
             colors=_supports_colors_for_stream(sys.stderr),
             unicode=_supports_unicode_for_stream(sys.stderr),
         )
@@ -290,7 +296,7 @@ class StaticRichStatus:
     PlainTextStatus, but with Rich formatting.
     """
 
-    def __init__(self, message: str, console: "Console") -> None:
+    def __init__(self, message: str, console: Console) -> None:
         """Initialize StaticRichStatus.
 
         Args:
@@ -318,7 +324,7 @@ class StaticRichStatus:
             self.message = message
             self.console.print(f"[dim]{message}...[/dim]")
 
-    def __enter__(self) -> "StaticRichStatus":
+    def __enter__(self) -> StaticRichStatus:
         """Print start message to console."""
         self.console.print(f"[dim]{self.message}...[/dim]")
         return self

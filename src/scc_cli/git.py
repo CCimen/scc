@@ -560,7 +560,9 @@ def check_branch_safety(path: Path, console: Console) -> bool:
             safe_name = sanitize_branch_name(name)
             branch_name = f"{BRANCH_PREFIX}{safe_name}"
 
-            with console.status(f"[cyan]Creating branch {branch_name}...[/cyan]", spinner=Spinners.SETUP):
+            with console.status(
+                f"[cyan]Creating branch {branch_name}...[/cyan]", spinner=Spinners.SETUP
+            ):
                 try:
                     subprocess.run(
                         ["git", "-C", str(path), "checkout", "-b", branch_name],

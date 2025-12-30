@@ -105,7 +105,9 @@ def worktree_create_cmd(
 
     # Install dependencies if requested
     if install_deps:
-        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP):
+        with Status(
+            "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
+        ):
             success = deps.auto_install_dependencies(worktree_path)
         if success:
             console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")

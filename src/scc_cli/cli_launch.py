@@ -245,7 +245,9 @@ def _prepare_workspace(
 
     # Install dependencies if requested
     if install_deps:
-        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP):
+        with Status(
+            "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
+        ):
             success = deps.auto_install_dependencies(workspace_path)
         if success:
             console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
@@ -343,7 +345,9 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     if not team:
         return
 
-    with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner=Spinners.SETUP):
+    with Status(
+        f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner=Spinners.SETUP
+    ):
         # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
 
@@ -393,7 +397,9 @@ def _sync_marketplace_settings(
     if org_config is None:
         return None
 
-    with Status("[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner=Spinners.NETWORK):
+    with Status(
+        "[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner=Spinners.NETWORK
+    ):
         try:
             result = sync_marketplace_settings(
                 project_dir=workspace_path,
@@ -918,7 +924,11 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
 
     # Ready status
     ready = data.get("ready_to_start", True)
-    status = f"[green]{Indicators.get('PASS')} Ready to start[/green]" if ready else f"[red]{Indicators.get('FAIL')} Blocked[/red]"
+    status = (
+        f"[green]{Indicators.get('PASS')} Ready to start[/green]"
+        if ready
+        else f"[red]{Indicators.get('FAIL')} Blocked[/red]"
+    )
     grid.add_row("Status:", status)
 
     # Blocked items
