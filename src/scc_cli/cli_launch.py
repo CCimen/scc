@@ -40,7 +40,7 @@ from .kinds import Kind
 from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from .output_mode import json_output_mode, print_human, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
-from .theme import Colors, get_brand_header
+from .theme import Colors, Indicators, Spinners, get_brand_header
 from .ui.gate import is_interactive_allowed
 from .ui.picker import (
     QuickResumeResult,
@@ -245,10 +245,10 @@ def _prepare_workspace(
 
     # Install dependencies if requested
     if install_deps:
-        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
+        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP):
             success = deps.auto_install_dependencies(workspace_path)
         if success:
-            console.print("[green]✓ Dependencies installed[/green]")
+            console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
         else:
             console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
 
@@ -343,7 +343,7 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     if not team:
         return
 
-    with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
+    with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner=Spinners.SETUP):
         # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
 
@@ -393,7 +393,7 @@ def _sync_marketplace_settings(
     if org_config is None:
         return None
 
-    with Status("[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner=Spinners.NETWORK):
         try:
             result = sync_marketplace_settings(
                 project_dir=workspace_path,
@@ -412,11 +412,11 @@ def _sync_marketplace_settings(
             # Log success
             if result.plugins_enabled:
                 console.print(
-                    f"[green]✓ Enabled {len(result.plugins_enabled)} team plugin(s)[/green]"
+                    f"[green]{Indicators.get('PASS')} Enabled {len(result.plugins_enabled)} team plugin(s)[/green]"
                 )
             if result.marketplaces_materialized:
                 console.print(
-                    f"[green]✓ Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
+                    f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
                 )
 
             return result
@@ -752,7 +752,7 @@ def start(
         raise typer.Exit(EXIT_CANCELLED)
 
     # ── Step 3: Docker availability check ────────────────────────────────────
-    with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
         docker.check_docker_available()
 
     # ── Step 4: Workspace validation and platform checks ─────────────────────
@@ -918,7 +918,7 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
 
     # Ready status
     ready = data.get("ready_to_start", True)
-    status = "[green]✓ Ready to start[/green]" if ready else "[red]✗ Blocked[/red]"
+    status = f"[green]{Indicators.get('PASS')} Ready to start[/green]" if ready else f"[red]{Indicators.get('FAIL')} Blocked[/red]"
     grid.add_row("Status:", status)
 
     # Blocked items
@@ -1355,7 +1355,7 @@ def run_start_wizard_flow(
 
     try:
         # Step 3: Docker availability check
-        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
             docker.check_docker_available()
 
         # Step 4: Workspace validation

@@ -21,6 +21,7 @@ from .json_command import json_command
 from .kinds import Kind
 from .output_mode import is_json_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .theme import Indicators, Spinners
 from .ui.gate import InteractivityContext
 from .ui.picker import TeamSwitchRequested, pick_containers, pick_session, pick_worktree
 
@@ -104,10 +105,10 @@ def worktree_create_cmd(
 
     # Install dependencies if requested
     if install_deps:
-        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
+        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP):
             success = deps.auto_install_dependencies(worktree_path)
         if success:
-            console.print("[green]✓ Dependencies installed[/green]")
+            console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
         else:
             console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
 
@@ -308,9 +309,9 @@ def _list_interactive(containers: list[docker.ContainerInfo]) -> None:
         with Status(f"[cyan]Stopping {container.name}...[/cyan]", console=console):
             success = docker.stop_container(container.id)
         if success:
-            console.print(f"[green]✓ Stopped: {container.name}[/green]")
+            console.print(f"[green]{Indicators.get('PASS')} Stopped: {container.name}[/green]")
         else:
-            console.print(f"[red]✗ Failed to stop: {container.name}[/red]")
+            console.print(f"[red]{Indicators.get('FAIL')} Failed to stop: {container.name}[/red]")
 
     def resume_container_action(item: Any) -> None:
         """Resume the selected container."""
@@ -318,9 +319,9 @@ def _list_interactive(containers: list[docker.ContainerInfo]) -> None:
         with Status(f"[cyan]Resuming {container.name}...[/cyan]", console=console):
             success = docker.resume_container(container.id)
         if success:
-            console.print(f"[green]✓ Resumed: {container.name}[/green]")
+            console.print(f"[green]{Indicators.get('PASS')} Resumed: {container.name}[/green]")
         else:
-            console.print(f"[red]✗ Failed to resume: {container.name}[/red]")
+            console.print(f"[red]{Indicators.get('FAIL')} Failed to resume: {container.name}[/red]")
 
     # Create screen with action handlers
     screen = ListScreen(
@@ -353,7 +354,7 @@ def list_cmd(
     - r: Resume the container
     - Enter: Select and show details
     """
-    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner=Spinners.DOCKER):
         containers = docker.list_scc_containers()
 
     if not containers:
@@ -430,7 +431,7 @@ def stop_cmd(
         scc stop --all                   # Stop all (explicit)
         scc stop --yes                   # Stop all without confirmation
     """
-    with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner=Spinners.DOCKER):
         # List Docker Desktop sandbox containers (image: docker/sandbox-templates:claude-code)
         running = docker.list_running_sandboxes()
 
@@ -588,7 +589,7 @@ def prune_cmd(
         scc prune --yes        # Remove without prompting (CI/scripts)
         scc prune --dry-run    # Only show what would be removed
     """
-    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner=Spinners.DOCKER):
         # Use _list_all_sandbox_containers to find ALL sandbox containers (by image)
         # This matches how stop_cmd uses list_running_sandboxes (also by image)
         # Containers created by Docker Desktop directly don't have SCC labels
@@ -757,7 +758,7 @@ def container_list_cmd() -> None:
         scc container list
     """
     # Delegate to existing list logic
-    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner=Spinners.DOCKER):
         containers = docker.list_scc_containers()
 
     if not containers:

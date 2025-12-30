@@ -37,6 +37,7 @@ from .panels import (
     create_warning_panel,
 )
 from .subprocess_utils import run_command, run_command_bool, run_command_lines
+from .theme import Indicators, Spinners
 from .utils.locks import file_lock, lock_path
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -559,7 +560,7 @@ def check_branch_safety(path: Path, console: Console) -> bool:
             safe_name = sanitize_branch_name(name)
             branch_name = f"{BRANCH_PREFIX}{safe_name}"
 
-            with console.status(f"[cyan]Creating branch {branch_name}...[/cyan]", spinner="dots"):
+            with console.status(f"[cyan]Creating branch {branch_name}...[/cyan]", spinner=Spinners.SETUP):
                 try:
                     subprocess.run(
                         ["git", "-C", str(path), "checkout", "-b", branch_name],
@@ -688,7 +689,7 @@ def create_worktree(
 
         try:
             for step_name, step_func in steps:
-                with console.status(f"[cyan]{step_name}...[/cyan]", spinner="dots"):
+                with console.status(f"[cyan]{step_name}...[/cyan]", spinner=Spinners.SETUP):
                     try:
                         step_func()
                     except subprocess.CalledProcessError as e:
@@ -697,7 +698,7 @@ def create_worktree(
                             command=" ".join(e.cmd) if hasattr(e, "cmd") else None,
                             stderr=e.stderr.decode() if e.stderr else None,
                         )
-                console.print(f"  [green]✓[/green] {step_name}")
+                console.print(f"  [green]{Indicators.get('PASS')}[/green] {step_name}")
                 if step_name == "Creating worktree":
                     worktree_created = True
         except KeyboardInterrupt:
@@ -1086,7 +1087,7 @@ def cleanup_worktree(
         return True
 
     # Remove worktree
-    with console.status("[cyan]Removing worktree...[/cyan]", spinner="dots"):
+    with console.status("[cyan]Removing worktree...[/cyan]", spinner=Spinners.DEFAULT):
         try:
             force_flag = ["--force"] if force else []
             subprocess.run(
@@ -1105,7 +1106,7 @@ def cleanup_worktree(
                 timeout=10,
             )
 
-    console.print("  [green]✓[/green] Worktree removed")
+    console.print(f"  [green]{Indicators.get('PASS')}[/green] Worktree removed")
 
     # Ask about branch deletion (auto-delete if --yes was provided)
     console.print()
@@ -1114,13 +1115,13 @@ def cleanup_worktree(
         f"[cyan]Also delete branch '{branch_name}'?[/cyan]", default=False
     )
     if should_delete_branch:
-        with console.status("[cyan]Deleting branch...[/cyan]", spinner="dots"):
+        with console.status("[cyan]Deleting branch...[/cyan]", spinner=Spinners.DEFAULT):
             subprocess.run(
                 ["git", "-C", str(repo_path), "branch", "-D", branch_name],
                 capture_output=True,
                 timeout=10,
             )
-        console.print("  [green]✓[/green] Branch deleted")
+        console.print(f"  [green]{Indicators.get('PASS')}[/green] Branch deleted")
         branch_deleted = True
 
     console.print()
@@ -1282,7 +1283,7 @@ def clone_repo(url: str, base_path: str, console: Console | None = None) -> str:
     console.print(create_info_panel("Cloning Repository", url, f"Target: {target}"))
     console.print()
 
-    with console.status("[cyan]Cloning...[/cyan]", spinner="dots"):
+    with console.status("[cyan]Cloning...[/cyan]", spinner=Spinners.NETWORK):
         try:
             subprocess.run(
                 ["git", "clone", url, str(target)],
@@ -1297,7 +1298,7 @@ def clone_repo(url: str, base_path: str, console: Console | None = None) -> str:
                 stderr=e.stderr.decode() if e.stderr else None,
             )
 
-    console.print("  [green]✓[/green] Repository cloned")
+    console.print(f"  [green]{Indicators.get('PASS')}[/green] Repository cloned")
     console.print()
     console.print(
         create_success_panel(
@@ -1379,7 +1380,7 @@ exit 0
     )
     console.print()
 
-    with console.status("[cyan]Installing hooks...[/cyan]", spinner="dots"):
+    with console.status("[cyan]Installing hooks...[/cyan]", spinner=Spinners.SETUP):
         pre_push_path.write_text(pre_push_content)
         pre_push_path.chmod(0o755)
 
@@ -1389,7 +1390,7 @@ exit 0
             capture_output=True,
         )
 
-    console.print("  [green]✓[/green] Pre-push hook installed")
+    console.print(f"  [green]{Indicators.get('PASS')}[/green] Pre-push hook installed")
     console.print()
     console.print(
         create_success_panel(

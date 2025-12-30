@@ -1386,6 +1386,7 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
         _sync_marketplace_settings,
         _validate_and_resolve_workspace,
     )
+    from ..theme import Spinners
 
     console = Console()
     _prepare_for_nested_ui(console)
@@ -1409,7 +1410,7 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
 
     try:
         # Docker availability check
-        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
             docker.check_docker_available()
 
         # Validate and resolve workspace
