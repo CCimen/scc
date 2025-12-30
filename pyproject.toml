@@ -68,8 +68,18 @@ include = [
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "I", "N", "W", "UP", "T201"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# T201: print() allowed in these files for legitimate stdout output
+"src/scc_cli/output_mode.py" = ["T201"]  # Centralized JSON stdout output via print_json()
+"src/scc_cli/cli_admin.py" = ["T201"]    # JSON output for scripting
+"src/scc_cli/cli_org.py" = ["T201"]      # Schema output for piping
+"src/scc_cli/cli_worktree.py" = ["T201"] # Path output for scripting: cd $(scc worktree list -i)
+"tests/**/*.py" = ["T201"]               # Tests may use print() freely
+# UP037: Explicit string annotation kept as defensive measure (guards against __future__ removal)
+"src/scc_cli/ui/theme.py" = ["UP037"]
 
 [tool.mypy]
 python_version = "3.10"
