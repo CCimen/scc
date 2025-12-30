@@ -12,6 +12,10 @@ Priority Order (highest to lowest):
 5. Explicit --interactive flag → True (if TTY available)
 6. Default → True (if TTY available)
 
+Fast Fail Validation:
+Conflicting flags (--json with --interactive/--select) raise UsageError
+immediately rather than silently ignoring the interactive flag.
+
 Example:
     >>> ctx = InteractivityContext.create(json_mode=False)
     >>> if ctx.allows_prompt():
@@ -79,6 +83,59 @@ def _is_tty_available() -> bool:
         True if stdin is a terminal, False if piped/redirected.
     """
     return sys.stdin.isatty()
+
+
+def validate_mode_flags(
+    *,
+    json_mode: bool = False,
+    interactive: bool = False,
+    select: bool = False,
+    dashboard: bool = False,
+) -> None:
+    """Validate that mode flags don't conflict - fail fast if they do.
+
+    This validation should be called as early as possible after option parsing,
+    before any UI/gating code runs. It ensures users get immediate feedback
+    about conflicting flags rather than silent behavior.
+
+    Args:
+        json_mode: Whether --json flag is set.
+        interactive: Whether --interactive/-i flag is set.
+        select: Whether --select flag is set.
+        dashboard: Whether --dashboard flag is set.
+
+    Raises:
+        UsageError: If JSON mode is combined with any interactive flag.
+
+    Example:
+        >>> validate_mode_flags(json_mode=True, interactive=True)
+        Traceback (most recent call last):
+            ...
+        UsageError: Cannot use --json with --interactive
+    """
+    from ..errors import UsageError
+
+    if not json_mode:
+        return  # No conflict possible without JSON mode
+
+    # Collect all conflicting flags
+    conflicts: list[str] = []
+    if interactive:
+        conflicts.append("--interactive")
+    if select:
+        conflicts.append("--select")
+    if dashboard:
+        conflicts.append("--dashboard")
+
+    if conflicts:
+        flags_str = ", ".join(conflicts)
+        raise UsageError(
+            user_message=f"Cannot use --json with {flags_str}",
+            suggested_action=(
+                "Remove one of the conflicting flags. "
+                "Use --json for machine-readable output OR interactive flags for user prompts, not both."
+            ),
+        )
 
 
 def is_interactive_allowed(

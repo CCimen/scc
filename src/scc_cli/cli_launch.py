@@ -683,6 +683,14 @@ def start(
 
     If no arguments provided, launches interactive mode.
     """
+    # ── Fast Fail: Validate mode flags before any processing ──────────────────
+    from scc_cli.ui.gate import validate_mode_flags
+
+    validate_mode_flags(
+        json_mode=(json_output or pretty),
+        select=select,
+    )
+
     # ── Step 0: Handle --standalone mode (skip org config entirely) ───────────
     if standalone:
         # In standalone mode, never ask for team and never load org config
