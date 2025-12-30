@@ -100,7 +100,7 @@ def render_help_content(mode: HelpMode) -> RenderableType:
         # Section header
         section_header = Text()
         section_header.append(f"─── {section_name} ", style="dim")
-        section_header.append("─" * (30 - len(section_name)), style="dim")
+        section_header.append("─" * max(0, 30 - len(section_name)), style="dim")
         renderables.append(section_header)
 
         # Section table

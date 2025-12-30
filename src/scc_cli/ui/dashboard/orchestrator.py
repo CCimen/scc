@@ -12,7 +12,7 @@ that exit the Rich Live context before handling nested UI components.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from rich.console import Console
 
@@ -26,9 +26,6 @@ from ..list_screen import ListState
 from ._dashboard import Dashboard
 from .loaders import _load_all_tab_data
 from .models import DashboardState, DashboardTab
-
-if TYPE_CHECKING:
-    pass
 
 
 def run_dashboard() -> None:
@@ -130,17 +127,24 @@ def _prepare_for_nested_ui(console: Console) -> None:
     """
     import io
     import sys
-    import termios
 
     # Restore cursor (Rich Live may hide it)
     console.show_cursor(True)
     console.print()  # Ensure clean newline
 
-    # Flush buffered input (best-effort)
+    # Flush buffered input (best-effort, Unix only)
     try:
+        import termios
+
         termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
-    except (termios.error, OSError, ValueError, TypeError, io.UnsupportedOperation):
-        pass  # Non-Unix, redirected stdin, or mock - safe to ignore
+    except (
+        ModuleNotFoundError,  # Windows - no termios module
+        OSError,  # Redirected stdin, no TTY
+        ValueError,  # Invalid file descriptor
+        TypeError,  # Mock stdin without fileno
+        io.UnsupportedOperation,  # Stdin without fileno support
+    ):
+        pass  # Non-Unix or non-TTY environment - safe to ignore
 
 
 def _handle_team_switch() -> None:

@@ -34,7 +34,7 @@ def get_version_header(version: str) -> str:
     else:
         return (
             "+---------------------------------------+\n"
-            f"|  SCC  Sandboxed Claude CLI  {v_padded} |\n"
+            f"|  [cyan bold]SCC[/cyan bold]  Sandboxed Claude CLI  [dim]{v_padded}[/dim] |\n"
             "+---------------------------------------+"
         )
 
@@ -54,7 +54,7 @@ def get_doctor_header() -> str:
     else:
         return (
             "+---------------------------------------+\n"
-            "|  SCC Doctor  System Health Check      |\n"
+            "|  [cyan bold]SCC Doctor[/cyan bold]  System Health Check      |\n"
             "+---------------------------------------+"
         )
 
