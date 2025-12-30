@@ -398,7 +398,7 @@ def get_err_console() -> Console:
     global _err_console
     if _err_console is None:
         # Lazy import to keep module load fast
-        from scc_cli.ui.theme import get_scc_theme
+        from scc_cli.theme import get_scc_theme
 
         _err_console = Console(
             stderr=True,

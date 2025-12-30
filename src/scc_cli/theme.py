@@ -12,7 +12,7 @@ Contains:
 - get_scc_theme(): Lazy-loaded Rich Theme for semantic style names
 
 Usage:
-    from scc_cli.ui.theme import Colors, Borders, Indicators, get_scc_theme
+    from scc_cli.theme import Colors, Borders, Indicators, get_scc_theme
 
     # Use semantic names instead of hardcoded colors:
     border_style=Borders.PANEL_SUCCESS  # instead of "green"
