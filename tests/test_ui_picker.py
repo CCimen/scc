@@ -360,7 +360,7 @@ class TestRunSingleSelectPicker:
         ]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live"):
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader
@@ -381,7 +381,7 @@ class TestRunSingleSelectPicker:
         items = [ListItem(value="item1", label="Item 1", description="")]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live"):
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader
@@ -399,7 +399,7 @@ class TestRunSingleSelectPicker:
         items = [ListItem(value="item1", label="Item 1", description="")]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live"):
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader
@@ -420,7 +420,7 @@ class TestRunSingleSelectPicker:
         ]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live") as mock_live_cls:
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader
@@ -446,7 +446,7 @@ class TestRunSingleSelectPicker:
         ]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live") as mock_live_cls:
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader
@@ -474,7 +474,7 @@ class TestRunSingleSelectPicker:
         ]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live") as mock_live_cls:
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader
@@ -505,7 +505,7 @@ class TestRunSingleSelectPicker:
         ]
 
         with patch("scc_cli.ui.picker.KeyReader") as mock_reader_cls:
-            with patch("scc_cli.ui.picker.Console"):
+            with patch("scc_cli.console.get_err_console"):
                 with patch("scc_cli.ui.picker.Live") as mock_live_cls:
                     mock_reader = MagicMock()
                     mock_reader_cls.return_value = mock_reader

@@ -20,13 +20,14 @@ from __future__ import annotations
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from ..theme import Indicators
+
 if TYPE_CHECKING:
-    from rich.console import RenderableType
+    from rich.console import Console, RenderableType
 
 
 class HelpMode(Enum):
@@ -37,36 +38,19 @@ class HelpMode(Enum):
     DASHBOARD = auto()  # Tabbed dashboard view
 
 
-# Key help entries: (key_display, description, modes_where_shown)
-# If modes is empty tuple, shown in all modes
-_HELP_ENTRIES: list[tuple[str, str, tuple[HelpMode, ...]]] = [
-    # Navigation - shown in all modes
-    ("↑ / k", "Move cursor up", ()),
-    ("↓ / j", "Move cursor down", ()),
-    # Filtering - shown in all modes
-    ("type", "Filter items by text", ()),
-    ("Backspace", "Delete filter character", ()),
-    # Selection - mode-specific
-    ("Enter", "Select item", (HelpMode.PICKER,)),
-    ("Space", "Toggle selection", (HelpMode.MULTI_SELECT,)),
-    ("a", "Toggle all items", (HelpMode.MULTI_SELECT,)),
-    ("Enter", "Confirm selection", (HelpMode.MULTI_SELECT,)),
-    ("Enter", "View details", (HelpMode.DASHBOARD,)),
-    # Tab navigation - dashboard only
-    ("Tab", "Next tab", (HelpMode.DASHBOARD,)),
-    ("Shift+Tab", "Previous tab", (HelpMode.DASHBOARD,)),
-    # Team switching - shown in all modes
-    ("t", "Switch team", ()),
-    # Exit - mode-specific
-    ("Esc", "Cancel / go back", (HelpMode.PICKER, HelpMode.MULTI_SELECT)),
-    ("q", "Quit", (HelpMode.DASHBOARD,)),
-    # Help - shown in all modes
-    ("?", "Show this help", ()),
-]
+# Mapping from HelpMode enum to string mode names used in KEYBINDING_DOCS
+_MODE_NAMES: dict[HelpMode, str] = {
+    HelpMode.PICKER: "PICKER",
+    HelpMode.MULTI_SELECT: "MULTI_SELECT",
+    HelpMode.DASHBOARD: "DASHBOARD",
+}
 
 
 def get_help_entries(mode: HelpMode) -> list[tuple[str, str]]:
     """Get help entries filtered for a specific mode.
+
+    This function uses KEYBINDING_DOCS from keys.py as the single source
+    of truth for keybinding documentation.
 
     Args:
         mode: The current screen mode.
@@ -74,47 +58,78 @@ def get_help_entries(mode: HelpMode) -> list[tuple[str, str]]:
     Returns:
         List of (key, description) tuples for the given mode.
     """
-    entries: list[tuple[str, str]] = []
-    for key, desc, modes in _HELP_ENTRIES:
-        if not modes or mode in modes:
-            entries.append((key, desc))
-    return entries
+    from .keys import get_keybindings_for_mode
+
+    mode_name = _MODE_NAMES[mode]
+    return get_keybindings_for_mode(mode_name)
 
 
-def render_help_content(mode: HelpMode) -> RenderableType:
-    """Render help content for a given mode.
+def get_help_entries_grouped(mode: HelpMode) -> dict[str, list[tuple[str, str]]]:
+    """Get help entries grouped by section for a specific mode.
+
+    This function uses KEYBINDING_DOCS from keys.py as the single source
+    of truth for keybinding documentation.
 
     Args:
         mode: The current screen mode.
 
     Returns:
-        A Rich renderable with the help content.
+        Dict mapping section names to lists of (key, description) tuples.
     """
-    entries = get_help_entries(mode)
+    from .keys import get_keybindings_grouped_by_section
 
-    table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-    table.add_column("Key", style="cyan bold", width=12)
-    table.add_column("Action", style="dim")
+    mode_name = _MODE_NAMES[mode]
+    return get_keybindings_grouped_by_section(mode_name)
 
-    for key, desc in entries:
-        table.add_row(key, desc)
+
+def render_help_content(mode: HelpMode) -> RenderableType:
+    """Render help content for a given mode with section headers.
+
+    Args:
+        mode: The current screen mode.
+
+    Returns:
+        A Rich renderable with the help content organized by section.
+    """
+    from rich.console import Group
+
+    grouped = get_help_entries_grouped(mode)
+
+    renderables: list[RenderableType] = []
+
+    for section_name, entries in grouped.items():
+        # Section header
+        section_header = Text()
+        sep = Indicators.get("HORIZONTAL_LINE")
+        section_header.append(f"{sep}{sep}{sep} {section_name} ", style="dim")
+        section_header.append(sep * max(0, 30 - len(section_name)), style="dim")
+        renderables.append(section_header)
+
+        # Section table
+        table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
+        table.add_column("Key", style="cyan bold", width=12)
+        table.add_column("Action", style="dim")
+
+        for key, desc in entries:
+            table.add_row(key, desc)
+
+        renderables.append(table)
+        renderables.append(Text(""))  # Spacing between sections
 
     # Mode indicator
-    mode_name = {
+    mode_display = {
         HelpMode.PICKER: "Picker",
         HelpMode.MULTI_SELECT: "Multi-Select",
         HelpMode.DASHBOARD: "Dashboard",
     }.get(mode, "Unknown")
 
     footer = Text()
-    footer.append("\n")
     footer.append("Press any key to dismiss", style="dim italic")
-
-    from rich.console import Group
+    renderables.append(footer)
 
     return Panel(
-        Group(table, footer),
-        title=f"[bold]Keyboard Shortcuts[/bold] │ {mode_name}",
+        Group(*renderables),
+        title=f"[bold]Keyboard Shortcuts[/bold] {Indicators.get('VERTICAL_LINE')} {mode_display}",
         title_align="left",
         border_style="blue",
         padding=(1, 2),
@@ -129,7 +144,9 @@ def show_help_overlay(mode: HelpMode, console: Console | None = None) -> None:
         console: Optional console to use. If None, creates a new one.
     """
     if console is None:
-        console = Console()
+        from ..console import get_err_console
+
+        console = get_err_console()
 
     content = render_help_content(mode)
     console.print(content)

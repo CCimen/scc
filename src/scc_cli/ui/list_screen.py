@@ -25,9 +25,11 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from rich.console import Console, RenderableType
+from rich.console import RenderableType
 from rich.live import Live
 from rich.text import Text
+
+from scc_cli.theme import Indicators
 
 from .chrome import Chrome, ChromeConfig
 from .keys import Action, ActionType, KeyReader, TeamSwitchRequested
@@ -162,9 +164,11 @@ class ListState(Generic[T]):
     def add_filter_char(self, char: str) -> bool:
         """Add character to filter query."""
         self.filter_query += char
-        # Reset cursor when filter changes
+        # Reset cursor and selection when filter changes
+        # Selection indices become stale when filtered list shrinks
         self.cursor = 0
         self.scroll_offset = 0
+        self.selected.clear()
         return True
 
     def delete_filter_char(self) -> bool:
@@ -172,8 +176,11 @@ class ListState(Generic[T]):
         if not self.filter_query:
             return False
         self.filter_query = self.filter_query[:-1]
+        # Reset cursor and selection when filter changes
+        # Selection indices become stale when filtered list changes
         self.cursor = 0
         self.scroll_offset = 0
+        self.selected.clear()
         return True
 
     def clear_filter(self) -> bool:
@@ -184,8 +191,11 @@ class ListState(Generic[T]):
         if not self.filter_query:
             return False
         self.filter_query = ""
+        # Reset cursor and selection when filter changes
+        # Selection indices become stale when filtered list changes
         self.cursor = 0
         self.scroll_offset = 0
+        self.selected.clear()
         return True
 
 
@@ -225,7 +235,9 @@ class ListScreen(Generic[T]):
         self.mode = mode
         self.title = title
         self.custom_actions = custom_actions or {}
-        self._console = Console()
+        from ..console import get_err_console
+
+        self._console = get_err_console()
 
     def run(self) -> T | list[T] | None:
         """Run the interactive list screen.
@@ -284,6 +296,10 @@ class ListScreen(Generic[T]):
 
         if not filtered:
             text.append("No matches found", style="dim italic")
+            if self.state.filter_query:
+                text.append(" — ", style="dim")
+                text.append("Backspace", style="cyan")
+                text.append(" to edit filter", style="dim")
             return text
 
         for i, item in enumerate(visible):
@@ -294,14 +310,14 @@ class ListScreen(Generic[T]):
 
             # Build line with cursor indicator
             if is_cursor:
-                text.append("❯ ", style="cyan bold")
+                text.append(f"{Indicators.get('CURSOR')} ", style="cyan bold")
             else:
                 text.append("  ")
 
             # Selection checkbox for multi-select
             if self.mode == ListMode.MULTI_SELECT:
                 if is_selected:
-                    text.append("[✓] ", style="green")
+                    text.append(f"[{Indicators.get('PASS')}] ", style="green")
                 else:
                     text.append("[ ] ", style="dim")
 
@@ -328,9 +344,9 @@ class ListScreen(Generic[T]):
 
         # Scroll indicators
         if self.state.scroll_offset > 0:
-            text.append("↑ more above\n", style="dim")
+            text.append(f"{Indicators.get('SCROLL_UP')} more above\n", style="dim")
         if self.state.scroll_offset + self.state.viewport_height < len(filtered):
-            text.append("↓ more below\n", style="dim")
+            text.append(f"{Indicators.get('SCROLL_DOWN')} more below\n", style="dim")
 
         return text
 
@@ -361,6 +377,12 @@ class ListScreen(Generic[T]):
                     item = self.state.current_item
                     if item:
                         return item.value
+                elif self.mode == ListMode.MULTI_SELECT:
+                    # In MULTI_SELECT, Enter confirms selection (same as CONFIRM)
+                    # This prevents should_exit from returning None as "cancelled"
+                    filtered = self.state.filtered_items
+                    selected_indices = self.state.selected & set(range(len(filtered)))
+                    return [filtered[i].value for i in sorted(selected_indices)]
 
             case ActionType.TOGGLE:
                 if self.mode == ListMode.MULTI_SELECT:

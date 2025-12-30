@@ -14,12 +14,12 @@ Both stores implement the ExceptionStore protocol and handle:
 from __future__ import annotations
 
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
 import scc_cli.config
+from scc_cli.console import err_line
 from scc_cli.models.exceptions import ExceptionFile
 
 # Current schema version supported by this implementation
@@ -112,10 +112,9 @@ class UserStore:
         schema_version = data.get("schema_version", 1)
         if schema_version > CURRENT_SCHEMA_VERSION:
             # Newer schema - warn and ignore (fail-open for local stores)
-            print(
+            err_line(
                 f"⚠️ {self.path} was created by newer SCC (schema v{schema_version}).\n"
-                f"   Local overrides ignored until you upgrade. Run: pip install --upgrade scc",
-                file=sys.stderr,
+                f"   Local overrides ignored until you upgrade. Run: pip install --upgrade scc"
             )
             return ExceptionFile()
 
@@ -160,10 +159,9 @@ class UserStore:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
         backup_path = self.path.parent / f"{self.path.name}.bak-{timestamp}"
         backup_path.write_text(self.path.read_text())
-        print(
+        err_line(
             f"⚠️ Local exceptions file corrupted. Backed up to {backup_path}.\n"
-            f"   Run `scc doctor` for details.",
-            file=sys.stderr,
+            f"   Run `scc doctor` for details."
         )
 
 
@@ -200,10 +198,9 @@ class RepoStore:
         schema_version = data.get("schema_version", 1)
         if schema_version > CURRENT_SCHEMA_VERSION:
             # Newer schema - warn and ignore (fail-open for local stores)
-            print(
+            err_line(
                 f"⚠️ {self._path} was created by newer SCC (schema v{schema_version}).\n"
-                f"   Local overrides ignored until you upgrade. Run: pip install --upgrade scc",
-                file=sys.stderr,
+                f"   Local overrides ignored until you upgrade. Run: pip install --upgrade scc"
             )
             return ExceptionFile()
 
@@ -248,8 +245,7 @@ class RepoStore:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
         backup_path = self._path.with_suffix(f".json.bak-{timestamp}")
         backup_path.write_text(self._path.read_text())
-        print(
+        err_line(
             f"⚠️ Repo exceptions file corrupted. Backed up to {backup_path}.\n"
-            f"   Run `scc doctor` for details.",
-            file=sys.stderr,
+            f"   Run `scc doctor` for details."
         )

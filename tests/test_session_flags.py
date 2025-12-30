@@ -155,7 +155,7 @@ class TestSelectFlag:
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.ui.select_session", return_value=mock_session) as mock_picker,
+            patch("scc_cli.cli_launch.select_session", return_value=mock_session) as mock_picker,
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch(
                 "scc_cli.cli_launch.docker.get_or_create_container",
@@ -184,7 +184,7 @@ class TestSelectFlag:
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.ui.select_session", return_value=mock_session) as mock_picker,
+            patch("scc_cli.cli_launch.select_session", return_value=mock_session) as mock_picker,
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch(
                 "scc_cli.cli_launch.docker.get_or_create_container",
@@ -226,7 +226,7 @@ class TestSelectFlag:
             patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.ui.select_session", return_value=None),  # User cancelled
+            patch("scc_cli.cli_launch.select_session", return_value=None),  # User cancelled
         ):
             result = runner.invoke(app, ["start", "--select"])
 
@@ -328,7 +328,7 @@ class TestFlagMutualExclusivity:
             patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
             patch("scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session),
             patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.ui.select_session", return_value=mock_session),
+            patch("scc_cli.cli_launch.select_session", return_value=mock_session),
             patch("scc_cli.cli_launch.docker.check_docker_available"),
             patch(
                 "scc_cli.cli_launch.docker.get_or_create_container",

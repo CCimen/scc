@@ -26,6 +26,8 @@ from rich.console import Group
 from rich.panel import Panel
 from rich.text import Text
 
+from ..theme import Borders, Indicators
+
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
@@ -326,7 +328,8 @@ class Chrome:
             parts.append(self.config.context_label)
         if self.config.subtitle:
             parts.append(self.config.subtitle)
-        return " │ ".join(parts)
+        sep = Indicators.get("VERTICAL_LINE")
+        return f" {sep} ".join(parts)
 
     def _render_tabs(self) -> Text:
         """Render the tab row."""
@@ -345,9 +348,9 @@ class Chrome:
         """Render the search/filter row."""
         text = Text()
         if query:
-            text.append("🔍 ", style="dim")
+            text.append(f"{Indicators.get('SEARCH_ICON')} ", style="dim")
             text.append(query, style="yellow")
-            text.append("_", style="blink yellow")
+            text.append(Indicators.get("TEXT_CURSOR"), style="yellow bold")
         else:
             text.append("Type to filter...", style="dim italic")
         text.append("\n")
@@ -356,10 +359,10 @@ class Chrome:
     def _render_footer(self) -> Text:
         """Render the footer hints row."""
         text = Text()
-        text.append("─" * 40 + "\n", style="dim")
+        text.append(Borders.FOOTER_SEPARATOR * 40 + "\n", style="dim")
         for i, hint in enumerate(self.config.footer_hints):
             if i > 0:
-                text.append(" │ ", style="dim")
+                text.append(f" {Indicators.get('VERTICAL_LINE')} ", style="dim")
             # Dimmed hints (e.g., teams in standalone mode) show in strike-through dim
             if hint.dimmed:
                 text.append(hint.key, style="dim strike")

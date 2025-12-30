@@ -204,13 +204,23 @@ def team_list(
     # Human-readable output
     if not is_json_mode():
         if not available_teams:
-            console.print(
-                create_warning_panel(
-                    "No Teams",
-                    "No team profiles configured.",
-                    "Run 'scc setup' to initialize configuration",
+            # Provide context-aware messaging based on mode
+            if config.is_standalone_mode():
+                console.print(
+                    create_warning_panel(
+                        "Standalone Mode",
+                        "Teams are not available in standalone mode.",
+                        "Run 'scc setup' with an organization URL to enable teams",
+                    )
                 )
-            )
+            else:
+                console.print(
+                    create_warning_panel(
+                        "No Teams",
+                        "No team profiles defined in organization config.",
+                        "Contact your organization admin to configure teams",
+                    )
+                )
             return {"teams": [], "current": current}
 
         # Build rows for responsive table
@@ -333,10 +343,17 @@ def team_switch(
     available_teams = teams.list_teams(cfg, org_config=org_config)
 
     if not available_teams:
-        print_human(
-            "[yellow]No teams available to switch to.[/yellow]\n"
-            "[dim]Run 'scc setup' to configure teams[/dim]"
-        )
+        # Provide context-aware messaging based on mode
+        if config.is_standalone_mode():
+            print_human(
+                "[yellow]Teams are not available in standalone mode.[/yellow]\n"
+                "[dim]Run 'scc setup' with an organization URL to enable teams[/dim]"
+            )
+        else:
+            print_human(
+                "[yellow]No teams available to switch to.[/yellow]\n"
+                "[dim]No team profiles defined in organization config[/dim]"
+            )
         return {"success": False, "error": "no_teams_available", "previous": None, "current": None}
 
     # Get current team for picker display

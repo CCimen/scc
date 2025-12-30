@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from . import config as config_module
+from .theme import Indicators
 
 if TYPE_CHECKING:
     from .ui.list_screen import ListItem
@@ -82,7 +83,7 @@ class TeamInfo:
         is_current = current_team is not None and self.name == current_team
 
         # Build label with current indicator
-        label = f"✓ {self.name}" if is_current else self.name
+        label = f"{Indicators.get('PASS')} {self.name}" if is_current else self.name
 
         # Check for credential/governance status
         governance_status: str | None = None

@@ -19,6 +19,7 @@ from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import is_json_mode, json_output_mode, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .theme import Spinners
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Admin App
@@ -256,7 +257,7 @@ def doctor_cmd(
                 raise typer.Exit(3)  # Prerequisites failed
             raise typer.Exit(0)
 
-    with Status("[cyan]Running health checks...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Running health checks...[/cyan]", console=console, spinner=Spinners.DEFAULT):
         result = doctor.run_doctor(workspace_path)
 
     if quick:
@@ -283,7 +284,7 @@ def update_cmd(
 
     cfg = config.load_config()
 
-    with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner=Spinners.NETWORK):
         result = update_module.check_all_updates(cfg, force=force)
 
     # Render detailed update status panel
@@ -319,7 +320,7 @@ def statusline_cmd(
         with Status(
             "[cyan]Reading Docker sandbox settings...[/cyan]",
             console=console,
-            spinner="dots",
+            spinner=Spinners.DOCKER,
         ):
             settings = docker.get_sandbox_settings()
 
@@ -354,7 +355,7 @@ def statusline_cmd(
         with Status(
             "[cyan]Removing statusline from Docker sandbox...[/cyan]",
             console=console,
-            spinner="dots",
+            spinner=Spinners.DOCKER,
         ):
             # Get existing settings
             existing_settings = docker.get_sandbox_settings()
@@ -405,7 +406,7 @@ def statusline_cmd(
         with Status(
             "[cyan]Injecting statusline into Docker sandbox...[/cyan]",
             console=console,
-            spinner="dots",
+            spinner=Spinners.DOCKER,
         ):
             # Inject script into Docker volume (will be at /mnt/claude-data/scc-statusline.sh)
             script_ok = docker.inject_file_to_sandbox_volume("scc-statusline.sh", script_content)

@@ -14,11 +14,11 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from . import ui_legacy as ui
 from .errors import SCCError
 from .exit_codes import EXIT_CANCELLED
 from .output_mode import is_json_command_mode, is_json_mode
 from .panels import create_warning_panel
+from .ui.prompts import render_error
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -60,7 +60,7 @@ def handle_errors(func: F) -> F:
     """Catch SCCError exceptions and render user-friendly error output.
 
     Wrap CLI command functions to provide consistent error handling:
-    - SCCError: Render with ui.render_error and exit with error's exit_code
+    - SCCError: Render with render_error and exit with error's exit_code
     - KeyboardInterrupt: Print cancellation message and exit 130
     - Other exceptions: Show warning panel (or full traceback with --debug)
 
@@ -79,7 +79,7 @@ def handle_errors(func: F) -> F:
             if is_json_command_mode():
                 raise
             target_console = err_console if is_json_mode() else console
-            ui.render_error(target_console, e, debug=state.debug)
+            render_error(target_console, e, debug=state.debug)
             raise typer.Exit(e.exit_code)
         except KeyboardInterrupt:
             if is_json_command_mode():

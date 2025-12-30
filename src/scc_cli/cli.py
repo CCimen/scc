@@ -16,7 +16,6 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_installed_version
 
 import typer
-from rich.panel import Panel
 
 from .cli_admin import (
     doctor_cmd,
@@ -98,17 +97,13 @@ def main_callback(
     state.debug = debug
 
     if version:
+        from .ui.branding import get_version_header
+
         try:
             pkg_version = get_installed_version("scc-cli")
         except PackageNotFoundError:
             pkg_version = "unknown"
-        console.print(
-            Panel(
-                f"[cyan]scc-cli[/cyan] [dim]v{pkg_version}[/dim]\n"
-                "[dim]Safe development environment manager for Claude Code[/dim]",
-                border_style="cyan",
-            )
-        )
+        console.print(get_version_header(pkg_version))
         raise typer.Exit()
 
     # If no command provided and not showing version, use context-aware routing

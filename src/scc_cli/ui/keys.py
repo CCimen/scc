@@ -173,6 +173,134 @@ class Action(Generic[T]):
     filter_char: str | None = None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Keybinding Documentation (Single Source of Truth)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class KeyDoc:
+    """Documentation entry for a keybinding.
+
+    This is the single source of truth for keybinding documentation.
+    Both the help overlay (ui/help.py) and footer hints (ui/chrome.py)
+    should derive their content from KEYBINDING_DOCS.
+
+    Attributes:
+        display_key: How to display the key (e.g., "↑ / k", "Enter").
+        description: Full description for help overlay.
+        section: Category for grouping in help (Navigation, Selection, etc.).
+        modes: Mode names where this binding is shown.
+            Empty tuple = all modes ("PICKER", "MULTI_SELECT", "DASHBOARD").
+    """
+
+    __slots__ = ("display_key", "description", "section", "modes")
+
+    def __init__(
+        self,
+        display_key: str,
+        description: str,
+        section: str = "General",
+        modes: tuple[str, ...] = (),
+    ) -> None:
+        self.display_key = display_key
+        self.description = description
+        self.section = section
+        self.modes = modes
+
+
+# Single source of truth for all keybinding documentation.
+# Modes: empty tuple = all modes, or specific modes like ("PICKER",) or ("DASHBOARD",)
+# Sections group related keybindings in help overlay: Navigation, Filtering, Selection, etc.
+KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
+    # Navigation
+    KeyDoc("↑ / k", "Move cursor up", section="Navigation"),
+    KeyDoc("↓ / j", "Move cursor down", section="Navigation"),
+    # Filtering
+    KeyDoc("type", "Filter items by text", section="Filtering"),
+    KeyDoc("Backspace", "Delete filter character", section="Filtering"),
+    # Selection (mode-specific)
+    KeyDoc("Enter", "Select item", section="Selection", modes=("PICKER",)),
+    KeyDoc("Space", "Toggle selection", section="Selection", modes=("MULTI_SELECT",)),
+    KeyDoc("a", "Toggle all items", section="Selection", modes=("MULTI_SELECT",)),
+    KeyDoc("Enter", "Confirm selection", section="Selection", modes=("MULTI_SELECT",)),
+    KeyDoc("Enter", "View details", section="Selection", modes=("DASHBOARD",)),
+    # Tab navigation (dashboard only)
+    KeyDoc("Tab", "Next tab", section="Tabs", modes=("DASHBOARD",)),
+    KeyDoc("Shift+Tab", "Previous tab", section="Tabs", modes=("DASHBOARD",)),
+    # Actions
+    KeyDoc("r", "Refresh data", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("n", "New session", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("t", "Switch team", section="Actions"),
+    # Exit
+    KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
+    KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),
+    # Help
+    KeyDoc("?", "Show this help", section="Help"),
+)
+
+
+def get_keybindings_for_mode(mode: str) -> list[tuple[str, str]]:
+    """Get keybinding entries filtered for a specific mode.
+
+    This function provides the primary interface for chrome.py footer hints
+    to retrieve keybinding documentation. It filters KEYBINDING_DOCS to
+    return only entries applicable to the given mode.
+
+    Args:
+        mode: Mode name ("PICKER", "MULTI_SELECT", or "DASHBOARD").
+
+    Returns:
+        List of (display_key, description) tuples for the given mode.
+
+    Example:
+        >>> entries = get_keybindings_for_mode("PICKER")
+        >>> ("Enter", "Select item") in entries
+        True
+    """
+    entries: list[tuple[str, str]] = []
+    for doc in KEYBINDING_DOCS:
+        # Empty modes = all modes, or check if mode is in the list
+        if not doc.modes or mode in doc.modes:
+            entries.append((doc.display_key, doc.description))
+    return entries
+
+
+def get_keybindings_grouped_by_section(mode: str) -> dict[str, list[tuple[str, str]]]:
+    """Get keybinding entries grouped by section for a specific mode.
+
+    This function provides the interface for help.py to render keybindings
+    with section headers. It filters KEYBINDING_DOCS and groups entries
+    by their section field while preserving order.
+
+    Args:
+        mode: Mode name ("PICKER", "MULTI_SELECT", or "DASHBOARD").
+
+    Returns:
+        Dict mapping section names to lists of (display_key, description) tuples.
+        Sections are returned in the order they first appear in KEYBINDING_DOCS.
+
+    Example:
+        >>> grouped = get_keybindings_grouped_by_section("DASHBOARD")
+        >>> "Navigation" in grouped
+        True
+        >>> grouped["Navigation"]
+        [('↑ / k', 'Move cursor up'), ('↓ / j', 'Move cursor down')]
+    """
+    # Use dict to preserve insertion order (Python 3.7+)
+    sections: dict[str, list[tuple[str, str]]] = {}
+    for doc in KEYBINDING_DOCS:
+        # Empty modes = all modes, or check if mode is in the list
+        if not doc.modes or mode in doc.modes:
+            if doc.section not in sections:
+                sections[doc.section] = []
+            sections[doc.section].append((doc.display_key, doc.description))
+    return sections
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Key Mappings (Runtime Behavior)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 # Default key mappings for navigation and common actions.
 # These are shared across all list modes.
 # NOTE: Dashboard-specific keys like 'r' (refresh) should NOT be here.
@@ -200,8 +328,8 @@ DEFAULT_KEY_MAP: dict[str, ActionType] = {
     readchar.key.BACKSPACE: ActionType.FILTER_DELETE,
     # Team switching
     "t": ActionType.TEAM_SWITCH,
-    # New session (explicit action in Quick Resume)
-    "n": ActionType.NEW_SESSION,
+    # Note: "n" (new session) is NOT in DEFAULT_KEY_MAP because it's screen-specific.
+    # It's added via custom_keys only to Quick Resume and Dashboard where it makes sense.
 }
 
 
@@ -222,6 +350,9 @@ def read_key() -> str:
 def is_printable(key: str) -> bool:
     """Check if a key is a printable character for type-to-filter.
 
+    Supports full Unicode including non-ASCII characters (åäö, emoji)
+    for Swedish locale and international users.
+
     Args:
         key: The key to check.
 
@@ -229,20 +360,20 @@ def is_printable(key: str) -> bool:
         True if the key is a single printable character that
         should be added to the filter query.
     """
-    # Single character, printable ASCII (excluding control chars)
+    # Single character only
     if len(key) != 1:
         return False
 
-    # Check if it's a printable character (space through tilde)
-    # but exclude keys that have special meanings
-    code = ord(key)
-    if code < 32 or code > 126:  # noqa: PLR2004
+    # Use Python's built-in isprintable() for proper Unicode support
+    # This handles åäö, emoji, and other non-ASCII printable chars
+    if not key.isprintable():
         return False
 
     # Exclude keys with special bindings
     # (they'll be handled by the key map first)
-    # NOTE: 'r' is NOT here - it's a filterable char. Dashboard handles 'r' explicitly.
-    special_keys = {"q", "?", "a", "j", "k", " ", "t", "n"}
+    # NOTE: 'r' and 'n' are NOT here - they're filterable chars.
+    # Dashboard handles 'r' and 'n' explicitly via custom_keys.
+    special_keys = {"q", "?", "a", "j", "k", " ", "t"}
     return key not in special_keys
 
 
@@ -285,8 +416,9 @@ def map_key_to_action(
     """
     # Priority 1: When filter is active, certain mapped keys become filter characters
     # (user is typing, arrow keys still work for navigation)
-    # j/k = vim navigation, t = team switch, a = toggle all, n = new session - all filterable when typing
-    if filter_active and enable_filter and key in ("j", "k", "t", "a", "n"):
+    # j/k = vim navigation, t = team switch, a = toggle all, n = new session, r = refresh
+    # All become filterable when user is actively typing a filter query
+    if filter_active and enable_filter and key in ("j", "k", "t", "a", "n", "r"):
         return Action(
             action_type=ActionType.FILTER_CHAR,
             filter_char=key,

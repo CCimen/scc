@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+from ..theme import Indicators
 from .types import CheckResult, JsonValidationResult
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -115,7 +116,7 @@ def format_code_frame(
         if line_num == error_line:
             # Error line with arrow indicator
             frame_lines.append(
-                f"[bold red]→ {line_num:>{line_num_width}} │[/bold red] "
+                f"[bold red]{Indicators.get('ARROW')} {line_num:>{line_num_width}} │[/bold red] "
                 f"[white]{_escape_rich(line_content)}[/white]"
             )
             # Caret line pointing to error column

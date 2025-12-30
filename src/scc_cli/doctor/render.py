@@ -259,7 +259,7 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
         if checks_with_commands:
             console.print()
             console.print("  [bold cyan]Next Steps[/bold cyan]")
-            console.print("  [dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
+            console.print("  [dim]────────────────────────────────────────────────────[/dim]")
             console.print()
 
             for check in checks_with_commands:

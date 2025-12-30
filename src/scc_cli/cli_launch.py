@@ -25,7 +25,6 @@ from rich.table import Table
 
 from . import config, deps, docker, git, sessions, setup, teams
 from . import platform as platform_module
-from . import ui_legacy as ui
 from .cli_common import (
     MAX_DISPLAY_PATH_LENGTH,
     PATH_TRUNCATE_LENGTH,
@@ -41,11 +40,18 @@ from .kinds import Kind
 from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from .output_mode import json_output_mode, print_human, print_json, set_pretty_mode
 from .panels import create_info_panel, create_success_panel, create_warning_panel
+from .theme import Colors, Indicators, Spinners, get_brand_header
 from .ui.gate import is_interactive_allowed
 from .ui.picker import (
     QuickResumeResult,
     TeamSwitchRequested,
     pick_context_quick_resume,
+)
+from .ui.prompts import (
+    prompt_custom_workspace,
+    prompt_repo_url,
+    select_session,
+    select_team,
 )
 from .ui.wizard import (
     BACK,
@@ -133,7 +139,7 @@ def _resolve_session_selection(
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
             return None, team, None, None, False
-        selected = ui.select_session(console, recent_sessions)
+        selected = select_session(console, recent_sessions)
         if selected is None:
             return None, team, None, None, True
         workspace = selected.get("workspace")
@@ -239,10 +245,12 @@ def _prepare_workspace(
 
     # Install dependencies if requested
     if install_deps:
-        with Status("[cyan]Installing dependencies...[/cyan]", console=console, spinner="dots"):
+        with Status(
+            "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
+        ):
             success = deps.auto_install_dependencies(workspace_path)
         if success:
-            console.print("[green]✓ Dependencies installed[/green]")
+            console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
         else:
             console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
 
@@ -337,7 +345,9 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     if not team:
         return
 
-    with Status(f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner="dots"):
+    with Status(
+        f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner=Spinners.SETUP
+    ):
         # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
 
@@ -387,7 +397,9 @@ def _sync_marketplace_settings(
     if org_config is None:
         return None
 
-    with Status("[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner="dots"):
+    with Status(
+        "[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner=Spinners.NETWORK
+    ):
         try:
             result = sync_marketplace_settings(
                 project_dir=workspace_path,
@@ -406,11 +418,11 @@ def _sync_marketplace_settings(
             # Log success
             if result.plugins_enabled:
                 console.print(
-                    f"[green]✓ Enabled {len(result.plugins_enabled)} team plugin(s)[/green]"
+                    f"[green]{Indicators.get('PASS')} Enabled {len(result.plugins_enabled)} team plugin(s)[/green]"
                 )
             if result.marketplaces_materialized:
                 console.print(
-                    f"[green]✓ Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
+                    f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
                 )
 
             return result
@@ -683,6 +695,14 @@ def start(
 
     If no arguments provided, launches interactive mode.
     """
+    # ── Fast Fail: Validate mode flags before any processing ──────────────────
+    from scc_cli.ui.gate import validate_mode_flags
+
+    validate_mode_flags(
+        json_mode=(json_output or pretty),
+        select=select,
+    )
+
     # ── Step 0: Handle --standalone mode (skip org config entirely) ───────────
     if standalone:
         # In standalone mode, never ask for team and never load org config
@@ -738,7 +758,7 @@ def start(
         raise typer.Exit(EXIT_CANCELLED)
 
     # ── Step 3: Docker availability check ────────────────────────────────────
-    with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+    with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
         docker.check_docker_available()
 
     # ── Step 4: Workspace validation and platform checks ─────────────────────
@@ -904,7 +924,11 @@ def _show_dry_run_panel(data: dict[str, Any]) -> None:
 
     # Ready status
     ready = data.get("ready_to_start", True)
-    status = "[green]✓ Ready to start[/green]" if ready else "[red]✗ Blocked[/red]"
+    status = (
+        f"[green]{Indicators.get('PASS')} Ready to start[/green]"
+        if ready
+        else f"[red]{Indicators.get('FAIL')} Blocked[/red]"
+    )
     grid.add_row("Status:", status)
 
     # Blocked items
@@ -974,7 +998,7 @@ def interactive_start(
         - Cancel: (None, None, None, None) if user pressed q
         - Back: (BACK, None, None, None) if allow_back and user pressed Esc
     """
-    ui.show_header(console)
+    console.print(get_brand_header(), style=Colors.BRAND)
 
     # Determine mode: standalone vs organization
     # CLI --standalone flag overrides config setting
@@ -1082,7 +1106,7 @@ def interactive_start(
             raise typer.Exit(EXIT_CONFIG)
         else:
             # Normal flow: org mode with teams available
-            team = ui.select_team(console, cfg)
+            team = select_team(console, cfg)
 
         # Step 2: Select workspace source (with back navigation support)
         workspace: str | None = None
@@ -1162,13 +1186,13 @@ def interactive_start(
                         workspace = cast(str, picker_result)
 
                     elif source == WorkspaceSource.CUSTOM:
-                        workspace = ui.prompt_custom_workspace(console)
+                        workspace = prompt_custom_workspace(console)
                         # Empty input means go back
                         if workspace is None:
                             continue
 
                     elif source == WorkspaceSource.CLONE:
-                        repo_url = ui.prompt_repo_url(console)
+                        repo_url = prompt_repo_url(console)
                         if repo_url:
                             workspace = git.clone_repo(
                                 repo_url, cfg.get("workspace_base", "~/projects")
@@ -1341,7 +1365,7 @@ def run_start_wizard_flow(
 
     try:
         # Step 3: Docker availability check
-        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner="dots"):
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
             docker.check_docker_available()
 
         # Step 4: Workspace validation
