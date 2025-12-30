@@ -206,12 +206,180 @@ def _run_subscreen_picker(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+# Common project markers across languages/frameworks
+# Split into direct checks (fast) and glob patterns (slower, checked only if needed)
+_PROJECT_MARKERS_DIRECT = (
+    ".git",  # Git repository (directory or file for worktrees)
+    ".scc.yaml",  # SCC config
+    ".gitignore",  # Often at project root
+    "package.json",  # Node.js / JavaScript
+    "tsconfig.json",  # TypeScript
+    "pyproject.toml",  # Python (modern)
+    "setup.py",  # Python (legacy)
+    "requirements.txt",  # Python dependencies
+    "Pipfile",  # Pipenv
+    "Cargo.toml",  # Rust
+    "go.mod",  # Go
+    "pom.xml",  # Java Maven
+    "build.gradle",  # Java/Kotlin Gradle
+    "gradlew",  # Gradle wrapper (strong signal)
+    "Gemfile",  # Ruby
+    "composer.json",  # PHP
+    "mix.exs",  # Elixir
+    "Makefile",  # Make-based projects
+    "CMakeLists.txt",  # CMake C/C++
+    ".project",  # Eclipse
+    "Dockerfile",  # Docker projects
+    "docker-compose.yml",  # Docker Compose
+    "compose.yaml",  # Docker Compose (new name)
+)
+
+# Glob patterns for project markers (checked only if direct checks fail)
+_PROJECT_MARKERS_GLOB = (
+    "*.sln",  # .NET solution
+    "*.csproj",  # .NET C# project
+)
+
+# Unix directories that should NOT be used as workspace
+_SUSPICIOUS_DIRS_UNIX = {
+    "/",
+    "/tmp",
+    "/var",
+    "/usr",
+    "/etc",
+    "/opt",
+    "/proc",
+    "/dev",
+    "/sys",
+    "/run",
+    "/Applications",  # macOS
+    "/Library",  # macOS
+    "/System",  # macOS
+    "/Volumes",  # macOS mount points
+    "/mnt",  # Linux mount points
+    "/home",  # Parent of all user homes
+    "/Users",  # macOS parent of all user homes
+}
+
+# Windows directories that should NOT be used as workspace
+_SUSPICIOUS_DIRS_WINDOWS = {
+    "C:\\",
+    "C:\\Windows",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "C:\\ProgramData",
+    "C:\\Users",
+    "D:\\",
+}
+
+
+def _safe_resolve(path: Path) -> Path:
+    """Safely resolve a path, falling back to absolute() on errors.
+
+    Args:
+        path: Path to resolve.
+
+    Returns:
+        Resolved path, or absolute path if resolution fails.
+    """
+    try:
+        return path.resolve(strict=False)
+    except (OSError, RuntimeError):
+        try:
+            return path.absolute()
+        except (OSError, RuntimeError):
+            return path
+
+
+def _is_suspicious_directory(path: Path) -> bool:
+    """Check if directory is suspicious (should not be used as workspace).
+
+    Cross-platform detection of directories that are likely not project roots:
+    - System directories (/, /tmp, C:\\Windows, etc.)
+    - User home directory itself
+    - Common non-project locations (Downloads, Desktop)
+
+    Args:
+        path: Directory to check.
+
+    Returns:
+        True if this is a suspicious directory.
+    """
+    resolved = _safe_resolve(path)
+    home = _safe_resolve(Path.home())
+
+    # User's home directory itself is suspicious
+    if resolved == home:
+        return True
+
+    str_path = str(resolved)
+
+    # Check platform-specific suspicious directories
+    import sys
+
+    if sys.platform == "win32":
+        # Windows: case-insensitive comparison
+        str_path_lower = str_path.lower()
+        for suspicious in _SUSPICIOUS_DIRS_WINDOWS:
+            if str_path_lower == suspicious.lower():
+                return True
+            # Also check if it's a drive root (e.g., "D:\")
+            if len(str_path) <= 3 and str_path[1:3] == ":\\":
+                return True
+    else:
+        # Unix-like systems
+        for suspicious in _SUSPICIOUS_DIRS_UNIX:
+            if str_path == suspicious:
+                return True
+
+    # Common non-project locations under home
+    suspicious_home_subdirs = ("Downloads", "Desktop", "Documents", "Library")
+    for subdir in suspicious_home_subdirs:
+        if resolved == home / subdir:
+            return True
+
+    return False
+
+
+def _has_project_markers(path: Path) -> bool:
+    """Check if a directory has common project markers.
+
+    Uses a two-phase approach for performance:
+    1. Fast direct existence checks for common markers
+    2. Slower glob patterns only if direct checks fail
+
+    Args:
+        path: Directory to check.
+
+    Returns:
+        True if directory has any recognizable project markers.
+    """
+    if not path.is_dir():
+        return False
+
+    # Phase 1: Fast direct checks
+    for marker in _PROJECT_MARKERS_DIRECT:
+        if (path / marker).exists():
+            return True
+
+    # Phase 2: Slower glob checks (only if no direct markers found)
+    for pattern in _PROJECT_MARKERS_GLOB:
+        try:
+            if next(path.glob(pattern), None) is not None:
+                return True
+        except (OSError, StopIteration):
+            continue
+
+    return False
+
+
 def _is_valid_workspace(path: Path) -> bool:
     """Check if a directory looks like a valid workspace.
 
     A valid workspace must have at least one of:
     - .git directory or file (for worktrees)
     - .scc.yaml config file
+    - Common project markers (package.json, pyproject.toml, etc.)
 
     Random directories (like $HOME) are NOT valid workspaces.
 
@@ -221,20 +389,7 @@ def _is_valid_workspace(path: Path) -> bool:
     Returns:
         True if directory exists and has workspace markers.
     """
-    if not path.is_dir():
-        return False
-
-    # Check for git (directory or file for worktrees)
-    git_path = path / ".git"
-    if git_path.exists():
-        return True
-
-    # Check for SCC config
-    if (path / ".scc.yaml").exists():
-        return True
-
-    # No workspace markers found - not a valid workspace
-    return False
+    return _has_project_markers(path)
 
 
 def pick_workspace_source(
@@ -269,21 +424,51 @@ def pick_workspace_source(
     if resolved_context_label is None and team:
         resolved_context_label = f"Team: {team}"
 
-    # Build items list - start with CWD option if valid
+    # Build items list - start with CWD option if appropriate
     items: list[ListItem[WorkspaceSource]] = []
 
-    # Check if current directory is a valid workspace
+    # Check current directory for project markers and git status
+    # Import here to avoid circular dependencies
+    from scc_cli import git
+
     cwd = Path.cwd()
-    if _is_valid_workspace(cwd):
-        # Show CWD name (last path component)
-        cwd_name = cwd.name or str(cwd)
-        items.append(
-            ListItem(
-                label="📍 Use current directory",
-                description=cwd_name,
-                value=WorkspaceSource.CURRENT_DIR,
+    cwd_name = cwd.name or str(cwd)
+    is_git = git.is_git_repo(cwd)
+
+    # Three-tier logic with git awareness:
+    # 1. Suspicious directory (home, /, tmp) → don't show
+    # 2. Has project markers + git → show folder name (confident)
+    # 3. Has project markers, no git → show "folder (no git)"
+    # 4. No markers, not suspicious → show "folder (no git)"
+    if not _is_suspicious_directory(cwd):
+        if _has_project_markers(cwd):
+            if is_git:
+                # Valid project with git - show with confidence
+                items.append(
+                    ListItem(
+                        label="📍 Current directory",
+                        description=cwd_name,
+                        value=WorkspaceSource.CURRENT_DIR,
+                    )
+                )
+            else:
+                # Has project markers but no git
+                items.append(
+                    ListItem(
+                        label="📍 Current directory",
+                        description=f"{cwd_name} (no git)",
+                        value=WorkspaceSource.CURRENT_DIR,
+                    )
+                )
+        else:
+            # Not a project but still allow - show with hint about git
+            items.append(
+                ListItem(
+                    label="📍 Current directory",
+                    description=f"{cwd_name} (no git)",
+                    value=WorkspaceSource.CURRENT_DIR,
+                )
             )
-        )
 
     # Add standard options
     items.append(

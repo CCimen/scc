@@ -74,17 +74,17 @@ def build_status_data(
 
     # Look up delegation info if org config available
     if org and team_name:
-        profiles = org.get("profiles", [])
-        for profile in profiles:
-            if profile.get("name") == team_name:
-                delegation = profile.get("delegation", {})
-                team_details["delegation"] = {
-                    "allow_additional_plugins": delegation.get("allow_additional_plugins", False),
-                    "allow_additional_mcp_servers": delegation.get(
-                        "allow_additional_mcp_servers", False
-                    ),
-                }
-                break
+        # Profiles are at TOP LEVEL of org_config as a DICT (not under "organization")
+        profiles = org.get("profiles", {})
+        profile = profiles.get(team_name)
+        if profile:
+            delegation = profile.get("delegation", {})
+            team_details["delegation"] = {
+                "allow_additional_plugins": delegation.get("allow_additional_plugins", False),
+                "allow_additional_mcp_servers": delegation.get(
+                    "allow_additional_mcp_servers", False
+                ),
+            }
 
     # Session info
     session: dict[str, Any] = {

@@ -257,35 +257,36 @@ class TestOrgSchema:
 class TestSemanticValidation:
     """Test semantic validation checks beyond JSON schema."""
 
-    def test_detect_duplicate_profile_names(self) -> None:
-        """Should detect duplicate profile names."""
+    def test_profiles_dict_schema_no_duplicates_possible(self) -> None:
+        """Dict-based profiles can't have duplicates - test basic validation."""
         from scc_cli.cli_org import check_semantic_errors
 
+        # With dict-based schema, duplicate keys are impossible
+        # This test verifies the function handles dict profiles correctly
         config = {
-            "organization": {
-                "name": "Test",
-                "profiles": [
-                    {"name": "backend", "plugins": []},
-                    {"name": "backend", "plugins": []},  # Duplicate
-                ],
-            }
+            "organization": {"name": "Test"},
+            "profiles": {
+                "backend": {"plugins": []},
+                "frontend": {"plugins": []},
+            },
         }
 
         errors = check_semantic_errors(config)
-        assert any("duplicate" in e.lower() for e in errors)
+        assert len(errors) == 0
 
     def test_detect_missing_default_profile(self) -> None:
         """Should warn if default_profile references non-existent profile."""
         from scc_cli.cli_org import check_semantic_errors
 
+        # Modern schema: profiles at TOP LEVEL as dict
         config = {
             "organization": {
                 "name": "Test",
                 "default_profile": "nonexistent",
-                "profiles": [
-                    {"name": "backend", "plugins": []},
-                ],
-            }
+            },
+            "profiles": {
+                "backend": {"plugins": []},
+            },
         }
 
         errors = check_semantic_errors(config)
@@ -295,15 +296,16 @@ class TestSemanticValidation:
         """Valid config should have no semantic errors."""
         from scc_cli.cli_org import check_semantic_errors
 
+        # Modern schema: profiles at TOP LEVEL as dict
         config = {
             "organization": {
                 "name": "Test",
                 "default_profile": "backend",
-                "profiles": [
-                    {"name": "backend", "plugins": []},
-                    {"name": "frontend", "plugins": []},
-                ],
-            }
+            },
+            "profiles": {
+                "backend": {"plugins": []},
+                "frontend": {"plugins": []},
+            },
         }
 
         errors = check_semantic_errors(config)

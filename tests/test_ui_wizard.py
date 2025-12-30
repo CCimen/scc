@@ -287,11 +287,41 @@ class TestPickWorkspaceSourceCurrentDir:
                 # First item description should contain dir name
                 assert tmp_path.name in items[0].description
 
-    def test_cwd_option_not_shown_for_non_workspace(self, tmp_path: Path) -> None:
-        """CWD option not shown when current directory is not a workspace."""
+    def test_cwd_option_shown_for_non_workspace_with_warning(self, tmp_path: Path) -> None:
+        """CWD option shown with warning when directory has no git repository.
+
+        New UX: Non-suspicious directories without git repository still show
+        the option, but with "(no git)" warning to inform users that worktree
+        creation will require git initialization.
+        """
         # tmp_path has no .git or .scc.yaml, so it's NOT a valid workspace
-        # The "Use current directory" option should NOT appear
+        # But it's also not suspicious (not home, /, tmp, etc.)
+        # So the option SHOULD appear with a warning
         with patch("scc_cli.ui.wizard.Path.cwd", return_value=tmp_path):
+            with patch("scc_cli.git.is_git_repo", return_value=False):
+                with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
+                    mock_picker.return_value = None
+                    pick_workspace_source()
+
+                    call_args = mock_picker.call_args
+                    items = call_args.kwargs["items"]
+                    values = [item.value for item in items]
+
+                    # Non-workspace but non-suspicious dir SHOULD show CWD option
+                    assert WorkspaceSource.CURRENT_DIR in values
+                    # But with a warning in the description
+                    cwd_item = next(i for i in items if i.value == WorkspaceSource.CURRENT_DIR)
+                    assert "no git" in cwd_item.description
+
+    def test_cwd_option_not_shown_for_suspicious_directory(self, tmp_path: Path) -> None:
+        """CWD option NOT shown when current directory is suspicious.
+
+        Suspicious directories like $HOME, /, /tmp should NOT show the
+        current directory option to prevent accidental misuse.
+        """
+        # Simulate being in home directory (suspicious)
+        home_dir = Path.home()
+        with patch("scc_cli.ui.wizard.Path.cwd", return_value=home_dir):
             with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
                 mock_picker.return_value = None
                 pick_workspace_source()
@@ -300,7 +330,7 @@ class TestPickWorkspaceSourceCurrentDir:
                 items = call_args.kwargs["items"]
                 values = [item.value for item in items]
 
-                # Non-workspace directory should NOT show CWD option
+                # Suspicious directory should NOT show CWD option
                 assert WorkspaceSource.CURRENT_DIR not in values
 
     def test_selecting_cwd_returns_current_dir_enum(self) -> None:

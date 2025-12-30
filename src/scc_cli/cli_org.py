@@ -86,16 +86,11 @@ def check_semantic_errors(config: dict[str, Any]) -> list[str]:
     """
     errors: list[str] = []
     org = config.get("organization", {})
-    profiles = org.get("profiles", [])
 
-    # Check for duplicate profile names
-    profile_names: list[str] = []
-    for profile in profiles:
-        name = profile.get("name", "")
-        if name in profile_names:
-            errors.append(f"Duplicate profile name: '{name}'")
-        else:
-            profile_names.append(name)
+    # Profiles are at TOP LEVEL of config as a DICT (not under "organization")
+    # Dict keys are unique, so no duplicate name checking needed
+    profiles = config.get("profiles", {})
+    profile_names: list[str] = list(profiles.keys())
 
     # Check if default_profile references existing profile
     default_profile = org.get("default_profile")
