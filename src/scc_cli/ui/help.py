@@ -63,40 +63,71 @@ def get_help_entries(mode: HelpMode) -> list[tuple[str, str]]:
     return get_keybindings_for_mode(mode_name)
 
 
-def render_help_content(mode: HelpMode) -> RenderableType:
-    """Render help content for a given mode.
+def get_help_entries_grouped(mode: HelpMode) -> dict[str, list[tuple[str, str]]]:
+    """Get help entries grouped by section for a specific mode.
+
+    This function uses KEYBINDING_DOCS from keys.py as the single source
+    of truth for keybinding documentation.
 
     Args:
         mode: The current screen mode.
 
     Returns:
-        A Rich renderable with the help content.
+        Dict mapping section names to lists of (key, description) tuples.
     """
-    entries = get_help_entries(mode)
+    from .keys import get_keybindings_grouped_by_section
 
-    table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-    table.add_column("Key", style="cyan bold", width=12)
-    table.add_column("Action", style="dim")
+    mode_name = _MODE_NAMES[mode]
+    return get_keybindings_grouped_by_section(mode_name)
 
-    for key, desc in entries:
-        table.add_row(key, desc)
+
+def render_help_content(mode: HelpMode) -> RenderableType:
+    """Render help content for a given mode with section headers.
+
+    Args:
+        mode: The current screen mode.
+
+    Returns:
+        A Rich renderable with the help content organized by section.
+    """
+    from rich.console import Group
+
+    grouped = get_help_entries_grouped(mode)
+
+    renderables: list[RenderableType] = []
+
+    for section_name, entries in grouped.items():
+        # Section header
+        section_header = Text()
+        section_header.append(f"─── {section_name} ", style="dim")
+        section_header.append("─" * (30 - len(section_name)), style="dim")
+        renderables.append(section_header)
+
+        # Section table
+        table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
+        table.add_column("Key", style="cyan bold", width=12)
+        table.add_column("Action", style="dim")
+
+        for key, desc in entries:
+            table.add_row(key, desc)
+
+        renderables.append(table)
+        renderables.append(Text(""))  # Spacing between sections
 
     # Mode indicator
-    mode_name = {
+    mode_display = {
         HelpMode.PICKER: "Picker",
         HelpMode.MULTI_SELECT: "Multi-Select",
         HelpMode.DASHBOARD: "Dashboard",
     }.get(mode, "Unknown")
 
     footer = Text()
-    footer.append("\n")
     footer.append("Press any key to dismiss", style="dim italic")
-
-    from rich.console import Group
+    renderables.append(footer)
 
     return Panel(
-        Group(table, footer),
-        title=f"[bold]Keyboard Shortcuts[/bold] │ {mode_name}",
+        Group(*renderables),
+        title=f"[bold]Keyboard Shortcuts[/bold] │ {mode_display}",
         title_align="left",
         border_style="blue",
         padding=(1, 2),

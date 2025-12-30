@@ -188,58 +188,61 @@ class KeyDoc:
     Attributes:
         display_key: How to display the key (e.g., "↑ / k", "Enter").
         description: Full description for help overlay.
+        section: Category for grouping in help (Navigation, Selection, etc.).
         modes: Mode names where this binding is shown.
             Empty tuple = all modes ("PICKER", "MULTI_SELECT", "DASHBOARD").
     """
 
-    __slots__ = ("display_key", "description", "modes")
+    __slots__ = ("display_key", "description", "section", "modes")
 
     def __init__(
         self,
         display_key: str,
         description: str,
+        section: str = "General",
         modes: tuple[str, ...] = (),
     ) -> None:
         self.display_key = display_key
         self.description = description
+        self.section = section
         self.modes = modes
 
 
 # Single source of truth for all keybinding documentation.
 # Modes: empty tuple = all modes, or specific modes like ("PICKER",) or ("DASHBOARD",)
+# Sections group related keybindings in help overlay: Navigation, Filtering, Selection, etc.
 KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
-    # ─── Navigation (all modes) ───
-    KeyDoc("↑ / k", "Move cursor up"),
-    KeyDoc("↓ / j", "Move cursor down"),
-    # ─── Filtering (all modes) ───
-    KeyDoc("type", "Filter items by text"),
-    KeyDoc("Backspace", "Delete filter character"),
-    # ─── Selection (mode-specific) ───
-    KeyDoc("Enter", "Select item", ("PICKER",)),
-    KeyDoc("Space", "Toggle selection", ("MULTI_SELECT",)),
-    KeyDoc("a", "Toggle all items", ("MULTI_SELECT",)),
-    KeyDoc("Enter", "Confirm selection", ("MULTI_SELECT",)),
-    KeyDoc("Enter", "View details", ("DASHBOARD",)),
-    # ─── Tab navigation (dashboard only) ───
-    KeyDoc("Tab", "Next tab", ("DASHBOARD",)),
-    KeyDoc("Shift+Tab", "Previous tab", ("DASHBOARD",)),
-    # ─── Dashboard actions ───
-    KeyDoc("r", "Refresh data", ("DASHBOARD",)),
-    KeyDoc("n", "New session", ("DASHBOARD",)),
-    # ─── Team switching (all modes) ───
-    KeyDoc("t", "Switch team"),
-    # ─── Exit actions (mode-specific) ───
-    KeyDoc("Esc", "Cancel / go back", ("PICKER", "MULTI_SELECT")),
-    KeyDoc("q", "Quit", ("DASHBOARD",)),
-    # ─── Help (all modes) ───
-    KeyDoc("?", "Show this help"),
+    # Navigation
+    KeyDoc("↑ / k", "Move cursor up", section="Navigation"),
+    KeyDoc("↓ / j", "Move cursor down", section="Navigation"),
+    # Filtering
+    KeyDoc("type", "Filter items by text", section="Filtering"),
+    KeyDoc("Backspace", "Delete filter character", section="Filtering"),
+    # Selection (mode-specific)
+    KeyDoc("Enter", "Select item", section="Selection", modes=("PICKER",)),
+    KeyDoc("Space", "Toggle selection", section="Selection", modes=("MULTI_SELECT",)),
+    KeyDoc("a", "Toggle all items", section="Selection", modes=("MULTI_SELECT",)),
+    KeyDoc("Enter", "Confirm selection", section="Selection", modes=("MULTI_SELECT",)),
+    KeyDoc("Enter", "View details", section="Selection", modes=("DASHBOARD",)),
+    # Tab navigation (dashboard only)
+    KeyDoc("Tab", "Next tab", section="Tabs", modes=("DASHBOARD",)),
+    KeyDoc("Shift+Tab", "Previous tab", section="Tabs", modes=("DASHBOARD",)),
+    # Actions
+    KeyDoc("r", "Refresh data", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("n", "New session", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("t", "Switch team", section="Actions"),
+    # Exit
+    KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
+    KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),
+    # Help
+    KeyDoc("?", "Show this help", section="Help"),
 )
 
 
 def get_keybindings_for_mode(mode: str) -> list[tuple[str, str]]:
     """Get keybinding entries filtered for a specific mode.
 
-    This function provides the primary interface for help.py and chrome.py
+    This function provides the primary interface for chrome.py footer hints
     to retrieve keybinding documentation. It filters KEYBINDING_DOCS to
     return only entries applicable to the given mode.
 
@@ -260,6 +263,38 @@ def get_keybindings_for_mode(mode: str) -> list[tuple[str, str]]:
         if not doc.modes or mode in doc.modes:
             entries.append((doc.display_key, doc.description))
     return entries
+
+
+def get_keybindings_grouped_by_section(mode: str) -> dict[str, list[tuple[str, str]]]:
+    """Get keybinding entries grouped by section for a specific mode.
+
+    This function provides the interface for help.py to render keybindings
+    with section headers. It filters KEYBINDING_DOCS and groups entries
+    by their section field while preserving order.
+
+    Args:
+        mode: Mode name ("PICKER", "MULTI_SELECT", or "DASHBOARD").
+
+    Returns:
+        Dict mapping section names to lists of (display_key, description) tuples.
+        Sections are returned in the order they first appear in KEYBINDING_DOCS.
+
+    Example:
+        >>> grouped = get_keybindings_grouped_by_section("DASHBOARD")
+        >>> "Navigation" in grouped
+        True
+        >>> grouped["Navigation"]
+        [('↑ / k', 'Move cursor up'), ('↓ / j', 'Move cursor down')]
+    """
+    # Use dict to preserve insertion order (Python 3.7+)
+    sections: dict[str, list[tuple[str, str]]] = {}
+    for doc in KEYBINDING_DOCS:
+        # Empty modes = all modes, or check if mode is in the list
+        if not doc.modes or mode in doc.modes:
+            if doc.section not in sections:
+                sections[doc.section] = []
+            sections[doc.section].append((doc.display_key, doc.description))
+    return sections
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
