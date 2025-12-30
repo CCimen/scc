@@ -256,7 +256,9 @@ def _prepare_workspace(
 
     # Check git safety (handles protected branch warnings)
     if workspace_path.exists():
-        git.check_branch_safety(workspace_path, console)
+        if not git.check_branch_safety(workspace_path, console):
+            console.print("[dim]Cancelled.[/dim]")
+            raise typer.Exit(EXIT_CANCELLED)
 
     return workspace_path
 
