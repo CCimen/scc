@@ -37,36 +37,19 @@ class HelpMode(Enum):
     DASHBOARD = auto()  # Tabbed dashboard view
 
 
-# Key help entries: (key_display, description, modes_where_shown)
-# If modes is empty tuple, shown in all modes
-_HELP_ENTRIES: list[tuple[str, str, tuple[HelpMode, ...]]] = [
-    # Navigation - shown in all modes
-    ("↑ / k", "Move cursor up", ()),
-    ("↓ / j", "Move cursor down", ()),
-    # Filtering - shown in all modes
-    ("type", "Filter items by text", ()),
-    ("Backspace", "Delete filter character", ()),
-    # Selection - mode-specific
-    ("Enter", "Select item", (HelpMode.PICKER,)),
-    ("Space", "Toggle selection", (HelpMode.MULTI_SELECT,)),
-    ("a", "Toggle all items", (HelpMode.MULTI_SELECT,)),
-    ("Enter", "Confirm selection", (HelpMode.MULTI_SELECT,)),
-    ("Enter", "View details", (HelpMode.DASHBOARD,)),
-    # Tab navigation - dashboard only
-    ("Tab", "Next tab", (HelpMode.DASHBOARD,)),
-    ("Shift+Tab", "Previous tab", (HelpMode.DASHBOARD,)),
-    # Team switching - shown in all modes
-    ("t", "Switch team", ()),
-    # Exit - mode-specific
-    ("Esc", "Cancel / go back", (HelpMode.PICKER, HelpMode.MULTI_SELECT)),
-    ("q", "Quit", (HelpMode.DASHBOARD,)),
-    # Help - shown in all modes
-    ("?", "Show this help", ()),
-]
+# Mapping from HelpMode enum to string mode names used in KEYBINDING_DOCS
+_MODE_NAMES: dict[HelpMode, str] = {
+    HelpMode.PICKER: "PICKER",
+    HelpMode.MULTI_SELECT: "MULTI_SELECT",
+    HelpMode.DASHBOARD: "DASHBOARD",
+}
 
 
 def get_help_entries(mode: HelpMode) -> list[tuple[str, str]]:
     """Get help entries filtered for a specific mode.
+
+    This function uses KEYBINDING_DOCS from keys.py as the single source
+    of truth for keybinding documentation.
 
     Args:
         mode: The current screen mode.
@@ -74,11 +57,10 @@ def get_help_entries(mode: HelpMode) -> list[tuple[str, str]]:
     Returns:
         List of (key, description) tuples for the given mode.
     """
-    entries: list[tuple[str, str]] = []
-    for key, desc, modes in _HELP_ENTRIES:
-        if not modes or mode in modes:
-            entries.append((key, desc))
-    return entries
+    from .keys import get_keybindings_for_mode
+
+    mode_name = _MODE_NAMES[mode]
+    return get_keybindings_for_mode(mode_name)
 
 
 def render_help_content(mode: HelpMode) -> RenderableType:

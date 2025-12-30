@@ -21,7 +21,7 @@ The formatters follow a consistent pattern:
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from ..docker.core import ContainerInfo
 from ..git import WorktreeInfo
@@ -30,6 +30,57 @@ from .list_screen import ListItem
 
 if TYPE_CHECKING:
     from ..contexts import WorkContext
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TypedDict Metadata Definitions (enables mypy type checking and IDE autocomplete)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class ContainerMetadata(TypedDict):
+    """Metadata for container list items.
+
+    Keys:
+        running: "yes" or "no" indicating container state.
+        id: Short (12-char) container ID for display.
+    """
+
+    running: str
+    id: str
+
+
+class WorktreeMetadata(TypedDict):
+    """Metadata for worktree list items.
+
+    Keys:
+        path: Full filesystem path to the worktree.
+        current: "yes" or "no" indicating if this is the current worktree.
+    """
+
+    path: str
+    current: str
+
+
+class ContextMetadata(TypedDict):
+    """Metadata for work context list items.
+
+    Keys:
+        team: Team/profile name.
+        repo: Repository name.
+        worktree: Worktree directory name.
+        path: Full filesystem path.
+        pinned: "yes" or "no".
+        running: "yes", "no", or "" (unknown).
+        current_branch: "yes", "no", or "" (unknown).
+    """
+
+    team: str
+    repo: str
+    worktree: str
+    path: str
+    pinned: str
+    running: str
+    current_branch: str
 
 
 def format_team(
@@ -313,7 +364,7 @@ def format_context(
         label=label,
         description="  ".join(desc_parts),
         metadata={
-            "team": context.team,
+            "team": context.team or "",  # Empty string for standalone mode (no team)
             "repo": context.repo_name,
             "worktree": context.worktree_name,
             "path": str(context.worktree_path),

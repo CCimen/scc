@@ -173,6 +173,99 @@ class Action(Generic[T]):
     filter_char: str | None = None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Keybinding Documentation (Single Source of Truth)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class KeyDoc:
+    """Documentation entry for a keybinding.
+
+    This is the single source of truth for keybinding documentation.
+    Both the help overlay (ui/help.py) and footer hints (ui/chrome.py)
+    should derive their content from KEYBINDING_DOCS.
+
+    Attributes:
+        display_key: How to display the key (e.g., "↑ / k", "Enter").
+        description: Full description for help overlay.
+        modes: Mode names where this binding is shown.
+            Empty tuple = all modes ("PICKER", "MULTI_SELECT", "DASHBOARD").
+    """
+
+    __slots__ = ("display_key", "description", "modes")
+
+    def __init__(
+        self,
+        display_key: str,
+        description: str,
+        modes: tuple[str, ...] = (),
+    ) -> None:
+        self.display_key = display_key
+        self.description = description
+        self.modes = modes
+
+
+# Single source of truth for all keybinding documentation.
+# Modes: empty tuple = all modes, or specific modes like ("PICKER",) or ("DASHBOARD",)
+KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
+    # ─── Navigation (all modes) ───
+    KeyDoc("↑ / k", "Move cursor up"),
+    KeyDoc("↓ / j", "Move cursor down"),
+    # ─── Filtering (all modes) ───
+    KeyDoc("type", "Filter items by text"),
+    KeyDoc("Backspace", "Delete filter character"),
+    # ─── Selection (mode-specific) ───
+    KeyDoc("Enter", "Select item", ("PICKER",)),
+    KeyDoc("Space", "Toggle selection", ("MULTI_SELECT",)),
+    KeyDoc("a", "Toggle all items", ("MULTI_SELECT",)),
+    KeyDoc("Enter", "Confirm selection", ("MULTI_SELECT",)),
+    KeyDoc("Enter", "View details", ("DASHBOARD",)),
+    # ─── Tab navigation (dashboard only) ───
+    KeyDoc("Tab", "Next tab", ("DASHBOARD",)),
+    KeyDoc("Shift+Tab", "Previous tab", ("DASHBOARD",)),
+    # ─── Dashboard actions ───
+    KeyDoc("r", "Refresh data", ("DASHBOARD",)),
+    KeyDoc("n", "New session", ("DASHBOARD",)),
+    # ─── Team switching (all modes) ───
+    KeyDoc("t", "Switch team"),
+    # ─── Exit actions (mode-specific) ───
+    KeyDoc("Esc", "Cancel / go back", ("PICKER", "MULTI_SELECT")),
+    KeyDoc("q", "Quit", ("DASHBOARD",)),
+    # ─── Help (all modes) ───
+    KeyDoc("?", "Show this help"),
+)
+
+
+def get_keybindings_for_mode(mode: str) -> list[tuple[str, str]]:
+    """Get keybinding entries filtered for a specific mode.
+
+    This function provides the primary interface for help.py and chrome.py
+    to retrieve keybinding documentation. It filters KEYBINDING_DOCS to
+    return only entries applicable to the given mode.
+
+    Args:
+        mode: Mode name ("PICKER", "MULTI_SELECT", or "DASHBOARD").
+
+    Returns:
+        List of (display_key, description) tuples for the given mode.
+
+    Example:
+        >>> entries = get_keybindings_for_mode("PICKER")
+        >>> ("Enter", "Select item") in entries
+        True
+    """
+    entries: list[tuple[str, str]] = []
+    for doc in KEYBINDING_DOCS:
+        # Empty modes = all modes, or check if mode is in the list
+        if not doc.modes or mode in doc.modes:
+            entries.append((doc.display_key, doc.description))
+    return entries
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Key Mappings (Runtime Behavior)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 # Default key mappings for navigation and common actions.
 # These are shared across all list modes.
 # NOTE: Dashboard-specific keys like 'r' (refresh) should NOT be here.
