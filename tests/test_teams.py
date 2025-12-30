@@ -354,25 +354,28 @@ class TestValidateTeamProfile:
 
 @pytest.fixture
 def sample_org_config():
-    """Create a sample org config (NEW architecture - remote config)."""
+    """Create a sample org config (NEW architecture - remote config).
+
+    Uses the dict-based marketplace structure where the marketplace name
+    is the key, matching the actual org-config.json schema:
+    "marketplaces": {"name": {"source": "github", "repo": "..."}}
+    """
     return {
         "organization": {
             "name": "Test Organization",
             "id": "test-org",
         },
-        "marketplaces": [
-            {
-                "name": "internal",
-                "type": "gitlab",
+        "marketplaces": {
+            "internal": {
+                "source": "gitlab",
                 "host": "gitlab.company.com",
                 "repo": "devops/claude-plugins",
             },
-            {
-                "name": "public",
-                "type": "github",
+            "public": {
+                "source": "github",
                 "repo": "company/public-plugins",
             },
-        ],
+        },
         "profiles": {
             "platform": {
                 "description": "Platform team (Python, FastAPI)",

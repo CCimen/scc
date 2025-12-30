@@ -50,13 +50,12 @@ def mock_org_config():
                 "additional_plugins": [],
             },
         },
-        "marketplaces": [
-            {
-                "name": "sundsvall",
-                "type": "github",
+        "marketplaces": {
+            "sundsvall": {
+                "source": "github",
                 "repo": "sundsvall/claude-plugins-marketplace",
             }
-        ],
+        },
     }
 
 
@@ -150,7 +149,7 @@ class TestTeamList:
 
     def test_team_list_shows_no_teams_warning(self, mock_config):
         """team list should show warning when no teams available."""
-        empty_org = {"profiles": {}, "marketplaces": []}
+        empty_org = {"profiles": {}, "marketplaces": {}}
         with (
             patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
             patch(

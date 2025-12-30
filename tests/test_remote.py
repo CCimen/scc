@@ -23,22 +23,25 @@ from scc_cli import remote
 
 @pytest.fixture
 def sample_org_config():
-    """Create a sample organization config."""
+    """Create a sample organization config.
+
+    Uses modern dict-based marketplace schema (org-config v1).
+    """
     return {
         "schema_version": "1.0.0",
         "organization": {
             "name": "Test Organization",
             "id": "test-org",
         },
-        "marketplaces": [
-            {
-                "name": "internal",
-                "type": "gitlab",
+        "marketplaces": {
+            "internal": {
+                "source": "git",
+                "owner": "group",
+                "repo": "claude-marketplace",
                 "host": "gitlab.example.org",
-                "repo": "group/claude-marketplace",
                 "auth": "env:GITLAB_TOKEN",
             }
-        ],
+        },
         "profiles": {
             "platform": {
                 "description": "Platform team",

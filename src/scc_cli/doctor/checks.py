@@ -577,14 +577,10 @@ def check_marketplace_auth_available() -> CheckResult | None:
     if not profile:
         return None
 
-    # Find the marketplace
+    # Find the marketplace (dict-based schema)
     marketplace_name = profile.get("marketplace")
-    marketplaces = org_config.get("marketplaces", [])
-    marketplace = None
-    for m in marketplaces:
-        if m.get("name") == marketplace_name:
-            marketplace = m
-            break
+    marketplaces = org_config.get("marketplaces", {})
+    marketplace = marketplaces.get(marketplace_name)
 
     if marketplace is None:
         return CheckResult(
@@ -667,14 +663,10 @@ def check_credential_injection() -> CheckResult | None:
     if not profile:
         return None
 
-    # Find the marketplace
+    # Find the marketplace (dict-based schema)
     marketplace_name = profile.get("marketplace")
-    marketplaces = org_config.get("marketplaces", [])
-    marketplace = None
-    for m in marketplaces:
-        if m.get("name") == marketplace_name:
-            marketplace = m
-            break
+    marketplaces = org_config.get("marketplaces", {})
+    marketplace = marketplaces.get(marketplace_name)
 
     if marketplace is None:
         return None

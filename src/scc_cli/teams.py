@@ -158,11 +158,12 @@ def get_team_details(
     # NEW architecture: use org_config for profiles
     if org_config is not None:
         profiles = org_config.get("profiles", {})
-        marketplaces = org_config.get("marketplaces", [])
+        # Marketplaces is a dict where keys are marketplace names
+        marketplaces = org_config.get("marketplaces", {})
     else:
         # Legacy fallback
         profiles = cfg.get("profiles", {})
-        marketplaces = []
+        marketplaces = {}
 
     team_info = profiles.get(team)
     if not team_info:
@@ -174,19 +175,39 @@ def get_team_details(
     # Get marketplace info
     if org_config is not None:
         # NEW: look up marketplace by name from org_config
+        # Marketplace name can be explicit in profile, or inferred from plugins
         marketplace_name = team_info.get("marketplace")
-        marketplace: dict[str, Any] = next(
-            (m for m in marketplaces if m.get("name") == marketplace_name),
-            {},
-        )
-        return {
-            "name": team,
-            "description": team_info.get("description", ""),
-            "plugins": plugins,  # List of plugin identifiers
-            "marketplace": marketplace.get("name"),
-            "marketplace_type": marketplace.get("type"),
-            "marketplace_repo": marketplace.get("repo"),
-        }
+        if marketplace_name and marketplace_name in marketplaces:
+            marketplace_info = marketplaces[marketplace_name]
+            # New schema: {"source": "github", "owner": "...", "repo": "..."}
+            return {
+                "name": team,
+                "description": team_info.get("description", ""),
+                "plugins": plugins,
+                "marketplace": marketplace_name,
+                "marketplace_type": marketplace_info.get("source"),
+                "marketplace_repo": marketplace_info.get("repo"),
+            }
+        else:
+            # No explicit marketplace - infer from first plugin if available
+            first_marketplace = None
+            if plugins:
+                for plugin_id in plugins:
+                    if "@" in plugin_id:
+                        first_marketplace = plugin_id.split("@")[1]
+                        break
+            return {
+                "name": team,
+                "description": team_info.get("description", ""),
+                "plugins": plugins,
+                "marketplace": first_marketplace,
+                "marketplace_type": marketplaces.get(first_marketplace, {}).get("source")
+                if first_marketplace
+                else None,
+                "marketplace_repo": marketplaces.get(first_marketplace, {}).get("repo")
+                if first_marketplace
+                else None,
+            }
     else:
         # Legacy: single marketplace in cfg
         marketplace = cfg.get("marketplace", {})

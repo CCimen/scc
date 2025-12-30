@@ -287,7 +287,9 @@ class TestCheckMarketplaceAuthAvailable:
         """Should return OK for public marketplace (no auth needed)."""
         org_config = {
             "profiles": {"dev": {"marketplace": "public"}},
-            "marketplaces": [{"name": "public", "auth": None}],
+            "marketplaces": {
+                "public": {"source": "github", "owner": "org", "repo": "plugins", "auth": None}
+            },
         }
         user_config = {"selected_profile": "dev"}
         with (
@@ -304,7 +306,14 @@ class TestCheckMarketplaceAuthAvailable:
         """Should return OK when env var auth is configured and set."""
         org_config = {
             "profiles": {"dev": {"marketplace": "internal"}},
-            "marketplaces": [{"name": "internal", "auth": "env:GITLAB_TOKEN"}],
+            "marketplaces": {
+                "internal": {
+                    "source": "git",
+                    "owner": "group",
+                    "repo": "plugins",
+                    "auth": "env:GITLAB_TOKEN",
+                }
+            },
         }
         user_config = {"selected_profile": "dev"}
         with (
@@ -321,7 +330,14 @@ class TestCheckMarketplaceAuthAvailable:
         """Should return error when env var auth is configured but not set."""
         org_config = {
             "profiles": {"dev": {"marketplace": "internal"}},
-            "marketplaces": [{"name": "internal", "auth": "env:GITLAB_TOKEN"}],
+            "marketplaces": {
+                "internal": {
+                    "source": "git",
+                    "owner": "group",
+                    "repo": "plugins",
+                    "auth": "env:GITLAB_TOKEN",
+                }
+            },
         }
         user_config = {"selected_profile": "dev"}
         # Create a clean environment without GITLAB_TOKEN
@@ -372,7 +388,14 @@ class TestCheckCredentialInjection:
         """Should return OK listing env vars that will be injected."""
         org_config = {
             "profiles": {"dev": {"marketplace": "internal"}},
-            "marketplaces": [{"name": "internal", "type": "gitlab", "auth": "env:GITLAB_TOKEN"}],
+            "marketplaces": {
+                "internal": {
+                    "source": "git",
+                    "owner": "group",
+                    "repo": "plugins",
+                    "auth": "env:GITLAB_TOKEN",
+                }
+            },
         }
         user_config = {"selected_profile": "dev"}
         with (
@@ -390,7 +413,9 @@ class TestCheckCredentialInjection:
         """Should return OK with 'no credentials needed' for public marketplace."""
         org_config = {
             "profiles": {"dev": {"marketplace": "public"}},
-            "marketplaces": [{"name": "public", "auth": None}],
+            "marketplaces": {
+                "public": {"source": "github", "owner": "org", "repo": "plugins", "auth": None}
+            },
         }
         user_config = {"selected_profile": "dev"}
         with (

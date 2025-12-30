@@ -771,23 +771,107 @@ def resolve_profile(org_config: dict[str, Any], profile_name: str) -> dict[str, 
 
 def resolve_marketplace(org_config: dict[Any, Any], profile: dict[Any, Any]) -> dict[Any, Any]:
     """
-    Resolve marketplace for a profile.
+    Resolve marketplace for a profile and translate to claude_adapter format.
 
-    Look up marketplace by name from the marketplaces array.
-    Raise ValueError if marketplace not found.
+    This is the SINGLE translation layer between org-config schema and
+    claude_adapter expected format. All schema changes should be handled here.
+
+    Schema Translation:
+        org-config (source/owner/repo) → claude_adapter (type/repo combined)
+
+    Args:
+        org_config: Organization config with marketplaces dict
+        profile: Profile dict with a "marketplace" field
+
+    Returns:
+        Marketplace dict normalized for claude_adapter:
+        - name: marketplace name (from dict key)
+        - type: "github" | "gitlab" | "https"
+        - repo: combined "owner/repo" for github
+        - url: for git/url sources
+        - ref: translated from "branch"
+
+    Raises:
+        ValueError: If marketplace not found, invalid source, or missing fields
     """
     marketplace_name = profile.get("marketplace")
+    if not marketplace_name:
+        raise ValueError(f"Profile '{profile.get('name')}' has no marketplace field")
 
-    # Support both new marketplaces[] array and legacy marketplace{} object
-    marketplaces: list[dict[Any, Any]] = org_config.get("marketplaces", [])
+    # Dict-based lookup
+    marketplaces: dict[str, dict[Any, Any]] = org_config.get("marketplaces", {})
+    marketplace_config = marketplaces.get(marketplace_name)
 
-    for m in marketplaces:
-        if m.get("name") == marketplace_name:
-            return m
+    if not marketplace_config:
+        raise ValueError(
+            f"Marketplace '{marketplace_name}' not found for profile '{profile.get('name')}'"
+        )
 
-    raise ValueError(
-        f"Marketplace '{marketplace_name}' not found for profile '{profile.get('name')}'"
-    )
+    # Validate and translate source type
+    source = marketplace_config.get("source", "")
+    valid_sources = {"github", "git", "url"}
+    if source not in valid_sources:
+        raise ValueError(
+            f"Marketplace '{marketplace_name}' has invalid source '{source}'. "
+            f"Valid sources: {', '.join(sorted(valid_sources))}"
+        )
+
+    result: dict[str, Any] = {"name": marketplace_name}
+
+    if source == "github":
+        # GitHub: requires owner + repo, combine into single repo field
+        owner = marketplace_config.get("owner", "")
+        repo = marketplace_config.get("repo", "")
+        if not owner or not repo:
+            raise ValueError(
+                f"GitHub marketplace '{marketplace_name}' requires 'owner' and 'repo' fields"
+            )
+        result["type"] = "github"
+        result["repo"] = f"{owner}/{repo}"
+
+    elif source == "git":
+        # Generic git: maps to gitlab type
+        # Supports two patterns:
+        # 1. Direct URL: {"source": "git", "url": "https://..."}
+        # 2. Host + owner + repo: {"source": "git", "host": "gitlab.example.org", "owner": "group", "repo": "name"}
+        url = marketplace_config.get("url", "")
+        host = marketplace_config.get("host", "")
+        owner = marketplace_config.get("owner", "")
+        repo = marketplace_config.get("repo", "")
+
+        result["type"] = "gitlab"
+
+        if url:
+            # Pattern 1: Direct URL provided
+            result["url"] = url
+        elif host and owner and repo:
+            # Pattern 2: Construct from host/owner/repo
+            result["host"] = host
+            result["repo"] = f"{owner}/{repo}"
+        else:
+            raise ValueError(
+                f"Git marketplace '{marketplace_name}' requires either 'url' field "
+                f"or 'host', 'owner', 'repo' fields"
+            )
+
+    elif source == "url":
+        # HTTPS URL: requires url
+        url = marketplace_config.get("url", "")
+        if not url:
+            raise ValueError(f"URL marketplace '{marketplace_name}' requires 'url' field")
+        result["type"] = "https"
+        result["url"] = url
+
+    # Translate branch -> ref (optional)
+    if marketplace_config.get("branch"):
+        result["ref"] = marketplace_config["branch"]
+
+    # Preserve optional fields
+    for field_name in ("host", "auth", "headers", "path"):
+        if marketplace_config.get(field_name):
+            result[field_name] = marketplace_config[field_name]
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -874,161 +958,3 @@ def get_marketplace_url(marketplace: dict[str, Any]) -> str:
     repo = _normalize_repo_path(repo)
 
     return f"https://{host}/{repo}"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Backward Compatibility Functions (Legacy API from teams.py)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def list_teams(cfg: dict[str, Any]) -> list[dict[str, Any]]:
-    """
-    List available teams from configuration.
-
-    BACKWARD COMPATIBILITY: Wrap list_profiles() for legacy code.
-    """
-    profiles = cfg.get("profiles", {})
-
-    teams = []
-    for name, info in profiles.items():
-        teams.append(
-            {
-                "name": name,
-                "description": info.get("description", ""),
-                "plugin": info.get("plugin"),
-            }
-        )
-
-    return teams
-
-
-def get_team_details(team: str, cfg: dict[str, Any]) -> dict[str, Any] | None:
-    """
-    Get detailed information for a specific team.
-
-    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
-    Return None if team doesn't exist.
-    """
-    profiles = cfg.get("profiles", {})
-    team_info = profiles.get(team)
-
-    if not team_info:
-        return None
-
-    # Support legacy single marketplace format
-    marketplace = cfg.get("marketplace", {})
-
-    return {
-        "name": team,
-        "description": team_info.get("description", ""),
-        "plugin": team_info.get("plugin"),
-        "marketplace": marketplace.get("name"),
-        "marketplace_repo": marketplace.get("repo"),
-    }
-
-
-def get_team_sandbox_settings(team_name: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """
-    Generate sandbox settings for a team profile.
-
-    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
-
-    Return settings.json content with extraKnownMarketplaces
-    and enabledPlugins configured for Claude Code.
-    """
-    if cfg is None:
-        cfg = config_module.load_config()
-
-    marketplace = cfg.get("marketplace", {})
-    marketplace_name = marketplace.get("name", "sundsvall")
-    marketplace_repo = marketplace.get("repo", "sundsvall/claude-plugins-marketplace")
-
-    profile = cfg.get("profiles", {}).get(team_name, {})
-    plugin_name = profile.get("plugin")
-
-    # No plugin configured for this profile
-    if not plugin_name:
-        return {}
-
-    # Generate settings that Claude Code understands
-    return {
-        "extraKnownMarketplaces": {
-            marketplace_name: {
-                "source": {
-                    "source": "github",
-                    "repo": marketplace_repo,
-                }
-            }
-        },
-        "enabledPlugins": [f"{plugin_name}@{marketplace_name}"],
-    }
-
-
-def get_team_plugin_id(team_name: str, cfg: dict[str, Any] | None = None) -> str | None:
-    """
-    Get the full plugin ID for a team (e.g., "api-team@sundsvall").
-
-    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
-    Return None if team has no plugin configured.
-    """
-    if cfg is None:
-        cfg = config_module.load_config()
-
-    marketplace = cfg.get("marketplace", {})
-    marketplace_name = marketplace.get("name", "sundsvall")
-
-    profile = cfg.get("profiles", {}).get(team_name, {})
-    plugin_name = profile.get("plugin")
-
-    if not plugin_name:
-        return None
-
-    return f"{plugin_name}@{marketplace_name}"
-
-
-def validate_team_profile(team_name: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """
-    Validate a team profile configuration.
-
-    BACKWARD COMPATIBILITY: Support legacy single marketplace format.
-
-    Return dict with:
-        - valid: bool
-        - team: team name
-        - plugin: plugin name or None
-        - errors: list of validation errors
-        - warnings: list of warnings
-    """
-    if cfg is None:
-        cfg = config_module.load_config()
-
-    result: dict[str, Any] = {
-        "valid": True,
-        "team": team_name,
-        "plugin": None,
-        "errors": [],
-        "warnings": [],
-    }
-
-    # Check if team exists
-    profiles = cfg.get("profiles", {})
-    if team_name not in profiles:
-        result["valid"] = False
-        result["errors"].append(f"Team '{team_name}' not found in profiles")
-        return result
-
-    profile = profiles[team_name]
-    result["plugin"] = profile.get("plugin")
-
-    # Check marketplace configuration
-    marketplace = cfg.get("marketplace", {})
-    if not marketplace.get("repo"):
-        result["warnings"].append("No marketplace repo configured")
-
-    # Check if plugin is configured (not required for 'base' profile)
-    if not result["plugin"] and team_name != "base":
-        result["warnings"].append(
-            f"Team '{team_name}' has no plugin configured - using base settings"
-        )
-
-    return result
