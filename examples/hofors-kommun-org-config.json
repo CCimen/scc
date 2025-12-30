@@ -1,0 +1,100 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "organization": {
+        "name": "Hofors kommun",
+        "id": "hofors-kommun",
+        "contact": "it-support@hofors.se"
+    },
+    "security": {
+        "blocked_plugins": ["*-experimental", "*-unsafe"],
+        "blocked_mcp_servers": ["*.untrusted.com"],
+        "blocked_base_images": ["*:latest"],
+        "allow_stdio_mcp": false,
+        "safety_net": {
+            "enabled": true,
+            "policy_path": "https://raw.githubusercontent.com/CCimen/sandboxed-code-plugins/main/scc-safety-net/policies/default.md"
+        }
+    },
+    "defaults": {
+        "allowed_plugins": ["scc-safety-net@sandboxed-code-official"],
+        "network_policy": "unrestricted"
+    },
+    "marketplaces": {
+        "sandboxed-code-official": {
+            "source": "github",
+            "owner": "CCimen",
+            "repo": "sandboxed-code-plugins",
+            "description": "Official SCC plugins including safety-net"
+        },
+        "anthropic-official": {
+            "source": "github",
+            "owner": "anthropics",
+            "repo": "claude-code-plugins",
+            "description": "Anthropic's official Claude Code plugins"
+        },
+        "wshobson-agents": {
+            "source": "github",
+            "owner": "wshobson",
+            "repo": "claude-code-agents",
+            "description": "Community agents for accessibility and Python development"
+        },
+        "thedotmack-mem": {
+            "source": "github",
+            "owner": "thedotmack",
+            "repo": "claude-mem",
+            "description": "Memory and context management for Claude"
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": ["*"],
+            "allow_additional_mcp_servers": ["pixeldraken", "api-ninjas"]
+        },
+        "projects": {
+            "allow_plugin_overrides": true,
+            "override_scope": ["enabled_plugins", "disabled_plugins"]
+        }
+    },
+    "profiles": {
+        "pixeldraken": {
+            "description": "Frontend React team - 'The Pixel Dragon' - breathing fire into UIs since 2024",
+            "tech_stack": ["React", "Next.js", "TypeScript", "TailwindCSS"],
+            "enabled_plugins": [
+                "scc-safety-net@sandboxed-code-official",
+                "frontend-design@anthropic-official",
+                "accessibility-compliance@wshobson-agents"
+            ],
+            "delegation": {
+                "allow_additional_plugins": true,
+                "allow_project_overrides": true
+            }
+        },
+        "api-ninjas": {
+            "description": "Backend FastAPI team - 'The API Ninjas' - silently returning 200 OK",
+            "tech_stack": ["Python", "FastAPI", "PostgreSQL", "Redis"],
+            "enabled_plugins": [
+                "scc-safety-net@sandboxed-code-official",
+                "python-development@wshobson-agents",
+                "claude-mem@thedotmack-mem"
+            ],
+            "delegation": {
+                "allow_additional_plugins": true,
+                "allow_additional_marketplaces": false,
+                "allow_project_overrides": true
+            }
+        },
+        "default": {
+            "description": "Default profile for new team members",
+            "enabled_plugins": [
+                "scc-safety-net@sandboxed-code-official"
+            ]
+        }
+    },
+    "settings": {
+        "session_timeout_hours": 12,
+        "auto_resume": true,
+        "stats_retention_days": 90,
+        "update_check_interval_hours": 24
+    }
+}

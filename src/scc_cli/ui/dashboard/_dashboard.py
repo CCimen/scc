@@ -575,6 +575,10 @@ class Dashboard:
                             self.state.list_state.clear_filter()
                             self.state = self.state.switch_tab(target_tab)
                             return True  # Refresh to show new tab
+
+                        # Statusline row: Enter triggers installation
+                        if current.value == "statusline_not_installed":
+                            raise StatuslineInstallRequested(return_to=self.state.active_tab.name)
                 else:
                     # Resource tabs handling (Containers, Worktrees, Sessions)
                     current = self.state.list_state.current_item
@@ -670,7 +674,7 @@ class Dashboard:
                         return_to=self.state.active_tab.name,
                         reason="dashboard_new_session",
                     )
-                elif action.custom_key == "statusline_install":
+                elif action.custom_key == "y":
                     # User pressed 'y' - only install if on Status tab with statusline row
                     if self.state.active_tab == DashboardTab.STATUS:
                         current = self.state.list_state.current_item
