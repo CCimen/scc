@@ -326,7 +326,7 @@ class TestTeamSwitchConsistency:
 
         # Mock is_standalone_mode to return False (org mode)
         # In org mode, TEAM_SWITCH should raise TeamSwitchRequested
-        with patch("scc_cli.ui.dashboard.scc_config.is_standalone_mode", return_value=False):
+        with patch("scc_cli.ui.dashboard._dashboard.scc_config.is_standalone_mode", return_value=False):
             try:
                 dashboard._handle_action(action)
                 raise AssertionError("Expected TeamSwitchRequested to be raised")
