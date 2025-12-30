@@ -34,22 +34,25 @@ def sample_claude_settings():
 
 @pytest.fixture
 def sample_org_config():
-    """Sample remote organization config."""
+    """Sample remote organization config.
+
+    Uses modern dict-based marketplace schema (org-config v1).
+    """
     return {
         "schema_version": "1.0.0",
         "organization": {
             "name": "Example Org",
             "id": "my-org",
         },
-        "marketplaces": [
-            {
-                "name": "internal",
-                "type": "gitlab",
+        "marketplaces": {
+            "internal": {
+                "source": "git",
+                "owner": "group",
+                "repo": "marketplace",
                 "host": "gitlab.example.org",
-                "repo": "group/marketplace",
                 "auth": "env:GITLAB_TOKEN",
             }
-        ],
+        },
         "profiles": {
             "platform": {
                 "description": "Platform team",

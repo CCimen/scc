@@ -22,7 +22,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from . import config
-from .remote import fetch_org_config
+from .remote import fetch_org_config, save_to_cache
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Welcome Screen
@@ -172,6 +172,12 @@ def fetch_and_validate_org_config(
 
     org_name = config_data.get("organization", {}).get("name", "Unknown")
     console.print(f"[green]✓ Connected to: {org_name}[/green]")
+
+    # Save org config to cache so team commands can access it
+    # Use default TTL of 24 hours (can be overridden in config defaults)
+    ttl_hours = config_data.get("defaults", {}).get("cache_ttl_hours", 24)
+    save_to_cache(config_data, source_url=url, etag=etag, ttl_hours=ttl_hours)
+    console.print("[dim]Organization config cached locally[/dim]")
 
     return config_data
 

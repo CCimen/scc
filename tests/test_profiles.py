@@ -14,35 +14,37 @@ from scc_cli import profiles
 
 @pytest.fixture
 def sample_org_config():
-    """Create a sample org config with multiple marketplaces and profiles."""
+    """Create a sample org config with multiple marketplaces and profiles.
+
+    Uses modern dict-based marketplace schema (org-config v1).
+    """
     return {
         "organization": {
             "name": "Example Organization",
             "id": "example-org",
         },
-        "marketplaces": [
-            {
-                "name": "internal",
-                "type": "gitlab",
+        "marketplaces": {
+            "internal": {
+                "source": "git",  # git → gitlab in resolve_marketplace
+                "owner": "group",
+                "repo": "claude-marketplace",
                 "host": "gitlab.example.org",
-                "repo": "group/claude-marketplace",
-                "ref": "main",
+                "branch": "main",
                 "auth": "env:GITLAB_TOKEN",
             },
-            {
-                "name": "public",
-                "type": "github",
-                "repo": "my-org/public-plugins",
-                "ref": "main",
+            "public": {
+                "source": "github",
+                "owner": "my-org",
+                "repo": "public-plugins",
+                "branch": "main",
                 "auth": None,
             },
-            {
-                "name": "custom",
-                "type": "https",
+            "custom": {
+                "source": "url",  # url → https in resolve_marketplace
                 "url": "https://plugins.example.org/marketplace",
                 "auth": "env:CUSTOM_TOKEN",
             },
-        ],
+        },
         "profiles": {
             "platform": {
                 "description": "Platform team (Python, FastAPI)",
@@ -58,27 +60,6 @@ def sample_org_config():
                 "description": "Custom team",
                 "plugin": "custom-plugin",
                 "marketplace": "custom",
-            },
-        },
-    }
-
-
-@pytest.fixture
-def legacy_config():
-    """Legacy config format (single marketplace in 'marketplace' key)."""
-    return {
-        "marketplace": {
-            "name": "sundsvall",
-            "repo": "sundsvall/claude-plugins-marketplace",
-        },
-        "profiles": {
-            "base": {
-                "description": "Default profile - no team plugin",
-                "plugin": None,
-            },
-            "ai-teamet": {
-                "description": "AI platform development",
-                "plugin": "ai-teamet",
             },
         },
     }
@@ -288,63 +269,3 @@ class TestGetMarketplaceUrl:
         marketplace = {"type": "bitbucket", "repo": "org/repo"}
         with pytest.raises(ValueError, match="requires 'url' or 'host'"):
             profiles.get_marketplace_url(marketplace)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for backward compatibility with legacy config format
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestLegacyConfigCompatibility:
-    """Tests for backward compatibility with legacy single-marketplace config."""
-
-    def test_list_teams_legacy(self, legacy_config):
-        """list_teams should work with legacy config."""
-        result = profiles.list_teams(legacy_config)
-        assert len(result) == 2
-        team_names = [t["name"] for t in result]
-        assert "base" in team_names
-        assert "ai-teamet" in team_names
-
-    def test_get_team_details_legacy(self, legacy_config):
-        """get_team_details should work with legacy config."""
-        result = profiles.get_team_details("ai-teamet", legacy_config)
-        assert result is not None
-        assert result["name"] == "ai-teamet"
-        assert result["plugin"] == "ai-teamet"
-        assert result["marketplace"] == "sundsvall"
-
-    def test_get_team_sandbox_settings_legacy(self, legacy_config):
-        """get_team_sandbox_settings should work with legacy config."""
-        result = profiles.get_team_sandbox_settings("ai-teamet", legacy_config)
-        assert "extraKnownMarketplaces" in result
-        assert "enabledPlugins" in result
-        assert result["enabledPlugins"] == ["ai-teamet@sundsvall"]
-
-    def test_get_team_plugin_id_legacy(self, legacy_config):
-        """get_team_plugin_id should work with legacy config."""
-        result = profiles.get_team_plugin_id("ai-teamet", legacy_config)
-        assert result == "ai-teamet@sundsvall"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for validation
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestValidateProfile:
-    """Tests for validate_team_profile function (backward compatible name)."""
-
-    def test_validate_valid_profile(self, sample_org_config):
-        """validate_team_profile should return valid=True for valid profile."""
-        result = profiles.validate_team_profile("platform", sample_org_config)
-        assert result["valid"] is True
-        assert result["team"] == "platform"
-        assert result["plugin"] == "platform"
-        assert result["errors"] == []
-
-    def test_validate_nonexistent_profile(self, sample_org_config):
-        """validate_team_profile should return valid=False for nonexistent profile."""
-        result = profiles.validate_team_profile("nonexistent", sample_org_config)
-        assert result["valid"] is False
-        assert "not found" in result["errors"][0]
