@@ -20,10 +20,11 @@ from __future__ import annotations
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from ..theme import Indicators
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -99,8 +100,9 @@ def render_help_content(mode: HelpMode) -> RenderableType:
     for section_name, entries in grouped.items():
         # Section header
         section_header = Text()
-        section_header.append(f"─── {section_name} ", style="dim")
-        section_header.append("─" * max(0, 30 - len(section_name)), style="dim")
+        sep = Indicators.get("HORIZONTAL_LINE")
+        section_header.append(f"{sep}{sep}{sep} {section_name} ", style="dim")
+        section_header.append(sep * max(0, 30 - len(section_name)), style="dim")
         renderables.append(section_header)
 
         # Section table
@@ -127,7 +129,7 @@ def render_help_content(mode: HelpMode) -> RenderableType:
 
     return Panel(
         Group(*renderables),
-        title=f"[bold]Keyboard Shortcuts[/bold] │ {mode_display}",
+        title=f"[bold]Keyboard Shortcuts[/bold] {Indicators.get('VERTICAL_LINE')} {mode_display}",
         title_align="left",
         border_style="blue",
         padding=(1, 2),
@@ -142,7 +144,9 @@ def show_help_overlay(mode: HelpMode, console: Console | None = None) -> None:
         console: Optional console to use. If None, creates a new one.
     """
     if console is None:
-        console = Console()
+        from ..console import get_err_console
+
+        console = get_err_console()
 
     content = render_help_content(mode)
     console.print(content)

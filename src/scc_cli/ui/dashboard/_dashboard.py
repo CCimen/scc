@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rich.console import Console, Group, RenderableType
+from rich.console import Group, RenderableType
 from rich.live import Live
 from rich.padding import Padding
 from rich.table import Table
@@ -55,7 +55,9 @@ class Dashboard:
             state: Initial dashboard state with tab data.
         """
         self.state = state
-        self._console = Console()
+        from ...console import get_err_console
+
+        self._console = get_err_console()
         # Track last layout mode for hysteresis (prevents flip-flop at resize boundary)
         self._last_side_by_side: bool | None = None
 
@@ -66,7 +68,8 @@ class Dashboard:
         """
         # Use custom_keys for dashboard-specific actions that aren't in DEFAULT_KEY_MAP
         # This allows 'r' to be a filter char in pickers but REFRESH in dashboard
-        reader = KeyReader(custom_keys={"r": "refresh"}, enable_filter=True)
+        # 'n' (new session) is also screen-specific to avoid global key conflicts
+        reader = KeyReader(custom_keys={"r": "refresh", "n": "new_session"}, enable_filter=True)
 
         with Live(
             self._render(),
@@ -78,6 +81,13 @@ class Dashboard:
                 # Pass filter_active based on actual filter state, not always True
                 # When filter is empty, j/k navigate; when typing, j/k become filter chars
                 action = reader.read(filter_active=bool(self.state.list_state.filter_query))
+
+                # Help overlay dismissal: any key while help is visible just closes help
+                # This is the standard pattern for modal overlays in Rich Live applications
+                if self.state.help_visible:
+                    self.state.help_visible = False
+                    live.update(self._render(), refresh=True)
+                    continue  # Consume the keypress (don't process it further)
 
                 result = self._handle_action(action)
                 if result is False:
@@ -95,7 +105,17 @@ class Dashboard:
         - ≥110 columns: side-by-side (list | details)
         - <110 columns: stacked (list above details)
         - Status tab: details auto-hidden via render rule
+
+        Help overlay is rendered INSIDE the Live context to avoid scroll artifacts.
+        When help_visible is True, the help panel overlays the normal content.
         """
+        # If help overlay is visible, render it instead of normal content
+        # This renders INSIDE the Live context, avoiding scroll artifacts
+        if self.state.help_visible:
+            from ..help import HelpMode, render_help_content
+
+            return render_help_content(HelpMode.DASHBOARD)
+
         list_body = self._render_list_body()
         config = self._get_chrome_config()
         chrome = Chrome(config)
@@ -156,7 +176,7 @@ class Dashboard:
         # Render status message if present (transient toast)
         if self.state.status_message:
             text.append("\n")
-            text.append("ℹ ", style="yellow")
+            text.append(f"{Indicators.get('INFO_ICON')} ", style="yellow")
             text.append(self.state.status_message, style="yellow")
             text.append("\n")
 
@@ -194,12 +214,12 @@ class Dashboard:
             table.add_column("details", ratio=1, no_wrap=False)
 
             # Single vertical bar - Rich expands it to match row height
-            table.add_row(list_body, "│", padded_details)
+            table.add_row(list_body, Indicators.get("VERTICAL_LINE"), padded_details)
             return table
         else:
             # Stacked: list above details with thin separator
             # Use same visual weight as side-by-side for smooth switching
-            separator = Text("─" * 30, style="dim")
+            separator = Text(Indicators.get("HORIZONTAL_LINE") * 30, style="dim")
             return Group(
                 list_body,
                 Text(""),  # Blank line for spacing
@@ -239,7 +259,7 @@ class Dashboard:
         # Header
         header = Text()
         header.append("Container Details\n", style="bold cyan")
-        header.append("─" * 20, style="dim")
+        header.append(Indicators.get("HORIZONTAL_LINE") * 20, style="dim")
 
         # Key/value table
         table = Table.grid(padding=(0, 1))
@@ -279,7 +299,7 @@ class Dashboard:
         # Header
         header = Text()
         header.append("Session Details\n", style="bold cyan")
-        header.append("─" * 20, style="dim")
+        header.append(Indicators.get("HORIZONTAL_LINE") * 20, style="dim")
 
         # Key/value table
         table = Table.grid(padding=(0, 1))
@@ -325,7 +345,7 @@ class Dashboard:
         # Header
         header = Text()
         header.append("Worktree Details\n", style="bold cyan")
-        header.append("─" * 20, style="dim")
+        header.append(Indicators.get("HORIZONTAL_LINE") * 20, style="dim")
 
         # Key/value table
         table = Table.grid(padding=(0, 1))
@@ -416,7 +436,10 @@ class Dashboard:
 
         # Determine primary action hint based on context
         if show_details:
-            # Details pane is open - show close action
+            # Details pane is open
+            if self.state.active_tab == DashboardTab.SESSIONS:
+                # Sessions tab: Enter resumes, Esc closes
+                hints.append(FooterHint("Enter", "resume"))
             hints.append(FooterHint("Esc", "close"))
         elif self.state.active_tab == DashboardTab.STATUS:
             # Status tab has no actionable items - no Enter hint
@@ -554,26 +577,24 @@ class Dashboard:
                             self.state = self.state.switch_tab(target_tab)
                             return True  # Refresh to show new tab
                 else:
-                    # Resource tabs handling
+                    # Resource tabs handling (Containers, Worktrees, Sessions)
                     current = self.state.list_state.current_item
 
-                    # Sessions tab: Enter resumes the selected session
-                    if (
-                        self.state.active_tab == DashboardTab.SESSIONS
-                        and current
-                        and not self.state.is_placeholder_selected()
-                    ):
-                        # Real session item → resume it
-                        if isinstance(current.value, dict) and not current.value.get(
-                            "_placeholder"
+                    # All resource tabs: toggle details pane on first Enter
+                    if self.state.details_open:
+                        # Sessions tab: Enter in details pane resumes the session
+                        if (
+                            self.state.active_tab == DashboardTab.SESSIONS
+                            and current
+                            and not self.state.is_placeholder_selected()
+                            and isinstance(current.value, dict)
+                            and not current.value.get("_placeholder")
                         ):
                             raise SessionResumeRequested(
                                 session=current.value,
                                 return_to=self.state.active_tab.name,
                             )
-
-                    # Other resource tabs (Containers, Worktrees): toggle details pane
-                    if self.state.details_open:
+                        # All tabs (including Sessions without valid session):
                         # Close details
                         self.state.details_open = False
                         return True
@@ -633,10 +654,10 @@ class Dashboard:
                 raise TeamSwitchRequested()
 
             case ActionType.HELP:
-                # Show dashboard-specific help overlay
-                from ..help import HelpMode, show_help_overlay
-
-                show_help_overlay(HelpMode.DASHBOARD, self._console)
+                # Show help overlay INSIDE the Live context (avoids scroll artifacts)
+                # The overlay is rendered in _render() and dismissed on next keypress
+                self.state.help_visible = True
+                return True  # Refresh to show help overlay
 
             case ActionType.CUSTOM:
                 # Handle dashboard-specific custom keys (not in DEFAULT_KEY_MAP)
@@ -644,5 +665,11 @@ class Dashboard:
                     # User pressed 'r' - signal orchestrator to reload tab data
                     # Uses .name (stable identifier) not .value (display string)
                     raise RefreshRequested(return_to=self.state.active_tab.name)
+                elif action.custom_key == "n":
+                    # User pressed 'n' - start new session (skip any resume prompts)
+                    raise StartRequested(
+                        return_to=self.state.active_tab.name,
+                        reason="dashboard_new_session",
+                    )
 
         return None

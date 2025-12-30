@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rich.console import Console
+from ...console import get_err_console
 
 from ..keys import (
     RefreshRequested,
@@ -155,7 +155,7 @@ def _handle_team_switch() -> None:
     from ... import config, teams
     from ..picker import pick_team
 
-    console = Console()
+    console = get_err_console()
     _prepare_for_nested_ui(console)
 
     try:
@@ -214,7 +214,7 @@ def _handle_start_flow(reason: str) -> bool | None:
     """
     from ...cli_launch import run_start_wizard_flow
 
-    console = Console()
+    console = get_err_console()
     _prepare_for_nested_ui(console)
 
     # For empty-state starts, skip Quick Resume (user intent is "create new")
@@ -262,7 +262,7 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
     )
     from ...theme import Spinners
 
-    console = Console()
+    console = get_err_console()
     _prepare_for_nested_ui(console)
 
     # Extract session info

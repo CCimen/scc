@@ -328,8 +328,8 @@ DEFAULT_KEY_MAP: dict[str, ActionType] = {
     readchar.key.BACKSPACE: ActionType.FILTER_DELETE,
     # Team switching
     "t": ActionType.TEAM_SWITCH,
-    # New session (explicit action in Quick Resume)
-    "n": ActionType.NEW_SESSION,
+    # Note: "n" (new session) is NOT in DEFAULT_KEY_MAP because it's screen-specific.
+    # It's added via custom_keys only to Quick Resume and Dashboard where it makes sense.
 }
 
 
@@ -350,6 +350,9 @@ def read_key() -> str:
 def is_printable(key: str) -> bool:
     """Check if a key is a printable character for type-to-filter.
 
+    Supports full Unicode including non-ASCII characters (åäö, emoji)
+    for Swedish locale and international users.
+
     Args:
         key: The key to check.
 
@@ -357,20 +360,20 @@ def is_printable(key: str) -> bool:
         True if the key is a single printable character that
         should be added to the filter query.
     """
-    # Single character, printable ASCII (excluding control chars)
+    # Single character only
     if len(key) != 1:
         return False
 
-    # Check if it's a printable character (space through tilde)
-    # but exclude keys that have special meanings
-    code = ord(key)
-    if code < 32 or code > 126:  # noqa: PLR2004
+    # Use Python's built-in isprintable() for proper Unicode support
+    # This handles åäö, emoji, and other non-ASCII printable chars
+    if not key.isprintable():
         return False
 
     # Exclude keys with special bindings
     # (they'll be handled by the key map first)
-    # NOTE: 'r' is NOT here - it's a filterable char. Dashboard handles 'r' explicitly.
-    special_keys = {"q", "?", "a", "j", "k", " ", "t", "n"}
+    # NOTE: 'r' and 'n' are NOT here - they're filterable chars.
+    # Dashboard handles 'r' and 'n' explicitly via custom_keys.
+    special_keys = {"q", "?", "a", "j", "k", " ", "t"}
     return key not in special_keys
 
 
@@ -413,8 +416,9 @@ def map_key_to_action(
     """
     # Priority 1: When filter is active, certain mapped keys become filter characters
     # (user is typing, arrow keys still work for navigation)
-    # j/k = vim navigation, t = team switch, a = toggle all, n = new session - all filterable when typing
-    if filter_active and enable_filter and key in ("j", "k", "t", "a", "n"):
+    # j/k = vim navigation, t = team switch, a = toggle all, n = new session, r = refresh
+    # All become filterable when user is actively typing a filter query
+    if filter_active and enable_filter and key in ("j", "k", "t", "a", "n", "r"):
         return Action(
             action_type=ActionType.FILTER_CHAR,
             filter_char=key,

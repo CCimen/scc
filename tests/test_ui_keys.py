@@ -106,10 +106,25 @@ class TestActionKeyMapping:
         action = map_key_to_action("t")
         assert action.action_type == ActionType.TEAM_SWITCH
 
-    def test_n_maps_to_new_session(self) -> None:
-        """'n' key maps to NEW_SESSION action."""
+    def test_n_is_not_globally_bound(self) -> None:
+        """'n' key is not in DEFAULT_KEY_MAP (screen-specific binding).
+
+        Unlike keys like 'q' and 't', 'n' is not in DEFAULT_KEY_MAP.
+        Screens that want new session functionality (Dashboard, Quick Resume)
+        register 'n' via custom_keys parameter.
+
+        Without custom_keys, 'n' behaves like any other printable character:
+        - enable_filter=True (default): returns FILTER_CHAR
+        - enable_filter=False: returns NOOP
+        """
+        # Default: enable_filter=True, so 'n' is a filterable character
         action = map_key_to_action("n")
-        assert action.action_type == ActionType.NEW_SESSION
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "n"
+
+        # With enable_filter=False, unbound keys return NOOP
+        action = map_key_to_action("n", enable_filter=False)
+        assert action.action_type == ActionType.NOOP
 
 
 class TestPrintableCharacterHandling:
@@ -136,9 +151,14 @@ class TestPrintableCharacterHandling:
         assert action.filter_char == "m"
 
     def test_special_keys_not_printable(self) -> None:
-        """Keys with special meanings are not treated as filter chars."""
-        # 'j', 'k', 'q', 'a', '?', 't', 'n' all have special meanings
-        for key in ["j", "k", "q", "a", "?", "t", "n"]:
+        """Keys with special meanings are not treated as filter chars.
+
+        Note: 'n' and 'r' are NOT in this list because they're screen-specific.
+        They become FILTER_CHAR by default and only trigger actions when
+        screens register them via custom_keys.
+        """
+        # 'j', 'k', 'q', 'a', '?', 't' all have special meanings in DEFAULT_KEY_MAP
+        for key in ["j", "k", "q", "a", "?", "t"]:
             action = map_key_to_action(key)
             assert action.action_type != ActionType.FILTER_CHAR
 
@@ -146,6 +166,26 @@ class TestPrintableCharacterHandling:
         """Punctuation marks (except special) are printable."""
         for char in ["-", "_", ".", ",", "!", "@"]:
             assert is_printable(char) is True
+
+    def test_non_ascii_is_printable(self) -> None:
+        """Non-ASCII printable characters are supported (Swedish locale, emoji).
+
+        This enables users to type filter queries with accented characters
+        like 'å', 'ä', 'ö' common in Swedish, or emoji in container/session names.
+        """
+        # Swedish characters
+        for char in ["å", "ä", "ö", "Å", "Ä", "Ö"]:
+            assert is_printable(char) is True
+
+        # Other European accented characters
+        for char in ["é", "ñ", "ü", "ß"]:
+            assert is_printable(char) is True
+
+        # Common emoji (single codepoints)
+        # Note: Multi-codepoint emoji (like flags, skin tones) would fail len(key) != 1
+        # but simple emoji like these are single codepoints
+        assert is_printable("★") is True  # Star
+        assert is_printable("♥") is True  # Heart
 
     def test_control_chars_not_printable(self) -> None:
         """Control characters are not printable."""
@@ -415,10 +455,84 @@ class TestFilterModeKeyBehavior:
         assert action.filter_char == "n"
         assert action.should_exit is False
 
-    def test_n_triggers_new_session_when_filter_not_active(self) -> None:
-        """'n' triggers NEW_SESSION when filter is not active."""
-        action = map_key_to_action("n", enable_filter=True, filter_active=False)
-        assert action.action_type == ActionType.NEW_SESSION
+    def test_n_triggers_custom_action_when_registered_and_filter_not_active(self) -> None:
+        """'n' triggers CUSTOM action when registered via custom_keys.
+
+        Screens like Dashboard and Quick Resume register 'n' via custom_keys
+        to get new session functionality. Without custom_keys, 'n' is just
+        a regular FILTER_CHAR.
+        """
+        action = map_key_to_action(
+            "n", enable_filter=True, filter_active=False, custom_keys={"n": "new_session"}
+        )
+        assert action.action_type == ActionType.CUSTOM
+        assert action.custom_key == "n"
+
+    def test_r_becomes_filter_char_when_filter_active(self) -> None:
+        """'r' is treated as filter char when filter_active=True.
+
+        Regression test: Typing words containing 'r' (like 'running', 'repo')
+        should not trigger REFRESH when the user is typing in the filter field.
+        This is a critical bug fix - dashboard passes r as custom_key for refresh.
+        """
+        action = map_key_to_action(
+            "r", enable_filter=True, filter_active=True, custom_keys={"r": "refresh"}
+        )
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "r"
+        assert action.should_exit is False
+
+    def test_r_triggers_custom_action_when_filter_not_active(self) -> None:
+        """'r' triggers CUSTOM action (refresh) when filter is not active.
+
+        The dashboard passes r as a custom key for refresh functionality.
+        """
+        action = map_key_to_action(
+            "r", enable_filter=True, filter_active=False, custom_keys={"r": "refresh"}
+        )
+        assert action.action_type == ActionType.CUSTOM
+        assert action.custom_key == "r"
+
+    def test_typing_running_after_filter_started(self) -> None:
+        """Typing 'r' mid-filter should add to filter, not trigger refresh.
+
+        Regression test for r key collision: when user has started typing a filter
+        (filter_active=True) and presses 'r', it should go to the filter input
+        instead of triggering the dashboard's refresh action.
+
+        Example: User types 'sta', then 'r' to make 'star' - should not refresh.
+        """
+        # Simulate user already typed 'sta' (filter_active=True)
+        # Now typing 'r' to make 'star'
+        action = map_key_to_action(
+            "r", enable_filter=True, filter_active=True, custom_keys={"r": "refresh"}
+        )
+        assert action.action_type == ActionType.FILTER_CHAR
+        assert action.filter_char == "r"
+
+        # Continue typing 'unning' → 'starring' scenario
+        for char in "ring":
+            action = map_key_to_action(
+                char, enable_filter=True, filter_active=True, custom_keys={"r": "refresh"}
+            )
+            assert action.action_type == ActionType.FILTER_CHAR, (
+                f"'{char}' should be filter char when filter_active=True"
+            )
+            assert action.filter_char == char
+
+    def test_r_as_first_char_triggers_refresh_with_custom_key(self) -> None:
+        """When filter is empty and 'r' is a custom key, it triggers refresh.
+
+        This is expected behavior: if the dashboard has bound 'r' to refresh,
+        pressing 'r' when filter is empty should trigger refresh.
+        Users can start filter by typing other chars like 's' for 'star'.
+        """
+        action = map_key_to_action(
+            "r", enable_filter=True, filter_active=False, custom_keys={"r": "refresh"}
+        )
+        # r as custom key takes precedence when filter not active
+        assert action.action_type == ActionType.CUSTOM
+        assert action.custom_key == "r"
 
     def test_regular_chars_always_filter_when_enabled(self) -> None:
         """Regular printable chars are always filter chars when enabled.

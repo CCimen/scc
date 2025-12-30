@@ -39,7 +39,6 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from rich.console import Console
 from rich.live import Live
 from rich.text import Text
 
@@ -458,7 +457,9 @@ def _run_single_select_picker(
     if not items:
         return None
 
-    console = Console()
+    from ..console import get_err_console
+
+    console = get_err_console()
     state = ListState(items=items)
     reader = KeyReader(enable_filter=True)
 
@@ -591,9 +592,12 @@ def _run_quick_resume_picker(
     if not items:
         return (QuickResumeResult.NEW_SESSION, None)
 
-    console = Console()
+    from ..console import get_err_console
+
+    console = get_err_console()
     state = ListState(items=items)
-    reader = KeyReader(enable_filter=True)
+    # 'n' (new session) is screen-specific, not global, to avoid key conflicts
+    reader = KeyReader(custom_keys={"n": "new_session"}, enable_filter=True)
 
     def render() -> RenderableType:
         """Render current picker state."""
@@ -665,9 +669,11 @@ def _run_quick_resume_picker(
                         return (QuickResumeResult.SELECTED, current.value)
                     return (QuickResumeResult.NEW_SESSION, None)
 
-                case ActionType.NEW_SESSION:
-                    # n = explicitly start new session (skip resume)
-                    return (QuickResumeResult.NEW_SESSION, None)
+                case ActionType.CUSTOM:
+                    # Handle screen-specific custom keys (e.g., 'n' for new session)
+                    if action.custom_key == "n":
+                        # n = explicitly start new session (skip resume)
+                        return (QuickResumeResult.NEW_SESSION, None)
 
                 case ActionType.CANCEL:
                     # Esc = go back to previous screen

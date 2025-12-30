@@ -260,9 +260,9 @@ class StatusLike(Protocol):
 class NullStatus:
     """No-op status object that provides the same interface as Rich Status.
 
-    Used when status display is disabled (e.g., static text mode where we
-    print once and can't update). This ensures callers can safely call
-    status.update() without checking for None.
+    Used when status display is disabled in JSON mode or other contexts
+    where we don't want any output. For static text mode that needs
+    completion messages, use StaticRichStatus instead.
     """
 
     def update(self, message: str) -> None:
@@ -271,7 +271,74 @@ class NullStatus:
         Args:
             message: Ignored - no display update occurs.
         """
-        pass  # Intentionally empty - static mode can't update display
+        pass  # Intentionally empty - no output wanted
+
+
+class StaticRichStatus:
+    """Static status indicator using Rich formatting (no animation).
+
+    Used when can_render=True but can_animate=False (e.g., TERM=dumb).
+    Provides start/completion messages using Rich markup, preventing
+    CI logs from appearing "hung" when animations are disabled.
+
+    Output format:
+        [dim]{message}...[/dim]             (on enter)
+        [green]✓ {message} done[/green]     (on success)
+        [red]✗ {message} failed[/red]       (on error)
+
+    This ensures static mode has the same completion semantics as
+    PlainTextStatus, but with Rich formatting.
+    """
+
+    def __init__(self, message: str, console: "Console") -> None:
+        """Initialize StaticRichStatus.
+
+        Args:
+            message: The status message to display.
+            console: Rich Console to write output to.
+        """
+        self.message = message
+        self.console = console
+        # Import from theme to get Unicode-aware indicators
+        from .theme import Indicators
+
+        self.check = Indicators.get("PASS")  # "✓" or "OK"
+        self.cross = Indicators.get("FAIL")  # "✗" or "FAIL"
+
+    def update(self, message: str) -> None:
+        """Update the status message (prints new message if changed).
+
+        Only prints if the message actually changed to prevent log spam
+        in CI environments where loops might call update() frequently.
+
+        Args:
+            message: The new status message to display.
+        """
+        if message != self.message:
+            self.message = message
+            self.console.print(f"[dim]{message}...[/dim]")
+
+    def __enter__(self) -> "StaticRichStatus":
+        """Print start message to console."""
+        self.console.print(f"[dim]{self.message}...[/dim]")
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> Literal[False]:
+        """Print completion or failure message to console."""
+        if exc_val:
+            self.console.print(f"[red]{self.cross} {self.message} failed[/red]")
+            # Print brief error summary (one line)
+            error_str = str(exc_val)
+            if error_str:
+                self.console.print(f"[dim]  Error: {error_str}[/dim]")
+        else:
+            self.console.print(f"[green]{self.check} {self.message} done[/green]")
+        return False  # Don't suppress exceptions
 
 
 class PlainTextStatus:
@@ -438,7 +505,8 @@ def human_status(
     """Context manager for status display with graceful degradation.
 
     When can_animate is True, displays a Rich spinner.
-    When can_animate is False but can_render is True, displays static text.
+    When can_animate is False but can_render is True, displays static text
+    with start/completion messages (using StaticRichStatus).
     When can_render is False, uses PlainTextStatus for minimal feedback.
 
     Args:
@@ -447,7 +515,8 @@ def human_status(
         spinner: Rich spinner name (default "dots").
 
     Yields:
-        A StatusLike object: Rich Status (animating), NullStatus (static), or PlainTextStatus (non-TTY).
+        A StatusLike object: Rich Status (animating), StaticRichStatus (static),
+        or PlainTextStatus (non-TTY).
 
     Example:
         with human_status("Processing files", caps) as status:
@@ -461,10 +530,10 @@ def human_status(
             yield status
     elif caps.can_render:
         # Static text (no animation, but Rich formatting works)
-        # Yield NullStatus so callers can safely call status.update()
+        # Use StaticRichStatus for start/completion semantics matching PlainTextStatus
         console = get_err_console()
-        console.print(f"[dim]{message}...[/dim]")
-        yield NullStatus()
+        with StaticRichStatus(message, console) as status:
+            yield status
     else:
         # Plain text fallback for non-TTY
         with PlainTextStatus(message, use_unicode=caps.unicode) as status:

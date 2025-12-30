@@ -93,6 +93,7 @@ class DashboardState:
         list_state: Navigation state for the current tab's list.
         status_message: Transient message to display (cleared on next action).
         details_open: Whether the details pane is visible.
+        help_visible: Whether the help overlay is shown (rendered inside Live).
     """
 
     active_tab: DashboardTab
@@ -100,6 +101,7 @@ class DashboardState:
     list_state: ListState[str]
     status_message: str | None = None
     details_open: bool = False
+    help_visible: bool = False
 
     @property
     def current_tab_data(self) -> TabData:

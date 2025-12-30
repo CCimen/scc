@@ -185,6 +185,7 @@ class Indicators:
         "PAUSED": ("◐", "[~]"),
         # Navigation
         "CURSOR": ("❯", ">"),
+        "TEXT_CURSOR": ("▏", "|"),
         "ARROW": ("→", "->"),
         "BULLET": ("•", "*"),
         "SCROLL_UP": ("↑", "^"),
@@ -192,6 +193,11 @@ class Indicators:
         # Progress
         "PENDING": ("⏳", "..."),
         "SPINNER": ("◌", "o"),
+        # Layout elements
+        "INFO_ICON": ("ℹ", "i"),  # Circled info icon for hints
+        "SEARCH_ICON": ("🔍", "[?]"),  # Search/filter indicator
+        "VERTICAL_LINE": ("│", "|"),  # Table column separator
+        "HORIZONTAL_LINE": ("─", "-"),  # Section separator
     }
 
     @classmethod
