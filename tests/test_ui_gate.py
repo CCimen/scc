@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
+from scc_cli.errors import UsageError
 from scc_cli.ui.gate import (
     InteractivityContext,
     InteractivityMode,
@@ -20,7 +21,72 @@ from scc_cli.ui.gate import (
     _is_tty_available,
     is_interactive_allowed,
     require_selection_or_prompt,
+    validate_mode_flags,
 )
+
+
+class TestValidateModeFlagsA2:
+    """Test validate_mode_flags() fast fail validation (A.2).
+
+    This function enforces that --json cannot be combined with interactive flags,
+    failing fast with a clear error rather than silently ignoring flags.
+    """
+
+    def test_no_conflict_when_not_json_mode(self) -> None:
+        """No error raised when json_mode is False."""
+        # Should not raise even with all interactive flags set
+        validate_mode_flags(
+            json_mode=False,
+            interactive=True,
+            select=True,
+            dashboard=True,
+        )
+
+    def test_no_conflict_when_no_interactive_flags(self) -> None:
+        """No error raised when json_mode is True but no interactive flags."""
+        validate_mode_flags(json_mode=True)
+
+    def test_json_with_interactive_raises_usage_error(self) -> None:
+        """--json with --interactive raises UsageError."""
+        with pytest.raises(UsageError) as exc_info:
+            validate_mode_flags(json_mode=True, interactive=True)
+
+        assert "--interactive" in str(exc_info.value.user_message)
+
+    def test_json_with_select_raises_usage_error(self) -> None:
+        """--json with --select raises UsageError."""
+        with pytest.raises(UsageError) as exc_info:
+            validate_mode_flags(json_mode=True, select=True)
+
+        assert "--select" in str(exc_info.value.user_message)
+
+    def test_json_with_dashboard_raises_usage_error(self) -> None:
+        """--json with --dashboard raises UsageError."""
+        with pytest.raises(UsageError) as exc_info:
+            validate_mode_flags(json_mode=True, dashboard=True)
+
+        assert "--dashboard" in str(exc_info.value.user_message)
+
+    def test_json_with_multiple_flags_lists_all_in_error(self) -> None:
+        """Multiple conflicting flags are all listed in error message."""
+        with pytest.raises(UsageError) as exc_info:
+            validate_mode_flags(
+                json_mode=True,
+                interactive=True,
+                select=True,
+            )
+
+        msg = str(exc_info.value.user_message)
+        assert "--interactive" in msg
+        assert "--select" in msg
+
+    def test_error_includes_suggested_action(self) -> None:
+        """UsageError includes actionable suggestion."""
+        with pytest.raises(UsageError) as exc_info:
+            validate_mode_flags(json_mode=True, interactive=True)
+
+        assert exc_info.value.suggested_action is not None
+        assert "Remove" in exc_info.value.suggested_action
 
 
 class TestIsInteractiveAllowed:
