@@ -148,7 +148,8 @@ def _load_status_tab_data() -> TabData:
                 ListItem(
                     value="statusline_not_installed",
                     label="Statusline",
-                    description="[yellow]Not installed[/yellow]  [dim]\\[y] or Enter to install[/dim]",
+                    description="Not installed - Enter to install",
+                    governance_status="warning",
                 )
             )
     except Exception:

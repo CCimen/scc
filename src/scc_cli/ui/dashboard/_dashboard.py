@@ -70,9 +70,8 @@ class Dashboard:
         # Use custom_keys for dashboard-specific actions that aren't in DEFAULT_KEY_MAP
         # This allows 'r' to be a filter char in pickers but REFRESH in dashboard
         # 'n' (new session) is also screen-specific to avoid global key conflicts
-        # 'y' triggers statusline install when on the statusline row (intuitive "yes" key)
         reader = KeyReader(
-            custom_keys={"r": "refresh", "n": "new_session", "y": "statusline_install"},
+            custom_keys={"r": "refresh", "n": "new_session"},
             enable_filter=True,
         )
 
@@ -674,11 +673,5 @@ class Dashboard:
                         return_to=self.state.active_tab.name,
                         reason="dashboard_new_session",
                     )
-                elif action.custom_key == "y":
-                    # User pressed 'y' - only install if on Status tab with statusline row
-                    if self.state.active_tab == DashboardTab.STATUS:
-                        current = self.state.list_state.current_item
-                        if current and current.value == "statusline_not_installed":
-                            raise StatuslineInstallRequested(return_to=self.state.active_tab.name)
 
         return None
