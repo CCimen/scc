@@ -286,6 +286,10 @@ class ListScreen(Generic[T]):
 
         if not filtered:
             text.append("No matches found", style="dim italic")
+            if self.state.filter_query:
+                text.append(" — press ", style="dim")
+                text.append("Esc", style="cyan")
+                text.append(" to clear filter", style="dim")
             return text
 
         for i, item in enumerate(visible):

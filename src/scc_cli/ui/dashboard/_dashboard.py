@@ -362,16 +362,30 @@ class Dashboard:
             value: Either a string placeholder key or a dict with "_placeholder" key.
         """
         tips: dict[str, str] = {
-            # Container placeholders
-            "no_containers": "No containers running. Run `scc start <path>` to launch one.",
-            # Session placeholders
-            "no_sessions": "No sessions recorded yet. Run `scc start` to create your first.",
+            # Container placeholders (first-time user friendly)
+            "no_containers": (
+                "No containers running. Press 'n' to start a new session, "
+                "or run `scc start <path>` from the terminal."
+            ),
+            # Session placeholders (first-time user friendly)
+            "no_sessions": (
+                "No sessions recorded yet. Press 'n' to create your first session!"
+            ),
             # Worktree placeholders
-            "no_worktrees": "Not in a git repository. Navigate to a git repo to see worktrees.",
-            "no_git": "Not in a git repository. Run `git init` or clone a repo first.",
-            # Error placeholders
-            "error": "Unable to load data. Check Docker is running and try again.",
-            "config_error": "Configuration error. Run `scc doctor` to diagnose.",
+            "no_worktrees": (
+                "Not in a git repository. Navigate to a git repo to see worktrees, "
+                "or run `git init` to initialize one."
+            ),
+            "no_git": (
+                "Not in a git repository. Run `git init` or clone a repo first."
+            ),
+            # Error placeholders (actionable doctor suggestion)
+            "error": (
+                "Unable to load data. Run `scc doctor` to check Docker status and diagnose issues."
+            ),
+            "config_error": (
+                "Configuration issue detected. Run `scc doctor` to diagnose and fix."
+            ),
         }
 
         # Extract placeholder key from dict if needed
