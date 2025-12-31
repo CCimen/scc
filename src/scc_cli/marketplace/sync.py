@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scc_cli.marketplace.adapter import translate_org_config
 from scc_cli.marketplace.managed import ManagedState, save_managed_state
 from scc_cli.marketplace.materialize import MaterializationError, materialize_marketplace
 from scc_cli.marketplace.normalize import matches_pattern
@@ -96,8 +97,10 @@ def sync_marketplace_settings(
     warnings: list[str] = []
 
     # ── Step 1: Parse org config ─────────────────────────────────────────────
+    # Translate external format (JSON Schema) to internal format (Pydantic)
     try:
-        org_config = OrganizationConfig.model_validate(org_config_data)
+        internal_data = translate_org_config(org_config_data)
+        org_config = OrganizationConfig.model_validate(internal_data)
     except Exception as e:
         raise SyncError(f"Invalid org config: {e}") from e
 

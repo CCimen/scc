@@ -370,12 +370,16 @@ class TeamProfile(BaseModel):
 
     Example:
         >>> profile = TeamProfile(
-        ...     name="Backend Team",
+        ...     description="Backend Team",
         ...     additional_plugins=["api-tools@internal"],
         ... )
     """
 
-    name: Annotated[str, Field(min_length=1, description="Team display name")]
+    # Note: 'name' is optional - the display name comes from the profile key
+    # or can be explicitly set here for a custom display name
+    name: str | None = Field(
+        default=None, description="Optional team display name (defaults to profile key)"
+    )
     description: str = Field(default="", description="Team description for UI display")
     additional_plugins: list[str] = Field(
         default_factory=list,

@@ -379,10 +379,15 @@ class TestConfigurationRecovery:
         )
         assert len(security.blocked_plugins) == 3
 
-    def test_team_profile_empty_name_rejected(self) -> None:
-        """TeamProfile with empty name should be rejected by Pydantic."""
-        with pytest.raises(ValueError):
-            TeamProfile(name="")
+    def test_team_profile_name_is_optional(self) -> None:
+        """TeamProfile name is optional - profile key serves as identifier."""
+        # Empty name is allowed (defaults to None)
+        profile = TeamProfile()
+        assert profile.name is None
+
+        # Explicit name can be set
+        profile_with_name = TeamProfile(name="Custom Name")
+        assert profile_with_name.name == "Custom Name"
 
     def test_organization_config_empty_name_rejected(self) -> None:
         """OrganizationConfig with empty name should be rejected."""
