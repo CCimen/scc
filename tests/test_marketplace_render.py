@@ -51,12 +51,14 @@ def existing_settings(project_dir: Path) -> Path:
     """Create existing settings.local.json with user-added plugins."""
     settings_path = project_dir / ".claude" / "settings.local.json"
     settings_data = {
-        "extraKnownMarketplaces": [
-            {
-                "type": "directory",
-                "path": "./user-custom-marketplace",
+        "extraKnownMarketplaces": {
+            "user-marketplace": {
+                "source": {
+                    "source": "directory",
+                    "path": "./user-custom-marketplace",
+                }
             }
-        ],
+        },
         "enabledPlugins": [
             "user-custom-plugin@user-marketplace",
             "some-other-plugin@external",
@@ -117,7 +119,7 @@ class TestRenderSettings:
     def test_builds_extra_known_marketplaces(
         self, effective_plugins: dict, materialized_marketplaces: dict
     ) -> None:
-        """Should build extraKnownMarketplaces array from materialized marketplaces."""
+        """Should build extraKnownMarketplaces object from materialized marketplaces."""
         from scc_cli.marketplace.render import render_settings
 
         settings = render_settings(
@@ -127,13 +129,15 @@ class TestRenderSettings:
 
         assert "extraKnownMarketplaces" in settings
         marketplaces = settings["extraKnownMarketplaces"]
+        assert isinstance(marketplaces, dict)
         assert len(marketplaces) == 1
-        assert marketplaces[0]["type"] == "directory"
+        assert "internal" in marketplaces
+        assert marketplaces["internal"]["source"]["source"] == "directory"
 
-    def test_builds_enabled_plugins_list(
+    def test_builds_enabled_plugins_object(
         self, effective_plugins: dict, materialized_marketplaces: dict
     ) -> None:
-        """Should build enabledPlugins array from effective plugins."""
+        """Should build enabledPlugins object from effective plugins."""
         from scc_cli.marketplace.render import render_settings
 
         settings = render_settings(
@@ -143,9 +147,10 @@ class TestRenderSettings:
 
         assert "enabledPlugins" in settings
         plugins = settings["enabledPlugins"]
-        assert "code-review@internal" in plugins
-        assert "linter@internal" in plugins
-        assert "api-tool@internal" in plugins
+        assert isinstance(plugins, dict)
+        assert plugins.get("code-review@internal") is True
+        assert plugins.get("linter@internal") is True
+        assert plugins.get("api-tool@internal") is True
 
     def test_uses_relative_paths_only(
         self, effective_plugins: dict, materialized_marketplaces: dict
@@ -158,15 +163,15 @@ class TestRenderSettings:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        for marketplace in settings.get("extraKnownMarketplaces", []):
-            path = marketplace.get("path", "")
+        for name, config in settings.get("extraKnownMarketplaces", {}).items():
+            path = config.get("source", {}).get("path", "")
             assert not path.startswith("/"), f"Absolute path found: {path}"
             assert path.startswith("."), f"Path should be relative: {path}"
 
     def test_includes_directory_type_for_local_marketplaces(
         self, effective_plugins: dict, materialized_marketplaces: dict
     ) -> None:
-        """Local materialized marketplaces should use type: directory."""
+        """Local materialized marketplaces should use source.source: directory."""
         from scc_cli.marketplace.render import render_settings
 
         settings = render_settings(
@@ -174,8 +179,8 @@ class TestRenderSettings:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        marketplaces = settings.get("extraKnownMarketplaces", [])
-        assert all(m["type"] == "directory" for m in marketplaces)
+        marketplaces = settings.get("extraKnownMarketplaces", {})
+        assert all(config["source"]["source"] == "directory" for config in marketplaces.values())
 
     def test_handles_empty_effective_plugins(self, materialized_marketplaces: dict) -> None:
         """Should handle case with no enabled plugins."""
@@ -194,7 +199,7 @@ class TestRenderSettings:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        assert settings["enabledPlugins"] == []
+        assert settings["enabledPlugins"] == {}
 
     def test_handles_empty_marketplaces(self, effective_plugins: dict) -> None:
         """Should handle case with no extra marketplaces."""
@@ -205,7 +210,7 @@ class TestRenderSettings:
             materialized_marketplaces={},
         )
 
-        assert settings.get("extraKnownMarketplaces", []) == []
+        assert settings.get("extraKnownMarketplaces", {}) == {}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -237,9 +242,12 @@ class TestMergeSettings:
             new_settings=new_settings,
         )
 
-        # User-added plugin should be preserved
+        # User-added plugin should be preserved (now checking dict keys)
         assert "user-custom-plugin@user-marketplace" in merged["enabledPlugins"]
         assert "some-other-plugin@external" in merged["enabledPlugins"]
+        # Values should be True for enabled plugins
+        assert merged["enabledPlugins"]["user-custom-plugin@user-marketplace"] is True
+        assert merged["enabledPlugins"]["some-other-plugin@external"] is True
 
     def test_preserves_user_added_marketplaces(
         self,
@@ -263,8 +271,9 @@ class TestMergeSettings:
         )
 
         # User-added marketplace should be preserved
-        marketplace_paths = [m["path"] for m in merged["extraKnownMarketplaces"]]
-        assert "./user-custom-marketplace" in marketplace_paths
+        marketplaces = merged["extraKnownMarketplaces"]
+        assert "user-marketplace" in marketplaces
+        assert marketplaces["user-marketplace"]["source"]["path"] == "./user-custom-marketplace"
 
     def test_removes_old_scc_managed_entries(
         self,
@@ -296,11 +305,11 @@ class TestMergeSettings:
             new_settings=new_settings,
         )
 
-        # Old managed plugins should be removed
+        # Old managed plugins should be removed (checking dict keys)
         assert "code-review@internal" not in merged["enabledPlugins"]
         assert "linter@internal" not in merged["enabledPlugins"]
-        # New managed plugin should be present
-        assert "new-tool@internal" in merged["enabledPlugins"]
+        # New managed plugin should be present with True value
+        assert merged["enabledPlugins"].get("new-tool@internal") is True
 
     def test_preserves_non_plugin_settings(
         self,
@@ -346,8 +355,8 @@ class TestMergeSettings:
             new_settings=new_settings,
         )
 
-        # Should have all new entries
-        assert "code-review@internal" in merged["enabledPlugins"]
+        # Should have all new entries (dict format)
+        assert merged["enabledPlugins"].get("code-review@internal") is True
         assert len(merged["extraKnownMarketplaces"]) > 0
 
     def test_handles_empty_managed_state(
@@ -373,9 +382,9 @@ class TestMergeSettings:
         )
 
         # All existing user plugins should be preserved (nothing was managed)
-        assert "user-custom-plugin@user-marketplace" in merged["enabledPlugins"]
+        assert merged["enabledPlugins"].get("user-custom-plugin@user-marketplace") is True
         # New plugins should be added
-        assert "code-review@internal" in merged["enabledPlugins"]
+        assert merged["enabledPlugins"].get("code-review@internal") is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -397,8 +406,8 @@ class TestPathResolution:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        for marketplace in settings.get("extraKnownMarketplaces", []):
-            path = marketplace.get("path", "")
+        for name, config in settings.get("extraKnownMarketplaces", {}).items():
+            path = config.get("source", {}).get("path", "")
             # Path should start with ./ or .claude/
             assert path.startswith("."), f"Path should be relative: {path}"
 
@@ -413,8 +422,8 @@ class TestPathResolution:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        for marketplace in settings.get("extraKnownMarketplaces", []):
-            path = marketplace.get("path", "")
+        for name, config in settings.get("extraKnownMarketplaces", {}).items():
+            path = config.get("source", {}).get("path", "")
             # No home directory paths
             assert "~" not in path
             assert "/Users/" not in path
@@ -433,8 +442,8 @@ class TestPathResolution:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        for marketplace in settings.get("extraKnownMarketplaces", []):
-            path = marketplace.get("path", "")
+        for name, config in settings.get("extraKnownMarketplaces", {}).items():
+            path = config.get("source", {}).get("path", "")
             # Should use forward slashes
             assert "\\" not in path
             # Should start with .claude/.scc-marketplaces/
@@ -459,9 +468,9 @@ class TestPathResolution:
             materialized_marketplaces=docker_compatible_marketplaces,
         )
 
-        marketplace = settings["extraKnownMarketplaces"][0]
+        marketplace = settings["extraKnownMarketplaces"]["internal"]
         # Path should be relative so it works from /workspace/<project>/ in Docker
-        assert marketplace["path"] == ".claude/.scc-marketplaces/internal"
+        assert marketplace["source"]["path"] == ".claude/.scc-marketplaces/internal"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -489,7 +498,7 @@ class TestRenderEdgeCases:
             materialized_marketplaces=materialized_marketplaces,
         )
 
-        # Simulating existing settings with same plugin
+        # Simulating existing settings with same plugin (using legacy array format)
         import tempfile
         from pathlib import Path
 
@@ -500,7 +509,7 @@ class TestRenderEdgeCases:
 
             existing = {
                 "enabledPlugins": ["shared-plugin@internal", "other-plugin"],
-                "extraKnownMarketplaces": [],
+                "extraKnownMarketplaces": {},
             }
             (claude_dir / "settings.local.json").write_text(json.dumps(existing))
 
@@ -509,9 +518,9 @@ class TestRenderEdgeCases:
                 new_settings=new_settings,
             )
 
-            # Should not have duplicate
-            plugin_count = merged["enabledPlugins"].count("shared-plugin@internal")
-            assert plugin_count == 1
+            # With object format, duplicates are naturally handled (dict keys are unique)
+            assert merged["enabledPlugins"].get("shared-plugin@internal") is True
+            assert merged["enabledPlugins"].get("other-plugin") is True
 
     def test_handles_special_characters_in_marketplace_names(self, effective_plugins: dict) -> None:
         """Should handle marketplace names with special characters."""
@@ -531,7 +540,9 @@ class TestRenderEdgeCases:
         )
 
         assert len(settings["extraKnownMarketplaces"]) == 1
-        assert "sundsvall-ai-2024" in settings["extraKnownMarketplaces"][0]["path"]
+        assert "sundsvall-ai-2024" in settings["extraKnownMarketplaces"]
+        path = settings["extraKnownMarketplaces"]["sundsvall-ai-2024"]["source"]["path"]
+        assert "sundsvall-ai-2024" in path
 
     def test_preserves_json_structure_integrity(
         self,

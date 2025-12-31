@@ -354,7 +354,8 @@ def run_sandbox(
 
             # STEP 6: Exec Claude interactively (replaces current process)
             # Claude binary is at /home/agent/.local/bin/claude
-            exec_cmd = ["docker", "exec", "-it", container_id, "claude"]
+            # Use -w to set working directory so Claude finds .claude/settings.local.json
+            exec_cmd = ["docker", "exec", "-it", "-w", str(workspace), container_id, "claude"]
 
             # Add Claude-specific flags
             if continue_session:

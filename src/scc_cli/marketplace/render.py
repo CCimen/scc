@@ -31,8 +31,8 @@ def render_settings(
     """Render effective plugins and marketplaces to Claude settings format.
 
     Creates a settings.local.json compatible structure with:
-    - extraKnownMarketplaces: Array of marketplace configs with type and path
-    - enabledPlugins: Array of plugin references (name@marketplace)
+    - extraKnownMarketplaces: Object mapping marketplace names to source configs
+    - enabledPlugins: Object mapping plugin references to boolean enable state
 
     Args:
         effective_plugins: Result from compute_effective_plugins()
@@ -45,36 +45,41 @@ def render_settings(
     Returns:
         Dict with Claude Code settings structure:
             {
-                "extraKnownMarketplaces": [...],
-                "enabledPlugins": [...]
+                "extraKnownMarketplaces": {
+                    "marketplace-name": {
+                        "source": {"source": "directory", "path": "..."}
+                    }
+                },
+                "enabledPlugins": {"plugin@marketplace": true, ...}
             }
     """
     settings: dict[str, Any] = {}
 
-    # Build extraKnownMarketplaces array
-    extra_marketplaces: list[dict[str, str]] = []
+    # Build extraKnownMarketplaces as OBJECT with marketplace names as keys
+    # Claude Code expects: {"name": {"source": {"source": "directory", "path": "..."}}}
+    extra_marketplaces: dict[str, dict[str, Any]] = {}
     for name, marketplace_data in materialized_marketplaces.items():
         # Get the relative path from the materialized data
         relative_path = marketplace_data.get("relative_path", "")
 
-        # All local marketplaces use type: directory
+        # All local marketplaces use source.source: directory
         # This is because they've been cloned/downloaded to a local path
-        extra_marketplaces.append(
-            {
-                "type": "directory",
+        extra_marketplaces[name] = {
+            "source": {
+                "source": "directory",
                 "path": relative_path,
             }
-        )
+        }
 
     settings["extraKnownMarketplaces"] = extra_marketplaces
 
-    # Build enabledPlugins array
+    # Build enabledPlugins as OBJECT with plugin references as keys
+    # Claude Code expects: {"plugin@marketplace": true, ...}
     enabled = effective_plugins.get("enabled", set())
-    # Convert set to sorted list for consistent output
-    if isinstance(enabled, set):
-        settings["enabledPlugins"] = sorted(list(enabled))
-    else:
-        settings["enabledPlugins"] = list(enabled)
+    enabled_plugins: dict[str, bool] = {}
+    for plugin in enabled:
+        enabled_plugins[str(plugin)] = True
+    settings["enabledPlugins"] = enabled_plugins
 
     return settings
 
@@ -144,51 +149,65 @@ def merge_settings(
     merged = dict(existing)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Process enabledPlugins
+    # Process enabledPlugins (object format: {"plugin@market": true, ...})
     # ─────────────────────────────────────────────────────────────────────────
 
-    # Get existing plugins, removing old SCC-managed ones
-    existing_plugins = set(existing.get("enabledPlugins", []))
-    # Remove old managed plugins
-    remaining_user_plugins = existing_plugins - managed_plugins
+    existing_plugins_raw = existing.get("enabledPlugins", {})
 
-    # Add new plugins from this render
-    new_plugins = set(new_settings.get("enabledPlugins", []))
-    merged_plugins = remaining_user_plugins | new_plugins
+    # Handle legacy array format by converting to object format
+    if isinstance(existing_plugins_raw, list):
+        # Legacy array format - convert to object with all true
+        existing_plugins_obj: dict[str, bool] = {p: True for p in existing_plugins_raw}
+    else:
+        existing_plugins_obj = dict(existing_plugins_raw)
 
-    # Deduplicate and sort
-    merged["enabledPlugins"] = sorted(list(merged_plugins))
+    # Remove old SCC-managed plugins
+    remaining_user_plugins: dict[str, bool] = {}
+    for plugin, enabled in existing_plugins_obj.items():
+        if plugin not in managed_plugins:
+            remaining_user_plugins[plugin] = enabled
+
+    # Add new plugins from this render (always enabled=True for SCC-managed)
+    new_plugins_obj = new_settings.get("enabledPlugins", {})
+    if isinstance(new_plugins_obj, list):
+        # Handle if someone passes array format
+        new_plugins_obj = {p: True for p in new_plugins_obj}
+
+    # Merge: user plugins take precedence for existing keys, then add new ones
+    merged_plugins: dict[str, bool] = dict(remaining_user_plugins)
+    for plugin, enabled in new_plugins_obj.items():
+        if plugin not in merged_plugins:
+            merged_plugins[plugin] = enabled
+
+    merged["enabledPlugins"] = merged_plugins
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Process extraKnownMarketplaces
+    # Process extraKnownMarketplaces (object format)
     # ─────────────────────────────────────────────────────────────────────────
 
-    existing_marketplaces = existing.get("extraKnownMarketplaces", [])
+    existing_marketplaces = existing.get("extraKnownMarketplaces", {})
 
-    # Filter out old SCC-managed marketplaces
-    remaining_user_marketplaces = [
-        m for m in existing_marketplaces if m.get("path", "") not in managed_marketplaces
-    ]
+    # Handle legacy array format by converting to object format
+    if isinstance(existing_marketplaces, list):
+        # Legacy array format - skip it (will be replaced)
+        existing_marketplaces = {}
+
+    # Filter out old SCC-managed marketplaces by checking path in source
+    remaining_user_marketplaces: dict[str, Any] = {}
+    for name, config in existing_marketplaces.items():
+        source = config.get("source", {})
+        path = source.get("path", "")
+        if path not in managed_marketplaces:
+            remaining_user_marketplaces[name] = config
 
     # Add new marketplaces from this render
-    new_marketplaces = new_settings.get("extraKnownMarketplaces", [])
+    new_marketplaces = new_settings.get("extraKnownMarketplaces", {})
 
-    # Merge: user marketplaces first, then new ones
-    # Deduplicate by path
-    seen_paths: set[str] = set()
-    merged_marketplaces: list[dict[str, str]] = []
-
-    for m in remaining_user_marketplaces:
-        path = m.get("path", "")
-        if path not in seen_paths:
-            merged_marketplaces.append(m)
-            seen_paths.add(path)
-
-    for m in new_marketplaces:
-        path = m.get("path", "")
-        if path not in seen_paths:
-            merged_marketplaces.append(m)
-            seen_paths.add(path)
+    # Merge: user marketplaces take precedence, then add new ones
+    merged_marketplaces: dict[str, Any] = dict(remaining_user_marketplaces)
+    for name, config in new_marketplaces.items():
+        if name not in merged_marketplaces:
+            merged_marketplaces[name] = config
 
     merged["extraKnownMarketplaces"] = merged_marketplaces
 
