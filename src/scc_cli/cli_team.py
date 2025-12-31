@@ -21,6 +21,7 @@ from . import config, teams
 from .cli_common import console, handle_errors, render_responsive_table
 from .json_command import json_command
 from .kinds import Kind
+from .marketplace.adapter import translate_org_config
 from .marketplace.compute import TeamNotFoundError
 from .marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
 from .marketplace.schema import OrganizationConfig
@@ -680,9 +681,10 @@ def team_validate(
             "error": "No organization configuration found",
         }
 
-    # Parse org config
+    # Parse org config (translate external format to internal Pydantic format)
     try:
-        org_config = OrganizationConfig.model_validate(org_config_data)
+        internal_data = translate_org_config(org_config_data)
+        org_config = OrganizationConfig.model_validate(internal_data)
     except Exception as e:
         if not is_json_mode():
             console.print(
