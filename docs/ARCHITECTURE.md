@@ -369,9 +369,9 @@ graph TD
         Init[cli_init.py]
     end
 
-    subgraph Helpers["CLI Utilities"]
+    subgraph Utils["CLI Utilities"]
         Common[cli_common.py]
-        Helpers[cli_helpers.py]
+        CliHelpers[cli_helpers.py]
         Contexts[contexts.py]
     end
 
@@ -387,7 +387,7 @@ graph TD
     Main --> Init
 
     Launch --> Common
-    Launch --> Helpers
+    Launch --> CliHelpers
     Launch --> Contexts
     Worktree --> Common
 ```
