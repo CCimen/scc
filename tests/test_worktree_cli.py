@@ -68,6 +68,7 @@ class TestWorktreeCreate:
 
         with (
             patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
             patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
             patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),
         ):
@@ -93,6 +94,7 @@ class TestWorktreeCreate:
 
         with (
             patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
             patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
             patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),
         ):
@@ -112,10 +114,13 @@ class TestWorktreeCreate:
             assert call_args[0][2] == "develop"
 
     def test_create_raises_for_non_repo(self, tmp_path: Path) -> None:
-        """create should exit with error for non-git directories."""
+        """create should exit with error for non-git directories in non-interactive mode."""
         from scc_cli.cli_worktree import worktree_create_cmd
 
-        with patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False):
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=False),
+        ):
             # @handle_errors decorator converts NotAGitRepoError to typer.Exit(4)
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 worktree_create_cmd(
@@ -1143,3 +1148,158 @@ class TestWorktreeEnterCommand:
         assert captured.out == ""
         # stderr should have error message
         assert "Not a git repository" in captured.err or "git" in captured.err.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for Worktree Create Interactive Init (Phase 4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWorktreeCreateInteractiveInit:
+    """Test worktree create interactive git init prompts.
+
+    Phase 4: CLI git init prompts mirror dashboard behavior.
+    """
+
+    def test_non_git_repo_non_interactive_raises_error(self, tmp_path: Path, capsys) -> None:
+        """Non-git repo in non-interactive mode should raise NotAGitRepoError via handle_errors."""
+        from scc_cli.cli_worktree import worktree_create_cmd
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=False),
+        ):
+            with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
+
+            # Should exit with EXIT_TOOL (4) for NotAGitRepoError
+            exit_code = getattr(exc_info.value, "code", None) or getattr(
+                exc_info.value, "exit_code", None
+            )
+            assert exit_code == 4  # EXIT_TOOL
+
+        # Error should appear in stderr
+        captured = capsys.readouterr()
+        assert "Not a git repository" in captured.err
+
+    def test_non_git_repo_interactive_prompts_init(self, tmp_path: Path, capsys) -> None:
+        """Non-git repo in interactive mode should prompt for init."""
+        from scc_cli.cli_worktree import worktree_create_cmd
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
+            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),  # User declines
+        ):
+            with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
+
+            # Should exit cleanly when user declines
+            exit_code = getattr(exc_info.value, "code", None) or getattr(
+                exc_info.value, "exit_code", None
+            )
+            assert exit_code == 0
+
+        captured = capsys.readouterr()
+        assert "Skipped git initialization" in captured.err
+
+    def test_non_git_repo_interactive_accepts_init(self, tmp_path: Path, capsys) -> None:
+        """Non-git repo in interactive mode should init when user accepts."""
+        from scc_cli.cli_worktree import worktree_create_cmd
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", side_effect=[False, True]),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
+            patch("scc_cli.cli_worktree.Confirm.ask", return_value=True),  # User accepts init
+            patch("scc_cli.cli_worktree.git.init_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
+            patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
+        ):
+            mock_create.return_value = tmp_path / "feature-x"
+            try:
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x", start_claude=False)
+            except (click.exceptions.Exit, SystemExit):
+                pass  # May exit after creation
+
+        captured = capsys.readouterr()
+        assert "Git repository initialized" in captured.err
+
+    def test_no_commits_non_interactive_shows_actionable_error(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        """No commits in non-interactive mode should show actionable error."""
+        from scc_cli.cli_worktree import worktree_create_cmd
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=False),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=False),
+        ):
+            with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
+
+            # Should exit with error
+            exit_code = getattr(exc_info.value, "code", None) or getattr(
+                exc_info.value, "exit_code", None
+            )
+            assert exit_code == 1
+
+        captured = capsys.readouterr()
+        # Should show actionable command
+        assert "git commit --allow-empty" in captured.err
+
+    def test_no_commits_interactive_prompts_create(self, tmp_path: Path, capsys) -> None:
+        """No commits in interactive mode should prompt for initial commit."""
+        from scc_cli.cli_worktree import worktree_create_cmd
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=False),
+            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),  # User declines
+        ):
+            with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
+
+            # Should exit cleanly when user declines
+            exit_code = getattr(exc_info.value, "code", None) or getattr(
+                exc_info.value, "exit_code", None
+            )
+            assert exit_code == 0
+
+        captured = capsys.readouterr()
+        # Should show how to create commit manually
+        assert "git commit --allow-empty" in captured.err
+
+    def test_git_identity_failure_shows_actionable_message(self, tmp_path: Path, capsys) -> None:
+        """Git identity failure should show actionable message."""
+        from scc_cli.cli_worktree import worktree_create_cmd
+
+        identity_error = (
+            "Git identity not configured. Run:\n"
+            "  git config --global user.name 'Your Name'\n"
+            "  git config --global user.email 'you@example.com'"
+        )
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_helpers.is_interactive", return_value=True),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=False),
+            patch("scc_cli.cli_worktree.Confirm.ask", return_value=True),  # User accepts
+            patch(
+                "scc_cli.cli_worktree.git.create_empty_initial_commit",
+                return_value=(False, identity_error),
+            ),
+        ):
+            with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
+
+            # Should exit with error
+            exit_code = getattr(exc_info.value, "code", None) or getattr(
+                exc_info.value, "exit_code", None
+            )
+            assert exit_code == 1
+
+        captured = capsys.readouterr()
+        # Should show git identity configuration instructions
+        assert "git config" in captured.err or "identity" in captured.err.lower()

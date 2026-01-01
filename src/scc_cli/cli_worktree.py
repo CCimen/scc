@@ -95,13 +95,60 @@ def worktree_create_cmd(
     ),
 ) -> None:
     """Create a new worktree for parallel development."""
+    from .cli_helpers import is_interactive
+
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
+    # Handle non-git repo: offer to initialize in interactive mode
     if not git.is_git_repo(workspace_path):
-        raise NotAGitRepoError(path=str(workspace_path))
+        if is_interactive():
+            err_console.print(f"[yellow]'{workspace_path}' is not a git repository.[/yellow]")
+            if Confirm.ask("[cyan]Initialize git repository here?[/cyan]", default=True):
+                if git.init_repo(workspace_path):
+                    err_console.print("[green]✓ Git repository initialized[/green]")
+                else:
+                    err_console.print("[red]Failed to initialize git repository[/red]")
+                    raise typer.Exit(1)
+            else:
+                err_console.print("[dim]Skipped git initialization.[/dim]")
+                raise typer.Exit(0)
+        else:
+            raise NotAGitRepoError(path=str(workspace_path))
+
+    # Handle repo with no commits: offer to create initial commit
+    if not git.has_commits(workspace_path):
+        if is_interactive():
+            err_console.print(
+                "[yellow]Repository has no commits. Worktrees require at least one commit.[/yellow]"
+            )
+            if Confirm.ask("[cyan]Create an empty initial commit?[/cyan]", default=True):
+                success, error_msg = git.create_empty_initial_commit(workspace_path)
+                if success:
+                    err_console.print("[green]✓ Initial commit created[/green]")
+                else:
+                    err_console.print(f"[red]Failed to create commit:[/red] {error_msg}")
+                    err_console.print(
+                        "[dim]Fix the issue above and try again, or create a commit manually.[/dim]"
+                    )
+                    raise typer.Exit(1)
+            else:
+                err_console.print(
+                    "[dim]Skipped initial commit. Create one to enable worktrees:[/dim]"
+                )
+                err_console.print("  [cyan]git commit --allow-empty -m 'Initial commit'[/cyan]")
+                raise typer.Exit(0)
+        else:
+            err_console.print(
+                create_warning_panel(
+                    "No Commits",
+                    "Repository has no commits. Worktrees require at least one commit.",
+                    "Run: git commit --allow-empty -m 'Initial commit'",
+                )
+            )
+            raise typer.Exit(1)
 
     worktree_path = git.create_worktree(workspace_path, name, base_branch)
 
