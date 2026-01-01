@@ -10,9 +10,9 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#commands">Commands</a> ·
+  <a href="docs/CLI-REFERENCE.md">CLI Reference</a> ·
   <a href="#configuration">Configuration</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="#contributing">Contributing</a>
+  <a href="docs/ARCHITECTURE.md">Architecture</a>
 </p>
 
 ---
@@ -166,35 +166,42 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 
 ## Commands
 
+### Essential Commands
+
 | Command | Description |
 |---------|-------------|
 | `scc` | Smart start: auto-detect workspace, show Quick Resume, or launch |
-| `scc start` | Same as `scc` — auto-detects workspace from CWD |
-| `scc start -i` | Force workspace picker (ignore current folder) |
-| `scc start <path>` | Start Claude Code in sandbox for specific path |
-| `scc start --resume` | Resume most recent session (no UI) |
-| `scc start --select` | Show session picker to choose which session to resume |
-| `scc start --standalone` | Launch without organization config (no team profile) |
-| `scc start --offline` | Use cached org config only (no network) |
-| `scc start --dry-run` | Preview launch configuration without starting container |
-| `scc start --dry-run --json` | Output launch config as JSON (for CI/automation) |
-| `scc start --non-interactive` | Fail fast instead of prompting (for CI/scripts) |
 | `scc setup` | Configure organization connection |
+| `scc doctor` | Check system health and diagnose issues |
 | `scc stop` | Stop running sandbox(es) |
-| `scc doctor` | Check system health |
-| `scc team list` | List team profiles |
-| `scc team switch <name>` | Switch to a different team |
-| `scc config explain` | Show effective config with sources |
-| `scc worktree create <repo> <name>` | Create git worktree |
-| `scc worktree enter [target]` | Enter worktree in subshell (no shell config needed) |
-| `scc worktree switch <target>` | Switch to worktree (outputs path for shell wrapper) |
-| `scc worktree select` | Interactive worktree picker |
-| `scc worktree list` | List worktrees |
-| `scc worktree list -v` | List with git status (staged/modified/untracked) |
-| `scc worktree remove <name>` | Remove worktree |
-| `scc worktree prune` | Clean stale worktree entries |
 
-Run `scc <command> --help` for options. See [CLI Reference](docs/CLI-REFERENCE.md) for full command list.
+### Session & Team
+
+| Command | Description |
+|---------|-------------|
+| `scc start --resume` | Resume most recent session |
+| `scc start --select` | Pick from recent sessions |
+| `scc team switch` | Switch to a different team profile |
+| `scc sessions` | List recent sessions |
+
+### Worktrees
+
+| Command | Description |
+|---------|-------------|
+| `scc worktree create <repo> <name>` | Create git worktree for parallel development |
+| `scc worktree enter [target]` | Enter worktree in subshell (no shell config needed) |
+| `scc worktree list -v` | List worktrees with git status |
+
+### Governance & Admin
+
+| Command | Description |
+|---------|-------------|
+| `scc config explain` | Show effective config with sources |
+| `scc exceptions list` | View active exceptions |
+| `scc audit plugins` | Audit installed plugins |
+| `scc support bundle` | Generate support bundle for troubleshooting |
+
+Run `scc <command> --help` for options. See **[CLI Reference](docs/CLI-REFERENCE.md)** for the complete command list (40+ commands).
 
 ### Git Worktrees
 
@@ -299,6 +306,7 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 ## Documentation
 
+- [CLI Reference](docs/CLI-REFERENCE.md) — complete command reference (40+ commands)
 - [Architecture](docs/ARCHITECTURE.md) — system design, module structure
 - [Governance](docs/GOVERNANCE.md) — delegation model, security boundaries
 - [Marketplace](docs/MARKETPLACE.md) — plugin distribution and safety-net
@@ -311,64 +319,25 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 SCC supports non-interactive operation for CI/CD pipelines and scripting.
 
-### Exit Codes
-
-| Code | Name | Meaning |
-|------|------|---------|
-| 0 | `EXIT_SUCCESS` | Operation completed successfully |
-| 1 | `EXIT_NOT_FOUND` | Target not found (worktree, session, workspace) |
-| 2 | `EXIT_USAGE` | Invalid command-line usage, missing args |
-| 3 | `EXIT_CONFIG` | Configuration or network error |
-| 4 | `EXIT_TOOL` | External tool failed (git, docker, not a git repo) |
-| 5 | `EXIT_PREREQ` | Missing prerequisites (Docker, Git not installed) |
-| 6 | `EXIT_GOVERNANCE` | Blocked by security policy |
-| 130 | `EXIT_CANCELLED` | User cancelled (Esc/Ctrl+C) |
-
-### JSON Output
-
-Use `--json` for machine-readable output:
-
 ```bash
-# Preview launch configuration
-scc start --dry-run --json
-
-# List teams as JSON
-scc team list --json
-
-# Explain config with JSON envelope
-scc config explain --json
-```
-
-JSON envelope format:
-```json
-{
-  "apiVersion": "scc.cli/v1",
-  "kind": "StartDryRun",
-  "metadata": { "timestamp": "...", "version": "..." },
-  "status": { "ok": true },
-  "data": { ... }
-}
-```
-
-### Non-Interactive Mode
-
-Use `--non-interactive` to fail fast instead of prompting:
-
-```bash
-# CI pipeline: fail if workspace not specified
-scc start --non-interactive ~/project
-
-# Require explicit team selection
+# CI pipeline example
 scc start --non-interactive --team backend ~/project
 
-# Combine with JSON for full automation
+# Preview configuration as JSON
+scc start --dry-run --json
+
+# Full automation mode
 scc start --dry-run --json --non-interactive ~/project
 ```
 
-When `--non-interactive` is set:
-- Missing required inputs cause immediate failure (exit 2)
-- No TUI pickers or prompts are displayed
-- Errors are returned as JSON when `--json` is also set
+**Key flags:**
+- `--non-interactive` — Fail fast instead of prompting
+- `--json` — Machine-readable output with standardized envelope
+- `--dry-run` — Preview configuration without launching
+
+**Exit codes:** 0 (success), 2 (usage error), 3 (config error), 4 (tool error), 5 (prerequisites), 6 (governance block), 130 (cancelled)
+
+See [CLI Reference → Exit Codes](docs/CLI-REFERENCE.md#exit-codes) for complete documentation.
 
 ---
 
