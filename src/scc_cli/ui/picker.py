@@ -256,6 +256,7 @@ def pick_worktree(
     *,
     title: str = "Select Worktree",
     subtitle: str | None = None,
+    initial_filter: str = "",
 ) -> Any | None:
     """Show interactive worktree picker.
 
@@ -266,6 +267,7 @@ def pick_worktree(
         worktrees: Sequence of WorktreeInfo objects.
         title: Title shown in chrome header.
         subtitle: Optional subtitle for additional context.
+        initial_filter: Pre-populate the filter query (for prefilled pickers).
 
     Returns:
         Selected WorktreeInfo, or None if cancelled.
@@ -280,6 +282,7 @@ def pick_worktree(
         items=items,
         title=title,
         subtitle=subtitle or f"{len(worktrees)} worktrees",
+        initial_filter=initial_filter,
     )
 
 
@@ -433,6 +436,7 @@ def _run_single_select_picker(
     standalone: bool = False,
     allow_back: bool = False,
     context_label: str | None = None,
+    initial_filter: str = "",
 ) -> T | None:
     """Run the interactive single-selection picker loop.
 
@@ -450,6 +454,7 @@ def _run_single_select_picker(
         allow_back: If True, Esc returns BACK sentinel (for sub-screens).
             If False, Esc returns None (for top-level screens).
         context_label: Optional context label (e.g., "Team: platform") shown in header.
+        initial_filter: Pre-populate the filter query (for prefilled pickers).
 
     Returns:
         Value from selected item, BACK if allow_back and Esc pressed, or None if quit.
@@ -460,7 +465,7 @@ def _run_single_select_picker(
     from ..console import get_err_console
 
     console = get_err_console()
-    state = ListState(items=items)
+    state = ListState(items=items, filter_query=initial_filter)
     reader = KeyReader(enable_filter=True)
 
     def render() -> RenderableType:

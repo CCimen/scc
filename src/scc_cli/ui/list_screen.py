@@ -221,6 +221,7 @@ class ListScreen(Generic[T]):
         mode: ListMode = ListMode.SINGLE_SELECT,
         custom_actions: dict[str, Callable[[ListItem[T]], None]] | None = None,
         viewport_height: int = 10,
+        initial_filter: str = "",
     ) -> None:
         """Initialize the list screen.
 
@@ -230,8 +231,13 @@ class ListScreen(Generic[T]):
             mode: Operating mode for selection behavior.
             custom_actions: Key → handler map for ACTIONABLE mode.
             viewport_height: Max items visible at once.
+            initial_filter: Pre-populate the filter query (for prefilled pickers).
         """
-        self.state = ListState(items=items, viewport_height=viewport_height)
+        self.state = ListState(
+            items=items,
+            viewport_height=viewport_height,
+            filter_query=initial_filter,
+        )
         self.mode = mode
         self.title = title
         self.custom_actions = custom_actions or {}

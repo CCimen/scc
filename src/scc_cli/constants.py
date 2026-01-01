@@ -55,7 +55,8 @@ OAUTH_CREDENTIAL_KEY = "claudeAiOauth"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Branch prefix for worktrees created by SCC
-WORKTREE_BRANCH_PREFIX = "claude/"
+# Uses product namespace (scc/) not agent namespace (claude/)
+WORKTREE_BRANCH_PREFIX = "scc/"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Default Plugin Marketplace

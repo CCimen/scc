@@ -18,9 +18,10 @@ from typing import TYPE_CHECKING, Any
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm, IntPrompt, Prompt
+from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
 
+from scc_cli.confirm import Confirm
 from scc_cli.theme import Borders, Colors
 
 if TYPE_CHECKING:

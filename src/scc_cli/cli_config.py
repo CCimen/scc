@@ -20,6 +20,7 @@ config_app = typer.Typer(
     name="config",
     help="Manage configuration and team profiles.",
     no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 

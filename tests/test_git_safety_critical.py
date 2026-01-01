@@ -73,7 +73,7 @@ def worktree_setup(real_git_repo):
     worktree_path = worktree_base / "test-feature"
 
     subprocess.run(
-        ["git", "worktree", "add", "-b", "claude/test-feature", str(worktree_path)],
+        ["git", "worktree", "add", "-b", "scc/test-feature", str(worktree_path)],
         cwd=real_git_repo,
         check=True,
         capture_output=True,
@@ -575,7 +575,7 @@ class TestProtectedBranchSafety:
     @pytest.mark.parametrize(
         "allowed",
         [
-            "claude/feature-x",
+            "scc/feature-x",
             "feature/new-thing",
             "bugfix/fix-123",
             "hotfix/urgent",

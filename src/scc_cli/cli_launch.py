@@ -19,7 +19,7 @@ from typing import Any, cast
 
 import typer
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 from rich.status import Status
 from rich.table import Table
 
@@ -31,6 +31,7 @@ from .cli_common import (
     console,
     handle_errors,
 )
+from .confirm import Confirm
 from .constants import WORKTREE_BRANCH_PREFIX
 from .contexts import WorkContext, load_recent_contexts, normalize_path, record_context
 from .errors import NotAGitRepoError, WorkspaceNotFoundError
@@ -651,6 +652,7 @@ launch_app = typer.Typer(
     name="launch",
     help="Start Claude Code in sandboxes.",
     no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 
