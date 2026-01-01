@@ -28,7 +28,10 @@ from ..chrome import Chrome, ChromeConfig, FooterHint
 from ..keys import (
     Action,
     ActionType,
+    CreateWorktreeRequested,
+    GitInitRequested,
     KeyReader,
+    RecentWorkspacesRequested,
     RefreshRequested,
     SessionResumeRequested,
     StartRequested,
@@ -70,8 +73,15 @@ class Dashboard:
         # Use custom_keys for dashboard-specific actions that aren't in DEFAULT_KEY_MAP
         # This allows 'r' to be a filter char in pickers but REFRESH in dashboard
         # 'n' (new session) is also screen-specific to avoid global key conflicts
+        # 'w', 'i', 'c' are for Worktrees tab: recent workspaces, git init, create/clone
         reader = KeyReader(
-            custom_keys={"r": "refresh", "n": "new_session"},
+            custom_keys={
+                "r": "refresh",
+                "n": "new_session",
+                "w": "recent_workspaces",
+                "i": "git_init",
+                "c": "create_worktree",
+            },
             enable_filter=True,
         )
 
@@ -393,12 +403,15 @@ class Dashboard:
             ),
             # Session placeholders (first-time user friendly)
             "no_sessions": ("No sessions recorded yet. Press 'n' to create your first session!"),
-            # Worktree placeholders
+            # Worktree placeholders - updated with actionable shortcuts
             "no_worktrees": (
-                "Not in a git repository. Navigate to a git repo to see worktrees, "
-                "or run `git init` to initialize one."
+                "Not in a git repository. Press 'w' for recent workspaces, "
+                "'i' to initialize git here, or 'c' to clone."
             ),
-            "no_git": ("Not in a git repository. Run `git init` or clone a repo first."),
+            "no_git": (
+                "Not in a git repository. Press 'w' for recent workspaces, "
+                "'i' to initialize git here, or 'c' to clone."
+            ),
             # Error placeholders (actionable doctor suggestion)
             "error": (
                 "Unable to load data. Run `scc doctor` to check Docker status and diagnose issues."
@@ -458,6 +471,23 @@ class Dashboard:
         else:
             # Real item selected - show details action
             hints.append(FooterHint("Enter", "details"))
+
+        # Worktrees tab specific actions
+        if self.state.active_tab == DashboardTab.WORKTREES and not show_details:
+            current = self.state.list_state.current_item
+            # Detect if we're in a git repo based on placeholder type
+            is_git_repo = True
+            if current and isinstance(current.value, str):
+                is_git_repo = current.value not in {"no_git", "no_worktrees"}
+
+            if not is_git_repo:
+                # Not in git repo: show w (recent), i (init), c (clone)
+                hints.append(FooterHint("w", "recent"))
+                hints.append(FooterHint("i", "init"))
+                hints.append(FooterHint("c", "clone"))
+            else:
+                # In git repo: show c (create worktree)
+                hints.append(FooterHint("c", "create"))
 
         # Tab navigation and refresh
         hints.append(FooterHint("Tab", "switch tab"))
@@ -673,5 +703,43 @@ class Dashboard:
                         return_to=self.state.active_tab.name,
                         reason="dashboard_new_session",
                     )
+                elif action.custom_key == "w":
+                    # User pressed 'w' - show recent workspaces picker
+                    # Only active on Worktrees tab
+                    if self.state.active_tab == DashboardTab.WORKTREES:
+                        raise RecentWorkspacesRequested(return_to=self.state.active_tab.name)
+                elif action.custom_key == "i":
+                    # User pressed 'i' - initialize git repo
+                    # Only active on Worktrees tab when not in a git repo
+                    if self.state.active_tab == DashboardTab.WORKTREES:
+                        current = self.state.list_state.current_item
+                        # Only show when not in git repo (placeholder is no_git or no_worktrees)
+                        is_non_git = (
+                            current
+                            and isinstance(current.value, str)
+                            and current.value
+                            in {
+                                "no_git",
+                                "no_worktrees",
+                            }
+                        )
+                        if is_non_git:
+                            raise GitInitRequested(return_to=self.state.active_tab.name)
+                        else:
+                            self.state.status_message = "Already in a git repository"
+                            return True
+                elif action.custom_key == "c":
+                    # User pressed 'c' - create worktree (or clone if not git)
+                    # Only active on Worktrees tab
+                    if self.state.active_tab == DashboardTab.WORKTREES:
+                        current = self.state.list_state.current_item
+                        # Check if we're in a git repo
+                        is_git_repo = True
+                        if current and isinstance(current.value, str):
+                            is_git_repo = current.value not in {"no_git", "no_worktrees"}
+                        raise CreateWorktreeRequested(
+                            return_to=self.state.active_tab.name,
+                            is_git_repo=is_git_repo,
+                        )
 
         return None

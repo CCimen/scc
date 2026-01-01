@@ -353,7 +353,7 @@ def _load_worktrees_tab_data() -> TabData:
                 ListItem(
                     value="no_worktrees",
                     label="No worktrees",
-                    description="Not in a git repository",
+                    description="Press 'w' recent | 'i' init | 'c' clone",
                 )
             )
 
@@ -373,7 +373,7 @@ def _load_worktrees_tab_data() -> TabData:
                 ListItem(
                     value="no_git",
                     label="Not available",
-                    description="Not in a git repository",
+                    description="Press 'w' recent | 'i' init | 'c' clone",
                 )
             ],
             count_active=0,

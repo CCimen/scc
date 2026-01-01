@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 from ..keys import (
+    CreateWorktreeRequested,
+    GitInitRequested,
+    RecentWorkspacesRequested,
     RefreshRequested,
     SessionResumeRequested,
     StartRequested,
@@ -126,6 +129,49 @@ def run_dashboard() -> None:
             else:
                 toast_message = "Statusline installation failed"
             # Loop continues to reload dashboard with fresh data
+
+        except RecentWorkspacesRequested as recent_req:
+            # User pressed 'w' - show recent workspaces picker
+            restore_tab = recent_req.return_to
+            result = _handle_recent_workspaces()
+
+            if result is None:
+                # User cancelled or quit
+                toast_message = "Cancelled"
+            elif result:
+                # User selected a workspace - start session in it
+                # For now, just show message; full integration comes later
+                toast_message = f"Selected: {result}"
+            # Loop continues to reload dashboard
+
+        except GitInitRequested as init_req:
+            # User pressed 'i' - initialize git repo
+            restore_tab = init_req.return_to
+            success = _handle_git_init()
+
+            if success:
+                toast_message = "Git repository initialized"
+            else:
+                toast_message = "Git init cancelled or failed"
+            # Loop continues to reload dashboard
+
+        except CreateWorktreeRequested as create_req:
+            # User pressed 'c' - create worktree or clone
+            restore_tab = create_req.return_to
+
+            if create_req.is_git_repo:
+                success = _handle_create_worktree()
+                if success:
+                    toast_message = "Worktree created"
+                else:
+                    toast_message = "Worktree creation cancelled"
+            else:
+                success = _handle_clone()
+                if success:
+                    toast_message = "Repository cloned"
+                else:
+                    toast_message = "Clone cancelled"
+            # Loop continues to reload dashboard
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -388,3 +434,154 @@ def _handle_statusline_install() -> bool:
     except Exception as e:
         console.print(f"[red]Error installing statusline: {e}[/red]")
         return False
+
+
+def _handle_recent_workspaces() -> str | None:
+    """Handle recent workspaces picker from dashboard.
+
+    Shows a picker with recently used workspaces, allowing the user to
+    quickly navigate to a previous project.
+
+    Returns:
+        Path of selected workspace, or None if cancelled.
+    """
+    from ...contexts import load_recent_workspaces
+    from ..picker import pick
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    try:
+        recent = load_recent_workspaces()
+        if not recent:
+            console.print("[yellow]No recent workspaces found[/yellow]")
+            console.print(
+                "[dim]Start a session with `scc start <path>` to populate this list.[/dim]"
+            )
+            return None
+
+        # Create items for picker
+        items = [{"label": ws.name, "value": str(ws)} for ws in recent]
+
+        selected = pick(
+            items,
+            title="Recent Workspaces",
+            prompt="Select a workspace",
+        )
+
+        if selected:
+            return str(selected.get("value", ""))
+        return None
+
+    except Exception as e:
+        console.print(f"[red]Error loading recent workspaces: {e}[/red]")
+        return None
+
+
+def _handle_git_init() -> bool:
+    """Handle git init request from dashboard.
+
+    Initializes a new git repository in the current directory,
+    optionally creating an initial commit.
+
+    Returns:
+        True if git was initialized successfully, False otherwise.
+    """
+    import os
+    import subprocess
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    cwd = os.getcwd()
+    console.print(f"[cyan]Initializing git repository in:[/cyan] {cwd}")
+    console.print()
+
+    try:
+        # Run git init
+        result = subprocess.run(
+            ["git", "init"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        console.print(f"[green]✓ {result.stdout.strip()}[/green]")
+
+        # Optionally create initial commit
+        console.print()
+        console.print("[dim]Creating initial empty commit...[/dim]")
+
+        # Try to create an empty commit
+        try:
+            subprocess.run(
+                ["git", "commit", "--allow-empty", "-m", "Initial commit"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            console.print("[green]✓ Initial commit created[/green]")
+        except subprocess.CalledProcessError as e:
+            # May fail if git identity not configured
+            if "user.email" in e.stderr or "user.name" in e.stderr:
+                console.print("[yellow]Tip: Configure git identity to enable commits:[/yellow]")
+                console.print("  git config user.name 'Your Name'")
+                console.print("  git config user.email 'your@email.com'")
+            else:
+                console.print(
+                    f"[yellow]Could not create initial commit: {e.stderr.strip()}[/yellow]"
+                )
+
+        console.print()
+        console.print("[dim]Press any key to continue...[/dim]")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Git init failed: {e.stderr.strip()}[/red]")
+        return False
+    except FileNotFoundError:
+        console.print("[red]Git is not installed or not in PATH[/red]")
+        return False
+
+
+def _handle_create_worktree() -> bool:
+    """Handle create worktree request from dashboard.
+
+    Prompts for a worktree name and creates a new git worktree.
+
+    Returns:
+        True if worktree was created successfully, False otherwise.
+    """
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    console.print("[cyan]Create new worktree[/cyan]")
+    console.print()
+    console.print("[dim]Use `scc worktree create <name>` from the terminal for full options.[/dim]")
+    console.print("[dim]Press any key to continue...[/dim]")
+
+    # For now, just inform user of CLI option
+    # Full interactive creation can be added in a future phase
+    return False
+
+
+def _handle_clone() -> bool:
+    """Handle clone request from dashboard.
+
+    Informs user how to clone a repository.
+
+    Returns:
+        True if clone was successful, False otherwise.
+    """
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    console.print("[cyan]Clone a repository[/cyan]")
+    console.print()
+    console.print("[dim]Use `git clone <url>` to clone a repository, then run `scc` in it.[/dim]")
+    console.print("[dim]Press any key to continue...[/dim]")
+
+    # For now, just inform user of git clone option
+    # Full interactive clone can be added in a future phase
+    return False

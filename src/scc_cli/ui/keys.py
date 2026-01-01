@@ -118,6 +118,60 @@ class SessionResumeRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class RecentWorkspacesRequested(Exception):  # noqa: N818
+    """Raised when user presses 'w' to open recent workspaces picker.
+
+    This is a control flow signal that allows the dashboard to request
+    showing the recent workspaces picker without coupling to picker logic.
+
+    The orchestrator catches this and shows the picker.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "WORKTREES").
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
+class GitInitRequested(Exception):  # noqa: N818
+    """Raised when user presses 'i' to initialize a git repository.
+
+    This is a control flow signal that allows the dashboard to request
+    git initialization without coupling to git logic.
+
+    The orchestrator catches this and runs the init flow.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "WORKTREES").
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
+class CreateWorktreeRequested(Exception):  # noqa: N818
+    """Raised when user presses 'c' to create a worktree (or clone if not git).
+
+    This is a control flow signal that allows the dashboard to request
+    worktree creation or clone flow based on context.
+
+    The orchestrator catches this and runs the appropriate flow.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "WORKTREES").
+        is_git_repo: Whether the current directory is a git repository.
+            If True, create worktree; if False, run clone flow.
+    """
+
+    def __init__(self, return_to: str = "", is_git_repo: bool = True) -> None:
+        self.return_to = return_to
+        self.is_git_repo = is_git_repo
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -248,6 +302,10 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("r", "Refresh data", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("n", "New session", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("t", "Switch team", section="Actions"),
+    # Worktrees tab actions
+    KeyDoc("w", "Recent workspaces", section="Worktrees", modes=("DASHBOARD",)),
+    KeyDoc("i", "Initialize git repo", section="Worktrees", modes=("DASHBOARD",)),
+    KeyDoc("c", "Create worktree / clone", section="Worktrees", modes=("DASHBOARD",)),
     # Exit
     KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
     KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),
