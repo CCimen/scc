@@ -951,3 +951,195 @@ class TestGetWorktreeStatus:
         assert modified == 0
         assert untracked == 0
         assert timed_out is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for Worktree Enter Command
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWorktreeEnterCommand:
+    """Test worktree enter command.
+
+    The enter command opens a subshell in the selected worktree.
+    Unlike switch, it doesn't require shell configuration.
+    """
+
+    def test_enter_command_exists(self) -> None:
+        """Enter command should be registered on worktree app."""
+        from scc_cli.cli_worktree import worktree_app
+
+        commands = {cmd.name for cmd in worktree_app.registered_commands}
+        assert "enter" in commands
+
+    def test_enter_opens_subshell_in_worktree(self, tmp_path: Path, capsys) -> None:
+        """Enter should open subshell in the worktree directory."""
+        from scc_cli.cli_worktree import worktree_enter_cmd
+
+        worktree = WorktreeInfo(
+            path=str(tmp_path / "feature-auth"),
+            branch="scc/feature-auth",
+            status="",
+        )
+        (tmp_path / "feature-auth").mkdir()
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch(
+                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                return_value=(worktree, [worktree]),
+            ),
+            patch("subprocess.run") as mock_run,
+            patch.dict("os.environ", {"SHELL": "/bin/bash"}),
+        ):
+            worktree_enter_cmd(target="feature-auth", workspace=str(tmp_path))
+
+        # Verify subprocess.run was called with correct cwd
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["cwd"] == str(tmp_path / "feature-auth")
+
+    def test_enter_sets_scc_worktree_env_var(self, tmp_path: Path) -> None:
+        """Enter should set $SCC_WORKTREE environment variable."""
+        worktree = WorktreeInfo(
+            path=str(tmp_path / "feature-auth"),
+            branch="scc/feature-auth",
+            status="",
+        )
+        (tmp_path / "feature-auth").mkdir()
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch(
+                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                return_value=(worktree, [worktree]),
+            ),
+            patch("subprocess.run") as mock_run,
+            patch.dict("os.environ", {"SHELL": "/bin/bash"}),
+        ):
+            from scc_cli.cli_worktree import worktree_enter_cmd
+
+            worktree_enter_cmd(target="feature-auth", workspace=str(tmp_path))
+
+        # Verify SCC_WORKTREE was set
+        call_kwargs = mock_run.call_args[1]
+        env = call_kwargs["env"]
+        assert "SCC_WORKTREE" in env
+        assert env["SCC_WORKTREE"] == "scc/feature-auth"
+
+    def test_enter_prints_to_stderr_not_stdout(self, tmp_path: Path, capsys) -> None:
+        """Enter should print info to stderr, keeping stdout clean."""
+        worktree = WorktreeInfo(
+            path=str(tmp_path / "feature-auth"),
+            branch="scc/feature-auth",
+            status="",
+        )
+        (tmp_path / "feature-auth").mkdir()
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch(
+                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                return_value=(worktree, [worktree]),
+            ),
+            patch("subprocess.run"),
+            patch.dict("os.environ", {"SHELL": "/bin/bash"}),
+        ):
+            from scc_cli.cli_worktree import worktree_enter_cmd
+
+            worktree_enter_cmd(target="feature-auth", workspace=str(tmp_path))
+
+        captured = capsys.readouterr()
+        # stdout should be empty (stdout purity)
+        assert captured.out == ""
+        # stderr should contain informative messages
+        assert "Entering" in captured.err or "worktree" in captured.err.lower()
+
+    def test_enter_dash_uses_oldpwd(self, tmp_path: Path) -> None:
+        """Enter '-' should use $OLDPWD as target."""
+        previous_dir = tmp_path / "previous"
+        previous_dir.mkdir()
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("subprocess.run") as mock_run,
+            patch.dict("os.environ", {"SHELL": "/bin/bash", "OLDPWD": str(previous_dir)}),
+        ):
+            from scc_cli.cli_worktree import worktree_enter_cmd
+
+            worktree_enter_cmd(target="-", workspace=str(tmp_path))
+
+        # Verify subprocess.run was called with OLDPWD as cwd
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["cwd"] == str(previous_dir)
+
+    def test_enter_caret_uses_main_worktree(self, tmp_path: Path) -> None:
+        """Enter '^' should enter the main branch worktree."""
+        main_worktree = WorktreeInfo(
+            path=str(tmp_path / "main"),
+            branch="main",
+            status="",
+        )
+        (tmp_path / "main").mkdir()
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.get_default_branch", return_value="main"),
+            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[main_worktree]),
+            patch("subprocess.run") as mock_run,
+            patch.dict("os.environ", {"SHELL": "/bin/bash"}),
+        ):
+            from scc_cli.cli_worktree import worktree_enter_cmd
+
+            worktree_enter_cmd(target="^", workspace=str(tmp_path))
+
+        # Verify subprocess.run was called with main worktree directory
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["cwd"] == str(tmp_path / "main")
+
+    def test_enter_no_target_would_show_picker(self, tmp_path: Path) -> None:
+        """Enter with no target should show interactive picker."""
+        worktree = WorktreeInfo(
+            path=str(tmp_path / "feature"),
+            branch="feature",
+            status="",
+        )
+        (tmp_path / "feature").mkdir()
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[worktree]),
+            patch("scc_cli.cli_worktree.pick_worktree") as mock_picker,
+            patch("subprocess.run"),
+            patch.dict("os.environ", {"SHELL": "/bin/bash"}),
+        ):
+            mock_picker.return_value = worktree
+            from scc_cli.cli_worktree import worktree_enter_cmd
+
+            worktree_enter_cmd(target=None, workspace=str(tmp_path))
+
+        # Verify picker was called
+        mock_picker.assert_called_once()
+
+    def test_enter_non_git_repo_fails(self, tmp_path: Path, capsys) -> None:
+        """Enter in non-git directory should fail with appropriate error."""
+        from scc_cli.cli_worktree import worktree_enter_cmd
+        from scc_cli.exit_codes import EXIT_TOOL
+
+        with (
+            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+        ):
+            with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
+                worktree_enter_cmd(target="feature", workspace=str(tmp_path))
+
+            # Should exit with EXIT_TOOL (4) for not a git repo
+            exit_code = getattr(exc_info.value, "code", None) or getattr(
+                exc_info.value, "exit_code", None
+            )
+            assert exit_code == EXIT_TOOL
+
+        captured = capsys.readouterr()
+        # stdout should be empty
+        assert captured.out == ""
+        # stderr should have error message
+        assert "Not a git repository" in captured.err or "git" in captured.err.lower()

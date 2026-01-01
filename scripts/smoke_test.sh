@@ -15,6 +15,9 @@
 
 set -euo pipefail
 
+# Use uv run to ensure we're using the local dev version
+SCC="uv run scc"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -61,7 +64,7 @@ echo ""
 info "Test 1: worktree switch stdout purity (non-git dir)"
 
 # Capture stdout and exit code (stderr goes to /dev/null)
-STDOUT=$(scc worktree switch -w "$TMPDIR" 2>/dev/null) || RESULT=$?
+STDOUT=$($SCC worktree switch -w "$TMPDIR" 2>/dev/null) || RESULT=$?
 RESULT=${RESULT:-0}
 
 if [[ -z "$STDOUT" ]]; then
@@ -79,7 +82,7 @@ fi
 # ------------------------------------------------------------------------------
 info "Test 2: worktree switch error goes to stderr"
 
-STDERR=$(scc worktree switch -w "$TMPDIR" 2>&1 >/dev/null || true)
+STDERR=$($SCC worktree switch -w "$TMPDIR" 2>&1 >/dev/null || true)
 
 if [[ "$STDERR" == *"Not a git repository"* ]]; then
     pass "worktree switch error appears in stderr"
@@ -100,7 +103,7 @@ git -C "$TESTREPO" config user.email "test@test.com"
 git -C "$TESTREPO" config user.name "Test"
 git -C "$TESTREPO" commit --allow-empty -m "Initial" --quiet
 
-if scc worktree list -v "$TESTREPO" >/dev/null 2>&1; then
+if $SCC worktree list -v "$TESTREPO" >/dev/null 2>&1; then
     pass "worktree list -v works in git repo"
 else
     fail "worktree list -v failed"
@@ -111,7 +114,7 @@ fi
 # ------------------------------------------------------------------------------
 info "Test 4: worktree list shows worktree"
 
-OUTPUT=$(scc worktree list "$TESTREPO" 2>&1)
+OUTPUT=$($SCC worktree list "$TESTREPO" 2>&1)
 
 if [[ -n "$OUTPUT" ]]; then
     pass "worktree list produces output"
@@ -124,7 +127,7 @@ fi
 # ------------------------------------------------------------------------------
 info "Test 5: Exit code is 4 (ToolError) for non-git dir"
 
-scc worktree switch -w "$TMPDIR" >/dev/null 2>&1 || EXIT_CODE=$?
+$SCC worktree switch -w "$TMPDIR" >/dev/null 2>&1 || EXIT_CODE=$?
 
 if [[ "${EXIT_CODE:-0}" -eq 4 ]]; then
     pass "worktree switch exit code is 4 (ToolError)"
@@ -137,17 +140,23 @@ fi
 # ------------------------------------------------------------------------------
 info "Test 6: scc doctor runs successfully"
 
-if scc doctor >/dev/null 2>&1; then
+if $SCC doctor >/dev/null 2>&1; then
     pass "scc doctor runs without error"
 else
     fail "scc doctor failed"
 fi
 
 # ------------------------------------------------------------------------------
-# Test 7 (SKELETON): worktree enter opens subshell
+# Test 7: worktree enter command exists and shows help
 # ------------------------------------------------------------------------------
-info "Test 7: worktree enter command (TODO: depends on Phase 5)"
-skip "worktree enter not yet implemented"
+info "Test 7: worktree enter command"
+
+# Verify enter command exists and shows help
+if $SCC worktree enter --help >/dev/null 2>&1; then
+    pass "worktree enter --help works"
+else
+    fail "worktree enter --help failed"
+fi
 
 # ------------------------------------------------------------------------------
 # Test 8 (SKELETON): Non-interactive mode fails fast
