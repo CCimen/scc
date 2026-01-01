@@ -603,11 +603,7 @@ def check_worktree_branch_conflicts(cwd: Path | None = None) -> CheckResult | No
             branch_worktrees[branch].append(path)
 
     # Find branches checked out in multiple worktrees
-    conflicts = {
-        branch: paths
-        for branch, paths in branch_worktrees.items()
-        if len(paths) > 1
-    }
+    conflicts = {branch: paths for branch, paths in branch_worktrees.items() if len(paths) > 1}
 
     if not conflicts:
         return None  # No conflicts to report
