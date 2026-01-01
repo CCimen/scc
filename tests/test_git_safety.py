@@ -659,6 +659,26 @@ class TestDisplayBranch:
         result = git.get_display_branch("feature/standard-branch")
         assert result == "feature/standard-branch"
 
+    def test_get_display_branch_strips_legacy_claude_prefix(self):
+        """get_display_branch should also strip legacy claude/ prefix for display."""
+        # Legacy branches from older SCC versions should display cleanly
+        result = git.get_display_branch("claude/feature-auth")
+        assert result == "feature-auth"
+
+        result = git.get_display_branch("claude/old-worktree")
+        assert result == "old-worktree"
+
+    def test_get_display_branch_dual_prefix_stripping(self):
+        """get_display_branch strips both scc/ and claude/ prefixes."""
+        # Current prefix
+        assert git.get_display_branch("scc/feature-x") == "feature-x"
+        # Legacy prefix
+        assert git.get_display_branch("claude/feature-y") == "feature-y"
+        # Non-prefixed
+        assert git.get_display_branch("develop") == "develop"
+        # Other prefixes unchanged
+        assert git.get_display_branch("feature/something") == "feature/something"
+
     def test_find_worktree_matches_scc_prefixed_branch(self, temp_git_repo):
         """find_worktree_by_query should match scc/ prefixed branches."""
         worktree_base = temp_git_repo.parent / f"{temp_git_repo.name}-worktrees"
