@@ -52,6 +52,13 @@ def run_dashboard() -> None:
         - RefreshRequested: Reload tab data, return to source tab
         - VerboseToggleRequested: Toggle verbose worktree status display
     """
+    from ... import config as scc_config
+
+    # Show one-time onboarding banner for new users
+    if not scc_config.has_seen_onboarding():
+        _show_onboarding_banner()
+        scc_config.mark_onboarding_seen()
+
     # Track which tab to restore after flow (uses .name for stability)
     restore_tab: str | None = None
     # Toast message to show on next dashboard iteration (e.g., "Start cancelled")
@@ -597,3 +604,39 @@ def _handle_clone() -> bool:
     # For now, just inform user of git clone option
     # Full interactive clone can be added in a future phase
     return False
+
+
+def _show_onboarding_banner() -> None:
+    """Show one-time onboarding banner for new users.
+
+    Displays a brief tip about `scc worktree enter` as the recommended
+    way to switch worktrees without shell configuration.
+
+    Waits for user to press any key before continuing.
+    """
+    import readchar
+    from rich.panel import Panel
+
+    console = get_err_console()
+
+    # Create a compact onboarding message
+    message = (
+        "[bold cyan]Welcome to SCC![/bold cyan]\n\n"
+        "[yellow]Tip:[/yellow] Use [bold]scc worktree enter[/bold] to switch worktrees.\n"
+        "No shell setup required — just type [dim]exit[/dim] to return.\n\n"
+        "[dim]Press [bold]?[/bold] anytime for help, or any key to continue...[/dim]"
+    )
+
+    console.print()
+    console.print(
+        Panel(
+            message,
+            title="[bold]Getting Started[/bold]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
+    console.print()
+
+    # Wait for any key
+    readchar.readkey()

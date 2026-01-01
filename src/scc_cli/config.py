@@ -58,6 +58,7 @@ USER_CONFIG_DEFAULTS = {
     "overrides": {
         "workspace_base": "~/projects",
     },
+    "onboarding_seen": False,  # Set to True after first dashboard run
 }
 
 
@@ -295,6 +296,23 @@ def is_standalone_mode() -> bool:
 
     # No org configured → default to standalone (solo dev / fresh install)
     return True
+
+
+def has_seen_onboarding() -> bool:
+    """Check if user has seen the onboarding banner.
+
+    Returns:
+        True if onboarding banner has been shown and dismissed.
+    """
+    config = load_user_config()
+    return bool(config.get("onboarding_seen", False))
+
+
+def mark_onboarding_seen() -> None:
+    """Mark onboarding as seen so banner won't show again."""
+    config = load_user_config()
+    config["onboarding_seen"] = True
+    save_user_config(config)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
