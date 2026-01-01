@@ -28,6 +28,7 @@ from ..keys import (
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
+    VerboseToggleRequested,
 )
 from ..list_screen import ListState
 from ._dashboard import Dashboard
@@ -49,15 +50,18 @@ def run_dashboard() -> None:
         - TeamSwitchRequested: Show team picker, reload with new team
         - StartRequested: Run start wizard, return to source tab with fresh data
         - RefreshRequested: Reload tab data, return to source tab
+        - VerboseToggleRequested: Toggle verbose worktree status display
     """
     # Track which tab to restore after flow (uses .name for stability)
     restore_tab: str | None = None
     # Toast message to show on next dashboard iteration (e.g., "Start cancelled")
     toast_message: str | None = None
+    # Track verbose worktree status display (persists across reloads)
+    verbose_worktrees: bool = False
 
     while True:
-        # Load real data for all tabs
-        tabs = _load_all_tab_data()
+        # Load real data for all tabs (pass verbose flag for worktrees)
+        tabs = _load_all_tab_data(verbose_worktrees=verbose_worktrees)
 
         # Determine initial tab (restore previous or default to STATUS)
         initial_tab = DashboardTab.STATUS
@@ -74,6 +78,7 @@ def run_dashboard() -> None:
             tabs=tabs,
             list_state=ListState(items=tabs[initial_tab].items),
             status_message=toast_message,  # Show any pending toast
+            verbose_worktrees=verbose_worktrees,  # Preserve verbose state
         )
         toast_message = None  # Clear after use
 
@@ -172,6 +177,13 @@ def run_dashboard() -> None:
                 else:
                     toast_message = "Clone cancelled"
             # Loop continues to reload dashboard
+
+        except VerboseToggleRequested as verbose_req:
+            # User pressed 'v' - toggle verbose worktree status
+            restore_tab = verbose_req.return_to
+            verbose_worktrees = verbose_req.verbose
+            toast_message = "Status on" if verbose_worktrees else "Status off"
+            # Loop continues with new verbose setting
 
 
 def _prepare_for_nested_ui(console: Console) -> None:

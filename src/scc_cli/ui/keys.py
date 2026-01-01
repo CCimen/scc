@@ -172,6 +172,25 @@ class CreateWorktreeRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class VerboseToggleRequested(Exception):  # noqa: N818
+    """Raised when user presses 'v' to toggle verbose worktree status.
+
+    This is a control flow signal that allows the dashboard to request
+    a data reload with the verbose flag toggled.
+
+    The orchestrator catches this and reloads with the new verbose setting.
+
+    Attributes:
+        return_to: Tab name to restore after refresh (e.g., "WORKTREES").
+        verbose: The new verbose state to apply.
+    """
+
+    def __init__(self, return_to: str = "", verbose: bool = False) -> None:
+        self.return_to = return_to
+        self.verbose = verbose
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 

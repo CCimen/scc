@@ -37,6 +37,7 @@ from ..keys import (
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
+    VerboseToggleRequested,
 )
 from ..list_screen import ListItem
 from .models import TAB_ORDER, DashboardState, DashboardTab
@@ -74,6 +75,7 @@ class Dashboard:
         # This allows 'r' to be a filter char in pickers but REFRESH in dashboard
         # 'n' (new session) is also screen-specific to avoid global key conflicts
         # 'w', 'i', 'c' are for Worktrees tab: recent workspaces, git init, create/clone
+        # 'v' toggles verbose status display in Worktrees tab
         reader = KeyReader(
             custom_keys={
                 "r": "refresh",
@@ -81,6 +83,7 @@ class Dashboard:
                 "w": "recent_workspaces",
                 "i": "git_init",
                 "c": "create_worktree",
+                "v": "verbose_toggle",
             },
             enable_filter=True,
         )
@@ -486,8 +489,11 @@ class Dashboard:
                 hints.append(FooterHint("i", "init"))
                 hints.append(FooterHint("c", "clone"))
             else:
-                # In git repo: show c (create worktree)
+                # In git repo: show c (create worktree), v (status toggle)
                 hints.append(FooterHint("c", "create"))
+                # Show v toggle with current state indicator
+                status_label = "status off" if self.state.verbose_worktrees else "status"
+                hints.append(FooterHint("v", status_label))
 
         # Tab navigation and refresh
         hints.append(FooterHint("Tab", "switch tab"))
@@ -740,6 +746,15 @@ class Dashboard:
                         raise CreateWorktreeRequested(
                             return_to=self.state.active_tab.name,
                             is_git_repo=is_git_repo,
+                        )
+                elif action.custom_key == "verbose_toggle":
+                    # User pressed 'v' - toggle verbose status display
+                    # Only active on Worktrees tab
+                    if self.state.active_tab == DashboardTab.WORKTREES:
+                        new_verbose = not self.state.verbose_worktrees
+                        raise VerboseToggleRequested(
+                            return_to=self.state.active_tab.name,
+                            verbose=new_verbose,
                         )
 
         return None
