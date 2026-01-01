@@ -774,7 +774,11 @@ class TestListBranchesWithoutWorktrees:
 
 
 class TestWorktreeListVerbose:
-    """Test worktree list --verbose flag."""
+    """Test worktree list --verbose flag.
+
+    Contract: -v/--verbose flag MUST trigger git status checks via get_worktree_status().
+    This prevents the flag from becoming a no-op during refactoring.
+    """
 
     def test_list_passes_verbose_to_git(self, tmp_path: Path) -> None:
         """list --verbose should pass verbose=True to git.list_worktrees."""
@@ -800,6 +804,60 @@ class TestWorktreeListVerbose:
             mock_list.assert_called_once()
             call_kwargs = mock_list.call_args[1]
             assert call_kwargs.get("verbose") is True
+
+    def test_verbose_triggers_get_worktree_status(self, tmp_path: Path) -> None:
+        """list --verbose MUST call get_worktree_status() for each worktree.
+
+        This is the critical contract test that ensures -v flag actually
+        fetches git status instead of becoming a silent no-op.
+        """
+        from scc_cli.git import list_worktrees
+
+        # Create a mock worktree with a path
+        mock_worktree_path = str(tmp_path)
+
+        with (
+            patch("scc_cli.git._get_worktrees_data") as mock_get_data,
+            patch("scc_cli.git.get_worktree_status") as mock_status,
+        ):
+            # Create a WorktreeInfo that will be processed
+            mock_get_data.return_value = [
+                WorktreeInfo(path=mock_worktree_path, branch="main", status="")
+            ]
+            # Status returns (staged, modified, untracked, timed_out)
+            mock_status.return_value = (1, 2, 3, False)
+
+            # Call list_worktrees with verbose=True
+            result = list_worktrees(tmp_path, verbose=True)
+
+            # CRITICAL: get_worktree_status MUST be called
+            mock_status.assert_called_once_with(mock_worktree_path)
+
+            # Verify status was populated
+            assert result[0].staged_count == 1
+            assert result[0].modified_count == 2
+            assert result[0].untracked_count == 3
+
+    def test_verbose_false_skips_status_check(self, tmp_path: Path) -> None:
+        """list without --verbose should NOT call get_worktree_status().
+
+        This verifies the performance benefit of the non-verbose path.
+        """
+        from scc_cli.git import list_worktrees
+
+        with (
+            patch("scc_cli.git._get_worktrees_data") as mock_get_data,
+            patch("scc_cli.git.get_worktree_status") as mock_status,
+        ):
+            mock_get_data.return_value = [
+                WorktreeInfo(path=str(tmp_path), branch="main", status="")
+            ]
+
+            # Call list_worktrees with verbose=False (default)
+            list_worktrees(tmp_path, verbose=False)
+
+            # get_worktree_status should NOT be called
+            mock_status.assert_not_called()
 
 
 class TestGetWorktreeStatus:
