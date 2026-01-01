@@ -102,6 +102,7 @@ class DashboardState:
     status_message: str | None = None
     details_open: bool = False
     help_visible: bool = False
+    verbose_worktrees: bool = False  # Toggle for worktree status display
 
     @property
     def current_tab_data(self) -> TabData:

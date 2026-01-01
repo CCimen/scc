@@ -216,6 +216,7 @@ class TestWorktreeCommand:
 
         with (
             patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
             patch("scc_cli.cli_worktree.git.create_worktree", return_value=worktree_path),
             patch("scc_cli.cli_worktree.deps.auto_install_dependencies") as mock_deps,
             patch("rich.prompt.Confirm.ask", return_value=False),  # Don't start claude

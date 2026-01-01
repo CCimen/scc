@@ -1301,16 +1301,21 @@ def list_branches_without_worktrees(repo_path: Path) -> list[str]:
 
 
 def get_display_branch(branch: str) -> str:
-    """Get user-friendly branch name (strip SCC prefix if present).
+    """Get user-friendly branch name (strip worktree prefixes if present).
+
+    Strips both `scc/` (current) and `claude/` (legacy) prefixes for cleaner display.
+    This is display-only; matching rules still require `scc/` prefix for new branches.
 
     Args:
         branch: The full branch name.
 
     Returns:
-        Branch name with SCC prefix stripped for display.
+        Branch name with worktree prefix stripped for display.
     """
-    if branch.startswith(WORKTREE_BRANCH_PREFIX):
-        return branch[len(WORKTREE_BRANCH_PREFIX) :]
+    # Strip both current (scc/) and legacy (claude/) prefixes for display
+    for prefix in (WORKTREE_BRANCH_PREFIX, "claude/"):
+        if branch.startswith(prefix):
+            return branch[len(prefix) :]
     return branch
 
 

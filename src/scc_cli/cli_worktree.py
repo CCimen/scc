@@ -95,13 +95,60 @@ def worktree_create_cmd(
     ),
 ) -> None:
     """Create a new worktree for parallel development."""
+    from .cli_helpers import is_interactive
+
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
+    # Handle non-git repo: offer to initialize in interactive mode
     if not git.is_git_repo(workspace_path):
-        raise NotAGitRepoError(path=str(workspace_path))
+        if is_interactive():
+            err_console.print(f"[yellow]'{workspace_path}' is not a git repository.[/yellow]")
+            if Confirm.ask("[cyan]Initialize git repository here?[/cyan]", default=True):
+                if git.init_repo(workspace_path):
+                    err_console.print("[green]✓ Git repository initialized[/green]")
+                else:
+                    err_console.print("[red]Failed to initialize git repository[/red]")
+                    raise typer.Exit(1)
+            else:
+                err_console.print("[dim]Skipped git initialization.[/dim]")
+                raise typer.Exit(0)
+        else:
+            raise NotAGitRepoError(path=str(workspace_path))
+
+    # Handle repo with no commits: offer to create initial commit
+    if not git.has_commits(workspace_path):
+        if is_interactive():
+            err_console.print(
+                "[yellow]Repository has no commits. Worktrees require at least one commit.[/yellow]"
+            )
+            if Confirm.ask("[cyan]Create an empty initial commit?[/cyan]", default=True):
+                success, error_msg = git.create_empty_initial_commit(workspace_path)
+                if success:
+                    err_console.print("[green]✓ Initial commit created[/green]")
+                else:
+                    err_console.print(f"[red]Failed to create commit:[/red] {error_msg}")
+                    err_console.print(
+                        "[dim]Fix the issue above and try again, or create a commit manually.[/dim]"
+                    )
+                    raise typer.Exit(1)
+            else:
+                err_console.print(
+                    "[dim]Skipped initial commit. Create one to enable worktrees:[/dim]"
+                )
+                err_console.print("  [cyan]git commit --allow-empty -m 'Initial commit'[/cyan]")
+                raise typer.Exit(0)
+        else:
+            err_console.print(
+                create_warning_panel(
+                    "No Commits",
+                    "Repository has no commits. Worktrees require at least one commit.",
+                    "Run: git commit --allow-empty -m 'Initial commit'",
+                )
+            )
+            raise typer.Exit(1)
 
     worktree_path = git.create_worktree(workspace_path, name, base_branch)
 
@@ -503,6 +550,162 @@ def worktree_select_cmd(
     except TeamSwitchRequested:
         err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
         raise typer.Exit(EXIT_CANCELLED)
+
+
+@worktree_app.command("enter")
+@handle_errors
+def worktree_enter_cmd(
+    target: str = typer.Argument(
+        None,
+        help="Target: worktree name, '-' (previous), '^' (main branch)",
+    ),
+    workspace: str = typer.Option(".", "-w", "--workspace", help="Path to the repository"),
+) -> None:
+    """Enter a worktree in a new subshell.
+
+    Unlike 'switch', this command opens a new shell in the worktree directory.
+    No shell configuration is required - just type 'exit' to return.
+
+    The $SCC_WORKTREE environment variable is set to the worktree name.
+
+    Shortcuts:
+      - : Previous directory (uses shell $OLDPWD)
+      ^ : Main/default branch worktree
+      <name> : Fuzzy match worktree by branch or directory name
+
+    Examples:
+      scc worktree enter feature-auth  # Enter feature-auth in new shell
+      scc worktree enter               # Interactive picker
+      scc worktree enter ^             # Enter main branch worktree
+    """
+    import os
+    import subprocess
+
+    workspace_path = Path(workspace).expanduser().resolve()
+
+    if not workspace_path.exists():
+        raise WorkspaceNotFoundError(path=str(workspace_path))
+
+    if not git.is_git_repo(workspace_path):
+        raise NotAGitRepoError(path=str(workspace_path))
+
+    # Resolve target to worktree path
+    worktree_path: Path | None = None
+    worktree_name: str = ""
+
+    if target is None:
+        # No target: interactive picker
+        worktree_list = git.list_worktrees(workspace_path)
+        if not worktree_list:
+            err_console.print(
+                create_warning_panel(
+                    "No Worktrees",
+                    "No worktrees found for this repository.",
+                    "Create one with: scc worktree create <repo> <name>",
+                ),
+            )
+            raise typer.Exit(1)
+
+        try:
+            selected = pick_worktree(
+                worktree_list,
+                title="Enter Worktree",
+                subtitle="Select a worktree to enter",
+            )
+            if selected:
+                worktree_path = Path(selected.path)
+                worktree_name = selected.branch or Path(selected.path).name
+            else:
+                raise typer.Exit(EXIT_CANCELLED)
+        except TeamSwitchRequested:
+            err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
+            raise typer.Exit(1)
+    elif target == "-":
+        # Previous directory
+        oldpwd = os.environ.get("OLDPWD")
+        if not oldpwd:
+            err_console.print(
+                create_warning_panel(
+                    "No Previous Directory",
+                    "Shell $OLDPWD is not set.",
+                    "This typically means you haven't changed directories yet.",
+                ),
+            )
+            raise typer.Exit(1)
+        worktree_path = Path(oldpwd)
+        worktree_name = worktree_path.name
+    elif target == "^":
+        # Main branch worktree
+        main_branch = git.get_default_branch(workspace_path)
+        worktree_list = git.list_worktrees(workspace_path)
+        for wt in worktree_list:
+            if wt.branch == main_branch or wt.branch in {"main", "master"}:
+                worktree_path = Path(wt.path)
+                worktree_name = wt.branch or worktree_path.name
+                break
+        if not worktree_path:
+            err_console.print(
+                create_warning_panel(
+                    "Main Branch Not Found",
+                    f"No worktree found for main branch ({main_branch}).",
+                    "The main worktree may be in a different location.",
+                ),
+            )
+            raise typer.Exit(1)
+    else:
+        # Fuzzy match target
+        matched, _matches = git.find_worktree_by_query(workspace_path, target)
+        if matched:
+            worktree_path = Path(matched.path)
+            worktree_name = matched.branch or Path(matched.path).name
+        else:
+            err_console.print(
+                create_warning_panel(
+                    "Worktree Not Found",
+                    f"No worktree matching '{target}'.",
+                    "Run 'scc worktree list' to see available worktrees.",
+                ),
+            )
+            raise typer.Exit(1)
+
+    # Verify worktree path exists
+    if not worktree_path or not worktree_path.exists():
+        err_console.print(
+            create_warning_panel(
+                "Worktree Missing",
+                f"Worktree path does not exist: {worktree_path}",
+                "The worktree may have been removed. Run 'scc worktree prune'.",
+            ),
+        )
+        raise typer.Exit(1)
+
+    # Print entry message to stderr (stdout stays clean)
+    err_console.print(f"[cyan]Entering worktree:[/cyan] {worktree_path}")
+    err_console.print("[dim]Type 'exit' to return.[/dim]")
+    err_console.print()
+
+    # Set up environment with SCC_WORKTREE variable
+    env = os.environ.copy()
+    env["SCC_WORKTREE"] = worktree_name
+
+    # Get user's shell (default to /bin/bash on Unix, cmd.exe on Windows)
+    import platform
+
+    if platform.system() == "Windows":
+        shell = os.environ.get("COMSPEC", "cmd.exe")
+    else:
+        shell = os.environ.get("SHELL", "/bin/bash")
+
+    # Run subshell in worktree directory
+    try:
+        subprocess.run([shell], cwd=str(worktree_path), env=env)
+    except FileNotFoundError:
+        err_console.print(f"[red]Shell not found: {shell}[/red]")
+        raise typer.Exit(1)
+
+    # After subshell exits, print a message
+    err_console.print()
+    err_console.print("[dim]Exited worktree subshell[/dim]")
 
 
 @worktree_app.command("remove")

@@ -145,6 +145,25 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
     config_check = check_config_directory()
     result.checks.append(config_check)
 
+    # Git worktree health checks (may return None if not in a git repo)
+    from .checks import (
+        check_git_version_for_worktrees,
+        check_worktree_branch_conflicts,
+        check_worktree_health,
+    )
+
+    git_version_wt_check = check_git_version_for_worktrees()
+    if git_version_wt_check is not None:
+        result.checks.append(git_version_wt_check)
+
+    worktree_health_check = check_worktree_health()
+    if worktree_health_check is not None:
+        result.checks.append(worktree_health_check)
+
+    branch_conflict_check = check_worktree_branch_conflicts()
+    if branch_conflict_check is not None:
+        result.checks.append(branch_conflict_check)
+
     # User config JSON validation check
     user_config_check = check_user_config_valid()
     result.checks.append(user_config_check)

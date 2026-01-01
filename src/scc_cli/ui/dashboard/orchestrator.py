@@ -20,11 +20,15 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 from ..keys import (
+    CreateWorktreeRequested,
+    GitInitRequested,
+    RecentWorkspacesRequested,
     RefreshRequested,
     SessionResumeRequested,
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
+    VerboseToggleRequested,
 )
 from ..list_screen import ListState
 from ._dashboard import Dashboard
@@ -46,15 +50,25 @@ def run_dashboard() -> None:
         - TeamSwitchRequested: Show team picker, reload with new team
         - StartRequested: Run start wizard, return to source tab with fresh data
         - RefreshRequested: Reload tab data, return to source tab
+        - VerboseToggleRequested: Toggle verbose worktree status display
     """
+    from ... import config as scc_config
+
+    # Show one-time onboarding banner for new users
+    if not scc_config.has_seen_onboarding():
+        _show_onboarding_banner()
+        scc_config.mark_onboarding_seen()
+
     # Track which tab to restore after flow (uses .name for stability)
     restore_tab: str | None = None
     # Toast message to show on next dashboard iteration (e.g., "Start cancelled")
     toast_message: str | None = None
+    # Track verbose worktree status display (persists across reloads)
+    verbose_worktrees: bool = False
 
     while True:
-        # Load real data for all tabs
-        tabs = _load_all_tab_data()
+        # Load real data for all tabs (pass verbose flag for worktrees)
+        tabs = _load_all_tab_data(verbose_worktrees=verbose_worktrees)
 
         # Determine initial tab (restore previous or default to STATUS)
         initial_tab = DashboardTab.STATUS
@@ -71,6 +85,7 @@ def run_dashboard() -> None:
             tabs=tabs,
             list_state=ListState(items=tabs[initial_tab].items),
             status_message=toast_message,  # Show any pending toast
+            verbose_worktrees=verbose_worktrees,  # Preserve verbose state
         )
         toast_message = None  # Clear after use
 
@@ -126,6 +141,56 @@ def run_dashboard() -> None:
             else:
                 toast_message = "Statusline installation failed"
             # Loop continues to reload dashboard with fresh data
+
+        except RecentWorkspacesRequested as recent_req:
+            # User pressed 'w' - show recent workspaces picker
+            restore_tab = recent_req.return_to
+            result = _handle_recent_workspaces()
+
+            if result is None:
+                # User cancelled or quit
+                toast_message = "Cancelled"
+            elif result:
+                # User selected a workspace - start session in it
+                # For now, just show message; full integration comes later
+                toast_message = f"Selected: {result}"
+            # Loop continues to reload dashboard
+
+        except GitInitRequested as init_req:
+            # User pressed 'i' - initialize git repo
+            restore_tab = init_req.return_to
+            success = _handle_git_init()
+
+            if success:
+                toast_message = "Git repository initialized"
+            else:
+                toast_message = "Git init cancelled or failed"
+            # Loop continues to reload dashboard
+
+        except CreateWorktreeRequested as create_req:
+            # User pressed 'c' - create worktree or clone
+            restore_tab = create_req.return_to
+
+            if create_req.is_git_repo:
+                success = _handle_create_worktree()
+                if success:
+                    toast_message = "Worktree created"
+                else:
+                    toast_message = "Worktree creation cancelled"
+            else:
+                success = _handle_clone()
+                if success:
+                    toast_message = "Repository cloned"
+                else:
+                    toast_message = "Clone cancelled"
+            # Loop continues to reload dashboard
+
+        except VerboseToggleRequested as verbose_req:
+            # User pressed 'v' - toggle verbose worktree status
+            restore_tab = verbose_req.return_to
+            verbose_worktrees = verbose_req.verbose
+            toast_message = "Status on" if verbose_worktrees else "Status off"
+            # Loop continues with new verbose setting
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -220,8 +285,9 @@ def _handle_start_flow(reason: str) -> bool | None:
     - None: User pressed q (quit app entirely)
 
     Args:
-        reason: Why the start flow was triggered (e.g., "no_containers", "no_sessions").
-            Used for logging/analytics and to determine skip_quick_resume.
+        reason: Why the start flow was triggered. Can be:
+            - "no_containers", "no_sessions": Empty state triggers (show wizard)
+            - "worktree:/path/to/worktree": Start session in specific worktree
 
     Returns:
         True if wizard completed successfully, False if user wants to go back,
@@ -231,6 +297,11 @@ def _handle_start_flow(reason: str) -> bool | None:
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
+
+    # Handle worktree-specific start (Enter on worktree in details pane)
+    if reason.startswith("worktree:"):
+        worktree_path = reason[9:]  # Remove "worktree:" prefix
+        return _handle_worktree_start(worktree_path)
 
     # For empty-state starts, skip Quick Resume (user intent is "create new")
     skip_quick_resume = reason in ("no_containers", "no_sessions")
@@ -245,6 +316,96 @@ def _handle_start_flow(reason: str) -> bool | None:
     # Run the wizard with allow_back=True for dashboard context
     # Returns: True (success), False (Esc/back), None (q/quit)
     return run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
+
+
+def _handle_worktree_start(worktree_path: str) -> bool | None:
+    """Handle starting a session in a specific worktree.
+
+    Launches a new session directly in the selected worktree, bypassing
+    the wizard workspace selection since the user already selected a worktree.
+
+    Args:
+        worktree_path: Absolute path to the worktree directory.
+
+    Returns:
+        True if session started successfully, False if cancelled,
+        None if user wants to quit entirely.
+    """
+    from pathlib import Path
+
+    from rich.status import Status
+
+    from ... import config, docker
+    from ...cli_launch import (
+        _configure_team_settings,
+        _launch_sandbox,
+        _resolve_mount_and_branch,
+        _sync_marketplace_settings,
+        _validate_and_resolve_workspace,
+    )
+    from ...theme import Spinners
+
+    console = get_err_console()
+
+    workspace_path = Path(worktree_path)
+    workspace_name = workspace_path.name
+
+    # Validate workspace exists
+    if not workspace_path.exists():
+        console.print(f"[red]Worktree no longer exists: {worktree_path}[/red]")
+        return False
+
+    console.print(f"[cyan]Starting session in:[/cyan] {workspace_name}")
+    console.print()
+
+    try:
+        # Docker availability check
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
+            docker.check_docker_available()
+
+        # Validate and resolve workspace
+        resolved_path = _validate_and_resolve_workspace(str(workspace_path))
+        if resolved_path is None:
+            console.print("[red]Workspace validation failed[/red]")
+            return False
+        workspace_path = resolved_path
+
+        # Get current team from config
+        cfg = config.load_config()
+        team = cfg.get("selected_profile")
+        _configure_team_settings(team, cfg)
+
+        # Sync marketplace settings
+        _sync_marketplace_settings(workspace_path, team)
+
+        # Resolve mount path and branch
+        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+
+        # Show session info
+        if team:
+            console.print(f"[dim]Team: {team}[/dim]")
+        if current_branch:
+            console.print(f"[dim]Branch: {current_branch}[/dim]")
+        console.print()
+
+        # Launch sandbox
+        _launch_sandbox(
+            workspace_path=workspace_path,
+            mount_path=mount_path,
+            team=team,
+            session_name=None,  # No specific session name
+            current_branch=current_branch,
+            should_continue_session=False,
+            fresh=False,
+        )
+        return True
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled[/yellow]")
+        return False
+    except Exception as e:
+        console.print(f"[red]Error starting session: {e}[/red]")
+        return False
 
 
 def _handle_session_resume(session: dict[str, Any]) -> bool:
@@ -388,3 +549,190 @@ def _handle_statusline_install() -> bool:
     except Exception as e:
         console.print(f"[red]Error installing statusline: {e}[/red]")
         return False
+
+
+def _handle_recent_workspaces() -> str | None:
+    """Handle recent workspaces picker from dashboard.
+
+    Shows a picker with recently used workspaces, allowing the user to
+    quickly navigate to a previous project.
+
+    Returns:
+        Path of selected workspace, or None if cancelled.
+    """
+    from ...contexts import load_recent_workspaces
+    from ..picker import pick
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    try:
+        recent = load_recent_workspaces()
+        if not recent:
+            console.print("[yellow]No recent workspaces found[/yellow]")
+            console.print(
+                "[dim]Start a session with `scc start <path>` to populate this list.[/dim]"
+            )
+            return None
+
+        # Create items for picker
+        items = [{"label": ws.name, "value": str(ws)} for ws in recent]
+
+        selected = pick(
+            items,
+            title="Recent Workspaces",
+            prompt="Select a workspace",
+        )
+
+        if selected:
+            return str(selected.get("value", ""))
+        return None
+
+    except Exception as e:
+        console.print(f"[red]Error loading recent workspaces: {e}[/red]")
+        return None
+
+
+def _handle_git_init() -> bool:
+    """Handle git init request from dashboard.
+
+    Initializes a new git repository in the current directory,
+    optionally creating an initial commit.
+
+    Returns:
+        True if git was initialized successfully, False otherwise.
+    """
+    import os
+    import subprocess
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    cwd = os.getcwd()
+    console.print(f"[cyan]Initializing git repository in:[/cyan] {cwd}")
+    console.print()
+
+    try:
+        # Run git init
+        result = subprocess.run(
+            ["git", "init"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        console.print(f"[green]✓ {result.stdout.strip()}[/green]")
+
+        # Optionally create initial commit
+        console.print()
+        console.print("[dim]Creating initial empty commit...[/dim]")
+
+        # Try to create an empty commit
+        try:
+            subprocess.run(
+                ["git", "commit", "--allow-empty", "-m", "Initial commit"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            console.print("[green]✓ Initial commit created[/green]")
+        except subprocess.CalledProcessError as e:
+            # May fail if git identity not configured
+            if "user.email" in e.stderr or "user.name" in e.stderr:
+                console.print("[yellow]Tip: Configure git identity to enable commits:[/yellow]")
+                console.print("  git config user.name 'Your Name'")
+                console.print("  git config user.email 'your@email.com'")
+            else:
+                console.print(
+                    f"[yellow]Could not create initial commit: {e.stderr.strip()}[/yellow]"
+                )
+
+        console.print()
+        console.print("[dim]Press any key to continue...[/dim]")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Git init failed: {e.stderr.strip()}[/red]")
+        return False
+    except FileNotFoundError:
+        console.print("[red]Git is not installed or not in PATH[/red]")
+        return False
+
+
+def _handle_create_worktree() -> bool:
+    """Handle create worktree request from dashboard.
+
+    Prompts for a worktree name and creates a new git worktree.
+
+    Returns:
+        True if worktree was created successfully, False otherwise.
+    """
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    console.print("[cyan]Create new worktree[/cyan]")
+    console.print()
+    console.print("[dim]Use `scc worktree create <name>` from the terminal for full options.[/dim]")
+    console.print("[dim]Press any key to continue...[/dim]")
+
+    # For now, just inform user of CLI option
+    # Full interactive creation can be added in a future phase
+    return False
+
+
+def _handle_clone() -> bool:
+    """Handle clone request from dashboard.
+
+    Informs user how to clone a repository.
+
+    Returns:
+        True if clone was successful, False otherwise.
+    """
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    console.print("[cyan]Clone a repository[/cyan]")
+    console.print()
+    console.print("[dim]Use `git clone <url>` to clone a repository, then run `scc` in it.[/dim]")
+    console.print("[dim]Press any key to continue...[/dim]")
+
+    # For now, just inform user of git clone option
+    # Full interactive clone can be added in a future phase
+    return False
+
+
+def _show_onboarding_banner() -> None:
+    """Show one-time onboarding banner for new users.
+
+    Displays a brief tip about `scc worktree enter` as the recommended
+    way to switch worktrees without shell configuration.
+
+    Waits for user to press any key before continuing.
+    """
+    import readchar
+    from rich.panel import Panel
+
+    console = get_err_console()
+
+    # Create a compact onboarding message
+    message = (
+        "[bold cyan]Welcome to SCC![/bold cyan]\n\n"
+        "[yellow]Tip:[/yellow] Use [bold]scc worktree enter[/bold] to switch worktrees.\n"
+        "No shell setup required — just type [dim]exit[/dim] to return.\n\n"
+        "[dim]Press [bold]?[/bold] anytime for help, or any key to continue...[/dim]"
+    )
+
+    console.print()
+    console.print(
+        Panel(
+            message,
+            title="[bold]Getting Started[/bold]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
+    console.print()
+
+    # Wait for any key
+    readchar.readkey()

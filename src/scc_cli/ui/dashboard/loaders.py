@@ -308,10 +308,14 @@ def _load_sessions_tab_data() -> TabData:
         )
 
 
-def _load_worktrees_tab_data() -> TabData:
+def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
     """Load Worktrees tab data showing git worktrees.
 
     Worktrees are loaded from the current working directory if it's a git repo.
+
+    Args:
+        verbose: If True, fetch git status for each worktree (slower but shows
+            staged/modified/untracked counts with +N/!N/?N indicators).
 
     Returns:
         TabData with worktree list items.
@@ -328,6 +332,16 @@ def _load_worktrees_tab_data() -> TabData:
         worktrees = git.list_worktrees(cwd)
         current_count = 0
 
+        # If verbose, fetch status for each worktree
+        if verbose:
+            for wt in worktrees:
+                staged, modified, untracked, timed_out = git.get_worktree_status(wt.path)
+                wt.staged_count = staged
+                wt.modified_count = modified
+                wt.untracked_count = untracked
+                wt.status_timed_out = timed_out
+                wt.has_changes = (staged + modified + untracked) > 0
+
         for wt in worktrees:
             if wt.is_current:
                 current_count += 1
@@ -335,8 +349,26 @@ def _load_worktrees_tab_data() -> TabData:
             desc_parts = []
             if wt.branch:
                 desc_parts.append(wt.branch)
-            if wt.has_changes:
+
+            # Show status markers when verbose
+            if verbose:
+                if wt.status_timed_out:
+                    desc_parts.append("…")  # Timeout indicator
+                else:
+                    status_parts = []
+                    if wt.staged_count > 0:
+                        status_parts.append(f"+{wt.staged_count}")
+                    if wt.modified_count > 0:
+                        status_parts.append(f"!{wt.modified_count}")
+                    if wt.untracked_count > 0:
+                        status_parts.append(f"?{wt.untracked_count}")
+                    if status_parts:
+                        desc_parts.append(" ".join(status_parts))
+                    elif not wt.has_changes:
+                        desc_parts.append(".")  # Clean indicator
+            elif wt.has_changes:
                 desc_parts.append("*modified")
+
             if wt.is_current:
                 desc_parts.append("(current)")
 
@@ -353,7 +385,7 @@ def _load_worktrees_tab_data() -> TabData:
                 ListItem(
                     value="no_worktrees",
                     label="No worktrees",
-                    description="Not in a git repository",
+                    description="Press 'w' recent | 'i' init | 'c' clone",
                 )
             )
 
@@ -373,7 +405,7 @@ def _load_worktrees_tab_data() -> TabData:
                 ListItem(
                     value="no_git",
                     label="Not available",
-                    description="Not in a git repository",
+                    description="Press 'w' recent | 'i' init | 'c' clone",
                 )
             ],
             count_active=0,
@@ -381,8 +413,12 @@ def _load_worktrees_tab_data() -> TabData:
         )
 
 
-def _load_all_tab_data() -> dict[DashboardTab, TabData]:
+def _load_all_tab_data(verbose_worktrees: bool = False) -> dict[DashboardTab, TabData]:
     """Load data for all dashboard tabs.
+
+    Args:
+        verbose_worktrees: If True, fetch git status for each worktree
+            (shows +N/!N/?N indicators but takes longer).
 
     Returns:
         Dictionary mapping each tab to its data.
@@ -391,5 +427,5 @@ def _load_all_tab_data() -> dict[DashboardTab, TabData]:
         DashboardTab.STATUS: _load_status_tab_data(),
         DashboardTab.CONTAINERS: _load_containers_tab_data(),
         DashboardTab.SESSIONS: _load_sessions_tab_data(),
-        DashboardTab.WORKTREES: _load_worktrees_tab_data(),
+        DashboardTab.WORKTREES: _load_worktrees_tab_data(verbose=verbose_worktrees),
     }
