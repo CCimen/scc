@@ -454,6 +454,9 @@ class Dashboard:
             if self.state.active_tab == DashboardTab.SESSIONS:
                 # Sessions tab: Enter resumes, Esc closes
                 hints.append(FooterHint("Enter", "resume"))
+            elif self.state.active_tab == DashboardTab.WORKTREES:
+                # Worktrees tab: Enter starts session here, Esc closes
+                hints.append(FooterHint("Enter", "start here"))
             hints.append(FooterHint("Esc", "close"))
         elif self.state.active_tab == DashboardTab.STATUS:
             # Status tab has no actionable items - no Enter hint
@@ -631,6 +634,18 @@ class Dashboard:
                             raise SessionResumeRequested(
                                 session=current.value,
                                 return_to=self.state.active_tab.name,
+                            )
+                        # Worktrees tab: Enter in details pane starts session here
+                        if (
+                            self.state.active_tab == DashboardTab.WORKTREES
+                            and current
+                            and not self.state.is_placeholder_selected()
+                            and isinstance(current.value, str)
+                        ):
+                            # Start session in the selected worktree
+                            raise StartRequested(
+                                return_to=self.state.active_tab.name,
+                                reason=f"worktree:{current.value}",
                             )
                         # All tabs (including Sessions without valid session):
                         # Close details

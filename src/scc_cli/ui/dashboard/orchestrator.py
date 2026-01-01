@@ -285,8 +285,9 @@ def _handle_start_flow(reason: str) -> bool | None:
     - None: User pressed q (quit app entirely)
 
     Args:
-        reason: Why the start flow was triggered (e.g., "no_containers", "no_sessions").
-            Used for logging/analytics and to determine skip_quick_resume.
+        reason: Why the start flow was triggered. Can be:
+            - "no_containers", "no_sessions": Empty state triggers (show wizard)
+            - "worktree:/path/to/worktree": Start session in specific worktree
 
     Returns:
         True if wizard completed successfully, False if user wants to go back,
@@ -296,6 +297,11 @@ def _handle_start_flow(reason: str) -> bool | None:
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
+
+    # Handle worktree-specific start (Enter on worktree in details pane)
+    if reason.startswith("worktree:"):
+        worktree_path = reason[9:]  # Remove "worktree:" prefix
+        return _handle_worktree_start(worktree_path)
 
     # For empty-state starts, skip Quick Resume (user intent is "create new")
     skip_quick_resume = reason in ("no_containers", "no_sessions")
@@ -310,6 +316,96 @@ def _handle_start_flow(reason: str) -> bool | None:
     # Run the wizard with allow_back=True for dashboard context
     # Returns: True (success), False (Esc/back), None (q/quit)
     return run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
+
+
+def _handle_worktree_start(worktree_path: str) -> bool | None:
+    """Handle starting a session in a specific worktree.
+
+    Launches a new session directly in the selected worktree, bypassing
+    the wizard workspace selection since the user already selected a worktree.
+
+    Args:
+        worktree_path: Absolute path to the worktree directory.
+
+    Returns:
+        True if session started successfully, False if cancelled,
+        None if user wants to quit entirely.
+    """
+    from pathlib import Path
+
+    from rich.status import Status
+
+    from ... import config, docker
+    from ...cli_launch import (
+        _configure_team_settings,
+        _launch_sandbox,
+        _resolve_mount_and_branch,
+        _sync_marketplace_settings,
+        _validate_and_resolve_workspace,
+    )
+    from ...theme import Spinners
+
+    console = get_err_console()
+
+    workspace_path = Path(worktree_path)
+    workspace_name = workspace_path.name
+
+    # Validate workspace exists
+    if not workspace_path.exists():
+        console.print(f"[red]Worktree no longer exists: {worktree_path}[/red]")
+        return False
+
+    console.print(f"[cyan]Starting session in:[/cyan] {workspace_name}")
+    console.print()
+
+    try:
+        # Docker availability check
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
+            docker.check_docker_available()
+
+        # Validate and resolve workspace
+        resolved_path = _validate_and_resolve_workspace(str(workspace_path))
+        if resolved_path is None:
+            console.print("[red]Workspace validation failed[/red]")
+            return False
+        workspace_path = resolved_path
+
+        # Get current team from config
+        cfg = config.load_config()
+        team = cfg.get("selected_profile")
+        _configure_team_settings(team, cfg)
+
+        # Sync marketplace settings
+        _sync_marketplace_settings(workspace_path, team)
+
+        # Resolve mount path and branch
+        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+
+        # Show session info
+        if team:
+            console.print(f"[dim]Team: {team}[/dim]")
+        if current_branch:
+            console.print(f"[dim]Branch: {current_branch}[/dim]")
+        console.print()
+
+        # Launch sandbox
+        _launch_sandbox(
+            workspace_path=workspace_path,
+            mount_path=mount_path,
+            team=team,
+            session_name=None,  # No specific session name
+            current_branch=current_branch,
+            should_continue_session=False,
+            fresh=False,
+        )
+        return True
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled[/yellow]")
+        return False
+    except Exception as e:
+        console.print(f"[red]Error starting session: {e}[/red]")
+        return False
 
 
 def _handle_session_resume(session: dict[str, Any]) -> bool:
