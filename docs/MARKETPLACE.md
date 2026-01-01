@@ -101,9 +101,7 @@ The plugin reads policy from `security.safety_net` in your org config:
 
 **How policy injection works:**
 
-When you start a sandbox, SCC extracts the `security.safety_net` section from your org config and mounts it read-only inside the container at `$SCC_POLICY_PATH`.
-
-> **Note:** The current plugin version (v1.0) uses hardcoded safety rules. Policy file support (reading `$SCC_POLICY_PATH` for custom `action`, `block_force_push`, etc.) will be enabled in a future plugin release.
+When you start a sandbox, SCC extracts the `security.safety_net` section from your org config and mounts it read-only inside the container at `$SCC_POLICY_PATH`. The plugin reads this policy file to determine which commands to block.
 
 Key behaviors:
 - **Always mounted**: The policy file is always present, even without org config (defaults to `{"action": "block"}`)

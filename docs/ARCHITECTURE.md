@@ -306,186 +306,300 @@ See [MARKETPLACE.md](./MARKETPLACE.md) for full configuration options and the sc
 
 ## Module Design
 
+SCC follows a layered architecture with clear separation of concerns. The diagrams below show the system from different perspectives.
+
+### System Overview
+
+High-level view showing major components and data flow:
+
+```mermaid
+graph LR
+    subgraph User["User Interaction"]
+        CLI[CLI Commands]
+        UI[Interactive UI]
+    end
+
+    subgraph Core["Core Logic"]
+        Config[Configuration]
+        Governance[Governance]
+        Profiles[Profiles]
+    end
+
+    subgraph Runtime["Runtime"]
+        Docker[Docker Sandbox]
+        Git[Git Operations]
+        Sessions[Sessions]
+    end
+
+    subgraph External["External"]
+        Claude[Claude Code]
+        OrgConfig[Org Config URL]
+        Filesystem[Workspace]
+    end
+
+    CLI --> Config
+    CLI --> UI
+    UI --> Config
+    Config --> Profiles
+    Profiles --> Governance
+    Config --> Docker
+    Docker --> Claude
+    Docker --> Filesystem
+    Git --> Filesystem
+    Config -.->|fetch| OrgConfig
+```
+
+### CLI Layer
+
+Command routing and user interaction:
+
 ```mermaid
 graph TD
-    %% Styling for visual distinction
-    classDef cli fill:#e1f5fe,stroke:#01579b
-    classDef core fill:#fff9c4,stroke:#fbc02d
-    classDef gov fill:#f3e5f5,stroke:#7b1fa2
-    classDef audit fill:#fbe9e7,stroke:#d84315
-    classDef runtime fill:#e8f5e9,stroke:#2e7d32
-    classDef ui fill:#e0f2f1,stroke:#00695c
-
-    subgraph CLI[CLI Layer]
-        Main[cli.py]:::cli
-        Launch[cli_launch.py]:::cli
-        Worktree[cli_worktree.py]:::cli
-        CfgCLI[cli_config.py]:::cli
-        Admin[cli_admin.py]:::cli
-        ExcCLI[cli_exceptions.py]:::cli
-        AuditCLI[cli_audit.py]:::cli
+    subgraph Commands["CLI Commands"]
+        Main[cli.py]
+        Launch[cli_launch.py]
+        Worktree[cli_worktree.py]
+        Team[cli_team.py]
+        Config[cli_config.py]
+        Admin[cli_admin.py]
+        Exc[cli_exceptions.py]
+        Audit[cli_audit.py]
+        Org[cli_org.py]
+        Support[cli_support.py]
+        Init[cli_init.py]
     end
 
-    subgraph UIPkg[ui/]
-        UIGate[gate.py]:::ui
-        UIList[list_screen.py]:::ui
-        UIPicker[picker.py]:::ui
-        subgraph DashPkg[dashboard/]
-            DashInit[__init__.py]:::ui
-            DashCore[_dashboard.py]:::ui
-            DashModels[models.py]:::ui
-            DashLoaders[loaders.py]:::ui
-            DashOrch[orchestrator.py]:::ui
-        end
-        UIChrome[chrome.py]:::ui
-        UIKeys[keys.py]:::ui
-        UIHelp[help.py]:::ui
-        UIWizard[wizard.py]:::ui
-        UIBrand[branding.py]:::ui
-    end
-
-    subgraph Output[Output & Theme]
-        Console[console.py]:::core
-        Theme[theme.py]:::core
-        Panels[panels.py]:::core
-    end
-
-    subgraph Core[Core & Config]
-        Constants[constants.py]:::core
-        Config[config.py]:::core
-        Remote[remote.py]:::core
-        Profiles[profiles.py]:::core
-        Validate[validate.py]:::core
-    end
-
-    subgraph Governance[Governance]
-        Evaluate[evaluate.py]:::gov
-        ApplyExc[apply_exceptions.py]:::gov
-        ExcStore[exception_store.py]:::gov
-    end
-
-    subgraph AuditPkg[Audit]
-        AuditReader[reader.py]:::audit
-        AuditParser[parser.py]:::audit
-    end
-
-    subgraph Runtime[Runtime Services]
-        subgraph DockerPkg[docker/]
-            DockerInit[__init__.py]:::runtime
-            DockerCore[core.py]:::runtime
-            DockerCreds[credentials.py]:::runtime
-            DockerLaunch[launch.py]:::runtime
-        end
-        subgraph DoctorPkg[doctor/]
-            DoctorInit[__init__.py]:::runtime
-            DoctorTypes[types.py]:::runtime
-            DoctorChecks[checks.py]:::runtime
-            DoctorRender[render.py]:::runtime
-        end
-        Adapter[claude_adapter.py]:::runtime
-        Git[git.py]:::runtime
-        Sessions[sessions.py]:::runtime
-        Stats[stats.py]:::runtime
+    subgraph Helpers["CLI Utilities"]
+        Common[cli_common.py]
+        Helpers[cli_helpers.py]
+        Contexts[contexts.py]
     end
 
     Main --> Launch
     Main --> Worktree
-    Main --> CfgCLI
+    Main --> Team
+    Main --> Config
     Main --> Admin
-    Main --> ExcCLI
-    Main --> AuditCLI
-    Main --> DashCore
+    Main --> Exc
+    Main --> Audit
+    Main --> Org
+    Main --> Support
+    Main --> Init
 
-    Launch --> UIPicker
-    Launch --> UIWizard
-    Worktree --> UIPicker
-    UIWizard --> UIPicker
-
-    DashCore --> UIList
-    DashCore --> DashLoaders
-    DashCore --> DashOrch
-    DashOrch --> DashModels
-    DashLoaders --> DashModels
-    UIPicker --> UIList
-    UIList --> UIChrome
-    UIList --> UIKeys
-    UIList --> UIHelp
-    UIPicker --> UIGate
-    DashCore --> UIGate
-    DashCore --> Console
-    UIChrome --> Theme
-    Panels --> Theme
-
-    Launch --> DockerLaunch
-    Launch --> Config
-    Launch --> Git
-    Launch --> Sessions
-    Launch --> Evaluate
-
-    ExcCLI --> ExcStore
-    ExcCLI --> ApplyExc
-
-    AuditCLI --> AuditReader
-    AuditReader --> AuditParser
-
-    CfgCLI --> Config
-    CfgCLI --> Profiles
-    CfgCLI --> Remote
-
-    Admin --> Stats
-    Admin --> Config
-    Admin --> DockerCore
-
-    DockerLaunch --> Adapter
-    DockerLaunch --> Sessions
-    DockerLaunch --> Stats
-    DockerCore --> DockerInit
-    DockerCreds --> DockerInit
-    DockerLaunch --> DockerInit
-
-    Adapter --> Profiles
-    Profiles --> Config
-    Remote --> Config
-    Evaluate --> Profiles
-    ApplyExc --> Evaluate
-    Sessions --> Config
-
-    %% Constants provides backend-specific values
-    DockerCore --> Constants
-    DockerLaunch --> Constants
-    DockerCreds --> Constants
-    Sessions --> Constants
-    AuditCLI --> Constants
-    Git --> Constants
+    Launch --> Common
+    Launch --> Helpers
+    Launch --> Contexts
+    Worktree --> Common
 ```
 
-This diagram shows module dependencies. Blue = CLI commands, Yellow = core config, Purple = governance, Orange = audit, Green = runtime services, Teal = interactive UI. The `docker/` package contains three submodules: `core.py` (primitives), `credentials.py` (OAuth persistence), and `launch.py` (orchestration). The `doctor/` package contains three submodules: `types.py` (data structures), `checks.py` (all health check functions), and `render.py` (orchestration and Rich terminal output). The `ui/` package provides interactive terminal experiences with consistent chrome, keybindings, and behavior patterns. The `ui/dashboard/` package contains four submodules: `_dashboard.py` (core Dashboard class), `models.py` (DashboardState, TabData), `loaders.py` (tab data loading), and `orchestrator.py` (event loop and action dispatch). The `wizard.py` module adds start wizard pickers with BACK sentinel navigation for nested screen flows. The Output & Theme subgraph contains `console.py` (TerminalCaps detection, stream contract enforcement), `theme.py` (design tokens, unicode fallbacks), and `panels.py` (styled panel factories).
+### Core & Configuration Layer
 
-Module responsibilities:
+Configuration resolution and governance:
+
+```mermaid
+graph TD
+    subgraph Config["Configuration"]
+        ConfigMod[config.py]
+        Remote[remote.py]
+        Validate[validate.py]
+        Constants[constants.py]
+        SourceRes[source_resolver.py]
+    end
+
+    subgraph Resolution["Profile Resolution"]
+        Profiles[profiles.py]
+        Adapter[claude_adapter.py]
+    end
+
+    subgraph Gov["Governance"]
+        Evaluate[evaluation/evaluate.py]
+        ApplyExc[evaluation/apply_exceptions.py]
+        Models[evaluation/models.py]
+    end
+
+    subgraph Stores["Persistence"]
+        ExcStore[stores/exception_store.py]
+        ModelsStore[models/]
+    end
+
+    Remote --> ConfigMod
+    SourceRes --> Remote
+    Validate --> ConfigMod
+    Profiles --> ConfigMod
+    Adapter --> Profiles
+    Evaluate --> Profiles
+    ApplyExc --> Evaluate
+    ApplyExc --> ExcStore
+```
+
+### Runtime & Integration Layer
+
+Execution and external system integration:
+
+```mermaid
+graph TD
+    subgraph Docker["docker/"]
+        DockerCore[core.py]
+        DockerCreds[credentials.py]
+        DockerLaunch[launch.py]
+    end
+
+    subgraph Doctor["doctor/"]
+        DoctorChecks[checks.py]
+        DoctorTypes[types.py]
+        DoctorRender[render.py]
+    end
+
+    subgraph Services["Runtime Services"]
+        Git[git.py]
+        Sessions[sessions.py]
+        Stats[stats.py]
+        Update[update.py]
+    end
+
+    subgraph Audit["audit/"]
+        AuditReader[reader.py]
+        AuditParser[parser.py]
+    end
+
+    DockerLaunch --> DockerCore
+    DockerLaunch --> DockerCreds
+    DockerLaunch --> Sessions
+    DockerLaunch --> Stats
+    DoctorRender --> DoctorChecks
+    DoctorChecks --> DoctorTypes
+    AuditReader --> AuditParser
+```
+
+### UI Layer
+
+Interactive terminal experiences:
+
+```mermaid
+graph TD
+    subgraph UI["ui/"]
+        Gate[gate.py]
+        ListScreen[list_screen.py]
+        Picker[picker.py]
+        Wizard[wizard.py]
+        Chrome[chrome.py]
+        Keys[keys.py]
+        Help[help.py]
+    end
+
+    subgraph Dashboard["ui/dashboard/"]
+        DashCore[_dashboard.py]
+        DashModels[models.py]
+        DashLoaders[loaders.py]
+        DashOrch[orchestrator.py]
+    end
+
+    subgraph Output["Output & Theme"]
+        Console[console.py]
+        Theme[theme.py]
+        Panels[panels.py]
+    end
+
+    Picker --> ListScreen
+    Picker --> Gate
+    Wizard --> Picker
+    DashCore --> ListScreen
+    DashCore --> DashLoaders
+    DashOrch --> DashModels
+    ListScreen --> Chrome
+    ListScreen --> Keys
+    Chrome --> Theme
+    Panels --> Theme
+    DashCore --> Console
+```
+
+**Color Legend:** Blue = CLI commands, Yellow = core config, Purple = governance, Green = runtime services, Teal = interactive UI
+
+---
+
+### Module Responsibilities
+
+Organized by architectural layer for easier navigation.
+
+#### Layer 1: CLI Surface
 
 | Module | Does | Does Not |
 |--------|------|----------|
-| `constants.py` | Centralize backend-specific values (agent name, image tag, volume names, credential paths, branch prefixes) | Business logic, I/O operations |
-| `profiles.py` | Profile resolution, effective config computation, delegation checks, security validation (blocked patterns, stdio gate, image normalization) | HTTP, file I/O |
-| `remote.py` | HTTP fetch, auth, ETag caching | Business logic |
-| `claude_adapter.py` | Claude Code format knowledge, MCP server translation | HTTP, profiles |
-| `validate.py` | Schema validation | HTTP, file I/O |
+| `cli.py` | Main entry point, command registration, global options | Business logic |
+| `cli_launch.py` | Session launch orchestration, workspace detection, resume logic | Docker operations |
+| `cli_worktree.py` | Worktree subcommands, session/container aliases | Git internals |
+| `cli_team.py` | Team profile management commands | Config fetching |
+| `cli_config.py` | Setup wizard, config explain, config editing | Remote operations |
+| `cli_admin.py` | Doctor, stats, status, statusline, update commands | Container operations |
+| `cli_exceptions.py` | Exception CRUD commands, unblock shortcut | Governance logic |
+| `cli_audit.py` | Plugin audit commands | Plugin internals |
+| `cli_org.py` | Organization config management commands | Remote fetching |
+| `cli_support.py` | Support bundle generation with redaction | Business logic |
+| `cli_init.py` | Project config initialization | Remote operations |
+| `cli_common.py` | Shared CLI utilities, decorators, AppState | Business logic |
+| `cli_helpers.py` | Confirmation patterns, safety helpers | Rendering |
+| `contexts.py` | Work context tracking (team + workspace associations) | Config fetching |
+
+#### Layer 2: Core & Configuration
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `constants.py` | Backend-specific values (agent name, image tag, volume names, paths, prefixes) | Business logic, I/O |
 | `config.py` | Local config, XDG paths, project config reading | Remote fetching |
+| `remote.py` | HTTP fetch, auth, ETag caching | Business logic |
+| `validate.py` | Schema validation | HTTP, file I/O |
+| `profiles.py` | Profile resolution, effective config computation, delegation checks, security validation | HTTP, file I/O |
+| `claude_adapter.py` | Claude Code format knowledge, MCP server translation (isolates all Claude-specific logic) | HTTP, profiles |
+| `source_resolver.py` | Parse org config sources (URLs, GitHub/GitLab shorthands, local files) | Fetching |
+
+#### Layer 3: Governance & Evaluation
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `evaluation/` | Pure governance evaluation (package) | I/O, storage |
+| `evaluation/evaluate.py` | BlockReason classification, pure governance logic | Exception storage |
+| `evaluation/apply_exceptions.py` | Exception overlay (policy and local scopes) | Storage, HTTP |
+| `evaluation/models.py` | Data structures (Decision, DeniedAddition, BlockedItem, EvaluationResult) | Business logic |
+
+#### Layer 4: State & Persistence
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `stores/` | Persistent storage (package) | Business logic |
+| `stores/exception_store.py` | JSON read/write, backup-on-corrupt, prune expired | Governance logic |
+| `models/` | Centralized data models (package) | Business logic |
+| `models/exceptions.py` | Exception system data models | Storage |
+| `models/plugin_audit.py` | Plugin audit data models | Parsing |
+
+#### Layer 5: Runtime & Integrations
+
+| Module | Does | Does Not |
+|--------|------|----------|
 | `docker/` | Docker sandbox operations (package) | URL building |
 | `docker/core.py` | Container lifecycle, Docker primitives, command building | Credential handling |
 | `docker/credentials.py` | Credential persistence, OAuth token management, volume sync | Container launching |
 | `docker/launch.py` | High-level launch orchestration, settings injection | Low-level Docker ops |
-| `doctor/` | Health checks and system diagnostics (package) | Auto-fixing issues |
-| `doctor/types.py` | Data structures (CheckResult, DoctorResult, JsonValidationResult) | Business logic |
-| `doctor/checks.py` | All health check functions (Git, Docker, config, cache, org) | Rendering |
-| `doctor/render.py` | Orchestration, JSON serialization, Rich terminal rendering | Check logic |
+| `git.py` | Branch safety, worktrees, repo-local hooks | Global git config |
+| `sessions.py` | Session tracking and history | Docker operations |
 | `stats.py` | Session recording, aggregation, reporting | Container operations |
 | `update.py` | Version checking, throttling, notifications | Container operations |
-| `evaluation/evaluate.py` | Pure governance evaluation, BlockReason classification | I/O, exception storage |
-| `evaluation/apply_exceptions.py` | Exception overlay (policy and local scopes) | Storage, HTTP |
-| `stores/exception_store.py` | JSON read/write, backup-on-corrupt, prune expired | Business logic |
-| `audit/parser.py` | JSON manifest parsing, error extraction | File I/O |
+
+#### Layer 6: Health & Diagnostics
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `doctor/` | Health checks and system diagnostics (package) | Auto-fixing issues |
+| `doctor/types.py` | Data structures (CheckResult, DoctorResult, JsonValidationResult) | Business logic |
+| `doctor/checks.py` | All health check functions (Git, Docker, config, cache, org, worktree) | Rendering |
+| `doctor/render.py` | Orchestration, JSON serialization, Rich terminal rendering | Check logic |
+| `audit/` | Plugin audit (package) | Plugin internals |
 | `audit/reader.py` | Plugin discovery, manifest file reading | Parsing logic |
+| `audit/parser.py` | JSON manifest parsing, error extraction | File I/O |
+
+#### Layer 7: Marketplace & Federation
+
+| Module | Does | Does Not |
+|--------|------|----------|
 | `marketplace/` | Plugin governance and marketplace management (package) | Plugin content |
 | `marketplace/schema.py` | Pydantic models for org config, team profiles, config sources, trust grants | Business logic |
 | `marketplace/compute.py` | Effective plugin computation (inline and federated teams), 6-step precedence | HTTP, file I/O |
@@ -499,25 +613,46 @@ Module responsibilities:
 | `marketplace/constants.py` | Marketplace-specific constants (implicit marketplaces, exit codes) | Business logic |
 | `marketplace/managed.py` | Managed state persistence for marketplace operations | Plugin logic |
 | `marketplace/sync.py` | Synchronization of marketplace state | Conflict detection |
-| `console.py` | TerminalCaps detection, stream contract enforcement (stdout=JSON, stderr=Rich), `get_err_console()` factory, `human_status()` wrapper | Business logic |
-| `theme.py` | Design tokens (Colors, Borders, Indicators, Spinners), unicode fallbacks, Rich theme integration | I/O, rendering |
+
+#### Layer 8: UI & Output
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `console.py` | TerminalCaps detection, stream contract enforcement (stdout=JSON, stderr=Rich) | Business logic |
+| `theme.py` | Design tokens (Colors, Borders, Indicators, Spinners), unicode fallbacks | I/O, rendering |
 | `panels.py` | Styled panel factories (`create_error_panel`, `create_success_panel`, etc.) | Business logic |
 | `ui/` | Interactive terminal experiences (package) | Non-TTY output |
-| `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Rendering, business logic |
+| `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Business logic |
 | `ui/list_screen.py` | Core navigation engine, state management, key handling | Domain logic |
-| `ui/picker.py` | Selection workflows, Quick Resume with 3-way results, chrome factory | Navigation internals |
-| `ui/dashboard/` | Tabbed dashboard with container/session management (package) | Selection workflows |
-| `ui/dashboard/_dashboard.py` | Core Dashboard class, tab rendering, two-step Enter key flow | Tab loading, orchestration |
-| `ui/dashboard/models.py` | Data structures (DashboardState, TabData, TabType) | Business logic |
-| `ui/dashboard/loaders.py` | Tab data loading functions (containers, sessions, worktrees) | Rendering |
-| `ui/dashboard/orchestrator.py` | Event loop, action dispatch, intent exception handling | Tab data loading |
-| `ui/wizard.py` | Start wizard pickers with BACK navigation, workspace source selection | Chrome, list internals |
+| `ui/picker.py` | Selection workflows, Quick Resume with 3-way results | Navigation internals |
+| `ui/wizard.py` | Start wizard pickers with BACK navigation | Chrome, list internals |
 | `ui/chrome.py` | Layout primitives (headers, footers, hints), standalone mode dimming | State management |
 | `ui/keys.py` | Key mapping internals, action dispatch, KEYBINDING_DOCS | Rendering |
 | `ui/help.py` | Mode-aware help overlay | Key handling |
 | `ui/branding.py` | ASCII art header with unicode/ASCII fallback | Business logic |
+| `ui/dashboard/` | Tabbed dashboard with container/session management (package) | Selection workflows |
+| `ui/dashboard/_dashboard.py` | Core Dashboard class, tab rendering, two-step Enter key flow | Tab loading |
+| `ui/dashboard/models.py` | Data structures (DashboardState, TabData, TabType) | Business logic |
+| `ui/dashboard/loaders.py` | Tab data loading functions (containers, sessions, worktrees) | Rendering |
+| `ui/dashboard/orchestrator.py` | Event loop, action dispatch, intent exception handling | Tab data loading |
 
-The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
+#### Layer 9: Utilities
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `utils/` | Shared utility functions (package) | Business logic |
+| `utils/fuzzy.py` | Fuzzy matching utilities | Domain logic |
+| `utils/locks.py` | File locking mechanisms | Business logic |
+| `utils/ttl.py` | TTL and caching utilities | Storage |
+| `confirm.py` | Case-insensitive confirmation prompt (circular import breaker) | Business logic |
+| `errors.py` | Exception hierarchy and error handling | I/O |
+| `exit_codes.py` | Exit code constants and exception-to-code mapping | Business logic |
+| `deprecation.py` | Deprecation warnings (suppressed in JSON mode) | Rendering |
+| `subprocess_utils.py` | Safe subprocess execution utilities | Business logic |
+
+---
+
+**Key Isolation Rule:** The `claude_adapter.py` module isolates all Claude Code format knowledge. When Claude changes their settings format, only this file needs updating.
 
 ## Marketplace & Federation
 
