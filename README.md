@@ -186,7 +186,8 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 | `scc team switch <name>` | Switch to a different team |
 | `scc config explain` | Show effective config with sources |
 | `scc worktree create <repo> <name>` | Create git worktree |
-| `scc worktree switch <target>` | Switch to worktree (outputs path) |
+| `scc worktree enter [target]` | Enter worktree in subshell (no shell config needed) |
+| `scc worktree switch <target>` | Switch to worktree (outputs path for shell wrapper) |
 | `scc worktree select` | Interactive worktree picker |
 | `scc worktree list` | List worktrees |
 | `scc worktree list -v` | List with git status (staged/modified/untracked) |
@@ -195,11 +196,19 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 
 Run `scc <command> --help` for options. See [CLI Reference](docs/CLI-REFERENCE.md) for full command list.
 
-### Git Worktree Shell Integration
+### Git Worktrees
 
-Add this wrapper to your shell config (`~/.bashrc` or `~/.zshrc`) for seamless worktree switching:
+**Primary method (no shell config needed):**
 
 ```bash
+scc worktree enter feature-auth   # Opens a subshell in the worktree
+# Type 'exit' to return to your previous directory
+```
+
+**Power users:** Add this shell wrapper for seamless `cd` switching:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
 wt() {
   local p
   p="$(scc worktree switch "$@")" || return $?
@@ -207,14 +216,16 @@ wt() {
 }
 ```
 
-**Usage examples:**
+**Usage examples (both methods):**
 
 ```bash
-wt ^              # Switch to main branch worktree
-wt -              # Switch to previous worktree (like cd -)
-wt feature-auth   # Fuzzy match worktree by name
-wt scc/feature-x  # Match by full branch name
+scc worktree enter ^        # Enter main branch worktree
+scc worktree enter -        # Enter previous worktree (like cd -)
+wt feature-auth             # Switch with shell wrapper
+wt scc/feature-x            # Match by full branch name
 ```
+
+**Note:** Branch names with `/` are sanitized to `-` (e.g., `feature/auth` → `feature-auth`).
 
 **Status indicators in `list -v`:**
 
