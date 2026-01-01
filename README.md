@@ -305,11 +305,11 @@ SCC supports non-interactive operation for CI/CD pipelines and scripting.
 | Code | Name | Meaning |
 |------|------|---------|
 | 0 | `EXIT_SUCCESS` | Operation completed successfully |
-| 1 | `EXIT_ERROR` | General error |
-| 2 | `EXIT_USAGE` | Invalid command-line usage |
-| 3 | `EXIT_CONFIG` | Configuration error |
-| 4 | `EXIT_VALIDATION` | Validation failure |
-| 5 | `EXIT_PREREQ` | Missing prerequisites |
+| 1 | `EXIT_NOT_FOUND` | Target not found (worktree, session, workspace) |
+| 2 | `EXIT_USAGE` | Invalid command-line usage, missing args |
+| 3 | `EXIT_CONFIG` | Configuration or network error |
+| 4 | `EXIT_TOOL` | External tool failed (git, docker, not a git repo) |
+| 5 | `EXIT_PREREQ` | Missing prerequisites (Docker, Git not installed) |
 | 6 | `EXIT_GOVERNANCE` | Blocked by security policy |
 | 130 | `EXIT_CANCELLED` | User cancelled (Esc/Ctrl+C) |
 
