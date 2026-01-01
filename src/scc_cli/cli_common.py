@@ -16,7 +16,7 @@ from rich.table import Table
 
 from .errors import SCCError
 from .exit_codes import EXIT_CANCELLED
-from .output_mode import is_json_command_mode, is_json_mode
+from .output_mode import is_json_command_mode
 from .panels import create_warning_panel
 from .ui.prompts import render_error
 
@@ -78,14 +78,14 @@ def handle_errors(func: F) -> F:
         except SCCError as e:
             if is_json_command_mode():
                 raise
-            target_console = err_console if is_json_mode() else console
-            render_error(target_console, e, debug=state.debug)
+            # Always use stderr for errors (stdout purity for shell wrappers)
+            render_error(err_console, e, debug=state.debug)
             raise typer.Exit(e.exit_code)
         except KeyboardInterrupt:
             if is_json_command_mode():
                 raise
-            target_console = err_console if is_json_mode() else console
-            target_console.print("\n[dim]Operation cancelled.[/dim]")
+            # Always use stderr for errors
+            err_console.print("\n[dim]Operation cancelled.[/dim]")
             raise typer.Exit(EXIT_CANCELLED)
         except (typer.Exit, SystemExit):
             # Let typer exits pass through
@@ -93,12 +93,11 @@ def handle_errors(func: F) -> F:
         except Exception as e:
             if is_json_command_mode():
                 raise
-            # Unexpected errors
-            target_console = err_console if is_json_mode() else console
+            # Unexpected errors - always use stderr
             if state.debug:
-                target_console.print_exception()
+                err_console.print_exception()
             else:
-                target_console.print(
+                err_console.print(
                     create_warning_panel(
                         "Unexpected Error",
                         str(e),

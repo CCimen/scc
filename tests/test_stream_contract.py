@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    pass
+    from pathlib import Path
 
 
 def run_scc(
@@ -191,3 +191,113 @@ class TestVersionCommandContract:
             f"stdout: {result.stdout!r}\n"
             f"stderr: {result.stderr!r}"
         )
+
+
+class TestWorktreeStdoutPurity:
+    """Verify worktree commands keep stdout pure for shell integration.
+
+    The wt() shell wrapper relies on stdout containing ONLY the worktree path.
+    Any error messages leaking to stdout break the wrapper.
+
+    Shell wrapper pattern:
+        wt() {
+            local p
+            p="$(scc worktree switch "$@")" || return $?
+            cd "$p" || return 1
+        }
+    """
+
+    def test_switch_in_non_git_dir_stdout_empty(self, tmp_path: Path) -> None:
+        """worktree switch in non-git dir: stdout must be empty.
+
+        This is the most common failure mode that breaks the wt() wrapper.
+        Error output must go to stderr only.
+        """
+        result = run_scc("worktree", "switch", "-w", str(tmp_path))
+
+        assert result.stdout == "", (
+            f"stdout leak breaks wt() wrapper:\n"
+            f"stdout: {result.stdout!r}\n"
+            f"stderr: {result.stderr!r}"
+        )
+
+    def test_switch_in_non_git_dir_exit_code(self, tmp_path: Path) -> None:
+        """worktree switch in non-git dir: exit code must be 4 (ToolError)."""
+        result = run_scc("worktree", "switch", "-w", str(tmp_path))
+
+        # ToolError exit code is 4
+        assert result.returncode == 4, (
+            f"Expected exit code 4 (ToolError), got {result.returncode}\n"
+            f"stdout: {result.stdout!r}\n"
+            f"stderr: {result.stderr!r}"
+        )
+
+    def test_switch_in_non_git_dir_stderr_has_error(self, tmp_path: Path) -> None:
+        """worktree switch in non-git dir: stderr must contain error message."""
+        result = run_scc("worktree", "switch", "-w", str(tmp_path))
+
+        assert "Not a git repository" in result.stderr, (
+            f"stderr missing error message:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        )
+
+    def test_switch_invalid_target_stdout_empty(self, tmp_path: Path) -> None:
+        """worktree switch with invalid target: stdout must be empty.
+
+        Even when the repo exists but target is invalid, errors go to stderr.
+        """
+        import subprocess
+
+        # Create a git repo
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", "init"],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "test",
+                "GIT_AUTHOR_EMAIL": "test@test.com",
+                "GIT_COMMITTER_NAME": "test",
+                "GIT_COMMITTER_EMAIL": "test@test.com",
+            },
+        )
+
+        # Switch to nonexistent target
+        result = run_scc("worktree", "switch", "nonexistent-worktree-xyz", "-w", str(tmp_path))
+
+        assert result.stdout == "", (
+            f"stdout leak breaks wt() wrapper:\n"
+            f"stdout: {result.stdout!r}\n"
+            f"stderr: {result.stderr!r}"
+        )
+
+
+class TestNonWorktreeStdoutPurity:
+    """Verify non-worktree commands also route errors to stderr.
+
+    This validates the handle_errors fix applies broadly, not just to worktree.
+    """
+
+    def test_workspace_not_found_stdout_empty(self) -> None:
+        """Commands with invalid workspace: stdout must be empty.
+
+        Tests that WorkspaceNotFoundError also routes to stderr.
+        """
+        # Use a path that definitely doesn't exist (positional arg, not -w option)
+        result = run_scc("worktree", "list", "/nonexistent/path/that/does/not/exist")
+
+        assert result.stdout == "", (
+            f"stdout leak detected:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        )
+
+    def test_workspace_not_found_stderr_has_error(self) -> None:
+        """Commands with invalid workspace: stderr must contain error message."""
+        result = run_scc("worktree", "list", "/nonexistent/path/that/does/not/exist")
+
+        # Should contain workspace-related error in stderr
+        assert (
+            "not exist" in result.stderr.lower()
+            or "not found" in result.stderr.lower()
+            or "does not exist" in result.stderr.lower()
+        ), f"stderr missing error message:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"

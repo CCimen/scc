@@ -200,7 +200,11 @@ Run `scc <command> --help` for options. See [CLI Reference](docs/CLI-REFERENCE.m
 Add this wrapper to your shell config (`~/.bashrc` or `~/.zshrc`) for seamless worktree switching:
 
 ```bash
-wt() { cd "$(scc worktree switch "$@")" || return 1; }
+wt() {
+  local p
+  p="$(scc worktree switch "$@")" || return $?
+  cd "$p" || return 1
+}
 ```
 
 **Usage examples:**
