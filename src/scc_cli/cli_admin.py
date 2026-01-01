@@ -86,6 +86,7 @@ admin_app = typer.Typer(
     name="admin",
     help="System administration commands.",
     no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 
@@ -495,6 +496,7 @@ stats_app = typer.Typer(
     name="stats",
     help="View and export usage statistics.",
     no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 

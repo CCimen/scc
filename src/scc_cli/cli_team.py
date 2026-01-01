@@ -168,6 +168,7 @@ team_app = typer.Typer(
     name="team",
     help="Team profile management",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 

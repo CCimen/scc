@@ -73,12 +73,52 @@ def temp_git_repo_on_main(temp_git_repo):
 def temp_git_repo_on_feature(temp_git_repo):
     """Git repo with a feature branch checked out."""
     subprocess.run(
-        ["git", "checkout", "-b", "claude/feature-x"],
+        ["git", "checkout", "-b", "scc/feature-x"],
         cwd=temp_git_repo,
         check=True,
         capture_output=True,
     )
     return temp_git_repo
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for WORKTREE_BRANCH_PREFIX constant (contract test)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWorktreeBranchPrefix:
+    """Tests locking the worktree branch prefix to prevent accidental changes."""
+
+    def test_prefix_is_scc_namespace(self):
+        """WORKTREE_BRANCH_PREFIX must be 'scc/' for product namespace."""
+        from scc_cli.constants import WORKTREE_BRANCH_PREFIX
+
+        assert WORKTREE_BRANCH_PREFIX == "scc/"
+
+    def test_create_worktree_uses_scc_prefix(self, temp_git_repo):
+        """Branches created by create_worktree must start with scc/ prefix."""
+        from unittest.mock import MagicMock, patch
+
+        from scc_cli.constants import WORKTREE_BRANCH_PREFIX
+
+        console = MagicMock()
+        console.status.return_value.__enter__ = MagicMock()
+        console.status.return_value.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("scc_cli.git.Confirm.ask", return_value=True),
+            patch("scc_cli.git._fetch_branch"),
+            patch("scc_cli.git.install_dependencies"),
+        ):
+            worktree_path = git.create_worktree(
+                temp_git_repo,
+                "test-prefix",
+                console=console,
+            )
+
+        branch = git.get_current_branch(worktree_path)
+        assert branch.startswith(WORKTREE_BRANCH_PREFIX)
+        assert branch == "scc/test-prefix"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -130,6 +170,25 @@ class TestSanitizeBranchName:
         # Unicode "ñ" is removed, leaving "feature--test" → "feature-test"
         assert git.sanitize_branch_name("feature-ñ-test") == "feature-test"
 
+    def test_replaces_forward_slash_with_hyphen(self):
+        """Forward slashes should become hyphens to prevent collisions."""
+        assert git.sanitize_branch_name("feature/auth") == "feature-auth"
+
+    def test_replaces_backslash_with_hyphen(self):
+        """Backslashes should become hyphens to prevent collisions."""
+        assert git.sanitize_branch_name("feature\\auth") == "feature-auth"
+
+    def test_slash_and_hyphen_normalize_to_same(self):
+        """feature/auth and feature-auth normalize to the same dir name."""
+        # This ensures no collision between slash-style and hyphen-style names
+        assert git.sanitize_branch_name("feature/auth") == "feature-auth"
+        assert git.sanitize_branch_name("feature-auth") == "feature-auth"
+
+    def test_nested_path_separators(self):
+        """Multiple path separators should collapse to single hyphen."""
+        assert git.sanitize_branch_name("feature/sub/path") == "feature-sub-path"
+        assert git.sanitize_branch_name("feature//auth") == "feature-auth"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for is_git_repo (requires real git)
@@ -175,7 +234,7 @@ class TestGetCurrentBranch:
 
     def test_gets_feature_branch(self, temp_git_repo_on_feature):
         """Should return feature branch name when on feature branch."""
-        assert git.get_current_branch(temp_git_repo_on_feature) == "claude/feature-x"
+        assert git.get_current_branch(temp_git_repo_on_feature) == "scc/feature-x"
 
     def test_returns_none_for_non_repo(self, tmp_path):
         """Should return None for non-git directory."""
@@ -302,7 +361,7 @@ class TestCheckBranchSafety:
         assert result is True
         # Verify branch was actually created
         current = git.get_current_branch(temp_git_repo_on_main)
-        assert current == "claude/my-new-feature"
+        assert current == "scc/my-new-feature"
 
     def test_passes_non_git_directory(self, tmp_path):
         """Non-git directories should pass without checks."""
@@ -332,7 +391,7 @@ class TestProtectedBranches:
     @pytest.mark.parametrize(
         "branch",
         [
-            "claude/feature-x",
+            "scc/feature-x",
             "feature/auth",
             "bugfix/login",
             "hotfix/security",
@@ -377,7 +436,7 @@ class TestCreateWorktree:
         assert (worktree_path / ".git").exists()
 
     def test_creates_branch_with_prefix(self, temp_git_repo):
-        """Created branch should have claude/ prefix."""
+        """Created branch should have scc/ prefix."""
         console = MagicMock()
         console.status.return_value.__enter__ = MagicMock()
         console.status.return_value.__exit__ = MagicMock(return_value=False)
@@ -394,9 +453,9 @@ class TestCreateWorktree:
                 console=console,
             )
 
-        # Verify branch has claude/ prefix
+        # Verify branch has scc/ prefix
         branch = git.get_current_branch(worktree_path)
-        assert branch.startswith("claude/")
+        assert branch.startswith("scc/")
 
     def test_cleans_up_on_dependency_failure(self, temp_git_repo: Path) -> None:
         """Failed dependency install should clean up the worktree."""
@@ -448,7 +507,7 @@ class TestCleanupWorktree:
         worktree_base.mkdir(exist_ok=True)
 
         subprocess.run(
-            ["git", "worktree", "add", "-b", "claude/dirty-feature", str(worktree_path)],
+            ["git", "worktree", "add", "-b", "scc/dirty-feature", str(worktree_path)],
             cwd=temp_git_repo,
             check=True,
             capture_output=True,
@@ -483,7 +542,7 @@ class TestCleanupWorktree:
         worktree_base.mkdir(exist_ok=True)
 
         subprocess.run(
-            ["git", "worktree", "add", "-b", "claude/force-delete", str(worktree_path)],
+            ["git", "worktree", "add", "-b", "scc/force-delete", str(worktree_path)],
             cwd=temp_git_repo,
             check=True,
             capture_output=True,
@@ -537,7 +596,7 @@ class TestListWorktrees:
         worktree_base.mkdir(exist_ok=True)
 
         subprocess.run(
-            ["git", "worktree", "add", "-b", "claude/list-test", str(worktree_path)],
+            ["git", "worktree", "add", "-b", "scc/list-test", str(worktree_path)],
             cwd=temp_git_repo,
             check=True,
             capture_output=True,
@@ -577,3 +636,73 @@ class TestGitAvailability:
         assert version is not None
         # Git version format: "git version X.Y.Z"
         assert "git" in version.lower() or version[0].isdigit()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for get_display_branch and branch prefix handling
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestDisplayBranch:
+    """Tests for get_display_branch() - user-friendly branch name display."""
+
+    def test_get_display_branch_strips_scc_prefix(self):
+        """get_display_branch should strip scc/ prefix."""
+        result = git.get_display_branch("scc/feature-auth")
+        assert result == "feature-auth"
+
+    def test_get_display_branch_preserves_unprefixed_branch(self):
+        """get_display_branch should preserve branches without SCC prefix."""
+        result = git.get_display_branch("main")
+        assert result == "main"
+
+        result = git.get_display_branch("feature/standard-branch")
+        assert result == "feature/standard-branch"
+
+    def test_find_worktree_matches_scc_prefixed_branch(self, temp_git_repo):
+        """find_worktree_by_query should match scc/ prefixed branches."""
+        worktree_base = temp_git_repo.parent / f"{temp_git_repo.name}-worktrees"
+        worktree_path = worktree_base / "auth-feature"
+        worktree_base.mkdir(exist_ok=True)
+
+        subprocess.run(
+            ["git", "worktree", "add", "-b", "scc/auth-feature", str(worktree_path)],
+            cwd=temp_git_repo,
+            check=True,
+            capture_output=True,
+        )
+
+        # User types just "auth-feature", should match scc/auth-feature
+        match, matches = git.find_worktree_by_query(temp_git_repo, "auth-feature")
+        assert match is not None
+        assert match.branch == "scc/auth-feature"
+
+    def test_find_worktree_exact_match_prefers_full_branch_name(self, temp_git_repo):
+        """Exact match on full branch name should take priority."""
+        worktree_base = temp_git_repo.parent / f"{temp_git_repo.name}-worktrees"
+        worktree_path = worktree_base / "exact-test"
+        worktree_base.mkdir(exist_ok=True)
+
+        subprocess.run(
+            ["git", "worktree", "add", "-b", "scc/exact-test", str(worktree_path)],
+            cwd=temp_git_repo,
+            check=True,
+            capture_output=True,
+        )
+
+        # User types full branch name
+        match, matches = git.find_worktree_by_query(temp_git_repo, "scc/exact-test")
+        assert match is not None
+        assert match.branch == "scc/exact-test"
+
+
+class TestSanitizeBranchNameSlashes:
+    """Tests for sanitize_branch_name slash handling."""
+
+    def test_no_collision_for_hyphen_vs_slash_inputs(self):
+        """feature-auth and feature/auth should produce same result."""
+        result1 = git.sanitize_branch_name("feature-auth")
+        result2 = git.sanitize_branch_name("feature/auth")
+
+        # Both normalize to the same result
+        assert result1 == result2 == "feature-auth"

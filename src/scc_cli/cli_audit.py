@@ -31,6 +31,7 @@ audit_app = typer.Typer(
     name="audit",
     help="Audit installed plugins and configurations.",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 

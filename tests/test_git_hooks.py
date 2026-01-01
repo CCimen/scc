@@ -65,9 +65,9 @@ class TestIsProtectedBranch:
         """Feature branches should not be protected."""
         assert git.is_protected_branch("feature/my-feature") is False
 
-    def test_claude_prefix_not_protected(self):
-        """claude/ branches should not be protected."""
-        assert git.is_protected_branch("claude/feature-x") is False
+    def test_scc_prefix_not_protected(self):
+        """scc/ branches should not be protected."""
+        assert git.is_protected_branch("scc/feature-x") is False
 
     def test_random_branch_not_protected(self):
         """Random branch names should not be protected."""

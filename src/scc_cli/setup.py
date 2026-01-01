@@ -18,10 +18,11 @@ from typing import Any, cast
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 from rich.table import Table
 
 from . import config
+from .confirm import Confirm
 from .remote import fetch_org_config, save_to_cache
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -17,11 +17,12 @@ from pathlib import Path
 
 from rich import box
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
+from .confirm import Confirm
 from .constants import WORKTREE_BRANCH_PREFIX
 from .errors import (
     CloneError,
@@ -45,7 +46,6 @@ from .utils.locks import file_lock, lock_path
 # ═══════════════════════════════════════════════════════════════════════════════
 
 PROTECTED_BRANCHES = ("main", "master", "develop", "production", "staging")
-BRANCH_PREFIX = WORKTREE_BRANCH_PREFIX  # Imported from constants.py
 SCC_HOOK_MARKER = "# SCC-MANAGED-HOOK"  # Identifies hooks we can safely update
 
 
@@ -63,6 +63,11 @@ class WorktreeInfo:
     status: str = ""
     is_current: bool = False
     has_changes: bool = False
+    # Status counts (populated with --verbose)
+    staged_count: int = 0
+    modified_count: int = 0
+    untracked_count: int = 0
+    status_timed_out: bool = False  # True if git status timed out
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -336,8 +341,8 @@ for protected in $protected_branches; do
         echo "❌ Direct push to '$branch' blocked by SCC"
         echo ""
         echo "Create a feature branch first:"
-        echo "  git checkout -b feature/your-feature"
-        echo "  git push -u origin feature/your-feature"
+        echo "  git checkout -b scc/your-feature"
+        echo "  git push -u origin scc/your-feature"
         echo ""
         exit 1
     fi
@@ -580,16 +585,28 @@ def get_default_branch(path: Path) -> str:
 
 
 def sanitize_branch_name(name: str) -> str:
-    """Sanitize a name for use as a branch name."""
-    # Convert to lowercase, replace spaces with hyphens
-    safe = name.lower().replace(" ", "-")
-    # Remove invalid characters
+    """Sanitize a name for use as a branch/directory name.
+
+    Converts input to a safe format for git branch names and filesystem directories.
+    Path separators (/ and \\) are replaced with hyphens to prevent collisions.
+
+    Examples:
+        >>> sanitize_branch_name("feature/auth")
+        'feature-auth'
+        >>> sanitize_branch_name("Feature Auth")
+        'feature-auth'
+    """
+    safe = name.lower()
+    # Replace path separators with hyphens FIRST (collision fix)
+    safe = safe.replace("/", "-").replace("\\", "-")
+    # Replace spaces with hyphens
+    safe = safe.replace(" ", "-")
+    # Remove invalid characters (only a-z, 0-9, - allowed)
     safe = re.sub(r"[^a-z0-9-]", "", safe)
-    # Remove multiple hyphens
+    # Collapse multiple hyphens
     safe = re.sub(r"-+", "-", safe)
-    # Remove leading/trailing hyphens
-    safe = safe.strip("-")
-    return safe
+    # Strip leading/trailing hyphens
+    return safe.strip("-")
 
 
 def get_uncommitted_files(path: Path) -> list[str]:
@@ -600,6 +617,59 @@ def get_uncommitted_files(path: Path) -> list[str]:
     )
     # Each line is "XY filename" where XY is 2-char status code
     return [line[3:] for line in lines if len(line) > 3]
+
+
+def get_worktree_status(worktree_path: str) -> tuple[int, int, int, bool]:
+    """Get status counts for a worktree (staged, modified, untracked, timed_out).
+
+    Parses git status --porcelain output where each line starts with:
+    - XY where X is index status, Y is worktree status
+    - X = staged changes (A, M, D, R, C)
+    - Y = unstaged changes (M, D)
+    - ?? = untracked files
+
+    Args:
+        worktree_path: Path to the worktree directory.
+
+    Returns:
+        Tuple of (staged_count, modified_count, untracked_count, timed_out).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_path, "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return 0, 0, 0, False
+
+        lines = [line for line in result.stdout.split("\n") if line.strip()]
+    except subprocess.TimeoutExpired:
+        return 0, 0, 0, True
+
+    staged = 0
+    modified = 0
+    untracked = 0
+
+    for line in lines:
+        if len(line) < 2:
+            continue
+
+        index_status = line[0]  # X - index/staging area
+        worktree_status = line[1]  # Y - working tree
+
+        if line.startswith("??"):
+            untracked += 1
+        else:
+            # Staged: any change in index (not space or ?)
+            if index_status not in (" ", "?"):
+                staged += 1
+            # Modified: any change in worktree (not space or ?)
+            if worktree_status not in (" ", "?"):
+                modified += 1
+
+    return staged, modified, untracked, False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -667,7 +737,7 @@ def check_branch_safety(path: Path, console: Console) -> bool:
             console.print()
             name = Prompt.ask("[cyan]Feature name[/cyan]")
             safe_name = sanitize_branch_name(name)
-            branch_name = f"{BRANCH_PREFIX}{safe_name}"
+            branch_name = f"{WORKTREE_BRANCH_PREFIX}{safe_name}"
 
             with console.status(
                 f"[cyan]Creating branch {branch_name}...[/cyan]", spinner=Spinners.SETUP
@@ -751,7 +821,10 @@ def create_worktree(
         raise NotAGitRepoError(path=str(repo_path))
 
     safe_name = sanitize_branch_name(name)
-    branch_name = f"{BRANCH_PREFIX}{safe_name}"
+    if not safe_name:
+        raise ValueError(f"Invalid worktree name: {name!r}")
+
+    branch_name = f"{WORKTREE_BRANCH_PREFIX}{safe_name}"
 
     # Determine worktree location
     worktree_base = repo_path.parent / f"{repo_path.name}-worktrees"
@@ -759,7 +832,6 @@ def create_worktree(
 
     lock_file = lock_path("worktree", repo_path)
     with file_lock(lock_file):
-        # Check if already exists
         if worktree_path.exists():
             raise WorktreeExistsError(path=str(worktree_path))
 
@@ -959,30 +1031,68 @@ def _create_worktree_dir(
         )
 
 
-def list_worktrees(repo_path: Path, console: Console | None = None) -> list[WorktreeInfo]:
+def list_worktrees(
+    repo_path: Path,
+    console: Console | None = None,
+    *,
+    verbose: bool = False,
+) -> list[WorktreeInfo]:
     """List all worktrees for a repository with beautiful table display.
 
     Args:
         repo_path: Path to the repository.
         console: Rich console for output (if None, return data only).
+        verbose: If True, fetch git status for each worktree (slower).
 
     Returns:
         List of WorktreeInfo objects.
     """
     worktrees = _get_worktrees_data(repo_path)
 
+    # Detect current worktree
+    import os
+
+    cwd = os.getcwd()
+    for wt in worktrees:
+        if os.path.realpath(wt.path) == os.path.realpath(cwd):
+            wt.is_current = True
+            break
+
+    # Fetch status if verbose
+    if verbose:
+        for wt in worktrees:
+            staged, modified, untracked, timed_out = get_worktree_status(wt.path)
+            wt.staged_count = staged
+            wt.modified_count = modified
+            wt.untracked_count = untracked
+            wt.status_timed_out = timed_out
+            wt.has_changes = (staged + modified + untracked) > 0
+
     if console is not None:
-        _render_worktrees_table(worktrees, console)
+        _render_worktrees_table(worktrees, console, verbose=verbose)
+
+        # Summary if any timed out (only when verbose and console provided)
+        if verbose:
+            timeout_count = sum(1 for wt in worktrees if wt.status_timed_out)
+            if timeout_count > 0:
+                console.print(
+                    f"[dim]Note: {timeout_count} worktree(s) timed out computing status.[/dim]",
+                )
 
     return worktrees
 
 
-def render_worktrees(worktrees: list[WorktreeInfo], console: Console) -> None:
+def render_worktrees(
+    worktrees: list[WorktreeInfo],
+    console: Console,
+    *,
+    verbose: bool = False,
+) -> None:
     """Render worktrees with beautiful formatting.
 
     Public interface used by cli.py for consistent styling across the application.
     """
-    _render_worktrees_table(worktrees, console)
+    _render_worktrees_table(worktrees, console, verbose=verbose)
 
 
 def _get_worktrees_data(repo_path: Path) -> list[WorktreeInfo]:
@@ -1034,7 +1144,201 @@ def _get_worktrees_data(repo_path: Path) -> list[WorktreeInfo]:
         return []
 
 
-def _render_worktrees_table(worktrees: list[WorktreeInfo], console: Console) -> None:
+def find_worktree_by_query(
+    repo_path: Path,
+    query: str,
+) -> tuple[WorktreeInfo | None, list[WorktreeInfo]]:
+    """Find a worktree by name, branch, or path using fuzzy matching.
+
+    Resolution order (prefix-aware):
+    1. Exact match on branch name (user typed full branch like 'scc/feature')
+    2. Prefixed branch match (user typed 'feature', branch is 'scc/feature')
+    3. Exact match on worktree directory name
+    4. Branch starts with query (prefix stripped for comparison)
+    5. Directory starts with query
+    6. Query contained in branch name (prefix stripped)
+    7. Query contained in directory name
+
+    Args:
+        repo_path: Path to the repository.
+        query: Search query (branch name, directory name, or partial match).
+
+    Returns:
+        Tuple of (exact_match, all_matches). If exact_match is None,
+        all_matches contains partial matches for disambiguation.
+    """
+    worktrees = _get_worktrees_data(repo_path)
+    if not worktrees:
+        return None, []
+
+    query_lower = query.lower()
+    query_sanitized = sanitize_branch_name(query).lower()
+    prefix_lower = WORKTREE_BRANCH_PREFIX.lower()
+    prefixed_query = f"{prefix_lower}{query_sanitized}"
+
+    matches: list[WorktreeInfo] = []
+
+    # Priority 1: Exact match on branch name (user typed full branch name)
+    for wt in worktrees:
+        branch_lower = wt.branch.lower()
+        if branch_lower == query_lower:
+            return wt, [wt]
+
+    # Priority 2: Prefixed branch match (user typed feature name, branch is scc/feature)
+    for wt in worktrees:
+        branch_lower = wt.branch.lower()
+        if branch_lower == prefixed_query:
+            return wt, [wt]
+
+    # Priority 3: Exact match on directory name
+    for wt in worktrees:
+        dir_name = Path(wt.path).name.lower()
+        if dir_name == query_sanitized or dir_name == query_lower:
+            return wt, [wt]
+
+    # Priority 4: Branch starts with query (strip prefix for matching)
+    for wt in worktrees:
+        branch_lower = wt.branch.lower()
+        display_branch = (
+            branch_lower[len(prefix_lower) :]
+            if branch_lower.startswith(prefix_lower)
+            else branch_lower
+        )
+        if display_branch.startswith(query_sanitized):
+            matches.append(wt)
+    if len(matches) == 1:
+        return matches[0], matches
+    if matches:
+        return None, matches
+
+    # Priority 5: Directory starts with query
+    for wt in worktrees:
+        dir_name = Path(wt.path).name.lower()
+        if dir_name.startswith(query_sanitized):
+            matches.append(wt)
+    if len(matches) == 1:
+        return matches[0], matches
+    if matches:
+        return None, matches
+
+    # Priority 6: Query contained in branch name (prefix stripped)
+    for wt in worktrees:
+        branch_lower = wt.branch.lower()
+        display_branch = (
+            branch_lower[len(prefix_lower) :]
+            if branch_lower.startswith(prefix_lower)
+            else branch_lower
+        )
+        if query_sanitized in display_branch:
+            matches.append(wt)
+    if len(matches) == 1:
+        return matches[0], matches
+    if matches:
+        return None, matches
+
+    # Priority 7: Query contained in directory name
+    for wt in worktrees:
+        dir_name = Path(wt.path).name.lower()
+        if query_sanitized in dir_name:
+            matches.append(wt)
+    if len(matches) == 1:
+        return matches[0], matches
+
+    return None, matches
+
+
+def find_main_worktree(repo_path: Path) -> WorktreeInfo | None:
+    """Find the worktree for the default/main branch.
+
+    Args:
+        repo_path: Path to the repository.
+
+    Returns:
+        WorktreeInfo for the main branch worktree, or None if not found.
+    """
+    default_branch = get_default_branch(repo_path)
+    worktrees = _get_worktrees_data(repo_path)
+
+    for wt in worktrees:
+        if wt.branch == default_branch:
+            return wt
+
+    return None
+
+
+def list_branches_without_worktrees(repo_path: Path) -> list[str]:
+    """List remote branches that don't have local worktrees.
+
+    Args:
+        repo_path: Path to the repository.
+
+    Returns:
+        List of branch names (without origin/ prefix) that have no worktrees.
+    """
+    # Get all remote branches
+    remote_output = run_command(
+        ["git", "-C", str(repo_path), "branch", "-r", "--format", "%(refname:short)"],
+        timeout=10,
+    )
+    if not remote_output:
+        return []
+
+    remote_branches = set()
+    for line in remote_output.strip().split("\n"):
+        line = line.strip()
+        if line and not line.endswith("/HEAD"):
+            # Remove origin/ prefix
+            if "/" in line:
+                branch = line.split("/", 1)[1]
+                remote_branches.add(branch)
+
+    # Get worktree branches
+    worktrees = _get_worktrees_data(repo_path)
+    worktree_branches = {wt.branch for wt in worktrees if wt.branch}
+
+    # Return branches without worktrees
+    return sorted(remote_branches - worktree_branches)
+
+
+def get_display_branch(branch: str) -> str:
+    """Get user-friendly branch name (strip SCC prefix if present).
+
+    Args:
+        branch: The full branch name.
+
+    Returns:
+        Branch name with SCC prefix stripped for display.
+    """
+    if branch.startswith(WORKTREE_BRANCH_PREFIX):
+        return branch[len(WORKTREE_BRANCH_PREFIX) :]
+    return branch
+
+
+def _format_git_status(wt: WorktreeInfo) -> Text:
+    """Format git status as compact symbols: +N!N?N, . for clean, or … for timeout."""
+    # Show ellipsis if status timed out
+    if wt.status_timed_out:
+        return Text("…", style="dim")
+
+    if wt.staged_count == 0 and wt.modified_count == 0 and wt.untracked_count == 0:
+        return Text(".", style="green")
+
+    parts = Text()
+    if wt.staged_count > 0:
+        parts.append(f"+{wt.staged_count}", style="green")
+    if wt.modified_count > 0:
+        parts.append(f"!{wt.modified_count}", style="yellow")
+    if wt.untracked_count > 0:
+        parts.append(f"?{wt.untracked_count}", style="dim")
+    return parts
+
+
+def _render_worktrees_table(
+    worktrees: list[WorktreeInfo],
+    console: Console,
+    *,
+    verbose: bool = False,
+) -> None:
     """Render worktrees in a responsive table."""
     if not worktrees:
         console.print()
@@ -1066,41 +1370,67 @@ def _render_worktrees_table(worktrees: list[WorktreeInfo], console: Console) -> 
     table.add_column("#", style="dim", width=3, justify="right")
     table.add_column("Branch", style="cyan", no_wrap=True)
 
+    if verbose:
+        table.add_column("Status", no_wrap=True, width=10)
+
     if wide_mode:
         table.add_column("Path", style="dim", overflow="ellipsis", ratio=2)
-        table.add_column("Status", style="dim", no_wrap=True, width=12)
+        if not verbose:
+            table.add_column("Status", style="dim", no_wrap=True, width=12)
     else:
         table.add_column("Path", style="dim", overflow="ellipsis", max_width=40)
 
     for idx, wt in enumerate(worktrees, 1):
-        # Style the branch name
+        # Style the branch name with @ prefix for current
         is_detached = not wt.branch
         is_protected = wt.branch in PROTECTED_BRANCHES if wt.branch else False
-        branch_value = wt.branch or "detached"
+        # Use display-friendly name (strip SCC prefix)
+        branch_value = get_display_branch(wt.branch) if wt.branch else "detached"
 
-        if is_protected or is_detached:
+        # Add @ prefix for current worktree
+        if wt.is_current:
+            branch_display = Text("@ ", style="green bold")
+            branch_display.append(branch_value, style="cyan bold")
+        elif is_protected or is_detached:
             branch_display = Text(branch_value, style="yellow")
         else:
             branch_display = Text(branch_value, style="cyan")
 
-        # Determine status
-        status = wt.status or ("detached" if is_detached else "active")
+        # Determine text status (for non-verbose wide mode)
+        text_status = wt.status or ("detached" if is_detached else "active")
         if is_protected:
-            status = "protected"
+            text_status = "protected"
 
         status_style = {
             "active": "green",
             "protected": "yellow",
             "detached": "yellow",
             "bare": "dim",
-        }.get(status, "dim")
+        }.get(text_status, "dim")
 
-        if wide_mode:
+        if verbose:
+            # Verbose mode: show git status symbols
+            git_status = _format_git_status(wt)
+            if wide_mode:
+                table.add_row(
+                    str(idx),
+                    branch_display,
+                    git_status,
+                    wt.path,
+                )
+            else:
+                table.add_row(
+                    str(idx),
+                    branch_display,
+                    git_status,
+                    wt.path,
+                )
+        elif wide_mode:
             table.add_row(
                 str(idx),
                 branch_display,
                 wt.path,
-                Text(status, style=status_style),
+                Text(text_status, style=status_style),
             )
         else:
             table.add_row(
@@ -1138,7 +1468,7 @@ def cleanup_worktree(
         True if worktree was removed (or would be in dry-run mode), False otherwise.
     """
     safe_name = sanitize_branch_name(name)
-    branch_name = f"{BRANCH_PREFIX}{safe_name}"
+    branch_name = f"{WORKTREE_BRANCH_PREFIX}{safe_name}"
     worktree_base = repo_path.parent / f"{repo_path.name}-worktrees"
     worktree_path = worktree_base / safe_name
 
@@ -1463,8 +1793,8 @@ for protected in $PROTECTED_BRANCHES; do
         echo "⛔ BLOCKED: Direct push to '$protected' is not allowed"
         echo ""
         echo "Please push to a feature branch instead:"
-        echo "  git checkout -b claude/<feature-name>"
-        echo "  git push -u origin claude/<feature-name>"
+        echo "  git checkout -b scc/<feature-name>"
+        echo "  git push -u origin scc/<feature-name>"
         echo ""
         exit 1
     fi

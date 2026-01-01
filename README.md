@@ -186,8 +186,48 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 | `scc team switch <name>` | Switch to a different team |
 | `scc config explain` | Show effective config with sources |
 | `scc worktree create <repo> <name>` | Create git worktree |
+| `scc worktree switch <target>` | Switch to worktree (outputs path) |
+| `scc worktree select` | Interactive worktree picker |
+| `scc worktree list` | List worktrees |
+| `scc worktree list -v` | List with git status (staged/modified/untracked) |
+| `scc worktree remove <name>` | Remove worktree |
+| `scc worktree prune` | Clean stale worktree entries |
 
 Run `scc <command> --help` for options. See [CLI Reference](docs/CLI-REFERENCE.md) for full command list.
+
+### Git Worktree Shell Integration
+
+Add this wrapper to your shell config (`~/.bashrc` or `~/.zshrc`) for seamless worktree switching:
+
+```bash
+wt() { cd "$(scc worktree switch "$@")" || return 1; }
+```
+
+**Usage examples:**
+
+```bash
+wt ^              # Switch to main branch worktree
+wt -              # Switch to previous worktree (like cd -)
+wt feature-auth   # Fuzzy match worktree by name
+wt scc/feature-x  # Match by full branch name
+```
+
+**Status indicators in `list -v`:**
+
+| Symbol | Meaning |
+|--------|---------|
+| `+N` | N staged files |
+| `!N` | N modified files |
+| `?N` | N untracked files |
+| `.` | Clean worktree |
+| `…` | Status timed out |
+
+**Cleanup stale entries:**
+
+```bash
+scc worktree prune -n   # Dry-run: show what would be pruned
+scc worktree prune      # Actually prune stale entries
+```
 
 ---
 
