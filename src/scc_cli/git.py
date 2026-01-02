@@ -79,8 +79,6 @@ from .ui.git_interactive import (  # noqa: F401
 )
 
 # Pure rendering functions
-from .ui.git_render import (  # noqa: F401
-    format_git_status as _format_git_status,
-    render_worktrees,
-    render_worktrees_table as _render_worktrees_table,
-)
+from .ui.git_render import format_git_status as _format_git_status  # noqa: F401
+from .ui.git_render import render_worktrees  # noqa: F401
+from .ui.git_render import render_worktrees_table as _render_worktrees_table  # noqa: F401
