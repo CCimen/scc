@@ -22,7 +22,7 @@ class TestDryRunBasicBehavior:
 
     def test_dry_run_does_not_launch_docker(self, tmp_path, monkeypatch):
         """--dry-run should NOT start a Docker container."""
-        from scc_cli.cli_launch import start
+        from scc_cli.commands.launch import start
 
         monkeypatch.chdir(tmp_path)
 
@@ -59,7 +59,7 @@ class TestDryRunBasicBehavior:
 
     def test_dry_run_shows_workspace_path(self, tmp_path, monkeypatch, capsys):
         """--dry-run should display the workspace path."""
-        from scc_cli.cli_launch import start
+        from scc_cli.commands.launch import start
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
@@ -100,7 +100,7 @@ class TestDryRunTeamConfig:
 
     def test_dry_run_shows_team_name(self, tmp_path, monkeypatch, capsys):
         """--dry-run should display the selected team."""
-        from scc_cli.cli_launch import start
+        from scc_cli.commands.launch import start
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
@@ -154,7 +154,7 @@ class TestDryRunJsonOutput:
 
     def test_dry_run_json_has_correct_kind(self, tmp_path, monkeypatch, capsys):
         """--dry-run --json should have kind=StartDryRun."""
-        from scc_cli.cli_launch import start
+        from scc_cli.commands.launch import start
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
@@ -189,7 +189,7 @@ class TestDryRunJsonOutput:
 
     def test_dry_run_json_has_envelope_structure(self, tmp_path, monkeypatch, capsys):
         """--dry-run --json should follow envelope structure."""
-        from scc_cli.cli_launch import start
+        from scc_cli.commands.launch import start
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
@@ -239,7 +239,7 @@ class TestBuildDryRunData:
 
     def test_build_dry_run_data_basic(self, tmp_path):
         """build_dry_run_data should assemble configuration information."""
-        from scc_cli.cli_launch import build_dry_run_data
+        from scc_cli.commands.launch import build_dry_run_data
 
         result = build_dry_run_data(
             workspace_path=tmp_path,
@@ -255,7 +255,7 @@ class TestBuildDryRunData:
 
     def test_build_dry_run_data_with_plugins(self, tmp_path):
         """build_dry_run_data should include plugins from org config."""
-        from scc_cli.cli_launch import build_dry_run_data
+        from scc_cli.commands.launch import build_dry_run_data
 
         mock_org = {
             "delegation": {"teams": {"allow_additional_plugins": ["*"]}},
@@ -281,7 +281,7 @@ class TestBuildDryRunData:
 
     def test_build_dry_run_data_ready_to_start(self, tmp_path):
         """build_dry_run_data should indicate ready state when no blockers."""
-        from scc_cli.cli_launch import build_dry_run_data
+        from scc_cli.commands.launch import build_dry_run_data
 
         result = build_dry_run_data(
             workspace_path=tmp_path,
@@ -304,7 +304,7 @@ class TestDryRunExitCodes:
 
     def test_dry_run_exits_zero_when_ready(self, tmp_path, monkeypatch):
         """--dry-run should exit 0 when configuration is valid and ready."""
-        from scc_cli.cli_launch import start
+        from scc_cli.commands.launch import start
 
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
@@ -345,7 +345,7 @@ class TestPrintWorkspaceHeader:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Shows workspace name and team."""
-        from scc_cli.cli_launch import _print_workspace_header
+        from scc_cli.commands.launch import _print_workspace_header
 
         with patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"):
             _print_workspace_header(tmp_path, team="platform")
@@ -363,7 +363,7 @@ class TestPrintWorkspaceHeader:
 
         from rich.console import Console
 
-        from scc_cli.cli_launch import _print_workspace_header
+        from scc_cli.commands.launch import _print_workspace_header
 
         # Capture output by patching console
         output = StringIO()
@@ -380,7 +380,7 @@ class TestPrintWorkspaceHeader:
 
         from rich.console import Console
 
-        from scc_cli.cli_launch import _print_workspace_header
+        from scc_cli.commands.launch import _print_workspace_header
 
         output = StringIO()
         with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
@@ -396,7 +396,7 @@ class TestPrintWorkspaceHeader:
 
         from rich.console import Console
 
-        from scc_cli.cli_launch import _print_workspace_header
+        from scc_cli.commands.launch import _print_workspace_header
 
         output = StringIO()
         with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):

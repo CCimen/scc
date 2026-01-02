@@ -72,24 +72,24 @@ class TestResumeFlag:
     def test_resume_auto_selects_recent_session(self, mock_session):
         """--resume without workspace should use most recent session."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             patch(
-                "scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session
+                "scc_cli.commands.launch.sessions.get_most_recent", return_value=mock_session
             ) as mock_recent,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -103,24 +103,24 @@ class TestResumeFlag:
     def test_resume_short_flag_works(self, mock_session):
         """-r short flag should work like --resume."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             patch(
-                "scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session
+                "scc_cli.commands.launch.sessions.get_most_recent", return_value=mock_session
             ) as mock_recent,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -131,9 +131,9 @@ class TestResumeFlag:
     def test_resume_without_sessions_shows_error(self):
         """--resume with no sessions should show appropriate error."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.sessions.get_most_recent", return_value=None),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.sessions.get_most_recent", return_value=None),
         ):
             result = runner.invoke(app, ["start", "--resume"])
 
@@ -151,24 +151,26 @@ class TestSelectFlag:
     def test_select_shows_session_picker(self, mock_sessions_list, mock_session):
         """--select should trigger the session picker UI."""
         with (
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.select_session", return_value=mock_session) as mock_picker,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.sessions.list_recent", return_value=mock_sessions_list),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.select_session", return_value=mock_session
+            ) as mock_picker,
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
+            patch(
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -180,24 +182,26 @@ class TestSelectFlag:
     def test_select_short_flag_works(self, mock_sessions_list, mock_session):
         """-s short flag should work like --select."""
         with (
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.select_session", return_value=mock_session) as mock_picker,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.sessions.list_recent", return_value=mock_sessions_list),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.select_session", return_value=mock_session
+            ) as mock_picker,
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
+            patch(
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -208,10 +212,10 @@ class TestSelectFlag:
     def test_select_without_sessions_shows_message(self):
         """--select with no sessions should show appropriate message."""
         with (
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.sessions.list_recent", return_value=[]),
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.sessions.list_recent", return_value=[]),
         ):
             result = runner.invoke(app, ["start", "--select"])
 
@@ -222,11 +226,11 @@ class TestSelectFlag:
     def test_select_user_cancels_exits_gracefully(self, mock_sessions_list):
         """--select should exit gracefully when user cancels picker."""
         with (
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.select_session", return_value=None),  # User cancelled
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.sessions.list_recent", return_value=mock_sessions_list),
+            patch("scc_cli.commands.launch.select_session", return_value=None),  # User cancelled
         ):
             result = runner.invoke(app, ["start", "--select"])
 
@@ -245,24 +249,24 @@ class TestContinueAlias:
     def test_continue_is_alias_for_resume(self, mock_session):
         """--continue should have same behavior as --resume."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             patch(
-                "scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session
+                "scc_cli.commands.launch.sessions.get_most_recent", return_value=mock_session
             ) as mock_recent,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -274,24 +278,24 @@ class TestContinueAlias:
     def test_continue_short_c_flag_works(self, mock_session):
         """-c short flag should work as alias."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             patch(
-                "scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session
+                "scc_cli.commands.launch.sessions.get_most_recent", return_value=mock_session
             ) as mock_recent,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -323,25 +327,25 @@ class TestFlagMutualExclusivity:
     def test_resume_and_select_are_mutually_exclusive(self, mock_session, mock_sessions_list):
         """Using both --resume and --select should error or pick one."""
         with (
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.sessions.get_most_recent", return_value=mock_session),
-            patch("scc_cli.cli_launch.sessions.list_recent", return_value=mock_sessions_list),
-            patch("scc_cli.cli_launch.select_session", return_value=mock_session),
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.sessions.get_most_recent", return_value=mock_session),
+            patch("scc_cli.commands.launch.sessions.list_recent", return_value=mock_sessions_list),
+            patch("scc_cli.commands.launch.select_session", return_value=mock_session),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -366,26 +370,26 @@ class TestSmartWorkspaceDetection:
         """Running 'scc start' from git repo should auto-detect workspace."""
         detected_path = "/home/user/project"
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             # Smart detection returns detected workspace
             patch(
-                "scc_cli.cli_launch.git.detect_workspace_root",
+                "scc_cli.commands.launch.git.detect_workspace_root",
                 return_value=(mock_session["workspace"], detected_path),
             ) as mock_detect,
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(mock_session["workspace"], False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -399,15 +403,15 @@ class TestSmartWorkspaceDetection:
     def test_no_detection_non_tty_shows_error(self):
         """Running 'scc start' in non-git dir without TTY should error."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             # Smart detection returns None (not in a git repo)
             patch(
-                "scc_cli.cli_launch.git.detect_workspace_root",
+                "scc_cli.commands.launch.git.detect_workspace_root",
                 return_value=(None, "/home/user/random"),
             ),
             # Non-TTY environment
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=False),
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=False),
         ):
             result = runner.invoke(app, ["start"])
 
@@ -419,9 +423,11 @@ class TestSmartWorkspaceDetection:
     def test_non_interactive_flag_requires_workspace(self):
         """--non-interactive should fail fast when interactive input is needed."""
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=False) as mock_allowed,
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
+            patch(
+                "scc_cli.commands.launch.is_interactive_allowed", return_value=False
+            ) as mock_allowed,
         ):
             result = runner.invoke(app, ["start", "--non-interactive"])
 
@@ -431,20 +437,20 @@ class TestSmartWorkspaceDetection:
     def test_interactive_flag_bypasses_detection(self, mock_sessions_list):
         """The -i flag should force interactive mode even when workspace can be detected."""
         with (
-            patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             # Detection would succeed, but should not be called when -i is used
             patch(
-                "scc_cli.cli_launch.git.detect_workspace_root",
+                "scc_cli.commands.launch.git.detect_workspace_root",
                 return_value=("/home/user/project", "/home/user/project"),
             ) as mock_detect,
-            patch("scc_cli.cli_launch.config.is_standalone_mode", return_value=True),
-            patch("scc_cli.cli_launch.config.load_cached_org_config", return_value=None),
-            patch("scc_cli.cli_launch.teams.list_teams", return_value=[]),
-            patch("scc_cli.cli_launch.load_recent_contexts", return_value=[]),
+            patch("scc_cli.commands.launch.config.is_standalone_mode", return_value=True),
+            patch("scc_cli.commands.launch.config.load_cached_org_config", return_value=None),
+            patch("scc_cli.commands.launch.teams.list_teams", return_value=[]),
+            patch("scc_cli.commands.launch.load_recent_contexts", return_value=[]),
             # User selects workspace via picker
-            patch("scc_cli.cli_launch.pick_workspace_source", return_value=None),
+            patch("scc_cli.commands.launch.pick_workspace_source", return_value=None),
         ):
             result = runner.invoke(app, ["start", "-i"])
 
@@ -457,25 +463,25 @@ class TestSmartWorkspaceDetection:
         """Auto-detected workspace should show brief feedback message."""
         detected_path = "/home/user/my-project"
         with (
-            patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.cli_launch.config.load_config", return_value={"standalone": True}),
+            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.config.load_config", return_value={"standalone": True}),
             patch(
-                "scc_cli.cli_launch.git.detect_workspace_root",
+                "scc_cli.commands.launch.git.detect_workspace_root",
                 return_value=(detected_path, detected_path),
             ),
-            patch("scc_cli.cli_launch.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.docker.check_docker_available"),
             patch(
-                "scc_cli.cli_launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.docker.get_or_create_container",
                 return_value=(["docker", "run"], False),
             ),
-            patch("scc_cli.cli_launch.docker.run"),
-            patch("scc_cli.cli_launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.cli_launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.git.get_workspace_mount_path",
                 return_value=(detected_path, False),
             ),
-            patch("scc_cli.cli_launch.git.check_branch_safety"),
-            patch("scc_cli.cli_launch.sessions.record_session"),
+            patch("scc_cli.commands.launch.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.sessions.record_session"),
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):

@@ -26,7 +26,7 @@ class TestInitAppStructure:
 
     def test_init_cmd_exists(self) -> None:
         """init_cmd function should exist."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         assert init_cmd is not None
         assert callable(init_cmd)
@@ -49,9 +49,9 @@ class TestInitFileCreation:
 
     def test_creates_scc_yaml_in_target_directory(self, tmp_path: Path) -> None:
         """init should create .scc.yaml in target directory."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             try:
                 init_cmd(
                     path=str(tmp_path),
@@ -70,9 +70,9 @@ class TestInitFileCreation:
         """init should create valid YAML with documented structure."""
         import yaml
 
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             try:
                 init_cmd(
                     path=str(tmp_path),
@@ -94,9 +94,9 @@ class TestInitFileCreation:
 
     def test_yaml_contains_helpful_comments(self, tmp_path: Path) -> None:
         """init should create YAML with helpful comments."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             try:
                 init_cmd(
                     path=str(tmp_path),
@@ -116,11 +116,11 @@ class TestInitFileCreation:
 
     def test_uses_current_directory_as_default(self, tmp_path: Path, monkeypatch) -> None:
         """init without path should use current directory."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         monkeypatch.chdir(tmp_path)
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             try:
                 init_cmd(
                     path=None,  # Default to current directory
@@ -146,13 +146,13 @@ class TestInitFileExistenceCheck:
 
     def test_fails_if_scc_yaml_exists(self, tmp_path: Path) -> None:
         """init should fail if .scc.yaml already exists without --force."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         # Create existing file
         existing = tmp_path / ".scc.yaml"
         existing.write_text("existing: content\n")
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 init_cmd(
                     path=str(tmp_path),
@@ -165,14 +165,14 @@ class TestInitFileExistenceCheck:
 
     def test_force_overwrites_existing_file(self, tmp_path: Path) -> None:
         """init --force should overwrite existing .scc.yaml."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         # Create existing file
         existing = tmp_path / ".scc.yaml"
         existing.write_text("existing: content\n")
         original_content = existing.read_text()
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             try:
                 init_cmd(
                     path=str(tmp_path),
@@ -198,7 +198,7 @@ class TestInitGitRepoDetection:
 
     def test_detects_git_repo(self, tmp_path: Path) -> None:
         """init should detect if target is a git repository."""
-        from scc_cli.cli_init import is_git_repo
+        from scc_cli.commands.init import is_git_repo
 
         # Create a git repo
         git_dir = tmp_path / ".git"
@@ -208,18 +208,18 @@ class TestInitGitRepoDetection:
 
     def test_detects_non_git_directory(self, tmp_path: Path) -> None:
         """init should detect non-git directories."""
-        from scc_cli.cli_init import is_git_repo
+        from scc_cli.commands.init import is_git_repo
 
         # No .git directory
         assert is_git_repo(tmp_path) is False
 
     def test_warns_if_not_git_repo(self, tmp_path: Path, capsys) -> None:
         """init should warn if target is not a git repository."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         # Don't create .git directory
 
-        with patch("scc_cli.cli_init.console") as mock_console:
+        with patch("scc_cli.commands.init.console") as mock_console:
             try:
                 init_cmd(
                     path=str(tmp_path),
@@ -249,9 +249,9 @@ class TestInitNonInteractiveMode:
 
     def test_non_interactive_uses_defaults(self, tmp_path: Path) -> None:
         """init --non-interactive should use defaults without prompts."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             try:
                 init_cmd(
                     path=str(tmp_path),
@@ -271,7 +271,7 @@ class TestInitNonInteractiveMode:
         # This test verifies the function signature supports interactive/non-interactive mode
         import inspect
 
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         sig = inspect.signature(init_cmd)
         assert "yes" in sig.parameters
@@ -287,7 +287,7 @@ class TestInitJsonOutput:
 
     def test_json_output_valid_envelope(self, tmp_path: Path, capsys) -> None:
         """init --json should output valid JSON envelope."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         try:
             init_cmd(
@@ -308,7 +308,7 @@ class TestInitJsonOutput:
 
     def test_json_output_includes_file_path(self, tmp_path: Path, capsys) -> None:
         """init --json should include created file path."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         try:
             init_cmd(
@@ -337,9 +337,9 @@ class TestInitErrorHandling:
 
     def test_fails_on_nonexistent_path(self) -> None:
         """init should fail if target path doesn't exist."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 init_cmd(
                     path="/nonexistent/path/to/project",
@@ -352,13 +352,13 @@ class TestInitErrorHandling:
 
     def test_fails_if_path_is_file(self, tmp_path: Path) -> None:
         """init should fail if target path is a file, not directory."""
-        from scc_cli.cli_init import init_cmd
+        from scc_cli.commands.init import init_cmd
 
         # Create a file instead of directory
         file_path = tmp_path / "not_a_dir"
         file_path.write_text("I'm a file")
 
-        with patch("scc_cli.cli_init.console"):
+        with patch("scc_cli.commands.init.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 init_cmd(
                     path=str(file_path),
@@ -380,7 +380,7 @@ class TestPureFunctions:
 
     def test_build_init_data_success(self) -> None:
         """build_init_data should return correct structure for success."""
-        from scc_cli.cli_init import build_init_data
+        from scc_cli.commands.init import build_init_data
 
         result = build_init_data(
             file_path="/path/to/.scc.yaml",
@@ -396,7 +396,7 @@ class TestPureFunctions:
 
     def test_build_init_data_overwrite(self) -> None:
         """build_init_data should indicate overwrite."""
-        from scc_cli.cli_init import build_init_data
+        from scc_cli.commands.init import build_init_data
 
         result = build_init_data(
             file_path="/path/to/.scc.yaml",
@@ -409,7 +409,7 @@ class TestPureFunctions:
 
     def test_generate_template_content(self) -> None:
         """generate_template_content should return valid YAML template."""
-        from scc_cli.cli_init import generate_template_content
+        from scc_cli.commands.init import generate_template_content
 
         content = generate_template_content()
 

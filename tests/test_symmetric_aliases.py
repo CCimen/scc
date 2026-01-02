@@ -18,13 +18,13 @@ class TestSessionAppStructure:
 
     def test_session_app_exists(self) -> None:
         """session_app Typer should exist."""
-        from scc_cli.cli_worktree import session_app
+        from scc_cli.commands.worktree import session_app
 
         assert session_app is not None
 
     def test_session_app_has_list_command(self) -> None:
         """session_app should have 'list' subcommand."""
-        from scc_cli.cli_worktree import session_app
+        from scc_cli.commands.worktree import session_app
 
         command_names = [cmd.name for cmd in session_app.registered_commands]
         assert "list" in command_names
@@ -40,13 +40,13 @@ class TestContainerAppStructure:
 
     def test_container_app_exists(self) -> None:
         """container_app Typer should exist."""
-        from scc_cli.cli_worktree import container_app
+        from scc_cli.commands.worktree import container_app
 
         assert container_app is not None
 
     def test_container_app_has_list_command(self) -> None:
         """container_app should have 'list' subcommand."""
-        from scc_cli.cli_worktree import container_app
+        from scc_cli.commands.worktree import container_app
 
         command_names = [cmd.name for cmd in container_app.registered_commands]
         assert "list" in command_names
@@ -89,7 +89,7 @@ class TestCommandDelegation:
         # We verify by checking they have similar signatures
         import inspect
 
-        from scc_cli.cli_worktree import session_list_cmd, sessions_cmd
+        from scc_cli.commands.worktree import session_list_cmd, sessions_cmd
 
         sessions_sig = inspect.signature(sessions_cmd)
         session_list_sig = inspect.signature(session_list_cmd)
@@ -100,7 +100,7 @@ class TestCommandDelegation:
 
     def test_container_list_delegates_to_list_cmd(self) -> None:
         """container list should delegate to list_cmd."""
-        from scc_cli.cli_worktree import container_list_cmd, list_cmd
+        from scc_cli.commands.worktree import container_list_cmd, list_cmd
 
         # Verify both functions exist and can be called
         assert callable(container_list_cmd)

@@ -108,8 +108,8 @@ class TestExceptionsListCommand:
     def test_list_shows_active_exceptions(self, mock_user_store, mock_repo_store):
         """Should display active exceptions by default."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "list"])
 
@@ -120,8 +120,8 @@ class TestExceptionsListCommand:
     def test_list_active_flag(self, mock_user_store, mock_repo_store):
         """Should show only active exceptions with --active flag."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "list", "--active"])
 
@@ -139,8 +139,8 @@ class TestExceptionsListCommand:
             ],
         )
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "list", "--expired"])
 
@@ -157,8 +157,8 @@ class TestExceptionsListCommand:
             ],
         )
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "list", "--all"])
 
@@ -169,8 +169,8 @@ class TestExceptionsListCommand:
     def test_list_json_output(self, mock_user_store, mock_repo_store):
         """Should output valid JSON with --json flag."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "list", "--json"])
 
@@ -185,8 +185,8 @@ class TestExceptionsListCommand:
         empty_store = MagicMock()
         empty_store.read.return_value = ExceptionFile(schema_version=1, exceptions=[])
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=empty_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=empty_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "list"])
 
@@ -205,8 +205,8 @@ class TestExceptionsCreateCommand:
     def test_create_with_mcp_server(self, mock_user_store, mock_repo_store):
         """Should create exception for MCP server."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -229,8 +229,8 @@ class TestExceptionsCreateCommand:
     def test_create_with_plugin(self, mock_user_store, mock_repo_store):
         """Should create exception for plugin."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -252,8 +252,8 @@ class TestExceptionsCreateCommand:
     def test_create_with_base_image(self, mock_user_store, mock_repo_store):
         """Should create exception for base image."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -275,8 +275,8 @@ class TestExceptionsCreateCommand:
     def test_create_multiple_targets(self, mock_user_store, mock_repo_store):
         """Should allow multiple targets in single exception."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -299,8 +299,8 @@ class TestExceptionsCreateCommand:
     def test_create_shared_uses_repo_store(self, mock_user_store, mock_repo_store):
         """Should use repo store when --shared is specified."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -323,8 +323,8 @@ class TestExceptionsCreateCommand:
     def test_create_policy_generates_yaml(self, mock_user_store, mock_repo_store):
         """Should generate YAML snippet for --policy flag."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -351,8 +351,8 @@ class TestExceptionsCreateCommand:
     def test_create_policy_requires_id(self, mock_user_store, mock_repo_store):
         """Should require --id when --policy is specified."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -375,8 +375,8 @@ class TestExceptionsCreateCommand:
     def test_create_requires_reason(self, mock_user_store, mock_repo_store):
         """Should require --reason."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -395,8 +395,8 @@ class TestExceptionsCreateCommand:
     def test_create_requires_target(self, mock_user_store, mock_repo_store):
         """Should require at least one allow target."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -415,8 +415,8 @@ class TestExceptionsCreateCommand:
     def test_create_with_until(self, mock_user_store, mock_repo_store):
         """Should accept --until time format."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -439,8 +439,8 @@ class TestExceptionsCreateCommand:
         future = datetime.now(timezone.utc) + timedelta(hours=8)
         expires_at = future.strftime("%Y-%m-%dT%H:%M:%SZ")
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -461,8 +461,8 @@ class TestExceptionsCreateCommand:
     def test_create_shows_expiration_info(self, mock_user_store, mock_repo_store):
         """Should show expiration time and relative duration."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -494,8 +494,8 @@ class TestExceptionsDeleteCommand:
     def test_delete_by_id(self, mock_user_store, mock_repo_store):
         """Should delete exception by exact ID."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -509,8 +509,8 @@ class TestExceptionsDeleteCommand:
         """Should delete by prefix if unambiguous."""
         # Only one exception starting with 'local-20251221-a'
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -523,8 +523,8 @@ class TestExceptionsDeleteCommand:
         """Should error on ambiguous prefix."""
         # Both exceptions start with 'local-20251221-'
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -537,8 +537,8 @@ class TestExceptionsDeleteCommand:
     def test_delete_not_found_error(self, mock_user_store, mock_repo_store):
         """Should error when exception not found."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -551,8 +551,8 @@ class TestExceptionsDeleteCommand:
     def test_delete_with_yes_flag(self, mock_user_store, mock_repo_store):
         """Should not prompt with --yes flag."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(
                 cli.app,
@@ -575,8 +575,8 @@ class TestExceptionsCleanupCommand:
         mock_store = MagicMock()
         mock_store.prune_expired.return_value = 3
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "cleanup"])
 
@@ -589,8 +589,8 @@ class TestExceptionsCleanupCommand:
         mock_store = MagicMock()
         mock_store.prune_expired.return_value = 0
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "cleanup"])
 
@@ -609,8 +609,8 @@ class TestExceptionsResetCommand:
     def test_reset_user_requires_yes(self, mock_user_store, mock_repo_store):
         """Should require --yes for destructive reset."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "reset", "--user"])
 
@@ -620,8 +620,8 @@ class TestExceptionsResetCommand:
     def test_reset_user_with_yes(self, mock_user_store, mock_repo_store):
         """Should reset user store with --yes."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "reset", "--user", "--yes"])
 
@@ -631,8 +631,8 @@ class TestExceptionsResetCommand:
     def test_reset_repo_with_yes(self, mock_user_store, mock_repo_store):
         """Should reset repo store with --yes."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "reset", "--repo", "--yes"])
 
@@ -642,8 +642,8 @@ class TestExceptionsResetCommand:
     def test_reset_requires_store_selection(self, mock_user_store, mock_repo_store):
         """Should require --user or --repo."""
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
         ):
             result = runner.invoke(cli.app, ["exceptions", "reset", "--yes"])
 
@@ -666,9 +666,9 @@ class TestUnblockCommand:
         mock_eval.blocked_items = []
 
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
-            patch("scc_cli.cli_exceptions.get_current_denials", return_value=mock_eval),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions.get_current_denials", return_value=mock_eval),
         ):
             result = runner.invoke(
                 cli.app,
@@ -693,9 +693,9 @@ class TestUnblockCommand:
         mock_eval.blocked_items = []
 
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
-            patch("scc_cli.cli_exceptions.get_current_denials", return_value=mock_eval),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions.get_current_denials", return_value=mock_eval),
         ):
             result = runner.invoke(
                 cli.app,
@@ -720,9 +720,9 @@ class TestUnblockCommand:
         mock_eval.blocked_items = [MagicMock(target="vendor-tools", target_type="plugin")]
 
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
-            patch("scc_cli.cli_exceptions.get_current_denials", return_value=mock_eval),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions.get_current_denials", return_value=mock_eval),
         ):
             result = runner.invoke(
                 cli.app,
@@ -746,9 +746,9 @@ class TestUnblockCommand:
         mock_eval.blocked_items = []
 
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
-            patch("scc_cli.cli_exceptions.get_current_denials", return_value=mock_eval),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions.get_current_denials", return_value=mock_eval),
         ):
             result = runner.invoke(
                 cli.app,
@@ -772,9 +772,9 @@ class TestUnblockCommand:
         mock_eval.blocked_items = []
 
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
-            patch("scc_cli.cli_exceptions.get_current_denials", return_value=mock_eval),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions.get_current_denials", return_value=mock_eval),
         ):
             result = runner.invoke(
                 cli.app,
@@ -795,9 +795,9 @@ class TestUnblockCommand:
         mock_eval.blocked_items = []
 
         with (
-            patch("scc_cli.cli_exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.cli_exceptions._get_repo_store", return_value=mock_repo_store),
-            patch("scc_cli.cli_exceptions.get_current_denials", return_value=mock_eval),
+            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
+            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
+            patch("scc_cli.commands.exceptions.get_current_denials", return_value=mock_eval),
         ):
             result = runner.invoke(
                 cli.app,

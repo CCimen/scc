@@ -18,16 +18,27 @@ from importlib.metadata import version as get_installed_version
 import typer
 
 from .cli_common import console, state
-from .cli_config import (
+from .commands.admin import (
+    doctor_cmd,
+    stats_app,
+    status_cmd,
+    statusline_cmd,
+    update_cmd,
+)
+from .commands.audit import audit_app
+from .commands.config import (
     config_cmd,
     setup_cmd,
 )
-from .cli_exceptions import exceptions_app, unblock_cmd
-from .cli_init import init_cmd
+from .commands.exceptions import exceptions_app, unblock_cmd
+from .commands.init import init_cmd
 
 # Import command functions from domain modules
-from .cli_launch import start
-from .cli_worktree import (
+from .commands.launch import start
+from .commands.org import org_app
+from .commands.support import support_app
+from .commands.team import team_app
+from .commands.worktree import (
     container_app,
     context_app,
     list_cmd,
@@ -37,17 +48,6 @@ from .cli_worktree import (
     stop_cmd,
     worktree_app,
 )
-from .commands.admin import (
-    doctor_cmd,
-    stats_app,
-    status_cmd,
-    statusline_cmd,
-    update_cmd,
-)
-from .commands.audit import audit_app
-from .commands.org import org_app
-from .commands.support import support_app
-from .commands.team import team_app
 
 # ─────────────────────────────────────────────────────────────────────────────
 # App Configuration

@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from scc_cli.cli_launch import _resolve_workspace_team
+from scc_cli.commands.launch import _resolve_workspace_team
 
 
 def test_explicit_team_wins_over_pinned() -> None:
@@ -36,8 +36,8 @@ def test_pinned_team_prompt_accepts() -> None:
     }
 
     with (
-        patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-        patch("scc_cli.cli_launch.Confirm.ask", return_value=True),
+        patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+        patch("scc_cli.commands.launch.Confirm.ask", return_value=True),
     ):
         result = _resolve_workspace_team(
             workspace,
@@ -60,8 +60,8 @@ def test_pinned_team_prompt_declines() -> None:
     }
 
     with (
-        patch("scc_cli.cli_launch.is_interactive_allowed", return_value=True),
-        patch("scc_cli.cli_launch.Confirm.ask", return_value=False),
+        patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
+        patch("scc_cli.commands.launch.Confirm.ask", return_value=False),
     ):
         result = _resolve_workspace_team(
             workspace,
@@ -84,8 +84,8 @@ def test_noninteractive_uses_pinned_team_with_notice() -> None:
     }
 
     with (
-        patch("scc_cli.cli_launch.is_interactive_allowed", return_value=False),
-        patch("scc_cli.cli_launch.print_human") as mock_print,
+        patch("scc_cli.commands.launch.is_interactive_allowed", return_value=False),
+        patch("scc_cli.commands.launch.print_human") as mock_print,
     ):
         result = _resolve_workspace_team(
             workspace,

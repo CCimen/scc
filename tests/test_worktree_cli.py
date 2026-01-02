@@ -28,27 +28,27 @@ class TestWorktreeAppStructure:
 
     def test_worktree_app_exists(self) -> None:
         """worktree_app Typer should exist."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         assert worktree_app is not None
 
     def test_worktree_app_has_create_command(self) -> None:
         """worktree_app should have 'create' subcommand."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         command_names = [cmd.name for cmd in worktree_app.registered_commands]
         assert "create" in command_names
 
     def test_worktree_app_has_list_command(self) -> None:
         """worktree_app should have 'list' subcommand."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         command_names = [cmd.name for cmd in worktree_app.registered_commands]
         assert "list" in command_names
 
     def test_worktree_app_has_remove_command(self) -> None:
         """worktree_app should have 'remove' subcommand."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         command_names = [cmd.name for cmd in worktree_app.registered_commands]
         assert "remove" in command_names
@@ -64,13 +64,13 @@ class TestWorktreeCreate:
 
     def test_create_calls_git_create_worktree(self, tmp_path: Path) -> None:
         """create should call git.create_worktree with correct args."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
-            patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
-            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.has_commits", return_value=True),
+            patch("scc_cli.commands.worktree.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.Confirm.ask", return_value=False),
         ):
             mock_create.return_value = tmp_path / "worktrees" / "feature"
             try:
@@ -90,13 +90,13 @@ class TestWorktreeCreate:
 
     def test_create_with_base_branch(self, tmp_path: Path) -> None:
         """create with --base should pass branch to git.create_worktree."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
-            patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
-            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.has_commits", return_value=True),
+            patch("scc_cli.commands.worktree.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.Confirm.ask", return_value=False),
         ):
             mock_create.return_value = tmp_path / "worktrees" / "feature"
             try:
@@ -115,10 +115,10 @@ class TestWorktreeCreate:
 
     def test_create_raises_for_non_repo(self, tmp_path: Path) -> None:
         """create should exit with error for non-git directories in non-interactive mode."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=False),
             patch("scc_cli.cli_helpers.is_interactive", return_value=False),
         ):
             # @handle_errors decorator converts NotAGitRepoError to typer.Exit(4)
@@ -143,11 +143,11 @@ class TestWorktreeList:
 
     def test_list_calls_git_list_worktrees(self, tmp_path: Path) -> None:
         """list should call git.list_worktrees."""
-        from scc_cli.cli_worktree import worktree_list_cmd
+        from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.list_worktrees") as mock_list,
-            patch("scc_cli.cli_worktree.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.git.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.git.render_worktrees"),
         ):
             mock_list.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="clean")
@@ -165,11 +165,11 @@ class TestWorktreeList:
 
     def test_list_json_has_correct_kind(self, tmp_path: Path, capsys) -> None:
         """list --json should output JSON with kind=WorktreeList."""
-        from scc_cli.cli_worktree import worktree_list_cmd
+        from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.list_worktrees") as mock_list,
-            patch("scc_cli.cli_worktree.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.git.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.git.render_worktrees"),
         ):
             mock_list.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="clean")
@@ -190,7 +190,7 @@ class TestWorktreeList:
 
     def test_list_json_contains_worktrees(self, tmp_path: Path, capsys) -> None:
         """list --json should contain worktree data."""
-        from scc_cli.cli_worktree import worktree_list_cmd
+        from scc_cli.commands.worktree import worktree_list_cmd
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path), branch="main", status="clean"),
@@ -198,8 +198,8 @@ class TestWorktreeList:
         ]
 
         with (
-            patch("scc_cli.cli_worktree.git.list_worktrees") as mock_list,
-            patch("scc_cli.cli_worktree.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.git.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.git.render_worktrees"),
         ):
             mock_list.return_value = worktrees
             try:
@@ -218,11 +218,11 @@ class TestWorktreeList:
 
     def test_list_json_empty_worktrees(self, tmp_path: Path, capsys) -> None:
         """list --json with no worktrees should return empty array."""
-        from scc_cli.cli_worktree import worktree_list_cmd
+        from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.list_worktrees") as mock_list,
-            patch("scc_cli.cli_worktree.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.git.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.git.render_worktrees"),
         ):
             mock_list.return_value = []
             try:
@@ -262,9 +262,9 @@ class TestWorktreeRemove:
 
     def test_remove_calls_git_cleanup_worktree(self, tmp_path: Path) -> None:
         """remove should call git.cleanup_worktree with correct args."""
-        from scc_cli.cli_worktree import worktree_remove_cmd
+        from scc_cli.commands.worktree import worktree_remove_cmd
 
-        with patch("scc_cli.cli_worktree.git.cleanup_worktree") as mock_cleanup:
+        with patch("scc_cli.commands.worktree.git.cleanup_worktree") as mock_cleanup:
             mock_cleanup.return_value = True
             try:
                 worktree_remove_cmd(
@@ -281,9 +281,9 @@ class TestWorktreeRemove:
 
     def test_remove_with_force_flag(self, tmp_path: Path) -> None:
         """remove with --force should pass force=True to cleanup."""
-        from scc_cli.cli_worktree import worktree_remove_cmd
+        from scc_cli.commands.worktree import worktree_remove_cmd
 
-        with patch("scc_cli.cli_worktree.git.cleanup_worktree") as mock_cleanup:
+        with patch("scc_cli.commands.worktree.git.cleanup_worktree") as mock_cleanup:
             mock_cleanup.return_value = True
             try:
                 worktree_remove_cmd(
@@ -325,7 +325,7 @@ class TestBuildWorktreeListData:
 
     def test_builds_correct_structure(self) -> None:
         """build_worktree_list_data should return correct structure."""
-        from scc_cli.cli_worktree import build_worktree_list_data
+        from scc_cli.commands.worktree import build_worktree_list_data
 
         worktrees = [
             {"path": "/home/user/repo", "branch": "main", "head": "abc123"},
@@ -341,7 +341,7 @@ class TestBuildWorktreeListData:
 
     def test_handles_empty_list(self) -> None:
         """build_worktree_list_data should handle empty list."""
-        from scc_cli.cli_worktree import build_worktree_list_data
+        from scc_cli.commands.worktree import build_worktree_list_data
 
         result = build_worktree_list_data([], workspace="/home/user/repo")
 
@@ -359,17 +359,17 @@ class TestWorktreeSwitchCommand:
 
     def test_switch_app_has_switch_command(self) -> None:
         """worktree_app should have 'switch' subcommand."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         command_names = [cmd.name for cmd in worktree_app.registered_commands]
         assert "switch" in command_names
 
     def test_switch_dash_uses_oldpwd(self, tmp_path: Path, capsys) -> None:
         """switch - should print $OLDPWD."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch.dict("os.environ", {"OLDPWD": "/previous/path"}),
         ):
             worktree_switch_cmd(target="-", workspace=str(tmp_path))
@@ -379,10 +379,10 @@ class TestWorktreeSwitchCommand:
 
     def test_switch_dash_without_oldpwd_exits(self, tmp_path: Path) -> None:
         """switch - without $OLDPWD should exit with error."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch.dict("os.environ", {}, clear=True),
         ):
             with pytest.raises(click.exceptions.Exit) as exc_info:
@@ -391,12 +391,12 @@ class TestWorktreeSwitchCommand:
 
     def test_switch_caret_uses_main_worktree(self, tmp_path: Path, capsys) -> None:
         """switch ^ should print main branch worktree path."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         main_wt = WorktreeInfo(path="/repo/main", branch="main", status="clean")
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.find_main_worktree", return_value=main_wt),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.find_main_worktree", return_value=main_wt),
         ):
             worktree_switch_cmd(target="^", workspace=str(tmp_path))
 
@@ -405,12 +405,12 @@ class TestWorktreeSwitchCommand:
 
     def test_switch_caret_without_main_worktree_exits(self, tmp_path: Path) -> None:
         """switch ^ without main worktree should exit with error."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.find_main_worktree", return_value=None),
-            patch("scc_cli.cli_worktree.git.get_default_branch", return_value="main"),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.find_main_worktree", return_value=None),
+            patch("scc_cli.commands.worktree.git.get_default_branch", return_value="main"),
         ):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 worktree_switch_cmd(target="^", workspace=str(tmp_path))
@@ -418,13 +418,13 @@ class TestWorktreeSwitchCommand:
 
     def test_switch_fuzzy_match_exact(self, tmp_path: Path, capsys) -> None:
         """switch with exact match should print worktree path."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         feature_wt = WorktreeInfo(path="/repo/feature", branch="feature", status="clean")
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                "scc_cli.commands.worktree.git.find_worktree_by_query",
                 return_value=(feature_wt, [feature_wt]),
             ),
         ):
@@ -435,12 +435,12 @@ class TestWorktreeSwitchCommand:
 
     def test_switch_no_match_exits(self, tmp_path: Path) -> None:
         """switch with no match should exit with error."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.find_worktree_by_query", return_value=(None, [])),
-            patch("scc_cli.cli_worktree.git.list_branches_without_worktrees", return_value=[]),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.find_worktree_by_query", return_value=(None, [])),
+            patch("scc_cli.commands.worktree.git.list_branches_without_worktrees", return_value=[]),
         ):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 worktree_switch_cmd(target="nonexistent", workspace=str(tmp_path))
@@ -463,13 +463,13 @@ class TestWorktreeSwitchStdoutPurity:
 
     def test_success_stdout_is_exactly_path(self, tmp_path: Path, capsys) -> None:
         """On success, stdout should be exactly the path with one newline."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         feature_wt = WorktreeInfo(path="/repo/feature", branch="feature", status="clean")
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                "scc_cli.commands.worktree.git.find_worktree_by_query",
                 return_value=(feature_wt, [feature_wt]),
             ),
         ):
@@ -483,12 +483,12 @@ class TestWorktreeSwitchStdoutPurity:
 
     def test_error_stdout_is_empty(self, tmp_path: Path, capsys) -> None:
         """On error (not found), stdout should be empty."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.find_worktree_by_query", return_value=(None, [])),
-            patch("scc_cli.cli_worktree.git.list_branches_without_worktrees", return_value=[]),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.find_worktree_by_query", return_value=(None, [])),
+            patch("scc_cli.commands.worktree.git.list_branches_without_worktrees", return_value=[]),
         ):
             with pytest.raises(click.exceptions.Exit):
                 worktree_switch_cmd(target="nonexistent", workspace=str(tmp_path))
@@ -499,10 +499,10 @@ class TestWorktreeSwitchStdoutPurity:
 
     def test_dash_shortcut_stdout_is_exactly_path(self, tmp_path: Path, capsys) -> None:
         """The '-' shortcut should print OLDPWD to stdout."""
-        from scc_cli.cli_worktree import worktree_switch_cmd
+        from scc_cli.commands.worktree import worktree_switch_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch.dict("os.environ", {"OLDPWD": "/previous/path"}),
         ):
             worktree_switch_cmd(target="-", workspace=str(tmp_path))
@@ -520,7 +520,7 @@ class TestWorktreeSelectStdoutPurity:
 
     def test_select_no_worktrees_has_actionable_error(self, tmp_path: Path, capsys) -> None:
         """On error (no worktrees), output should have actionable message."""
-        from scc_cli.cli_worktree import worktree_select_cmd
+        from scc_cli.commands.worktree import worktree_select_cmd
         from scc_cli.ui.gate import InteractivityContext, InteractivityMode
 
         # Create a context that disallows prompts (non-interactive mode)
@@ -531,9 +531,9 @@ class TestWorktreeSelectStdoutPurity:
         )
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[]),
-            patch("scc_cli.cli_worktree.git.list_branches_without_worktrees", return_value=[]),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.list_worktrees", return_value=[]),
+            patch("scc_cli.commands.worktree.git.list_branches_without_worktrees", return_value=[]),
             patch("scc_cli.ui.gate.InteractivityContext.create", return_value=mock_ctx),
         ):
             with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
@@ -567,8 +567,8 @@ class TestWorktreeListJsonContract:
             WorktreeInfo(path=str(tmp_path / "feature"), branch="feature", status="clean"),
         ]
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=worktrees),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.list_worktrees", return_value=worktrees),
         ):
             result = runner.invoke(app, ["worktree", "list", str(tmp_path), "--json"])
 
@@ -589,8 +589,8 @@ class TestWorktreeListJsonContract:
 
         worktrees = [WorktreeInfo(path=str(tmp_path / "main"), branch="main", status="")]
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=worktrees),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.list_worktrees", return_value=worktrees),
         ):
             result = runner.invoke(app, ["worktree", "list", str(tmp_path), "--json"])
 
@@ -611,18 +611,18 @@ class TestWorktreeSelectCommand:
 
     def test_select_app_has_select_command(self) -> None:
         """worktree_app should have 'select' subcommand."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         command_names = [cmd.name for cmd in worktree_app.registered_commands]
         assert "select" in command_names
 
     def test_select_no_worktrees_exits(self, tmp_path: Path) -> None:
         """select with no worktrees should exit with error."""
-        from scc_cli.cli_worktree import worktree_select_cmd
+        from scc_cli.commands.worktree import worktree_select_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[]),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.list_worktrees", return_value=[]),
         ):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 worktree_select_cmd(workspace=str(tmp_path), branches=False)
@@ -787,11 +787,11 @@ class TestWorktreeListVerbose:
 
     def test_list_passes_verbose_to_git(self, tmp_path: Path) -> None:
         """list --verbose should pass verbose=True to git.list_worktrees."""
-        from scc_cli.cli_worktree import worktree_list_cmd
+        from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.list_worktrees") as mock_list,
-            patch("scc_cli.cli_worktree.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.git.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.git.render_worktrees"),
         ):
             mock_list.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="clean")
@@ -975,14 +975,14 @@ class TestWorktreeEnterCommand:
 
     def test_enter_command_exists(self) -> None:
         """Enter command should be registered on worktree app."""
-        from scc_cli.cli_worktree import worktree_app
+        from scc_cli.commands.worktree import worktree_app
 
         commands = {cmd.name for cmd in worktree_app.registered_commands}
         assert "enter" in commands
 
     def test_enter_opens_subshell_in_worktree(self, tmp_path: Path, capsys) -> None:
         """Enter should open subshell in the worktree directory."""
-        from scc_cli.cli_worktree import worktree_enter_cmd
+        from scc_cli.commands.worktree import worktree_enter_cmd
 
         worktree = WorktreeInfo(
             path=str(tmp_path / "feature-auth"),
@@ -992,9 +992,9 @@ class TestWorktreeEnterCommand:
         (tmp_path / "feature-auth").mkdir()
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                "scc_cli.commands.worktree.git.find_worktree_by_query",
                 return_value=(worktree, [worktree]),
             ),
             patch("subprocess.run") as mock_run,
@@ -1017,15 +1017,15 @@ class TestWorktreeEnterCommand:
         (tmp_path / "feature-auth").mkdir()
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                "scc_cli.commands.worktree.git.find_worktree_by_query",
                 return_value=(worktree, [worktree]),
             ),
             patch("subprocess.run") as mock_run,
             patch.dict("os.environ", {"SHELL": "/bin/bash"}),
         ):
-            from scc_cli.cli_worktree import worktree_enter_cmd
+            from scc_cli.commands.worktree import worktree_enter_cmd
 
             worktree_enter_cmd(target="feature-auth", workspace=str(tmp_path))
 
@@ -1045,15 +1045,15 @@ class TestWorktreeEnterCommand:
         (tmp_path / "feature-auth").mkdir()
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.cli_worktree.git.find_worktree_by_query",
+                "scc_cli.commands.worktree.git.find_worktree_by_query",
                 return_value=(worktree, [worktree]),
             ),
             patch("subprocess.run"),
             patch.dict("os.environ", {"SHELL": "/bin/bash"}),
         ):
-            from scc_cli.cli_worktree import worktree_enter_cmd
+            from scc_cli.commands.worktree import worktree_enter_cmd
 
             worktree_enter_cmd(target="feature-auth", workspace=str(tmp_path))
 
@@ -1069,11 +1069,11 @@ class TestWorktreeEnterCommand:
         previous_dir.mkdir()
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch("subprocess.run") as mock_run,
             patch.dict("os.environ", {"SHELL": "/bin/bash", "OLDPWD": str(previous_dir)}),
         ):
-            from scc_cli.cli_worktree import worktree_enter_cmd
+            from scc_cli.commands.worktree import worktree_enter_cmd
 
             worktree_enter_cmd(target="-", workspace=str(tmp_path))
 
@@ -1091,13 +1091,13 @@ class TestWorktreeEnterCommand:
         (tmp_path / "main").mkdir()
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.get_default_branch", return_value="main"),
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[main_worktree]),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.get_default_branch", return_value="main"),
+            patch("scc_cli.commands.worktree.git.list_worktrees", return_value=[main_worktree]),
             patch("subprocess.run") as mock_run,
             patch.dict("os.environ", {"SHELL": "/bin/bash"}),
         ):
-            from scc_cli.cli_worktree import worktree_enter_cmd
+            from scc_cli.commands.worktree import worktree_enter_cmd
 
             worktree_enter_cmd(target="^", workspace=str(tmp_path))
 
@@ -1115,14 +1115,14 @@ class TestWorktreeEnterCommand:
         (tmp_path / "feature").mkdir()
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.list_worktrees", return_value=[worktree]),
-            patch("scc_cli.cli_worktree.pick_worktree") as mock_picker,
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.list_worktrees", return_value=[worktree]),
+            patch("scc_cli.commands.worktree.pick_worktree") as mock_picker,
             patch("subprocess.run"),
             patch.dict("os.environ", {"SHELL": "/bin/bash"}),
         ):
             mock_picker.return_value = worktree
-            from scc_cli.cli_worktree import worktree_enter_cmd
+            from scc_cli.commands.worktree import worktree_enter_cmd
 
             worktree_enter_cmd(target=None, workspace=str(tmp_path))
 
@@ -1131,11 +1131,11 @@ class TestWorktreeEnterCommand:
 
     def test_enter_non_git_repo_fails(self, tmp_path: Path, capsys) -> None:
         """Enter in non-git directory should fail with appropriate error."""
-        from scc_cli.cli_worktree import worktree_enter_cmd
+        from scc_cli.commands.worktree import worktree_enter_cmd
         from scc_cli.exit_codes import EXIT_TOOL
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=False),
         ):
             with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
                 worktree_enter_cmd(target="feature", workspace=str(tmp_path))
@@ -1166,10 +1166,10 @@ class TestWorktreeCreateInteractiveInit:
 
     def test_non_git_repo_non_interactive_raises_error(self, tmp_path: Path, capsys) -> None:
         """Non-git repo in non-interactive mode should raise NotAGitRepoError via handle_errors."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=False),
             patch("scc_cli.cli_helpers.is_interactive", return_value=False),
         ):
             with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
@@ -1187,12 +1187,12 @@ class TestWorktreeCreateInteractiveInit:
 
     def test_non_git_repo_interactive_prompts_init(self, tmp_path: Path, capsys) -> None:
         """Non-git repo in interactive mode should prompt for init."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=False),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=False),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
-            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),  # User declines
+            patch("scc_cli.commands.worktree.Confirm.ask", return_value=False),  # User declines
         ):
             with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
                 worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
@@ -1208,15 +1208,15 @@ class TestWorktreeCreateInteractiveInit:
 
     def test_non_git_repo_interactive_accepts_init(self, tmp_path: Path, capsys) -> None:
         """Non-git repo in interactive mode should init when user accepts."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", side_effect=[False, True]),
+            patch("scc_cli.commands.worktree.git.is_git_repo", side_effect=[False, True]),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
-            patch("scc_cli.cli_worktree.Confirm.ask", return_value=True),  # User accepts init
-            patch("scc_cli.cli_worktree.git.init_repo", return_value=True),
-            patch("scc_cli.cli_worktree.git.has_commits", return_value=True),
-            patch("scc_cli.cli_worktree.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.Confirm.ask", return_value=True),  # User accepts init
+            patch("scc_cli.commands.worktree.git.init_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.has_commits", return_value=True),
+            patch("scc_cli.commands.worktree.git.create_worktree") as mock_create,
         ):
             mock_create.return_value = tmp_path / "feature-x"
             try:
@@ -1231,12 +1231,12 @@ class TestWorktreeCreateInteractiveInit:
         self, tmp_path: Path, capsys
     ) -> None:
         """No commits in non-interactive mode should show actionable error."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch("scc_cli.cli_helpers.is_interactive", return_value=False),
-            patch("scc_cli.cli_worktree.git.has_commits", return_value=False),
+            patch("scc_cli.commands.worktree.git.has_commits", return_value=False),
         ):
             with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
                 worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
@@ -1253,13 +1253,13 @@ class TestWorktreeCreateInteractiveInit:
 
     def test_no_commits_interactive_prompts_create(self, tmp_path: Path, capsys) -> None:
         """No commits in interactive mode should prompt for initial commit."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
-            patch("scc_cli.cli_worktree.git.has_commits", return_value=False),
-            patch("scc_cli.cli_worktree.Confirm.ask", return_value=False),  # User declines
+            patch("scc_cli.commands.worktree.git.has_commits", return_value=False),
+            patch("scc_cli.commands.worktree.Confirm.ask", return_value=False),  # User declines
         ):
             with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
                 worktree_create_cmd(workspace=str(tmp_path), name="feature-x")
@@ -1276,7 +1276,7 @@ class TestWorktreeCreateInteractiveInit:
 
     def test_git_identity_failure_shows_actionable_message(self, tmp_path: Path, capsys) -> None:
         """Git identity failure should show actionable message."""
-        from scc_cli.cli_worktree import worktree_create_cmd
+        from scc_cli.commands.worktree import worktree_create_cmd
 
         identity_error = (
             "Git identity not configured. Run:\n"
@@ -1285,12 +1285,12 @@ class TestWorktreeCreateInteractiveInit:
         )
 
         with (
-            patch("scc_cli.cli_worktree.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
-            patch("scc_cli.cli_worktree.git.has_commits", return_value=False),
-            patch("scc_cli.cli_worktree.Confirm.ask", return_value=True),  # User accepts
+            patch("scc_cli.commands.worktree.git.has_commits", return_value=False),
+            patch("scc_cli.commands.worktree.Confirm.ask", return_value=True),  # User accepts
             patch(
-                "scc_cli.cli_worktree.git.create_empty_initial_commit",
+                "scc_cli.commands.worktree.git.create_empty_initial_commit",
                 return_value=(False, identity_error),
             ),
         ):

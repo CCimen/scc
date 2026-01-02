@@ -78,7 +78,7 @@ class TestPruneDryRunFlag:
     def test_prune_dry_run_shows_what_would_be_removed(self, stopped_container):
         """--dry-run should list containers that would be removed."""
         with patch(
-            "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+            "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
             return_value=[stopped_container],
         ):
             result = runner.invoke(app, ["prune", "--dry-run"])
@@ -93,10 +93,10 @@ class TestPruneDryRunFlag:
         """--dry-run should NOT call remove_container."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container") as mock_remove,
+            patch("scc_cli.commands.worktree.docker.remove_container") as mock_remove,
         ):
             result = runner.invoke(app, ["prune", "--dry-run"])
 
@@ -106,7 +106,7 @@ class TestPruneDryRunFlag:
     def test_prune_dry_run_does_not_prompt(self, stopped_container):
         """--dry-run should not prompt for confirmation."""
         with patch(
-            "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+            "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
             return_value=[stopped_container],
         ):
             # No input provided - would fail if it prompted
@@ -129,10 +129,10 @@ class TestPruneInteractiveConfirmation:
         """Default prune should show containers and prompt."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True),
+            patch("scc_cli.commands.worktree.docker.remove_container", return_value=True),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             # Provide 'y' input to confirm
@@ -148,10 +148,10 @@ class TestPruneInteractiveConfirmation:
         """Answering 'n' should abort without removing."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container") as mock_remove,
+            patch("scc_cli.commands.worktree.docker.remove_container") as mock_remove,
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             result = runner.invoke(app, ["prune"], input="n\n")
@@ -166,10 +166,12 @@ class TestPruneInteractiveConfirmation:
         """Answering 'y' should remove containers."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
+            patch(
+                "scc_cli.commands.worktree.docker.remove_container", return_value=True
+            ) as mock_remove,
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             result = runner.invoke(app, ["prune"], input="y\n")
@@ -190,10 +192,12 @@ class TestPruneWithYesFlag:
         """--yes flag should actually remove containers."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
+            patch(
+                "scc_cli.commands.worktree.docker.remove_container", return_value=True
+            ) as mock_remove,
         ):
             result = runner.invoke(app, ["prune", "--yes"])
 
@@ -204,10 +208,12 @@ class TestPruneWithYesFlag:
         """-y short flag should work like --yes."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
+            patch(
+                "scc_cli.commands.worktree.docker.remove_container", return_value=True
+            ) as mock_remove,
         ):
             result = runner.invoke(app, ["prune", "-y"])
 
@@ -218,10 +224,10 @@ class TestPruneWithYesFlag:
         """Should show count of removed containers."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=multiple_stopped_containers,
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True),
+            patch("scc_cli.commands.worktree.docker.remove_container", return_value=True),
         ):
             result = runner.invoke(app, ["prune", "--yes"])
 
@@ -242,10 +248,12 @@ class TestPruneOnlyStoppedContainers:
         """Running containers should be excluded from pruning."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[running_container, stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
+            patch(
+                "scc_cli.commands.worktree.docker.remove_container", return_value=True
+            ) as mock_remove,
         ):
             result = runner.invoke(app, ["prune", "--yes"])
 
@@ -256,7 +264,7 @@ class TestPruneOnlyStoppedContainers:
     def test_prune_dry_run_only_lists_stopped(self, running_container, stopped_container):
         """--dry-run should only list stopped containers."""
         with patch(
-            "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+            "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
             return_value=[running_container, stopped_container],
         ):
             result = runner.invoke(app, ["prune", "--dry-run"])
@@ -270,7 +278,7 @@ class TestPruneOnlyStoppedContainers:
         """If all containers are running, should indicate nothing to prune."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[running_container],
             ),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
@@ -297,7 +305,7 @@ class TestPruneEmptyState:
     def test_prune_no_containers_shows_message(self):
         """Should show message when no SCC containers exist."""
         with (
-            patch("scc_cli.cli_worktree.docker._list_all_sandbox_containers", return_value=[]),
+            patch("scc_cli.commands.worktree.docker._list_all_sandbox_containers", return_value=[]),
             patch("scc_cli.cli_helpers.is_interactive", return_value=True),
         ):
             result = runner.invoke(app, ["prune"])
@@ -312,7 +320,9 @@ class TestPruneEmptyState:
 
     def test_prune_yes_no_containers_shows_message(self):
         """--yes with no containers should show message, not error."""
-        with patch("scc_cli.cli_worktree.docker._list_all_sandbox_containers", return_value=[]):
+        with patch(
+            "scc_cli.commands.worktree.docker._list_all_sandbox_containers", return_value=[]
+        ):
             result = runner.invoke(app, ["prune", "--yes"])
 
         assert result.exit_code == 0
@@ -330,10 +340,10 @@ class TestPruneErrorHandling:
         """Should handle failed container removal gracefully."""
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[stopped_container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=False),
+            patch("scc_cli.commands.worktree.docker.remove_container", return_value=False),
         ):
             result = runner.invoke(app, ["prune", "--yes"])
 
@@ -345,11 +355,11 @@ class TestPruneErrorHandling:
         # First two succeed, third fails
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=multiple_stopped_containers,
             ),
             patch(
-                "scc_cli.cli_worktree.docker.remove_container",
+                "scc_cli.commands.worktree.docker.remove_container",
                 side_effect=[True, True, False],
             ),
         ):
@@ -394,10 +404,12 @@ class TestPruneStatusDetection:
 
         with (
             patch(
-                "scc_cli.cli_worktree.docker._list_all_sandbox_containers",
+                "scc_cli.commands.worktree.docker._list_all_sandbox_containers",
                 return_value=[container],
             ),
-            patch("scc_cli.cli_worktree.docker.remove_container", return_value=True) as mock_remove,
+            patch(
+                "scc_cli.commands.worktree.docker.remove_container", return_value=True
+            ) as mock_remove,
         ):
             runner.invoke(app, ["prune", "--yes"])
 
