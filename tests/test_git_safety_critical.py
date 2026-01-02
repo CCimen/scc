@@ -126,7 +126,9 @@ class TestCleanupWorktreeRmtreeFallback:
         git_file.write_text("corrupted")  # Invalid gitdir pointer
 
         # Run cleanup with force=True (skips uncommitted change check)
-        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):  # Don't delete branch
+        with patch(
+            "scc_cli.ui.git_interactive.Confirm.ask", return_value=False
+        ):  # Don't delete branch
             result = git.cleanup_worktree(
                 repo,
                 worktree_setup["worktree_name"],
@@ -269,7 +271,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -289,7 +293,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -313,7 +319,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
             patch.object(Path, "resolve", mock_resolve),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
@@ -342,7 +350,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -361,7 +371,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -380,7 +392,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -407,7 +421,9 @@ class TestGetWorkspaceMountPathSecurity:
 
         with (
             patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
-            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
+            patch(
+                "scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo
+            ),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 

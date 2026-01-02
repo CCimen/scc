@@ -949,7 +949,10 @@ class TestGetWorktreeStatus:
 
         from scc_cli.git import get_worktree_status
 
-        with patch("scc_cli.services.git.worktree.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 5)):
+        with patch(
+            "scc_cli.services.git.worktree.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("git", 5),
+        ):
             staged, modified, untracked, timed_out = get_worktree_status(str(tmp_path))
 
         assert staged == 0

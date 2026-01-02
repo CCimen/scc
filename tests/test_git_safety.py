@@ -470,7 +470,9 @@ class TestCreateWorktree:
 
         with (
             patch("scc_cli.ui.git_interactive._fetch_branch"),
-            patch("scc_cli.ui.git_interactive._create_worktree_dir", side_effect=fake_create_worktree),
+            patch(
+                "scc_cli.ui.git_interactive._create_worktree_dir", side_effect=fake_create_worktree
+            ),
             patch(
                 "scc_cli.ui.git_interactive.install_dependencies",
                 side_effect=WorktreeCreationError(name="fail"),
