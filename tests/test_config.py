@@ -84,16 +84,23 @@ class TestLoadSaveConfig:
         assert loaded["config_version"] == "1.0.0"
 
     def test_load_config_handles_malformed_json(self, temp_config_dir):
-        """load_config should return defaults for malformed JSON."""
+        """load_config should raise ConfigError for malformed JSON."""
+        import pytest
+
         from scc_cli import config
+        from scc_cli.errors import ConfigError
 
         # Write invalid JSON
         config_file = temp_config_dir / "config.json"
         config_file.write_text("{invalid json}")
 
-        loaded = config.load_config()
-        # Should return defaults with config_version
-        assert "config_version" in loaded
+        # Should raise ConfigError with actionable guidance
+        with pytest.raises(ConfigError) as exc_info:
+            config.load_config()
+
+        # Verify error has actionable guidance
+        assert "Invalid JSON" in exc_info.value.user_message
+        assert exc_info.value.suggested_action is not None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -29,6 +29,7 @@ from .cli_common import (
     MAX_DISPLAY_PATH_LENGTH,
     PATH_TRUNCATE_LENGTH,
     console,
+    err_console,
     handle_errors,
 )
 from .confirm import Confirm
@@ -1319,7 +1320,7 @@ def interactive_start(
                         f"  [green]{Indicators.get('PASS')}[/green] Initialized git repository"
                     )
                 else:
-                    console.print(f"  [red]{Indicators.get('FAIL')}[/red] Failed to initialize git")
+                    err_console.print(f"  [red]{Indicators.get('FAIL')}[/red] Failed to initialize git")
                     can_create_worktree = False
             else:
                 # User declined git init - can't create worktree
@@ -1344,7 +1345,7 @@ def interactive_start(
                             f"  [green]{Indicators.get('PASS')}[/green] Created initial commit"
                         )
                     else:
-                        console.print(f"  [red]{Indicators.get('FAIL')}[/red] {error_msg}")
+                        err_console.print(f"  [red]{Indicators.get('FAIL')}[/red] {error_msg}")
                         can_create_worktree = False
                 else:
                     # User declined empty commit - can't create worktree
@@ -1452,5 +1453,5 @@ def run_start_wizard_flow(
         return True
 
     except Exception as e:
-        console.print(f"[red]Error launching sandbox: {e}[/red]")
+        err_console.print(f"[red]Error launching sandbox: {e}[/red]")
         return False

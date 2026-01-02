@@ -12,6 +12,9 @@ Usage:
     from scc_cli.constants import AGENT_NAME, SANDBOX_IMAGE
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_package_version
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Agent Configuration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,8 +72,26 @@ DEFAULT_MARKETPLACE_REPO = "sundsvall/claude-plugins-marketplace"
 # Version Information
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Current CLI version (must match pyproject.toml)
-CLI_VERSION = "1.2.4"
+# Fallback version for editable installs and dev checkouts
+# Keep in sync with pyproject.toml as last resort
+_FALLBACK_VERSION = "1.5.0"
+
+
+def _get_version() -> str:
+    """Get CLI version from package metadata with meaningful fallback.
+
+    Returns:
+        Version string from installed package, or fallback with dev suffix
+        for editable installs where package metadata is unavailable.
+    """
+    try:
+        return get_package_version("scc-cli")
+    except PackageNotFoundError:
+        # Editable install or dev checkout - still provide meaningful version
+        return f"{_FALLBACK_VERSION}-dev (no package metadata)"
+
+
+CLI_VERSION = _get_version()
 
 # Schema versions this CLI can understand
 # v1: Full-featured format with delegation, security policies, marketplace

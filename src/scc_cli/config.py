@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -168,7 +169,12 @@ def load_user_config() -> dict[str, Any]:
     Load user configuration from ~/.config/scc/config.json.
 
     Returns merged config with defaults.
+
+    Raises:
+        ConfigError: If config file exists but cannot be read or parsed.
     """
+    from .errors import ConfigError
+
     # Start with defaults
     config = _deep_copy(USER_CONFIG_DEFAULTS)
 
@@ -178,26 +184,66 @@ def load_user_config() -> dict[str, Any]:
     # Load and merge user config if exists
     if CONFIG_FILE.exists():
         try:
-            with open(CONFIG_FILE) as f:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
                 user_config = json.load(f)
             deep_merge(config, user_config)
-        except (OSError, json.JSONDecodeError):
-            pass
+        except json.JSONDecodeError as e:
+            raise ConfigError(
+                user_message=f"Invalid JSON in config file: {CONFIG_FILE}",
+                suggested_action=(
+                    "Fix the JSON syntax error, or delete the file to regenerate defaults.\n"
+                    f"  To backup and reset: mv {CONFIG_FILE} {CONFIG_FILE}.backup"
+                ),
+                debug_context=str(e),
+            )
+        except OSError as e:
+            raise ConfigError(
+                user_message=f"Cannot read config file: {CONFIG_FILE}",
+                suggested_action="Check file permissions, or delete the file to regenerate defaults.",
+                debug_context=str(e),
+            )
 
     return config
+
+
+def _atomic_write_config(config: dict[str, Any], path: Path) -> None:
+    """Write config atomically to prevent corruption on crash.
+
+    Uses NamedTemporaryFile in same directory for guaranteed atomic rename.
+    Sets restrictive permissions (0o600) for future token storage.
+
+    Args:
+        config: Configuration dict to save
+        path: Target path for config file
+    """
+    content = json.dumps(config, indent=2)
+    # Same directory = same filesystem = atomic rename works
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        dir=path.parent,
+        delete=False,
+        suffix=".tmp",
+        encoding="utf-8",
+    ) as tmp:
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+    # Set restrictive permissions (config may contain tokens in future)
+    tmp_path.chmod(0o600)
+    # Atomic rename on POSIX
+    tmp_path.replace(path)
 
 
 def save_user_config(config: dict[str, Any]) -> None:
     """
     Save user configuration to ~/.config/scc/config.json.
 
+    Uses atomic write pattern to prevent corruption on crash.
+
     Args:
         config: Configuration dict to save
     """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
+    _atomic_write_config(config, CONFIG_FILE)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

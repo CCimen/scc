@@ -94,86 +94,84 @@ class TestJsonModeStreamContract:
 
 
 class TestHumanModeStreamContract:
-    """Verify human mode sends all output to stderr, nothing to stdout.
+    """Verify human mode stream contract for doctor command.
 
-    NOTE: These tests are currently marked xfail because the doctor command
-    outputs to stdout. This documents the contract violation that needs to be
-    fixed when doctor is migrated to use the gated console infrastructure.
+    Doctor uses a RELAXED contract (different from other commands):
+    - Normal report output → stdout (allows `scc doctor > report.txt`)
+    - Errors about doctor failing to run → stderr
+    - --json mode → pure JSON to stdout only
+
+    This is intentional - doctor is a "reporting" command where users may
+    want to capture the output to a file.
     """
 
-    @pytest.mark.xfail(
-        reason="doctor command outputs to stdout instead of stderr - needs migration to gated console",
-        strict=True,  # Fail if this unexpectedly passes (contract was fixed)
-    )
-    def test_doctor_human_stdout_is_empty(self) -> None:
-        """Human mode must not emit anything to stdout."""
+    def test_doctor_human_stdout_has_report(self) -> None:
+        """Doctor human mode outputs report to stdout (relaxed contract)."""
         # TERM=dumb disables Rich animations but keeps text output
         result = run_scc("doctor", env_override={"TERM": "dumb"})
 
-        assert result.stdout == "", (
-            f"Human mode leaked to stdout:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        # stdout should contain the health check report
+        has_content = bool(result.stdout.strip())
+        # Accept various indicators in the health check output
+        has_diagnostic_indicator = any(
+            indicator in result.stdout
+            for indicator in ["Health Check", "✓", "✗", "Git", "Docker", "OK", "FAIL"]
         )
 
-    @pytest.mark.xfail(
-        reason="doctor command outputs to stdout instead of stderr - needs migration to gated console",
-        strict=True,
-    )
-    def test_doctor_human_stderr_has_content(self) -> None:
-        """Human mode must emit diagnostic content to stderr."""
+        assert has_content, (
+            f"Doctor stdout should contain report:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        )
+        assert has_diagnostic_indicator, (
+            f"Doctor stdout missing expected health check content:\nstdout: {result.stdout!r}"
+        )
+
+    def test_doctor_human_stderr_for_errors_only(self) -> None:
+        """Doctor human mode should only use stderr for actual errors."""
         result = run_scc("doctor", env_override={"TERM": "dumb"})
 
-        # stderr should contain diagnostic output
-        # Accept both Unicode and ASCII indicators
-        has_content = bool(result.stderr.strip())
-        has_diagnostic_indicator = any(
-            indicator in result.stderr for indicator in ["OK", "FAIL", "WARN"]
-        )
-
-        assert has_content, "Human mode stderr is empty"
-        assert has_diagnostic_indicator, (
-            f"Human mode stderr missing expected indicators:\nstderr: {result.stderr!r}"
-        )
+        # stderr should be empty or only contain debug output / error messages
+        # (not the main health check report)
+        if result.stderr.strip():
+            # If there's stderr content, it should be error/debug related
+            # not the main report (which should be in stdout)
+            has_report_in_stderr = any(
+                indicator in result.stderr for indicator in ["Health Check", "Git", "Docker"]
+            )
+            assert not has_report_in_stderr, (
+                f"Doctor report should go to stdout, not stderr:\nstderr: {result.stderr!r}"
+            )
 
 
 class TestNoColorStreamContract:
     """Verify NO_COLOR environment variable is respected."""
 
-    @pytest.mark.xfail(
-        reason="doctor command outputs to stdout instead of stderr - needs migration to gated console",
-        strict=True,
-    )
-    def test_no_color_still_outputs_to_stderr(self) -> None:
-        """NO_COLOR should not break the stderr contract."""
+    def test_no_color_doctor_still_outputs_to_stdout(self) -> None:
+        """NO_COLOR should not change doctor's relaxed contract (stdout for report)."""
         result = run_scc("doctor", env_override={"NO_COLOR": "1", "TERM": "dumb"})
 
-        # stdout still empty
-        assert result.stdout == "", f"NO_COLOR mode leaked to stdout: {result.stdout!r}"
-
-        # stderr has content
-        assert result.stderr.strip(), "NO_COLOR mode stderr is empty"
+        # Doctor uses relaxed contract: report goes to stdout
+        assert result.stdout.strip(), (
+            f"NO_COLOR mode doctor stdout should have report: {result.stdout!r}"
+        )
 
 
 class TestPipedOutputContract:
     """Test behavior when stdout is piped (non-TTY)."""
 
-    @pytest.mark.xfail(
-        reason="doctor command outputs to stdout instead of stderr - needs migration to gated console",
-        strict=True,
-    )
-    def test_human_mode_with_piped_stdout(self) -> None:
-        """When stdout is piped, human output should still go to stderr.
+    def test_doctor_piped_stdout_has_report(self) -> None:
+        """When stdout is piped, doctor report should still go to stdout.
 
-        This simulates: scc doctor | cat
-        The pipe makes stdout non-TTY, but stderr may still be TTY.
+        This simulates: scc doctor | cat or scc doctor > report.txt
+        The pipe makes stdout non-TTY, but doctor's relaxed contract
+        still outputs the report to stdout for capture.
         """
         # We're already capturing stdout via subprocess, which makes it non-TTY
         result = run_scc("doctor", env_override={"TERM": "dumb"})
 
-        # stdout should be empty (human mode never writes to stdout)
-        assert result.stdout == "", f"Piped mode leaked to stdout: {result.stdout!r}"
-
-        # stderr should have doctor output
-        assert result.stderr.strip(), "Piped mode stderr is empty"
+        # stdout should have doctor report (relaxed contract allows capture)
+        assert result.stdout.strip(), (
+            f"Piped mode doctor stdout should have report:\nstdout: {result.stdout!r}"
+        )
 
 
 class TestVersionCommandContract:

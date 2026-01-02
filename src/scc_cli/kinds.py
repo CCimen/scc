@@ -60,3 +60,6 @@ class Kind(str, Enum):
 
     # Init
     INIT_RESULT = "InitResult"
+
+    # Error (used by handle_errors in JSON mode)
+    ERROR = "Error"

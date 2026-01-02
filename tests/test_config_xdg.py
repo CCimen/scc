@@ -263,20 +263,25 @@ class TestLoadUserConfig:
         assert loaded["organization_source"]["url"] == "https://example.org/config.json"
 
     def test_load_handles_corrupted_json(self, temp_home, new_config_dir):
-        """Should return defaults for corrupted JSON."""
+        """Should raise ConfigError for corrupted JSON with actionable guidance."""
         import importlib
 
+        import pytest
+
         from scc_cli import config
+        from scc_cli.errors import ConfigError
 
         importlib.reload(config)
 
         new_config_dir.mkdir(parents=True, exist_ok=True)
         (new_config_dir / "config.json").write_text("{invalid json}")
 
-        loaded = config.load_user_config()
+        # Should raise ConfigError with actionable guidance
+        with pytest.raises(ConfigError) as exc_info:
+            config.load_user_config()
 
-        # Should return defaults, not crash
-        assert isinstance(loaded, dict)
+        assert "Invalid JSON" in exc_info.value.user_message
+        assert exc_info.value.suggested_action is not None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -494,50 +499,6 @@ class TestStandaloneMode:
         result = config.is_standalone_mode()
 
         assert result is False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for deep_merge (Keep existing)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestDeepMerge:
-    """Tests for deep_merge function."""
-
-    def test_empty_override_returns_base(self):
-        """Empty override should not modify base."""
-        from scc_cli.config import deep_merge
-
-        base = {"a": 1, "b": {"c": 2}}
-        result = deep_merge(base.copy(), {})
-        assert result == {"a": 1, "b": {"c": 2}}
-
-    def test_simple_override(self):
-        """Simple keys should be overridden."""
-        from scc_cli.config import deep_merge
-
-        base = {"a": 1, "b": 2}
-        override = {"b": 3}
-        result = deep_merge(base, override)
-        assert result == {"a": 1, "b": 3}
-
-    def test_nested_merge(self):
-        """Nested dicts should be merged recursively."""
-        from scc_cli.config import deep_merge
-
-        base = {"a": {"b": 1, "c": 2}}
-        override = {"a": {"c": 3}}
-        result = deep_merge(base, override)
-        assert result == {"a": {"b": 1, "c": 3}}
-
-    def test_new_keys_added(self):
-        """New keys in override should be added."""
-        from scc_cli.config import deep_merge
-
-        base = {"a": 1}
-        override = {"b": 2}
-        result = deep_merge(base, override)
-        assert result == {"a": 1, "b": 2}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

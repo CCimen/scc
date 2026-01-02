@@ -1,9 +1,11 @@
-"""Tests for docker module - new architecture with claude_adapter integration.
+"""Tests for docker module - org_config-based settings injection.
 
-These tests verify docker.py's integration with the new remote org config architecture:
+Tests for docker.py's integration with the remote org config architecture:
 - inject_settings() takes pre-built settings (docker.py is "dumb")
-- launch_with_org_config() orchestrates full flow with profiles/claude_adapter
-- Backward compatibility with inject_team_settings() when using org_config
+- inject_team_settings() with org_config parameter
+- Integration with claude_adapter for settings building
+
+For team-based injection and low-level utilities, see test_docker.py
 """
 
 import json
