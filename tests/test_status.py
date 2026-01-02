@@ -20,7 +20,7 @@ class TestStatusBasicOutput:
 
     def test_status_shows_organization_name(self, capsys):
         """Status should display organization name from config."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {
             "organization_source": {
@@ -31,9 +31,11 @@ class TestStatusBasicOutput:
             "name": "Acme Corp",
         }
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -41,16 +43,18 @@ class TestStatusBasicOutput:
 
     def test_status_shows_current_team(self, capsys):
         """Status should display currently selected team."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {
             "selected_profile": "platform",
         }
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -58,14 +62,16 @@ class TestStatusBasicOutput:
 
     def test_status_shows_no_team_selected(self, capsys):
         """Status should handle no team selected gracefully."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {}
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -83,7 +89,7 @@ class TestStatusSessionInfo:
 
     def test_status_shows_running_session(self, capsys):
         """Status should show running session when active."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
         from scc_cli.docker.core import ContainerInfo
 
         mock_cfg = {}
@@ -96,10 +102,13 @@ class TestStatusSessionInfo:
             workspace="/home/user/myproject",
         )
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
                 with patch(
-                    "scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[mock_container]
+                    "scc_cli.commands.admin.docker.list_running_sandboxes",
+                    return_value=[mock_container],
                 ):
                     status_cmd()
 
@@ -109,14 +118,16 @@ class TestStatusSessionInfo:
 
     def test_status_shows_no_active_session(self, capsys):
         """Status should indicate no active session when none running."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {}
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -138,14 +149,16 @@ class TestStatusJsonOutput:
 
     def test_status_json_has_correct_kind(self, capsys):
         """JSON output should have kind=Status."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {}
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     try:
                         status_cmd(json_output=True, pretty=False)
                     except click.exceptions.Exit:
@@ -157,14 +170,16 @@ class TestStatusJsonOutput:
 
     def test_status_json_has_envelope_structure(self, capsys):
         """JSON output should follow envelope structure."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {}
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     try:
                         status_cmd(json_output=True, pretty=False)
                     except click.exceptions.Exit:
@@ -183,7 +198,7 @@ class TestStatusJsonOutput:
 
     def test_status_json_data_contains_expected_fields(self, capsys):
         """JSON data should contain organization, team, and session info."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {
             "organization_source": {"url": "https://example.org/config.json"},
@@ -191,9 +206,11 @@ class TestStatusJsonOutput:
         }
         mock_org = {"name": "Acme Corp"}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     try:
                         status_cmd(json_output=True, pretty=False)
                     except click.exceptions.Exit:
@@ -219,16 +236,18 @@ class TestStatusVerboseMode:
 
     def test_status_verbose_shows_source_urls(self, capsys):
         """Verbose mode should show organization source URL."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {
             "organization_source": {"url": "https://example.org/config.json"},
         }
         mock_org = {"name": "Acme Corp"}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd(verbose=True)
 
         captured = capsys.readouterr()
@@ -236,7 +255,7 @@ class TestStatusVerboseMode:
 
     def test_status_verbose_shows_delegation_info(self, capsys):
         """Verbose mode should show team delegation information."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         mock_cfg = {
             "selected_profile": "platform",
@@ -252,9 +271,11 @@ class TestStatusVerboseMode:
             }
         }
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd(verbose=True)
 
         captured = capsys.readouterr()
@@ -272,7 +293,7 @@ class TestStatusWorkspaceDetection:
 
     def test_status_shows_workspace_path(self, capsys, tmp_path, monkeypatch):
         """Status should show current workspace path."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
@@ -280,9 +301,11 @@ class TestStatusWorkspaceDetection:
         mock_cfg = {}
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -291,7 +314,7 @@ class TestStatusWorkspaceDetection:
 
     def test_status_indicates_scc_yaml_present(self, capsys, tmp_path, monkeypatch):
         """Status should indicate when .scc.yaml is present in workspace."""
-        from scc_cli.cli_admin import status_cmd
+        from scc_cli.commands.admin import status_cmd
 
         # Create .scc.yaml in temp directory
         scc_yaml = tmp_path / ".scc.yaml"
@@ -301,9 +324,11 @@ class TestStatusWorkspaceDetection:
         mock_cfg = {}
         mock_org = {}
 
-        with patch("scc_cli.cli_admin.config.load_user_config", return_value=mock_cfg):
-            with patch("scc_cli.cli_admin.config.load_cached_org_config", return_value=mock_org):
-                with patch("scc_cli.cli_admin.docker.list_running_sandboxes", return_value=[]):
+        with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
+            with patch(
+                "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
+            ):
+                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -321,7 +346,7 @@ class TestBuildStatusData:
 
     def test_build_status_data_with_full_config(self):
         """build_status_data should assemble all status information."""
-        from scc_cli.cli_admin import build_status_data
+        from scc_cli.commands.admin import build_status_data
 
         cfg = {
             "organization_source": {"url": "https://example.org/config.json"},
@@ -338,7 +363,7 @@ class TestBuildStatusData:
 
     def test_build_status_data_with_running_session(self):
         """build_status_data should include active session info."""
-        from scc_cli.cli_admin import build_status_data
+        from scc_cli.commands.admin import build_status_data
         from scc_cli.docker.core import ContainerInfo
 
         cfg = {}
@@ -360,7 +385,7 @@ class TestBuildStatusData:
 
     def test_build_status_data_with_no_organization(self):
         """build_status_data should handle missing organization gracefully."""
-        from scc_cli.cli_admin import build_status_data
+        from scc_cli.commands.admin import build_status_data
 
         cfg = {}
         org = None

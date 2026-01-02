@@ -9,8 +9,7 @@ import warnings
 # Avoids surprising users with stderr noise
 if os.environ.get("SCC_DEBUG") == "1" or os.environ.get("PYTHONWARNINGS"):
     warnings.warn(
-        "Importing from scc_cli.errors is deprecated. "
-        "Use scc_cli.core.errors instead.",
+        "Importing from scc_cli.errors is deprecated. Use scc_cli.core.errors instead.",
         DeprecationWarning,
         stacklevel=2,
     )

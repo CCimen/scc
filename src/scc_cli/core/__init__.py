@@ -25,6 +25,7 @@ from .errors import (
 )
 from .exit_codes import (
     EXIT_CANCELLED,
+    EXIT_CODE_MAP,
     EXIT_CONFIG,
     EXIT_ERROR,
     EXIT_GOVERNANCE,
@@ -35,7 +36,6 @@ from .exit_codes import (
     EXIT_TOOL,
     EXIT_USAGE,
     EXIT_VALIDATION,
-    EXIT_CODE_MAP,
     get_exit_code_for_exception,
 )
 

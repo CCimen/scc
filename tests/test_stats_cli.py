@@ -76,7 +76,7 @@ class TestStatsCommand:
 
     def test_stats_shows_summary(self, mock_stats_report):
         """Should display summary of user's usage statistics."""
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report):
+        with patch("scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report):
             result = runner.invoke(cli.app, ["stats"])
 
         assert result.exit_code == 0
@@ -85,7 +85,7 @@ class TestStatsCommand:
 
     def test_stats_shows_project_breakdown(self, mock_stats_report):
         """Should show per-project breakdown."""
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report):
+        with patch("scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report):
             result = runner.invoke(cli.app, ["stats"])
 
         assert result.exit_code == 0
@@ -94,7 +94,7 @@ class TestStatsCommand:
 
     def test_stats_shows_incomplete_sessions(self, mock_stats_report):
         """Should indicate incomplete sessions."""
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report):
+        with patch("scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report):
             result = runner.invoke(cli.app, ["stats"])
 
         assert result.exit_code == 0
@@ -102,7 +102,9 @@ class TestStatsCommand:
 
     def test_stats_with_days_filter(self, mock_stats_report):
         """Should accept --days filter."""
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report) as mock_get:
+        with patch(
+            "scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report
+        ) as mock_get:
             result = runner.invoke(cli.app, ["stats", "--days", "7"])
 
         assert result.exit_code == 0
@@ -118,7 +120,7 @@ class TestStatsCommand:
             period_start=datetime.min,
             period_end=datetime.now(),
         )
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=empty_report):
+        with patch("scc_cli.commands.admin.stats.get_stats", return_value=empty_report):
             result = runner.invoke(cli.app, ["stats"])
 
         assert result.exit_code == 0
@@ -136,7 +138,7 @@ class TestStatsExportCommand:
 
     def test_export_json_outputs_valid_json(self, mock_stats_report):
         """Should output valid JSON."""
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report):
+        with patch("scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report):
             result = runner.invoke(cli.app, ["stats", "export", "--json"])
 
         assert result.exit_code == 0
@@ -147,7 +149,9 @@ class TestStatsExportCommand:
 
     def test_export_json_with_days_filter(self, mock_stats_report):
         """Should accept --days filter for export."""
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report) as mock_get:
+        with patch(
+            "scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report
+        ) as mock_get:
             result = runner.invoke(cli.app, ["stats", "export", "--json", "--days", "30"])
 
         assert result.exit_code == 0
@@ -155,7 +159,7 @@ class TestStatsExportCommand:
 
     def test_export_raw_events(self, sample_events):
         """Should export raw events when --raw flag is used."""
-        with patch("scc_cli.cli_admin.stats.read_usage_events", return_value=sample_events):
+        with patch("scc_cli.commands.admin.stats.read_usage_events", return_value=sample_events):
             result = runner.invoke(cli.app, ["stats", "export", "--raw"])
 
         assert result.exit_code == 0
@@ -167,7 +171,7 @@ class TestStatsExportCommand:
     def test_export_to_file(self, mock_stats_report, tmp_path):
         """Should export to file when --output is specified."""
         output_file = tmp_path / "stats.json"
-        with patch("scc_cli.cli_admin.stats.get_stats", return_value=mock_stats_report):
+        with patch("scc_cli.commands.admin.stats.get_stats", return_value=mock_stats_report):
             result = runner.invoke(
                 cli.app, ["stats", "export", "--json", "--output", str(output_file)]
             )

@@ -39,7 +39,7 @@ class TestOrgInitListTemplates:
 
     def test_list_templates_shows_available(self, cli_runner: CliRunner) -> None:
         """--list-templates should show all available templates."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--list-templates"])
 
@@ -51,7 +51,7 @@ class TestOrgInitListTemplates:
 
     def test_list_templates_shows_descriptions(self, cli_runner: CliRunner) -> None:
         """--list-templates should show template descriptions."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--list-templates"])
 
@@ -62,7 +62,7 @@ class TestOrgInitListTemplates:
 
     def test_list_templates_json_output(self, cli_runner: CliRunner) -> None:
         """--list-templates --json should return structured data."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--list-templates", "--json"])
 
@@ -84,7 +84,7 @@ class TestOrgInitStdout:
 
     def test_stdout_outputs_json_config(self, cli_runner: CliRunner) -> None:
         """--stdout should print valid JSON config to stdout."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--stdout", "--template", "minimal"])
 
@@ -96,7 +96,7 @@ class TestOrgInitStdout:
 
     def test_stdout_with_org_name(self, cli_runner: CliRunner) -> None:
         """--stdout with --org-name should substitute organization name."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(
             org_app,
@@ -110,7 +110,7 @@ class TestOrgInitStdout:
 
     def test_stdout_with_org_domain(self, cli_runner: CliRunner) -> None:
         """--stdout with --org-domain should substitute contact email."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(
             org_app,
@@ -123,7 +123,7 @@ class TestOrgInitStdout:
 
     def test_stdout_minimal_template(self, cli_runner: CliRunner) -> None:
         """--stdout with minimal template produces valid minimal config."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--stdout", "--template", "minimal"])
 
@@ -134,7 +134,7 @@ class TestOrgInitStdout:
 
     def test_stdout_teams_template_has_multiple_profiles(self, cli_runner: CliRunner) -> None:
         """Teams template should have multiple profiles defined."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--stdout", "--template", "teams"])
 
@@ -144,7 +144,7 @@ class TestOrgInitStdout:
 
     def test_stdout_unknown_template_shows_error(self, cli_runner: CliRunner) -> None:
         """Unknown template should show error with available templates."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--stdout", "--template", "nonexistent"])
 
@@ -165,7 +165,7 @@ class TestOrgInitFileOutput:
 
     def test_output_writes_to_file(self, cli_runner: CliRunner, tmp_path: Path) -> None:
         """--output should write config to specified file."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         output_file = tmp_path / "org-config.json"
 
@@ -188,7 +188,7 @@ class TestOrgInitFileOutput:
 
     def test_output_with_org_name(self, cli_runner: CliRunner, tmp_path: Path) -> None:
         """--output with --org-name should write config with correct name."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         output_file = tmp_path / "org-config.json"
 
@@ -213,7 +213,7 @@ class TestOrgInitFileOutput:
         self, cli_runner: CliRunner, tmp_path: Path
     ) -> None:
         """--output should refuse to overwrite existing file without --force."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         output_file = tmp_path / "org-config.json"
         output_file.write_text('{"existing": true}')
@@ -235,7 +235,7 @@ class TestOrgInitFileOutput:
 
     def test_output_overwrites_with_force(self, cli_runner: CliRunner, tmp_path: Path) -> None:
         """--output --force should overwrite existing file."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         output_file = tmp_path / "org-config.json"
         output_file.write_text('{"existing": true}')
@@ -268,7 +268,7 @@ class TestOrgInitDefaults:
 
     def test_default_template_is_minimal(self, cli_runner: CliRunner) -> None:
         """Without --template, should use 'minimal' template."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--stdout"])
 
@@ -280,7 +280,7 @@ class TestOrgInitDefaults:
 
     def test_init_without_output_or_stdout_shows_help(self, cli_runner: CliRunner) -> None:
         """Without --stdout or --output, should show usage help."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--template", "minimal"])
 
@@ -299,7 +299,7 @@ class TestOrgInitJsonEnvelope:
 
     def test_output_json_envelope(self, cli_runner: CliRunner, tmp_path: Path) -> None:
         """--output --json should return envelope with file path."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         output_file = tmp_path / "org-config.json"
 
@@ -323,7 +323,7 @@ class TestOrgInitJsonEnvelope:
 
     def test_list_templates_json_envelope_kind(self, cli_runner: CliRunner) -> None:
         """--list-templates --json should use proper envelope kind."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         result = cli_runner.invoke(org_app, ["init", "--list-templates", "--json"])
 

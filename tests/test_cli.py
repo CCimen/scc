@@ -347,8 +347,8 @@ class TestDoctorCommand:
     def test_doctor_shows_healthy_status(self):
         """Doctor should show healthy when all checks pass."""
         with (
-            patch("scc_cli.cli_admin.doctor.run_doctor") as mock_checks,
-            patch("scc_cli.cli_admin.doctor.render_doctor_results"),
+            patch("scc_cli.commands.admin.doctor.run_doctor") as mock_checks,
+            patch("scc_cli.commands.admin.doctor.render_doctor_results"),
         ):
             mock_result = MagicMock()
             mock_result.all_ok = True
@@ -360,8 +360,8 @@ class TestDoctorCommand:
     def test_doctor_shows_fix_suggestions(self):
         """Doctor should show fix suggestions when issues found."""
         with (
-            patch("scc_cli.cli_admin.doctor.run_doctor") as mock_checks,
-            patch("scc_cli.cli_admin.doctor.render_doctor_results"),
+            patch("scc_cli.commands.admin.doctor.run_doctor") as mock_checks,
+            patch("scc_cli.commands.admin.doctor.render_doctor_results"),
         ):
             mock_result = MagicMock()
             mock_result.all_ok = False
@@ -426,7 +426,7 @@ class TestUpdateCommand:
         mock_result = MagicMock()
         mock_result.cli_update_available = False
         with (
-            patch("scc_cli.cli_admin.config.load_config", return_value={}),
+            patch("scc_cli.commands.admin.config.load_config", return_value={}),
             patch("scc_cli.update.check_all_updates", return_value=mock_result),
             patch("scc_cli.update.render_update_status_panel"),
         ):
@@ -439,7 +439,7 @@ class TestUpdateCommand:
         mock_result = MagicMock()
         mock_result.cli_update_available = True
         with (
-            patch("scc_cli.cli_admin.config.load_config", return_value={}),
+            patch("scc_cli.commands.admin.config.load_config", return_value={}),
             patch("scc_cli.update.check_all_updates", return_value=mock_result),
             patch("scc_cli.update.render_update_status_panel"),
         ):
@@ -581,7 +581,9 @@ class TestStatuslineCommand:
     def test_statusline_show_with_configured(self):
         """Should show current statusline configuration."""
         mock_settings = {"statusLine": {"command": "/path/to/script"}}
-        with patch("scc_cli.cli_admin.docker.get_sandbox_settings", return_value=mock_settings):
+        with patch(
+            "scc_cli.commands.admin.docker.get_sandbox_settings", return_value=mock_settings
+        ):
             result = runner.invoke(app, ["statusline", "--show"])
 
         assert result.exit_code == 0
@@ -589,14 +591,16 @@ class TestStatuslineCommand:
     def test_statusline_show_not_configured(self):
         """Should indicate when statusline not configured."""
         mock_settings = {"otherSetting": True}
-        with patch("scc_cli.cli_admin.docker.get_sandbox_settings", return_value=mock_settings):
+        with patch(
+            "scc_cli.commands.admin.docker.get_sandbox_settings", return_value=mock_settings
+        ):
             result = runner.invoke(app, ["statusline", "--show"])
 
         assert result.exit_code == 0
 
     def test_statusline_show_no_settings(self):
         """Should indicate when no settings exist."""
-        with patch("scc_cli.cli_admin.docker.get_sandbox_settings", return_value=None):
+        with patch("scc_cli.commands.admin.docker.get_sandbox_settings", return_value=None):
             result = runner.invoke(app, ["statusline", "--show"])
 
         assert result.exit_code == 0
@@ -605,8 +609,8 @@ class TestStatuslineCommand:
         """Uninstall should remove statusline from settings."""
         mock_settings = {"statusLine": {"command": "/path/to/script"}, "other": True}
         with (
-            patch("scc_cli.cli_admin.docker.get_sandbox_settings", return_value=mock_settings),
-            patch("scc_cli.cli_admin.docker.inject_file_to_sandbox_volume", return_value=True),
+            patch("scc_cli.commands.admin.docker.get_sandbox_settings", return_value=mock_settings),
+            patch("scc_cli.commands.admin.docker.inject_file_to_sandbox_volume", return_value=True),
         ):
             result = runner.invoke(app, ["statusline", "--uninstall"])
 

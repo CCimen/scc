@@ -9,8 +9,7 @@ import warnings
 # Avoids surprising users with stderr noise
 if os.environ.get("SCC_DEBUG") == "1" or os.environ.get("PYTHONWARNINGS"):
     warnings.warn(
-        "Importing from scc_cli.constants is deprecated. "
-        "Use scc_cli.core.constants instead.",
+        "Importing from scc_cli.constants is deprecated. Use scc_cli.core.constants instead.",
         DeprecationWarning,
         stacklevel=2,
     )

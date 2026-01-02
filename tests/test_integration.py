@@ -393,7 +393,7 @@ class TestDoctorWorkflow:
     def test_doctor_checks_all_components(self, full_config_environment):
         """Doctor should check Docker, Git, Config, and connectivity."""
         with (
-            patch("scc_cli.cli_admin.doctor.run_doctor") as mock_doctor,
+            patch("scc_cli.commands.admin.doctor.run_doctor") as mock_doctor,
         ):
             mock_doctor.return_value = None
             runner.invoke(app, ["doctor"])

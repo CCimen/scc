@@ -71,7 +71,7 @@ class TestBuildImportPreviewData:
 
     def test_builds_preview_with_org_info(self, valid_org_config: dict) -> None:
         """Preview should include organization information."""
-        from scc_cli.cli_org import build_import_preview_data
+        from scc_cli.commands.org import build_import_preview_data
 
         result = build_import_preview_data(
             source="https://example.com/org.json",
@@ -86,7 +86,7 @@ class TestBuildImportPreviewData:
 
     def test_preview_with_shorthand_shows_resolved_url(self, valid_org_config: dict) -> None:
         """When using shorthand, should show both original and resolved URL."""
-        from scc_cli.cli_org import build_import_preview_data
+        from scc_cli.commands.org import build_import_preview_data
 
         result = build_import_preview_data(
             source="github:acme/configs",
@@ -100,7 +100,7 @@ class TestBuildImportPreviewData:
 
     def test_preview_includes_validation_status(self, valid_org_config: dict) -> None:
         """Preview should indicate validation status."""
-        from scc_cli.cli_org import build_import_preview_data
+        from scc_cli.commands.org import build_import_preview_data
 
         result = build_import_preview_data(
             source="https://example.com/org.json",
@@ -114,7 +114,7 @@ class TestBuildImportPreviewData:
 
     def test_preview_with_validation_errors(self, invalid_org_config: dict) -> None:
         """Preview should show validation errors when config is invalid."""
-        from scc_cli.cli_org import build_import_preview_data
+        from scc_cli.commands.org import build_import_preview_data
 
         result = build_import_preview_data(
             source="https://example.com/org.json",
@@ -128,7 +128,7 @@ class TestBuildImportPreviewData:
 
     def test_preview_includes_available_profiles(self, valid_org_config: dict) -> None:
         """Preview should list available profiles."""
-        from scc_cli.cli_org import build_import_preview_data
+        from scc_cli.commands.org import build_import_preview_data
 
         result = build_import_preview_data(
             source="https://example.com/org.json",
@@ -142,7 +142,7 @@ class TestBuildImportPreviewData:
 
     def test_preview_includes_version_info(self, valid_org_config: dict) -> None:
         """Preview should include version compatibility info."""
-        from scc_cli.cli_org import build_import_preview_data
+        from scc_cli.commands.org import build_import_preview_data
 
         result = build_import_preview_data(
             source="https://example.com/org.json",
@@ -167,20 +167,20 @@ class TestOrgImportPreview:
         self, cli_runner: CliRunner, valid_org_config: dict
     ) -> None:
         """--preview should show info but not save config."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.cli_org.save_user_config") as mock_save:
+                with patch("scc_cli.commands.org.save_user_config") as mock_save:
                     result = cli_runner.invoke(
                         org_app, ["import", "https://example.com/org.json", "--preview"]
                     )
@@ -192,14 +192,14 @@ class TestOrgImportPreview:
 
     def test_preview_json_output(self, cli_runner: CliRunner, valid_org_config: dict) -> None:
         """--preview --json should return structured data."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -219,14 +219,14 @@ class TestOrgImportPreview:
         self, cli_runner: CliRunner, invalid_org_config: dict
     ) -> None:
         """--preview should show validation errors for invalid config."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = invalid_org_config
         mock_response.headers = {}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -247,14 +247,14 @@ class TestOrgImportShorthand:
 
     def test_github_shorthand_resolves(self, cli_runner: CliRunner, valid_org_config: dict) -> None:
         """github:org/repo should resolve to raw.githubusercontent.com URL."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://raw.githubusercontent.com/acme/configs/main/org-config.json",
                 provider="github",
@@ -277,23 +277,23 @@ class TestOrgImportSave:
 
     def test_import_saves_config(self, cli_runner: CliRunner, valid_org_config: dict) -> None:
         """Import without --preview should save to user config."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
                 auth_spec=None,
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.cli_org.load_user_config", return_value={}):
-                    with patch("scc_cli.cli_org.save_user_config") as mock_save:
-                        with patch("scc_cli.cli_org.save_to_cache"):
+                with patch("scc_cli.commands.org.load_user_config", return_value={}):
+                    with patch("scc_cli.commands.org.save_user_config") as mock_save:
+                        with patch("scc_cli.commands.org.save_to_cache"):
                             result = cli_runner.invoke(
                                 org_app, ["import", "https://example.com/org.json"]
                             )
@@ -308,20 +308,20 @@ class TestOrgImportSave:
         self, cli_runner: CliRunner, invalid_org_config: dict
     ) -> None:
         """Import should fail for invalid configs (validation gate)."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = invalid_org_config
         mock_response.headers = {}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.cli_org.save_user_config") as mock_save:
+                with patch("scc_cli.commands.org.save_user_config") as mock_save:
                     result = cli_runner.invoke(org_app, ["import", "https://example.com/org.json"])
 
         # Should fail with non-zero exit code
@@ -331,23 +331,23 @@ class TestOrgImportSave:
 
     def test_import_caches_config(self, cli_runner: CliRunner, valid_org_config: dict) -> None:
         """Import should cache the fetched config."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
                 auth_spec=None,
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.cli_org.load_user_config", return_value={}):
-                    with patch("scc_cli.cli_org.save_user_config"):
-                        with patch("scc_cli.cli_org.save_to_cache") as mock_cache:
+                with patch("scc_cli.commands.org.load_user_config", return_value={}):
+                    with patch("scc_cli.commands.org.save_user_config"):
+                        with patch("scc_cli.commands.org.save_to_cache") as mock_cache:
                             result = cli_runner.invoke(
                                 org_app, ["import", "https://example.com/org.json"]
                             )
@@ -368,9 +368,9 @@ class TestOrgImportErrors:
         """Network errors should show helpful message."""
         import requests
 
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -386,12 +386,12 @@ class TestOrgImportErrors:
 
     def test_404_shows_not_found(self, cli_runner: CliRunner) -> None:
         """404 response should show not found message."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 404
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -407,10 +407,10 @@ class TestOrgImportErrors:
 
     def test_invalid_url_shows_error(self, cli_runner: CliRunner) -> None:
         """Invalid URL format should show error."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
         from scc_cli.source_resolver import ResolveError
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = ResolveError(
                 message="Invalid source format",
                 source="not-a-valid-source",
@@ -433,23 +433,23 @@ class TestOrgImportJsonOutput:
 
     def test_json_envelope_on_success(self, cli_runner: CliRunner, valid_org_config: dict) -> None:
         """Successful import should return proper JSON envelope."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.cli_org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
                 auth_spec=None,
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.cli_org.load_user_config", return_value={}):
-                    with patch("scc_cli.cli_org.save_user_config"):
-                        with patch("scc_cli.cli_org.save_to_cache"):
+                with patch("scc_cli.commands.org.load_user_config", return_value={}):
+                    with patch("scc_cli.commands.org.save_user_config"):
+                        with patch("scc_cli.commands.org.save_to_cache"):
                             result = cli_runner.invoke(
                                 org_app, ["import", "https://example.com/org.json", "--json"]
                             )
