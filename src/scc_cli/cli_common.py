@@ -64,6 +64,9 @@ def handle_errors(func: F) -> F:
     - KeyboardInterrupt: Print cancellation message and exit 130
     - Other exceptions: Show warning panel (or full traceback with --debug)
 
+    JSON Mode: This is the SINGLE LOCATION for JSON error envelope output.
+    All errors in JSON mode are handled here to ensure consistency.
+
     Args:
         func: The CLI command function to wrap.
 
@@ -77,14 +80,29 @@ def handle_errors(func: F) -> F:
             return func(*args, **kwargs)
         except SCCError as e:
             if is_json_command_mode():
-                raise
-            # Always use stderr for errors (stdout purity for shell wrappers)
+                # JSON mode: emit structured error envelope to stdout
+                from .exit_codes import get_exit_code_for_exception
+                from .json_output import build_error_envelope
+                from .output_mode import print_json
+
+                envelope = build_error_envelope(e)
+                print_json(envelope)
+                raise typer.Exit(get_exit_code_for_exception(e))
+            # Human mode: use stderr for errors (stdout purity for shell wrappers)
             render_error(err_console, e, debug=state.debug)
             raise typer.Exit(e.exit_code)
         except KeyboardInterrupt:
             if is_json_command_mode():
-                raise
-            # Always use stderr for errors
+                # JSON mode: emit cancellation envelope
+                from .json_output import build_error_envelope
+                from .output_mode import print_json
+
+                # Create a pseudo-exception for the envelope
+                cancel_exc = Exception("Operation cancelled by user")
+                envelope = build_error_envelope(cancel_exc)
+                print_json(envelope)
+                raise typer.Exit(EXIT_CANCELLED)
+            # Human mode: use stderr
             err_console.print("\n[dim]Operation cancelled.[/dim]")
             raise typer.Exit(EXIT_CANCELLED)
         except (typer.Exit, SystemExit):
@@ -92,8 +110,15 @@ def handle_errors(func: F) -> F:
             raise
         except Exception as e:
             if is_json_command_mode():
-                raise
-            # Unexpected errors - always use stderr
+                # JSON mode: emit structured error envelope for unexpected errors
+                from .exit_codes import EXIT_INTERNAL
+                from .json_output import build_error_envelope
+                from .output_mode import print_json
+
+                envelope = build_error_envelope(e)
+                print_json(envelope)
+                raise typer.Exit(EXIT_INTERNAL)
+            # Human mode: unexpected errors to stderr
             if state.debug:
                 err_console.print_exception()
             else:

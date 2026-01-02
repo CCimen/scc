@@ -755,7 +755,7 @@ def worktree_prune_cmd(
     workspace_path = Path(workspace).expanduser().resolve()
 
     if not git.is_git_repo(workspace_path):
-        raise git.NotAGitRepoError(path=str(workspace_path))
+        raise NotAGitRepoError(path=str(workspace_path))
 
     cmd = ["git", "-C", str(workspace_path), "worktree", "prune"]
     if dry_run:

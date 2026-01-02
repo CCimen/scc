@@ -44,6 +44,34 @@ jobs:
         with:
           args: "format --check --diff"
 
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run mypy
+        run: uv run mypy src/scc_cli/
+
+      - name: Run pyright (services/)
+        run: uv run pyright src/scc_cli/services
+
   test:
     name: Tests
     runs-on: ubuntu-latest

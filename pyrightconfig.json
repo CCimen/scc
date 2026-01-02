@@ -1,0 +1,18 @@
+{
+  "include": [
+    "src/scc_cli/services"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.*"
+  ],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.10",
+  "pythonPlatform": "All",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportUnusedImport": false,
+  "reportUnusedVariable": false,
+  "venvPath": ".",
+  "venv": ".venv"
+}

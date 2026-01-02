@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__
+from .errors import SCCError
 from .kinds import Kind
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -93,4 +94,66 @@ def build_envelope(
             "warnings": warnings,
         },
         "data": data,
+    }
+
+
+def build_error_envelope(exc: Exception) -> dict[str, Any]:
+    """Build a JSON error envelope from an exception.
+
+    This is the canonical error format for JSON mode output.
+    All errors should go through this function to ensure consistency.
+
+    Args:
+        exc: The exception to convert to JSON envelope
+
+    Returns:
+        A structured error envelope dict ready for JSON serialization:
+        {
+            "apiVersion": "scc.cli/v1",
+            "kind": "Error",
+            "metadata": { ... },
+            "status": {
+                "ok": false,
+                "errors": ["Error message"],
+                "warnings": []
+            },
+            "data": {
+                "error_type": "SCCError",
+                "user_message": "...",
+                "suggested_action": "...",
+                "debug_context": "..."  # Only for SCCError
+            }
+        }
+    """
+    # Generate ISO 8601 timestamp in UTC
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Build error data depending on exception type
+    error_data: dict[str, Any] = {
+        "error_type": type(exc).__name__,
+    }
+
+    if isinstance(exc, SCCError):
+        error_data["user_message"] = exc.user_message
+        if exc.suggested_action:
+            error_data["suggested_action"] = exc.suggested_action
+        if exc.debug_context:
+            error_data["debug_context"] = exc.debug_context
+        error_message = exc.user_message
+    else:
+        error_message = str(exc)
+
+    return {
+        "apiVersion": API_VERSION,
+        "kind": str(Kind.ERROR.value),
+        "metadata": {
+            "generatedAt": generated_at,
+            "cliVersion": __version__,
+        },
+        "status": {
+            "ok": False,
+            "errors": [error_message],
+            "warnings": [],
+        },
+        "data": error_data,
     }

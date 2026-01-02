@@ -1,4 +1,13 @@
-"""Tests for docker module - team settings injection."""
+"""Tests for docker module - team settings injection and utilities.
+
+Tests for the team-based settings injection flow and low-level utilities:
+- inject_team_settings() with teams.get_team_sandbox_settings
+- inject_file_to_sandbox_volume() file injection
+- get_sandbox_settings() reading existing sandbox settings
+- Integration tests for team settings workflow
+
+For org_config-based injection tests, see test_docker_org_config.py
+"""
 
 import json
 from unittest.mock import MagicMock, patch
