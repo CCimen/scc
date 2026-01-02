@@ -6,16 +6,27 @@ import errno
 import hashlib
 import os
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
+from io import TextIOWrapper
 from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+fcntl: ModuleType | None
+msvcrt: ModuleType | None
 
 try:
-    import fcntl  # type: ignore[import-not-found]
+    import fcntl as _fcntl
+
+    fcntl = _fcntl
 except ImportError:  # pragma: no cover - Windows fallback
     fcntl = None
 
 try:
-    import msvcrt  # type: ignore[import-not-found]
+    import msvcrt as _msvcrt
+
+    msvcrt = _msvcrt
 except ImportError:  # pragma: no cover - non-Windows fallback
     msvcrt = None
 
@@ -42,7 +53,7 @@ def lock_path(namespace: str, key: str | Path | None = None) -> Path:
     return LOCK_DIR / filename
 
 
-def _acquire_lock(lock_file: os.PathLike[str] | os.PathLike[bytes] | int) -> None:
+def _acquire_lock(lock_file: TextIOWrapper[Any]) -> None:
     if fcntl is not None:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return
@@ -51,7 +62,7 @@ def _acquire_lock(lock_file: os.PathLike[str] | os.PathLike[bytes] | int) -> Non
         return
 
 
-def _release_lock(lock_file: os.PathLike[str] | os.PathLike[bytes] | int) -> None:
+def _release_lock(lock_file: TextIOWrapper[Any]) -> None:
     if fcntl is not None:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         return
@@ -63,7 +74,9 @@ def _release_lock(lock_file: os.PathLike[str] | os.PathLike[bytes] | int) -> Non
 
 
 @contextmanager
-def file_lock(path: Path, *, timeout: float = DEFAULT_TIMEOUT, poll: float = 0.1):
+def file_lock(
+    path: Path, *, timeout: float = DEFAULT_TIMEOUT, poll: float = 0.1
+) -> Generator[None, None, None]:
     """Acquire an exclusive file lock with a timeout."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_file = path.open("a+")

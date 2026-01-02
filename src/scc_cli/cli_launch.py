@@ -286,7 +286,7 @@ def _resolve_workspace_team(
         return team
 
     pinned_team = config.get_workspace_team_from_config(cfg, workspace_path)
-    selected_profile = cfg.get("selected_profile")
+    selected_profile: str | None = cfg.get("selected_profile")
 
     if pinned_team and selected_profile and pinned_team != selected_profile:
         if is_interactive_allowed(json_mode=json_mode, no_interactive_flag=no_interactive):
@@ -1320,7 +1320,9 @@ def interactive_start(
                         f"  [green]{Indicators.get('PASS')}[/green] Initialized git repository"
                     )
                 else:
-                    err_console.print(f"  [red]{Indicators.get('FAIL')}[/red] Failed to initialize git")
+                    err_console.print(
+                        f"  [red]{Indicators.get('FAIL')}[/red] Failed to initialize git"
+                    )
                     can_create_worktree = False
             else:
                 # User declined git init - can't create worktree

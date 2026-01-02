@@ -145,15 +145,15 @@ def run_dashboard() -> None:
         except RecentWorkspacesRequested as recent_req:
             # User pressed 'w' - show recent workspaces picker
             restore_tab = recent_req.return_to
-            result = _handle_recent_workspaces()
+            selected_workspace = _handle_recent_workspaces()
 
-            if result is None:
+            if selected_workspace is None:
                 # User cancelled or quit
                 toast_message = "Cancelled"
-            elif result:
+            elif selected_workspace:
                 # User selected a workspace - start session in it
                 # For now, just show message; full integration comes later
-                toast_message = f"Selected: {result}"
+                toast_message = f"Selected: {selected_workspace}"
             # Loop continues to reload dashboard
 
         except GitInitRequested as init_req:
@@ -560,14 +560,14 @@ def _handle_recent_workspaces() -> str | None:
     Returns:
         Path of selected workspace, or None if cancelled.
     """
-    from ...contexts import load_recent_workspaces
-    from ..picker import pick
+    from ...contexts import load_recent_contexts
+    from ..picker import pick_context
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
 
     try:
-        recent = load_recent_workspaces()
+        recent = load_recent_contexts()
         if not recent:
             console.print("[yellow]No recent workspaces found[/yellow]")
             console.print(
@@ -575,17 +575,14 @@ def _handle_recent_workspaces() -> str | None:
             )
             return None
 
-        # Create items for picker
-        items = [{"label": ws.name, "value": str(ws)} for ws in recent]
-
-        selected = pick(
-            items,
+        selected = pick_context(
+            recent,
             title="Recent Workspaces",
-            prompt="Select a workspace",
+            subtitle="Select a workspace",
         )
 
         if selected:
-            return str(selected.get("value", ""))
+            return str(selected.worktree_path)
         return None
 
     except Exception as e:

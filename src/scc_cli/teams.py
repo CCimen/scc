@@ -286,7 +286,7 @@ def get_team_plugin_id(team_name: str, cfg: dict[str, Any] | None = None) -> str
         cfg = config_module.load_config()
 
     profile = cfg.get("profiles", {}).get(team_name, {})
-    plugins = profile.get("additional_plugins", [])
+    plugins: list[str] = profile.get("additional_plugins", [])
 
     if not plugins:
         return None
@@ -308,7 +308,8 @@ def get_team_plugins(team_name: str, cfg: dict[str, Any] | None = None) -> list[
         cfg = config_module.load_config()
 
     profile = cfg.get("profiles", {}).get(team_name, {})
-    return profile.get("additional_plugins", [])
+    plugins: list[str] = profile.get("additional_plugins", [])
+    return plugins
 
 
 def validate_team_profile(
