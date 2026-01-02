@@ -33,7 +33,9 @@ class TestDryRunBasicBehavior:
 
         with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
             with patch("scc_cli.commands.launch.config.load_config", return_value={}):
-                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                ):
                     with patch("scc_cli.commands.launch.docker.run", mock_docker_run):
                         with patch("scc_cli.commands.launch.docker.check_docker_available"):
                             try:
@@ -66,7 +68,9 @@ class TestDryRunBasicBehavior:
 
         with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
             with patch("scc_cli.commands.launch.config.load_config", return_value={}):
-                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                ):
                     with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
@@ -161,7 +165,9 @@ class TestDryRunJsonOutput:
 
         with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
             with patch("scc_cli.commands.launch.config.load_config", return_value={}):
-                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                ):
                     with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
@@ -196,7 +202,9 @@ class TestDryRunJsonOutput:
 
         with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
             with patch("scc_cli.commands.launch.config.load_config", return_value={}):
-                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                ):
                     with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
@@ -313,7 +321,9 @@ class TestDryRunExitCodes:
 
         with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
             with patch("scc_cli.commands.launch.config.load_config", return_value={}):
-                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                ):
                     with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
@@ -401,7 +411,8 @@ class TestPrintWorkspaceHeader:
         output = StringIO()
         with patch("scc_cli.commands.launch.console", Console(file=output, force_terminal=True)):
             with patch(
-                "scc_cli.commands.launch.git.get_current_branch", side_effect=Exception("Not a git repo")
+                "scc_cli.commands.launch.git.get_current_branch",
+                side_effect=Exception("Not a git repo"),
             ):
                 _print_workspace_header(tmp_path, team="dev")
 
