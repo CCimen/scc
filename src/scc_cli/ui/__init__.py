@@ -51,6 +51,24 @@ from .gate import (
     require_selection_or_prompt,
 )
 
+# Git Interactive: User-facing workflows with console output
+from .git_interactive import (
+    check_branch_safety,
+    cleanup_worktree,
+    clone_repo,
+    create_worktree,
+    install_dependencies,
+    install_hooks,
+    list_worktrees,
+)
+
+# Git Rendering: Pure display functions for git data
+from .git_render import (
+    format_git_status,
+    render_worktrees,
+    render_worktrees_table,
+)
+
 # Help: Mode-aware help overlay (user-facing)
 from .help import (
     HelpMode,
@@ -121,4 +139,16 @@ __all__ = [
     "render_error",
     "select_session",
     "select_team",
+    # Git Rendering: Pure display functions for git data
+    "format_git_status",
+    "render_worktrees",
+    "render_worktrees_table",
+    # Git Interactive: User-facing workflows with console output
+    "check_branch_safety",
+    "cleanup_worktree",
+    "clone_repo",
+    "create_worktree",
+    "install_dependencies",
+    "install_hooks",
+    "list_worktrees",
 ]

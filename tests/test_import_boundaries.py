@@ -159,6 +159,166 @@ class TestFutureLayerBoundaries:
         assert result.returncode == 1, f"core/ imports commands/:\n{result.stdout}"
 
 
+class TestGitModuleBoundary:
+    """git.py facade must have no Rich imports after Phase 4 refactoring.
+
+    Phase 4 acceptance criterion: "git.py has no direct Rich imports"
+    """
+
+    def test_git_facade_has_no_rich_imports(self) -> None:
+        """git.py must NOT directly import from rich library.
+
+        After Phase 4 refactoring, git.py should be a pure facade that
+        re-exports from services/git/ and ui/ without any Rich imports.
+        This is a key acceptance criterion from the maintainability plan.
+        """
+        git_file = SRC / "git.py"
+        if not git_file.exists():
+            return
+
+        content = git_file.read_text()
+
+        # Check for direct rich imports
+        rich_imports = [
+            "from rich",
+            "import rich",
+        ]
+        violations = []
+        for pattern in rich_imports:
+            if pattern in content:
+                violations.append(pattern)
+
+        assert not violations, (
+            f"git.py should not have Rich imports after Phase 4.\n"
+            f"Found: {violations}\n"
+            f"Rich imports should be in ui/git_render.py or ui/git_interactive.py"
+        )
+
+    def test_git_facade_is_reexports_only(self) -> None:
+        """git.py should only contain re-exports, no function definitions.
+
+        After refactoring, git.py should be a thin facade that imports
+        and re-exports from other modules. It should not define any
+        functions itself.
+        """
+        git_file = SRC / "git.py"
+        if not git_file.exists():
+            return
+
+        # Check for function definitions (excluding class methods)
+        result = subprocess.run(
+            ["grep", "-E", r"^def [a-z_]+\(", str(git_file)],
+            capture_output=True,
+            text=True,
+        )
+
+        # grep returns 0 when matches found, 1 when not
+        # We want no matches (returncode 1)
+        if result.returncode == 0:
+            funcs = result.stdout.strip().split("\n")
+            assert False, (
+                f"git.py should only contain re-exports, not function definitions.\n"
+                f"Found {len(funcs)} function(s):\n{result.stdout}\n"
+                f"Move these to services/git/ or ui/git_*.py"
+            )
+
+
+class TestServicesGitBoundary:
+    """services/git/ must be pure data layer with no UI dependencies."""
+
+    def test_services_git_has_no_rich_imports(self) -> None:
+        """services/git/ modules must NOT import from rich library.
+
+        The services layer should be purely data-focused. Rich imports
+        belong in the ui/ layer.
+        """
+        services_git_path = SRC / "services" / "git"
+        if not services_git_path.exists():
+            return
+
+        result = subprocess.run(
+            ["grep", "-rE", r"(from rich|import rich)", str(services_git_path)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, (
+            f"services/git/ imports rich library:\n{result.stdout}\n"
+            f"Move Rich usage to ui/git_render.py or ui/git_interactive.py"
+        )
+
+    def test_services_git_has_no_console_params(self) -> None:
+        """services/git/ functions should not accept Console parameters.
+
+        Functions that need Console belong in the ui/ layer, not services/.
+        """
+        services_git_path = SRC / "services" / "git"
+        if not services_git_path.exists():
+            return
+
+        result = subprocess.run(
+            ["grep", "-rE", r"console:\s*Console", str(services_git_path)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, (
+            f"services/git/ has Console parameters:\n{result.stdout}\n"
+            f"Functions with Console belong in ui/ layer"
+        )
+
+    def test_services_git_does_not_import_ui(self) -> None:
+        """services/git/ must not import from ui/."""
+        services_git_path = SRC / "services" / "git"
+        if not services_git_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.ui|from \.\.ui|import scc_cli\.ui)",
+                str(services_git_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"services/git/ imports ui/:\n{result.stdout}"
+
+    def test_services_git_does_not_import_cli_modules(self) -> None:
+        """services/git/ must not import cli_* modules."""
+        services_git_path = SRC / "services" / "git"
+        if not services_git_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.cli_|from \.\.cli_|import scc_cli\.cli_)",
+                str(services_git_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"services/git/ imports cli_* modules:\n{result.stdout}"
+
+
+class TestUICanImportServices:
+    """Verify UI can properly import from services (positive test)."""
+
+    def test_ui_git_interactive_imports_services(self) -> None:
+        """ui/git_interactive.py should import from services/git/."""
+        ui_file = SRC / "ui" / "git_interactive.py"
+        if not ui_file.exists():
+            return
+
+        content = ui_file.read_text()
+
+        # Should import from services/git/
+        assert "from ..services.git" in content or "from scc_cli.services.git" in content, (
+            "ui/git_interactive.py should import from services/git/"
+        )
+
+
 TESTS = REPO_ROOT / "tests"
 
 

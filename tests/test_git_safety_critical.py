@@ -126,7 +126,7 @@ class TestCleanupWorktreeRmtreeFallback:
         git_file.write_text("corrupted")  # Invalid gitdir pointer
 
         # Run cleanup with force=True (skips uncommitted change check)
-        with patch("scc_cli.git.Confirm.ask", return_value=False):  # Don't delete branch
+        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):  # Don't delete branch
             result = git.cleanup_worktree(
                 repo,
                 worktree_setup["worktree_name"],
@@ -157,7 +157,7 @@ class TestCleanupWorktreeRmtreeFallback:
         # Corrupt worktree to trigger rmtree fallback
         (worktree_path / ".git").write_text("corrupted")
 
-        with patch("scc_cli.git.Confirm.ask", return_value=False):
+        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):
             git.cleanup_worktree(
                 repo,
                 worktree_setup["worktree_name"],
@@ -187,7 +187,7 @@ class TestCleanupWorktreeRmtreeFallback:
         uncommitted_file.write_text("data that will be lost")
 
         # Force cleanup (skips confirmation)
-        with patch("scc_cli.git.Confirm.ask", return_value=False):
+        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):
             result = git.cleanup_worktree(
                 worktree_setup["repo"],
                 worktree_setup["worktree_name"],
@@ -268,8 +268,8 @@ class TestGetWorkspaceMountPathSecurity:
         fake_main_repo = Path(blocked_path) / "repo"
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -288,8 +288,8 @@ class TestGetWorkspaceMountPathSecurity:
         fake_main_repo = fake_base / "repo"
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -312,8 +312,8 @@ class TestGetWorkspaceMountPathSecurity:
             return self
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
             patch.object(Path, "resolve", mock_resolve),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
@@ -341,8 +341,8 @@ class TestGetWorkspaceMountPathSecurity:
         fake_main_repo = fake_base / "repo"
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -360,8 +360,8 @@ class TestGetWorkspaceMountPathSecurity:
         fake_main_repo = fake_base / "repo"
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -379,8 +379,8 @@ class TestGetWorkspaceMountPathSecurity:
         fake_main_repo = fake_base / "repo"
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 
@@ -406,8 +406,8 @@ class TestGetWorkspaceMountPathSecurity:
         fake_main_repo = Path("/var/repos/project")
 
         with (
-            patch("scc_cli.git.is_worktree", return_value=True),
-            patch("scc_cli.git.get_worktree_main_repo", return_value=fake_main_repo),
+            patch("scc_cli.services.git.worktree.is_worktree", return_value=True),
+            patch("scc_cli.services.git.worktree.get_worktree_main_repo", return_value=fake_main_repo),
         ):
             mount_path, is_expanded = git.get_workspace_mount_path(fake_worktree)
 

@@ -645,7 +645,7 @@ class TestFindWorktreeByQuery:
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
             WorktreeInfo(path=str(tmp_path / "feature"), branch="feature/auth", status=""),
         ]
-        with patch("scc_cli.git._get_worktrees_data", return_value=worktrees):
+        with patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees):
             exact, matches = find_worktree_by_query(tmp_path, "main")
 
         assert exact is not None
@@ -660,7 +660,7 @@ class TestFindWorktreeByQuery:
             WorktreeInfo(path=str(tmp_path / "feature-auth"), branch="feature/auth", status=""),
             WorktreeInfo(path=str(tmp_path / "feature-login"), branch="feature/login", status=""),
         ]
-        with patch("scc_cli.git._get_worktrees_data", return_value=worktrees):
+        with patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees):
             exact, matches = find_worktree_by_query(tmp_path, "feature")
 
         # Should match both feature branches (starts with)
@@ -673,7 +673,7 @@ class TestFindWorktreeByQuery:
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
         ]
-        with patch("scc_cli.git._get_worktrees_data", return_value=worktrees):
+        with patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees):
             exact, matches = find_worktree_by_query(tmp_path, "nonexistent")
 
         assert exact is None
@@ -686,7 +686,7 @@ class TestFindWorktreeByQuery:
         worktrees = [
             WorktreeInfo(path="/home/user/repos/my-feature", branch="feature/auth", status=""),
         ]
-        with patch("scc_cli.git._get_worktrees_data", return_value=worktrees):
+        with patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees):
             exact, matches = find_worktree_by_query(tmp_path, "my-feature")
 
         assert exact is not None
@@ -705,8 +705,8 @@ class TestFindMainWorktree:
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
         ]
         with (
-            patch("scc_cli.git._get_worktrees_data", return_value=worktrees),
-            patch("scc_cli.git.get_default_branch", return_value="main"),
+            patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees),
+            patch("scc_cli.services.git.branch.get_default_branch", return_value="main"),
         ):
             result = find_main_worktree(tmp_path)
 
@@ -721,8 +721,8 @@ class TestFindMainWorktree:
             WorktreeInfo(path=str(tmp_path / "feature"), branch="feature/auth", status=""),
         ]
         with (
-            patch("scc_cli.git._get_worktrees_data", return_value=worktrees),
-            patch("scc_cli.git.get_default_branch", return_value="main"),
+            patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees),
+            patch("scc_cli.services.git.branch.get_default_branch", return_value="main"),
         ):
             result = find_main_worktree(tmp_path)
 
@@ -744,8 +744,8 @@ class TestListBranchesWithoutWorktrees:
         remote_output = "origin/main\norigin/feature/auth\norigin/feature/login\norigin/develop"
 
         with (
-            patch("scc_cli.git._get_worktrees_data", return_value=worktrees),
-            patch("scc_cli.git.run_command", return_value=remote_output),
+            patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees),
+            patch("scc_cli.services.git.branch.run_command", return_value=remote_output),
         ):
             result = list_branches_without_worktrees(tmp_path)
 
@@ -765,8 +765,8 @@ class TestListBranchesWithoutWorktrees:
         remote_output = "origin/main"
 
         with (
-            patch("scc_cli.git._get_worktrees_data", return_value=worktrees),
-            patch("scc_cli.git.run_command", return_value=remote_output),
+            patch("scc_cli.services.git.worktree.get_worktrees_data", return_value=worktrees),
+            patch("scc_cli.services.git.branch.run_command", return_value=remote_output),
         ):
             result = list_branches_without_worktrees(tmp_path)
 
@@ -822,8 +822,8 @@ class TestWorktreeListVerbose:
         mock_worktree_path = str(tmp_path)
 
         with (
-            patch("scc_cli.git._get_worktrees_data") as mock_get_data,
-            patch("scc_cli.git.get_worktree_status") as mock_status,
+            patch("scc_cli.ui.git_interactive.get_worktrees_data") as mock_get_data,
+            patch("scc_cli.ui.git_interactive.get_worktree_status") as mock_status,
         ):
             # Create a WorktreeInfo that will be processed
             mock_get_data.return_value = [
@@ -851,8 +851,8 @@ class TestWorktreeListVerbose:
         from scc_cli.git import list_worktrees
 
         with (
-            patch("scc_cli.git._get_worktrees_data") as mock_get_data,
-            patch("scc_cli.git.get_worktree_status") as mock_status,
+            patch("scc_cli.ui.git_interactive.get_worktrees_data") as mock_get_data,
+            patch("scc_cli.ui.git_interactive.get_worktree_status") as mock_status,
         ):
             mock_get_data.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="")
@@ -880,7 +880,7 @@ class TestGetWorktreeStatus:
         mock_result.returncode = 0
         mock_result.stdout = "A  newfile.py\nM  changed.py\n"
 
-        with patch("scc_cli.git.subprocess.run", return_value=mock_result):
+        with patch("scc_cli.services.git.worktree.subprocess.run", return_value=mock_result):
             staged, modified, untracked, timed_out = get_worktree_status(str(tmp_path))
 
         assert staged == 2
@@ -899,7 +899,7 @@ class TestGetWorktreeStatus:
         mock_result.returncode = 0
         mock_result.stdout = " M modified.py\n"
 
-        with patch("scc_cli.git.subprocess.run", return_value=mock_result):
+        with patch("scc_cli.services.git.worktree.subprocess.run", return_value=mock_result):
             staged, modified, untracked, timed_out = get_worktree_status(str(tmp_path))
 
         assert staged == 0
@@ -917,7 +917,7 @@ class TestGetWorktreeStatus:
         mock_result.returncode = 0
         mock_result.stdout = "?? untracked.py\n?? another.py\n"
 
-        with patch("scc_cli.git.subprocess.run", return_value=mock_result):
+        with patch("scc_cli.services.git.worktree.subprocess.run", return_value=mock_result):
             staged, modified, untracked, timed_out = get_worktree_status(str(tmp_path))
 
         assert staged == 0
@@ -935,7 +935,7 @@ class TestGetWorktreeStatus:
         mock_result.returncode = 0
         mock_result.stdout = ""
 
-        with patch("scc_cli.git.subprocess.run", return_value=mock_result):
+        with patch("scc_cli.services.git.worktree.subprocess.run", return_value=mock_result):
             staged, modified, untracked, timed_out = get_worktree_status(str(tmp_path))
 
         assert staged == 0
@@ -949,7 +949,7 @@ class TestGetWorktreeStatus:
 
         from scc_cli.git import get_worktree_status
 
-        with patch("scc_cli.git.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 5)):
+        with patch("scc_cli.services.git.worktree.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 5)):
             staged, modified, untracked, timed_out = get_worktree_status(str(tmp_path))
 
         assert staged == 0
