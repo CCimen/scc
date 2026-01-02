@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 import typer
 from rich.console import Console
 
-from .exit_codes import EXIT_USAGE
+from .core.exit_codes import EXIT_USAGE
 from .output_mode import is_json_mode
 
 console = Console()

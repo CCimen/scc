@@ -6,7 +6,7 @@ import typer
 
 from .. import config, profiles, setup
 from ..cli_common import console, handle_errors
-from ..exit_codes import EXIT_USAGE
+from ..core.exit_codes import EXIT_USAGE
 from ..panels import create_error_panel, create_info_panel
 from ..source_resolver import ResolveError, resolve_source
 from ..stores.exception_store import RepoStore, UserStore

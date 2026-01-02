@@ -17,7 +17,7 @@ from rich.table import Table
 from rich.text import Text
 
 from scc_cli.audit.reader import audit_all_plugins
-from scc_cli.constants import AGENT_CONFIG_DIR
+from scc_cli.core.constants import AGENT_CONFIG_DIR
 from scc_cli.models.plugin_audit import (
     AuditOutput,
     ManifestStatus,

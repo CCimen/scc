@@ -88,7 +88,7 @@ class TestLoadSaveConfig:
         import pytest
 
         from scc_cli import config
-        from scc_cli.errors import ConfigError
+        from scc_cli.core.errors import ConfigError
 
         # Write invalid JSON
         config_file = temp_config_dir / "config.json"

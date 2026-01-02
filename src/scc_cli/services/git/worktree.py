@@ -7,7 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...constants import WORKTREE_BRANCH_PREFIX
+from ...core.constants import WORKTREE_BRANCH_PREFIX
 from .branch import get_default_branch, sanitize_branch_name
 
 

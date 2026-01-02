@@ -1132,7 +1132,7 @@ class TestWorktreeEnterCommand:
     def test_enter_non_git_repo_fails(self, tmp_path: Path, capsys) -> None:
         """Enter in non-git directory should fail with appropriate error."""
         from scc_cli.commands.worktree import worktree_enter_cmd
-        from scc_cli.exit_codes import EXIT_TOOL
+        from scc_cli.core.exit_codes import EXIT_TOOL
 
         with (
             patch("scc_cli.commands.worktree.git.is_git_repo", return_value=False),

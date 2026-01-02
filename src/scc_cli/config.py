@@ -173,7 +173,7 @@ def load_user_config() -> dict[str, Any]:
     Raises:
         ConfigError: If config file exists but cannot be read or parsed.
     """
-    from .errors import ConfigError
+    from .core.errors import ConfigError
 
     # Start with defaults
     config = _deep_copy(USER_CONFIG_DEFAULTS)

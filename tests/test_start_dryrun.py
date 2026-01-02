@@ -31,11 +31,11 @@ class TestDryRunBasicBehavior:
 
         mock_docker_run = MagicMock()
 
-        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.cli_launch.config.load_config", return_value={}):
-                with patch("scc_cli.cli_launch.config.load_cached_org_config", return_value={}):
-                    with patch("scc_cli.cli_launch.docker.run", mock_docker_run):
-                        with patch("scc_cli.cli_launch.docker.check_docker_available"):
+        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                    with patch("scc_cli.commands.launch.docker.run", mock_docker_run):
+                        with patch("scc_cli.commands.launch.docker.check_docker_available"):
                             try:
                                 start(
                                     workspace=str(tmp_path),
@@ -64,10 +64,10 @@ class TestDryRunBasicBehavior:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.cli_launch.config.load_config", return_value={}):
-                with patch("scc_cli.cli_launch.config.load_cached_org_config", return_value={}):
-                    with patch("scc_cli.cli_launch.docker.check_docker_available"):
+        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -107,21 +107,21 @@ class TestDryRunTeamConfig:
 
         mock_org = {"profiles": {"platform": {"description": "Platform team"}}}
 
-        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
+        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
             with patch(
-                "scc_cli.cli_launch.config.load_config",
+                "scc_cli.commands.launch.config.load_config",
                 return_value={"selected_profile": "platform"},
             ):
                 with patch(
-                    "scc_cli.cli_launch.config.load_cached_org_config",
+                    "scc_cli.commands.launch.config.load_cached_org_config",
                     return_value=mock_org,
                 ):
-                    with patch("scc_cli.cli_launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         with patch(
-                            "scc_cli.cli_launch.teams.validate_team_profile",
+                            "scc_cli.commands.launch.teams.validate_team_profile",
                             return_value={"valid": True},
                         ):
-                            with patch("scc_cli.cli_launch.docker.inject_team_settings"):
+                            with patch("scc_cli.commands.launch.docker.inject_team_settings"):
                                 try:
                                     start(
                                         workspace=str(tmp_path),
@@ -159,10 +159,10 @@ class TestDryRunJsonOutput:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.cli_launch.config.load_config", return_value={}):
-                with patch("scc_cli.cli_launch.config.load_cached_org_config", return_value={}):
-                    with patch("scc_cli.cli_launch.docker.check_docker_available"):
+        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -194,10 +194,10 @@ class TestDryRunJsonOutput:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.cli_launch.config.load_config", return_value={}):
-                with patch("scc_cli.cli_launch.config.load_cached_org_config", return_value={}):
-                    with patch("scc_cli.cli_launch.docker.check_docker_available"):
+        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -311,10 +311,10 @@ class TestDryRunExitCodes:
 
         exit_code = None
 
-        with patch("scc_cli.cli_launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.cli_launch.config.load_config", return_value={}):
-                with patch("scc_cli.cli_launch.config.load_cached_org_config", return_value={}):
-                    with patch("scc_cli.cli_launch.docker.check_docker_available"):
+        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+                with patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}):
+                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -347,7 +347,7 @@ class TestPrintWorkspaceHeader:
         """Shows workspace name and team."""
         from scc_cli.commands.launch import _print_workspace_header
 
-        with patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"):
+        with patch("scc_cli.commands.launch.git.get_current_branch", return_value="main"):
             _print_workspace_header(tmp_path, team="platform")
 
         # Rich output goes to console, so we capture it via capsys
@@ -367,8 +367,8 @@ class TestPrintWorkspaceHeader:
 
         # Capture output by patching console
         output = StringIO()
-        with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
-            with patch("scc_cli.cli_launch.git.get_current_branch", return_value="main"):
+        with patch("scc_cli.commands.launch.console", Console(file=output, force_terminal=True)):
+            with patch("scc_cli.commands.launch.git.get_current_branch", return_value="main"):
                 _print_workspace_header(tmp_path, team=None)
 
         result = output.getvalue()
@@ -383,8 +383,8 @@ class TestPrintWorkspaceHeader:
         from scc_cli.commands.launch import _print_workspace_header
 
         output = StringIO()
-        with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
-            with patch("scc_cli.cli_launch.git.get_current_branch", return_value="feature-x"):
+        with patch("scc_cli.commands.launch.console", Console(file=output, force_terminal=True)):
+            with patch("scc_cli.commands.launch.git.get_current_branch", return_value="feature-x"):
                 _print_workspace_header(tmp_path, team="dev")
 
         result = output.getvalue()
@@ -399,9 +399,9 @@ class TestPrintWorkspaceHeader:
         from scc_cli.commands.launch import _print_workspace_header
 
         output = StringIO()
-        with patch("scc_cli.cli_launch.console", Console(file=output, force_terminal=True)):
+        with patch("scc_cli.commands.launch.console", Console(file=output, force_terminal=True)):
             with patch(
-                "scc_cli.cli_launch.git.get_current_branch", side_effect=Exception("Not a git repo")
+                "scc_cli.commands.launch.git.get_current_branch", side_effect=Exception("Not a git repo")
             ):
                 _print_workspace_header(tmp_path, team="dev")
 

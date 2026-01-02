@@ -15,7 +15,7 @@ import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
-from scc_cli.exit_codes import EXIT_CANCELLED, EXIT_USAGE
+from scc_cli.core.exit_codes import EXIT_CANCELLED, EXIT_USAGE
 
 runner = CliRunner()
 

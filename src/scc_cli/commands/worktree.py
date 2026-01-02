@@ -15,9 +15,9 @@ from .. import config, contexts, deps, docker, git, sessions
 from ..cli_common import console, err_console, handle_errors, render_responsive_table
 from ..cli_helpers import ConfirmItems, confirm_action
 from ..confirm import Confirm
-from ..constants import WORKTREE_BRANCH_PREFIX
-from ..errors import NotAGitRepoError, WorkspaceNotFoundError
-from ..exit_codes import EXIT_CANCELLED
+from ..core.constants import WORKTREE_BRANCH_PREFIX
+from ..core.errors import NotAGitRepoError, WorkspaceNotFoundError
+from ..core.exit_codes import EXIT_CANCELLED
 from ..json_command import json_command
 from ..kinds import Kind
 from ..output_mode import is_json_mode

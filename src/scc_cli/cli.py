@@ -6,10 +6,10 @@ A command-line tool for safely running Claude Code in Docker sandboxes
 with team-specific configurations and worktree management.
 
 This module serves as the thin orchestrator that composes commands from:
-- cli_launch.py: Start command and interactive mode
-- cli_worktree.py: Worktree, session, and container management
-- cli_config.py: Teams, setup, and configuration commands
-- cli_admin.py: Doctor, update, statusline, and stats commands
+- commands/launch.py: Start command and interactive mode
+- commands/worktree.py: Worktree, session, and container management
+- commands/config.py: Teams, setup, and configuration commands
+- commands/admin.py: Doctor, update, statusline, and stats commands
 """
 
 from importlib.metadata import PackageNotFoundError

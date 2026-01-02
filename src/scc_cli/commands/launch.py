@@ -33,10 +33,10 @@ from ..cli_common import (
     handle_errors,
 )
 from ..confirm import Confirm
-from ..constants import WORKTREE_BRANCH_PREFIX
 from ..contexts import WorkContext, load_recent_contexts, normalize_path, record_context
-from ..errors import NotAGitRepoError, WorkspaceNotFoundError
-from ..exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
+from ..core.constants import WORKTREE_BRANCH_PREFIX
+from ..core.errors import NotAGitRepoError, WorkspaceNotFoundError
+from ..core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
 from ..json_output import build_envelope
 from ..kinds import Kind
 from ..marketplace.sync import SyncError, SyncResult, sync_marketplace_settings

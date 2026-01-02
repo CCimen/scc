@@ -271,7 +271,7 @@ class TestStartWorkflow:
 
     def test_cancel_at_protected_branch_prompt_exits(self, full_config_environment, git_workspace):
         """Cancelling at protected branch prompt should exit with EXIT_CANCELLED."""
-        from scc_cli.exit_codes import EXIT_CANCELLED
+        from scc_cli.core.exit_codes import EXIT_CANCELLED
 
         with (
             patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),

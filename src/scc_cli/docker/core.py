@@ -14,8 +14,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..constants import SANDBOX_IMAGE
-from ..errors import (
+from ..core.constants import SANDBOX_IMAGE
+from ..core.errors import (
     ContainerNotFoundError,
     DockerNotFoundError,
     DockerVersionError,
@@ -200,7 +200,7 @@ def build_command(
         - Agent `claude` is ALWAYS included, even in detached mode
         - Session flags passed via docker exec in detached mode (see run_sandbox)
     """
-    from ..constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT
+    from ..core.constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT
 
     cmd = ["docker", "sandbox", "run"]
 

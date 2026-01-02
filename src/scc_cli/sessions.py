@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import config
-from .constants import AGENT_CONFIG_DIR
+from .core.constants import AGENT_CONFIG_DIR
 from .utils.locks import file_lock, lock_path
 
 # ═══════════════════════════════════════════════════════════════════════════════

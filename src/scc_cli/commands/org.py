@@ -15,8 +15,8 @@ from rich.table import Table
 
 from ..cli_common import console, handle_errors
 from ..config import load_user_config, save_user_config
-from ..constants import CLI_VERSION
-from ..exit_codes import EXIT_CONFIG, EXIT_VALIDATION
+from ..core.constants import CLI_VERSION
+from ..core.exit_codes import EXIT_CONFIG, EXIT_VALIDATION
 from ..json_output import build_envelope
 from ..kinds import Kind
 from ..marketplace.team_fetch import fetch_team_config

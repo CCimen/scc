@@ -6,7 +6,7 @@ Pure functions with no UI dependencies.
 import shutil
 from pathlib import Path
 
-from ...errors import GitNotFoundError
+from ...core.errors import GitNotFoundError
 from ...subprocess_utils import run_command, run_command_bool
 
 

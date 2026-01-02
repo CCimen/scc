@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from rich.console import Console
 
-from ..exit_codes import EXIT_SUCCESS, EXIT_USAGE
+from ..core.exit_codes import EXIT_SUCCESS, EXIT_USAGE
 
 if TYPE_CHECKING:
     pass
@@ -113,7 +113,7 @@ def validate_mode_flags(
             ...
         UsageError: Cannot use --json with --interactive
     """
-    from ..errors import UsageError
+    from ..core.errors import UsageError
 
     if not json_mode:
         return  # No conflict possible without JSON mode

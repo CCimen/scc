@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from jsonschema import Draft7Validator
 
-from .constants import CLI_VERSION, CURRENT_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
+from .core.constants import CLI_VERSION, CURRENT_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 
 if TYPE_CHECKING:
     pass

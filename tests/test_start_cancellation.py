@@ -8,7 +8,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
-from scc_cli.exit_codes import EXIT_CANCELLED, EXIT_CONFIG
+from scc_cli.core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG
 
 runner = CliRunner()
 

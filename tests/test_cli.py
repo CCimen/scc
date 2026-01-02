@@ -18,12 +18,12 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
-from scc_cli.errors import (
+from scc_cli.core.errors import (
     DockerNotFoundError,
     DockerVersionError,
     SandboxNotAvailableError,
 )
-from scc_cli.exit_codes import EXIT_USAGE
+from scc_cli.core.exit_codes import EXIT_USAGE
 
 runner = CliRunner()
 

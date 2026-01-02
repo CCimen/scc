@@ -13,7 +13,7 @@ from rich.panel import Panel
 
 from ..cli_common import console, handle_errors
 from ..cli_helpers import confirm_action, is_interactive
-from ..exit_codes import EXIT_CONFIG, EXIT_SUCCESS, EXIT_USAGE
+from ..core.exit_codes import EXIT_CONFIG, EXIT_SUCCESS, EXIT_USAGE
 from ..json_output import build_envelope
 from ..kinds import Kind
 from ..output_mode import print_json, set_pretty_mode

@@ -6,7 +6,7 @@ Pure functions with no UI dependencies.
 import re
 from pathlib import Path
 
-from ...constants import WORKTREE_BRANCH_PREFIX
+from ...core.constants import WORKTREE_BRANCH_PREFIX
 from ...subprocess_utils import run_command, run_command_bool, run_command_lines
 
 PROTECTED_BRANCHES = ("main", "master", "develop", "production", "staging")

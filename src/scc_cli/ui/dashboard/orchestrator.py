@@ -521,7 +521,7 @@ def _handle_statusline_install() -> bool:
     """
     from rich.status import Status
 
-    from ...cli_admin import install_statusline
+    from ...commands.admin import install_statusline
     from ...theme import Spinners
 
     console = get_err_console()
