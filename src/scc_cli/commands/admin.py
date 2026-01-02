@@ -611,8 +611,8 @@ def stats_export_cmd(
             )
         )
     else:
-        # Print to stdout
-        print(result)
+        # Print to stdout for piping/scripting
+        print(result)  # noqa: T201
 
 
 @stats_app.command(name="aggregate")
@@ -705,4 +705,4 @@ def stats_aggregate_cmd(
             )
         )
     else:
-        print(result)
+        print(result)  # noqa: T201

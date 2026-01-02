@@ -795,7 +795,7 @@ def org_schema_cmd(
             raise typer.Exit(0)
 
     # Raw schema output (for piping to files or validators)
-    print(json.dumps(schema, indent=2))
+    print(json.dumps(schema, indent=2))  # noqa: T201
     raise typer.Exit(0)
 
 

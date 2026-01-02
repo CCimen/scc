@@ -293,7 +293,7 @@ def _handle_start_flow(reason: str) -> bool | None:
         True if wizard completed successfully, False if user wants to go back,
         None if user wants to quit entirely.
     """
-    from ...cli_launch import run_start_wizard_flow
+    from ...commands.launch import run_start_wizard_flow
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
@@ -336,7 +336,7 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
     from rich.status import Status
 
     from ... import config, docker
-    from ...cli_launch import (
+    from ...commands.launch import (
         _configure_team_settings,
         _launch_sandbox,
         _resolve_mount_and_branch,
@@ -429,7 +429,7 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
     from rich.status import Status
 
     from ... import config, docker
-    from ...cli_launch import (
+    from ...commands.launch import (
         _configure_team_settings,
         _launch_sandbox,
         _resolve_mount_and_branch,

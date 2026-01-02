@@ -243,7 +243,7 @@ def worktree_list_cmd(
             )
             if selected:
                 # Print just the path for scripting: cd $(scc worktree list -i)
-                print(selected.path)
+                print(selected.path)  # noqa: T201
         except TeamSwitchRequested:
             console.print("[dim]Use 'scc team switch' to change teams[/dim]")
         return None
@@ -309,7 +309,7 @@ def worktree_switch_cmd(
                 subtitle=f"{len(worktree_list)} worktrees",
             )
             if selected:
-                print(selected.path)
+                print(selected.path)  # noqa: T201
             else:
                 raise typer.Exit(EXIT_CANCELLED)
         except TeamSwitchRequested:
@@ -330,7 +330,7 @@ def worktree_switch_cmd(
                 ),
             )
             raise typer.Exit(1)
-        print(oldpwd)
+        print(oldpwd)  # noqa: T201
         return
 
     if target == "^":
@@ -346,14 +346,14 @@ def worktree_switch_cmd(
                 ),
             )
             raise typer.Exit(1)
-        print(main_wt.path)
+        print(main_wt.path)  # noqa: T201
         return
 
     # Fuzzy match worktree
     exact_match, matches = git.find_worktree_by_query(workspace_path, target)
 
     if exact_match:
-        print(exact_match.path)
+        print(exact_match.path)  # noqa: T201
         return
 
     if not matches:
@@ -373,7 +373,7 @@ def worktree_switch_cmd(
                             name=target,
                             base_branch=target,
                         )
-                        print(worktree_path)
+                        print(worktree_path)  # noqa: T201
                         return
                     else:
                         # User declined - use EXIT_CANCELLED so shell wrappers don't cd
@@ -411,7 +411,7 @@ def worktree_switch_cmd(
                 initial_filter=target,
             )
             if selected:
-                print(selected.path)
+                print(selected.path)  # noqa: T201
             else:
                 raise typer.Exit(EXIT_CANCELLED)
         except TeamSwitchRequested:
@@ -518,7 +518,7 @@ def worktree_select_cmd(
 
         # If selected item is a worktree (has path), print it
         if selected.path:
-            print(selected.path)
+            print(selected.path)  # noqa: T201
             return
 
         # Selected a branch without worktree - offer to create
@@ -543,7 +543,7 @@ def worktree_select_cmd(
                     {"Branch": selected.branch, "Path": str(worktree_path)},
                 )
             )
-            print(worktree_path)
+            print(worktree_path)  # noqa: T201
         else:
             raise typer.Exit(EXIT_CANCELLED)
 
