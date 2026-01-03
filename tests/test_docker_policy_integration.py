@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
-from scc_cli.constants import SAFETY_NET_POLICY_FILENAME
+from scc_cli.core.constants import SAFETY_NET_POLICY_FILENAME
 from scc_cli.docker.launch import (
     DEFAULT_SAFETY_NET_POLICY,
     VALID_SAFETY_NET_ACTIONS,

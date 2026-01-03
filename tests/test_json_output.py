@@ -43,57 +43,57 @@ class TestExitCodes:
 
     def test_exit_success_is_zero(self):
         """EXIT_SUCCESS must be 0."""
-        from scc_cli.exit_codes import EXIT_SUCCESS
+        from scc_cli.core.exit_codes import EXIT_SUCCESS
 
         assert EXIT_SUCCESS == 0
 
     def test_exit_error_is_one(self):
         """EXIT_ERROR must be 1 (general error)."""
-        from scc_cli.exit_codes import EXIT_ERROR
+        from scc_cli.core.exit_codes import EXIT_ERROR
 
         assert EXIT_ERROR == 1
 
     def test_exit_usage_is_two(self):
         """EXIT_USAGE must be 2 (Click/Typer convention)."""
-        from scc_cli.exit_codes import EXIT_USAGE
+        from scc_cli.core.exit_codes import EXIT_USAGE
 
         assert EXIT_USAGE == 2
 
     def test_exit_config_is_three(self):
         """EXIT_CONFIG must be 3."""
-        from scc_cli.exit_codes import EXIT_CONFIG
+        from scc_cli.core.exit_codes import EXIT_CONFIG
 
         assert EXIT_CONFIG == 3
 
     def test_exit_validation_is_four(self):
         """EXIT_VALIDATION must be 4."""
-        from scc_cli.exit_codes import EXIT_VALIDATION
+        from scc_cli.core.exit_codes import EXIT_VALIDATION
 
         assert EXIT_VALIDATION == 4
 
     def test_exit_prereq_is_five(self):
         """EXIT_PREREQ must be 5."""
-        from scc_cli.exit_codes import EXIT_PREREQ
+        from scc_cli.core.exit_codes import EXIT_PREREQ
 
         assert EXIT_PREREQ == 5
 
     def test_exit_governance_is_six(self):
         """EXIT_GOVERNANCE must be 6."""
-        from scc_cli.exit_codes import EXIT_GOVERNANCE
+        from scc_cli.core.exit_codes import EXIT_GOVERNANCE
 
         assert EXIT_GOVERNANCE == 6
 
     def test_get_exit_code_for_config_error(self):
         """ConfigError should map to EXIT_CONFIG."""
-        from scc_cli.errors import ConfigError
-        from scc_cli.exit_codes import EXIT_CONFIG, get_exit_code_for_exception
+        from scc_cli.core.errors import ConfigError
+        from scc_cli.core.exit_codes import EXIT_CONFIG, get_exit_code_for_exception
 
         exc = ConfigError(user_message="test")
         assert get_exit_code_for_exception(exc) == EXIT_CONFIG
 
     def test_get_exit_code_for_unknown_error(self):
         """Unknown exceptions should map to EXIT_ERROR."""
-        from scc_cli.exit_codes import EXIT_ERROR, get_exit_code_for_exception
+        from scc_cli.core.exit_codes import EXIT_ERROR, get_exit_code_for_exception
 
         exc = RuntimeError("test")
         assert get_exit_code_for_exception(exc) == EXIT_ERROR

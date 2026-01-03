@@ -11,15 +11,15 @@ from rich.panel import Panel
 from rich.status import Status
 from rich.table import Table
 
-from . import config, docker, doctor, stats
-from .cli_common import console, handle_errors
-from .docker.core import ContainerInfo
-from .json_command import json_command
-from .json_output import build_envelope
-from .kinds import Kind
-from .output_mode import is_json_mode, json_output_mode, print_json, set_pretty_mode
-from .panels import create_info_panel, create_success_panel, create_warning_panel
-from .theme import Spinners
+from .. import config, docker, doctor, stats
+from ..cli_common import console, handle_errors
+from ..docker.core import ContainerInfo
+from ..json_command import json_command
+from ..json_output import build_envelope
+from ..kinds import Kind
+from ..output_mode import is_json_mode, json_output_mode, print_json, set_pretty_mode
+from ..panels import create_info_panel, create_success_panel, create_warning_panel
+from ..theme import Spinners
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Statusline Installation Helper
@@ -338,7 +338,7 @@ def update_cmd(
     force: bool = typer.Option(False, "--force", "-f", help="Force check even if recently checked"),
 ) -> None:
     """Check for updates to scc-cli CLI and organization config."""
-    from . import update as update_module
+    from .. import update as update_module
 
     cfg = config.load_config()
 
@@ -611,8 +611,8 @@ def stats_export_cmd(
             )
         )
     else:
-        # Print to stdout
-        print(result)
+        # Print to stdout for piping/scripting
+        print(result)  # noqa: T201
 
 
 @stats_app.command(name="aggregate")
@@ -705,4 +705,4 @@ def stats_aggregate_cmd(
             )
         )
     else:
-        print(result)
+        print(result)  # noqa: T201

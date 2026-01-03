@@ -27,7 +27,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_replaces_auth_values(self) -> None:
         """Auth values should be replaced with [REDACTED]."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "auth": "secret-token-12345",
@@ -40,7 +40,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_replaces_token_values(self) -> None:
         """Token values should be replaced with [REDACTED]."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "token": "ghp_abc123xyz",
@@ -55,7 +55,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_replaces_api_key_values(self) -> None:
         """API key values should be replaced with [REDACTED]."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "api_key": "sk-ant-api03-xxx",
@@ -70,7 +70,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_replaces_password_values(self) -> None:
         """Password values should be replaced with [REDACTED]."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "password": "super-secret",
@@ -83,7 +83,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_handles_nested_dicts(self) -> None:
         """Nested dictionaries should have secrets redacted."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "config": {
@@ -98,7 +98,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_handles_lists(self) -> None:
         """Lists containing dicts should have secrets redacted."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "plugins": [
@@ -114,7 +114,7 @@ class TestSecretRedaction:
 
     def test_redact_secrets_strips_authorization_headers(self) -> None:
         """Authorization headers should be stripped."""
-        from scc_cli.cli_support import redact_secrets
+        from scc_cli.commands.support import redact_secrets
 
         data = {
             "headers": {
@@ -138,7 +138,7 @@ class TestPathRedaction:
 
     def test_redact_paths_replaces_home_directory(self) -> None:
         """Home directory paths should be redacted."""
-        from scc_cli.cli_support import redact_paths
+        from scc_cli.commands.support import redact_paths
 
         home = str(Path.home())
         data = {"path": f"{home}/projects/my-repo"}
@@ -149,7 +149,7 @@ class TestPathRedaction:
 
     def test_redact_paths_handles_nested_paths(self) -> None:
         """Nested paths should be redacted."""
-        from scc_cli.cli_support import redact_paths
+        from scc_cli.commands.support import redact_paths
 
         home = str(Path.home())
         data = {
@@ -163,7 +163,7 @@ class TestPathRedaction:
 
     def test_redact_paths_preserves_relative_paths(self) -> None:
         """Relative paths should not be modified."""
-        from scc_cli.cli_support import redact_paths
+        from scc_cli.commands.support import redact_paths
 
         data = {"path": "./relative/path"}
         result = redact_paths(data)
@@ -172,7 +172,7 @@ class TestPathRedaction:
 
     def test_redact_paths_disabled_with_flag(self) -> None:
         """Path redaction can be disabled."""
-        from scc_cli.cli_support import redact_paths
+        from scc_cli.commands.support import redact_paths
 
         home = str(Path.home())
         data = {"path": f"{home}/projects/my-repo"}
@@ -191,7 +191,7 @@ class TestBundleDataCollection:
 
     def test_build_bundle_data_includes_system_info(self) -> None:
         """Bundle data should include system info."""
-        from scc_cli.cli_support import build_bundle_data
+        from scc_cli.commands.support import build_bundle_data
 
         result = build_bundle_data()
 
@@ -201,7 +201,7 @@ class TestBundleDataCollection:
 
     def test_build_bundle_data_includes_cli_version(self) -> None:
         """Bundle data should include CLI version."""
-        from scc_cli.cli_support import build_bundle_data
+        from scc_cli.commands.support import build_bundle_data
 
         result = build_bundle_data()
 
@@ -209,7 +209,7 @@ class TestBundleDataCollection:
 
     def test_build_bundle_data_includes_timestamp(self) -> None:
         """Bundle data should include generation timestamp."""
-        from scc_cli.cli_support import build_bundle_data
+        from scc_cli.commands.support import build_bundle_data
 
         result = build_bundle_data()
 
@@ -217,10 +217,10 @@ class TestBundleDataCollection:
 
     def test_build_bundle_data_includes_config(self) -> None:
         """Bundle data should include config (redacted)."""
-        from scc_cli.cli_support import build_bundle_data
+        from scc_cli.commands.support import build_bundle_data
 
         with patch(
-            "scc_cli.cli_support.config.load_config", return_value={"selected_profile": "test"}
+            "scc_cli.commands.support.config.load_config", return_value={"selected_profile": "test"}
         ):
             result = build_bundle_data()
 
@@ -228,9 +228,9 @@ class TestBundleDataCollection:
 
     def test_build_bundle_data_includes_doctor_output(self) -> None:
         """Bundle data should include doctor output."""
-        from scc_cli.cli_support import build_bundle_data
+        from scc_cli.commands.support import build_bundle_data
 
-        with patch("scc_cli.cli_support.doctor.run_doctor") as mock_doctor:
+        with patch("scc_cli.commands.support.doctor.run_doctor") as mock_doctor:
             from scc_cli.doctor import CheckResult, DoctorResult
 
             mock_doctor.return_value = DoctorResult(
@@ -253,11 +253,11 @@ class TestBundleFileCreation:
 
     def test_create_bundle_creates_zip_file(self, tmp_path: Path) -> None:
         """create_bundle should create a zip file."""
-        from scc_cli.cli_support import create_bundle
+        from scc_cli.commands.support import create_bundle
 
         output_path = tmp_path / "support-bundle.zip"
 
-        with patch("scc_cli.cli_support.build_bundle_data", return_value={"test": "data"}):
+        with patch("scc_cli.commands.support.build_bundle_data", return_value={"test": "data"}):
             create_bundle(output_path)
 
         assert output_path.exists()
@@ -265,11 +265,11 @@ class TestBundleFileCreation:
 
     def test_create_bundle_contains_manifest(self, tmp_path: Path) -> None:
         """Bundle zip should contain manifest.json."""
-        from scc_cli.cli_support import create_bundle
+        from scc_cli.commands.support import create_bundle
 
         output_path = tmp_path / "support-bundle.zip"
 
-        with patch("scc_cli.cli_support.build_bundle_data", return_value={"test": "data"}):
+        with patch("scc_cli.commands.support.build_bundle_data", return_value={"test": "data"}):
             create_bundle(output_path)
 
         with zipfile.ZipFile(output_path, "r") as zf:
@@ -277,7 +277,7 @@ class TestBundleFileCreation:
 
     def test_create_bundle_default_output_path(self) -> None:
         """create_bundle should use default path if not specified."""
-        from scc_cli.cli_support import get_default_bundle_path
+        from scc_cli.commands.support import get_default_bundle_path
 
         result = get_default_bundle_path()
 
@@ -306,9 +306,9 @@ class TestJsonManifestOutput:
 
     def test_json_output_does_not_create_file(self, tmp_path: Path, capsys) -> None:
         """--json flag should output manifest, not create zip."""
-        from scc_cli.cli_support import support_bundle_cmd
+        from scc_cli.commands.support import support_bundle_cmd
 
-        with patch("scc_cli.cli_support.build_bundle_data", return_value={"test": "data"}):
+        with patch("scc_cli.commands.support.build_bundle_data", return_value={"test": "data"}):
             try:
                 support_bundle_cmd(
                     output=None,
@@ -335,11 +335,11 @@ class TestCustomOutputPath:
 
     def test_custom_output_path_creates_file_at_location(self, tmp_path: Path) -> None:
         """--output should create bundle at specified path."""
-        from scc_cli.cli_support import support_bundle_cmd
+        from scc_cli.commands.support import support_bundle_cmd
 
         output_path = tmp_path / "custom-bundle.zip"
 
-        with patch("scc_cli.cli_support.build_bundle_data", return_value={"test": "data"}):
+        with patch("scc_cli.commands.support.build_bundle_data", return_value={"test": "data"}):
             try:
                 support_bundle_cmd(
                     output=str(output_path),
@@ -363,13 +363,13 @@ class TestSupportBundleCLI:
 
     def test_support_app_exists(self) -> None:
         """support_app Typer should exist."""
-        from scc_cli.cli_support import support_app
+        from scc_cli.commands.support import support_app
 
         assert support_app is not None
 
     def test_support_bundle_command_registered(self) -> None:
         """bundle command should be registered on support_app."""
-        from scc_cli.cli_support import support_app
+        from scc_cli.commands.support import support_app
 
         command_names = [cmd.name for cmd in support_app.registered_commands]
         assert "bundle" in command_names

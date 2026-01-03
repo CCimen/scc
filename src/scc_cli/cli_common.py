@@ -14,8 +14,8 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from .errors import SCCError
-from .exit_codes import EXIT_CANCELLED
+from .core.errors import SCCError
+from .core.exit_codes import EXIT_CANCELLED
 from .output_mode import is_json_command_mode
 from .panels import create_warning_panel
 from .ui.prompts import render_error
@@ -81,7 +81,7 @@ def handle_errors(func: F) -> F:
         except SCCError as e:
             if is_json_command_mode():
                 # JSON mode: emit structured error envelope to stdout
-                from .exit_codes import get_exit_code_for_exception
+                from .core.exit_codes import get_exit_code_for_exception
                 from .json_output import build_error_envelope
                 from .output_mode import print_json
 
@@ -111,7 +111,7 @@ def handle_errors(func: F) -> F:
         except Exception as e:
             if is_json_command_mode():
                 # JSON mode: emit structured error envelope for unexpected errors
-                from .exit_codes import EXIT_INTERNAL
+                from .core.exit_codes import EXIT_INTERNAL
                 from .json_output import build_error_envelope
                 from .output_mode import print_json
 

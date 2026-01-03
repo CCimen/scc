@@ -9,7 +9,7 @@ This module enables future extensibility to support other AI coding CLIs
 adding new backend support.
 
 Usage:
-    from scc_cli.constants import AGENT_NAME, SANDBOX_IMAGE
+    from scc_cli.core.constants import AGENT_NAME, SANDBOX_IMAGE
 """
 
 from importlib.metadata import PackageNotFoundError

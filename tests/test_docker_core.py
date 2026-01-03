@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli import docker
-from scc_cli.errors import (
+from scc_cli.core.errors import (
     ContainerNotFoundError,
     DockerNotFoundError,
     DockerVersionError,

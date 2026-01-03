@@ -25,15 +25,15 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from . import config, profiles
-from .cli_common import handle_errors
-from .cli_helpers import create_audit_record, require_reason_for_governance
-from .evaluation import EvaluationResult, evaluate
-from .models.exceptions import AllowTargets
-from .models.exceptions import Exception as SccException
-from .stores.exception_store import RepoStore, UserStore
-from .utils.fuzzy import find_similar
-from .utils.ttl import calculate_expiration, format_expiration, format_relative
+from .. import config, profiles
+from ..cli_common import handle_errors
+from ..cli_helpers import create_audit_record, require_reason_for_governance
+from ..evaluation import EvaluationResult, evaluate
+from ..models.exceptions import AllowTargets
+from ..models.exceptions import Exception as SccException
+from ..stores.exception_store import RepoStore, UserStore
+from ..utils.fuzzy import find_similar
+from ..utils.ttl import calculate_expiration, format_expiration, format_relative
 
 console = Console()
 
@@ -67,25 +67,10 @@ def _is_git_ignored(file_path: str) -> bool:
     Uses git check-ignore to determine if the file would be ignored.
     Returns False if git is not available or not in a git repo (fail-open).
     """
-    import subprocess
+    from ..services.git import is_file_ignored
 
     repo_root = _get_repo_root()
-    # Only check if we're actually in a git repo
-    if not (repo_root / ".git").exists():
-        return False
-
-    try:
-        result = subprocess.run(
-            ["git", "check-ignore", "-q", file_path],
-            capture_output=True,
-            cwd=repo_root,
-            timeout=5,
-        )
-        # Exit code 0 means file is ignored
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        # git not available or other error - fail silently
-        return False
+    return is_file_ignored(file_path, repo_root)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

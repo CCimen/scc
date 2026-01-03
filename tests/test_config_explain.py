@@ -193,10 +193,13 @@ class TestConfigExplainBasic:
     def test_explain_shows_effective_plugins(self, effective_config_basic, mock_org_config):
         """Should show effective plugins in output."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_basic,
             ),
         ):
@@ -209,10 +212,13 @@ class TestConfigExplainBasic:
     def test_explain_shows_source_attribution(self, effective_config_basic, mock_org_config):
         """Should show where each setting came from."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_basic,
             ),
         ):
@@ -226,10 +232,13 @@ class TestConfigExplainBasic:
     def test_explain_shows_session_config(self, effective_config_basic, mock_org_config):
         """Should show session configuration."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_basic,
             ),
         ):
@@ -251,10 +260,13 @@ class TestConfigExplainBlocked:
     def test_explain_shows_blocked_items(self, effective_config_with_blocked, mock_org_config):
         """Should display blocked items."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_blocked,
             ),
         ):
@@ -267,10 +279,13 @@ class TestConfigExplainBlocked:
     def test_explain_shows_blocked_pattern(self, effective_config_with_blocked, mock_org_config):
         """Should show which pattern caused the block."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_blocked,
             ),
         ):
@@ -292,10 +307,13 @@ class TestConfigExplainDenied:
     def test_explain_shows_denied_additions(self, effective_config_with_denied, mock_org_config):
         """Should display denied additions."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_denied,
             ),
         ):
@@ -308,10 +326,13 @@ class TestConfigExplainDenied:
     def test_explain_shows_denial_reason(self, effective_config_with_denied, mock_org_config):
         """Should show why the addition was denied."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_denied,
             ),
         ):
@@ -333,10 +354,13 @@ class TestConfigExplainFieldFilter:
     def test_explain_filter_plugins(self, effective_config_full, mock_org_config):
         """Should filter output to only plugins."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_full,
             ),
         ):
@@ -350,10 +374,13 @@ class TestConfigExplainFieldFilter:
     def test_explain_filter_session(self, effective_config_full, mock_org_config):
         """Should filter output to session config."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_full,
             ),
         ):
@@ -377,10 +404,13 @@ class TestConfigExplainWorkspace:
         workspace.mkdir()
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_basic,
             ) as mock_compute,
         ):
@@ -395,10 +425,13 @@ class TestConfigExplainWorkspace:
     def test_explain_uses_cwd_by_default(self, effective_config_basic, mock_org_config):
         """Should use current directory if no workspace specified."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_basic,
             ) as mock_compute,
         ):
@@ -421,7 +454,7 @@ class TestConfigExplainErrors:
 
     def test_explain_no_org_config(self):
         """Should handle missing org config gracefully."""
-        with patch("scc_cli.cli_config.config.load_cached_org_config", return_value=None):
+        with patch("scc_cli.commands.config.config.load_cached_org_config", return_value=None):
             result = runner.invoke(cli.app, ["config", "explain"])
 
         # Should exit with error or helpful message
@@ -434,8 +467,11 @@ class TestConfigExplainErrors:
     def test_explain_no_team_selected(self, mock_org_config):
         """Should handle no team selected."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value=None),
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value=None),
         ):
             result = runner.invoke(cli.app, ["config", "explain"])
 
@@ -484,10 +520,13 @@ class TestConfigExplainMCPServers:
     def test_explain_shows_mcp_servers(self, effective_config_with_mcp, mock_org_config):
         """Should display MCP servers."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_mcp,
             ),
         ):
@@ -500,10 +539,13 @@ class TestConfigExplainMCPServers:
     def test_explain_shows_mcp_server_types(self, effective_config_with_mcp, mock_org_config):
         """Should show MCP server types (sse, stdio)."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_mcp,
             ),
         ):
@@ -516,10 +558,13 @@ class TestConfigExplainMCPServers:
     def test_explain_filter_mcp_servers(self, effective_config_with_mcp, mock_org_config):
         """Should filter output to only MCP servers."""
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective_config_with_mcp,
             ),
         ):
@@ -582,10 +627,13 @@ class TestConfigExplainGoldenBlockedItems:
         )
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -621,10 +669,13 @@ class TestConfigExplainGoldenBlockedItems:
         )
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -665,10 +716,13 @@ class TestConfigExplainGoldenDeniedAdditions:
         )
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -703,10 +757,13 @@ class TestConfigExplainGoldenDeniedAdditions:
         )
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -760,14 +817,17 @@ class TestConfigExplainGoldenActiveExceptions:
         empty_file = ExceptionFile()
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
-            patch("scc_cli.cli_config.UserStore") as mock_user_store,
-            patch("scc_cli.cli_config.RepoStore") as mock_repo_store,
+            patch("scc_cli.commands.config.UserStore") as mock_user_store,
+            patch("scc_cli.commands.config.RepoStore") as mock_repo_store,
         ):
             mock_user_store.return_value.read.return_value = exc_file
             mock_repo_store.return_value.read.return_value = empty_file
@@ -814,14 +874,17 @@ class TestConfigExplainGoldenActiveExceptions:
         empty_file = ExceptionFile()
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
-            patch("scc_cli.cli_config.UserStore") as mock_user_store,
-            patch("scc_cli.cli_config.RepoStore") as mock_repo_store,
+            patch("scc_cli.commands.config.UserStore") as mock_user_store,
+            patch("scc_cli.commands.config.RepoStore") as mock_repo_store,
         ):
             mock_user_store.return_value.read.return_value = exc_file
             mock_repo_store.return_value.read.return_value = empty_file
@@ -865,14 +928,17 @@ class TestConfigExplainGoldenActiveExceptions:
         empty_file = ExceptionFile()
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
-            patch("scc_cli.cli_config.UserStore") as mock_user_store,
-            patch("scc_cli.cli_config.RepoStore") as mock_repo_store,
+            patch("scc_cli.commands.config.UserStore") as mock_user_store,
+            patch("scc_cli.commands.config.RepoStore") as mock_repo_store,
         ):
             mock_user_store.return_value.read.return_value = exc_file
             mock_repo_store.return_value.read.return_value = empty_file
@@ -930,10 +996,13 @@ class TestConfigExplainGoldenCombined:
         )
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -970,10 +1039,13 @@ class TestConfigExplainGoldenCombined:
         )
 
         with (
-            patch("scc_cli.cli_config.config.load_cached_org_config", return_value=mock_org_config),
-            patch("scc_cli.cli_config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.cli_config.profiles.compute_effective_config",
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.profiles.compute_effective_config",
                 return_value=effective,
             ),
         ):

@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli import git
-from scc_cli.errors import WorktreeCreationError
+from scc_cli.core.errors import WorktreeCreationError
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures - Real Git Repos
@@ -91,7 +91,7 @@ class TestWorktreeBranchPrefix:
 
     def test_prefix_is_scc_namespace(self):
         """WORKTREE_BRANCH_PREFIX must be 'scc/' for product namespace."""
-        from scc_cli.constants import WORKTREE_BRANCH_PREFIX
+        from scc_cli.core.constants import WORKTREE_BRANCH_PREFIX
 
         assert WORKTREE_BRANCH_PREFIX == "scc/"
 
@@ -99,7 +99,7 @@ class TestWorktreeBranchPrefix:
         """Branches created by create_worktree must start with scc/ prefix."""
         from unittest.mock import MagicMock, patch
 
-        from scc_cli.constants import WORKTREE_BRANCH_PREFIX
+        from scc_cli.core.constants import WORKTREE_BRANCH_PREFIX
 
         console = MagicMock()
         console.status.return_value.__enter__ = MagicMock()

@@ -280,9 +280,13 @@ class PolicyViolationError(ConfigError):
             else:
                 self.user_message = f"Security policy violation: '{self.item}' is blocked"
 
-        # Generate fix-it command for suggested action
+        # Generate fix-it command for suggested action (inline to keep core/ dependency-free)
         if not self.suggested_action and self.item:
-            from scc_cli.utils.fixit import generate_policy_exception_command
-
-            cmd = generate_policy_exception_command(self.item, self.item_type)
+            type_to_flag = {
+                "plugin": "--allow-plugin",
+                "mcp_server": "--allow-mcp",
+                "base_image": "--allow-image",
+            }
+            flag = type_to_flag.get(self.item_type, f"--allow-{self.item_type}")
+            cmd = f'scc exceptions create --policy --id INC-... {flag} {self.item} --ttl 8h --reason "..."'
             self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"

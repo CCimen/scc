@@ -29,7 +29,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from ..constants import OAUTH_CREDENTIAL_KEY, SANDBOX_DATA_VOLUME
+from ..core.constants import OAUTH_CREDENTIAL_KEY, SANDBOX_DATA_VOLUME
 from .core import _list_all_sandbox_containers, list_running_sandboxes
 
 

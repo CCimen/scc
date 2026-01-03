@@ -13,54 +13,59 @@ The main `start()` function delegates to focused helper functions
 for maintainability and testability.
 """
 
-import sys
 from pathlib import Path
 from typing import Any, cast
 
 import typer
-from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.status import Status
-from rich.table import Table
 
-from . import config, deps, docker, git, sessions, setup, teams
-from . import platform as platform_module
-from .cli_common import (
-    MAX_DISPLAY_PATH_LENGTH,
-    PATH_TRUNCATE_LENGTH,
+from ... import config, docker, git, sessions, setup, teams
+from ...cli_common import (
     console,
     err_console,
     handle_errors,
 )
-from .confirm import Confirm
-from .constants import WORKTREE_BRANCH_PREFIX
-from .contexts import WorkContext, load_recent_contexts, normalize_path, record_context
-from .errors import NotAGitRepoError, WorkspaceNotFoundError
-from .exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
-from .json_output import build_envelope
-from .kinds import Kind
-from .marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
-from .output_mode import json_output_mode, print_human, print_json, set_pretty_mode
-from .panels import create_info_panel, create_success_panel, create_warning_panel
-from .theme import Colors, Indicators, Spinners, get_brand_header
-from .ui.gate import is_interactive_allowed
-from .ui.picker import (
+from ...confirm import Confirm
+from ...contexts import load_recent_contexts, normalize_path
+from ...core.errors import WorkspaceNotFoundError
+from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
+from ...json_output import build_envelope
+from ...kinds import Kind
+from ...marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
+from ...output_mode import json_output_mode, print_json, set_pretty_mode
+from ...panels import create_warning_panel
+from ...theme import Colors, Indicators, Spinners, get_brand_header
+from ...ui.gate import is_interactive_allowed
+from ...ui.picker import (
     QuickResumeResult,
     TeamSwitchRequested,
     pick_context_quick_resume,
 )
-from .ui.prompts import (
+from ...ui.prompts import (
     prompt_custom_workspace,
     prompt_repo_url,
     select_session,
     select_team,
 )
-from .ui.wizard import (
+from ...ui.wizard import (
     BACK,
     WorkspaceSource,
     pick_recent_workspace,
     pick_team_repo,
     pick_workspace_source,
+)
+from .render import (
+    build_dry_run_data,
+    show_dry_run_panel,
+    warn_if_non_worktree,
+)
+from .sandbox import launch_sandbox
+from .workspace import (
+    prepare_workspace,
+    resolve_mount_and_branch,
+    resolve_workspace_team,
+    validate_and_resolve_workspace,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -173,167 +178,6 @@ def _resolve_session_selection(
     return workspace, team, session_name, worktree_name, cancelled
 
 
-def _validate_and_resolve_workspace(
-    workspace: str | None, *, no_interactive: bool = False
-) -> Path | None:
-    """
-    Validate workspace path and handle platform-specific warnings.
-
-    Raises:
-        WorkspaceNotFoundError: If workspace path doesn't exist.
-        typer.Exit: If user declines to continue after WSL2 warning.
-    """
-    if workspace is None:
-        return None
-
-    workspace_path = Path(workspace).expanduser().resolve()
-
-    if not workspace_path.exists():
-        raise WorkspaceNotFoundError(path=str(workspace_path))
-
-    # WSL2 performance warning
-    if platform_module.is_wsl2():
-        is_optimal, warning = platform_module.check_path_performance(workspace_path)
-        if not is_optimal and warning:
-            print_human(
-                "[yellow]Warning:[/yellow] Workspace is on the Windows filesystem."
-                " Performance may be slow.",
-                file=sys.stderr,
-                highlight=False,
-            )
-            if is_interactive_allowed(no_interactive_flag=no_interactive):
-                console.print()
-                console.print(
-                    create_warning_panel(
-                        "Performance Warning",
-                        "Your workspace is on the Windows filesystem.",
-                        "For better performance, move to ~/projects inside WSL.",
-                    )
-                )
-                console.print()
-                if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
-                    console.print("[dim]Cancelled.[/dim]")
-                    raise typer.Exit(EXIT_CANCELLED)
-
-    return workspace_path
-
-
-def _prepare_workspace(
-    workspace_path: Path | None,
-    worktree_name: str | None,
-    install_deps: bool,
-) -> Path | None:
-    """
-    Prepare workspace: create worktree, install deps, check git safety.
-
-    Returns:
-        The (possibly updated) workspace path after worktree creation.
-    """
-    if workspace_path is None:
-        return None
-
-    # Handle worktree creation
-    if worktree_name:
-        workspace_path = git.create_worktree(workspace_path, worktree_name)
-        console.print(
-            create_success_panel(
-                "Worktree Created",
-                {
-                    "Path": str(workspace_path),
-                    "Branch": f"{WORKTREE_BRANCH_PREFIX}{worktree_name}",
-                },
-            )
-        )
-
-    # Install dependencies if requested
-    if install_deps:
-        with Status(
-            "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
-        ):
-            success = deps.auto_install_dependencies(workspace_path)
-        if success:
-            console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
-        else:
-            console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")
-
-    # Check git safety (handles protected branch warnings)
-    if workspace_path.exists():
-        if not git.check_branch_safety(workspace_path, console):
-            console.print("[dim]Cancelled.[/dim]")
-            raise typer.Exit(EXIT_CANCELLED)
-
-    return workspace_path
-
-
-def _resolve_workspace_team(
-    workspace_path: Path | None,
-    team: str | None,
-    cfg: dict[str, Any],
-    *,
-    json_mode: bool = False,
-    standalone: bool = False,
-    no_interactive: bool = False,
-) -> str | None:
-    """Resolve team selection using workspace pinning when available.
-
-    Prefers explicit team, then workspace-pinned team, then global selected profile.
-    Prompts if pinned team differs from the global profile in interactive mode.
-    """
-    if standalone or workspace_path is None:
-        return team
-
-    if team:
-        return team
-
-    pinned_team = config.get_workspace_team_from_config(cfg, workspace_path)
-    selected_profile: str | None = cfg.get("selected_profile")
-
-    if pinned_team and selected_profile and pinned_team != selected_profile:
-        if is_interactive_allowed(json_mode=json_mode, no_interactive_flag=no_interactive):
-            message = (
-                f"Workspace '{workspace_path}' was last used with team '{pinned_team}'."
-                " Use that team for this session?"
-            )
-            if Confirm.ask(message, default=True):
-                return pinned_team
-            return selected_profile
-
-        if not json_mode:
-            print_human(
-                "[yellow]Notice:[/yellow] "
-                f"Workspace '{workspace_path}' was last used with team '{pinned_team}'. "
-                "Using it. Pass --team to override.",
-                file=sys.stderr,
-                highlight=False,
-            )
-        return pinned_team
-
-    if pinned_team:
-        return pinned_team
-
-    return selected_profile
-
-
-def _warn_if_non_worktree(workspace_path: Path | None, *, json_mode: bool = False) -> None:
-    """Warn when running from a main repo without a worktree."""
-    if json_mode or workspace_path is None:
-        return
-
-    if not git.is_git_repo(workspace_path):
-        return
-
-    if git.is_worktree(workspace_path):
-        return
-
-    print_human(
-        "[yellow]Tip:[/yellow] You're working in the main repo. "
-        "For isolation, try: scc worktree create . <feature> or "
-        "scc start --worktree <feature>",
-        file=sys.stderr,
-        highlight=False,
-    )
-
-
 def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     """
     Validate team profile and inject settings into Docker sandbox.
@@ -441,208 +285,6 @@ def _sync_marketplace_settings(
             )
             # Non-fatal: continue without marketplace sync
             return None
-
-
-def _resolve_mount_and_branch(workspace_path: Path | None) -> tuple[Path | None, str | None]:
-    """
-    Resolve mount path for worktrees and get current branch.
-
-    For worktrees, expands mount scope to include main repo.
-    Returns (mount_path, current_branch).
-    """
-    if workspace_path is None:
-        return None, None
-
-    # Get current branch
-    current_branch = None
-    try:
-        current_branch = git.get_current_branch(workspace_path)
-    except (NotAGitRepoError, OSError):
-        pass
-
-    # Handle worktree mounting
-    mount_path, is_expanded = git.get_workspace_mount_path(workspace_path)
-    if is_expanded:
-        console.print()
-        console.print(
-            create_info_panel(
-                "Worktree Detected",
-                f"Mounting parent directory for worktree support:\n{mount_path}",
-                "Both worktree and main repo will be accessible",
-            )
-        )
-        console.print()
-
-    return mount_path, current_branch
-
-
-def _launch_sandbox(
-    workspace_path: Path | None,
-    mount_path: Path | None,
-    team: str | None,
-    session_name: str | None,
-    current_branch: str | None,
-    should_continue_session: bool,
-    fresh: bool,
-) -> None:
-    """
-    Execute the Docker sandbox with all configurations applied.
-
-    Handles container creation, session recording, and process handoff.
-    Safety-net policy from org config is extracted and mounted read-only.
-    """
-    # Load org config for safety-net policy injection
-    # This is already cached by _configure_team_settings(), so it's a fast read
-    org_config = config.load_cached_org_config()
-
-    # Prepare sandbox volume for credential persistence
-    docker.prepare_sandbox_volume_for_credentials()
-
-    # Get or create container
-    docker_cmd, is_resume = docker.get_or_create_container(
-        workspace=mount_path,
-        branch=current_branch,
-        profile=team,
-        force_new=fresh,
-        continue_session=should_continue_session,
-        env_vars=None,
-    )
-
-    # Extract container name for session tracking
-    container_name = _extract_container_name(docker_cmd, is_resume)
-
-    # Record session and context
-    if workspace_path:
-        sessions.record_session(
-            workspace=str(workspace_path),
-            team=team,
-            session_name=session_name,
-            container_name=container_name,
-            branch=current_branch,
-        )
-        # Record context for quick resume feature
-        # Determine repo root (may be same as workspace for non-worktrees)
-        repo_root = git.get_worktree_main_repo(workspace_path) or workspace_path
-        worktree_name = workspace_path.name
-        context = WorkContext(
-            team=team,  # Keep None for standalone mode (don't use "base")
-            repo_root=repo_root,
-            worktree_path=workspace_path,
-            worktree_name=worktree_name,
-            branch=current_branch,  # For Quick Resume branch highlighting
-            last_session_id=session_name,
-        )
-        # Context recording is best-effort - failure should never block sandbox launch
-        # (Quick Resume is a convenience feature, not critical path)
-        try:
-            record_context(context)
-        except (OSError, ValueError) as e:
-            import logging
-
-            print_human(
-                "[yellow]Warning:[/yellow] Could not save Quick Resume context.",
-                highlight=False,
-            )
-            print_human(f"[dim]{e}[/dim]", highlight=False)
-            logging.debug(f"Failed to record context for Quick Resume: {e}")
-
-        if team:
-            try:
-                config.set_workspace_team(str(workspace_path), team)
-            except (OSError, ValueError) as e:
-                import logging
-
-                print_human(
-                    "[yellow]Warning:[/yellow] Could not save workspace team preference.",
-                    highlight=False,
-                )
-                print_human(f"[dim]{e}[/dim]", highlight=False)
-                logging.debug(f"Failed to store workspace team mapping: {e}")
-
-    # Show launch info and execute
-    _show_launch_panel(
-        workspace=workspace_path,
-        team=team,
-        session_name=session_name,
-        branch=current_branch,
-        is_resume=is_resume,
-    )
-
-    # Pass org_config for safety-net policy injection (mounted read-only)
-    docker.run(docker_cmd, org_config=org_config)
-
-
-def _extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | None:
-    """Extract container name from docker command for session tracking."""
-    for idx, arg in enumerate(docker_cmd):
-        if arg == "--name" and idx + 1 < len(docker_cmd):
-            return docker_cmd[idx + 1]
-        if arg.startswith("--name="):
-            return arg.split("=", 1)[1]
-
-    if is_resume and docker_cmd:
-        # For resume, container name is the last arg
-        if docker_cmd[-1].startswith("scc-"):
-            return docker_cmd[-1]
-    return None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Dry Run Data Builder (Pure Function)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def build_dry_run_data(
-    workspace_path: Path,
-    team: str | None,
-    org_config: dict[str, Any] | None,
-    project_config: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """
-    Build dry run data showing resolved configuration.
-
-    This pure function assembles configuration information for preview
-    without performing any side effects like Docker launch.
-
-    Args:
-        workspace_path: Path to the workspace directory.
-        team: Selected team profile name (or None).
-        org_config: Organization configuration dict (or None).
-        project_config: Project-level .scc.yaml config (or None).
-
-    Returns:
-        Dictionary with resolved configuration data.
-    """
-    plugins: list[dict[str, Any]] = []
-    blocked_items: list[str] = []
-
-    if org_config and team:
-        from . import profiles
-
-        workspace_for_project = None if project_config is not None else workspace_path
-        effective = profiles.compute_effective_config(
-            org_config,
-            team,
-            project_config=project_config,
-            workspace_path=workspace_for_project,
-        )
-
-        for plugin in sorted(effective.plugins):
-            plugins.append({"name": plugin, "source": "resolved"})
-
-        for blocked in effective.blocked_items:
-            if blocked.blocked_by:
-                blocked_items.append(f"{blocked.item} (blocked by '{blocked.blocked_by}')")
-            else:
-                blocked_items.append(blocked.item)
-
-    return {
-        "workspace": str(workspace_path),
-        "team": team,
-        "plugins": plugins,
-        "blocked_items": blocked_items,
-        "ready_to_start": len(blocked_items) == 0,
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -767,7 +409,7 @@ def start(
         docker.check_docker_available()
 
     # ── Step 4: Workspace validation and platform checks ─────────────────────
-    workspace_path = _validate_and_resolve_workspace(workspace, no_interactive=non_interactive)
+    workspace_path = validate_and_resolve_workspace(workspace, no_interactive=non_interactive)
     if workspace_path is None:
         if not json_output and not pretty:
             console.print("[dim]Cancelled.[/dim]")
@@ -776,10 +418,10 @@ def start(
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
     # ── Step 5: Workspace preparation (worktree, deps, git safety) ───────────
-    workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps)
+    workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps)
 
     # ── Step 5.5: Resolve team from workspace pinning ────────────────────────
-    team = _resolve_workspace_team(
+    team = resolve_workspace_team(
         workspace_path,
         team,
         cfg,
@@ -826,18 +468,18 @@ def start(
                     if pretty:
                         set_pretty_mode(False)
         else:
-            _show_dry_run_panel(dry_run_data)
+            show_dry_run_panel(dry_run_data)
 
         raise typer.Exit(0)
 
-    _warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
+    warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 
     # ── Step 7: Resolve mount path and branch for worktrees ──────────────────
-    mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+    mount_path, current_branch = resolve_mount_and_branch(workspace_path)
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
     should_continue_session = resume or continue_session
-    _launch_sandbox(
+    launch_sandbox(
         workspace_path=workspace_path,
         mount_path=mount_path,
         team=team,
@@ -846,115 +488,6 @@ def start(
         should_continue_session=should_continue_session,
         fresh=fresh,
     )
-
-
-def _show_launch_panel(
-    workspace: Path | None,
-    team: str | None,
-    session_name: str | None,
-    branch: str | None,
-    is_resume: bool,
-) -> None:
-    """Display launch info panel with session details.
-
-    Args:
-        workspace: Path to the workspace directory, or None.
-        team: Team profile name, or None for base profile.
-        session_name: Optional session name for identification.
-        branch: Current git branch, or None if not in a git repo.
-        is_resume: True if resuming an existing container.
-    """
-    grid = Table.grid(padding=(0, 2))
-    grid.add_column(style="dim", no_wrap=True)
-    grid.add_column(style="white")
-
-    if workspace:
-        # Shorten path for display
-        display_path = str(workspace)
-        if len(display_path) > MAX_DISPLAY_PATH_LENGTH:
-            display_path = "..." + display_path[-PATH_TRUNCATE_LENGTH:]
-        grid.add_row("Workspace:", display_path)
-
-    grid.add_row("Team:", team or "standalone")
-
-    if branch:
-        grid.add_row("Branch:", branch)
-
-    if session_name:
-        grid.add_row("Session:", session_name)
-
-    mode = "[green]Resume existing[/green]" if is_resume else "[cyan]New container[/cyan]"
-    grid.add_row("Mode:", mode)
-
-    panel = Panel(
-        grid,
-        title="[bold green]Launching Claude Code[/bold green]",
-        border_style="green",
-        padding=(0, 1),
-    )
-
-    console.print()
-    console.print(panel)
-    console.print()
-    console.print("[dim]Starting Docker sandbox...[/dim]")
-    console.print()
-
-
-def _show_dry_run_panel(data: dict[str, Any]) -> None:
-    """Display dry run configuration preview.
-
-    Args:
-        data: Dictionary containing workspace, team, plugins, and ready_to_start status.
-    """
-    grid = Table.grid(padding=(0, 2))
-    grid.add_column(style="dim", no_wrap=True)
-    grid.add_column(style="white")
-
-    # Workspace
-    workspace = data.get("workspace", "")
-    if len(workspace) > MAX_DISPLAY_PATH_LENGTH:
-        workspace = "..." + workspace[-PATH_TRUNCATE_LENGTH:]
-    grid.add_row("Workspace:", workspace)
-
-    # Team
-    grid.add_row("Team:", data.get("team") or "standalone")
-
-    # Plugins
-    plugins = data.get("plugins", [])
-    if plugins:
-        plugin_list = ", ".join(p.get("name", "unknown") for p in plugins)
-        grid.add_row("Plugins:", plugin_list)
-    else:
-        grid.add_row("Plugins:", "[dim]none[/dim]")
-
-    # Ready status
-    ready = data.get("ready_to_start", True)
-    status = (
-        f"[green]{Indicators.get('PASS')} Ready to start[/green]"
-        if ready
-        else f"[red]{Indicators.get('FAIL')} Blocked[/red]"
-    )
-    grid.add_row("Status:", status)
-
-    # Blocked items
-    blocked = data.get("blocked_items", [])
-    if blocked:
-        for item in blocked:
-            grid.add_row("[red]Blocked:[/red]", item)
-
-    panel = Panel(
-        grid,
-        title="[bold cyan]Dry Run Preview[/bold cyan]",
-        border_style="cyan",
-        padding=(0, 1),
-    )
-
-    console.print()
-    console.print(panel)
-    console.print()
-    if ready:
-        console.print("[dim]Remove --dry-run to launch[/dim]")
-    console.print()
 
 
 def interactive_start(
@@ -1428,10 +961,10 @@ def run_start_wizard_flow(
             docker.check_docker_available()
 
         # Step 4: Workspace validation
-        workspace_path = _validate_and_resolve_workspace(workspace)
+        workspace_path = validate_and_resolve_workspace(workspace)
 
         # Step 5: Workspace preparation (worktree, deps, git safety)
-        workspace_path = _prepare_workspace(workspace_path, worktree_name, install_deps=False)
+        workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps=False)
 
         # Step 6: Team configuration
         _configure_team_settings(team, cfg)
@@ -1440,10 +973,10 @@ def run_start_wizard_flow(
         _sync_marketplace_settings(workspace_path, team)
 
         # Step 7: Resolve mount path and branch
-        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+        mount_path, current_branch = resolve_mount_and_branch(workspace_path)
 
         # Step 8: Launch sandbox (fresh start, not resume)
-        _launch_sandbox(
+        launch_sandbox(
             workspace_path=workspace_path,
             mount_path=mount_path,
             team=team,

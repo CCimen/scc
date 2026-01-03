@@ -97,11 +97,13 @@ class TestTeamList:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """List command should display available teams."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     result = cli_runner.invoke(team_app, ["list"])
 
         assert result.exit_code == 0
@@ -113,11 +115,13 @@ class TestTeamList:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """Current team should be marked in the list."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     result = cli_runner.invoke(team_app, ["list"])
 
         assert result.exit_code == 0
@@ -128,11 +132,13 @@ class TestTeamList:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Should show message when no teams available."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=[]):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=[]):
                     result = cli_runner.invoke(team_app, ["list"])
 
         assert result.exit_code == 0
@@ -143,11 +149,13 @@ class TestTeamList:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """--json should return proper JSON envelope."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     result = cli_runner.invoke(team_app, ["list", "--json"])
 
         assert result.exit_code == 0
@@ -160,11 +168,13 @@ class TestTeamList:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """JSON output should include is_current field for teams."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     result = cli_runner.invoke(team_app, ["list", "--json"])
 
         data = json.loads(result.stdout)
@@ -182,15 +192,17 @@ class TestTeamList:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """--sync should fetch fresh config from organization."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         mock_fetch_return = ({"profiles": {}}, '"etag123"', 200)
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     with patch(
-                        "scc_cli.cli_team.config.CACHE_DIR",
+                        "scc_cli.commands.team.config.CACHE_DIR",
                         new=MagicMock(mkdir=MagicMock()),
                     ):
                         with patch(
@@ -215,7 +227,7 @@ class TestTeamCurrent:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Should display the currently selected team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         team_details = {
             "name": "backend",
@@ -223,9 +235,13 @@ class TestTeamCurrent:
             "plugins": ["backend-tools@marketplace"],
         }
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=team_details):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.team.teams.get_team_details", return_value=team_details
+                ):
                     result = cli_runner.invoke(team_app, ["current"])
 
         assert result.exit_code == 0
@@ -235,10 +251,12 @@ class TestTeamCurrent:
         self, cli_runner: CliRunner, user_config_no_team: dict
     ) -> None:
         """Should show message when no team selected."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_no_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_no_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
                 result = cli_runner.invoke(team_app, ["current"])
 
         assert result.exit_code == 0
@@ -249,11 +267,13 @@ class TestTeamCurrent:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Should handle case where selected team no longer exists."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=None):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.get_team_details", return_value=None):
                     result = cli_runner.invoke(team_app, ["current"])
 
         assert result.exit_code == 0
@@ -262,7 +282,7 @@ class TestTeamCurrent:
 
     def test_current_json_output(self, cli_runner: CliRunner, user_config_with_team: dict) -> None:
         """--json should return proper JSON envelope with team info."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         team_details = {
             "name": "backend",
@@ -271,9 +291,13 @@ class TestTeamCurrent:
             "marketplace": "internal",
         }
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=team_details):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.team.teams.get_team_details", return_value=team_details
+                ):
                     result = cli_runner.invoke(team_app, ["current", "--json"])
 
         assert result.exit_code == 0
@@ -284,10 +308,12 @@ class TestTeamCurrent:
 
     def test_current_json_no_team(self, cli_runner: CliRunner, user_config_no_team: dict) -> None:
         """--json with no team should return null team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_no_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_no_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
                 result = cli_runner.invoke(team_app, ["current", "--json"])
 
         assert result.exit_code == 0
@@ -307,12 +333,14 @@ class TestTeamSwitch:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """Should successfully switch to a valid team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
-                    with patch("scc_cli.cli_team.config.save_user_config") as mock_save:
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
+                    with patch("scc_cli.commands.team.config.save_user_config") as mock_save:
                         result = cli_runner.invoke(team_app, ["switch", "frontend"])
 
         assert result.exit_code == 0
@@ -327,12 +355,14 @@ class TestTeamSwitch:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """Should show error for non-existent team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
-                    with patch("scc_cli.cli_team.config.save_user_config") as mock_save:
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
+                    with patch("scc_cli.commands.team.config.save_user_config") as mock_save:
                         result = cli_runner.invoke(team_app, ["switch", "nonexistent"])
 
         # Should not save config
@@ -345,11 +375,13 @@ class TestTeamSwitch:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Should show message when no teams available."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=[]):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=[]):
                     result = cli_runner.invoke(team_app, ["switch", "backend"])
 
         output_lower = result.stdout.lower()
@@ -359,11 +391,13 @@ class TestTeamSwitch:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """--non-interactive should fail without team name."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     result = cli_runner.invoke(team_app, ["switch", "--non-interactive"])
 
         assert result.exit_code != 0
@@ -372,12 +406,14 @@ class TestTeamSwitch:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """--json should return success envelope on valid switch."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
-                    with patch("scc_cli.cli_team.config.save_user_config"):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
+                    with patch("scc_cli.commands.team.config.save_user_config"):
                         result = cli_runner.invoke(team_app, ["switch", "frontend", "--json"])
 
         assert result.exit_code == 0
@@ -391,11 +427,13 @@ class TestTeamSwitch:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """--json should return error info for invalid team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
                     result = cli_runner.invoke(team_app, ["switch", "nonexistent", "--json"])
 
         assert result.exit_code == 0  # JSON mode returns 0 with error in payload
@@ -416,7 +454,7 @@ class TestTeamInfo:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Should display detailed team information."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         team_details = {
             "name": "backend",
@@ -427,11 +465,15 @@ class TestTeamInfo:
         }
         validation = {"valid": True, "warnings": [], "errors": []}
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=team_details):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.team.teams.get_team_details", return_value=team_details
+                ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile", return_value=validation
+                        "scc_cli.commands.team.teams.validate_team_profile", return_value=validation
                     ):
                         result = cli_runner.invoke(team_app, ["info", "backend"])
 
@@ -441,11 +483,13 @@ class TestTeamInfo:
 
     def test_info_team_not_found(self, cli_runner: CliRunner, user_config_with_team: dict) -> None:
         """Should show not found for missing team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=None):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.get_team_details", return_value=None):
                     result = cli_runner.invoke(team_app, ["info", "nonexistent"])
 
         assert result.exit_code == 0
@@ -456,7 +500,7 @@ class TestTeamInfo:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Should display validation warnings."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         team_details = {
             "name": "backend",
@@ -469,11 +513,15 @@ class TestTeamInfo:
             "errors": [],
         }
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=team_details):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.team.teams.get_team_details", return_value=team_details
+                ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile", return_value=validation
+                        "scc_cli.commands.team.teams.validate_team_profile", return_value=validation
                     ):
                         result = cli_runner.invoke(team_app, ["info", "backend"])
 
@@ -485,7 +533,7 @@ class TestTeamInfo:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """--json should return full team profile info."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         team_details = {
             "name": "backend",
@@ -497,11 +545,15 @@ class TestTeamInfo:
         }
         validation = {"valid": True, "warnings": [], "errors": []}
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=team_details):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.team.teams.get_team_details", return_value=team_details
+                ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile", return_value=validation
+                        "scc_cli.commands.team.teams.validate_team_profile", return_value=validation
                     ):
                         result = cli_runner.invoke(team_app, ["info", "backend", "--json"])
 
@@ -516,11 +568,13 @@ class TestTeamInfo:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """--json should return found=false for missing team."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=None):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.get_team_details", return_value=None):
                     result = cli_runner.invoke(team_app, ["info", "nonexistent", "--json"])
 
         assert result.exit_code == 0
@@ -530,7 +584,7 @@ class TestTeamInfo:
 
     def test_info_requires_team_name(self, cli_runner: CliRunner) -> None:
         """Info command should require team name argument."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         result = cli_runner.invoke(team_app, ["info"])
 
@@ -549,7 +603,7 @@ class TestTeamCommandEdgeCases:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Descriptions should be truncated without --verbose."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         long_desc_teams = [
             {
@@ -559,9 +613,11 @@ class TestTeamCommandEdgeCases:
             }
         ]
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=long_desc_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=long_desc_teams):
                     result = cli_runner.invoke(team_app, ["list"])
 
         assert result.exit_code == 0
@@ -572,7 +628,7 @@ class TestTeamCommandEdgeCases:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """--verbose should show full descriptions."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         long_desc_teams = [
             {
@@ -582,9 +638,11 @@ class TestTeamCommandEdgeCases:
             }
         ]
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=long_desc_teams):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=long_desc_teams):
                     result = cli_runner.invoke(team_app, ["list", "--verbose"])
 
         assert result.exit_code == 0
@@ -596,12 +654,14 @@ class TestTeamCommandEdgeCases:
         self, cli_runner: CliRunner, sample_teams: list[dict], user_config_with_team: dict
     ) -> None:
         """Switching to the same team should succeed."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.list_teams", return_value=sample_teams):
-                    with patch("scc_cli.cli_team.config.save_user_config"):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch("scc_cli.commands.team.teams.list_teams", return_value=sample_teams):
+                    with patch("scc_cli.commands.team.config.save_user_config"):
                         result = cli_runner.invoke(team_app, ["switch", "backend"])
 
         assert result.exit_code == 0
@@ -610,7 +670,7 @@ class TestTeamCommandEdgeCases:
         self, cli_runner: CliRunner, user_config_with_team: dict
     ) -> None:
         """Info for profile with no plugin should show 'base profile'."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
         team_details = {
             "name": "platform",
@@ -619,11 +679,15 @@ class TestTeamCommandEdgeCases:
         }
         validation = {"valid": True, "warnings": [], "errors": []}
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
-            with patch("scc_cli.cli_team.config.load_cached_org_config", return_value={}):
-                with patch("scc_cli.cli_team.teams.get_team_details", return_value=team_details):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
+            with patch("scc_cli.commands.team.config.load_cached_org_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.team.teams.get_team_details", return_value=team_details
+                ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile", return_value=validation
+                        "scc_cli.commands.team.teams.validate_team_profile", return_value=validation
                     ):
                         result = cli_runner.invoke(team_app, ["info", "platform"])
 
@@ -689,18 +753,21 @@ class TestTeamSwitchFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Switching to inline team should NOT trigger fetch_team_config."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.list_teams", return_value=sample_teams_with_federated
+                    "scc_cli.commands.team.teams.list_teams",
+                    return_value=sample_teams_with_federated,
                 ):
-                    with patch("scc_cli.cli_team.config.save_user_config"):
-                        with patch("scc_cli.cli_team.fetch_team_config") as mock_fetch:
+                    with patch("scc_cli.commands.team.config.save_user_config"):
+                        with patch("scc_cli.commands.team.fetch_team_config") as mock_fetch:
                             result = cli_runner.invoke(team_app, ["switch", "backend"])
 
         assert result.exit_code == 0
@@ -715,7 +782,7 @@ class TestTeamSwitchFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Switching to federated team should fetch team config to prime cache."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
         from scc_cli.marketplace.team_fetch import TeamFetchResult
 
         mock_result = TeamFetchResult(
@@ -726,17 +793,20 @@ class TestTeamSwitchFederated:
             commit_sha="abc123",
         )
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.list_teams", return_value=sample_teams_with_federated
+                    "scc_cli.commands.team.teams.list_teams",
+                    return_value=sample_teams_with_federated,
                 ):
-                    with patch("scc_cli.cli_team.config.save_user_config"):
+                    with patch("scc_cli.commands.team.config.save_user_config"):
                         with patch(
-                            "scc_cli.cli_team.fetch_team_config", return_value=mock_result
+                            "scc_cli.commands.team.fetch_team_config", return_value=mock_result
                         ) as mock_fetch:
                             result = cli_runner.invoke(team_app, ["switch", "frontend"])
 
@@ -753,7 +823,7 @@ class TestTeamSwitchFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Switching to federated team should display federation info."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
         from scc_cli.marketplace.team_fetch import TeamFetchResult
 
         mock_result = TeamFetchResult(
@@ -764,16 +834,21 @@ class TestTeamSwitchFederated:
             commit_sha="abc123",
         )
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.list_teams", return_value=sample_teams_with_federated
+                    "scc_cli.commands.team.teams.list_teams",
+                    return_value=sample_teams_with_federated,
                 ):
-                    with patch("scc_cli.cli_team.config.save_user_config"):
-                        with patch("scc_cli.cli_team.fetch_team_config", return_value=mock_result):
+                    with patch("scc_cli.commands.team.config.save_user_config"):
+                        with patch(
+                            "scc_cli.commands.team.fetch_team_config", return_value=mock_result
+                        ):
                             result = cli_runner.invoke(team_app, ["switch", "frontend"])
 
         assert result.exit_code == 0
@@ -789,7 +864,7 @@ class TestTeamSwitchFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Fetch failure should warn but not block team switch."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
         from scc_cli.marketplace.team_fetch import TeamFetchResult
 
         mock_result = TeamFetchResult(
@@ -799,16 +874,21 @@ class TestTeamSwitchFederated:
             error="Network error: Connection refused",
         )
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.list_teams", return_value=sample_teams_with_federated
+                    "scc_cli.commands.team.teams.list_teams",
+                    return_value=sample_teams_with_federated,
                 ):
-                    with patch("scc_cli.cli_team.config.save_user_config") as mock_save:
-                        with patch("scc_cli.cli_team.fetch_team_config", return_value=mock_result):
+                    with patch("scc_cli.commands.team.config.save_user_config") as mock_save:
+                        with patch(
+                            "scc_cli.commands.team.fetch_team_config", return_value=mock_result
+                        ):
                             result = cli_runner.invoke(team_app, ["switch", "frontend"])
 
         # Switch should succeed despite fetch failure
@@ -826,7 +906,7 @@ class TestTeamSwitchFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """JSON output should include federation metadata."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
         from scc_cli.marketplace.team_fetch import TeamFetchResult
 
         mock_result = TeamFetchResult(
@@ -837,16 +917,21 @@ class TestTeamSwitchFederated:
             commit_sha="abc123",
         )
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.list_teams", return_value=sample_teams_with_federated
+                    "scc_cli.commands.team.teams.list_teams",
+                    return_value=sample_teams_with_federated,
                 ):
-                    with patch("scc_cli.cli_team.config.save_user_config"):
-                        with patch("scc_cli.cli_team.fetch_team_config", return_value=mock_result):
+                    with patch("scc_cli.commands.team.config.save_user_config"):
+                        with patch(
+                            "scc_cli.commands.team.fetch_team_config", return_value=mock_result
+                        ):
                             result = cli_runner.invoke(team_app, ["switch", "frontend", "--json"])
 
         assert result.exit_code == 0
@@ -900,19 +985,21 @@ class TestTeamInfoFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Team info for inline team should show 'inline' mode."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.get_team_details",
+                    "scc_cli.commands.team.teams.get_team_details",
                     return_value={"name": "backend", "description": "Backend team (inline)"},
                 ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile",
+                        "scc_cli.commands.team.teams.validate_team_profile",
                         return_value={"valid": True, "warnings": [], "errors": []},
                     ):
                         result = cli_runner.invoke(team_app, ["info", "backend"])
@@ -928,19 +1015,21 @@ class TestTeamInfoFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Team info for federated team should show 'federated' mode."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.get_team_details",
+                    "scc_cli.commands.team.teams.get_team_details",
                     return_value={"name": "frontend", "description": "Frontend team (federated)"},
                 ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile",
+                        "scc_cli.commands.team.teams.validate_team_profile",
                         return_value={"valid": True, "warnings": [], "errors": []},
                     ):
                         result = cli_runner.invoke(team_app, ["info", "frontend"])
@@ -956,19 +1045,21 @@ class TestTeamInfoFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Team info for federated team should show config source URL."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.get_team_details",
+                    "scc_cli.commands.team.teams.get_team_details",
                     return_value={"name": "frontend", "description": "Frontend team (federated)"},
                 ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile",
+                        "scc_cli.commands.team.teams.validate_team_profile",
                         return_value={"valid": True, "warnings": [], "errors": []},
                     ):
                         result = cli_runner.invoke(team_app, ["info", "frontend"])
@@ -984,19 +1075,21 @@ class TestTeamInfoFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """Team info for federated team should show trust grants."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.get_team_details",
+                    "scc_cli.commands.team.teams.get_team_details",
                     return_value={"name": "frontend", "description": "Frontend team (federated)"},
                 ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile",
+                        "scc_cli.commands.team.teams.validate_team_profile",
                         return_value={"valid": True, "warnings": [], "errors": []},
                     ):
                         result = cli_runner.invoke(team_app, ["info", "frontend"])
@@ -1012,19 +1105,21 @@ class TestTeamInfoFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """JSON output for federated team should include federation metadata."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.get_team_details",
+                    "scc_cli.commands.team.teams.get_team_details",
                     return_value={"name": "frontend", "description": "Frontend team (federated)"},
                 ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile",
+                        "scc_cli.commands.team.teams.validate_team_profile",
                         return_value={"valid": True, "warnings": [], "errors": []},
                     ):
                         result = cli_runner.invoke(team_app, ["info", "frontend", "--json"])
@@ -1042,19 +1137,21 @@ class TestTeamInfoFederated:
         org_config_with_federated_team: dict,
     ) -> None:
         """JSON output for inline team should show inline status."""
-        from scc_cli.cli_team import team_app
+        from scc_cli.commands.team import team_app
 
-        with patch("scc_cli.cli_team.config.load_user_config", return_value=user_config_with_team):
+        with patch(
+            "scc_cli.commands.team.config.load_user_config", return_value=user_config_with_team
+        ):
             with patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=org_config_with_federated_team,
             ):
                 with patch(
-                    "scc_cli.cli_team.teams.get_team_details",
+                    "scc_cli.commands.team.teams.get_team_details",
                     return_value={"name": "backend", "description": "Backend team (inline)"},
                 ):
                     with patch(
-                        "scc_cli.cli_team.teams.validate_team_profile",
+                        "scc_cli.commands.team.teams.validate_team_profile",
                         return_value={"valid": True, "warnings": [], "errors": []},
                     ):
                         result = cli_runner.invoke(team_app, ["info", "backend", "--json"])

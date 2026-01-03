@@ -23,8 +23,8 @@ from rich.text import Text
 from rich.tree import Tree
 
 from ..confirm import Confirm
-from ..constants import WORKTREE_BRANCH_PREFIX
-from ..errors import (
+from ..core.constants import WORKTREE_BRANCH_PREFIX
+from ..core.errors import (
     CloneError,
     NotAGitRepoError,
     WorktreeCreationError,

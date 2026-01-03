@@ -4,13 +4,13 @@ from pathlib import Path
 
 import typer
 
-from . import config, profiles, setup
-from .cli_common import console, handle_errors
-from .exit_codes import EXIT_USAGE
-from .panels import create_error_panel, create_info_panel
-from .source_resolver import ResolveError, resolve_source
-from .stores.exception_store import RepoStore, UserStore
-from .utils.ttl import format_relative
+from .. import config, profiles, setup
+from ..cli_common import console, handle_errors
+from ..core.exit_codes import EXIT_USAGE
+from ..panels import create_error_panel, create_info_panel
+from ..source_resolver import ResolveError, resolve_source
+from ..stores.exception_store import RepoStore, UserStore
+from ..utils.ttl import format_relative
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config App
@@ -460,7 +460,7 @@ def _render_active_exceptions() -> int:
     """
     from datetime import datetime, timezone
 
-    from .models.exceptions import Exception as SccException
+    from ..models.exceptions import Exception as SccException
 
     # Load exceptions from both stores
     user_store = UserStore()

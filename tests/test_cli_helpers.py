@@ -19,7 +19,7 @@ from scc_cli.cli_helpers import (
     is_interactive,
     require_reason_for_governance,
 )
-from scc_cli.exit_codes import EXIT_USAGE
+from scc_cli.core.exit_codes import EXIT_USAGE
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for is_interactive()

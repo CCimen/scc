@@ -27,8 +27,8 @@ from typing import Any, TypeVar
 
 import typer
 
-from .errors import ConfigError, PolicyViolationError, PrerequisiteError, SCCError
-from .exit_codes import (
+from .core.errors import ConfigError, PolicyViolationError, PrerequisiteError, SCCError
+from .core.exit_codes import (
     EXIT_CANCELLED,
     EXIT_CONFIG,
     EXIT_ERROR,

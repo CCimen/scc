@@ -25,7 +25,7 @@ from scc_cli.confirm import Confirm
 from scc_cli.theme import Borders, Colors
 
 if TYPE_CHECKING:
-    from scc_cli.errors import SCCError
+    from scc_cli.core.errors import SCCError
 
 
 def render_error(console: Console, error: "SCCError", debug: bool = False) -> None:

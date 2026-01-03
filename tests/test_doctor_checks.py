@@ -294,7 +294,9 @@ class TestCheckMarketplaceAuthAvailable:
         user_config = {"selected_profile": "dev"}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=org_config),
+            patch(
+                "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
+            ),
         ):
             result = doctor.check_marketplace_auth_available()
 
@@ -318,7 +320,9 @@ class TestCheckMarketplaceAuthAvailable:
         user_config = {"selected_profile": "dev"}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=org_config),
+            patch(
+                "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
+            ),
             patch.dict(os.environ, {"GITLAB_TOKEN": "secret-token"}),
         ):
             result = doctor.check_marketplace_auth_available()
@@ -344,7 +348,9 @@ class TestCheckMarketplaceAuthAvailable:
         clean_env = {k: v for k, v in os.environ.items() if k != "GITLAB_TOKEN"}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=org_config),
+            patch(
+                "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
+            ),
             patch.dict(os.environ, clean_env, clear=True),
         ):
             result = doctor.check_marketplace_auth_available()
@@ -358,7 +364,7 @@ class TestCheckMarketplaceAuthAvailable:
         user_config = {"selected_profile": None}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=None),
+            patch("scc_cli.doctor.checks.organization.load_cached_org_config", return_value=None),
         ):
             result = doctor.check_marketplace_auth_available()
 
@@ -369,7 +375,7 @@ class TestCheckMarketplaceAuthAvailable:
         user_config = {"selected_profile": "dev"}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=None),
+            patch("scc_cli.doctor.checks.organization.load_cached_org_config", return_value=None),
         ):
             result = doctor.check_marketplace_auth_available()
 
@@ -400,7 +406,9 @@ class TestCheckCredentialInjection:
         user_config = {"selected_profile": "dev"}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=org_config),
+            patch(
+                "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
+            ),
             patch.dict(os.environ, {"GITLAB_TOKEN": "secret"}),
         ):
             result = doctor.check_credential_injection()
@@ -420,7 +428,9 @@ class TestCheckCredentialInjection:
         user_config = {"selected_profile": "dev"}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=org_config),
+            patch(
+                "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
+            ),
         ):
             result = doctor.check_credential_injection()
 
@@ -433,7 +443,7 @@ class TestCheckCredentialInjection:
         user_config = {}
         with (
             patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
-            patch("scc_cli.doctor.checks.load_cached_org_config", return_value=None),
+            patch("scc_cli.doctor.checks.organization.load_cached_org_config", return_value=None),
         ):
             result = doctor.check_credential_injection()
 

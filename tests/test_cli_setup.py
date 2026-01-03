@@ -53,7 +53,7 @@ class TestSetupOrgFlag:
         )
 
         with (
-            patch("scc_cli.cli_config.resolve_source", return_value=mock_resolved),
+            patch("scc_cli.commands.config.resolve_source", return_value=mock_resolved),
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 return_value=sample_org_config,
@@ -78,7 +78,7 @@ class TestSetupOrgFlag:
         mock_resolved.resolved_url = "https://example.com/org-config.json"
 
         with (
-            patch("scc_cli.cli_config.resolve_source", return_value=mock_resolved),
+            patch("scc_cli.commands.config.resolve_source", return_value=mock_resolved),
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 return_value=sample_org_config,
@@ -103,7 +103,7 @@ class TestSetupOrgFlag:
             suggestion="Use: github:owner/repo or https://...",
         )
 
-        with patch("scc_cli.cli_config.resolve_source", return_value=mock_error):
+        with patch("scc_cli.commands.config.resolve_source", return_value=mock_error):
             result = cli_runner.invoke(app, ["setup", "--org", "invalid-source"])
 
         assert result.exit_code == 1
@@ -129,7 +129,7 @@ class TestSetupProfileFlag:
         mock_resolved.resolved_url = "https://example.com/org-config.json"
 
         with (
-            patch("scc_cli.cli_config.resolve_source", return_value=mock_resolved),
+            patch("scc_cli.commands.config.resolve_source", return_value=mock_resolved),
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 return_value=sample_org_config,
@@ -153,7 +153,7 @@ class TestSetupProfileFlag:
         mock_resolved.resolved_url = "https://example.com/org-config.json"
 
         with (
-            patch("scc_cli.cli_config.resolve_source", return_value=mock_resolved),
+            patch("scc_cli.commands.config.resolve_source", return_value=mock_resolved),
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 return_value=sample_org_config,
@@ -178,7 +178,7 @@ class TestSetupProfileFlag:
         mock_resolved.resolved_url = "https://example.com/org-config.json"
 
         with (
-            patch("scc_cli.cli_config.resolve_source", return_value=mock_resolved),
+            patch("scc_cli.commands.config.resolve_source", return_value=mock_resolved),
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 return_value=sample_org_config,
@@ -253,7 +253,9 @@ class TestSetupOrgUrlBackwardCompat:
         mock_resolved.resolved_url = "https://raw.githubusercontent.com/org/repo/main/config.json"
 
         with (
-            patch("scc_cli.cli_config.resolve_source", return_value=mock_resolved) as mock_resolve,
+            patch(
+                "scc_cli.commands.config.resolve_source", return_value=mock_resolved
+            ) as mock_resolve,
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 return_value=sample_org_config,

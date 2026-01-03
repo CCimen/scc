@@ -26,20 +26,20 @@ class TestOrgAppStructure:
 
     def test_org_app_exists(self) -> None:
         """org_app Typer should exist."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         assert org_app is not None
 
     def test_org_app_has_validate_command(self) -> None:
         """org_app should have 'validate' subcommand."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         command_names = [cmd.name for cmd in org_app.registered_commands]
         assert "validate" in command_names
 
     def test_org_app_has_schema_command(self) -> None:
         """org_app should have 'schema' subcommand."""
-        from scc_cli.cli_org import org_app
+        from scc_cli.commands.org import org_app
 
         command_names = [cmd.name for cmd in org_app.registered_commands]
         assert "schema" in command_names
@@ -55,7 +55,7 @@ class TestOrgValidate:
 
     def test_validate_file_valid_config(self, tmp_path: Path) -> None:
         """validate should succeed for valid config file."""
-        from scc_cli.cli_org import org_validate_cmd
+        from scc_cli.commands.org import org_validate_cmd
 
         # Create a minimal valid config (matches v1 schema requirements)
         config_file = tmp_path / "org.json"
@@ -65,7 +65,7 @@ class TestOrgValidate:
             )
         )
 
-        with patch("scc_cli.cli_org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             try:
                 org_validate_cmd(
                     source=str(config_file),
@@ -78,7 +78,7 @@ class TestOrgValidate:
 
     def test_validate_file_invalid_config(self, tmp_path: Path) -> None:
         """validate should fail for invalid config file."""
-        from scc_cli.cli_org import org_validate_cmd
+        from scc_cli.commands.org import org_validate_cmd
 
         # Create an invalid config (missing required fields)
         config_file = tmp_path / "org.json"
@@ -91,7 +91,7 @@ class TestOrgValidate:
             )
         )
 
-        with patch("scc_cli.cli_org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source=str(config_file),
@@ -103,7 +103,7 @@ class TestOrgValidate:
 
     def test_validate_json_output_valid(self, tmp_path: Path, capsys) -> None:
         """validate --json should output JSON envelope for valid config."""
-        from scc_cli.cli_org import org_validate_cmd
+        from scc_cli.commands.org import org_validate_cmd
 
         config_file = tmp_path / "org.json"
         config_file.write_text(
@@ -130,7 +130,7 @@ class TestOrgValidate:
 
     def test_validate_json_output_invalid(self, tmp_path: Path, capsys) -> None:
         """validate --json should output errors for invalid config."""
-        from scc_cli.cli_org import org_validate_cmd
+        from scc_cli.commands.org import org_validate_cmd
 
         config_file = tmp_path / "org.json"
         config_file.write_text(
@@ -160,9 +160,9 @@ class TestOrgValidate:
 
     def test_validate_nonexistent_file(self) -> None:
         """validate should fail for nonexistent file."""
-        from scc_cli.cli_org import org_validate_cmd
+        from scc_cli.commands.org import org_validate_cmd
 
-        with patch("scc_cli.cli_org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source="/nonexistent/path/config.json",
@@ -174,12 +174,12 @@ class TestOrgValidate:
 
     def test_validate_malformed_json(self, tmp_path: Path) -> None:
         """validate should fail for malformed JSON."""
-        from scc_cli.cli_org import org_validate_cmd
+        from scc_cli.commands.org import org_validate_cmd
 
         config_file = tmp_path / "org.json"
         config_file.write_text("{ invalid json }")
 
-        with patch("scc_cli.cli_org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source=str(config_file),
@@ -200,7 +200,7 @@ class TestOrgSchema:
 
     def test_schema_prints_bundled_schema(self, capsys) -> None:
         """schema should print the bundled JSON schema."""
-        from scc_cli.cli_org import org_schema_cmd
+        from scc_cli.commands.org import org_schema_cmd
 
         try:
             org_schema_cmd(
@@ -218,7 +218,7 @@ class TestOrgSchema:
 
     def test_schema_json_output(self, capsys) -> None:
         """schema --json should output envelope with schema."""
-        from scc_cli.cli_org import org_schema_cmd
+        from scc_cli.commands.org import org_schema_cmd
 
         try:
             org_schema_cmd(
@@ -237,9 +237,9 @@ class TestOrgSchema:
 
     def test_schema_invalid_version(self) -> None:
         """schema with invalid version should fail."""
-        from scc_cli.cli_org import org_schema_cmd
+        from scc_cli.commands.org import org_schema_cmd
 
-        with patch("scc_cli.cli_org.console"):
+        with patch("scc_cli.commands.org.schema_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_schema_cmd(
                     schema_version="v99",
@@ -259,7 +259,7 @@ class TestSemanticValidation:
 
     def test_profiles_dict_schema_no_duplicates_possible(self) -> None:
         """Dict-based profiles can't have duplicates - test basic validation."""
-        from scc_cli.cli_org import check_semantic_errors
+        from scc_cli.commands.org import check_semantic_errors
 
         # With dict-based schema, duplicate keys are impossible
         # This test verifies the function handles dict profiles correctly
@@ -276,7 +276,7 @@ class TestSemanticValidation:
 
     def test_detect_missing_default_profile(self) -> None:
         """Should warn if default_profile references non-existent profile."""
-        from scc_cli.cli_org import check_semantic_errors
+        from scc_cli.commands.org import check_semantic_errors
 
         # Modern schema: profiles at TOP LEVEL as dict
         config = {
@@ -294,7 +294,7 @@ class TestSemanticValidation:
 
     def test_valid_config_no_semantic_errors(self) -> None:
         """Valid config should have no semantic errors."""
-        from scc_cli.cli_org import check_semantic_errors
+        from scc_cli.commands.org import check_semantic_errors
 
         # Modern schema: profiles at TOP LEVEL as dict
         config = {
@@ -338,7 +338,7 @@ class TestBuildValidationData:
 
     def test_builds_correct_structure_valid(self) -> None:
         """build_validation_data should return correct structure for valid config."""
-        from scc_cli.cli_org import build_validation_data
+        from scc_cli.commands.org import build_validation_data
 
         result = build_validation_data(
             source="/path/to/config.json",
@@ -355,7 +355,7 @@ class TestBuildValidationData:
 
     def test_builds_correct_structure_invalid(self) -> None:
         """build_validation_data should return correct structure for invalid config."""
-        from scc_cli.cli_org import build_validation_data
+        from scc_cli.commands.org import build_validation_data
 
         result = build_validation_data(
             source="/path/to/config.json",

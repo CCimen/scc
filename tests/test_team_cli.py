@@ -70,9 +70,9 @@ class TestTeamList:
     def test_team_list_shows_available_teams(self, mock_config, mock_org_config):
         """team list should display available team profiles."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -84,9 +84,9 @@ class TestTeamList:
     def test_team_list_marks_current_team(self, mock_config, mock_org_config):
         """team list should mark the currently selected team."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -98,9 +98,9 @@ class TestTeamList:
     def test_team_list_json_output(self, mock_config, mock_org_config):
         """team list --json should output valid JSON envelope."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -118,9 +118,9 @@ class TestTeamList:
     def test_team_list_json_compact_by_default(self, mock_config, mock_org_config):
         """team list --json should output compact JSON by default."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -134,9 +134,9 @@ class TestTeamList:
     def test_team_list_json_pretty_mode(self, mock_config, mock_org_config):
         """team list --json --pretty should output indented JSON."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -151,9 +151,9 @@ class TestTeamList:
         """team list should show warning when no teams available."""
         empty_org = {"profiles": {}, "marketplaces": {}}
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=empty_org,
             ),
         ):
@@ -173,9 +173,9 @@ class TestTeamCurrent:
     def test_team_current_shows_selected_team(self, mock_config, mock_org_config):
         """team current should show the currently selected team."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -187,9 +187,9 @@ class TestTeamCurrent:
         """team current should indicate when no team is selected."""
         config_no_team = {"config_version": "1.0.0", "selected_profile": None}
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=config_no_team),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=config_no_team),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -200,9 +200,9 @@ class TestTeamCurrent:
     def test_team_current_json_output(self, mock_config, mock_org_config):
         """team current --json should output valid JSON envelope."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -230,12 +230,12 @@ class TestTeamSwitch:
             saved_config.update(cfg)
 
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.config.save_user_config", side_effect=capture_save),
+            patch("scc_cli.commands.team.config.save_user_config", side_effect=capture_save),
         ):
             result = runner.invoke(app, ["team", "switch", "frontend"])
             assert result.exit_code == 0
@@ -247,9 +247,9 @@ class TestTeamSwitch:
     def test_team_switch_invalid_team(self, mock_config, mock_org_config):
         """team switch should fail for non-existent team."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -260,9 +260,9 @@ class TestTeamSwitch:
     def test_team_switch_non_interactive_requires_name(self, mock_config, mock_org_config):
         """team switch --non-interactive should fail without team name."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -272,12 +272,12 @@ class TestTeamSwitch:
     def test_team_switch_json_output(self, mock_config, mock_org_config):
         """team switch --json should output valid JSON envelope."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.config.save_user_config"),
+            patch("scc_cli.commands.team.config.save_user_config"),
         ):
             result = runner.invoke(app, ["team", "switch", "frontend", "--json"])
             assert result.exit_code == 0
@@ -306,15 +306,15 @@ class TestTeamSwitchPickerIntegration:
     def test_picker_called_when_no_team_provided_and_tty(self, mock_config, mock_org_config):
         """When no team name is provided and TTY is available, picker should be called."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.config.save_user_config"),
+            patch("scc_cli.commands.team.config.save_user_config"),
             # Mock the interactivity gate to allow prompts
-            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             # Set up context to allow prompts
             mock_ctx = mock_ctx_create.return_value
@@ -338,14 +338,14 @@ class TestTeamSwitchPickerIntegration:
             saved_config.update(cfg)
 
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.config.save_user_config", side_effect=save_config),
-            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.config.save_user_config", side_effect=save_config),
+            patch("scc_cli.commands.team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             mock_ctx = mock_ctx_create.return_value
             mock_ctx.allows_prompt.return_value = True
@@ -358,14 +358,14 @@ class TestTeamSwitchPickerIntegration:
     def test_picker_receives_current_team_for_marking(self, mock_config, mock_org_config):
         """Picker should receive current team to mark it in the list."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.config.save_user_config"),
-            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.config.save_user_config"),
+            patch("scc_cli.commands.team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             mock_ctx = mock_ctx_create.return_value
             mock_ctx.allows_prompt.return_value = True
@@ -380,13 +380,13 @@ class TestTeamSwitchPickerIntegration:
     def test_picker_cancellation_returns_cancelled_status(self, mock_config, mock_org_config):
         """Cancelling the picker should return cancelled status in data."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.InteractivityContext.create") as mock_ctx_create,
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.InteractivityContext.create") as mock_ctx_create,
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             mock_ctx = mock_ctx_create.return_value
             mock_ctx.allows_prompt.return_value = True
@@ -402,13 +402,13 @@ class TestTeamSwitchPickerIntegration:
     def test_explicit_team_name_skips_picker(self, mock_config, mock_org_config):
         """When team name is provided explicitly, picker should not be called."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.config.save_user_config"),
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.config.save_user_config"),
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             result = runner.invoke(app, ["team", "switch", "frontend"])
             assert result.exit_code == 0
@@ -420,12 +420,12 @@ class TestTeamSwitchPickerIntegration:
     def test_json_mode_blocks_picker(self, mock_config, mock_org_config):
         """In JSON mode without team name, should fail rather than show picker."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             result = runner.invoke(app, ["team", "switch", "--json"])
             # Should fail because JSON mode blocks interactive picker
@@ -436,12 +436,12 @@ class TestTeamSwitchPickerIntegration:
     def test_non_interactive_flag_blocks_picker(self, mock_config, mock_org_config):
         """--non-interactive flag should prevent picker from being shown."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
-            patch("scc_cli.cli_team.pick_team") as mock_picker,
+            patch("scc_cli.commands.team.pick_team") as mock_picker,
         ):
             result = runner.invoke(app, ["team", "switch", "--non-interactive"])
             assert result.exit_code != 0
@@ -459,9 +459,9 @@ class TestTeamInfo:
     def test_team_info_shows_details(self, mock_config, mock_org_config):
         """team info should show detailed team information."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -473,9 +473,9 @@ class TestTeamInfo:
     def test_team_info_not_found(self, mock_config, mock_org_config):
         """team info should handle non-existent team gracefully."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -486,9 +486,9 @@ class TestTeamInfo:
     def test_team_info_json_output(self, mock_config, mock_org_config):
         """team info --json should output valid JSON envelope."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -519,9 +519,9 @@ class TestJsonEnvelopeContract:
 
         for cmd in commands:
             with (
-                patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+                patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
                 patch(
-                    "scc_cli.cli_team.config.load_cached_org_config",
+                    "scc_cli.commands.team.config.load_cached_org_config",
                     return_value=mock_org_config,
                 ),
             ):
@@ -537,9 +537,9 @@ class TestJsonEnvelopeContract:
     def test_json_metadata_has_timestamp_and_version(self, mock_config, mock_org_config):
         """metadata must have generatedAt and cliVersion."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):
@@ -554,9 +554,9 @@ class TestJsonEnvelopeContract:
     def test_json_status_has_ok_errors_warnings(self, mock_config, mock_org_config):
         """status must have ok, errors, warnings fields."""
         with (
-            patch("scc_cli.cli_team.config.load_user_config", return_value=mock_config),
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
             patch(
-                "scc_cli.cli_team.config.load_cached_org_config",
+                "scc_cli.commands.team.config.load_cached_org_config",
                 return_value=mock_org_config,
             ),
         ):

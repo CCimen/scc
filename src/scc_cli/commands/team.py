@@ -17,20 +17,20 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from . import config, teams
-from .cli_common import console, handle_errors, render_responsive_table
-from .json_command import json_command
-from .kinds import Kind
-from .marketplace.adapter import translate_org_config
-from .marketplace.compute import TeamNotFoundError
-from .marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
-from .marketplace.schema import OrganizationConfig
-from .marketplace.team_fetch import TeamFetchResult, fetch_team_config
-from .marketplace.trust import TrustViolationError
-from .output_mode import is_json_mode, print_human
-from .panels import create_warning_panel
-from .ui.gate import InteractivityContext
-from .ui.picker import TeamSwitchRequested, pick_team
+from .. import config, teams
+from ..cli_common import console, handle_errors, render_responsive_table
+from ..json_command import json_command
+from ..kinds import Kind
+from ..marketplace.adapter import translate_org_config
+from ..marketplace.compute import TeamNotFoundError
+from ..marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
+from ..marketplace.schema import OrganizationConfig
+from ..marketplace.team_fetch import TeamFetchResult, fetch_team_config
+from ..marketplace.trust import TrustViolationError
+from ..output_mode import is_json_mode, print_human
+from ..panels import create_warning_panel
+from ..ui.gate import InteractivityContext
+from ..ui.picker import TeamSwitchRequested, pick_team
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Display Helpers
@@ -112,7 +112,7 @@ def _parse_config_source(raw_source: dict[str, Any]) -> Any:
     Raises:
         ValueError: If config_source format is invalid
     """
-    from .marketplace.schema import (
+    from ..marketplace.schema import (
         ConfigSourceGit,
         ConfigSourceGitHub,
         ConfigSourceURL,
@@ -197,7 +197,7 @@ def team_list(
 
     # Sync if requested
     if sync:
-        from .remote import fetch_org_config
+        from ..remote import fetch_org_config
 
         org_source = cfg.get("organization_source", {})
         org_url = org_source.get("url")

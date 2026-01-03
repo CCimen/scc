@@ -6,10 +6,10 @@ A command-line tool for safely running Claude Code in Docker sandboxes
 with team-specific configurations and worktree management.
 
 This module serves as the thin orchestrator that composes commands from:
-- cli_launch.py: Start command and interactive mode
-- cli_worktree.py: Worktree, session, and container management
-- cli_config.py: Teams, setup, and configuration commands
-- cli_admin.py: Doctor, update, statusline, and stats commands
+- commands/launch.py: Start command and interactive mode
+- commands/worktree.py: Worktree, session, and container management
+- commands/config.py: Teams, setup, and configuration commands
+- commands/admin.py: Doctor, update, statusline, and stats commands
 """
 
 from importlib.metadata import PackageNotFoundError
@@ -17,28 +17,28 @@ from importlib.metadata import version as get_installed_version
 
 import typer
 
-from .cli_admin import (
+from .cli_common import console, state
+from .commands.admin import (
     doctor_cmd,
     stats_app,
     status_cmd,
     statusline_cmd,
     update_cmd,
 )
-from .cli_audit import audit_app
-from .cli_common import console, state
-from .cli_config import (
+from .commands.audit import audit_app
+from .commands.config import (
     config_cmd,
     setup_cmd,
 )
-from .cli_exceptions import exceptions_app, unblock_cmd
-from .cli_init import init_cmd
+from .commands.exceptions import exceptions_app, unblock_cmd
+from .commands.init import init_cmd
 
 # Import command functions from domain modules
-from .cli_launch import start
-from .cli_org import org_app
-from .cli_support import support_app
-from .cli_team import team_app
-from .cli_worktree import (
+from .commands.launch import start
+from .commands.org import org_app
+from .commands.support import support_app
+from .commands.team import team_app
+from .commands.worktree import (
     container_app,
     context_app,
     list_cmd,

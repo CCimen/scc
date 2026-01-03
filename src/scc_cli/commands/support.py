@@ -16,11 +16,11 @@ from typing import Any
 
 import typer
 
-from . import __version__, config, doctor
-from .cli_common import console, handle_errors
-from .json_output import build_envelope
-from .kinds import Kind
-from .output_mode import json_output_mode, print_json, set_pretty_mode
+from .. import __version__, config, doctor
+from ..cli_common import console, handle_errors
+from ..json_output import build_envelope
+from ..kinds import Kind
+from ..output_mode import json_output_mode, print_json, set_pretty_mode
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Support App

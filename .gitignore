@@ -58,4 +58,4 @@ specs/
 
 # Local development directories
 plugindocs/
-safetypluginclone/
+safetypluginclone/.claude/.state/

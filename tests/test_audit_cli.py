@@ -127,7 +127,7 @@ class TestAuditPluginsCommand:
 
     def test_audit_plugins_shows_header(self, sample_audit_output: AuditOutput) -> None:
         """Should display header with plugin count."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
@@ -135,7 +135,7 @@ class TestAuditPluginsCommand:
 
     def test_audit_plugins_shows_plugin_names(self, sample_audit_output: AuditOutput) -> None:
         """Should display plugin names in output."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
@@ -144,7 +144,7 @@ class TestAuditPluginsCommand:
 
     def test_audit_plugins_shows_status(self, sample_audit_output: AuditOutput) -> None:
         """Should show status for each plugin."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
@@ -154,7 +154,7 @@ class TestAuditPluginsCommand:
     def test_audit_plugins_shows_mcp_servers(self, parsed_plugin: PluginAuditResult) -> None:
         """Should show MCP servers for plugins with declarations."""
         output = AuditOutput(plugins=[parsed_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
@@ -163,7 +163,7 @@ class TestAuditPluginsCommand:
     def test_audit_plugins_shows_malformed_error(self, malformed_plugin: PluginAuditResult) -> None:
         """Should show error details for malformed manifests."""
         output = AuditOutput(plugins=[malformed_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 1  # CI failure
@@ -172,7 +172,7 @@ class TestAuditPluginsCommand:
 
     def test_audit_plugins_shows_disclaimer(self, sample_audit_output: AuditOutput) -> None:
         """Should show informational disclaimer."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
@@ -181,7 +181,7 @@ class TestAuditPluginsCommand:
     def test_audit_plugins_empty_registry(self) -> None:
         """Should handle empty plugin registry gracefully."""
         output = AuditOutput(plugins=[])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
@@ -198,7 +198,7 @@ class TestAuditPluginsJsonOutput:
 
     def test_json_output_is_valid_json(self, sample_audit_output: AuditOutput) -> None:
         """Should output valid JSON."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         assert result.exit_code == 0
@@ -208,7 +208,7 @@ class TestAuditPluginsJsonOutput:
 
     def test_json_output_has_schema_version(self, sample_audit_output: AuditOutput) -> None:
         """Should include schemaVersion in JSON output."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)
@@ -217,7 +217,7 @@ class TestAuditPluginsJsonOutput:
 
     def test_json_output_has_summary(self, sample_audit_output: AuditOutput) -> None:
         """Should include summary statistics in JSON output."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)
@@ -227,7 +227,7 @@ class TestAuditPluginsJsonOutput:
 
     def test_json_output_has_plugins_array(self, sample_audit_output: AuditOutput) -> None:
         """Should include plugins array in JSON output."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)
@@ -237,7 +237,7 @@ class TestAuditPluginsJsonOutput:
     def test_json_output_plugin_structure(self, parsed_plugin: PluginAuditResult) -> None:
         """Should include expected fields for each plugin."""
         output = AuditOutput(plugins=[parsed_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)
@@ -252,7 +252,7 @@ class TestAuditPluginsJsonOutput:
     def test_json_output_includes_mcp_servers(self, parsed_plugin: PluginAuditResult) -> None:
         """Should include MCP server info in JSON output."""
         output = AuditOutput(plugins=[parsed_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)
@@ -264,7 +264,7 @@ class TestAuditPluginsJsonOutput:
     def test_json_output_includes_error_details(self, malformed_plugin: PluginAuditResult) -> None:
         """Should include error details in JSON for malformed manifests."""
         output = AuditOutput(plugins=[malformed_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)
@@ -285,14 +285,16 @@ class TestAuditPluginsExitCodes:
 
     def test_exit_0_when_all_ok(self, sample_audit_output: AuditOutput) -> None:
         """Should exit 0 when all plugins parsed successfully."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=sample_audit_output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=sample_audit_output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
 
     def test_exit_1_when_malformed(self, problematic_audit_output: AuditOutput) -> None:
         """Should exit 1 when any plugin has malformed manifest."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=problematic_audit_output):
+        with patch(
+            "scc_cli.commands.audit.audit_all_plugins", return_value=problematic_audit_output
+        ):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 1
@@ -316,7 +318,7 @@ class TestAuditPluginsExitCodes:
             ),
         )
         output = AuditOutput(plugins=[unreadable_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 1
@@ -324,14 +326,16 @@ class TestAuditPluginsExitCodes:
     def test_exit_0_when_empty(self) -> None:
         """Should exit 0 when no plugins installed."""
         output = AuditOutput(plugins=[])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins"])
 
         assert result.exit_code == 0
 
     def test_json_exit_code_matches_human(self, problematic_audit_output: AuditOutput) -> None:
         """JSON output should have same exit code as human output."""
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=problematic_audit_output):
+        with patch(
+            "scc_cli.commands.audit.audit_all_plugins", return_value=problematic_audit_output
+        ):
             human_result = runner.invoke(cli.app, ["audit", "plugins"])
             json_result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
@@ -349,7 +353,7 @@ class TestAuditOutputSecurity:
     def test_relative_paths_in_output(self, parsed_plugin: PluginAuditResult) -> None:
         """Should use relative paths in output, not full system paths."""
         output = AuditOutput(plugins=[parsed_plugin])
-        with patch("scc_cli.cli_audit.audit_all_plugins", return_value=output):
+        with patch("scc_cli.commands.audit.audit_all_plugins", return_value=output):
             result = runner.invoke(cli.app, ["audit", "plugins", "--json"])
 
         data = json.loads(result.output)

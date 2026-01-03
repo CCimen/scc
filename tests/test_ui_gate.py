@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from scc_cli.errors import UsageError
+from scc_cli.core.errors import UsageError
 from scc_cli.ui.gate import (
     InteractivityContext,
     InteractivityMode,

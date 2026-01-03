@@ -269,7 +269,7 @@ class TestLoadUserConfig:
         import pytest
 
         from scc_cli import config
-        from scc_cli.errors import ConfigError
+        from scc_cli.core.errors import ConfigError
 
         importlib.reload(config)
 

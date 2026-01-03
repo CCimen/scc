@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__
-from .errors import SCCError
+from .core.errors import SCCError
 from .kinds import Kind
 
 # ═══════════════════════════════════════════════════════════════════════════════
