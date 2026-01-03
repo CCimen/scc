@@ -49,7 +49,7 @@ def install_statusline() -> bool:
         script_content = (template_files / "statusline.sh").read_text()
     except (FileNotFoundError, TypeError):
         # Fallback: read from relative path during development
-        dev_path = Path(__file__).parent / "templates" / "statusline.sh"
+        dev_path = Path(__file__).parents[1] / "templates" / "statusline.sh"
         if dev_path.exists():
             script_content = dev_path.read_text()
         else:

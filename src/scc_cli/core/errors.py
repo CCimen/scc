@@ -14,6 +14,7 @@ Exit codes:
 - 5: Internal error (bug)
 """
 
+import shlex
 from dataclasses import dataclass, field
 
 
@@ -288,5 +289,9 @@ class PolicyViolationError(ConfigError):
                 "base_image": "--allow-image",
             }
             flag = type_to_flag.get(self.item_type, f"--allow-{self.item_type}")
-            cmd = f'scc exceptions create --policy --id INC-... {flag} {self.item} --ttl 8h --reason "..."'
+            quoted_item = shlex.quote(self.item)
+            cmd = (
+                "scc exceptions create --policy --id INC-... "
+                f'{flag} {quoted_item} --ttl 8h --reason "..."'
+            )
             self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
@@ -588,9 +589,10 @@ def unblock_cmd(
                 f"\n[red]✗[/red] Cannot unblock '{target}': blocked by security policy.\n"
             )
             console.print("  To request policy exception (requires PR approval):")
+            quoted_target = shlex.quote(target)
             console.print(
-                f"    scc exceptions create --policy --id INC-... --allow-mcp {target} "
-                f'--ttl 8h --reason "..."'
+                "    scc exceptions create --policy --id INC-... --allow-mcp "
+                f'{quoted_target} --ttl 8h --reason "..."'
             )
             console.print()
             raise typer.Exit(1)
@@ -616,7 +618,10 @@ def unblock_cmd(
             console.print("\n[dim]Re-run with the exact name.[/dim]")
         else:
             console.print("  To create a preemptive exception, use:")
-            console.print(f'    scc exceptions create --allow-mcp {target} --ttl 8h --reason "..."')
+            quoted_target = shlex.quote(target)
+            console.print(
+                f'    scc exceptions create --allow-mcp {quoted_target} --ttl 8h --reason "..."'
+            )
         console.print()
         raise typer.Exit(1)
 
