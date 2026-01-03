@@ -357,16 +357,40 @@ Command routing and user interaction:
 graph TD
     subgraph Commands["CLI Commands"]
         Main[cli.py]
-        Launch[cli_launch.py]
-        Worktree[cli_worktree.py]
         Team[cli_team.py]
         Config[cli_config.py]
         Admin[cli_admin.py]
         Exc[cli_exceptions.py]
         Audit[cli_audit.py]
-        Org[cli_org.py]
         Support[cli_support.py]
         Init[cli_init.py]
+    end
+
+    subgraph LaunchPkg["commands/launch/"]
+        LaunchApp[app.py]
+        LaunchRender[render.py]
+        LaunchSandbox[sandbox.py]
+        LaunchWorkspace[workspace.py]
+    end
+
+    subgraph WorktreePkg["commands/worktree/"]
+        WorktreeApp[app.py]
+        WorktreeHelpers[_helpers.py]
+        ContainerCmds[container_commands.py]
+        ContextCmds[context_commands.py]
+        SessionCmds[session_commands.py]
+        WorktreeCmds[worktree_commands.py]
+    end
+
+    subgraph OrgPkg["commands/org/"]
+        OrgApp[app.py]
+        OrgBuilders[_builders.py]
+        ImportCmd[import_cmd.py]
+        InitCmd[init_cmd.py]
+        SchemaCmd[schema_cmd.py]
+        StatusCmd[status_cmd.py]
+        UpdateCmd[update_cmd.py]
+        ValidateCmd[validate_cmd.py]
     end
 
     subgraph Utils["CLI Utilities"]
@@ -375,21 +399,38 @@ graph TD
         Contexts[contexts.py]
     end
 
-    Main --> Launch
-    Main --> Worktree
+    Main --> LaunchApp
+    Main --> WorktreeApp
+    Main --> OrgApp
     Main --> Team
     Main --> Config
     Main --> Admin
     Main --> Exc
     Main --> Audit
-    Main --> Org
     Main --> Support
     Main --> Init
 
-    Launch --> Common
-    Launch --> CliHelpers
-    Launch --> Contexts
-    Worktree --> Common
+    LaunchApp --> LaunchRender
+    LaunchApp --> LaunchSandbox
+    LaunchApp --> LaunchWorkspace
+    LaunchApp --> Common
+    LaunchApp --> CliHelpers
+    LaunchApp --> Contexts
+
+    WorktreeApp --> WorktreeHelpers
+    WorktreeApp --> ContainerCmds
+    WorktreeApp --> ContextCmds
+    WorktreeApp --> SessionCmds
+    WorktreeApp --> WorktreeCmds
+    WorktreeApp --> Common
+
+    OrgApp --> OrgBuilders
+    OrgApp --> ImportCmd
+    OrgApp --> InitCmd
+    OrgApp --> SchemaCmd
+    OrgApp --> StatusCmd
+    OrgApp --> UpdateCmd
+    OrgApp --> ValidateCmd
 ```
 
 ### Core & Configuration Layer
@@ -526,19 +567,53 @@ Organized by architectural layer for easier navigation.
 | Module | Does | Does Not |
 |--------|------|----------|
 | `cli.py` | Main entry point, command registration, global options | Business logic |
-| `cli_launch.py` | Session launch orchestration, workspace detection, resume logic | Docker operations |
-| `cli_worktree.py` | Worktree subcommands, session/container aliases | Git internals |
+| `commands/launch/` | Session launch orchestration (package) | Docker operations |
+| `commands/launch/app.py` | Launch command registration, argument parsing | Rendering, sandbox logic |
+| `commands/launch/render.py` | Launch-related UI rendering, progress display | Business logic |
+| `commands/launch/sandbox.py` | Sandbox launch orchestration | Low-level Docker ops |
+| `commands/launch/workspace.py` | Workspace detection, validation, path resolution | Git internals |
+| `commands/worktree/` | Worktree management (package) | Git internals |
+| `commands/worktree/app.py` | Worktree command registration | Subcommand logic |
+| `commands/worktree/_helpers.py` | Shared worktree utilities, path helpers | Business logic |
+| `commands/worktree/container_commands.py` | Container subcommands (attach, exec, logs, stop) | Docker internals |
+| `commands/worktree/context_commands.py` | Context subcommands (switch, focus) | Config fetching |
+| `commands/worktree/session_commands.py` | Session subcommands (list, resume, clean) | Session storage |
+| `commands/worktree/worktree_commands.py` | Worktree subcommands (create, list, remove) | Git operations |
+| `commands/org/` | Organization config management (package) | Remote fetching |
+| `commands/org/app.py` | Org command registration | Subcommand logic |
+| `commands/org/_builders.py` | JSON envelope builders for org commands | Business logic |
+| `commands/org/import_cmd.py` | Import command (create org config from existing setup) | Config validation |
+| `commands/org/init_cmd.py` | Init command (bootstrap new org config) | Remote operations |
+| `commands/org/schema_cmd.py` | Schema command (export JSON schema) | Validation logic |
+| `commands/org/status_cmd.py` | Status command (show org config summary) | Config fetching |
+| `commands/org/update_cmd.py` | Update command (refresh cached config) | Remote fetching |
+| `commands/org/validate_cmd.py` | Validate command (check org config validity) | Schema generation |
 | `cli_team.py` | Team profile management commands | Config fetching |
 | `cli_config.py` | Setup wizard, config explain, config editing | Remote operations |
 | `cli_admin.py` | Doctor, stats, status, statusline, update commands | Container operations |
 | `cli_exceptions.py` | Exception CRUD commands, unblock shortcut | Governance logic |
 | `cli_audit.py` | Plugin audit commands | Plugin internals |
-| `cli_org.py` | Organization config management commands | Remote fetching |
 | `cli_support.py` | Support bundle generation with redaction | Business logic |
 | `cli_init.py` | Project config initialization | Remote operations |
 | `cli_common.py` | Shared CLI utilities, decorators, AppState | Business logic |
 | `cli_helpers.py` | Confirmation patterns, safety helpers | Rendering |
 | `contexts.py` | Work context tracking (team + workspace associations) | Config fetching |
+
+#### Layer 1.5: Core Package (Zero-Dependency Foundation)
+
+The `core/` package provides foundational modules with **zero dependencies** on `ui/`, `commands/`, or `services/`. This architectural constraint ensures core types and utilities remain reusable and testable without side effects.
+
+| Module | Does | Does Not |
+|--------|------|----------|
+| `core/errors.py` | Typed exception hierarchy with user-friendly messaging (user_message, suggested_action, debug_context), exit code assignment | I/O operations, logging, UI rendering |
+| `core/constants.py` | Backend-specific constants (agent name, image tag, volume names, paths, credential locations, branch prefixes) | Environment access, business logic, I/O |
+| `core/exit_codes.py` | Standardized exit code constants (0-6, 130), exception-to-exit-code mapping | Exception handling, process termination |
+
+**Architecture Rules:**
+- `core/` modules MUST NOT import from `ui/`, `commands/`, `services/`, or `services/adapters/`
+- Enforced by `tests/test_import_boundaries.py`
+- All exceptions should inherit from `core.errors.SCCError` for consistent error handling
+- Exit codes MUST use constants from `core.exit_codes` (no magic numbers)
 
 #### Layer 2: Core & Configuration
 
@@ -579,7 +654,11 @@ Organized by architectural layer for easier navigation.
 | `docker/core.py` | Container lifecycle, Docker primitives, command building | Credential handling |
 | `docker/credentials.py` | Credential persistence, OAuth token management, volume sync | Container launching |
 | `docker/launch.py` | High-level launch orchestration, settings injection | Low-level Docker ops |
-| `git.py` | Branch safety, worktrees, repo-local hooks | Global git config |
+| `services/git/` | Git operations (package) | UI dependencies |
+| `services/git/core.py` | Core git utilities, repo validation, commit operations | Branch management |
+| `services/git/branch.py` | Branch safety checks, existence validation | Worktree operations |
+| `services/git/worktree.py` | Worktree listing, creation, removal, branch associations | Hook management |
+| `services/git/hooks.py` | Repo-local hook installation and management | Global git config |
 | `sessions.py` | Session tracking and history | Docker operations |
 | `stats.py` | Session recording, aggregation, reporting | Container operations |
 | `update.py` | Version checking, throttling, notifications | Container operations |
@@ -590,7 +669,13 @@ Organized by architectural layer for easier navigation.
 |--------|------|----------|
 | `doctor/` | Health checks and system diagnostics (package) | Auto-fixing issues |
 | `doctor/types.py` | Data structures (CheckResult, DoctorResult, JsonValidationResult) | Business logic |
-| `doctor/checks.py` | All health check functions (Git, Docker, config, cache, org, worktree) | Rendering |
+| `doctor/checks/` | Health check functions (package) | Rendering |
+| `doctor/checks/cache.py` | Cache directory validation, staleness detection, corruption checks | Rendering |
+| `doctor/checks/config.py` | Config file validation, schema compliance checks | Rendering |
+| `doctor/checks/environment.py` | Docker availability, git installation, system requirements | Rendering |
+| `doctor/checks/json_helpers.py` | JSON validation utilities, schema checking helpers | Business logic |
+| `doctor/checks/organization.py` | Org config validation, team profile checks, governance validation | Rendering |
+| `doctor/checks/worktree.py` | Worktree health, branch tracking, orphan detection | Rendering |
 | `doctor/render.py` | Orchestration, JSON serialization, Rich terminal rendering | Check logic |
 | `audit/` | Plugin audit (package) | Plugin internals |
 | `audit/reader.py` | Plugin discovery, manifest file reading | Parsing logic |
