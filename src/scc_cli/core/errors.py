@@ -292,6 +292,6 @@ class PolicyViolationError(ConfigError):
             quoted_item = shlex.quote(self.item)
             cmd = (
                 "scc exceptions create --policy --id INC-... "
-                f"{flag} {quoted_item} --ttl 8h --reason \"...\""
+                f'{flag} {quoted_item} --ttl 8h --reason "..."'
             )
             self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"

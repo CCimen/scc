@@ -592,7 +592,7 @@ def unblock_cmd(
             quoted_target = shlex.quote(target)
             console.print(
                 "    scc exceptions create --policy --id INC-... --allow-mcp "
-                f"{quoted_target} --ttl 8h --reason \"...\""
+                f'{quoted_target} --ttl 8h --reason "..."'
             )
             console.print()
             raise typer.Exit(1)
@@ -620,8 +620,7 @@ def unblock_cmd(
             console.print("  To create a preemptive exception, use:")
             quoted_target = shlex.quote(target)
             console.print(
-                "    scc exceptions create --allow-mcp "
-                f"{quoted_target} --ttl 8h --reason \"...\""
+                f'    scc exceptions create --allow-mcp {quoted_target} --ttl 8h --reason "..."'
             )
         console.print()
         raise typer.Exit(1)
