@@ -275,8 +275,12 @@ class TestOrgStatusCommand:
         """In standalone mode, should show 'standalone' status."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=standalone_config):
-            with patch("scc_cli.commands.org.load_from_cache", return_value=(None, None)):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=standalone_config
+        ):
+            with patch(
+                "scc_cli.commands.org.status_cmd.load_from_cache", return_value=(None, None)
+            ):
                 result = cli_runner.invoke(org_app, ["status"])
 
         assert result.exit_code == 0
@@ -292,9 +296,11 @@ class TestOrgStatusCommand:
         """When connected to org, should show organization name."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
             with patch(
-                "scc_cli.commands.org.load_from_cache",
+                "scc_cli.commands.org.status_cmd.load_from_cache",
                 return_value=(org_config_with_versions, cache_meta_valid),
             ):
                 result = cli_runner.invoke(org_app, ["status"])
@@ -312,9 +318,11 @@ class TestOrgStatusCommand:
         """Should display the currently selected profile."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
             with patch(
-                "scc_cli.commands.org.load_from_cache",
+                "scc_cli.commands.org.status_cmd.load_from_cache",
                 return_value=(org_config_with_versions, cache_meta_valid),
             ):
                 result = cli_runner.invoke(org_app, ["status"])
@@ -332,9 +340,11 @@ class TestOrgStatusCommand:
         """Should show cache freshness information."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
             with patch(
-                "scc_cli.commands.org.load_from_cache",
+                "scc_cli.commands.org.status_cmd.load_from_cache",
                 return_value=(org_config_with_versions, cache_meta_valid),
             ):
                 result = cli_runner.invoke(org_app, ["status"])
@@ -352,8 +362,12 @@ class TestOrgStatusJsonOutput:
         """JSON output should include mode=standalone."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=standalone_config):
-            with patch("scc_cli.commands.org.load_from_cache", return_value=(None, None)):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=standalone_config
+        ):
+            with patch(
+                "scc_cli.commands.org.status_cmd.load_from_cache", return_value=(None, None)
+            ):
                 result = cli_runner.invoke(org_app, ["status", "--json"])
 
         assert result.exit_code == 0
@@ -370,9 +384,11 @@ class TestOrgStatusJsonOutput:
         """JSON output should include full org status."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
             with patch(
-                "scc_cli.commands.org.load_from_cache",
+                "scc_cli.commands.org.status_cmd.load_from_cache",
                 return_value=(org_config_with_versions, cache_meta_valid),
             ):
                 result = cli_runner.invoke(org_app, ["status", "--json"])
@@ -386,8 +402,12 @@ class TestOrgStatusJsonOutput:
         """JSON output should follow envelope structure."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=standalone_config):
-            with patch("scc_cli.commands.org.load_from_cache", return_value=(None, None)):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=standalone_config
+        ):
+            with patch(
+                "scc_cli.commands.org.status_cmd.load_from_cache", return_value=(None, None)
+            ):
                 result = cli_runner.invoke(org_app, ["status", "--json"])
 
         assert result.exit_code == 0
@@ -401,8 +421,12 @@ class TestOrgStatusJsonOutput:
         """--pretty flag should format JSON with indentation."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=standalone_config):
-            with patch("scc_cli.commands.org.load_from_cache", return_value=(None, None)):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=standalone_config
+        ):
+            with patch(
+                "scc_cli.commands.org.status_cmd.load_from_cache", return_value=(None, None)
+            ):
                 result = cli_runner.invoke(org_app, ["status", "--pretty"])
 
         assert result.exit_code == 0
@@ -432,12 +456,14 @@ class TestOrgStatusVersionCompatibility:
             "profiles": {},
         }
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
             with patch(
-                "scc_cli.commands.org.load_from_cache",
+                "scc_cli.commands.org.status_cmd.load_from_cache",
                 return_value=(org_config, cache_meta_valid),
             ):
-                with patch("scc_cli.commands.org.CLI_VERSION", "1.2.4"):
+                with patch("scc_cli.commands.org.status_cmd.CLI_VERSION", "1.2.4"):
                     result = cli_runner.invoke(org_app, ["status"])
 
         assert result.exit_code == 0
@@ -461,12 +487,14 @@ class TestOrgStatusVersionCompatibility:
             "profiles": {},
         }
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
             with patch(
-                "scc_cli.commands.org.load_from_cache",
+                "scc_cli.commands.org.status_cmd.load_from_cache",
                 return_value=(org_config, cache_meta_valid),
             ):
-                with patch("scc_cli.commands.org.CLI_VERSION", "1.2.4"):
+                with patch("scc_cli.commands.org.status_cmd.CLI_VERSION", "1.2.4"):
                     result = cli_runner.invoke(org_app, ["status"])
 
         # Should still exit 0 (status command shows info, not validation)
@@ -487,8 +515,12 @@ class TestOrgStatusNoCache:
         """When no cache exists, should indicate config not yet fetched."""
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.load_user_config", return_value=org_connected_config):
-            with patch("scc_cli.commands.org.load_from_cache", return_value=(None, None)):
+        with patch(
+            "scc_cli.commands.org.status_cmd.load_user_config", return_value=org_connected_config
+        ):
+            with patch(
+                "scc_cli.commands.org.status_cmd.load_from_cache", return_value=(None, None)
+            ):
                 result = cli_runner.invoke(org_app, ["status"])
 
         assert result.exit_code == 0

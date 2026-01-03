@@ -31,13 +31,13 @@ class TestDryRunBasicBehavior:
 
         mock_docker_run = MagicMock()
 
-        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.docker.run", mock_docker_run):
-                        with patch("scc_cli.commands.launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.app.docker.run", mock_docker_run):
+                        with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
                             try:
                                 start(
                                     workspace=str(tmp_path),
@@ -66,12 +66,12 @@ class TestDryRunBasicBehavior:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -111,21 +111,21 @@ class TestDryRunTeamConfig:
 
         mock_org = {"profiles": {"platform": {"description": "Platform team"}}}
 
-        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
+        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
             with patch(
-                "scc_cli.commands.launch.config.load_config",
+                "scc_cli.commands.launch.app.config.load_config",
                 return_value={"selected_profile": "platform"},
             ):
                 with patch(
-                    "scc_cli.commands.launch.config.load_cached_org_config",
+                    "scc_cli.commands.launch.app.config.load_cached_org_config",
                     return_value=mock_org,
                 ):
-                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
                         with patch(
-                            "scc_cli.commands.launch.teams.validate_team_profile",
+                            "scc_cli.commands.launch.app.teams.validate_team_profile",
                             return_value={"valid": True},
                         ):
-                            with patch("scc_cli.commands.launch.docker.inject_team_settings"):
+                            with patch("scc_cli.commands.launch.app.docker.inject_team_settings"):
                                 try:
                                     start(
                                         workspace=str(tmp_path),
@@ -163,12 +163,12 @@ class TestDryRunJsonOutput:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -200,12 +200,12 @@ class TestDryRunJsonOutput:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -319,12 +319,12 @@ class TestDryRunExitCodes:
 
         exit_code = None
 
-        with patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.config.load_config", return_value={}):
+        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
                         try:
                             start(
                                 workspace=str(tmp_path),

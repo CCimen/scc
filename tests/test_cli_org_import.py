@@ -174,13 +174,13 @@ class TestOrgImportPreview:
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.commands.org.save_user_config") as mock_save:
+                with patch("scc_cli.commands.org.import_cmd.save_user_config") as mock_save:
                     result = cli_runner.invoke(
                         org_app, ["import", "https://example.com/org.json", "--preview"]
                     )
@@ -199,7 +199,7 @@ class TestOrgImportPreview:
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -226,7 +226,7 @@ class TestOrgImportPreview:
         mock_response.json.return_value = invalid_org_config
         mock_response.headers = {}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -254,7 +254,7 @@ class TestOrgImportShorthand:
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://raw.githubusercontent.com/acme/configs/main/org-config.json",
                 provider="github",
@@ -284,16 +284,16 @@ class TestOrgImportSave:
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
                 auth_spec=None,
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.commands.org.load_user_config", return_value={}):
-                    with patch("scc_cli.commands.org.save_user_config") as mock_save:
-                        with patch("scc_cli.commands.org.save_to_cache"):
+                with patch("scc_cli.commands.org.import_cmd.load_user_config", return_value={}):
+                    with patch("scc_cli.commands.org.import_cmd.save_user_config") as mock_save:
+                        with patch("scc_cli.commands.org.import_cmd.save_to_cache"):
                             result = cli_runner.invoke(
                                 org_app, ["import", "https://example.com/org.json"]
                             )
@@ -315,13 +315,13 @@ class TestOrgImportSave:
         mock_response.json.return_value = invalid_org_config
         mock_response.headers = {}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.commands.org.save_user_config") as mock_save:
+                with patch("scc_cli.commands.org.import_cmd.save_user_config") as mock_save:
                     result = cli_runner.invoke(org_app, ["import", "https://example.com/org.json"])
 
         # Should fail with non-zero exit code
@@ -338,16 +338,16 @@ class TestOrgImportSave:
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
                 auth_spec=None,
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.commands.org.load_user_config", return_value={}):
-                    with patch("scc_cli.commands.org.save_user_config"):
-                        with patch("scc_cli.commands.org.save_to_cache") as mock_cache:
+                with patch("scc_cli.commands.org.import_cmd.load_user_config", return_value={}):
+                    with patch("scc_cli.commands.org.import_cmd.save_user_config"):
+                        with patch("scc_cli.commands.org.import_cmd.save_to_cache") as mock_cache:
                             result = cli_runner.invoke(
                                 org_app, ["import", "https://example.com/org.json"]
                             )
@@ -370,7 +370,7 @@ class TestOrgImportErrors:
 
         from scc_cli.commands.org import org_app
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -391,7 +391,7 @@ class TestOrgImportErrors:
         mock_response = MagicMock()
         mock_response.status_code = 404
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
@@ -410,7 +410,7 @@ class TestOrgImportErrors:
         from scc_cli.commands.org import org_app
         from scc_cli.source_resolver import ResolveError
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = ResolveError(
                 message="Invalid source format",
                 source="not-a-valid-source",
@@ -440,16 +440,16 @@ class TestOrgImportJsonOutput:
         mock_response.json.return_value = valid_org_config
         mock_response.headers = {"ETag": '"abc123"'}
 
-        with patch("scc_cli.commands.org.resolve_source") as mock_resolve:
+        with patch("scc_cli.commands.org.import_cmd.resolve_source") as mock_resolve:
             mock_resolve.return_value = MagicMock(
                 resolved_url="https://example.com/org.json",
                 provider="https",
                 auth_spec=None,
             )
             with patch("requests.get", return_value=mock_response):
-                with patch("scc_cli.commands.org.load_user_config", return_value={}):
-                    with patch("scc_cli.commands.org.save_user_config"):
-                        with patch("scc_cli.commands.org.save_to_cache"):
+                with patch("scc_cli.commands.org.import_cmd.load_user_config", return_value={}):
+                    with patch("scc_cli.commands.org.import_cmd.save_user_config"):
+                        with patch("scc_cli.commands.org.import_cmd.save_to_cache"):
                             result = cli_runner.invoke(
                                 org_app, ["import", "https://example.com/org.json", "--json"]
                             )

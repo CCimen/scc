@@ -133,8 +133,8 @@ class TestOrgUpdateBasic:
     ):
         """org update should refresh org config from remote."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_inline_teams
@@ -149,7 +149,7 @@ class TestOrgUpdateBasic:
 
     def test_update_standalone_mode_error(self, mock_user_config_standalone):
         """org update should fail in standalone mode."""
-        with patch("scc_cli.commands.org.load_user_config") as mock_load_user:
+        with patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user:
             mock_load_user.return_value = mock_user_config_standalone
 
             result = runner.invoke(app, ["org", "update"])
@@ -159,7 +159,7 @@ class TestOrgUpdateBasic:
 
     def test_update_no_source_configured_error(self):
         """org update should fail when no organization source is configured."""
-        with patch("scc_cli.commands.org.load_user_config") as mock_load_user:
+        with patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user:
             mock_load_user.return_value = {
                 "standalone": False,
                 "organization_source": None,
@@ -174,8 +174,8 @@ class TestOrgUpdateBasic:
     ):
         """org update should show success message with org details."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_inline_teams
@@ -203,9 +203,9 @@ class TestOrgUpdateTeam:
     ):
         """org update --team should refresh a federated team's config."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
-            patch("scc_cli.commands.org.fetch_team_config") as mock_fetch_team,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.fetch_team_config") as mock_fetch_team,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -225,8 +225,8 @@ class TestOrgUpdateTeam:
     ):
         """org update --team on inline team should show warning (not federated)."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -242,8 +242,8 @@ class TestOrgUpdateTeam:
     ):
         """org update --team with unknown team should error."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -258,9 +258,9 @@ class TestOrgUpdateTeam:
     ):
         """org update --team should show error when team config fetch fails."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
-            patch("scc_cli.commands.org.fetch_team_config") as mock_fetch_team,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.fetch_team_config") as mock_fetch_team,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -289,9 +289,9 @@ class TestOrgUpdateAllTeams:
     ):
         """org update --all-teams should refresh all federated team configs."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
-            patch("scc_cli.commands.org.fetch_team_config") as mock_fetch_team,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.fetch_team_config") as mock_fetch_team,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -312,8 +312,8 @@ class TestOrgUpdateAllTeams:
     ):
         """org update --all-teams with no federated teams should indicate that."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_inline_teams
@@ -340,9 +340,9 @@ class TestOrgUpdateAllTeams:
                 return MagicMock(success=False, error="Network error")
 
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
-            patch("scc_cli.commands.org.fetch_team_config", side_effect=mock_fetch),
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.fetch_team_config", side_effect=mock_fetch),
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -367,8 +367,8 @@ class TestOrgUpdateJson:
     ):
         """org update --json should return proper JSON envelope."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_inline_teams
@@ -387,8 +387,8 @@ class TestOrgUpdateJson:
     ):
         """org update --json should include org info in response."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_inline_teams
@@ -405,9 +405,9 @@ class TestOrgUpdateJson:
     ):
         """org update --team <name> --json should include team update info."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
-            patch("scc_cli.commands.org.fetch_team_config") as mock_fetch_team,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.fetch_team_config") as mock_fetch_team,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -429,9 +429,9 @@ class TestOrgUpdateJson:
     ):
         """org update --all-teams --json should include summary of all team updates."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
-            patch("scc_cli.commands.org.fetch_team_config") as mock_fetch_team,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.fetch_team_config") as mock_fetch_team,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -459,7 +459,7 @@ class TestOrgUpdateJsonErrors:
 
     def test_update_standalone_json_error(self, mock_user_config_standalone):
         """org update --json in standalone mode should return JSON error."""
-        with patch("scc_cli.commands.org.load_user_config") as mock_load_user:
+        with patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user:
             mock_load_user.return_value = mock_user_config_standalone
 
             result = runner.invoke(app, ["org", "update", "--json"])
@@ -473,8 +473,8 @@ class TestOrgUpdateJsonErrors:
     ):
         """org update --team with unknown team should return JSON error."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = mock_org_config_federated_teams
@@ -489,8 +489,8 @@ class TestOrgUpdateJsonErrors:
     def test_update_network_failure_json_error(self, mock_user_config_org_connected):
         """org update --json should return JSON error on network failure."""
         with (
-            patch("scc_cli.commands.org.load_user_config") as mock_load_user,
-            patch("scc_cli.commands.org.load_org_config") as mock_load_org,
+            patch("scc_cli.commands.org.update_cmd.load_user_config") as mock_load_user,
+            patch("scc_cli.commands.org.update_cmd.load_org_config") as mock_load_org,
         ):
             mock_load_user.return_value = mock_user_config_org_connected
             mock_load_org.return_value = None  # Simulate fetch failure

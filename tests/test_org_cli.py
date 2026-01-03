@@ -65,7 +65,7 @@ class TestOrgValidate:
             )
         )
 
-        with patch("scc_cli.commands.org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             try:
                 org_validate_cmd(
                     source=str(config_file),
@@ -91,7 +91,7 @@ class TestOrgValidate:
             )
         )
 
-        with patch("scc_cli.commands.org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source=str(config_file),
@@ -162,7 +162,7 @@ class TestOrgValidate:
         """validate should fail for nonexistent file."""
         from scc_cli.commands.org import org_validate_cmd
 
-        with patch("scc_cli.commands.org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source="/nonexistent/path/config.json",
@@ -179,7 +179,7 @@ class TestOrgValidate:
         config_file = tmp_path / "org.json"
         config_file.write_text("{ invalid json }")
 
-        with patch("scc_cli.commands.org.console"):
+        with patch("scc_cli.commands.org.validate_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source=str(config_file),
@@ -239,7 +239,7 @@ class TestOrgSchema:
         """schema with invalid version should fail."""
         from scc_cli.commands.org import org_schema_cmd
 
-        with patch("scc_cli.commands.org.console"):
+        with patch("scc_cli.commands.org.schema_cmd.console"):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_schema_cmd(
                     schema_version="v99",

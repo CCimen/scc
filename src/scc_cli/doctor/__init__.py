@@ -17,7 +17,7 @@ Package Structure:
 # Re-export the config module for backward compatibility with tests
 from scc_cli import config
 
-# Import all check functions from checks.py
+# Import all check functions from checks/ package
 from scc_cli.doctor.checks import (
     _escape_rich,
     check_cache_readable,

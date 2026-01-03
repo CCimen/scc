@@ -130,22 +130,22 @@ class TestStartCommand:
         (tmp_path / "package.json").write_text("{}")
 
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
                 return_value=(tmp_path, False),
             ),
-            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.commands.launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
                 return_value=(["docker"], False),
             ),
-            patch("scc_cli.commands.launch.docker.run"),
-            patch("scc_cli.commands.launch.deps.auto_install_dependencies") as mock_deps,
+            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.deps.auto_install_dependencies") as mock_deps,
         ):
             mock_deps.return_value = True
             runner.invoke(app, ["start", str(tmp_path), "--install-deps"])
@@ -155,22 +155,22 @@ class TestStartCommand:
     def test_start_with_offline_uses_cache_only(self, tmp_path):
         """Should use cached config only when --offline flag set."""
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.commands.launch.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
                 return_value=(tmp_path, False),
             ),
-            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.commands.launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
                 return_value=(["docker"], False),
             ),
-            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.sandbox.docker.run"),
         ):
             mock_remote.return_value = {"organization": {"name": "Test"}}
             runner.invoke(app, ["start", str(tmp_path), "--offline"])
@@ -182,21 +182,21 @@ class TestStartCommand:
     def test_start_with_standalone_skips_org_config(self, tmp_path):
         """Should skip org config when --standalone flag set."""
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.git.get_current_branch", return_value="main"),
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
+            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
+            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
                 return_value=(tmp_path, False),
             ),
-            patch("scc_cli.commands.launch.docker.prepare_sandbox_volume_for_credentials"),
+            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
             patch(
-                "scc_cli.commands.launch.docker.get_or_create_container",
+                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
                 return_value=(["docker"], False),
             ),
-            patch("scc_cli.commands.launch.docker.run"),
+            patch("scc_cli.commands.launch.sandbox.docker.run"),
             patch("scc_cli.remote.load_org_config") as mock_remote,
         ):
             runner.invoke(app, ["start", str(tmp_path), "--standalone"])
@@ -218,10 +218,15 @@ class TestWorktreeCommand:
         worktree_path.mkdir()
 
         with (
-            patch("scc_cli.commands.worktree.git.is_git_repo", return_value=True),
-            patch("scc_cli.commands.worktree.git.has_commits", return_value=True),
-            patch("scc_cli.commands.worktree.git.create_worktree", return_value=worktree_path),
-            patch("scc_cli.commands.worktree.deps.auto_install_dependencies") as mock_deps,
+            patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
+            patch("scc_cli.commands.worktree.worktree_commands.git.has_commits", return_value=True),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.git.create_worktree",
+                return_value=worktree_path,
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.deps.auto_install_dependencies"
+            ) as mock_deps,
             patch("rich.prompt.Confirm.ask", return_value=False),  # Don't start claude
         ):
             mock_deps.return_value = True
@@ -250,7 +255,10 @@ class TestSessionsCommand:
                 "team": "dev",
             },
         ]
-        with patch("scc_cli.commands.worktree.sessions.list_recent", return_value=mock_sessions):
+        with patch(
+            "scc_cli.commands.worktree.session_commands.sessions.list_recent",
+            return_value=mock_sessions,
+        ):
             result = runner.invoke(app, ["sessions"])
         assert result.exit_code == 0
         assert "session1" in result.output
@@ -262,8 +270,11 @@ class TestSessionsCommand:
             {"name": "session2", "workspace": "/tmp/proj2"},
         ]
         with (
-            patch("scc_cli.commands.worktree.sessions.list_recent", return_value=mock_sessions),
-            patch("scc_cli.commands.worktree.pick_session") as mock_select,
+            patch(
+                "scc_cli.commands.worktree.session_commands.sessions.list_recent",
+                return_value=mock_sessions,
+            ),
+            patch("scc_cli.commands.worktree.session_commands.pick_session") as mock_select,
         ):
             mock_select.return_value = mock_sessions[0]
             runner.invoke(app, ["sessions", "--select"])
@@ -282,8 +293,8 @@ class TestStartCommandErrors:
     def test_start_requires_setup_first(self, tmp_path):
         """Should prompt for setup when not configured."""
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=True),
-            patch("scc_cli.commands.launch.setup.maybe_run_setup", return_value=False),
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=True),
+            patch("scc_cli.commands.launch.app.setup.maybe_run_setup", return_value=False),
         ):
             result = runner.invoke(app, ["start", str(tmp_path)])
 
@@ -293,11 +304,11 @@ class TestStartCommandErrors:
     def test_start_shows_docker_not_found_error(self, tmp_path):
         """Should show helpful message when Docker not installed."""
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.docker.check_docker_available") as mock_docker,
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
             patch(
-                "scc_cli.commands.launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
                 return_value=(tmp_path, False),
             ),
         ):
@@ -310,11 +321,11 @@ class TestStartCommandErrors:
     def test_start_shows_docker_version_error(self, tmp_path):
         """Should show helpful message when Docker version too old."""
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.docker.check_docker_available") as mock_docker,
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
             patch(
-                "scc_cli.commands.launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
                 return_value=(tmp_path, False),
             ),
         ):
@@ -327,11 +338,11 @@ class TestStartCommandErrors:
     def test_start_shows_sandbox_not_available_error(self, tmp_path):
         """Should show helpful message when sandbox not available."""
         with (
-            patch("scc_cli.commands.launch.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.docker.check_docker_available") as mock_docker,
+            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
             patch(
-                "scc_cli.commands.launch.git.get_workspace_mount_path",
+                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
                 return_value=(tmp_path, False),
             ),
         ):
@@ -472,7 +483,8 @@ class TestListCommand:
         mock_container.branch = "main"
 
         with patch(
-            "scc_cli.commands.worktree.docker.list_scc_containers", return_value=[mock_container]
+            "scc_cli.commands.worktree.container_commands.docker.list_scc_containers",
+            return_value=[mock_container],
         ):
             result = runner.invoke(app, ["list"])
 
@@ -480,7 +492,10 @@ class TestListCommand:
 
     def test_list_shows_empty_message(self):
         """List should show message when no containers."""
-        with patch("scc_cli.commands.worktree.docker.list_scc_containers", return_value=[]):
+        with patch(
+            "scc_cli.commands.worktree.container_commands.docker.list_scc_containers",
+            return_value=[],
+        ):
             result = runner.invoke(app, ["list"])
 
         assert result.exit_code == 0
@@ -502,11 +517,12 @@ class TestStopCommand:
 
         with (
             patch(
-                "scc_cli.commands.worktree.docker.list_running_sandboxes",
+                "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
                 return_value=[mock_container],
             ),
             patch(
-                "scc_cli.commands.worktree.docker.stop_container", return_value=True
+                "scc_cli.commands.worktree.container_commands.docker.stop_container",
+                return_value=True,
             ) as mock_stop,
         ):
             result = runner.invoke(app, ["stop", "scc-project-abc123"])
@@ -522,7 +538,8 @@ class TestStopCommand:
         mock_container.id = "other123"
 
         with patch(
-            "scc_cli.commands.worktree.docker.list_running_sandboxes", return_value=[mock_container]
+            "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+            return_value=[mock_container],
         ):
             result = runner.invoke(app, ["stop", "nonexistent"])
 
@@ -531,7 +548,10 @@ class TestStopCommand:
 
     def test_stop_all_when_no_containers(self):
         """Stop should show message when no containers running."""
-        with patch("scc_cli.commands.worktree.docker.list_running_sandboxes", return_value=[]):
+        with patch(
+            "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+            return_value=[],
+        ):
             result = runner.invoke(app, ["stop"])
 
         # Should indicate no containers running
@@ -548,7 +568,9 @@ class TestWorktreeCommandErrors:
 
     def test_worktree_not_git_repo_shows_error(self, tmp_path):
         """Should show error when not in a git repo."""
-        with patch("scc_cli.commands.worktree.git.is_git_repo", return_value=False):
+        with patch(
+            "scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=False
+        ):
             result = runner.invoke(app, ["worktree", "create", str(tmp_path), "feature-x"])
 
         # Should indicate not a git repo
@@ -636,7 +658,9 @@ class TestSessionsCommandDetails:
 
     def test_sessions_empty_list(self):
         """Should show message when no sessions."""
-        with patch("scc_cli.commands.worktree.sessions.list_recent", return_value=[]):
+        with patch(
+            "scc_cli.commands.worktree.session_commands.sessions.list_recent", return_value=[]
+        ):
             result = runner.invoke(app, ["sessions"])
 
         assert result.exit_code == 0
@@ -648,7 +672,8 @@ class TestSessionsCommandDetails:
             for i in range(5)
         ]
         with patch(
-            "scc_cli.commands.worktree.sessions.list_recent", return_value=mock_sessions
+            "scc_cli.commands.worktree.session_commands.sessions.list_recent",
+            return_value=mock_sessions,
         ) as mock_list:
             result = runner.invoke(app, ["sessions", "-n", "5"])
 

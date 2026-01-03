@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from scc_cli.commands.launch import _resolve_workspace_team
+from scc_cli.commands.launch.workspace import resolve_workspace_team
 
 
 def test_explicit_team_wins_over_pinned() -> None:
@@ -15,7 +15,7 @@ def test_explicit_team_wins_over_pinned() -> None:
         "workspace_team_map": {workspace_key: "data"},
     }
 
-    result = _resolve_workspace_team(
+    result = resolve_workspace_team(
         workspace,
         team="security",
         cfg=cfg,
@@ -36,10 +36,10 @@ def test_pinned_team_prompt_accepts() -> None:
     }
 
     with (
-        patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
-        patch("scc_cli.commands.launch.Confirm.ask", return_value=True),
+        patch("scc_cli.commands.launch.workspace.is_interactive_allowed", return_value=True),
+        patch("scc_cli.commands.launch.workspace.Confirm.ask", return_value=True),
     ):
-        result = _resolve_workspace_team(
+        result = resolve_workspace_team(
             workspace,
             team=None,
             cfg=cfg,
@@ -60,10 +60,10 @@ def test_pinned_team_prompt_declines() -> None:
     }
 
     with (
-        patch("scc_cli.commands.launch.is_interactive_allowed", return_value=True),
-        patch("scc_cli.commands.launch.Confirm.ask", return_value=False),
+        patch("scc_cli.commands.launch.workspace.is_interactive_allowed", return_value=True),
+        patch("scc_cli.commands.launch.workspace.Confirm.ask", return_value=False),
     ):
-        result = _resolve_workspace_team(
+        result = resolve_workspace_team(
             workspace,
             team=None,
             cfg=cfg,
@@ -84,10 +84,10 @@ def test_noninteractive_uses_pinned_team_with_notice() -> None:
     }
 
     with (
-        patch("scc_cli.commands.launch.is_interactive_allowed", return_value=False),
-        patch("scc_cli.commands.launch.print_human") as mock_print,
+        patch("scc_cli.commands.launch.workspace.is_interactive_allowed", return_value=False),
+        patch("scc_cli.commands.launch.workspace.print_human") as mock_print,
     ):
-        result = _resolve_workspace_team(
+        result = resolve_workspace_team(
             workspace,
             team=None,
             cfg=cfg,

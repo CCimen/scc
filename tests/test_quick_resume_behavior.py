@@ -19,11 +19,11 @@ def test_quick_resume_shows_active_team_in_header() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.config.is_standalone_mode", return_value=False),
-        patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.teams.list_teams", return_value=[]),
-        patch("scc_cli.commands.launch.load_recent_contexts", return_value=[context]),
-        patch("scc_cli.commands.launch.pick_context_quick_resume") as mock_picker,
+        patch("scc_cli.commands.launch.app.config.is_standalone_mode", return_value=False),
+        patch("scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.app.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.app.load_recent_contexts", return_value=[context]),
+        patch("scc_cli.commands.launch.app.pick_context_quick_resume") as mock_picker,
     ):
         mock_picker.side_effect = RuntimeError("stop")
         try:
@@ -47,12 +47,12 @@ def test_quick_resume_back_cancels_at_top_level() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.config.is_standalone_mode", return_value=False),
-        patch("scc_cli.commands.launch.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.teams.list_teams", return_value=[]),
-        patch("scc_cli.commands.launch.load_recent_contexts", return_value=[context]),
+        patch("scc_cli.commands.launch.app.config.is_standalone_mode", return_value=False),
+        patch("scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.app.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.app.load_recent_contexts", return_value=[context]),
         patch(
-            "scc_cli.commands.launch.pick_context_quick_resume",
+            "scc_cli.commands.launch.app.pick_context_quick_resume",
             return_value=(QuickResumeResult.BACK, None),
         ),
     ):
