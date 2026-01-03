@@ -23,6 +23,7 @@ from .core import (
     has_commits,
     has_remote,
     init_repo,
+    is_file_ignored,
     is_git_repo,
 )
 from .hooks import (
@@ -47,6 +48,7 @@ __all__ = [
     "check_git_installed",
     "get_git_version",
     "is_git_repo",
+    "is_file_ignored",
     "has_commits",
     "init_repo",
     "create_empty_initial_commit",

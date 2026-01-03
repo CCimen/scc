@@ -179,3 +179,38 @@ def detect_workspace_root(start_dir: Path) -> tuple[Path | None, Path]:
 
     # No workspace detected
     return (None, start_dir)
+
+
+def is_file_ignored(file_path: str | Path, repo_root: Path | None = None) -> bool:
+    """Check if a file path is ignored by git.
+
+    Uses git check-ignore to determine if the file would be ignored.
+    Returns False if git is not available or not in a git repo (fail-open).
+
+    Args:
+        file_path: The file path to check.
+        repo_root: The repository root. If None, uses current directory.
+
+    Returns:
+        True if the file is ignored by git, False otherwise.
+    """
+    import subprocess
+
+    cwd = str(repo_root) if repo_root else None
+
+    # Check if we're actually in a git repo
+    if repo_root and not (repo_root / ".git").exists():
+        return False
+
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", str(file_path)],
+            capture_output=True,
+            cwd=cwd,
+            timeout=5,
+        )
+        # Exit code 0 means file IS ignored
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        # git not available or other error - fail silently (fail-open)
+        return False

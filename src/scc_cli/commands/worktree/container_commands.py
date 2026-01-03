@@ -381,44 +381,5 @@ def container_list_cmd() -> None:
     Examples:
         scc container list
     """
-    # Delegate to existing list logic
-    with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner=Spinners.DOCKER):
-        containers = docker.list_scc_containers()
-
-    if not containers:
-        console.print(
-            create_warning_panel(
-                "No Containers",
-                "No SCC-managed containers found.",
-                "Start a session with: scc start <workspace>",
-            )
-        )
-        return
-
-    # Build rows
-    rows = []
-    for c in containers:
-        # Color status based on state
-        status = c.status
-        if status == "running":
-            status = f"[green]{status}[/green]"
-        elif status == "exited":
-            status = f"[yellow]{status}[/yellow]"
-
-        rows.append([c.name, status, c.workspace or "-", c.profile or "-", c.branch or "-"])
-
-    render_responsive_table(
-        title="SCC Containers",
-        columns=[
-            ("Name", "cyan"),
-            ("Status", "white"),
-        ],
-        rows=rows,
-        wide_columns=[
-            ("Workspace", "dim"),
-            ("Profile", "yellow"),
-            ("Branch", "green"),
-        ],
-    )
-
-    console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")
+    # Delegate to list_cmd to avoid duplication and ensure consistent behavior
+    list_cmd(interactive=False)

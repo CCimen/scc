@@ -84,52 +84,5 @@ def session_list_cmd(
         scc session list -n 20
         scc session list --select
     """
-    # Delegate to existing sessions logic
-    recent = sessions.list_recent(limit)
-
-    # Interactive picker mode
-    if select and recent:
-        try:
-            selected = pick_session(
-                recent,
-                title="Select Session",
-                subtitle=f"{len(recent)} recent sessions",
-            )
-            if selected:
-                console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
-                console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
-        except TeamSwitchRequested:
-            console.print("[dim]Use 'scc team switch' to change teams[/dim]")
-        return
-
-    if not recent:
-        console.print(
-            create_warning_panel(
-                "No Sessions",
-                "No recent sessions found.",
-                "Start a session with: scc start <workspace>",
-            )
-        )
-        return
-
-    # Build rows for responsive table
-    rows = []
-    for s in recent:
-        # Shorten workspace path if needed
-        ws = s.get("workspace", "-")
-        if len(ws) > 40:
-            ws = "..." + ws[-37:]
-        rows.append([s.get("name", "-"), ws, s.get("last_used", "-"), s.get("team", "-")])
-
-    render_responsive_table(
-        title="Recent Sessions",
-        columns=[
-            ("Session", "cyan"),
-            ("Workspace", "white"),
-        ],
-        rows=rows,
-        wide_columns=[
-            ("Last Used", "yellow"),
-            ("Team", "green"),
-        ],
-    )
+    # Delegate to sessions_cmd to avoid duplication
+    sessions_cmd(limit=limit, select=select)
