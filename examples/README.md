@@ -18,19 +18,24 @@ Ready-to-use configuration templates for SCC (Sandboxed Code CLI). Pick a path a
 
 ## Pick Your Path
 
-- **Teams own their marketplaces/plugins (federated)** → **Example Org**: `10-example-org-federated.json`
-  - Use the matching team configs: `10-example-org-frontend-team-config.json`, `10-example-org-backend-team-config.json`, `10-example-org-ml-team-config.json`
-- **Org controls marketplaces, single team or small org** → `01-quickstart-minimal.json`
-- **Org controls marketplaces, multiple teams** → `02-org-teams-delegation.json`
-- **Strict security / compliance baseline** → `03-org-strict-security.json`
-  - If you need local MCP tools, also review `04-org-stdio-hardened.json`
+- **Teams own their marketplaces/plugins (federated, team-owned)** → **Example Org**:
+  - [10-example-org-federated.json](10-example-org-federated.json)
+  - Matching team configs:
+    - [10-example-org-frontend-team-config.json](10-example-org-frontend-team-config.json)
+    - [10-example-org-backend-team-config.json](10-example-org-backend-team-config.json)
+    - [10-example-org-ml-team-config.json](10-example-org-ml-team-config.json)
+- **Org controls marketplaces (centralized)**:
+  - Small org or single team → [01-quickstart-minimal.json](01-quickstart-minimal.json)
+  - Multiple teams → [02-org-teams-delegation.json](02-org-teams-delegation.json)
+- **Strict security / compliance baseline** → [03-org-strict-security.json](03-org-strict-security.json)
+  - If you need local MCP tools, also review [04-org-stdio-hardened.json](04-org-stdio-hardened.json)
 
 <details>
 <summary>More options</summary>
 
-- **Hybrid GitLab + GitHub sources** → `07-hybrid-gitlab-github-skeleton.json`
-- **Federation reference (all source types)** → `05-org-federated-teams.json`
-- **Need a complete reference** → `99-complete-reference.json`
+- **Hybrid GitLab + GitHub sources** → [07-hybrid-gitlab-github-skeleton.json](07-hybrid-gitlab-github-skeleton.json)
+- **Federation reference (all source types)** → [05-org-federated-teams.json](05-org-federated-teams.json)
+- **Need a complete reference** → [99-complete-reference.json](99-complete-reference.json)
 
 </details>
 
@@ -51,6 +56,8 @@ cp examples/10-example-org-federated.json org-config.json
 # 3) Validate org config
 scc org validate org-config.json
 ```
+
+This pattern assumes each team owns its own `marketplaces` in the team config.
 
 Team configs live in **separate GitHub repos**. Use these as templates:
 
@@ -83,38 +90,36 @@ examples/06-github-federated-skeleton.json
 
 | Example | Intent | Best for | Tags |
 |---------|--------|----------|------|
-| `01-quickstart-minimal.json` | Centralized | Small org, single team | beginner, minimal |
-| `02-org-teams-delegation.json` | Centralized | Multi-team org | delegation |
-| `03-org-strict-security.json` | Centralized | Regulated/security-first | security |
-| `04-org-stdio-hardened.json` | Centralized | Local MCP tools with guardrails | mcp, security |
-| `05-org-federated-teams.json` | Federated | Full federation reference | advanced |
-| `06-github-federated-skeleton.json` | Federated | GitHub-only template | skeleton |
-| `07-hybrid-gitlab-github-skeleton.json` | Federated | GitLab configs + GitHub plugins | hybrid |
-| `08-sundsvall-kommun-org.json` | Mixed | Org marketplace + one federated team | real-world |
-| `08-sundsvall-ai-team-config.json` | Federated | Team config example | real-world |
-| `09-org-safety-net-enabled.json` | Centralized | Safety-net plugin example | plugin |
-| `10-example-org-federated.json` | Federated | Team-owned marketplaces | real-world |
-| `10-example-org-frontend-team-config.json` | Federated | Frontend team config | real-world |
-| `10-example-org-backend-team-config.json` | Federated | Backend team config | real-world |
-| `10-example-org-ml-team-config.json` | Federated | ML team config | real-world |
-| `99-complete-reference.json` | Reference | All fields documented | reference |
-| `team-config-example.json` | Reference | Team config schema example | reference |
+| [01-quickstart-minimal.json](01-quickstart-minimal.json) | Centralized | Small org, single team | beginner, minimal |
+| [02-org-teams-delegation.json](02-org-teams-delegation.json) | Centralized | Multi-team org | delegation |
+| [03-org-strict-security.json](03-org-strict-security.json) | Centralized | Regulated/security-first | security |
+| [04-org-stdio-hardened.json](04-org-stdio-hardened.json) | Centralized | Local MCP tools with guardrails | mcp, security |
+| [05-org-federated-teams.json](05-org-federated-teams.json) | Federated | Full federation reference | advanced |
+| [06-github-federated-skeleton.json](06-github-federated-skeleton.json) | Federated | GitHub-only template | skeleton |
+| [07-hybrid-gitlab-github-skeleton.json](07-hybrid-gitlab-github-skeleton.json) | Federated | GitLab configs + GitHub plugins | hybrid |
+| [08-sundsvall-kommun-org.json](08-sundsvall-kommun-org.json) | Mixed | Org marketplace + one federated team | real-world |
+| [08-sundsvall-ai-team-config.json](08-sundsvall-ai-team-config.json) | Federated | Team config example | real-world |
+| [09-org-safety-net-enabled.json](09-org-safety-net-enabled.json) | Centralized | Safety-net plugin example | plugin |
+| [10-example-org-federated.json](10-example-org-federated.json) | Federated | Team-owned marketplaces | real-world |
+| [10-example-org-frontend-team-config.json](10-example-org-frontend-team-config.json) | Federated | Frontend team config | real-world |
+| [10-example-org-backend-team-config.json](10-example-org-backend-team-config.json) | Federated | Backend team config | real-world |
+| [10-example-org-ml-team-config.json](10-example-org-ml-team-config.json) | Federated | ML team config | real-world |
+| [99-complete-reference.json](99-complete-reference.json) | Reference | All fields documented | reference |
+| [team-config-example.json](team-config-example.json) | Reference | Team config schema example | reference |
 
 ---
 
-## Advanced & Reference Examples
+## Advanced & Reference (collapsed)
 
 <details>
-<summary>Security, MCP, federation, and full reference (click to expand)</summary>
+<summary>Security, MCP, federation, hybrid, full reference</summary>
 
-| Example | Intent | Best for | Tags |
-|---------|--------|----------|------|
-| `03-org-strict-security.json` | Centralized | Regulated/security-first | security |
-| `04-org-stdio-hardened.json` | Centralized | Local MCP tools with guardrails | mcp, security |
-| `05-org-federated-teams.json` | Federated | Full federation reference | advanced |
-| `07-hybrid-gitlab-github-skeleton.json` | Federated | GitLab configs + GitHub plugins | hybrid |
-| `09-org-safety-net-enabled.json` | Centralized | Safety-net plugin example | plugin |
-| `99-complete-reference.json` | Reference | All fields documented | reference |
+- Strict security baseline: [03-org-strict-security.json](03-org-strict-security.json)
+- Local MCP with guardrails: [04-org-stdio-hardened.json](04-org-stdio-hardened.json)
+- Full federation reference: [05-org-federated-teams.json](05-org-federated-teams.json)
+- Hybrid GitLab + GitHub: [07-hybrid-gitlab-github-skeleton.json](07-hybrid-gitlab-github-skeleton.json)
+- Safety-net plugin example: [09-org-safety-net-enabled.json](09-org-safety-net-enabled.json)
+- Complete reference: [99-complete-reference.json](99-complete-reference.json)
 
 </details>
 
@@ -124,8 +129,11 @@ examples/06-github-federated-skeleton.json
 
 **Use this when** teams maintain their own plugins/marketplaces and the org file should stay minimal.
 
-- Org config: `10-example-org-federated.json`
-- Team configs: `10-example-org-frontend-team-config.json`, `10-example-org-backend-team-config.json`, `10-example-org-ml-team-config.json`
+- Org config: [10-example-org-federated.json](10-example-org-federated.json)
+- Team configs:
+  - [10-example-org-frontend-team-config.json](10-example-org-frontend-team-config.json)
+  - [10-example-org-backend-team-config.json](10-example-org-backend-team-config.json)
+  - [10-example-org-ml-team-config.json](10-example-org-ml-team-config.json)
 
 **Key design decisions:**
 
@@ -139,8 +147,8 @@ examples/06-github-federated-skeleton.json
 
 **Use this when** the org wants a shared marketplace, but some teams need their own configs.
 
-- Org config: `08-sundsvall-kommun-org.json`
-- AI team config: `08-sundsvall-ai-team-config.json`
+- Org config: [08-sundsvall-kommun-org.json](08-sundsvall-kommun-org.json)
+- AI team config: [08-sundsvall-ai-team-config.json](08-sundsvall-ai-team-config.json)
 
 **Pick Sundsvall if** you want a fuller, org-led reference with a mixed model.
 
@@ -188,29 +196,17 @@ scc doctor
 scc status
 ```
 
-**Team config validation** (schema check):
+**Team config validation**
 
-```bash
-uv run python - <<'PY'
-import json
-from pathlib import Path
-from jsonschema import Draft7Validator
-
-schema = json.loads(Path("src/scc_cli/schemas/team-config.v1.schema.json").read_text())
-validator = Draft7Validator(schema)
-
-for path in sorted(Path("examples").glob("*team-config*.json")):
-    data = json.loads(path.read_text())
-    errors = list(validator.iter_errors(data))
-    print(path, "OK" if not errors else "INVALID")
-PY
-```
-
-**After org config is installed**, you can also validate a team by name:
+After the org config is installed, validate a team by name:
 
 ```
 scc team validate <TEAM_NAME>
 ```
+
+If you are unsure which commands your version supports, see:
+
+- [docs/CLI-REFERENCE.md](../docs/CLI-REFERENCE.md)
 
 ---
 
@@ -254,4 +250,4 @@ Team config examples use:
 
 If you plan to enable marketplace plugins (like safety-net), see:
 
-- `docs/MARKETPLACE.md`
+- [docs/MARKETPLACE.md](../docs/MARKETPLACE.md)
