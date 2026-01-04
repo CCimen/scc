@@ -63,6 +63,7 @@ scc org validate org-config.json
 This pattern assumes each team owns its own `marketplaces` in the team config.
 
 Team configs live in **separate GitHub repos**. Use these as templates:
+Links are relative to the `examples/` folder.
 
 - [10-example-org-frontend-team-config.json](10-example-org-frontend-team-config.json)
 - [10-example-org-backend-team-config.json](10-example-org-backend-team-config.json)
@@ -192,6 +193,7 @@ examples/06-github-federated-skeleton.json
 scc org validate org-config.json
 
 # Effective config (uses installed org config; no file argument)
+# This does not validate a file.
 scc config explain
 
 # Health checks
@@ -205,6 +207,8 @@ scc status
 <summary>Team config schema validation (jsonschema)</summary>
 
 Run from repo root (schema path is repo-relative).
+
+Requires the `jsonschema` dependency (included in `uv` dev dependencies).
 
 ```bash
 uv run python - <<'PY'
