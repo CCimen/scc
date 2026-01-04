@@ -557,6 +557,7 @@ def _clone_and_read_config(
             "1",
             "--branch",
             branch,
+            "--",
             clone_url,
             str(target_dir),
         ]
