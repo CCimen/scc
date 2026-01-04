@@ -23,7 +23,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from scc_cli.marketplace.constants import (
@@ -71,6 +71,18 @@ class InvalidMarketplaceError(MaterializationError):
             "A valid marketplace must contain .claude-plugin/marketplace.json",
             marketplace_name,
         )
+
+
+def _validate_marketplace_name(name: str) -> None:
+    """Validate marketplace name for safe filesystem usage."""
+    if not name or not name.strip():
+        raise InvalidMarketplaceError(name, "marketplace name cannot be empty")
+    if name in {".", ".."}:
+        raise InvalidMarketplaceError(name, "marketplace name cannot be '.' or '..'")
+    if "/" in name or "\\" in name:
+        raise InvalidMarketplaceError(name, "marketplace name cannot contain path separators")
+    if "\x00" in name:
+        raise InvalidMarketplaceError(name, "marketplace name cannot contain null bytes")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -272,6 +284,7 @@ def run_git_clone(
             str(depth),
             "--branch",
             branch,
+            "--",
             url,
             str(target_dir),
         ]
@@ -387,9 +400,40 @@ def download_and_extract(
                 shutil.rmtree(target_dir)
             target_dir.mkdir(parents=True)
 
-            # Extract archive
+            # Extract archive (path-safe)
             with tarfile.open(tmp_path, "r:*") as tar:
-                tar.extractall(target_dir)
+                safe_members: list[tarfile.TarInfo] = []
+                for member in tar.getmembers():
+                    member_path = PurePosixPath(member.name)
+                    if member_path.is_absolute():
+                        return DownloadResult(
+                            success=False,
+                            error=f"Unsafe archive member (absolute path): {member.name}",
+                        )
+                    if ".." in member_path.parts:
+                        return DownloadResult(
+                            success=False,
+                            error=f"Unsafe archive member (path traversal): {member.name}",
+                        )
+                    if "" in member_path.parts:
+                        return DownloadResult(
+                            success=False,
+                            error=f"Unsafe archive member (empty path segment): {member.name}",
+                        )
+                    if (
+                        member.islnk()
+                        or member.issym()
+                        or member.ischr()
+                        or member.isblk()
+                        or member.isfifo()
+                    ):
+                        return DownloadResult(
+                            success=False,
+                            error=f"Unsafe archive member (link/device): {member.name}",
+                        )
+                    safe_members.append(member)
+
+                tar.extractall(target_dir, members=safe_members)
 
             # Discover plugins
             plugins = _discover_plugins(target_dir)
@@ -422,11 +466,13 @@ def download_and_extract(
 
 def _get_relative_path(name: str) -> str:
     """Get relative path for a marketplace."""
+    _validate_marketplace_name(name)
     return f".claude/{MARKETPLACE_CACHE_DIR}/{name}"
 
 
 def _get_absolute_path(project_dir: Path, name: str) -> Path:
     """Get absolute path for a marketplace."""
+    _validate_marketplace_name(name)
     return project_dir / ".claude" / MARKETPLACE_CACHE_DIR / name
 
 

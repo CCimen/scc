@@ -296,6 +296,7 @@ def remove_container(container_name: str, force: bool = False) -> bool:
     cmd = ["docker", "rm"]
     if force:
         cmd.append("-f")
+    cmd.append("--")
     cmd.append(container_name)
     return run_command_bool(cmd, timeout=30)
 
