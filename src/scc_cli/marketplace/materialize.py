@@ -23,7 +23,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from scc_cli.marketplace.constants import (
@@ -405,20 +405,26 @@ def download_and_extract(
                 safe_members: list[tarfile.TarInfo] = []
                 for member in tar.getmembers():
                     member_path = PurePosixPath(member.name)
-                    if member_path.is_absolute():
+                    windows_member_path = PureWindowsPath(member.name)
+                    if member_path.is_absolute() or windows_member_path.is_absolute():
                         return DownloadResult(
                             success=False,
                             error=f"Unsafe archive member (absolute path): {member.name}",
                         )
-                    if ".." in member_path.parts:
+                    if ".." in member_path.parts or ".." in windows_member_path.parts:
                         return DownloadResult(
                             success=False,
                             error=f"Unsafe archive member (path traversal): {member.name}",
                         )
-                    if "" in member_path.parts:
+                    if "" in member_path.parts or "" in windows_member_path.parts:
                         return DownloadResult(
                             success=False,
                             error=f"Unsafe archive member (empty path segment): {member.name}",
+                        )
+                    if "\\" in member.name or windows_member_path.drive:
+                        return DownloadResult(
+                            success=False,
+                            error=f"Unsafe archive member (windows path): {member.name}",
                         )
                     if (
                         member.islnk()
