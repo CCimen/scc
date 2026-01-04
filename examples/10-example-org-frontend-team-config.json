@@ -2,14 +2,14 @@
     "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
     "schema_version": 1,
     "enabled_plugins": [
-        "spring-boot-helper@gavle-backend",
-        "java-analyzer@gavle-backend"
+        "react-tools@example-frontend",
+        "typescript-helper@example-frontend"
     ],
     "marketplaces": {
-        "gavle-backend": {
+        "example-frontend": {
             "source": "github",
-            "owner": "gavle-kommun",
-            "repo": "gavle-backend-plugins",
+            "owner": "example-org",
+            "repo": "example-org-frontend-plugins",
             "branch": "main"
         }
     }

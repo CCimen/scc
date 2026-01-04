@@ -2,14 +2,14 @@
     "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
     "schema_version": 1,
     "enabled_plugins": [
-        "react-tools@gavle-frontend",
-        "typescript-helper@gavle-frontend"
+        "python-tools@example-ml",
+        "ml-pipeline@example-ml"
     ],
     "marketplaces": {
-        "gavle-frontend": {
+        "example-ml": {
             "source": "github",
-            "owner": "gavle-kommun",
-            "repo": "gavle-frontend-plugins",
+            "owner": "example-org",
+            "repo": "example-org-ml-plugins",
             "branch": "main"
         }
     }

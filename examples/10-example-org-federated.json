@@ -2,9 +2,9 @@
     "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
     "schema_version": "1.0.0",
     "organization": {
-        "name": "Gävle kommun",
-        "id": "gavle-kommun",
-        "contact": "it@gavle.se"
+        "name": "Example Org",
+        "id": "example-org",
+        "contact": "it@example.org"
     },
     "security": {
         "blocked_plugins": [
@@ -21,15 +21,15 @@
             "description": "Frontend team - React/TypeScript",
             "config_source": {
                 "source": "github",
-                "owner": "gavle-kommun",
-                "repo": "scc-frontend-team-config",
+                "owner": "example-org",
+                "repo": "example-org-frontend-team-config",
                 "branch": "main"
             },
             "trust": {
                 "inherit_org_marketplaces": false,
                 "allow_additional_marketplaces": true,
                 "marketplace_source_patterns": [
-                    "github.com/gavle-kommun/**"
+                    "github.com/example-org/**"
                 ]
             }
         },
@@ -37,15 +37,15 @@
             "description": "Backend team - Java/Spring Boot",
             "config_source": {
                 "source": "github",
-                "owner": "gavle-kommun",
-                "repo": "scc-backend-team-config",
+                "owner": "example-org",
+                "repo": "example-org-backend-team-config",
                 "branch": "main"
             },
             "trust": {
                 "inherit_org_marketplaces": false,
                 "allow_additional_marketplaces": true,
                 "marketplace_source_patterns": [
-                    "github.com/gavle-kommun/**"
+                    "github.com/example-org/**"
                 ]
             }
         },
@@ -53,15 +53,15 @@
             "description": "ML team - Python/ML backend",
             "config_source": {
                 "source": "github",
-                "owner": "gavle-kommun",
-                "repo": "scc-ml-team-config",
+                "owner": "example-org",
+                "repo": "example-org-ml-team-config",
                 "branch": "main"
             },
             "trust": {
                 "inherit_org_marketplaces": false,
                 "allow_additional_marketplaces": true,
                 "marketplace_source_patterns": [
-                    "github.com/gavle-kommun/**"
+                    "github.com/example-org/**"
                 ]
             }
         }
