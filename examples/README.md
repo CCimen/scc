@@ -33,6 +33,7 @@ scc config explain org-config.json
 | Teams manage their own configs | `06-github-federated-skeleton.json` | GitHub-only federation |
 | Private GitLab + public GitHub plugins | `07-hybrid-gitlab-github-skeleton.json` | Mixed source federation |
 | **Swedish municipality / public sector** | `08-sundsvall-kommun-org.json` | Real-world reference config |
+| **Federated teams, no org marketplaces** | `10-gavle-kommun-federated.json` | Minimal team-owned marketplaces |
 | **Protect git history with safety-net** | `09-org-safety-net-enabled.json` | Marketplace plugin with git protection |
 | See all available options | `99-complete-reference.json` | Reference only (not for production) |
 
@@ -53,6 +54,10 @@ Build your understanding step by step:
 | 🟣 Skeleton | `07-hybrid-gitlab-github-skeleton.json` | GitLab + GitHub hybrid template |
 | 🏛️ Real-World | `08-sundsvall-kommun-org.json` | Swedish municipality with real teams |
 | 🏛️ Real-World | `08-sundsvall-ai-team-config.json` | AI team's federated config |
+| 🏛️ Real-World | `10-gavle-kommun-federated.json` | Minimal federation with team-owned marketplaces |
+| 🏛️ Real-World | `10-gavle-frontend-team-config.json` | Frontend team config example |
+| 🏛️ Real-World | `10-gavle-backend-team-config.json` | Backend team config example |
+| 🏛️ Real-World | `10-gavle-ml-team-config.json` | ML team config example |
 | 🔒 Plugin | `09-org-safety-net-enabled.json` | Marketplace plugin with git protection |
 | 📚 Reference | `99-complete-reference.json` | All fields documented |
 | 📚 Reference | `team-config-example.json` | External team config format |
@@ -160,6 +165,48 @@ This file would be in the `ai-team-scc-config` repo:
 - Add prompt engineering and LLM integration plugins
 - Reference your inference tooling helpers
 - Disable plugins your team doesn't need
+
+---
+
+## Real-World Reference: Gävle kommun (Federated Teams)
+
+### 10-gavle-kommun-federated.json
+**Best for**: Teams that manage their own plugins and marketplaces in GitHub
+
+This config keeps the org file minimal and delegates plugins/marketplaces to team repos:
+
+```
+Gävle kommun (GitHub: gavle-kommun)
+├── scc-org-config                  ← org config (this file)
+├── scc-frontend-team-config        ← team config (frontend)
+├── scc-backend-team-config         ← team config (backend)
+└── scc-ml-team-config              ← team config (ML)
+
+Team marketplaces (per team)
+├── gavle-frontend-plugins
+├── gavle-backend-plugins
+└── gavle-ml-plugins
+```
+
+**Teams:**
+
+| Team | Stack | Config Source |
+|------|-------|---------------|
+| **frontend** | React / TypeScript | `scc-frontend-team-config` |
+| **backend** | Java / Spring Boot | `scc-backend-team-config` |
+| **ml** | Python / ML backend | `scc-ml-team-config` |
+
+**Key design decisions:**
+
+1. **No org marketplaces** - each team defines its own marketplace
+2. **Team configs live in GitHub** - org config only references repos
+3. **Trust grants allow team marketplaces** - `allow_additional_marketplaces: true`
+
+### Team config examples
+
+- `10-gavle-frontend-team-config.json`
+- `10-gavle-backend-team-config.json`
+- `10-gavle-ml-team-config.json`
 
 ---
 
@@ -292,15 +339,21 @@ Teams can manage their own plugins in external repositories:
 | Setting | Default | Effect |
 |---------|---------|--------|
 | `inherit_org_marketplaces` | `true` | Team can use org-defined marketplaces |
-| `allow_additional_marketplaces` | `false` | Team can define their own marketplaces |
+| `allow_additional_marketplaces` | `false` | When true, team can define their own marketplaces |
 | `marketplace_source_patterns` | `[]` | URL patterns for allowed marketplace sources |
+
+**Note:** If teams maintain their own marketplaces, set `allow_additional_marketplaces: true`.
+When `false`, any `marketplaces` block in the team config will fail trust validation.
 
 ---
 
 ## Validation Commands
 
 ```bash
-# Validate config structure and show effective policies
+# Validate org config structure and semantics
+scc org validate org-config.json
+
+# Show effective policies (useful for debugging)
 scc config explain org-config.json
 
 # Check system health and prerequisites
@@ -308,6 +361,24 @@ scc doctor
 
 # Show current team and config status
 scc status
+```
+
+**Team config validation** (schema check):
+
+```bash
+uv run python - <<'PY'
+import json
+from pathlib import Path
+from jsonschema import Draft7Validator
+
+schema = json.loads(Path("src/scc_cli/schemas/team-config.v1.schema.json").read_text())
+validator = Draft7Validator(schema)
+
+for path in sorted(Path("examples").glob("*team-config*.json")):
+    data = json.loads(path.read_text())
+    errors = list(validator.iter_errors(data))
+    print(path, "OK" if not errors else "INVALID")
+PY
 ```
 
 ---

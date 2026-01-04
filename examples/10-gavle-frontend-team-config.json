@@ -1,0 +1,16 @@
+{
+    "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
+    "schema_version": 1,
+    "enabled_plugins": [
+        "react-tools@gavle-frontend",
+        "typescript-helper@gavle-frontend"
+    ],
+    "marketplaces": {
+        "gavle-frontend": {
+            "source": "github",
+            "owner": "gavle-kommun",
+            "repo": "gavle-frontend-plugins",
+            "branch": "main"
+        }
+    }
+}
