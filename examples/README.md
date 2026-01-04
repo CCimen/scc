@@ -7,6 +7,7 @@ Ready-to-use configuration templates for SCC (Sandboxed Code CLI). Pick a path a
 - [Pick Your Path](#pick-your-path)
 - [Quick Start](#quick-start)
 - [Example Index](#example-index)
+- [Advanced & Reference](#advanced--reference)
 - [Real-world References](#real-world-references)
 - [Skeleton Templates](#skeleton-templates)
 - [Validation](#validation)
@@ -43,6 +44,8 @@ Ready-to-use configuration templates for SCC (Sandboxed Code CLI). Pick a path a
 
 ## Quick Start
 
+Run these commands from the **repo root**.
+
 ### Federated: teams own marketplaces (Example Org path)
 
 ```bash
@@ -61,9 +64,9 @@ This pattern assumes each team owns its own `marketplaces` in the team config.
 
 Team configs live in **separate GitHub repos**. Use these as templates:
 
-- `examples/10-example-org-frontend-team-config.json`
-- `examples/10-example-org-backend-team-config.json`
-- `examples/10-example-org-ml-team-config.json`
+- [10-example-org-frontend-team-config.json](10-example-org-frontend-team-config.json)
+- [10-example-org-backend-team-config.json](10-example-org-backend-team-config.json)
+- [10-example-org-ml-team-config.json](10-example-org-ml-team-config.json)
 
 ### Centralized: org controls marketplaces
 
@@ -109,7 +112,7 @@ examples/06-github-federated-skeleton.json
 
 ---
 
-## Advanced & Reference (collapsed)
+## Advanced & Reference
 
 <details>
 <summary>Security, MCP, federation, hybrid, full reference</summary>
@@ -198,7 +201,30 @@ scc status
 
 **Team config validation**
 
-After the org config is installed, validate a team by name:
+<details>
+<summary>Team config schema validation (jsonschema)</summary>
+
+Run from repo root (schema path is repo-relative).
+
+```bash
+uv run python - <<'PY'
+import json
+from pathlib import Path
+from jsonschema import Draft7Validator
+
+schema = json.loads(Path("src/scc_cli/schemas/team-config.v1.schema.json").read_text())
+validator = Draft7Validator(schema)
+
+for path in sorted(Path("examples").glob("*team-config*.json")):
+    data = json.loads(path.read_text())
+    errors = list(validator.iter_errors(data))
+    print(path, "OK" if not errors else "INVALID")
+PY
+```
+
+</details>
+
+If your SCC version supports it, you can validate a team by name after the org config is installed:
 
 ```
 scc team validate <TEAM_NAME>
