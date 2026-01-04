@@ -1,0 +1,69 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "organization": {
+        "name": "Example Org",
+        "id": "example-org",
+        "contact": "it@example.org"
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-beta"
+        ],
+        "blocked_base_images": [
+            "*:latest"
+        ],
+        "allow_stdio_mcp": false
+    },
+    "profiles": {
+        "frontend": {
+            "description": "Frontend team - React/TypeScript",
+            "config_source": {
+                "source": "github",
+                "owner": "example-org",
+                "repo": "example-org-frontend-team-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": false,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/example-org/**"
+                ]
+            }
+        },
+        "backend": {
+            "description": "Backend team - Java/Spring Boot",
+            "config_source": {
+                "source": "github",
+                "owner": "example-org",
+                "repo": "example-org-backend-team-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": false,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/example-org/**"
+                ]
+            }
+        },
+        "ml": {
+            "description": "ML team - Python/ML backend",
+            "config_source": {
+                "source": "github",
+                "owner": "example-org",
+                "repo": "example-org-ml-team-config",
+                "branch": "main"
+            },
+            "trust": {
+                "inherit_org_marketplaces": false,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "github.com/example-org/**"
+                ]
+            }
+        }
+    }
+}

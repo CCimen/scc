@@ -1,0 +1,16 @@
+{
+    "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
+    "schema_version": 1,
+    "enabled_plugins": [
+        "react-tools@example-frontend",
+        "typescript-helper@example-frontend"
+    ],
+    "marketplaces": {
+        "example-frontend": {
+            "source": "github",
+            "owner": "example-org",
+            "repo": "example-org-frontend-plugins",
+            "branch": "main"
+        }
+    }
+}

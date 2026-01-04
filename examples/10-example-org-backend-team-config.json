@@ -1,0 +1,16 @@
+{
+    "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
+    "schema_version": 1,
+    "enabled_plugins": [
+        "spring-boot-helper@example-backend",
+        "java-analyzer@example-backend"
+    ],
+    "marketplaces": {
+        "example-backend": {
+            "source": "github",
+            "owner": "example-org",
+            "repo": "example-org-backend-plugins",
+            "branch": "main"
+        }
+    }
+}
