@@ -772,7 +772,7 @@ class TestRemoveContainer:
             assert result is True
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
-            assert call_args == ["docker", "rm", "my-container"]
+            assert call_args == ["docker", "rm", "--", "my-container"]
 
     def test_force_flag_adds_f(self):
         """Should add -f flag when force is True."""
