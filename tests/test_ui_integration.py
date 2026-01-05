@@ -428,9 +428,9 @@ class TestCLIDashboardIntegration:
 
     def test_cli_shows_dashboard_when_no_workspace_detected(self) -> None:
         """CLI shows dashboard when NOT in a valid workspace (e.g., $HOME)."""
-        # Mock _is_valid_workspace to return False (no workspace context)
-        # Patch at the source module where the function is defined
-        with patch("scc_cli.ui.wizard._is_valid_workspace", return_value=False):
+        # Mock resolve_launch_context to return None (no strong signal found)
+        # This simulates being outside a git repo and without .scc.yaml
+        with patch("scc_cli.services.workspace.resolve_launch_context", return_value=None):
             with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
                 with patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard:
                     # Import after patching
@@ -448,9 +448,21 @@ class TestCLIDashboardIntegration:
 
     def test_cli_invokes_start_when_workspace_detected(self) -> None:
         """CLI invokes start when in a valid workspace (git repo, .scc.yaml)."""
-        # Mock _is_valid_workspace to return True (valid workspace context)
-        # Patch at the source module where the function is defined
-        with patch("scc_cli.ui.wizard._is_valid_workspace", return_value=True):
+        from pathlib import Path
+
+        from scc_cli.core.workspace import ResolverResult
+
+        # Create a mock ResolverResult that is auto-eligible (strong signal, not suspicious)
+        mock_result = ResolverResult(
+            workspace_root=Path("/test/repo"),
+            entry_dir=Path("/test/repo"),
+            mount_root=Path("/test/repo"),
+            container_workdir="/test/repo",
+            is_auto_detected=True,
+            is_suspicious=False,
+            reason="git repo detected",
+        )
+        with patch("scc_cli.services.workspace.resolve_launch_context", return_value=mock_result):
             with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
                 # Import after patching
                 from scc_cli.cli import main_callback

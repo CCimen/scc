@@ -11,6 +11,7 @@ This module handles workspace-related operations for the launch command:
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,7 @@ from ...confirm import Confirm
 from ...core.constants import WORKTREE_BRANCH_PREFIX
 from ...core.errors import NotAGitRepoError, WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED
+from ...core.workspace import ResolverResult
 from ...output_mode import print_human
 from ...panels import create_info_panel, create_success_panel, create_warning_panel
 from ...theme import Indicators, Spinners
@@ -33,16 +35,94 @@ if TYPE_CHECKING:
     pass
 
 
+@dataclass
+class LaunchContext:
+    """Display-focused launch context wrapping ResolverResult.
+
+    This dataclass is used for rendering the launch panel and JSON output.
+    It combines resolver results with session-specific information.
+    """
+
+    resolver_result: ResolverResult
+    team: str | None
+    branch: str | None
+    session_name: str | None
+    mode: str  # "new" or "resume"
+
+    @property
+    def workspace_root(self) -> Path:
+        """Workspace root (WR)."""
+        return self.resolver_result.workspace_root
+
+    @property
+    def entry_dir(self) -> Path:
+        """Entry directory (ED)."""
+        return self.resolver_result.entry_dir
+
+    @property
+    def mount_root(self) -> Path:
+        """Mount root (MR)."""
+        return self.resolver_result.mount_root
+
+    @property
+    def container_workdir(self) -> str:
+        """Container working directory (CW)."""
+        return self.resolver_result.container_workdir
+
+    @property
+    def entry_dir_relative(self) -> str:
+        """Entry dir path relative to workspace root."""
+        try:
+            return str(self.entry_dir.relative_to(self.workspace_root))
+        except ValueError:
+            return str(self.entry_dir)
+
+    @property
+    def is_mount_expanded(self) -> bool:
+        """Whether mount was expanded for worktree support."""
+        return self.resolver_result.is_mount_expanded
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON output."""
+        return {
+            "workspace_root": str(self.workspace_root),
+            "entry_dir": str(self.entry_dir),
+            "entry_dir_relative": self.entry_dir_relative,
+            "mount_root": str(self.mount_root),
+            "container_workdir": self.container_workdir,
+            "is_mount_expanded": self.is_mount_expanded,
+            "team": self.team,
+            "branch": self.branch,
+            "session_name": self.session_name,
+            "mode": self.mode,
+            "reason": self.resolver_result.reason,
+        }
+
+
 def validate_and_resolve_workspace(
-    workspace: str | None, *, no_interactive: bool = False
+    workspace: str | None,
+    *,
+    no_interactive: bool = False,
+    allow_suspicious: bool = False,
+    json_mode: bool = False,
 ) -> Path | None:
     """
     Validate workspace path and handle platform-specific warnings.
 
+    Args:
+        workspace: Workspace path string.
+        no_interactive: If True, fail fast instead of prompting.
+        allow_suspicious: If True, allow suspicious workspaces in non-interactive mode.
+        json_mode: If True, output is JSON (suppress Rich panels).
+
     Raises:
         WorkspaceNotFoundError: If workspace path doesn't exist.
-        typer.Exit: If user declines to continue after WSL2 warning.
+        UsageError: If workspace is suspicious in non-interactive mode without --allow-suspicious-workspace.
+        typer.Exit: If user declines to continue after warnings.
     """
+    from ...core.errors import UsageError
+    from ...services.workspace.suspicious import get_suspicious_reason, is_suspicious_directory
+
     if workspace is None:
         return None
 
@@ -50,6 +130,43 @@ def validate_and_resolve_workspace(
 
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
+
+    # Check for suspicious workspace (home, /tmp, system directories)
+    if is_suspicious_directory(workspace_path):
+        reason = get_suspicious_reason(workspace_path) or "Suspicious directory"
+
+        # If --allow-suspicious-workspace is set, skip confirmation entirely
+        if allow_suspicious:
+            print_human(
+                f"[yellow]Warning:[/yellow] {reason}",
+                file=sys.stderr,
+                highlight=False,
+            )
+        elif is_interactive_allowed(json_mode=json_mode, no_interactive_flag=no_interactive):
+            # Interactive mode: warn but allow user to continue
+            console.print()
+            console.print(
+                create_warning_panel(
+                    "Suspicious Workspace",
+                    reason,
+                    "Consider using a project-specific directory instead.",
+                )
+            )
+            console.print()
+            if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
+                console.print("[dim]Cancelled.[/dim]")
+                raise typer.Exit(EXIT_CANCELLED)
+        else:
+            # Non-interactive mode without flag: block
+            raise UsageError(
+                user_message=f"Refusing to start in suspicious directory: {workspace_path}\n  → {reason}",
+                suggested_action=(
+                    "Either:\n"
+                    f"  • Run: scc start --allow-suspicious-workspace {workspace_path}\n"
+                    "  • Run: scc start --interactive (to choose a different workspace)\n"
+                    "  • Run from a project directory inside a git repository"
+                ),
+            )
 
     # WSL2 performance warning
     if platform_module.is_wsl2():
@@ -174,7 +291,11 @@ def resolve_workspace_team(
     return selected_profile
 
 
-def resolve_mount_and_branch(workspace_path: Path | None) -> tuple[Path | None, str | None]:
+def resolve_mount_and_branch(
+    workspace_path: Path | None,
+    *,
+    json_mode: bool = False,
+) -> tuple[Path | None, str | None]:
     """
     Resolve mount path for worktrees and get current branch.
 
@@ -193,7 +314,7 @@ def resolve_mount_and_branch(workspace_path: Path | None) -> tuple[Path | None, 
 
     # Handle worktree mounting
     mount_path, is_expanded = git.get_workspace_mount_path(workspace_path)
-    if is_expanded:
+    if is_expanded and not json_mode:
         console.print()
         console.print(
             create_info_panel(

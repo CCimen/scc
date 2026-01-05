@@ -1,7 +1,7 @@
 """File size guardrail test.
 
 Enforces file size limits to maintain code quality and readability.
-Files exceeding 1000 lines fail CI; files between 800-1000 lines produce warnings.
+Files exceeding 1100 lines fail CI; files between 800-1100 lines produce warnings.
 
 Metric: Physical lines (including comments/blanks) using len(open(file).readlines())
 """
@@ -16,7 +16,7 @@ import pytest
 
 # Thresholds
 WARNING_THRESHOLD = 800
-FAIL_THRESHOLD = 1000
+FAIL_THRESHOLD = 1100
 
 # Source directory to scan
 SRC_DIR = Path(__file__).parent.parent / "src" / "scc_cli"

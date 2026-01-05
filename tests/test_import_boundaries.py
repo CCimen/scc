@@ -322,6 +322,124 @@ class TestUICanImportServices:
 TESTS = REPO_ROOT / "tests"
 
 
+class TestCoreWorkspaceBoundary:
+    """core/workspace.py must be a pure domain module with no external dependencies."""
+
+    def test_core_workspace_no_services_imports(self) -> None:
+        """core/workspace.py must not import from services/."""
+        core_workspace = SRC / "core" / "workspace.py"
+        if not core_workspace.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-E",
+                r"(from scc_cli\.services|from \.\.services|import scc_cli\.services)",
+                str(core_workspace),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"core/workspace.py imports services/:\n{result.stdout}"
+
+    def test_core_workspace_no_ui_imports(self) -> None:
+        """core/workspace.py must not import from ui/."""
+        core_workspace = SRC / "core" / "workspace.py"
+        if not core_workspace.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-E",
+                r"(from scc_cli\.ui|from \.\.ui|import scc_cli\.ui)",
+                str(core_workspace),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"core/workspace.py imports ui/:\n{result.stdout}"
+
+    def test_core_workspace_no_commands_imports(self) -> None:
+        """core/workspace.py must not import from commands/."""
+        core_workspace = SRC / "core" / "workspace.py"
+        if not core_workspace.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-E",
+                r"(from scc_cli\.commands|from \.\.commands|import scc_cli\.commands)",
+                str(core_workspace),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"core/workspace.py imports commands/:\n{result.stdout}"
+
+
+class TestServicesWorkspaceBoundary:
+    """services/workspace/ must not depend on ui/ or commands/."""
+
+    def test_services_workspace_no_ui_imports(self) -> None:
+        """services/workspace/ must not import from ui/."""
+        services_workspace_path = SRC / "services" / "workspace"
+        if not services_workspace_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.ui|from \.\.ui|from \.\.\.ui|import scc_cli\.ui)",
+                str(services_workspace_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"services/workspace/ imports ui/:\n{result.stdout}"
+
+    def test_services_workspace_no_commands_imports(self) -> None:
+        """services/workspace/ must not import from commands/."""
+        services_workspace_path = SRC / "services" / "workspace"
+        if not services_workspace_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.commands|from \.\.commands|from \.\.\.commands|import scc_cli\.commands)",
+                str(services_workspace_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"services/workspace/ imports commands/:\n{result.stdout}"
+
+    def test_services_workspace_no_cli_modules_imports(self) -> None:
+        """services/workspace/ must not import cli_* modules."""
+        services_workspace_path = SRC / "services" / "workspace"
+        if not services_workspace_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.cli_|from \.\.cli_|from \.\.\.cli_|import scc_cli\.cli_)",
+                str(services_workspace_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, (
+            f"services/workspace/ imports cli_* modules:\n{result.stdout}"
+        )
+
+
 class TestNoTestFileDuplicates:
     """Prevent test file duplication patterns that lead to clutter.
 

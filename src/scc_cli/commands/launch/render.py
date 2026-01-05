@@ -5,8 +5,10 @@ This module contains display/rendering functions extracted from launch.py.
 These are pure output functions that format and display information.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.panel import Panel
 from rich.table import Table
@@ -15,6 +17,9 @@ from ... import git
 from ...cli_common import MAX_DISPLAY_PATH_LENGTH, PATH_TRUNCATE_LENGTH, console
 from ...output_mode import print_human
 from ...theme import Indicators
+
+if TYPE_CHECKING:
+    from .workspace import LaunchContext
 
 
 def warn_if_non_worktree(workspace_path: Path | None, *, json_mode: bool = False) -> None:
@@ -49,6 +54,11 @@ def build_dry_run_data(
     team: str | None,
     org_config: dict[str, Any] | None,
     project_config: dict[str, Any] | None,
+    *,
+    entry_dir: Path | None = None,
+    mount_root: Path | None = None,
+    container_workdir: str | None = None,
+    resolution_reason: str | None = None,
 ) -> dict[str, Any]:
     """
     Build dry run data showing resolved configuration.
@@ -57,13 +67,17 @@ def build_dry_run_data(
     without performing any side effects like Docker launch.
 
     Args:
-        workspace_path: Path to the workspace directory.
+        workspace_path: Path to the workspace root (WR).
         team: Selected team profile name (or None).
         org_config: Organization configuration dict (or None).
         project_config: Project-level .scc.yaml config (or None).
+        entry_dir: Entry directory (ED), defaults to workspace_path if not provided.
+        mount_root: Mount root (MR), defaults to workspace_path if not provided.
+        container_workdir: Container workdir (CW), defaults to entry_dir if not provided.
+        resolution_reason: Debug explanation for how workspace was resolved.
 
     Returns:
-        Dictionary with resolved configuration data.
+        Dictionary with resolved configuration data including path information.
     """
     plugins: list[dict[str, Any]] = []
     blocked_items: list[str] = []
@@ -88,12 +102,21 @@ def build_dry_run_data(
             else:
                 blocked_items.append(blocked.item)
 
+    # Compute defaults for optional path fields
+    effective_entry = entry_dir if entry_dir is not None else workspace_path
+    effective_mount = mount_root if mount_root is not None else workspace_path
+    effective_cw = container_workdir if container_workdir is not None else str(effective_entry)
+
     return {
-        "workspace": str(workspace_path),
+        "workspace_root": str(workspace_path),
+        "entry_dir": str(effective_entry),
+        "mount_root": str(effective_mount),
+        "container_workdir": effective_cw,
         "team": team,
         "plugins": plugins,
         "blocked_items": blocked_items,
         "ready_to_start": len(blocked_items) == 0,
+        "resolution_reason": resolution_reason,
     }
 
 
@@ -153,17 +176,38 @@ def show_dry_run_panel(data: dict[str, Any]) -> None:
     """Display dry run configuration preview.
 
     Args:
-        data: Dictionary containing workspace, team, plugins, and ready_to_start status.
+        data: Dictionary containing workspace paths, team, plugins, and ready_to_start status.
     """
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", no_wrap=True)
     grid.add_column(style="white")
 
-    # Workspace
-    workspace = data.get("workspace", "")
-    if len(workspace) > MAX_DISPLAY_PATH_LENGTH:
-        workspace = "..." + workspace[-PATH_TRUNCATE_LENGTH:]
-    grid.add_row("Workspace:", workspace)
+    # Workspace root (WR)
+    workspace_root = data.get("workspace_root", data.get("workspace", ""))
+    if len(workspace_root) > MAX_DISPLAY_PATH_LENGTH:
+        workspace_root = "..." + workspace_root[-PATH_TRUNCATE_LENGTH:]
+    grid.add_row("Workspace root:", workspace_root)
+
+    # Entry dir (ED) - only show if different from workspace_root
+    entry_dir = data.get("entry_dir", "")
+    if entry_dir and entry_dir != data.get("workspace_root"):
+        if len(entry_dir) > MAX_DISPLAY_PATH_LENGTH:
+            entry_dir = "..." + entry_dir[-PATH_TRUNCATE_LENGTH:]
+        grid.add_row("Entry dir:", entry_dir)
+
+    # Mount root (MR) - only show if different (worktree expansion)
+    mount_root = data.get("mount_root", "")
+    if mount_root and mount_root != data.get("workspace_root"):
+        if len(mount_root) > MAX_DISPLAY_PATH_LENGTH:
+            mount_root = "..." + mount_root[-PATH_TRUNCATE_LENGTH:]
+        grid.add_row("Mount root:", f"{mount_root} [dim](worktree)[/dim]")
+
+    # Container workdir (CW)
+    container_workdir = data.get("container_workdir", "")
+    if container_workdir:
+        if len(container_workdir) > MAX_DISPLAY_PATH_LENGTH:
+            container_workdir = "..." + container_workdir[-PATH_TRUNCATE_LENGTH:]
+        grid.add_row("Container cwd:", container_workdir)
 
     # Team
     grid.add_row("Team:", data.get("team") or "standalone")
@@ -203,4 +247,63 @@ def show_dry_run_panel(data: dict[str, Any]) -> None:
     console.print()
     if ready:
         console.print("[dim]Remove --dry-run to launch[/dim]")
+    console.print()
+
+
+def show_launch_context_panel(ctx: LaunchContext) -> None:
+    """Display enhanced launch context panel with path information.
+
+    Shows:
+    - Workspace root (WR)
+    - Entry dir (ED) with relative path if different from WR
+    - Mount root (MR) only if different from WR (worktree expansion)
+    - Container workdir (CW)
+    - Team / branch / session / mode
+    """
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column(style="white")
+
+    # Workspace root (WR)
+    grid.add_row("Workspace:", str(ctx.workspace_root))
+
+    # Entry dir (ED) - show relative if different from WR
+    if ctx.entry_dir != ctx.workspace_root:
+        rel = ctx.entry_dir_relative
+        if rel != ".":
+            grid.add_row("Entry dir:", f"{rel} [dim](relative)[/dim]")
+
+    # Mount root (MR) - only show if different (worktree expansion)
+    if ctx.mount_root != ctx.workspace_root:
+        grid.add_row("Mount root:", f"{ctx.mount_root} [dim](expanded for worktree)[/dim]")
+
+    # Container workdir (CW)
+    grid.add_row("Container cwd:", ctx.container_workdir)
+
+    # Team
+    grid.add_row("Team:", ctx.team or "standalone")
+
+    # Branch
+    if ctx.branch:
+        grid.add_row("Branch:", ctx.branch)
+
+    # Session
+    if ctx.session_name:
+        grid.add_row("Session:", ctx.session_name)
+
+    # Mode
+    mode_display = (
+        "[green]Resume existing[/green]" if ctx.mode == "resume" else "[cyan]New container[/cyan]"
+    )
+    grid.add_row("Mode:", mode_display)
+
+    panel = Panel(
+        grid,
+        title="[bold green]Launching Claude Code[/bold green]",
+        border_style="green",
+        padding=(0, 1),
+    )
+
+    console.print()
+    console.print(panel)
     console.print()

@@ -34,7 +34,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .utils.locks import file_lock, lock_path
 
@@ -209,11 +209,19 @@ def _save_contexts_raw(contexts: list[dict[str, Any]]) -> None:
         raise
 
 
-def load_recent_contexts(limit: int = 10) -> list[WorkContext]:
+def load_recent_contexts(
+    limit: int = 10,
+    *,
+    team_filter: str | None | Literal["all"] = "all",
+) -> list[WorkContext]:
     """Load recent contexts, sorted by pinned first then recency.
 
     Args:
         limit: Maximum number of contexts to return.
+        team_filter: Team filter:
+            - "all" (default): No filter, return all contexts
+            - None: Return only standalone contexts (team=None)
+            - str: Return only contexts matching this team name
 
     Returns:
         List of WorkContext objects, pinned first, then by last_used descending.
@@ -224,6 +232,15 @@ def load_recent_contexts(limit: int = 10) -> list[WorkContext]:
     # Sort: pinned=True first (True > False with reverse=True),
     # then by timestamp descending (larger = more recent)
     contexts.sort(key=lambda c: (c.pinned, _parse_dt(c.last_used)), reverse=True)
+
+    # Apply team filter if specified
+    if team_filter != "all":
+        if team_filter is None:
+            # Standalone mode: only contexts with no team
+            contexts = [ctx for ctx in contexts if ctx.team is None]
+        else:
+            # Team mode: only contexts matching this team
+            contexts = [ctx for ctx in contexts if ctx.team == team_filter]
 
     return contexts[:limit]
 

@@ -83,7 +83,8 @@ def _resolve_session_selection(
     json_mode: bool = False,
     standalone_override: bool = False,
     no_interactive: bool = False,
-) -> tuple[str | None, str | None, str | None, str | None, bool]:
+    dry_run: bool = False,
+) -> tuple[str | None, str | None, str | None, str | None, bool, bool]:
     """
     Handle session selection logic for --select, --resume, and interactive modes.
 
@@ -97,9 +98,10 @@ def _resolve_session_selection(
         standalone_override: Whether --standalone flag is set (overrides config).
 
     Returns:
-        Tuple of (workspace, team, session_name, worktree_name, cancelled)
+        Tuple of (workspace, team, session_name, worktree_name, cancelled, was_auto_detected)
         If user cancels or no session found, workspace will be None.
         cancelled is True only for explicit user cancellation.
+        was_auto_detected is True if workspace was found via resolver (git/.scc.yaml).
 
     Raises:
         typer.Exit: If interactive mode required but not allowed (non-TTY, CI, --json).
@@ -110,12 +112,38 @@ def _resolve_session_selection(
 
     # Interactive mode if no workspace provided and no session flags
     if workspace is None and not resume and not select:
+        # For --dry-run without workspace, use resolver to auto-detect (skip interactive)
+        if dry_run:
+            from pathlib import Path
+
+            from ...services.workspace import resolve_launch_context
+
+            result = resolve_launch_context(Path.cwd(), workspace_arg=None)
+            if result is not None:
+                return str(result.workspace_root), team, None, None, False, True  # auto-detected
+            # No auto-detect possible, fall through to error
+            err_console.print(
+                "[red]Error:[/red] No workspace could be auto-detected.\n"
+                "[dim]Provide a workspace path: scc start --dry-run /path/to/project[/dim]",
+                highlight=False,
+            )
+            raise typer.Exit(EXIT_USAGE)
+
         # Check TTY gating before entering interactive mode
         if not is_interactive_allowed(
             json_mode=json_mode,
             no_interactive_flag=no_interactive,
         ):
-            console.print(
+            # Try auto-detect before failing
+            from pathlib import Path
+
+            from ...services.workspace import resolve_launch_context
+
+            result = resolve_launch_context(Path.cwd(), workspace_arg=None)
+            if result is not None:
+                return str(result.workspace_root), team, None, None, False, True  # auto-detected
+
+            err_console.print(
                 "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
                 "[dim]Provide a workspace path: scc start /path/to/project[/dim]",
                 highlight=False,
@@ -125,8 +153,8 @@ def _resolve_session_selection(
             cfg, standalone_override=standalone_override
         )
         if workspace is None:
-            return None, team, None, None, True
-        return workspace, team, session_name, worktree_name, False
+            return None, team, None, None, True, False
+        return workspace, team, session_name, worktree_name, False, False  # user picked
 
     # Handle --select: interactive session picker
     if select and workspace is None:
@@ -145,10 +173,10 @@ def _resolve_session_selection(
         if not recent_sessions:
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None, False
+            return None, team, None, None, False, False
         selected = select_session(console, recent_sessions)
         if selected is None:
-            return None, team, None, None, True
+            return None, team, None, None, True, False
         workspace = selected.get("workspace")
         if not team:
             team = selected.get("team")
@@ -173,9 +201,9 @@ def _resolve_session_selection(
         else:
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None, False
+            return None, team, None, None, False, False
 
-    return workspace, team, session_name, worktree_name, cancelled
+    return workspace, team, session_name, worktree_name, cancelled, False  # explicit workspace
 
 
 def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
@@ -311,23 +339,13 @@ def start(
     session_name: str | None = typer.Option(None, "--session", help="Session name"),
     resume: bool = typer.Option(False, "-r", "--resume", help="Resume most recent session"),
     select: bool = typer.Option(False, "-s", "--select", help="Select from recent sessions"),
-    continue_session: bool = typer.Option(
-        False, "-c", "--continue", hidden=True, help="Alias for --resume (deprecated)"
-    ),
-    worktree_name: str | None = typer.Option(
-        None, "-w", "--worktree", help="Create worktree with this name"
-    ),
-    fresh: bool = typer.Option(
-        False, "--fresh", help="Force new container (don't resume existing)"
-    ),
-    install_deps: bool = typer.Option(
-        False, "--install-deps", help="Install dependencies before starting"
-    ),
+    continue_session: bool = typer.Option(False, "-c", "--continue", hidden=True),
+    worktree_name: str | None = typer.Option(None, "-w", "--worktree", help="Worktree name"),
+    fresh: bool = typer.Option(False, "--fresh", help="Force new container"),
+    install_deps: bool = typer.Option(False, "--install-deps", help="Install dependencies"),
     offline: bool = typer.Option(False, "--offline", help="Use cached config only (error if none)"),
     standalone: bool = typer.Option(False, "--standalone", help="Run without organization config"),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview resolved configuration without launching"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview config without launching"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
     non_interactive: bool = typer.Option(
@@ -336,12 +354,22 @@ def start(
         "--no-interactive",
         help="Fail fast if interactive input would be required",
     ),
+    allow_suspicious_workspace: bool = typer.Option(
+        False,
+        "--allow-suspicious-workspace",
+        help="Allow starting in suspicious directories (e.g., home, /tmp) in non-interactive mode",
+    ),
 ) -> None:
     """
     Start Claude Code in a Docker sandbox.
 
     If no arguments provided, launches interactive mode.
     """
+    from pathlib import Path
+
+    # Capture original CWD for entry_dir tracking (before any directory changes)
+    original_cwd = Path.cwd()
+
     # ── Fast Fail: Validate mode flags before any processing ──────────────────
     from scc_cli.ui.gate import validate_mode_flags
 
@@ -362,7 +390,7 @@ def start(
         # Check if cached org config exists
         cached = config.load_cached_org_config()
         if cached is None:
-            console.print(
+            err_console.print(
                 "[red]Error:[/red] --offline requires cached organization config.\n"
                 "[dim]Run 'scc setup' first to cache your org config.[/dim]",
                 highlight=False,
@@ -385,15 +413,18 @@ def start(
         resume = True
 
     # ── Step 2: Session selection (interactive, --select, --resume) ──────────
-    workspace, team, session_name, worktree_name, cancelled = _resolve_session_selection(
-        workspace=workspace,
-        team=team,
-        resume=resume,
-        select=select,
-        cfg=cfg,
-        json_mode=(json_output or pretty),
-        standalone_override=standalone,
-        no_interactive=non_interactive,
+    workspace, team, session_name, worktree_name, cancelled, was_auto_detected = (
+        _resolve_session_selection(
+            workspace=workspace,
+            team=team,
+            resume=resume,
+            select=select,
+            cfg=cfg,
+            json_mode=(json_output or pretty),
+            standalone_override=standalone,
+            no_interactive=non_interactive,
+            dry_run=dry_run,
+        )
     )
     if workspace is None:
         if cancelled:
@@ -405,11 +436,18 @@ def start(
         raise typer.Exit(EXIT_CANCELLED)
 
     # ── Step 3: Docker availability check ────────────────────────────────────
-    with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
-        docker.check_docker_available()
+    # Skip Docker check for dry-run (just previewing config)
+    if not dry_run:
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
+            docker.check_docker_available()
 
     # ── Step 4: Workspace validation and platform checks ─────────────────────
-    workspace_path = validate_and_resolve_workspace(workspace, no_interactive=non_interactive)
+    workspace_path = validate_and_resolve_workspace(
+        workspace,
+        no_interactive=non_interactive,
+        allow_suspicious=allow_suspicious_workspace,
+        json_mode=(json_output or pretty),
+    )
     if workspace_path is None:
         if not json_output and not pretty:
             console.print("[dim]Cancelled.[/dim]")
@@ -418,7 +456,9 @@ def start(
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
     # ── Step 5: Workspace preparation (worktree, deps, git safety) ───────────
-    workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps)
+    # Skip for dry-run (no worktree creation, no deps, no branch safety prompts)
+    if not dry_run:
+        workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps)
 
     # ── Step 5.5: Resolve team from workspace pinning ────────────────────────
     team = resolve_workspace_team(
@@ -441,16 +481,37 @@ def start(
         if not offline:
             _sync_marketplace_settings(workspace_path, team)
 
-    # ── Step 6.6: Handle --dry-run (preview without launching) ────────────────
-    if dry_run:
-        org_config = config.load_cached_org_config()
-        project_config = None  # TODO: Load from .scc.yaml if present
+    # ── Step 6.6: Resolve mount path for worktrees (needed for dry-run too) ────
+    # At this point workspace_path is guaranteed to exist (validated above)
+    assert workspace_path is not None
+    mount_path, current_branch = resolve_mount_and_branch(
+        workspace_path, json_mode=(json_output or pretty)
+    )
 
+    # ── Step 6.7: Handle --dry-run (preview without launching) ────────────────
+    if dry_run:
+        # Use resolver for consistent ED/MR/CW (single source of truth)
+        from ...services.workspace import resolve_launch_context
+
+        # Pass None for workspace_arg if auto-detected (resolver finds it again)
+        # Pass explicit path if user provided one (preserves their intent)
+        workspace_arg = None if was_auto_detected else str(workspace_path)
+        result = resolve_launch_context(
+            original_cwd, workspace_arg, allow_suspicious=allow_suspicious_workspace
+        )
+        # Workspace already validated, resolver must succeed
+        assert result is not None, f"Resolver failed for validated workspace: {workspace_path}"
+
+        org_config = config.load_cached_org_config()
         dry_run_data = build_dry_run_data(
-            workspace_path=workspace_path,  # type: ignore[arg-type]
+            workspace_path=workspace_path,
             team=team,
             org_config=org_config,
-            project_config=project_config,
+            project_config=None,
+            entry_dir=result.entry_dir,
+            mount_root=result.mount_root,
+            container_workdir=result.container_workdir,
+            resolution_reason=result.reason,
         )
 
         # Handle --pretty implies --json
@@ -473,9 +534,6 @@ def start(
         raise typer.Exit(0)
 
     warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
-
-    # ── Step 7: Resolve mount path and branch for worktrees ──────────────────
-    mount_path, current_branch = resolve_mount_and_branch(workspace_path)
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
     should_continue_session = resume or continue_session
@@ -956,37 +1014,23 @@ def run_start_wizard_flow(
         return None  # Quit app
 
     try:
-        # Step 3: Docker availability check
         with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
             docker.check_docker_available()
-
-        # Step 4: Workspace validation
         workspace_path = validate_and_resolve_workspace(workspace)
-
-        # Step 5: Workspace preparation (worktree, deps, git safety)
         workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps=False)
-
-        # Step 6: Team configuration
         _configure_team_settings(team, cfg)
-
-        # Step 6.5: Sync marketplace settings
         _sync_marketplace_settings(workspace_path, team)
-
-        # Step 7: Resolve mount path and branch
         mount_path, current_branch = resolve_mount_and_branch(workspace_path)
-
-        # Step 8: Launch sandbox (fresh start, not resume)
         launch_sandbox(
             workspace_path=workspace_path,
             mount_path=mount_path,
             team=team,
             session_name=session_name,
             current_branch=current_branch,
-            should_continue_session=False,  # Fresh start
+            should_continue_session=False,
             fresh=False,
         )
         return True
-
     except Exception as e:
         err_console.print(f"[red]Error launching sandbox: {e}[/red]")
         return False

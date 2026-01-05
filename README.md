@@ -37,10 +37,11 @@ Run `scc doctor` to verify your environment or troubleshoot issues.
 
 ### Smart Start Flow
 
-When you run `scc` or `scc start` from inside a git repository:
-- **Auto-detects workspace** from your current directory
+When you run `scc` or `scc start`:
+- **Auto-detects workspace** from git repository root or `.scc.yaml` location
 - **Shows Quick Resume** if you have recent sessions for this workspace
-- **Prints brief context** (workspace name, branch, team) before launching
+- **Prints brief context** (workspace root, entry directory, team) before launching
+- **Safety guard**: Won't auto-launch from suspicious directories (home, `/tmp`). Explicit paths like `scc start ~/` prompt for confirmation
 
 **Keyboard shortcuts in interactive mode:**
 - `Enter` — Select/resume session
