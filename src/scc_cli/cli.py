@@ -111,12 +111,14 @@ def main_callback(
     if ctx.invoked_subcommand is None:
         from pathlib import Path
 
+        from .services.workspace import resolve_launch_context
         from .ui.gate import is_interactive_allowed
-        from .ui.wizard import _is_valid_workspace
 
-        # Context detection: check if CWD is a valid workspace
+        # Use strong-signal resolver (git or .scc.yaml) for parity with 'scc start'
+        # Weak markers (package.json, etc.) are NOT used for auto-launch
         cwd = Path.cwd()
-        workspace_detected = _is_valid_workspace(cwd)
+        result = resolve_launch_context(cwd, workspace_arg=None)
+        workspace_detected = result is not None and result.is_auto_eligible()
 
         if is_interactive_allowed():
             if interactive:
@@ -139,7 +141,7 @@ def main_callback(
                     pretty=False,
                 )
             elif workspace_detected:
-                # User is in a valid workspace → use smart start flow
+                # Strong signal found (git repo or .scc.yaml) → use smart start flow
                 # This shows Quick Resume (if sessions exist) or launches immediately
                 ctx.invoke(
                     start,
@@ -159,12 +161,12 @@ def main_callback(
                     pretty=False,
                 )
             else:
-                # No workspace context (e.g., $HOME) → show dashboard
+                # No strong signal (not in git repo, no .scc.yaml) → show dashboard
                 from .ui.dashboard import run_dashboard
 
                 run_dashboard()
         else:
-            # Non-interactive - invoke start with defaults
+            # Non-interactive - invoke start with defaults (will fail F1/F2 if no signal)
             # NOTE: Must pass ALL defaults explicitly - ctx.invoke() doesn't resolve
             # typer.Argument/Option defaults, it passes raw ArgumentInfo/OptionInfo
             ctx.invoke(

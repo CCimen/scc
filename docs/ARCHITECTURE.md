@@ -608,6 +608,7 @@ The `core/` package provides foundational modules with **zero dependencies** on 
 | `core/errors.py` | Typed exception hierarchy with user-friendly messaging (user_message, suggested_action, debug_context), exit code assignment | I/O operations, logging, UI rendering |
 | `core/constants.py` | Backend-specific constants (agent name, image tag, volume names, paths, credential locations, branch prefixes) | Environment access, business logic, I/O |
 | `core/exit_codes.py` | Standardized exit code constants (0-6, 130), exception-to-exit-code mapping | Exception handling, process termination |
+| `core/workspace.py` | ResolverResult dataclass for workspace resolution (WR/ED/MR/CW paths), is_auto_eligible() method | Path resolution logic, filesystem I/O |
 
 **Architecture Rules:**
 - `core/` modules MUST NOT import from `ui/`, `commands/`, `services/`, or `services/adapters/`
@@ -659,6 +660,9 @@ The `core/` package provides foundational modules with **zero dependencies** on 
 | `services/git/branch.py` | Branch safety checks, existence validation | Worktree operations |
 | `services/git/worktree.py` | Worktree listing, creation, removal, branch associations | Hook management |
 | `services/git/hooks.py` | Repo-local hook installation and management | Global git config |
+| `services/workspace/` | Workspace resolution (package) | UI dependencies |
+| `services/workspace/resolver.py` | Main resolver (git repo, .scc.yaml detection, CW calculation) | HTTP, rendering |
+| `services/workspace/suspicious.py` | Suspicious directory detection (home, /tmp, etc.) | Business logic |
 | `sessions.py` | Session tracking and history | Docker operations |
 | `stats.py` | Session recording, aggregation, reporting | Container operations |
 | `update.py` | Version checking, throttling, notifications | Container operations |
@@ -710,6 +714,7 @@ The `core/` package provides foundational modules with **zero dependencies** on 
 | `ui/gate.py` | Interactivity policy enforcement, TTY and CI detection | Business logic |
 | `ui/list_screen.py` | Core navigation engine, state management, key handling | Domain logic |
 | `ui/picker.py` | Selection workflows, Quick Resume with 3-way results | Navigation internals |
+| `ui/quick_resume.py` | Quick Resume gating (should_show_quick_resume) and team-scoped context loading | Business logic |
 | `ui/wizard.py` | Start wizard pickers with BACK navigation | Chrome, list internals |
 | `ui/chrome.py` | Layout primitives (headers, footers, hints), standalone mode dimming | State management |
 | `ui/keys.py` | Key mapping internals, action dispatch, KEYBINDING_DOCS | Rendering |
@@ -1233,11 +1238,13 @@ scc start ~/repo --team platform
 **Smart start (auto-detection):**
 ```
 scc                      # or: scc start
-→ Detect workspace root from current directory
+→ Detect workspace root (strong signals only):
   1. git rev-parse --show-toplevel (works for repos and worktrees)
   2. Parent-walk for .scc.yaml
-  3. Parent-walk for .git directory or file
-→ If found: auto-select workspace, print brief header
+→ Safety check: block suspicious directories (home, /tmp, etc.)
+  - Auto-detected suspicious → fail or show dashboard
+  - Explicit path suspicious → warn but allow (interactive)
+→ If found: auto-select workspace, print launch context
 → If sessions exist for workspace: show Quick Resume picker
 → If no sessions: launch immediately
 ```

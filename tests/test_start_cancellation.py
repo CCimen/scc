@@ -20,7 +20,7 @@ def test_start_cancelled_exits_130_and_message():
         patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
         patch(
             "scc_cli.commands.launch.app._resolve_session_selection",
-            return_value=(None, None, None, None, True),
+            return_value=(None, None, None, None, True, False),
         ),
     ):
         result = runner.invoke(app, ["start"])

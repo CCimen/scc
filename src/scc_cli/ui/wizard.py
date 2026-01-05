@@ -42,6 +42,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from ..services.workspace import is_suspicious_directory
 from .keys import BACK, _BackSentinel
 from .list_screen import ListItem
 from .picker import _run_single_select_picker
@@ -240,106 +241,6 @@ _PROJECT_MARKERS_GLOB = (
     "*.csproj",  # .NET C# project
 )
 
-# Unix directories that should NOT be used as workspace
-_SUSPICIOUS_DIRS_UNIX = {
-    "/",
-    "/tmp",
-    "/var",
-    "/usr",
-    "/etc",
-    "/opt",
-    "/proc",
-    "/dev",
-    "/sys",
-    "/run",
-    "/Applications",  # macOS
-    "/Library",  # macOS
-    "/System",  # macOS
-    "/Volumes",  # macOS mount points
-    "/mnt",  # Linux mount points
-    "/home",  # Parent of all user homes
-    "/Users",  # macOS parent of all user homes
-}
-
-# Windows directories that should NOT be used as workspace
-_SUSPICIOUS_DIRS_WINDOWS = {
-    "C:\\",
-    "C:\\Windows",
-    "C:\\Program Files",
-    "C:\\Program Files (x86)",
-    "C:\\ProgramData",
-    "C:\\Users",
-    "D:\\",
-}
-
-
-def _safe_resolve(path: Path) -> Path:
-    """Safely resolve a path, falling back to absolute() on errors.
-
-    Args:
-        path: Path to resolve.
-
-    Returns:
-        Resolved path, or absolute path if resolution fails.
-    """
-    try:
-        return path.resolve(strict=False)
-    except (OSError, RuntimeError):
-        try:
-            return path.absolute()
-        except (OSError, RuntimeError):
-            return path
-
-
-def _is_suspicious_directory(path: Path) -> bool:
-    """Check if directory is suspicious (should not be used as workspace).
-
-    Cross-platform detection of directories that are likely not project roots:
-    - System directories (/, /tmp, C:\\Windows, etc.)
-    - User home directory itself
-    - Common non-project locations (Downloads, Desktop)
-
-    Args:
-        path: Directory to check.
-
-    Returns:
-        True if this is a suspicious directory.
-    """
-    resolved = _safe_resolve(path)
-    home = _safe_resolve(Path.home())
-
-    # User's home directory itself is suspicious
-    if resolved == home:
-        return True
-
-    str_path = str(resolved)
-
-    # Check platform-specific suspicious directories
-    import sys
-
-    if sys.platform == "win32":
-        # Windows: case-insensitive comparison
-        str_path_lower = str_path.lower()
-        for suspicious in _SUSPICIOUS_DIRS_WINDOWS:
-            if str_path_lower == suspicious.lower():
-                return True
-            # Also check if it's a drive root (e.g., "D:\")
-            if len(str_path) <= 3 and str_path[1:3] == ":\\":
-                return True
-    else:
-        # Unix-like systems
-        for suspicious in _SUSPICIOUS_DIRS_UNIX:
-            if str_path == suspicious:
-                return True
-
-    # Common non-project locations under home
-    suspicious_home_subdirs = ("Downloads", "Desktop", "Documents", "Library")
-    for subdir in suspicious_home_subdirs:
-        if resolved == home / subdir:
-            return True
-
-    return False
-
 
 def _has_project_markers(path: Path) -> bool:
     """Check if a directory has common project markers.
@@ -440,7 +341,7 @@ def pick_workspace_source(
     # 2. Has project markers + git → show folder name (confident)
     # 3. Has project markers, no git → show "folder (no git)"
     # 4. No markers, not suspicious → show "folder (no git)"
-    if not _is_suspicious_directory(cwd):
+    if not is_suspicious_directory(cwd):
         if _has_project_markers(cwd):
             if is_git:
                 # Valid project with git - show with confidence

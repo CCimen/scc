@@ -256,10 +256,14 @@ class TestBuildDryRunData:
             project_config=None,
         )
 
-        assert result["workspace"] == str(tmp_path)
+        assert result["workspace_root"] == str(tmp_path)
         assert result["team"] == "platform"
         assert "plugins" in result
         assert "ready_to_start" in result
+        # New path fields should be present with defaults
+        assert result["entry_dir"] == str(tmp_path)
+        assert result["mount_root"] == str(tmp_path)
+        assert result["container_workdir"] == str(tmp_path)
 
     def test_build_dry_run_data_with_plugins(self, tmp_path):
         """build_dry_run_data should include plugins from org config."""

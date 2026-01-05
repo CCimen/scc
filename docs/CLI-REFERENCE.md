@@ -212,7 +212,7 @@ scc start [WORKSPACE] [OPTIONS]
 
 | Argument | Description |
 |----------|-------------|
-| `WORKSPACE` | Path to workspace (auto-detected from current directory if omitted) |
+| `WORKSPACE` | Path to workspace (auto-detected from git root or `.scc.yaml` location if omitted) |
 
 **Options:**
 
@@ -232,6 +232,7 @@ scc start [WORKSPACE] [OPTIONS]
 | `--json` | Output as JSON (useful with `--dry-run`) |
 | `--pretty` | Pretty-print JSON output |
 | `--non-interactive` | Fail fast if interactive input required |
+| `--allow-suspicious-workspace` | Allow starting in suspicious directories (home, `/tmp`, etc.) in non-interactive mode |
 
 **Examples:**
 
@@ -256,6 +257,9 @@ scc start --dry-run --json
 
 # CI/automation mode
 scc start --non-interactive --team backend ~/project
+
+# Allow suspicious workspace in CI (e.g., /tmp mount)
+scc start --non-interactive --allow-suspicious-workspace /tmp/build
 ```
 
 **Keyboard shortcuts in interactive mode:**
