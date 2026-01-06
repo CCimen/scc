@@ -10,9 +10,13 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#commands">Commands</a> ·
-  <a href="docs/CLI-REFERENCE.md">CLI Reference</a> ·
+  <a href="https://scc-cli.dev">Documentation</a> ·
   <a href="#configuration">Configuration</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a>
+  <a href="https://scc-cli.dev/architecture/overview/">Architecture</a>
+</p>
+
+<p align="center">
+  <strong>📚 Full Documentation: <a href="https://scc-cli.dev">scc-cli.dev</a></strong>
 </p>
 
 ---
@@ -21,7 +25,7 @@ Run [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (Anthropic's A
 
 SCC isolates AI execution in containers, enforces branch safety, and prevents destructive git commands. Organizations distribute plugins through a central config—developers get standardized setups without manual configuration.
 
-> **Plugin Marketplace:** Extend Claude with the [official plugin marketplace](https://github.com/CCimen/sandboxed-code-plugins). Start with [**scc-safety-net**](docs/MARKETPLACE.md#safety-net-plugin) to block destructive git commands like `push --force`.
+> **Plugin Marketplace:** Extend Claude with the [official plugin marketplace](https://github.com/CCimen/sandboxed-code-plugins). Start with [**scc-safety-net**](https://scc-cli.dev/plugins/safety-net/) to block destructive git commands like `push --force`.
 
 ## 30-Second Guide
 
@@ -58,7 +62,7 @@ When you run `scc` or `scc start`:
 | **Developer** joining a team | [Developer Onboarding](#developer-onboarding) — what you get automatically |
 | **Team Lead** setting up your team | [Team Setup](#team-setup) — manage plugins in your own repo |
 | **Org Admin** configuring security | [Organization Setup](#organization-setup) — control what's allowed org-wide |
-| Exploring **plugins** | [Plugin Marketplace](docs/MARKETPLACE.md) — official plugins & safety tools |
+| Exploring **plugins** | [Plugin Marketplace](https://scc-cli.dev/plugins/marketplace/) — official plugins & safety tools |
 
 ---
 
@@ -129,7 +133,7 @@ Org admins create a single JSON config that controls security for all teams:
 
 Host this anywhere: GitHub, GitLab, S3, or any HTTPS URL. Private repos work with token auth.
 
-See [examples/](examples/) for complete org configs and [GOVERNANCE.md](docs/GOVERNANCE.md) for delegation rules.
+See [examples/](examples/) for complete org configs and [Governance](https://scc-cli.dev/architecture/governance-model/) for delegation rules.
 
 ---
 
@@ -202,7 +206,7 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 | `scc audit plugins` | Audit installed plugins |
 | `scc support bundle` | Generate support bundle for troubleshooting |
 
-Run `scc <command> --help` for options. See **[CLI Reference](docs/CLI-REFERENCE.md)** for the complete command list (40+ commands).
+Run `scc <command> --help` for options. See **[CLI Reference](https://scc-cli.dev/reference/cli/overview/)** for the complete command list (40+ commands).
 
 ### Git Worktrees
 
@@ -301,18 +305,21 @@ Run `scc doctor` to diagnose issues.
 | Organization config fetch failed | Check URL and token |
 | Plugin blocked | Check `scc config explain` for security blocks |
 
-See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
+See [Troubleshooting Guide](https://scc-cli.dev/troubleshooting/) for more solutions.
 
 ---
 
 ## Documentation
 
-- [CLI Reference](docs/CLI-REFERENCE.md) — complete command reference (40+ commands)
-- [Architecture](docs/ARCHITECTURE.md) — system design, module structure
-- [Governance](docs/GOVERNANCE.md) — delegation model, security boundaries
-- [Marketplace](docs/MARKETPLACE.md) — plugin distribution and safety-net
-- [Troubleshooting](docs/TROUBLESHOOTING.md) — common problems and solutions
-- [Examples](examples/) — ready-to-use organization config templates
+Visit **[scc-cli.dev](https://scc-cli.dev)** for comprehensive documentation:
+
+- [Getting Started](https://scc-cli.dev/getting-started/quick-start/) — installation and first steps
+- [CLI Reference](https://scc-cli.dev/reference/cli/overview/) — complete command reference (40+ commands)
+- [Architecture](https://scc-cli.dev/architecture/overview/) — system design, module structure
+- [Governance](https://scc-cli.dev/architecture/governance-model/) — delegation model, security boundaries
+- [Plugin Marketplace](https://scc-cli.dev/plugins/marketplace/) — plugin distribution and safety-net
+- [Troubleshooting](https://scc-cli.dev/troubleshooting/) — common problems and solutions
+- [Examples](https://scc-cli.dev/examples/) — ready-to-use organization config templates
 
 ---
 
@@ -338,7 +345,7 @@ scc start --dry-run --json --non-interactive ~/project
 
 **Exit codes:** 0 (success), 2 (usage error), 3 (config error), 4 (tool error), 5 (prerequisites), 6 (governance block), 130 (cancelled)
 
-See [CLI Reference → Exit Codes](docs/CLI-REFERENCE.md#exit-codes) for complete documentation.
+See [CLI Reference → Exit Codes](https://scc-cli.dev/reference/cli/overview/#exit-codes) for complete documentation.
 
 ---
 
