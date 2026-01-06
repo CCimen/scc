@@ -154,7 +154,9 @@ def format_failure(file_info: FileInfo) -> str:
 class TestFileSizes:
     """Test class for file size guardrails."""
 
-    @pytest.mark.xfail(reason="commands/launch/app.py exceeds limit - to be split in future refactor")
+    @pytest.mark.xfail(
+        reason="commands/launch/app.py exceeds limit - to be split in future refactor"
+    )
     def test_file_size_limits(self) -> None:
         """Verify all Python files in src/scc_cli/ are within size limits.
 
