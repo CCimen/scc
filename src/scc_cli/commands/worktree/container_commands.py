@@ -94,7 +94,7 @@ def list_cmd(
             create_warning_panel(
                 "No Containers",
                 "No SCC-managed containers found.",
-                "Start a session with: scc start <workspace>",
+                "Use: scc sessions (recent sessions) or scc start <workspace>",
             )
         )
         return

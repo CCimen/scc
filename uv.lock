@@ -951,7 +951,7 @@ wheels = [
 
 [[package]]
 name = "scc-cli"
-version = "1.5.1"
+version = "1.5.2"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
@@ -975,6 +975,8 @@ dev = [
 dev = [
     { name = "mypy" },
     { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "responses" },
     { name = "types-jsonschema" },
     { name = "types-requests" },
@@ -1000,6 +1002,8 @@ provides-extras = ["dev"]
 dev = [
     { name = "mypy", specifier = ">=1.19.1" },
     { name = "pyright", specifier = ">=1.1.407" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "responses", specifier = ">=0.25.8" },
     { name = "types-jsonschema", specifier = ">=4.25.1.20251009" },
     { name = "types-requests", specifier = ">=2.32.4.20250913" },

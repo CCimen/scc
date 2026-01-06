@@ -1,11 +1,9 @@
-"""Tests for docker module - org_config-based settings injection.
+"""Tests for docker module - settings injection.
 
-Tests for docker.py's integration with the remote org config architecture:
+Tests for docker.py's settings injection:
 - inject_settings() takes pre-built settings (docker.py is "dumb")
-- inject_team_settings() with org_config parameter
-- Integration with claude_adapter for settings building
 
-For team-based injection and low-level utilities, see test_docker.py
+For low-level utilities, see test_docker.py
 """
 
 import json
@@ -178,40 +176,3 @@ class TestInjectSettings:
             result = docker.inject_settings(sample_claude_settings)
 
             assert result is False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for inject_team_settings with org_config (updated backward compat)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestInjectTeamSettingsWithOrgConfig:
-    """Tests for inject_team_settings() with org_config parameter."""
-
-    def test_inject_team_settings_with_org_config(self, sample_org_config):
-        """inject_team_settings should work with org_config parameter."""
-        with (
-            patch("scc_cli.docker.launch.inject_settings", return_value=True) as mock_inject,
-            patch.dict("os.environ", {"GITLAB_TOKEN": "secret"}, clear=False),
-        ):
-            result = docker.inject_team_settings(team_name="platform", org_config=sample_org_config)
-
-            assert result is True
-            mock_inject.assert_called_once()
-            settings = mock_inject.call_args[0][0]
-            assert settings["enabledPlugins"] == ["platform@my-org"]
-
-    def test_inject_team_settings_no_plugin_configured(self, sample_org_config):
-        """inject_team_settings returns True when profile has no plugin."""
-        # Create org_config with profile that has no plugin
-        org_config = {
-            **sample_org_config,
-            "profiles": {"base": {"description": "Base profile"}},
-        }
-
-        with patch("scc_cli.docker.launch.inject_settings") as mock_inject:
-            result = docker.inject_team_settings(team_name="base", org_config=org_config)
-
-            # Should return True without injecting
-            assert result is True
-            mock_inject.assert_not_called()

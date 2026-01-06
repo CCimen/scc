@@ -95,6 +95,8 @@ addopts = "-v --cov=scc_cli"
 dev = [
     "mypy>=1.19.1",
     "pyright>=1.1.407",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
     "responses>=0.25.8",
     "types-jsonschema>=4.25.1.20251009",
     "types-requests>=2.32.4.20250913",

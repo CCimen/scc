@@ -320,7 +320,7 @@ def pick_workspace_source(
         Selected WorkspaceSource, BACK if allow_back and Esc pressed, or None if quit.
     """
     # Build subtitle based on context
-    subtitle = "Pick a project source"
+    subtitle = "Pick a project source (press 't' to switch team)"
     resolved_context_label = context_label
     if resolved_context_label is None and team:
         resolved_context_label = f"Team: {team}"

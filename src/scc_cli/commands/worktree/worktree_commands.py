@@ -126,13 +126,17 @@ def worktree_create_cmd(
         console.print()
         if Confirm.ask("[cyan]Start Claude Code in this worktree?[/cyan]", default=True):
             docker.check_docker_available()
+            # For worktrees, mount the common parent (contains .git/worktrees/)
+            # but set CWD to the worktree path
+            mount_path, _ = git.get_workspace_mount_path(worktree_path)
             docker_cmd, _ = docker.get_or_create_container(
-                workspace=worktree_path,
+                workspace=mount_path,
                 branch=f"{WORKTREE_BRANCH_PREFIX}{name}",
             )
             # Load org config for safety-net policy injection
             org_config = config.load_cached_org_config()
-            docker.run(docker_cmd, org_config=org_config)
+            # Pass container_workdir explicitly for correct CWD in worktree
+            docker.run(docker_cmd, org_config=org_config, container_workdir=worktree_path)
 
 
 @json_command(Kind.WORKTREE_LIST)

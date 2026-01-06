@@ -111,6 +111,10 @@ def main_callback(
     if ctx.invoked_subcommand is None:
         from pathlib import Path
 
+        from rich.prompt import Prompt
+
+        from . import config as scc_config
+        from . import setup as scc_setup
         from .services.workspace import resolve_launch_context
         from .ui.gate import is_interactive_allowed
 
@@ -121,6 +125,51 @@ def main_callback(
         workspace_detected = result is not None and result.is_auto_eligible()
 
         if is_interactive_allowed():
+            # If no org is configured and standalone isn't explicit, offer setup
+            user_cfg = scc_config.load_user_config()
+            org_source = user_cfg.get("organization_source") or {}
+            has_org = bool(org_source.get("url"))
+            if not has_org and not user_cfg.get("standalone"):
+                choice = Prompt.ask(
+                    "[yellow]No organization configured.[/yellow] Choose setup mode",
+                    choices=["setup", "standalone", "quit"],
+                    default="setup",
+                )
+                if choice == "setup":
+                    if not scc_setup.run_setup_wizard(console):
+                        raise typer.Exit(0)
+                elif choice == "standalone":
+                    user_cfg["standalone"] = True
+                    scc_config.save_user_config(user_cfg)
+                else:
+                    raise typer.Exit(0)
+
+                # Offer to start immediately after setup/standalone choice
+                start_now = Prompt.ask(
+                    "[cyan]Start a session now?[/cyan]",
+                    choices=["yes", "no"],
+                    default="yes",
+                )
+                if start_now == "yes":
+                    ctx.invoke(
+                        start,
+                        workspace=str(cwd) if workspace_detected else None,
+                        team=None,
+                        session_name=None,
+                        resume=False,
+                        select=False,
+                        continue_session=False,
+                        worktree_name=None,
+                        fresh=False,
+                        install_deps=False,
+                        offline=False,
+                        standalone=False,
+                        dry_run=False,
+                        json_output=False,
+                        pretty=False,
+                    )
+                    return
+
             if interactive:
                 # -i flag: force interactive workspace picker via start -i
                 ctx.invoke(

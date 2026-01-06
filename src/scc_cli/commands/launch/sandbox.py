@@ -115,7 +115,9 @@ def launch_sandbox(
     )
 
     # Pass org_config for safety-net policy injection (mounted read-only)
-    docker.run(docker_cmd, org_config=org_config)
+    # Pass workspace_path as container_workdir so Claude's CWD is the actual workspace
+    # (mount_path may be a parent directory for worktree support)
+    docker.run(docker_cmd, org_config=org_config, container_workdir=workspace_path)
 
 
 def extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | None:

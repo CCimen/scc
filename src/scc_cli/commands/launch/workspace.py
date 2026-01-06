@@ -251,10 +251,15 @@ def resolve_workspace_team(
     standalone: bool = False,
     no_interactive: bool = False,
 ) -> str | None:
-    """Resolve team selection using workspace pinning when available.
+    """Resolve team selection with proper priority.
 
-    Prefers explicit team, then workspace-pinned team, then global selected profile.
-    Prompts if pinned team differs from the global profile in interactive mode.
+    Resolution priority:
+    1. Explicit --team flag (if provided)
+    2. selected_profile (explicit user choice via `scc team switch`)
+    3. Workspace-pinned team (auto-saved from previous session)
+
+    In interactive mode, prompts user when pinned team differs from selected profile.
+    In non-interactive mode, prefers selected_profile (explicit user action).
     """
     if standalone or workspace_path is None:
         return team
@@ -267,23 +272,29 @@ def resolve_workspace_team(
 
     if pinned_team and selected_profile and pinned_team != selected_profile:
         if is_interactive_allowed(json_mode=json_mode, no_interactive_flag=no_interactive):
+            # Default to selected_profile (explicit user choice) for consistency
+            # with non-interactive mode behavior
             message = (
-                f"Workspace '{workspace_path}' was last used with team '{pinned_team}'."
-                " Use that team for this session?"
+                f"[yellow]Note:[/yellow] This workspace was last used with team "
+                f"'[cyan]{pinned_team}[/cyan]', but your current profile is "
+                f"'[cyan]{selected_profile}[/cyan]'.\n"
+                f"Use workspace's previous team '{pinned_team}' instead?"
             )
-            if Confirm.ask(message, default=True):
+            if Confirm.ask(message, default=False):
                 return pinned_team
             return selected_profile
 
+        # Non-interactive: prefer selected_profile (explicit user choice via `scc team switch`)
+        # over workspace pinning (auto-saved from previous session)
         if not json_mode:
             print_human(
                 "[yellow]Notice:[/yellow] "
-                f"Workspace '{workspace_path}' was last used with team '{pinned_team}'. "
-                "Using it. Pass --team to override.",
+                f"Workspace was last used with team '{pinned_team}', "
+                f"but current profile is '{selected_profile}'. Using '{selected_profile}'.",
                 file=sys.stderr,
                 highlight=False,
             )
-        return pinned_team
+        return selected_profile
 
     if pinned_team:
         return pinned_team

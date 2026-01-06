@@ -36,6 +36,15 @@ def _load_status_tab_data() -> TabData:
 
     items: list[ListItem[str]] = []
 
+    # Start new session (primary action)
+    items.append(
+        ListItem(
+            value="start_session",
+            label="Start new session",
+            description="Launch Claude in a workspace",
+        )
+    )
+
     # Load current team info
     try:
         user_config = config.load_user_config()
@@ -47,7 +56,7 @@ def _load_status_tab_data() -> TabData:
                 ListItem(
                     value="team",
                     label="Team",
-                    description=str(team),
+                    description=f"{team} (Enter to switch)",
                 )
             )
         else:
@@ -55,7 +64,7 @@ def _load_status_tab_data() -> TabData:
                 ListItem(
                     value="team",
                     label="Team",
-                    description="No team selected",
+                    description="No team selected (Enter to choose)",
                 )
             )
 
@@ -65,11 +74,23 @@ def _load_status_tab_data() -> TabData:
             if org_url:
                 # Extract domain for display
                 domain = org_url.replace("https://", "").replace("http://", "").split("/")[0]
+                org_name = None
+                try:
+                    org_config = config.load_cached_org_config()
+                    if org_config:
+                        org_name = org_config.get("organization", {}).get("name")
+                except Exception:
+                    org_name = None
+
+                desc = domain
+                if org_name:
+                    desc = f"{org_name} ({domain})"
+
                 items.append(
                     ListItem(
                         value="organization",
                         label="Organization",
-                        description=domain,
+                        description=desc,
                     )
                 )
         elif user_config.get("standalone"):
@@ -280,7 +301,7 @@ def _load_sessions_tab_data() -> TabData:
                 ListItem(
                     value={"_placeholder": "no_sessions", "_startable": True},
                     label="No sessions",
-                    description="Start a session with 'scc start'",
+                    description="Press Enter to start",
                 )
             )
 

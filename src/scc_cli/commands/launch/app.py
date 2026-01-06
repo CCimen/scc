@@ -41,12 +41,12 @@ from ...ui.picker import (
     QuickResumeResult,
     TeamSwitchRequested,
     pick_context_quick_resume,
+    pick_team,
 )
 from ...ui.prompts import (
     prompt_custom_workspace,
     prompt_repo_url,
     select_session,
-    select_team,
 )
 from ...ui.wizard import (
     BACK,
@@ -150,7 +150,7 @@ def _resolve_session_selection(
             )
             raise typer.Exit(EXIT_USAGE)
         workspace, team, session_name, worktree_name = interactive_start(
-            cfg, standalone_override=standalone_override
+            cfg, standalone_override=standalone_override, team_override=team
         )
         if workspace is None:
             return None, team, None, None, True, False
@@ -169,12 +169,33 @@ def _resolve_session_selection(
                 highlight=False,
             )
             raise typer.Exit(EXIT_USAGE)
+
+        # Prefer explicit --team, then selected_profile for filtering
+        effective_team = team or cfg.get("selected_profile")
+        if standalone_override:
+            effective_team = None
+
+        # If org mode and no active team, require explicit selection
+        if effective_team is None and not standalone_override:
+            if not json_mode:
+                console.print(
+                    "[yellow]No active team selected.[/yellow] "
+                    "Run 'scc team switch' or pass --team to select."
+                )
+            return None, team, None, None, False, False
+
         recent_sessions = sessions.list_recent(limit=10)
-        if not recent_sessions:
+        if effective_team is None:
+            filtered_sessions = [s for s in recent_sessions if s.get("team") is None]
+        else:
+            filtered_sessions = [s for s in recent_sessions if s.get("team") == effective_team]
+
+        if not filtered_sessions:
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
             return None, team, None, None, False, False
-        selected = select_session(console, recent_sessions)
+
+        selected = select_session(console, filtered_sessions)
         if selected is None:
             return None, team, None, None, True, False
         workspace = selected.get("workspace")
@@ -188,8 +209,28 @@ def _resolve_session_selection(
 
     # Handle --resume: auto-select most recent session
     elif resume and workspace is None:
-        recent_session = sessions.get_most_recent()
-        if recent_session:
+        # Prefer explicit --team, then selected_profile for resume filtering
+        effective_team = team or cfg.get("selected_profile")
+        if standalone_override:
+            effective_team = None
+
+        # If org mode and no active team, require explicit selection
+        if effective_team is None and not standalone_override:
+            if not json_mode:
+                console.print(
+                    "[yellow]No active team selected.[/yellow] "
+                    "Run 'scc team switch' or pass --team to resume."
+                )
+            return None, team, None, None, False, False
+
+        recent_sessions = sessions.list_recent(limit=50)
+        if effective_team is None:
+            filtered_sessions = [s for s in recent_sessions if s.get("team") is None]
+        else:
+            filtered_sessions = [s for s in recent_sessions if s.get("team") == effective_team]
+
+        if filtered_sessions:
+            recent_session = filtered_sessions[0]
             workspace = recent_session.get("workspace")
             if not team:
                 team = recent_session.get("team")
@@ -208,7 +249,11 @@ def _resolve_session_selection(
 
 def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     """
-    Validate team profile and inject settings into Docker sandbox.
+    Validate team profile exists.
+
+    NOTE: Plugin settings are now sourced ONLY from workspace settings.local.json
+    (via _sync_marketplace_settings). Docker volume injection has been removed
+    to prevent plugin mixing across teams.
 
     IMPORTANT: This function must remain cache-only (no network calls).
     It's called in offline mode where only cached org config is available.
@@ -222,7 +267,7 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
         return
 
     with Status(
-        f"[cyan]Configuring {team} plugin...[/cyan]", console=console, spinner=Spinners.SETUP
+        f"[cyan]Validating {team} profile...[/cyan]", console=console, spinner=Spinners.SETUP
     ):
         # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
@@ -238,7 +283,8 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
             )
             raise typer.Exit(1)
 
-        docker.inject_team_settings(team, org_config=org_config)
+        # NOTE: docker.inject_team_settings() removed - workspace settings.local.json
+        # is now the single source of truth for plugins (prevents cross-team mixing)
 
 
 def _sync_marketplace_settings(
@@ -301,17 +347,10 @@ def _sync_marketplace_settings(
                     f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
                 )
 
-            # Inject marketplace settings into Docker sandbox volume
-            # This bridges the gap between workspace settings and Docker volume
-            if result.settings_path and result.settings_path.exists():
-                import json
-
-                try:
-                    settings_data = json.loads(result.settings_path.read_text())
-                    docker.inject_settings(settings_data)
-                except (json.JSONDecodeError, OSError):
-                    # Non-fatal: settings were written to workspace, just not injected
-                    pass
+            # NOTE: We intentionally do NOT inject marketplace settings to Docker volume.
+            # Workspace-relative paths (.claude/.scc-marketplaces/...) only resolve
+            # correctly from the workspace directory. The container runs with -w <workspace>
+            # so Claude Code reads settings.local.json from the workspace context.
 
             return result
 
@@ -566,6 +605,7 @@ def interactive_start(
     skip_quick_resume: bool = False,
     allow_back: bool = False,
     standalone_override: bool = False,
+    team_override: str | None = None,
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Guide user through interactive session setup.
 
@@ -574,6 +614,7 @@ def interactive_start(
 
     The flow prioritizes quick resume by showing recent contexts first:
     0. Global Quick Resume - if contexts exist and skip_quick_resume=False
+       (filtered by effective_team: --team > selected_profile)
     1. Team selection - if no context selected (skipped in standalone mode)
     2. Workspace source selection
     2.5. Workspace-scoped Quick Resume - if contexts exist for selected workspace
@@ -586,6 +627,7 @@ def interactive_start(
     - Esc at Step 2: Go back to Step 1 (if team exists) or BACK to dashboard
     - Esc at Step 2.5: Go back to Step 2 workspace picker
     - 't' anywhere: Restart at Step 1 (team selection)
+    - 'a' at Quick Resume: Toggle between filtered and all-teams view
 
     Args:
         cfg: Application configuration dictionary containing workspace_base
@@ -599,6 +641,8 @@ def interactive_start(
             dashboard on Esc.
         standalone_override: If True, force standalone mode regardless of
             config. Used when --standalone CLI flag is passed.
+        team_override: If provided, use this team for filtering instead of
+            selected_profile. Set by --team CLI flag.
 
     Returns:
         Tuple of (workspace, team, session_name, worktree_name).
@@ -612,11 +656,21 @@ def interactive_start(
     # CLI --standalone flag overrides config setting
     standalone_mode = standalone_override or config.is_standalone_mode()
 
-    active_team_label = cfg.get("selected_profile")
+    # Calculate effective_team: --team flag takes precedence over selected_profile
+    # This is the team used for filtering Quick Resume contexts
+    selected_profile = cfg.get("selected_profile")
+    effective_team: str | None = team_override or selected_profile
+
+    # Build display label for UI
     if standalone_mode:
         active_team_label = "standalone"
-    elif not active_team_label:
-        active_team_label = "none"
+    elif team_override:
+        # Show that --team flag is active with "(filtered)" indicator
+        active_team_label = f"{team_override} (filtered)"
+    elif selected_profile:
+        active_team_label = selected_profile
+    else:
+        active_team_label = "none (press 't' to choose)"
     active_team_context = f"Team: {active_team_label}"
 
     # Get available teams (from org config if available)
@@ -627,23 +681,82 @@ def interactive_start(
     user_dismissed_quick_resume = False
 
     # Step 0: Global Quick Resume
-    # Skip when: entering from dashboard empty state (skip_quick_resume=True)
+    # Skip when:
+    # - entering from dashboard empty state (skip_quick_resume=True)
+    # - org mode with no active team (force team selection first)
     # User can press 't' to switch teams (raises TeamSwitchRequested → skip to Step 1)
-    if not skip_quick_resume:
-        recent_contexts = load_recent_contexts(limit=10)
-        if recent_contexts:
+    #
+    # In org mode without an effective team, skip Quick Resume entirely.
+    # This prevents showing cross-team sessions and forces user to pick a team first.
+    should_skip_quick_resume = skip_quick_resume
+    if not standalone_mode and not effective_team and available_teams:
+        # Org mode with no active team - skip to team picker
+        should_skip_quick_resume = True
+        console.print("[dim]💡 Select a team first to see team-specific sessions[/dim]")
+        console.print()
+
+    if not should_skip_quick_resume:
+        # Track whether showing all teams (toggled by 'a' key)
+        show_all_teams = False
+
+        # Quick Resume loop: allows toggling between filtered and all-teams view
+        while True:
+            # Filter by effective_team unless user toggled to show all
+            team_filter = "all" if show_all_teams else effective_team
+            recent_contexts = load_recent_contexts(limit=10, team_filter=team_filter)
+
+            # Update header based on view mode and build helpful subtitle
+            qr_subtitle: str | None = None
+            if show_all_teams:
+                qr_context_label = "All teams"
+                qr_title = "Quick Resume — All Teams"
+                if recent_contexts:
+                    qr_subtitle = (
+                        "Showing all teams — resuming uses that team's plugins. "
+                        "Press 'a' to filter."
+                    )
+                else:
+                    qr_subtitle = "No sessions yet — start fresh"
+            else:
+                qr_context_label = active_team_context
+                qr_title = "Quick Resume"
+                if not recent_contexts:
+                    all_contexts = load_recent_contexts(limit=10, team_filter="all")
+                    team_label = effective_team or "standalone"
+                    if all_contexts:
+                        qr_subtitle = (
+                            f"No sessions yet for {team_label}. Press 'a' to show all teams."
+                        )
+                    else:
+                        qr_subtitle = "No sessions yet — start fresh"
+
             try:
                 result, selected_context = pick_context_quick_resume(
                     recent_contexts,
-                    title="Quick Resume",
+                    title=qr_title,
+                    subtitle=qr_subtitle,
                     standalone=standalone_mode,
-                    context_label=active_team_context,
+                    context_label=qr_context_label,
+                    effective_team=effective_team,
                 )
 
                 match result:
                     case QuickResumeResult.SELECTED:
-                        # User pressed Enter - resume selected context
+                        # User pressed Enter on a context - resume it
                         if selected_context is not None:
+                            # Cross-team resume requires confirmation
+                            if (
+                                effective_team
+                                and selected_context.team
+                                and selected_context.team != effective_team
+                            ):
+                                console.print()
+                                if not Confirm.ask(
+                                    f"[yellow]Resume session from team '{selected_context.team}'?[/yellow]\n"
+                                    f"[dim]This will use {selected_context.team} plugins for this session.[/dim]",
+                                    default=False,
+                                ):
+                                    continue  # Back to QR picker loop
                             return (
                                 str(selected_context.worktree_path),
                                 selected_context.team,
@@ -659,9 +772,21 @@ def interactive_start(
                         return (None, None, None, None)
 
                     case QuickResumeResult.NEW_SESSION:
-                        # User pressed 'n' - continue with normal wizard flow
+                        # User pressed 'n' or selected "New Session" entry
                         user_dismissed_quick_resume = True
                         console.print()
+                        break  # Exit QR loop, continue to wizard
+
+                    case QuickResumeResult.TOGGLE_ALL_TEAMS:
+                        # User pressed 'a' - toggle all-teams view
+                        if standalone_mode:
+                            console.print(
+                                "[dim]All teams view is unavailable in standalone mode[/dim]"
+                            )
+                            console.print()
+                            continue
+                        show_all_teams = not show_all_teams
+                        continue  # Re-render with new filter
 
                     case QuickResumeResult.CANCELLED:
                         # User pressed q - cancel entire wizard
@@ -671,13 +796,9 @@ def interactive_start(
                 # User pressed 't' - skip to team selection (Step 1)
                 # Reset Quick Resume dismissal so new team's contexts are shown
                 user_dismissed_quick_resume = False
+                show_all_teams = False
                 console.print()
-        else:
-            # First-time hint: no recent contexts yet
-            console.print(
-                "[dim]💡 Tip: Your recent contexts will appear here for quick resume[/dim]"
-            )
-            console.print()
+                break  # Exit QR loop, continue to team selection
 
     # ─────────────────────────────────────────────────────────────────────────
     # MEGA-LOOP: Wraps Steps 1-2.5 to handle 't' key (TeamSwitchRequested)
@@ -712,9 +833,25 @@ def interactive_start(
             )
             console.print()
             raise typer.Exit(EXIT_CONFIG)
+        elif team_override:
+            # --team flag provided - use it directly, skip team picker
+            team = team_override
+            console.print(f"[dim]Using team from --team flag: {team}[/dim]")
+            console.print()
         else:
             # Normal flow: org mode with teams available
-            team = select_team(console, cfg)
+            selected = pick_team(
+                available_teams,
+                current_team=str(selected_profile) if selected_profile else None,
+                title="Select Team",
+            )
+            if selected is None:
+                return (None, None, None, None)
+            team = selected.get("name")
+            if team and team != selected_profile:
+                config.set_selected_profile(team)
+                selected_profile = team
+                effective_team = team
 
         # Step 2: Select workspace source (with back navigation support)
         workspace: str | None = None
@@ -819,7 +956,10 @@ def interactive_start(
                 # Smart filter: Match contexts related to this workspace AND team
                 workspace_contexts = []
                 for ctx in load_recent_contexts(limit=30):
-                    # Filter by team in org mode (prevents cross-team resume confusion)
+                    # Standalone: only show standalone contexts
+                    if standalone_mode and ctx.team is not None:
+                        continue
+                    # Org mode: filter by team (prevents cross-team resume confusion)
                     if team is not None and ctx.team != team:
                         continue
 
@@ -848,44 +988,103 @@ def interactive_start(
                 if workspace_contexts and not user_dismissed_quick_resume:
                     console.print()
 
-                    # Use flag pattern for control flow (avoid continue inside match block)
-                    go_back_to_workspace = False
+                    # Workspace QR loop for handling toggle (press 'a')
+                    workspace_qr_show_all = False
+                    while True:
+                        # Filter contexts based on toggle state
+                        displayed_contexts = workspace_contexts
+                        if workspace_qr_show_all:
+                            # Show all contexts for this workspace (ignore team filter)
+                            # Use same 3-case matching logic as above
+                            displayed_contexts = []
+                            for ctx in load_recent_contexts(limit=30):
+                                # Case 1: Exact worktree match
+                                if ctx.worktree_path == normalized_workspace:
+                                    displayed_contexts.append(ctx)
+                                    continue
+                                # Case 2: User picked repo root
+                                if ctx.repo_root == normalized_workspace:
+                                    displayed_contexts.append(ctx)
+                                    continue
+                                # Case 3: User picked a subdir
+                                try:
+                                    if normalized_workspace.is_relative_to(ctx.worktree_path):
+                                        displayed_contexts.append(ctx)
+                                        continue
+                                    if normalized_workspace.is_relative_to(ctx.repo_root):
+                                        displayed_contexts.append(ctx)
+                                except ValueError:
+                                    pass
 
-                    result, selected_context = pick_context_quick_resume(
-                        workspace_contexts,
-                        title=f"Resume session in {Path(workspace).name}?",
-                        subtitle="Existing sessions found for this workspace",
-                        standalone=standalone_mode,
-                        context_label=f"Team: {team or active_team_label}",
-                    )
-                    # Note: TeamSwitchRequested bubbles up to mega-loop handler
+                        qr_subtitle = "Existing sessions found for this workspace"
+                        if workspace_qr_show_all:
+                            qr_subtitle = (
+                                "All teams for this workspace — resuming uses that team's plugins"
+                            )
 
-                    match result:
-                        case QuickResumeResult.SELECTED:
-                            # User wants to resume - return context info immediately
-                            if selected_context is not None:
-                                return (
-                                    str(selected_context.worktree_path),
-                                    selected_context.team,
-                                    selected_context.last_session_id,
-                                    None,  # worktree_name - not creating new worktree
-                                )
+                        result, selected_context = pick_context_quick_resume(
+                            displayed_contexts,
+                            title=f"Resume session in {Path(workspace).name}?",
+                            subtitle=qr_subtitle,
+                            standalone=standalone_mode,
+                            context_label="All teams"
+                            if workspace_qr_show_all
+                            else f"Team: {team or active_team_label}",
+                            effective_team=team or effective_team,
+                        )
+                        # Note: TeamSwitchRequested bubbles up to mega-loop handler
 
-                        case QuickResumeResult.NEW_SESSION:
-                            # User pressed 'n' - continue with fresh session
-                            pass  # Fall through to break below
+                        match result:
+                            case QuickResumeResult.SELECTED:
+                                # User wants to resume - return context info immediately
+                                if selected_context is not None:
+                                    # Cross-team resume requires confirmation
+                                    current_team = team or effective_team
+                                    if (
+                                        current_team
+                                        and selected_context.team
+                                        and selected_context.team != current_team
+                                    ):
+                                        console.print()
+                                        if not Confirm.ask(
+                                            f"[yellow]Resume session from team '{selected_context.team}'?[/yellow]\n"
+                                            f"[dim]This will use {selected_context.team} plugins for this session.[/dim]",
+                                            default=False,
+                                        ):
+                                            continue  # Back to workspace QR picker loop
+                                    return (
+                                        str(selected_context.worktree_path),
+                                        selected_context.team,
+                                        selected_context.last_session_id,
+                                        None,  # worktree_name - not creating new worktree
+                                    )
 
-                        case QuickResumeResult.BACK:
-                            # User pressed Esc - go back to workspace picker (Step 2)
-                            go_back_to_workspace = True
+                            case QuickResumeResult.NEW_SESSION:
+                                # User pressed 'n' - continue with fresh session
+                                break  # Exit workspace QR loop
 
-                        case QuickResumeResult.CANCELLED:
-                            # User pressed q - cancel entire wizard
-                            return (None, None, None, None)
+                            case QuickResumeResult.BACK:
+                                # User pressed Esc - go back to workspace picker (Step 2)
+                                workspace = None
+                                break  # Exit workspace QR loop
 
-                    # Handle flag-based control flow outside match block
-                    if go_back_to_workspace:
-                        workspace = None
+                            case QuickResumeResult.TOGGLE_ALL_TEAMS:
+                                # User pressed 'a' - toggle all-teams view
+                                if standalone_mode:
+                                    console.print(
+                                        "[dim]All teams view is unavailable in standalone mode[/dim]"
+                                    )
+                                    console.print()
+                                    continue
+                                workspace_qr_show_all = not workspace_qr_show_all
+                                continue  # Re-render workspace QR
+
+                            case QuickResumeResult.CANCELLED:
+                                # User pressed q - cancel entire wizard
+                                return (None, None, None, None)
+
+                    # Check if we need to go back to workspace picker
+                    if workspace is None:
                         continue  # Continue outer loop to re-enter Step 2
 
                 # No contexts or user dismissed global Quick Resume - proceed to Step 3

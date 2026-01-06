@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ..config import get_cache_dir
+from ..console import err_line
 from ..core.constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT, SANDBOX_DATA_VOLUME
 from ..core.errors import SandboxLaunchError
 from .core import (
@@ -224,6 +225,7 @@ def run(
     cmd: list[str],
     ensure_credentials: bool = True,
     org_config: dict[str, Any] | None = None,
+    container_workdir: Path | None = None,
 ) -> int:
     """
     Execute the Docker command with optional org configuration.
@@ -237,6 +239,10 @@ def run(
         ensure_credentials: If True, use detached→symlink→exec pattern
         org_config: Organization config dict. If provided, safety-net policy
             is extracted and mounted. If None, default fail-safe policy is used.
+        container_workdir: Working directory for Claude inside container.
+            If None, uses the -w value from cmd (mount path).
+            For worktrees, this should be the actual workspace path so Claude
+            finds .claude/settings.local.json.
 
     Raises:
         SandboxLaunchError: If Docker command fails to start
@@ -262,6 +268,7 @@ def run(
         resume=resume,
         ensure_credentials=ensure_credentials,
         org_config=org_config,
+        container_workdir=container_workdir,
     )
 
 
@@ -271,6 +278,7 @@ def run_sandbox(
     resume: bool = False,
     ensure_credentials: bool = True,
     org_config: dict[str, Any] | None = None,
+    container_workdir: Path | None = None,
 ) -> int:
     """
     Run Claude in a Docker sandbox with credential persistence.
@@ -285,13 +293,18 @@ def run_sandbox(
     but Claude read config at T+0 before symlinks existed.
 
     Args:
-        workspace: Path to mount as workspace (-w flag)
+        workspace: Path to mount as workspace (-w flag for docker sandbox run).
+            For worktrees, this is the common parent directory.
         continue_session: Pass -c flag to Claude
         resume: Pass --resume flag to Claude
         ensure_credentials: If True, create credential symlinks
         org_config: Organization config dict. If provided, security.safety_net
             policy is extracted and mounted read-only into container for the
             scc-safety-net plugin. If None, a default fail-safe policy is used.
+        container_workdir: Working directory for Claude inside container
+            (-w flag for docker exec). If None, defaults to workspace.
+            For worktrees, this should be the actual workspace path so Claude
+            finds .claude/settings.local.json.
 
     Returns:
         Exit code from Docker process
@@ -300,6 +313,15 @@ def run_sandbox(
         SandboxLaunchError: If Docker command fails to start
     """
     try:
+        # STEP 0: Reset global settings to prevent plugin mixing across teams
+        # This ensures only workspace settings.local.json drives plugins.
+        # Called once per scc start flow, before container exec.
+        if not reset_global_settings():
+            err_line(
+                "Warning: Failed to reset global settings. "
+                "Plugin mixing may occur if switching teams."
+            )
+
         # ALWAYS write policy file and get host path (even without org config)
         # This ensures the mount is present from first launch, avoiding
         # sandbox reuse issues when safety-net is enabled later.
@@ -355,7 +377,9 @@ def run_sandbox(
             # STEP 6: Exec Claude interactively (replaces current process)
             # Claude binary is at /home/agent/.local/bin/claude
             # Use -w to set working directory so Claude finds .claude/settings.local.json
-            exec_cmd = ["docker", "exec", "-it", "-w", str(workspace), container_id, "claude"]
+            # For worktrees: workspace is mount path (parent), container_workdir is actual workspace
+            exec_workdir = container_workdir if container_workdir else workspace
+            exec_cmd = ["docker", "exec", "-it", "-w", str(exec_workdir), container_id, "claude"]
 
             # Add Claude-specific flags
             if continue_session:
@@ -375,6 +399,8 @@ def run_sandbox(
         else:
             # Non-credential mode or Windows: use legacy flow
             # Policy injection still applies - mount is always present
+            # NOTE: Legacy path uses workspace for BOTH mount and CWD via -w flag.
+            # Worktrees require the exec path (credential mode) for separate mount/CWD.
             cmd = build_command(
                 workspace=workspace,
                 continue_session=continue_session,
@@ -516,56 +542,21 @@ def inject_settings(settings: dict[str, Any]) -> bool:
     )
 
 
-def inject_team_settings(team_name: str, org_config: dict[str, Any] | None = None) -> bool:
+def reset_global_settings() -> bool:
     """
-    Inject team-specific settings into the Docker sandbox volume.
+    Reset global settings in Docker sandbox volume to empty state.
 
-    Supports two modes:
-    1. With org_config: Uses new remote org config architecture
-       - Resolves profile/marketplace from org_config
-       - Builds settings via claude_adapter
-    2. Without org_config (deprecated): Uses legacy teams module
+    This prevents plugin mixing across teams by ensuring the volume doesn't
+    retain old plugin configurations. Workspace settings.local.json is the
+    single source of truth for plugins.
 
-    Args:
-        team_name: Name of the team profile
-        org_config: Optional remote organization config. If provided, uses
-            the new architecture with profiles.py and claude_adapter.py
+    Called once per `scc start` flow, before container exec.
 
     Returns:
-        True if settings were injected successfully, False otherwise
+        True if reset successful, False otherwise
     """
-    if org_config is not None:
-        # New architecture: use profiles.py and claude_adapter.py
-        from .. import claude_adapter, profiles
-
-        # Resolve profile from org config
-        profile = profiles.resolve_profile(org_config, team_name)
-
-        # Check if profile has a plugin
-        if not profile.get("plugin"):
-            return True  # No plugin to inject
-
-        # Resolve marketplace
-        marketplace = profiles.resolve_marketplace(org_config, profile)
-
-        # Get org_id for namespacing
-        org_id = org_config.get("organization", {}).get("id")
-
-        # Build settings using claude_adapter
-        settings = claude_adapter.build_claude_settings(profile, marketplace, org_id)
-
-        # Inject settings
-        return inject_settings(settings)
-    else:
-        # Legacy mode: use old teams module
-        from .. import teams
-
-        team_settings = teams.get_team_sandbox_settings(team_name)
-
-        if not team_settings:
-            return True
-
-        return inject_settings(team_settings)
+    # Write empty settings to the volume (overwrites any existing)
+    return inject_file_to_sandbox_volume("settings.json", "{}")
 
 
 def get_or_create_container(

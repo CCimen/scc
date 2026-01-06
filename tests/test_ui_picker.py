@@ -737,6 +737,9 @@ class TestQuickResumeCurrentBranch:
                 # Verify format_context was called with is_current_branch=True
                 mock_picker.assert_called_once()
                 items = mock_picker.call_args.kwargs["items"]
-                assert len(items) == 1
-                # The item should have ★ indicator since worktree_name == current_branch
-                assert "★" in items[0].label
+                # Items: "New Session" virtual entry, "Switch team" entry, then context(s)
+                assert len(items) == 3
+                assert "New session" in items[0].label
+                assert "Switch team" in items[1].label
+                # The context item should have ★ indicator since worktree_name == current_branch
+                assert "★" in items[2].label

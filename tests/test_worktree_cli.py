@@ -605,7 +605,8 @@ class TestWorktreeListJsonContract:
                 return_value=worktrees,
             ),
         ):
-            result = runner.invoke(app, ["worktree", "list", str(tmp_path), "--json"])
+            # CLI structure: scc worktree [group-workspace] list [options]
+            result = runner.invoke(app, ["worktree", str(tmp_path), "list", "--json"])
 
         # Should succeed
         assert result.exit_code == 0
@@ -630,7 +631,8 @@ class TestWorktreeListJsonContract:
                 return_value=worktrees,
             ),
         ):
-            result = runner.invoke(app, ["worktree", "list", str(tmp_path), "--json"])
+            # CLI structure: scc worktree [group-workspace] list [options]
+            result = runner.invoke(app, ["worktree", str(tmp_path), "list", "--json"])
 
         assert result.exit_code == 0
         data = json.loads(result.output)

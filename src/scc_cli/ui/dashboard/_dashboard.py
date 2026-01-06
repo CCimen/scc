@@ -434,7 +434,7 @@ class Dashboard:
 
         Hints reflect available actions for the current selection:
         - Details open: "Esc close"
-        - Status tab: No Enter action (info-only)
+        - Status tab: Enter on actionable rows (start/team/resources/statusline)
         - Startable placeholder: "Enter start"
         - Non-startable placeholder: No Enter hint
         - Real item: "Enter details"
@@ -459,8 +459,16 @@ class Dashboard:
                 hints.append(FooterHint("Enter", "start here"))
             hints.append(FooterHint("Esc", "close"))
         elif self.state.active_tab == DashboardTab.STATUS:
-            # Status tab has no actionable items - no Enter hint
-            pass
+            current = self.state.list_state.current_item
+            if current:
+                if current.value == "start_session":
+                    hints.append(FooterHint("Enter", "start"))
+                elif current.value == "team":
+                    hints.append(FooterHint("Enter", "switch team"))
+                elif current.value in {"containers", "sessions", "worktrees"}:
+                    hints.append(FooterHint("Enter", "open"))
+                elif current.value == "statusline_not_installed":
+                    hints.append(FooterHint("Enter", "install"))
         elif self.state.is_placeholder_selected():
             # Check if placeholder is startable
             current = self.state.list_state.current_item
@@ -497,6 +505,10 @@ class Dashboard:
                 # Show v toggle with current state indicator
                 status_label = "status off" if self.state.verbose_worktrees else "status"
                 hints.append(FooterHint("v", status_label))
+
+        # Sessions tab quick hint
+        if self.state.active_tab == DashboardTab.SESSIONS and not show_details:
+            hints.append(FooterHint("Enter", "details/resume"))
 
         # Tab navigation and refresh
         hints.append(FooterHint("Tab", "switch tab"))
@@ -592,6 +604,13 @@ class Dashboard:
                 if self.state.active_tab == DashboardTab.STATUS:
                     current = self.state.list_state.current_item
                     if current:
+                        # Start session row
+                        if current.value == "start_session":
+                            raise StartRequested(
+                                return_to=self.state.active_tab.name,
+                                reason="dashboard_start",
+                            )
+
                         # Team row: same behavior as 't' key
                         if current.value == "team":
                             if scc_config.is_standalone_mode():

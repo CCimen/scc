@@ -125,24 +125,23 @@ class TestDryRunTeamConfig:
                             "scc_cli.commands.launch.app.teams.validate_team_profile",
                             return_value={"valid": True},
                         ):
-                            with patch("scc_cli.commands.launch.app.docker.inject_team_settings"):
-                                try:
-                                    start(
-                                        workspace=str(tmp_path),
-                                        team="platform",
-                                        session_name=None,
-                                        resume=False,
-                                        select=False,
-                                        continue_session=False,
-                                        worktree_name=None,
-                                        fresh=False,
-                                        install_deps=False,
-                                        offline=False,
-                                        standalone=False,
-                                        dry_run=True,
-                                    )
-                                except click.exceptions.Exit:
-                                    pass
+                            try:
+                                start(
+                                    workspace=str(tmp_path),
+                                    team="platform",
+                                    session_name=None,
+                                    resume=False,
+                                    select=False,
+                                    continue_session=False,
+                                    worktree_name=None,
+                                    fresh=False,
+                                    install_deps=False,
+                                    offline=False,
+                                    standalone=False,
+                                    dry_run=True,
+                                )
+                            except click.exceptions.Exit:
+                                pass
 
         captured = capsys.readouterr()
         assert "platform" in captured.out

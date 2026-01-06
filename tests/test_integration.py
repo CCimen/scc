@@ -350,12 +350,16 @@ class TestSessionWorkflow:
         config_dir = full_config_environment["config_dir"]
         config_dir / "sessions.json"
 
+        # Mock session with no team (standalone mode)
+        mock_session = {
+            "workspace": str(git_workspace),
+            "team": None,  # Standalone mode - no team filtering
+        }
+
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch("scc_cli.commands.launch.app.sessions.get_most_recent") as mock_recent,
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.sessions.list_recent") as mock_list,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
             patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
@@ -370,26 +374,23 @@ class TestSessionWorkflow:
             ),
             patch("scc_cli.commands.launch.sandbox.docker.run"),
         ):
-            mock_recent.return_value = {
-                "workspace": str(git_workspace),
-                "team": "platform",
-            }
+            mock_list.return_value = [mock_session]
 
-            result = runner.invoke(app, ["start", "--continue"])
+            # Use --standalone flag to bypass team filtering
+            result = runner.invoke(app, ["start", "--continue", "--standalone"])
 
         # Should have resumed the session
-        assert "Resuming" in result.output or mock_recent.called
+        assert "Resuming" in result.output or mock_list.called
 
     def test_continue_without_sessions_shows_error(self, full_config_environment):
         """--continue with no sessions should show appropriate error."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch("scc_cli.commands.launch.app.sessions.get_most_recent", return_value=None),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.sessions.list_recent", return_value=[]),
         ):
-            result = runner.invoke(app, ["start", "--continue"])
+            # Use --standalone flag to bypass team filtering
+            result = runner.invoke(app, ["start", "--continue", "--standalone"])
 
         assert result.exit_code != 0 or "no recent" in result.output.lower()
 
@@ -434,8 +435,9 @@ class TestWorktreeWorkflow:
             worktree_path = git_workspace.parent / "claude" / "feature-x"
             mock_create.return_value = worktree_path
 
+            # CLI structure: scc worktree [group-workspace] create <workspace> <name>
             runner.invoke(
-                app, ["worktree", "create", str(git_workspace), "feature-x", "--no-start"]
+                app, ["worktree", ".", "create", str(git_workspace), "feature-x", "--no-start"]
             )
 
         mock_create.assert_called_once()
@@ -458,10 +460,12 @@ class TestWorktreeWorkflow:
         ):
             mock_deps.return_value = True
 
+            # CLI structure: scc worktree [group-workspace] create <workspace> <name>
             runner.invoke(
                 app,
                 [
                     "worktree",
+                    ".",
                     "create",
                     str(git_workspace),
                     "feature-x",
