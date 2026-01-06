@@ -229,6 +229,7 @@ class TestSyncMarketplaceSettingsOrchestration:
 
         mock_materialize.return_value = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="directory",
             source_url="/path/to/plugins",
@@ -520,6 +521,7 @@ class TestForceRefreshBehavior:
 
         mock_materialize.return_value = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="directory",
             source_url="/path",

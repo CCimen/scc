@@ -34,37 +34,50 @@ def render_settings(
     - extraKnownMarketplaces: Object mapping marketplace names to source configs
     - enabledPlugins: Object mapping plugin references to boolean enable state
 
+    CRITICAL: Uses canonical_name (from marketplace.json) NOT alias name (from org config).
+    Claude Code looks up marketplaces by the 'name' field in marketplace.json,
+    not by the key used in the SCC org config.
+
     Args:
         effective_plugins: Result from compute_effective_plugins()
-            - enabled: Set of enabled plugin references
+            - enabled: Set of enabled plugin references (using alias names)
             - extra_marketplaces: List of marketplace IDs to enable
-        materialized_marketplaces: Dict mapping name to MaterializedMarketplace-like dicts
+        materialized_marketplaces: Dict mapping alias name to MaterializedMarketplace-like dicts
             - relative_path: Path relative to project root
             - source_type: Type of source (github, git, directory, url)
+            - canonical_name: The actual name from marketplace.json (what Claude Code sees)
 
     Returns:
         Dict with Claude Code settings structure:
             {
                 "extraKnownMarketplaces": {
-                    "marketplace-name": {
+                    "canonical-marketplace-name": {
                         "source": {"source": "directory", "path": "..."}
                     }
                 },
-                "enabledPlugins": {"plugin@marketplace": true, ...}
+                "enabledPlugins": {"plugin@canonical-marketplace-name": true, ...}
             }
     """
     settings: dict[str, Any] = {}
 
-    # Build extraKnownMarketplaces as OBJECT with marketplace names as keys
-    # Claude Code expects: {"name": {"source": {"source": "directory", "path": "..."}}}
+    # Build alias -> canonical name mapping
+    alias_to_canonical: dict[str, str] = {}
+    for alias_name, marketplace_data in materialized_marketplaces.items():
+        canonical_name = marketplace_data.get("canonical_name", alias_name)
+        alias_to_canonical[alias_name] = canonical_name
+
+    # Build extraKnownMarketplaces as OBJECT with CANONICAL marketplace names as keys
+    # Claude Code expects: {"canonical-name": {"source": {"source": "directory", "path": "..."}}}
     extra_marketplaces: dict[str, dict[str, Any]] = {}
-    for name, marketplace_data in materialized_marketplaces.items():
+    for alias_name, marketplace_data in materialized_marketplaces.items():
         # Get the relative path from the materialized data
         relative_path = marketplace_data.get("relative_path", "")
+        # Use canonical name as the key - this is what Claude Code expects
+        canonical_name = marketplace_data.get("canonical_name", alias_name)
 
         # All local marketplaces use source.source: directory
         # This is because they've been cloned/downloaded to a local path
-        extra_marketplaces[name] = {
+        extra_marketplaces[canonical_name] = {
             "source": {
                 "source": "directory",
                 "path": relative_path,
@@ -74,11 +87,22 @@ def render_settings(
     settings["extraKnownMarketplaces"] = extra_marketplaces
 
     # Build enabledPlugins as OBJECT with plugin references as keys
-    # Claude Code expects: {"plugin@marketplace": true, ...}
+    # Claude Code expects: {"plugin@canonical-marketplace-name": true, ...}
+    # We need to translate alias marketplace names to canonical names
     enabled = effective_plugins.get("enabled", set())
     enabled_plugins: dict[str, bool] = {}
-    for plugin in enabled:
-        enabled_plugins[str(plugin)] = True
+    for plugin_ref in enabled:
+        plugin_str = str(plugin_ref)
+        # Translate marketplace alias to canonical name in plugin reference
+        if "@" in plugin_str:
+            plugin_name, alias_name = plugin_str.rsplit("@", 1)
+            canonical_name = alias_to_canonical.get(alias_name, alias_name)
+            translated_ref = f"{plugin_name}@{canonical_name}"
+            enabled_plugins[translated_ref] = True
+        else:
+            # No marketplace specified, keep as-is
+            enabled_plugins[plugin_str] = True
+
     settings["enabledPlugins"] = enabled_plugins
 
     return settings

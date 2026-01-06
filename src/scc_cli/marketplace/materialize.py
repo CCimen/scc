@@ -95,7 +95,8 @@ class MaterializedMarketplace:
     """A marketplace that has been materialized to local filesystem.
 
     Attributes:
-        name: Marketplace identifier (matches org config key)
+        name: Marketplace identifier (matches org config key - the "alias")
+        canonical_name: The actual name from marketplace.json (what Claude Code sees)
         relative_path: Path relative to project root (for Docker compatibility)
         source_type: Source type (github, git, directory, url)
         source_url: Original source URL or path
@@ -108,6 +109,7 @@ class MaterializedMarketplace:
     """
 
     name: str
+    canonical_name: str  # Name from marketplace.json - used by Claude Code
     relative_path: str
     source_type: str
     source_url: str
@@ -122,6 +124,7 @@ class MaterializedMarketplace:
         """Serialize to dictionary for JSON storage."""
         return {
             "name": self.name,
+            "canonical_name": self.canonical_name,
             "relative_path": self.relative_path,
             "source_type": self.source_type,
             "source_url": self.source_url,
@@ -142,8 +145,13 @@ class MaterializedMarketplace:
         else:
             materialized_at = datetime.now(timezone.utc)
 
+        # canonical_name defaults to name for backward compatibility with old manifests
+        name = data["name"]
+        canonical_name = data.get("canonical_name", name)
+
         return cls(
-            name=data["name"],
+            name=name,
+            canonical_name=canonical_name,
             relative_path=data["relative_path"],
             source_type=data["source_type"],
             source_url=data["source_url"],
@@ -163,6 +171,7 @@ class CloneResult:
     success: bool
     commit_sha: str | None = None
     plugins: list[str] | None = None
+    canonical_name: str | None = None  # Name from marketplace.json
     error: str | None = None
 
 
@@ -173,7 +182,16 @@ class DownloadResult:
     success: bool
     etag: str | None = None
     plugins: list[str] | None = None
+    canonical_name: str | None = None  # Name from marketplace.json
     error: str | None = None
+
+
+@dataclass
+class DiscoveryResult:
+    """Result of discovering plugins and metadata from a marketplace."""
+
+    plugins: list[str]
+    canonical_name: str  # The 'name' field from marketplace.json
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -259,6 +277,7 @@ def run_git_clone(
     target_dir: Path,
     branch: str = "main",
     depth: int = 1,
+    fallback_name: str = "",
 ) -> CloneResult:
     """Clone a git repository to target directory.
 
@@ -267,9 +286,10 @@ def run_git_clone(
         target_dir: Directory to clone into
         branch: Branch to checkout
         depth: Clone depth (1 for shallow)
+        fallback_name: Fallback name if marketplace.json doesn't specify one
 
     Returns:
-        CloneResult with success status and commit SHA
+        CloneResult with success status, commit SHA, and canonical name
     """
     try:
         # Clean target directory if exists
@@ -310,10 +330,10 @@ def run_git_clone(
         )
         commit_sha = sha_result.stdout.strip() if sha_result.returncode == 0 else None
 
-        # Discover plugins
-        plugins = _discover_plugins(target_dir)
+        # Discover plugins and canonical name
+        discovery = _discover_plugins(target_dir, fallback_name=fallback_name)
 
-        if plugins is None:
+        if discovery is None:
             return CloneResult(
                 success=False,
                 commit_sha=commit_sha,
@@ -323,7 +343,8 @@ def run_git_clone(
         return CloneResult(
             success=True,
             commit_sha=commit_sha,
-            plugins=plugins,
+            plugins=discovery.plugins,
+            canonical_name=discovery.canonical_name,
         )
 
     except FileNotFoundError:
@@ -335,14 +356,15 @@ def run_git_clone(
         )
 
 
-def _discover_plugins(marketplace_dir: Path) -> list[str] | None:
-    """Discover plugins in a marketplace directory.
+def _discover_plugins(marketplace_dir: Path, fallback_name: str = "") -> DiscoveryResult | None:
+    """Discover plugins and canonical name from a marketplace directory.
 
     Args:
         marketplace_dir: Root of the marketplace
+        fallback_name: Name to use if marketplace.json doesn't specify one
 
     Returns:
-        List of plugin names, or None if structure is invalid
+        DiscoveryResult with plugins and canonical name, or None if structure is invalid
     """
     manifest_path = marketplace_dir / ".claude-plugin" / "marketplace.json"
 
@@ -352,9 +374,16 @@ def _discover_plugins(marketplace_dir: Path) -> list[str] | None:
     try:
         data = json.loads(manifest_path.read_text())
         plugins = data.get("plugins", [])
-        return [p.get("name", "") for p in plugins if isinstance(p, dict)]
+        plugin_names = [p.get("name", "") for p in plugins if isinstance(p, dict)]
+
+        # Get canonical name from marketplace.json - this is what Claude Code uses
+        canonical_name = data.get("name", fallback_name)
+        if not canonical_name:
+            canonical_name = fallback_name
+
+        return DiscoveryResult(plugins=plugin_names, canonical_name=canonical_name)
     except (json.JSONDecodeError, KeyError):
-        return []
+        return DiscoveryResult(plugins=[], canonical_name=fallback_name)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -366,6 +395,7 @@ def download_and_extract(
     url: str,
     target_dir: Path,
     headers: dict[str, str] | None = None,
+    fallback_name: str = "",
 ) -> DownloadResult:
     """Download and extract marketplace from URL.
 
@@ -373,9 +403,10 @@ def download_and_extract(
         url: HTTPS URL to download
         target_dir: Directory to extract into
         headers: Optional HTTP headers
+        fallback_name: Fallback name if marketplace.json doesn't specify one
 
     Returns:
-        DownloadResult with success status and ETag
+        DownloadResult with success status, ETag, and canonical name
     """
     import tarfile
     import tempfile
@@ -441,10 +472,10 @@ def download_and_extract(
 
                 tar.extractall(target_dir, members=safe_members)
 
-            # Discover plugins
-            plugins = _discover_plugins(target_dir)
+            # Discover plugins and canonical name
+            discovery = _discover_plugins(target_dir, fallback_name=fallback_name)
 
-            if plugins is None:
+            if discovery is None:
                 return DownloadResult(
                     success=False,
                     error="Missing .claude-plugin/marketplace.json",
@@ -453,7 +484,8 @@ def download_and_extract(
             return DownloadResult(
                 success=True,
                 etag=etag,
-                plugins=plugins,
+                plugins=discovery.plugins,
+                canonical_name=discovery.canonical_name,
             )
         finally:
             tmp_path.unlink(missing_ok=True)
@@ -490,12 +522,12 @@ def materialize_github(
     """Materialize a GitHub marketplace source.
 
     Args:
-        name: Marketplace name (key in org config)
+        name: Marketplace name (key in org config) - the "alias"
         source: GitHub source configuration
         project_dir: Project root directory
 
     Returns:
-        MaterializedMarketplace with materialization details
+        MaterializedMarketplace with materialization details including canonical_name
 
     Raises:
         MaterializationError: On clone failure
@@ -518,7 +550,8 @@ def materialize_github(
     target_dir = _get_absolute_path(project_dir, name)
 
     try:
-        result = run_git_clone(url, target_dir, branch=branch, depth=1)
+        # Pass name as fallback in case marketplace.json doesn't specify one
+        result = run_git_clone(url, target_dir, branch=branch, depth=1, fallback_name=name)
     except FileNotFoundError:
         raise GitNotAvailableError()
 
@@ -527,8 +560,12 @@ def materialize_github(
             raise InvalidMarketplaceError(name, result.error)
         raise MaterializationError(result.error or "Clone failed", name)
 
+    # canonical_name comes from marketplace.json, fallback to alias name
+    canonical_name = result.canonical_name or name
+
     return MaterializedMarketplace(
         name=name,
+        canonical_name=canonical_name,
         relative_path=_get_relative_path(name),
         source_type="github",
         source_url=url,
@@ -549,12 +586,12 @@ def materialize_git(
     """Materialize a generic git marketplace source.
 
     Args:
-        name: Marketplace name (key in org config)
+        name: Marketplace name (key in org config) - the "alias"
         source: Git source configuration
         project_dir: Project root directory
 
     Returns:
-        MaterializedMarketplace with materialization details
+        MaterializedMarketplace with materialization details including canonical_name
 
     Raises:
         MaterializationError: On clone failure
@@ -570,15 +607,20 @@ def materialize_git(
 
     target_dir = _get_absolute_path(project_dir, name)
 
-    result = run_git_clone(url, target_dir, branch=branch, depth=1)
+    # Pass name as fallback in case marketplace.json doesn't specify one
+    result = run_git_clone(url, target_dir, branch=branch, depth=1, fallback_name=name)
 
     if not result.success:
         if result.error and "marketplace.json" in result.error:
             raise InvalidMarketplaceError(name, result.error)
         raise MaterializationError(result.error or "Clone failed", name)
 
+    # canonical_name comes from marketplace.json, fallback to alias name
+    canonical_name = result.canonical_name or name
+
     return MaterializedMarketplace(
         name=name,
+        canonical_name=canonical_name,
         relative_path=_get_relative_path(name),
         source_type="git",
         source_url=url,
@@ -601,12 +643,12 @@ def materialize_directory(
     Creates a symlink to the local directory for Docker visibility.
 
     Args:
-        name: Marketplace name (key in org config)
+        name: Marketplace name (key in org config) - the "alias"
         source: Directory source configuration
         project_dir: Project root directory
 
     Returns:
-        MaterializedMarketplace with materialization details
+        MaterializedMarketplace with materialization details including canonical_name
 
     Raises:
         InvalidMarketplaceError: When marketplace structure is invalid
@@ -622,9 +664,9 @@ def materialize_directory(
     if not source_path.is_absolute():
         source_path = project_dir / source_path
 
-    # Validate marketplace structure
-    plugins = _discover_plugins(source_path)
-    if plugins is None:
+    # Validate marketplace structure and discover canonical name
+    discovery = _discover_plugins(source_path, fallback_name=name)
+    if discovery is None:
         raise InvalidMarketplaceError(
             name,
             "Missing .claude-plugin/marketplace.json",
@@ -646,6 +688,7 @@ def materialize_directory(
 
     return MaterializedMarketplace(
         name=name,
+        canonical_name=discovery.canonical_name,
         relative_path=_get_relative_path(name),
         source_type="directory",
         source_url=str(source_path),
@@ -654,7 +697,7 @@ def materialize_directory(
         materialized_at=datetime.now(timezone.utc),
         commit_sha=None,
         etag=None,
-        plugins_available=plugins,
+        plugins_available=discovery.plugins,
     )
 
 
@@ -666,12 +709,12 @@ def materialize_url(
     """Materialize a URL marketplace source.
 
     Args:
-        name: Marketplace name (key in org config)
+        name: Marketplace name (key in org config) - the "alias"
         source: URL source configuration
         project_dir: Project root directory
 
     Returns:
-        MaterializedMarketplace with materialization details
+        MaterializedMarketplace with materialization details including canonical_name
 
     Raises:
         MaterializationError: On download failure or HTTP URL (security)
@@ -698,13 +741,18 @@ def materialize_url(
     if headers:
         headers = {k: os.path.expandvars(v) for k, v in headers.items()}
 
-    result = download_and_extract(url, target_dir, headers=headers)
+    # Pass name as fallback in case marketplace.json doesn't specify one
+    result = download_and_extract(url, target_dir, headers=headers, fallback_name=name)
 
     if not result.success:
         raise MaterializationError(result.error or "Download failed", name)
 
+    # canonical_name comes from marketplace.json, fallback to alias name
+    canonical_name = result.canonical_name or name
+
     return MaterializedMarketplace(
         name=name,
+        canonical_name=canonical_name,
         relative_path=_get_relative_path(name),
         source_type="url",
         source_url=url,
@@ -753,6 +801,29 @@ def materialize_marketplace(
             target_path = _get_absolute_path(project_dir, name)
 
             if target_path.exists() and is_cache_fresh(existing):
+                # CRITICAL FIX: Re-read canonical_name from marketplace.json if it's
+                # missing or equals the alias name (indicating an old manifest entry)
+                # This ensures alias→canonical translation works with cached marketplaces
+                if existing.canonical_name == existing.name:
+                    discovery = _discover_plugins(target_path, fallback_name=name)
+                    if discovery and discovery.canonical_name != existing.name:
+                        # Update the cached entry with the correct canonical name
+                        existing = MaterializedMarketplace(
+                            name=existing.name,
+                            canonical_name=discovery.canonical_name,
+                            relative_path=existing.relative_path,
+                            source_type=existing.source_type,
+                            source_url=existing.source_url,
+                            source_ref=existing.source_ref,
+                            materialization_mode=existing.materialization_mode,
+                            materialized_at=existing.materialized_at,
+                            commit_sha=existing.commit_sha,
+                            etag=existing.etag,
+                            plugins_available=existing.plugins_available,
+                        )
+                        # Persist the updated canonical_name for future runs
+                        manifest[name] = existing
+                        save_manifest(project_dir, manifest)
                 return existing
 
     # Route to appropriate handler using isinstance for proper type narrowing

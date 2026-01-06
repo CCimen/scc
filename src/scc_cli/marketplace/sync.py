@@ -184,9 +184,28 @@ def sync_marketplace_settings(
             materialized[marketplace_name] = {
                 "relative_path": result.relative_path,
                 "source_type": result.source_type,
+                "canonical_name": result.canonical_name,  # Critical for alias → canonical translation
             }
         except MaterializationError as e:
             warnings.append(f"Failed to materialize '{marketplace_name}': {e}")
+
+    # ── Step 3b: Check for canonical name collisions ────────────────────────
+    # Multiple aliases resolving to the same canonical name is a configuration error
+    canonical_to_aliases: dict[str, list[str]] = {}
+    for alias_name, data in materialized.items():
+        canonical = data.get("canonical_name", alias_name)
+        if canonical not in canonical_to_aliases:
+            canonical_to_aliases[canonical] = []
+        canonical_to_aliases[canonical].append(alias_name)
+
+    for canonical, aliases in canonical_to_aliases.items():
+        if len(aliases) > 1:
+            raise SyncError(
+                f"Canonical name collision: marketplace.json name '{canonical}' "
+                f"is used by multiple org config entries: {', '.join(aliases)}. "
+                f"Each marketplace must have a unique canonical name.",
+                details={"canonical_name": canonical, "conflicting_aliases": aliases},
+            )
 
     # ── Step 4: Render settings ──────────────────────────────────────────────
     effective_dict = {
