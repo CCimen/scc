@@ -167,9 +167,26 @@ def _fetch_federated_team_config(
 team_app = typer.Typer(
     name="team",
     help="Team profile management",
-    no_args_is_help=True,
+    no_args_is_help=False,
     context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
 )
+
+
+@team_app.callback(invoke_without_command=True)
+def team_callback(
+    ctx: typer.Context,
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full descriptions"),
+    sync: bool = typer.Option(False, "--sync", "-s", help="Sync team configs from organization"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON"),
+) -> None:
+    """List teams by default.
+
+    This makes `scc team` behave like `scc team list` for convenience.
+    """
+    if ctx.invoked_subcommand is None:
+        team_list(verbose=verbose, sync=sync, json_output=json_output, pretty=pretty)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

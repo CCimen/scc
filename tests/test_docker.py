@@ -1,151 +1,39 @@
-"""Tests for docker module - team settings injection and utilities.
+"""Tests for docker module - settings injection utilities.
 
-Tests for the team-based settings injection flow and low-level utilities:
-- inject_team_settings() with teams.get_team_sandbox_settings
+Tests for the low-level Docker utilities:
+- reset_global_settings() global settings reset
 - inject_file_to_sandbox_volume() file injection
 - get_sandbox_settings() reading existing sandbox settings
-- Integration tests for team settings workflow
-
-For org_config-based injection tests, see test_docker_org_config.py
 """
 
-import json
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from scc_cli import docker
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Test Fixtures
+# Tests for reset_global_settings
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.fixture
-def mock_team_settings():
-    """Sample team settings returned by teams.get_team_sandbox_settings."""
-    return {
-        "extraKnownMarketplaces": {
-            "sundsvall": {
-                "source": {
-                    "source": "github",
-                    "repo": "sundsvall/claude-plugins-marketplace",
-                }
-            }
-        },
-        "enabledPlugins": ["ai-teamet@sundsvall"],
-    }
+class TestResetGlobalSettings:
+    """Tests for reset_global_settings function."""
 
-
-@pytest.fixture
-def mock_existing_settings():
-    """Sample existing settings in the Docker volume."""
-    return {
-        "statusLine": {
-            "command": "/mnt/claude-data/scc-statusline.sh",
-        },
-        "someOtherSetting": True,
-    }
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for inject_team_settings
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestInjectTeamSettings:
-    """Tests for inject_team_settings function."""
-
-    def test_inject_team_settings_with_plugin(self, mock_team_settings):
-        """inject_team_settings should inject team config when plugin exists."""
-        with (
-            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
-            patch(
-                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
-            patch("scc_cli.teams.get_team_sandbox_settings", return_value=mock_team_settings),
-        ):
-            result = docker.inject_team_settings("ai-teamet")
+    def test_reset_global_settings_success(self):
+        """reset_global_settings should return True on success."""
+        with patch(
+            "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+        ) as mock_inject:
+            result = docker.reset_global_settings()
 
             assert result is True
-            mock_inject.assert_called_once()
-            # Verify the content is valid JSON with team settings
-            call_args = mock_inject.call_args
-            assert call_args[0][0] == "settings.json"
-            injected_content = json.loads(call_args[0][1])
-            assert "extraKnownMarketplaces" in injected_content
-            assert "enabledPlugins" in injected_content
+            mock_inject.assert_called_once_with("settings.json", "{}")
 
-    def test_inject_team_settings_no_plugin(self):
-        """inject_team_settings should return True when team has no plugin."""
-        with patch("scc_cli.teams.get_team_sandbox_settings", return_value={}):
-            result = docker.inject_team_settings("base")
-
-            # Should return True (success) without injecting anything
-            assert result is True
-
-    def test_inject_team_settings_merges_with_existing(
-        self, mock_team_settings, mock_existing_settings
-    ):
-        """inject_team_settings should merge with existing settings."""
-        with (
-            patch(
-                "scc_cli.docker.launch.get_sandbox_settings", return_value=mock_existing_settings
-            ),
-            patch(
-                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
-            patch("scc_cli.teams.get_team_sandbox_settings", return_value=mock_team_settings),
-        ):
-            result = docker.inject_team_settings("ai-teamet")
-
-            assert result is True
-            # Verify merged content contains both existing and team settings
-            call_args = mock_inject.call_args
-            injected_content = json.loads(call_args[0][1])
-            # Existing settings preserved
-            assert "statusLine" in injected_content
-            assert "someOtherSetting" in injected_content
-            # Team settings added
-            assert "extraKnownMarketplaces" in injected_content
-            assert "enabledPlugins" in injected_content
-
-    def test_inject_team_settings_team_overrides_existing(self):
-        """inject_team_settings should let team settings override existing."""
-        existing = {"enabledPlugins": ["old-plugin@old-market"]}
-        team = {"enabledPlugins": ["new-plugin@new-market"]}
-
-        with (
-            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=existing),
-            patch(
-                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
-            patch("scc_cli.teams.get_team_sandbox_settings", return_value=team),
-        ):
-            docker.inject_team_settings("test-team")
-
-            call_args = mock_inject.call_args
-            injected_content = json.loads(call_args[0][1])
-            # Team settings should override existing
-            assert injected_content["enabledPlugins"] == ["new-plugin@new-market"]
-
-    def test_inject_team_settings_handles_injection_failure(self, mock_team_settings):
-        """inject_team_settings should return False when injection fails."""
-        with (
-            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
-            patch("scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=False),
-            patch("scc_cli.teams.get_team_sandbox_settings", return_value=mock_team_settings),
-        ):
-            result = docker.inject_team_settings("ai-teamet")
+    def test_reset_global_settings_failure(self):
+        """reset_global_settings should return False on failure."""
+        with patch("scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=False):
+            result = docker.reset_global_settings()
 
             assert result is False
-
-    def test_inject_team_settings_nonexistent_team(self):
-        """inject_team_settings should handle nonexistent team gracefully."""
-        with patch("scc_cli.teams.get_team_sandbox_settings", return_value={}):
-            # Should return True (no plugin to inject is not an error)
-            result = docker.inject_team_settings("nonexistent-team")
-            assert result is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -284,72 +172,3 @@ class TestGetSandboxSettings:
 
             # Should return None due to JSON parse error
             assert result is None
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Integration test scenarios
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestTeamSettingsIntegration:
-    """Integration tests for team settings workflow."""
-
-    def test_full_team_injection_workflow(self, temp_config_dir):
-        """Test complete workflow from config to injection."""
-        from scc_cli import config
-
-        # Setup: Save config with team profile
-        test_config = {
-            "marketplace": {
-                "name": "sundsvall",
-                "repo": "sundsvall/claude-plugins-marketplace",
-            },
-            "profiles": {
-                "ai-teamet": {
-                    "description": "AI platform development",
-                    "additional_plugins": ["ai-teamet@sundsvall"],
-                },
-            },
-        }
-        config.save_config(test_config)
-
-        # Mock Docker operations
-        with (
-            patch("scc_cli.docker.launch.get_sandbox_settings", return_value=None),
-            patch(
-                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
-            ) as mock_inject,
-        ):
-            result = docker.inject_team_settings("ai-teamet")
-
-            assert result is True
-            # Verify correct settings were injected
-            call_args = mock_inject.call_args
-            injected_content = json.loads(call_args[0][1])
-            assert injected_content["enabledPlugins"] == ["ai-teamet@sundsvall"]
-            assert "sundsvall" in injected_content["extraKnownMarketplaces"]
-
-    def test_base_profile_no_injection(self, temp_config_dir):
-        """Test that base profile doesn't inject plugin settings."""
-        from scc_cli import config
-
-        test_config = {
-            "marketplace": {
-                "name": "sundsvall",
-                "repo": "sundsvall/claude-plugins-marketplace",
-            },
-            "profiles": {
-                "base": {
-                    "description": "Default profile",
-                    "additional_plugins": [],
-                },
-            },
-        }
-        config.save_config(test_config)
-
-        with patch("scc_cli.docker.launch.inject_file_to_sandbox_volume") as mock_inject:
-            result = docker.inject_team_settings("base")
-
-            assert result is True
-            # Should not attempt to inject anything
-            mock_inject.assert_not_called()

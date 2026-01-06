@@ -148,28 +148,34 @@ class ChromeConfig:
         """Create config for Quick Resume picker with consistent key hints.
 
         The Quick Resume picker follows the standard TUI key contract:
-        - Enter: Resume the selected context
+        - Enter: Select highlighted item (New Session or resume context)
         - n: Explicitly start a new session (skip resume)
+        - a: Toggle all teams view (show contexts from all teams)
         - Esc: Back/dismiss (cancel wizard from this screen)
         - q: Quit app
 
         Args:
             title: Picker title (typically "Quick Resume").
             subtitle: Optional subtitle (defaults to hint about n/Esc).
-            standalone: If True, dim the "t teams" hint (not available without org).
+            standalone: If True, dim the "t teams" and "a all teams" hints.
 
         Returns:
             ChromeConfig with Quick Resume-specific hints.
         """
+        default_subtitle = "n for new session · a all teams · Esc to go back"
+        if standalone:
+            default_subtitle = "n for new session · Esc to go back"
+
         return cls(
             title=title,
-            subtitle=subtitle or "n for new session · Esc to go back",
+            subtitle=subtitle or default_subtitle,
             show_tabs=False,
             show_search=True,
             footer_hints=(
                 FooterHint("↑↓", "navigate"),
-                FooterHint("Enter", "resume"),
+                FooterHint("Enter", "select"),
                 FooterHint("n", "new session"),
+                FooterHint("a", "all teams", dimmed=standalone),
                 FooterHint("Esc", "back"),
                 FooterHint("q", "quit"),
                 FooterHint("t", "teams", dimmed=standalone),

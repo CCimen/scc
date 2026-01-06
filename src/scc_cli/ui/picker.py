@@ -56,7 +56,12 @@ from .keys import BACK, ActionType, KeyReader, TeamSwitchRequested
 from .list_screen import ListItem, ListMode, ListScreen, ListState
 
 # Re-export for backwards compatibility
-__all__ = ["QuickResumeResult", "TeamSwitchRequested"]
+__all__ = [
+    "QuickResumeResult",
+    "TeamSwitchRequested",
+    "NEW_SESSION_SENTINEL",
+    "SWITCH_TEAM_SENTINEL",
+]
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -70,17 +75,24 @@ T = TypeVar("T")
 class QuickResumeResult(Enum):
     """Result of the Quick Resume picker interaction.
 
-    This enum distinguishes between four distinct user intents:
+    This enum distinguishes between five distinct user intents:
     - SELECTED: User pressed Enter to resume the highlighted context
-    - NEW_SESSION: User pressed 'n' to explicitly start a new session
+    - NEW_SESSION: User pressed 'n' OR selected the "New Session" virtual entry
     - BACK: User pressed Esc to go back to the previous screen
     - CANCELLED: User pressed 'q' to quit the application entirely
+    - TOGGLE_ALL_TEAMS: User pressed 'a' to toggle all-teams view
     """
 
     SELECTED = "selected"
     NEW_SESSION = "new_session"
     BACK = "back"
     CANCELLED = "cancelled"
+    TOGGLE_ALL_TEAMS = "toggle_all_teams"
+
+
+# Sentinel values for virtual entries
+NEW_SESSION_SENTINEL = object()
+SWITCH_TEAM_SENTINEL = object()
 
 
 def pick_team(
@@ -335,17 +347,21 @@ def pick_context(
 def pick_context_quick_resume(
     contexts: Sequence[WorkContext],
     *,
-    title: str = "Recent Contexts",
+    title: str = "Quick Resume",
     subtitle: str | None = None,
     standalone: bool = False,
     current_branch: str | None = None,
     context_label: str | None = None,
+    effective_team: str | None = None,
 ) -> tuple[QuickResumeResult, WorkContext | None]:
-    """Show Quick Resume picker with 4-way result semantics.
+    """Show Quick Resume picker with 5-way result semantics.
 
-    This picker distinguishes between four user intents:
-    - Enter: Resume the selected context (SELECTED)
+    The picker always shows "New Session" as the first (default) option.
+    This picker distinguishes between five user intents:
+    - Enter on "New Session": Start fresh (NEW_SESSION)
+    - Enter on context: Resume the selected context (SELECTED)
     - n: Explicitly start a new session (NEW_SESSION)
+    - a: Toggle all-teams view (TOGGLE_ALL_TEAMS)
     - Esc: Go back to previous screen (BACK)
     - q: Cancel the entire wizard (CANCELLED)
 
@@ -357,6 +373,7 @@ def pick_context_quick_resume(
         current_branch: Current git branch from CWD, used to highlight
             contexts matching this branch with a ★ indicator.
         context_label: Optional context label (e.g., "Team: platform") shown in header.
+        effective_team: The effective team for display in "New Session" label.
 
     Returns:
         Tuple of (QuickResumeResult, selected WorkContext or None).
@@ -372,19 +389,37 @@ def pick_context_quick_resume(
         ...         resume_session(context)
         ...     case QuickResumeResult.NEW_SESSION:
         ...         start_new_session()
+        ...     case QuickResumeResult.TOGGLE_ALL_TEAMS:
+        ...         # Reload with all teams filter
         ...     case QuickResumeResult.BACK:
         ...         continue  # Go back to previous screen
         ...     case QuickResumeResult.CANCELLED:
         ...         return  # Exit wizard
     """
-    if not contexts:
-        return (QuickResumeResult.NEW_SESSION, None)
-
     # Query running containers for status indicators
     running_workspaces = _get_running_workspaces()
 
+    # Build "New Session" virtual entry as first item (always default)
+    team_label = effective_team or "standalone" if not standalone else "standalone"
+    new_session_desc = "Start fresh"
+    if not contexts:
+        new_session_desc = "No sessions yet — press Enter to start"
+    new_session_item: ListItem[WorkContext | object] = ListItem(
+        label=f"➕ New session ({team_label})",
+        description=new_session_desc,
+        value=NEW_SESSION_SENTINEL,
+    )
+
+    switch_team_item: ListItem[WorkContext | object] | None = None
+    if not standalone:
+        switch_team_item = ListItem(
+            label="👥 Switch team",
+            description="Choose a different team",
+            value=SWITCH_TEAM_SENTINEL,
+        )
+
     # Convert contexts to list items with status and branch indicators
-    items = [
+    context_items = [
         format_context(
             context,
             is_running=str(context.worktree_path) in running_workspaces,
@@ -394,6 +429,13 @@ def pick_context_quick_resume(
         )
         for context in contexts
     ]
+
+    # New Session is always first (and default selection)
+    # Build combined list manually to handle type variance
+    items: list[ListItem[Any]] = [new_session_item]
+    if switch_team_item is not None:
+        items.append(switch_team_item)
+    items.extend(context_items)
 
     return _run_quick_resume_picker(
         items=items,
@@ -575,24 +617,27 @@ def _run_quick_resume_picker(
     subtitle: str | None = None,
     standalone: bool = False,
     context_label: str | None = None,
-) -> tuple[QuickResumeResult, T | None]:
-    """Run the Quick Resume picker with 4-way result semantics.
+) -> tuple[QuickResumeResult, WorkContext | None]:
+    """Run the Quick Resume picker with 5-way result semantics.
 
     Unlike the standard single-select picker, this distinguishes between:
-    - Enter: Resume the selected context (SELECTED)
+    - Enter on "New Session": Start fresh (NEW_SESSION)
+    - Enter on context: Resume the selected context (SELECTED)
     - n: Explicitly start a new session (NEW_SESSION)
+    - a: Toggle all-teams view (TOGGLE_ALL_TEAMS)
     - Esc: Go back to previous screen (BACK)
     - q: Cancel the entire wizard (CANCELLED)
 
     Args:
-        items: List items to display (recent contexts).
+        items: List items to display (first item should be "New Session" sentinel).
         title: Title for chrome header.
         subtitle: Optional subtitle.
         standalone: If True, dim the "t teams" hint (not available without org).
         context_label: Optional context label (e.g., "Team: platform") shown in header.
 
     Returns:
-        Tuple of (QuickResumeResult, selected_value or None).
+        Tuple of (QuickResumeResult, selected WorkContext or None).
+        Returns None for context when NEW_SESSION is selected.
     """
     if not items:
         return (QuickResumeResult.NEW_SESSION, None)
@@ -601,8 +646,11 @@ def _run_quick_resume_picker(
 
     console = get_err_console()
     state = ListState(items=items)
-    # 'n' (new session) is screen-specific, not global, to avoid key conflicts
-    reader = KeyReader(custom_keys={"n": "new_session"}, enable_filter=True)
+    # Custom keys: 'n' for new session, 'a' for toggle all teams
+    reader = KeyReader(
+        custom_keys={"n": "new_session", "a": "toggle_all_teams"},
+        enable_filter=True,
+    )
 
     def render() -> RenderableType:
         """Render current picker state."""
@@ -650,7 +698,7 @@ def _run_quick_resume_picker(
         chrome = Chrome(config)
         return chrome.render(body, search_query=filter_query)
 
-    # Run the picker loop with 3-way key handling
+    # Run the picker loop
     with Live(
         render(),
         console=console,
@@ -668,17 +716,27 @@ def _run_quick_resume_picker(
                     state.move_cursor(1)
 
                 case ActionType.SELECT:
-                    # Enter = resume selected context
+                    # Enter = select current item
                     current = state.current_item
                     if current is not None:
-                        return (QuickResumeResult.SELECTED, current.value)
+                        # Check for virtual entries first
+                        if current.value is NEW_SESSION_SENTINEL:
+                            return (QuickResumeResult.NEW_SESSION, None)
+                        if current.value is SWITCH_TEAM_SENTINEL:
+                            raise TeamSwitchRequested()
+                        # Otherwise it's a WorkContext
+                        # Type ignore: we know context_items contain WorkContext values
+                        return (QuickResumeResult.SELECTED, current.value)  # type: ignore[return-value]
                     return (QuickResumeResult.NEW_SESSION, None)
 
                 case ActionType.CUSTOM:
-                    # Handle screen-specific custom keys (e.g., 'n' for new session)
-                    if action.custom_key == "n":
+                    # Handle screen-specific custom keys
+                    if action.custom_key == "new_session":
                         # n = explicitly start new session (skip resume)
                         return (QuickResumeResult.NEW_SESSION, None)
+                    elif action.custom_key == "toggle_all_teams":
+                        # a = toggle all teams view (caller handles reload)
+                        return (QuickResumeResult.TOGGLE_ALL_TEAMS, None)
 
                 case ActionType.CANCEL:
                     # Esc = go back to previous screen

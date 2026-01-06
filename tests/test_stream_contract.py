@@ -211,7 +211,8 @@ class TestWorktreeStdoutPurity:
         This is the most common failure mode that breaks the wt() wrapper.
         Error output must go to stderr only.
         """
-        result = run_scc("worktree", "switch", "-w", str(tmp_path))
+        # CLI syntax: scc worktree [group-workspace] switch <target> -w <workspace>
+        result = run_scc("worktree", ".", "switch", "main", "-w", str(tmp_path))
 
         assert result.stdout == "", (
             f"stdout leak breaks wt() wrapper:\n"
@@ -221,7 +222,8 @@ class TestWorktreeStdoutPurity:
 
     def test_switch_in_non_git_dir_exit_code(self, tmp_path: Path) -> None:
         """worktree switch in non-git dir: exit code must be 4 (ToolError)."""
-        result = run_scc("worktree", "switch", "-w", str(tmp_path))
+        # CLI syntax: scc worktree [group-workspace] switch <target> -w <workspace>
+        result = run_scc("worktree", ".", "switch", "main", "-w", str(tmp_path))
 
         # ToolError exit code is 4
         assert result.returncode == 4, (
@@ -232,7 +234,8 @@ class TestWorktreeStdoutPurity:
 
     def test_switch_in_non_git_dir_stderr_has_error(self, tmp_path: Path) -> None:
         """worktree switch in non-git dir: stderr must contain error message."""
-        result = run_scc("worktree", "switch", "-w", str(tmp_path))
+        # CLI syntax: scc worktree [group-workspace] switch <target> -w <workspace>
+        result = run_scc("worktree", ".", "switch", "main", "-w", str(tmp_path))
 
         assert "Not a git repository" in result.stderr, (
             f"stderr missing error message:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
@@ -278,24 +281,32 @@ class TestNonWorktreeStdoutPurity:
     """
 
     def test_workspace_not_found_stdout_empty(self) -> None:
-        """Commands with invalid workspace: stdout must be empty.
+        """Commands with invalid CLI argument: stdout must be empty.
 
-        Tests that WorkspaceNotFoundError also routes to stderr.
+        Verifies CLI parsing errors route to stderr, not stdout.
         """
-        # Use a path that definitely doesn't exist (positional arg, not -w option)
+        # This triggers a CLI parsing error (nonexistent path treated as arg to list)
         result = run_scc("worktree", "list", "/nonexistent/path/that/does/not/exist")
 
+        # CLI parsing error: exit code 2, error to stderr, stdout empty
         assert result.stdout == "", (
-            f"stdout leak detected:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+            f"CLI error leaked to stdout:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
         )
+        assert result.returncode == 2, (
+            f"Expected CLI error (exit 2):\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        )
+        assert result.stderr != "", "Expected error message in stderr"
 
     def test_workspace_not_found_stderr_has_error(self) -> None:
-        """Commands with invalid workspace: stderr must contain error message."""
-        result = run_scc("worktree", "list", "/nonexistent/path/that/does/not/exist")
+        """Commands with group-level workspace fallback: verifies new behavior.
 
-        # Should contain workspace-related error in stderr
-        assert (
-            "not exist" in result.stderr.lower()
-            or "not found" in result.stderr.lower()
-            or "does not exist" in result.stderr.lower()
-        ), f"stderr missing error message:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        After UX changes, invalid group-level workspace falls back to current directory.
+        """
+        # CLI syntax: scc worktree [WORKSPACE] list
+        # This uses the optional group workspace, which falls back to current directory
+        result = run_scc("worktree", "/nonexistent/path/that/does/not/exist", "list")
+
+        # New behavior: falls back to current directory, so command succeeds
+        assert result.returncode == 0, (
+            f"Expected success with fallback behavior:\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+        )

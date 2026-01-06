@@ -230,9 +230,19 @@ class TestWorktreeCommand:
             patch("rich.prompt.Confirm.ask", return_value=False),  # Don't start claude
         ):
             mock_deps.return_value = True
+            # CLI structure: scc worktree [group-workspace] create <workspace> <name>
+            # The "." is needed as explicit group workspace so Typer knows "create" is the subcommand
             runner.invoke(
                 app,
-                ["worktree", "create", str(tmp_path), "feature-x", "--install-deps", "--no-start"],
+                [
+                    "worktree",
+                    ".",
+                    "create",
+                    str(tmp_path),
+                    "feature-x",
+                    "--install-deps",
+                    "--no-start",
+                ],
             )
         mock_deps.assert_called_once_with(worktree_path)
 
@@ -259,7 +269,8 @@ class TestSessionsCommand:
             "scc_cli.commands.worktree.session_commands.sessions.list_recent",
             return_value=mock_sessions,
         ):
-            result = runner.invoke(app, ["sessions"])
+            # Use --all to bypass team filtering
+            result = runner.invoke(app, ["sessions", "--all"])
         assert result.exit_code == 0
         assert "session1" in result.output
 
@@ -277,7 +288,8 @@ class TestSessionsCommand:
             patch("scc_cli.commands.worktree.session_commands.pick_session") as mock_select,
         ):
             mock_select.return_value = mock_sessions[0]
-            runner.invoke(app, ["sessions", "--select"])
+            # Use --all to bypass team filtering
+            runner.invoke(app, ["sessions", "--select", "--all"])
         # Should have called pick_session for interactive picker
         mock_select.assert_called_once()
 

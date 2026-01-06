@@ -160,7 +160,7 @@ class TestPickWorkspaceSourceTopLevel:
             assert context_label == "Team: platform"
 
     def test_subtitle_default_without_team(self) -> None:
-        """Subtitle has default when no team specified."""
+        """Subtitle has default when no team specified, with hint to switch team."""
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             mock_picker.return_value = None
             pick_workspace_source(team=None)
@@ -168,7 +168,9 @@ class TestPickWorkspaceSourceTopLevel:
             call_args = mock_picker.call_args
             subtitle = call_args.kwargs["subtitle"]
 
-            assert subtitle == "Pick a project source"
+            # Subtitle now includes hint for team switching
+            assert "Pick a project source" in subtitle
+            assert "'t'" in subtitle or "switch team" in subtitle
 
 
 class TestPickWorkspaceSourceWithAllowBack:

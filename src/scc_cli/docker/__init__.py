@@ -75,7 +75,7 @@ from .launch import (
     get_sandbox_settings,
     inject_file_to_sandbox_volume,
     inject_settings,
-    inject_team_settings,
+    reset_global_settings,
     run,
     run_sandbox,
 )
@@ -113,7 +113,7 @@ __all__ = [
     "inject_file_to_sandbox_volume",
     "get_sandbox_settings",
     "inject_settings",
-    "inject_team_settings",
+    "reset_global_settings",
     # High-level launch functions
     "run",
     "run_sandbox",

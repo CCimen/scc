@@ -74,8 +74,8 @@ def test_pinned_team_prompt_declines() -> None:
     assert result == "platform"
 
 
-def test_noninteractive_uses_pinned_team_with_notice() -> None:
-    """Non-interactive flow should pick pinned team and warn."""
+def test_noninteractive_uses_selected_profile_with_notice() -> None:
+    """Non-interactive flow should prefer selected_profile (explicit user choice) over pinned team."""
     workspace = Path("/tmp/project")
     workspace_key = str(workspace.resolve())
     cfg = {
@@ -95,5 +95,7 @@ def test_noninteractive_uses_pinned_team_with_notice() -> None:
             standalone=False,
         )
 
-    assert result == "data"
+    # Should use selected_profile (explicit user action via `scc team switch`)
+    # rather than pinned team (auto-saved from previous session)
+    assert result == "platform"
     assert mock_print.called

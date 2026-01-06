@@ -71,14 +71,15 @@ class TestResumeFlag:
 
     def test_resume_auto_selects_recent_session(self, mock_session):
         """--resume without workspace should use most recent session."""
+        # Mock session with no team (standalone mode)
+        standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch(
-                "scc_cli.commands.launch.app.sessions.get_most_recent", return_value=mock_session
-            ) as mock_recent,
+                "scc_cli.commands.launch.app.sessions.list_recent",
+                return_value=[standalone_session],
+            ) as mock_list,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch(
                 "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
@@ -95,23 +96,25 @@ class TestResumeFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            result = runner.invoke(app, ["start", "--resume"])
+            # Use --standalone flag to bypass team filtering
+            result = runner.invoke(app, ["start", "--resume", "--standalone"])
 
-        # Should have called get_most_recent
-        mock_recent.assert_called_once()
+        # Should have called list_recent (new implementation filters by team)
+        mock_list.assert_called_once()
         # Should indicate resuming
         assert "Resuming" in result.output or result.exit_code == 0
 
     def test_resume_short_flag_works(self, mock_session):
         """-r short flag should work like --resume."""
+        # Mock session with no team (standalone mode)
+        standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch(
-                "scc_cli.commands.launch.app.sessions.get_most_recent", return_value=mock_session
-            ) as mock_recent,
+                "scc_cli.commands.launch.app.sessions.list_recent",
+                return_value=[standalone_session],
+            ) as mock_list,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch(
                 "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
@@ -128,20 +131,20 @@ class TestResumeFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            _result = runner.invoke(app, ["start", "-r"])
+            # Use --standalone flag to bypass team filtering
+            _result = runner.invoke(app, ["start", "-r", "--standalone"])
 
-        mock_recent.assert_called_once()
+        mock_list.assert_called_once()
 
     def test_resume_without_sessions_shows_error(self):
         """--resume with no sessions should show appropriate error."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch("scc_cli.commands.launch.app.sessions.get_most_recent", return_value=None),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.sessions.list_recent", return_value=[]),
         ):
-            result = runner.invoke(app, ["start", "--resume"])
+            # Use --standalone flag to bypass team filtering
+            result = runner.invoke(app, ["start", "--resume", "--standalone"])
 
         assert result.exit_code != 0 or "no recent" in result.output.lower()
 
@@ -156,17 +159,18 @@ class TestSelectFlag:
 
     def test_select_shows_session_picker(self, mock_sessions_list, mock_session):
         """--select should trigger the session picker UI."""
+        # Sessions need team=None for standalone mode filtering
+        standalone_sessions = [{**s, "team": None} for s in mock_sessions_list]
+        standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.sessions.list_recent", return_value=standalone_sessions
             ),
             patch(
-                "scc_cli.commands.launch.app.sessions.list_recent", return_value=mock_sessions_list
-            ),
-            patch(
-                "scc_cli.commands.launch.app.select_session", return_value=mock_session
+                "scc_cli.commands.launch.app.select_session", return_value=standalone_session
             ) as mock_picker,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch(
@@ -184,24 +188,26 @@ class TestSelectFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            _result = runner.invoke(app, ["start", "--select"])
+            # Use --standalone flag to bypass team filtering
+            _result = runner.invoke(app, ["start", "--select", "--standalone"])
 
         # Should have called the session picker
         mock_picker.assert_called_once()
 
     def test_select_short_flag_works(self, mock_sessions_list, mock_session):
         """-s short flag should work like --select."""
+        # Sessions need team=None for standalone mode filtering
+        standalone_sessions = [{**s, "team": None} for s in mock_sessions_list]
+        standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.sessions.list_recent", return_value=standalone_sessions
             ),
             patch(
-                "scc_cli.commands.launch.app.sessions.list_recent", return_value=mock_sessions_list
-            ),
-            patch(
-                "scc_cli.commands.launch.app.select_session", return_value=mock_session
+                "scc_cli.commands.launch.app.select_session", return_value=standalone_session
             ) as mock_picker,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch(
@@ -219,7 +225,8 @@ class TestSelectFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            _result = runner.invoke(app, ["start", "-s"])
+            # Use --standalone flag to bypass team filtering
+            _result = runner.invoke(app, ["start", "-s", "--standalone"])
 
         mock_picker.assert_called_once()
 
@@ -228,12 +235,11 @@ class TestSelectFlag:
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch("scc_cli.commands.launch.app.sessions.list_recent", return_value=[]),
         ):
-            result = runner.invoke(app, ["start", "--select"])
+            # Use --standalone flag to bypass team filtering
+            result = runner.invoke(app, ["start", "--select", "--standalone"])
 
         # Should not crash and should indicate no sessions
         assert result.exit_code in (0, 1)
@@ -241,20 +247,21 @@ class TestSelectFlag:
 
     def test_select_user_cancels_exits_gracefully(self, mock_sessions_list):
         """--select should exit gracefully when user cancels picker."""
+        # Sessions need team=None for standalone mode filtering
+        standalone_sessions = [{**s, "team": None} for s in mock_sessions_list]
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch(
-                "scc_cli.commands.launch.app.sessions.list_recent", return_value=mock_sessions_list
+                "scc_cli.commands.launch.app.sessions.list_recent", return_value=standalone_sessions
             ),
             patch(
                 "scc_cli.commands.launch.app.select_session", return_value=None
             ),  # User cancelled
         ):
-            result = runner.invoke(app, ["start", "--select"])
+            # Use --standalone flag to bypass team filtering
+            result = runner.invoke(app, ["start", "--select", "--standalone"])
 
         # User cancellation should exit with EXIT_CANCELLED
         assert result.exit_code == EXIT_CANCELLED
@@ -270,14 +277,15 @@ class TestContinueAlias:
 
     def test_continue_is_alias_for_resume(self, mock_session):
         """--continue should have same behavior as --resume."""
+        # Mock session with no team (standalone mode)
+        standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch(
-                "scc_cli.commands.launch.app.sessions.get_most_recent", return_value=mock_session
-            ) as mock_recent,
+                "scc_cli.commands.launch.app.sessions.list_recent",
+                return_value=[standalone_session],
+            ) as mock_list,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch(
                 "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
@@ -294,21 +302,23 @@ class TestContinueAlias:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            _result = runner.invoke(app, ["start", "--continue"])
+            # Use --standalone flag to bypass team filtering
+            _result = runner.invoke(app, ["start", "--continue", "--standalone"])
 
-        # Should behave like --resume (call get_most_recent)
-        mock_recent.assert_called_once()
+        # Should behave like --resume (call list_recent)
+        mock_list.assert_called_once()
 
     def test_continue_short_c_flag_works(self, mock_session):
         """-c short flag should work as alias."""
+        # Mock session with no team (standalone mode)
+        standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
-            ),
-            patch(
-                "scc_cli.commands.launch.app.sessions.get_most_recent", return_value=mock_session
-            ) as mock_recent,
+                "scc_cli.commands.launch.app.sessions.list_recent",
+                return_value=[standalone_session],
+            ) as mock_list,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch(
                 "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
@@ -325,9 +335,10 @@ class TestContinueAlias:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            _result = runner.invoke(app, ["start", "-c"])
+            # Use --standalone flag to bypass team filtering
+            _result = runner.invoke(app, ["start", "-c", "--standalone"])
 
-        mock_recent.assert_called_once()
+        mock_list.assert_called_once()
 
     def test_continue_flag_is_hidden(self):
         """--continue should be hidden from help output."""

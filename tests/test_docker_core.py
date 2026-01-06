@@ -686,6 +686,7 @@ class TestRun:
                 "scc_cli.docker.launch.write_safety_net_policy_to_host",
                 return_value=None,
             ),
+            patch("scc_cli.docker.launch.reset_global_settings", return_value=True),
             patch("subprocess.run", side_effect=FileNotFoundError()),
         ):
             with pytest.raises(SandboxLaunchError) as exc_info:
@@ -701,6 +702,7 @@ class TestRun:
                 "scc_cli.docker.launch.write_safety_net_policy_to_host",
                 return_value=None,
             ),
+            patch("scc_cli.docker.launch.reset_global_settings", return_value=True),
             patch("subprocess.run", side_effect=OSError("Permission denied")),
         ):
             with pytest.raises(SandboxLaunchError):
@@ -717,6 +719,7 @@ class TestRun:
                 "scc_cli.docker.launch.write_safety_net_policy_to_host",
                 return_value=None,
             ),
+            patch("scc_cli.docker.launch.reset_global_settings", return_value=True),
             patch("subprocess.run", return_value=mock_result) as mock_subprocess,
         ):
             result = docker.run(["docker", "sandbox", "run"])
