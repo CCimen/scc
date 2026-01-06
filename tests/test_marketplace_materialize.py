@@ -119,6 +119,7 @@ class TestMaterializedMarketplace:
         now = datetime.now(timezone.utc)
         marketplace = MaterializedMarketplace(
             name="internal",
+            canonical_name="claude-plugins",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -131,6 +132,7 @@ class TestMaterializedMarketplace:
         )
 
         assert marketplace.name == "internal"
+        assert marketplace.canonical_name == "claude-plugins"
         assert marketplace.relative_path == ".claude/.scc-marketplaces/internal"
         assert marketplace.source_type == "github"
         assert marketplace.commit_sha == "abc123def456"
@@ -143,6 +145,7 @@ class TestMaterializedMarketplace:
         # Valid relative path should work
         marketplace = MaterializedMarketplace(
             name="test",
+            canonical_name="test",
             relative_path=".claude/.scc-marketplaces/test",
             source_type="directory",
             source_url="/local/path",
@@ -162,6 +165,7 @@ class TestMaterializedMarketplace:
         now = datetime.now(timezone.utc)
         marketplace = MaterializedMarketplace(
             name="internal",
+            canonical_name="claude-plugins",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -175,6 +179,7 @@ class TestMaterializedMarketplace:
 
         data = marketplace.to_dict()
         assert data["name"] == "internal"
+        assert data["canonical_name"] == "claude-plugins"
         assert data["source_type"] == "github"
         assert "materialized_at" in data
 
@@ -254,6 +259,7 @@ class TestManifestManagement:
 
         marketplace = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -290,6 +296,7 @@ class TestManifestManagement:
         # Save new manifest
         marketplace = MaterializedMarketplace(
             name="new",
+            canonical_name="new",
             relative_path=".claude/.scc-marketplaces/new",
             source_type="directory",
             source_url="/local",
@@ -613,6 +620,7 @@ class TestMaterializeMarketplace:
 
         mock_result = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -651,6 +659,7 @@ class TestMaterializeMarketplace:
 
         mock_result = MaterializedMarketplace(
             name="gitlab",
+            canonical_name="gitlab",
             relative_path=".claude/.scc-marketplaces/gitlab",
             source_type="git",
             source_url="https://gitlab.example.se/ai/plugins.git",
@@ -691,6 +700,7 @@ class TestMaterializeMarketplace:
 
         mock_result = MaterializedMarketplace(
             name="local",
+            canonical_name="local",
             relative_path=".claude/.scc-marketplaces/local",
             source_type="directory",
             source_url="/path/to/local/plugins",
@@ -729,6 +739,7 @@ class TestMaterializeMarketplace:
 
         mock_result = MaterializedMarketplace(
             name="remote",
+            canonical_name="remote",
             relative_path=".claude/.scc-marketplaces/remote",
             source_type="url",
             source_url="https://plugins.example.se/marketplace.tar.gz",
@@ -778,6 +789,7 @@ class TestCacheReuse:
         # Pre-populate cache
         existing = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -823,6 +835,7 @@ class TestCacheReuse:
         # Pre-populate stale cache
         existing = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -846,7 +859,7 @@ class TestCacheReuse:
             patch("scc_cli.marketplace.materialize.is_cache_fresh", return_value=False),
         ):
             mock_clone.return_value = MagicMock(
-                success=True, commit_sha="new456", plugins=["new-tool"]
+                success=True, commit_sha="new456", plugins=["new-tool"], canonical_name="internal"
             )
 
             result = materialize_marketplace(
@@ -871,6 +884,7 @@ class TestCacheReuse:
         # Pre-populate fresh cache
         existing = MaterializedMarketplace(
             name="internal",
+            canonical_name="internal",
             relative_path=".claude/.scc-marketplaces/internal",
             source_type="github",
             source_url="https://github.com/sundsvall/claude-plugins",
@@ -891,7 +905,7 @@ class TestCacheReuse:
 
         with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(
-                success=True, commit_sha="forced789", plugins=["tool"]
+                success=True, commit_sha="forced789", plugins=["tool"], canonical_name="internal"
             )
 
             result = materialize_marketplace(
@@ -943,6 +957,7 @@ class TestPathValidation:
 
         marketplace = MaterializedMarketplace(
             name="test",
+            canonical_name="test",
             relative_path=".claude/.scc-marketplaces/test",
             source_type="directory",
             source_url="/absolute/path/to/source",  # Source URL can be absolute

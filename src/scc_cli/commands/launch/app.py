@@ -301,6 +301,18 @@ def _sync_marketplace_settings(
                     f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
                 )
 
+            # Inject marketplace settings into Docker sandbox volume
+            # This bridges the gap between workspace settings and Docker volume
+            if result.settings_path and result.settings_path.exists():
+                import json
+
+                try:
+                    settings_data = json.loads(result.settings_path.read_text())
+                    docker.inject_settings(settings_data)
+                except (json.JSONDecodeError, OSError):
+                    # Non-fatal: settings were written to workspace, just not injected
+                    pass
+
             return result
 
         except SyncError as e:
