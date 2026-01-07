@@ -45,6 +45,7 @@ When you run `scc` or `scc start`:
 - **Auto-detects workspace** from git repository root or `.scc.yaml` location
 - **Shows Quick Resume** if you have recent sessions for this workspace
 - **Prints brief context** (workspace root, entry directory, team) before launching
+- **Applies personal profile** (if saved) after team config, before workspace overrides
 - **Safety guard**: Won't auto-launch from suspicious directories (home, `/tmp`). Explicit paths like `scc start ~/` prompt for confirmation
 
 **Keyboard shortcuts in interactive mode:**
@@ -74,6 +75,7 @@ When you run `scc` or `scc start`:
 - **Organization security policies** — applied automatically, no action needed
 - **Command guardrails** — block destructive git commands like `push --force` (when scc-safety-net plugin is enabled)
 - **Isolated git worktrees** — your main branch stays clean while Claude experiments
+- **Personal profiles (optional)** — save your own plugin/MCP preferences per project
 
 **What you never need to do:**
 - Edit config files manually
@@ -92,6 +94,7 @@ Your org admin and team lead handle the configuration. You just code.
 | Default plugins for all teams | ✅ **Sets** | — | — |
 | Team-specific plugins | ✅ Approves | ✅ **Chooses** | — |
 | Project-local config (.scc.yaml) | ✅ Can restrict | ✅ Can restrict | ✅ **Extends** |
+| Personal profiles (local) | ✅ Governed by security blocks | ✅ Governed by delegation | ✅ **Chooses** |
 | Safety-net policy (block/warn) | ✅ **Sets** | ❌ Cannot override | ❌ Cannot override |
 
 Organization security blocks cannot be overridden by teams or developers.
@@ -169,6 +172,31 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 
 ---
 
+### Personal Profiles
+
+Want your own plugins or MCP servers without committing anything? Personal profiles are per‑project, stored outside the repo, and auto‑applied on `scc start`.
+
+```bash
+# Save current workspace preferences
+scc profile save
+
+# Apply or preview
+scc profile apply
+scc profile apply --preview
+
+# Check status/drift
+scc profile status
+```
+
+Sync across machines with any git host:
+
+```bash
+scc profile export --repo ~/dotfiles/scc-profiles
+scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
+```
+
+---
+
 ## Commands
 
 ### Essential Commands
@@ -196,6 +224,18 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 | `scc worktree create <repo> <name>` | Create git worktree for parallel development |
 | `scc worktree enter [target]` | Enter worktree in subshell (no shell config needed) |
 | `scc worktree list -v` | List worktrees with git status |
+
+### Personal Profiles
+
+| Command | Description |
+|---------|-------------|
+| `scc profile save` | Save current workspace settings as a personal profile |
+| `scc profile apply` | Apply profile to current workspace |
+| `scc profile diff` | Show diff between profile and workspace |
+| `scc profile status` | Show whether a profile exists and if drift is detected |
+| `scc profile export --repo PATH` | Export profiles to a local repo |
+| `scc profile import --repo PATH` | Import profiles from a local repo |
+| `scc profile sync --repo PATH` | Pull/import + export + optional commit/push |
 
 ### Governance & Admin
 

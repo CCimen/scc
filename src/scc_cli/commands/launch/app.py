@@ -28,6 +28,7 @@ from ...cli_common import (
 )
 from ...confirm import Confirm
 from ...contexts import load_recent_contexts, normalize_path
+from ...core import personal_profiles
 from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
 from ...json_output import build_envelope
@@ -366,6 +367,79 @@ def _sync_marketplace_settings(
             return None
 
 
+def _apply_personal_profile(
+    workspace_path: Path,
+    *,
+    json_mode: bool,
+    non_interactive: bool,
+) -> tuple[str | None, bool]:
+    """Apply personal profile if available.
+
+    Returns (profile_id, applied).
+    """
+    profile, corrupt = personal_profiles.load_personal_profile_with_status(workspace_path)
+    if corrupt:
+        if not json_mode:
+            console.print("[yellow]Personal profile is invalid JSON. Skipping.[/yellow]")
+        return None, False
+    if profile is None:
+        return None, False
+
+    drift = personal_profiles.detect_drift(workspace_path)
+    if drift and not personal_profiles.workspace_has_overrides(workspace_path):
+        drift = False
+
+    if drift and not is_interactive_allowed(
+        json_mode=json_mode, no_interactive_flag=non_interactive
+    ):
+        if not json_mode:
+            console.print(
+                "[yellow]Workspace overrides detected; personal profile not applied.[/yellow]"
+            )
+        return profile.profile_id, False
+
+    if drift and not json_mode:
+        console.print("[yellow]Workspace overrides detected.[/yellow]")
+        if not Confirm.ask("Apply personal profile anyway?", default=False):
+            return profile.profile_id, False
+
+    existing_settings, settings_invalid = personal_profiles.load_workspace_settings_with_status(
+        workspace_path
+    )
+    existing_mcp, mcp_invalid = personal_profiles.load_workspace_mcp_with_status(workspace_path)
+    if settings_invalid:
+        if not json_mode:
+            console.print("[yellow]Invalid JSON in .claude/settings.local.json[/yellow]")
+        return profile.profile_id, False
+    if mcp_invalid:
+        if not json_mode:
+            console.print("[yellow]Invalid JSON in .mcp.json[/yellow]")
+        return profile.profile_id, False
+
+    existing_settings = existing_settings or {}
+    existing_mcp = existing_mcp or {}
+
+    merged_settings = personal_profiles.merge_personal_settings(
+        workspace_path, existing_settings, profile.settings or {}
+    )
+    merged_mcp = personal_profiles.merge_personal_mcp(existing_mcp, profile.mcp or {})
+
+    personal_profiles.write_workspace_settings(workspace_path, merged_settings)
+    if profile.mcp:
+        personal_profiles.write_workspace_mcp(workspace_path, merged_mcp)
+
+    personal_profiles.save_applied_state(
+        workspace_path,
+        profile.profile_id,
+        personal_profiles.compute_fingerprints(workspace_path),
+    )
+
+    if not json_mode:
+        console.print("[green]Applied personal profile.[/green]")
+
+    return profile.profile_id, True
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Launch App
 # ─────────────────────────────────────────────────────────────────────────────
@@ -552,14 +626,39 @@ def start(
         if not offline:
             _sync_marketplace_settings(workspace_path, team)
 
-    # ── Step 6.6: Resolve mount path for worktrees (needed for dry-run too) ────
+    # ── Step 6.55: Apply personal profile (local overlay) ─────────────────────
+    personal_profile_id = None
+    personal_applied = False
+    if not dry_run and workspace_path is not None:
+        personal_profile_id, personal_applied = _apply_personal_profile(
+            workspace_path,
+            json_mode=(json_output or pretty),
+            non_interactive=non_interactive,
+        )
+
+    # ── Step 6.6: Active stack summary ───────────────────────────────────────
+    if not (json_output or pretty) and workspace_path is not None:
+        personal_label = "project" if personal_profile_id else "none"
+        if personal_profile_id and not personal_applied:
+            personal_label = "skipped"
+        workspace_label = (
+            "overrides" if personal_profiles.workspace_has_overrides(workspace_path) else "none"
+        )
+        console.print(
+            "[dim]Active stack:[/dim] "
+            f"Team: {team or 'standalone'} | "
+            f"Personal: {personal_label} | "
+            f"Workspace: {workspace_label}"
+        )
+
+    # ── Step 6.7: Resolve mount path for worktrees (needed for dry-run too) ────
     # At this point workspace_path is guaranteed to exist (validated above)
     assert workspace_path is not None
     mount_path, current_branch = resolve_mount_and_branch(
         workspace_path, json_mode=(json_output or pretty)
     )
 
-    # ── Step 6.7: Handle --dry-run (preview without launching) ────────────────
+    # ── Step 6.8: Handle --dry-run (preview without launching) ────────────────
     if dry_run:
         # Use resolver for consistent ED/MR/CW (single source of truth)
         from ...services.workspace import resolve_launch_context

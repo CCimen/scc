@@ -36,6 +36,7 @@ from .commands.init import init_cmd
 # Import command functions from domain modules
 from .commands.launch import start
 from .commands.org import org_app
+from .commands.profile import profile_app
 from .commands.support import support_app
 from .commands.team import team_app
 from .commands.worktree import (
@@ -265,6 +266,7 @@ app.command(name="prune", rich_help_panel=PANEL_SESSION)(prune_cmd)
 
 # Configuration commands
 app.add_typer(team_app, name="team", rich_help_panel=PANEL_CONFIG)
+app.add_typer(profile_app, name="profile", rich_help_panel=PANEL_CONFIG)
 app.command(name="setup", rich_help_panel=PANEL_CONFIG)(setup_cmd)
 app.command(name="config", rich_help_panel=PANEL_CONFIG)(config_cmd)
 app.command(name="init", rich_help_panel=PANEL_CONFIG)(init_cmd)

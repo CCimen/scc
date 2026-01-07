@@ -6,6 +6,7 @@ import typer
 
 from .. import config, profiles, setup
 from ..cli_common import console, handle_errors
+from ..core import personal_profiles
 from ..core.exit_codes import EXIT_USAGE
 from ..panels import create_error_panel, create_info_panel
 from ..source_resolver import ResolveError, resolve_source
@@ -279,6 +280,9 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
     # Show decisions (config values with source attribution)
     _render_config_decisions(effective, field_filter)
 
+    # Show personal profile additions (if any)
+    _render_personal_profile(ws_path, field_filter)
+
     # Show blocked items
     if effective.blocked_items and (not field_filter or field_filter == "blocked"):
         _render_blocked_items(effective.blocked_items)
@@ -388,6 +392,34 @@ def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: 
         else:
             console.print("  [dim]None configured[/dim]")
         console.print()
+
+
+def _render_personal_profile(ws_path: Path, field_filter: str | None) -> None:
+    profile = personal_profiles.load_personal_profile(ws_path)
+    if profile is None:
+        return
+
+    if field_filter and field_filter not in {"plugins", "mcp_servers"}:
+        return
+
+    console.print("[bold magenta]Personal Profile[/bold magenta]")
+    console.print(f"  Repo: {profile.repo_id}")
+
+    plugins = personal_profiles.extract_personal_plugins(profile)
+    if not field_filter or field_filter == "plugins":
+        if plugins:
+            for plugin in sorted(plugins):
+                console.print(f"  [green]+[/green] {plugin} [dim](personal)[/dim]")
+        else:
+            console.print("  [dim]No personal plugins saved[/dim]")
+
+    if not field_filter or field_filter == "mcp_servers":
+        if profile.mcp:
+            console.print("  [green]+[/green] .mcp.json [dim](personal)[/dim]")
+        else:
+            console.print("  [dim]No personal MCP config saved[/dim]")
+
+    console.print()
 
 
 def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:

@@ -11,6 +11,8 @@ both CLI and non-CLI code (tests, background tasks, etc.).
 
 from __future__ import annotations
 
+from . import personal_profiles
+
 # Explicit public API exports
 from .constants import CLI_VERSION
 from .errors import (
@@ -65,4 +67,5 @@ __all__ = [
     "EXIT_CANCELLED",
     "EXIT_CODE_MAP",
     "get_exit_code_for_exception",
+    "personal_profiles",
 ]
