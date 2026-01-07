@@ -80,7 +80,10 @@ class SandboxNotAvailableError(PrerequisiteError):
 
     user_message: str = field(default="Docker sandbox feature is not available")
     suggested_action: str = field(
-        default="Ensure Docker Desktop is version 4.50+ and sandbox feature is enabled"
+        default=(
+            "Ensure Docker Desktop 4.50+ is installed and the sandbox CLI is available. "
+            "Run 'docker sandbox --help' to verify and check your PATH for Docker Desktop."
+        )
     )
 
 
@@ -207,6 +210,15 @@ class SandboxLaunchError(ToolError):
     suggested_action: str = field(
         default="Check Docker Desktop is running and has available resources"
     )
+
+    def __post_init__(self) -> None:
+        # Call parent to set debug_context from command/stderr
+        super().__post_init__()
+        # Always show stderr in suggested_action (don't hide behind debug flag)
+        if self.stderr and self.stderr.strip():
+            self.suggested_action = (
+                f"{self.suggested_action}\n\nDocker error: {self.stderr.strip()}"
+            )
 
 
 @dataclass

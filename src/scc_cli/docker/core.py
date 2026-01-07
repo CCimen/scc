@@ -64,20 +64,20 @@ def check_docker_available() -> None:
 
     Raises:
         DockerNotFoundError: Docker is not installed
-        DockerVersionError: Docker version is too old
+        DockerVersionError: Docker Desktop version is too old
         SandboxNotAvailableError: Sandbox feature not available
     """
     # Check Docker is installed
     if not _check_docker_installed():
         raise DockerNotFoundError()
 
-    # Check Docker version
-    version = get_docker_version()
-    if version:
-        current = _parse_version(version)
+    # Check Docker Desktop version when available (sandbox requirement)
+    desktop_version = get_docker_desktop_version()
+    if desktop_version:
+        current = _parse_version(desktop_version)
         required = _parse_version(MIN_DOCKER_VERSION)
         if current < required:
-            raise DockerVersionError(current_version=version)
+            raise DockerVersionError(current_version=desktop_version)
 
     # Check sandbox command exists
     if not check_docker_sandbox():
@@ -88,12 +88,28 @@ def check_docker_sandbox() -> bool:
     """Check whether Docker sandbox feature is available (Docker Desktop 4.50+)."""
     if not _check_docker_installed():
         return False
-    return run_command_bool(["docker", "sandbox", "--help"], timeout=10)
+
+    output = run_command(["docker", "sandbox", "--help"], timeout=10)
+    if not output:
+        return False
+
+    normalized = output.lower()
+    # True sandbox CLI prints a specific help header (not generic docker help)
+    return (
+        "docker sandbox" in normalized
+        or "sandbox run" in normalized
+        or "run an ai agent inside a sandbox" in normalized
+    )
 
 
 def get_docker_version() -> str | None:
     """Get Docker version string."""
     return run_command(["docker", "--version"], timeout=5)
+
+
+def get_docker_desktop_version() -> str | None:
+    """Get Docker Desktop version string, if available."""
+    return run_command(["docker", "desktop", "version"], timeout=5)
 
 
 def generate_container_name(workspace: Path, branch: str | None = None) -> str:

@@ -512,7 +512,10 @@ class TestCheckDockerAvailable:
         """Should raise DockerVersionError when version is too old."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.core.get_docker_version", return_value="4.0.0"),
+            patch(
+                "scc_cli.docker.core.get_docker_desktop_version",
+                return_value="Docker Desktop 4.0.0",
+            ),
             patch("scc_cli.docker.core.check_docker_sandbox", return_value=True),
         ):
             with pytest.raises(DockerVersionError):
@@ -522,7 +525,7 @@ class TestCheckDockerAvailable:
         """Should raise SandboxNotAvailableError when sandbox not available."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.core.get_docker_version", return_value="27.5.1"),
+            patch("scc_cli.docker.core.get_docker_desktop_version", return_value=None),
             patch("scc_cli.docker.core.check_docker_sandbox", return_value=False),
         ):
             with pytest.raises(SandboxNotAvailableError):
@@ -532,7 +535,10 @@ class TestCheckDockerAvailable:
         """Should not raise when all requirements are met."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.core.get_docker_version", return_value="27.5.1"),
+            patch(
+                "scc_cli.docker.core.get_docker_desktop_version",
+                return_value="Docker Desktop 4.50.0",
+            ),
             patch("scc_cli.docker.core.check_docker_sandbox", return_value=True),
         ):
             # Should not raise
@@ -575,7 +581,10 @@ class TestCheckDockerSandbox:
         """Should check 'docker sandbox --help' to detect feature."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
-            patch("scc_cli.docker.core.run_command_bool", return_value=True) as mock_run,
+            patch(
+                "scc_cli.docker.core.run_command",
+                return_value="Docker Sandbox\nRun an AI agent inside a sandbox",
+            ) as mock_run,
         ):
             result = docker.check_docker_sandbox()
 
@@ -604,6 +613,27 @@ class TestGetDockerVersion:
         """Should return None when command fails."""
         with patch("scc_cli.docker.core.run_command", return_value=None):
             result = docker.get_docker_version()
+
+            assert result is None
+
+
+class TestGetDockerDesktopVersion:
+    """Tests for get_docker_desktop_version() - Desktop version retrieval."""
+
+    def test_returns_desktop_version_string(self):
+        """Should return Docker Desktop version string."""
+        with patch(
+            "scc_cli.docker.core.run_command",
+            return_value="Docker Desktop 4.50.1 (123456)",
+        ):
+            result = docker.get_docker_desktop_version()
+
+            assert result == "Docker Desktop 4.50.1 (123456)"
+
+    def test_returns_none_on_failure(self):
+        """Should return None when command fails."""
+        with patch("scc_cli.docker.core.run_command", return_value=None):
+            result = docker.get_docker_desktop_version()
 
             assert result is None
 

@@ -53,6 +53,7 @@ from .core import (
     container_exists,
     generate_container_name,
     get_container_status,
+    get_docker_desktop_version,
     get_docker_version,
     list_running_sandboxes,
     list_scc_containers,
@@ -90,6 +91,7 @@ __all__ = [
     "check_docker_available",
     "check_docker_sandbox",
     "get_docker_version",
+    "get_docker_desktop_version",
     # Container lifecycle
     "container_exists",
     "get_container_status",
