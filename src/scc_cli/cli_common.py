@@ -126,7 +126,7 @@ def handle_errors(func: F) -> F:
                     create_warning_panel(
                         "Unexpected Error",
                         str(e),
-                        "Run with --debug for full traceback",
+                        "Run with 'scc --debug <command>' for full traceback",
                     )
                 )
             raise typer.Exit(5)

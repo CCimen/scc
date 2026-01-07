@@ -50,26 +50,51 @@ def check_docker() -> CheckResult:
             severity="error",
         )
 
-    # Parse and check minimum version
-    current = docker_module._parse_version(version)
+    return CheckResult(
+        name="Docker",
+        passed=True,
+        message="Docker CLI is installed and accessible",
+        version=version,
+    )
+
+
+def check_docker_desktop() -> CheckResult:
+    """Check Docker Desktop version (sandbox requires 4.50+)."""
+    from ... import docker as docker_module
+
+    desktop_version = docker_module.get_docker_desktop_version()
+    if desktop_version is None:
+        return CheckResult(
+            name="Docker Desktop",
+            passed=False,
+            message="Docker Desktop CLI not detected",
+            fix_hint=("Install or update Docker Desktop 4.50+ and ensure its CLI is first in PATH"),
+            fix_url="https://docker.com/products/docker-desktop",
+            severity="warning",
+        )
+
+    current = docker_module._parse_version(desktop_version)
     required = docker_module._parse_version(docker_module.MIN_DOCKER_VERSION)
 
     if current < required:
         return CheckResult(
-            name="Docker",
+            name="Docker Desktop",
             passed=False,
-            message=f"Docker version {'.'.join(map(str, current))} is below minimum {docker_module.MIN_DOCKER_VERSION}",
-            version=version,
-            fix_hint="Update Docker Desktop to the latest version",
+            message=(
+                f"Docker Desktop {'.'.join(map(str, current))} is below minimum "
+                f"{docker_module.MIN_DOCKER_VERSION}"
+            ),
+            version=desktop_version,
+            fix_hint="Update Docker Desktop to 4.50+",
             fix_url="https://docker.com/products/docker-desktop",
             severity="error",
         )
 
     return CheckResult(
-        name="Docker",
+        name="Docker Desktop",
         passed=True,
-        message="Docker is installed and meets version requirements",
-        version=version,
+        message="Docker Desktop meets sandbox requirements",
+        version=desktop_version,
     )
 
 
@@ -82,7 +107,10 @@ def check_docker_sandbox() -> CheckResult:
             name="Docker Sandbox",
             passed=False,
             message="Docker sandbox feature is not available",
-            fix_hint=f"Requires Docker Desktop {docker_module.MIN_DOCKER_VERSION}+ with sandbox feature enabled",
+            fix_hint=(
+                f"Requires Docker Desktop {docker_module.MIN_DOCKER_VERSION}+ with sandbox enabled. "
+                "Run 'docker sandbox --help' and verify Docker Desktop is first in PATH"
+            ),
             fix_url="https://docs.docker.com/desktop/features/sandbox/",
             severity="error",
         )
