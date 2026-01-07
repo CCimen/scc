@@ -624,11 +624,11 @@ class TestGetDockerDesktopVersion:
         """Should return Docker Desktop version string."""
         with patch(
             "scc_cli.docker.core.run_command",
-            return_value="Docker Desktop 4.50.1 (123456)",
+            side_effect=["Docker Desktop 4.50.1 (123456)", None],
         ):
             result = docker.get_docker_desktop_version()
 
-            assert result == "Docker Desktop 4.50.1 (123456)"
+            assert result == "4.50.1"
 
     def test_returns_none_on_failure(self):
         """Should return None when command fails."""
