@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse
 
 from scc_cli import config as config_module
@@ -196,12 +196,16 @@ def save_personal_profile(
     _ensure_personal_dir()
     profile_path = get_profile_path(repo_id)
 
+    saved_at = datetime.now(timezone.utc).isoformat()
+    settings_data = settings or {}
+    mcp_data = mcp or {}
+
     payload = {
         "version": PROFILE_VERSION,
         "repo_id": repo_id,
-        "saved_at": datetime.now(timezone.utc).isoformat(),
-        "settings": settings or {},
-        "mcp": mcp or {},
+        "saved_at": saved_at,
+        "settings": settings_data,
+        "mcp": mcp_data,
     }
 
     _write_json(profile_path, payload)
@@ -209,9 +213,9 @@ def save_personal_profile(
     return PersonalProfile(
         repo_id=repo_id,
         profile_id=repo_id,
-        saved_at=payload.get("saved_at"),
-        settings=payload.get("settings"),
-        mcp=payload.get("mcp"),
+        saved_at=saved_at,
+        settings=settings_data,
+        mcp=mcp_data,
         path=profile_path,
     )
 
@@ -548,7 +552,9 @@ def merge_personal_mcp(existing: dict[str, Any], personal: dict[str, Any]) -> di
         return personal
     merged = json.loads(json.dumps(personal))
     config_module.deep_merge(merged, existing)
-    return merged
+    if isinstance(merged, dict):
+        return cast(dict[str, Any], merged)
+    return {}
 
 
 def workspace_has_overrides(workspace: Path) -> bool:
