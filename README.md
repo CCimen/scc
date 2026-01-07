@@ -176,6 +176,8 @@ With Option B, team leads can update plugins via PRs to their own repo—no org 
 
 Want your own plugins or MCP servers without committing anything? Personal profiles are per‑project, stored outside the repo, and auto‑applied on `scc start`.
 
+If you install plugins inside the container and they only show up in sandbox settings, `scc profile save` and `scc profile status` will detect them and offer to import them into `.claude/settings.local.json` before saving.
+
 ```bash
 # Save current workspace preferences
 scc profile save
