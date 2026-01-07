@@ -355,14 +355,19 @@ def apply_cmd(
     merged_mcp = merge_personal_mcp(existing_mcp, profile.mcp or {})
 
     if preview or dry_run:
+        any_diff = False
         diff_settings = build_diff_text("settings.local.json", existing_settings, merged_settings)
         if diff_settings:
             console.print(diff_settings)
+            any_diff = True
 
         if profile.mcp:
             diff_mcp = build_diff_text(".mcp.json", existing_mcp, merged_mcp)
             if diff_mcp:
                 console.print(diff_mcp)
+                any_diff = True
+        if not any_diff:
+            console.print("[dim]No changes to apply.[/dim]")
         return
 
     write_workspace_settings(ws_path, merged_settings)
@@ -407,10 +412,10 @@ def diff_cmd(
         existing_settings,
         profile.settings or {},
     )
+    any_diff = False
     if diff_settings:
         console.print(diff_settings)
-    else:
-        console.print("[dim]No settings.local.json differences.[/dim]")
+        any_diff = True
 
     if profile.mcp:
         diff_mcp = build_diff_text(
@@ -420,8 +425,10 @@ def diff_cmd(
         )
         if diff_mcp:
             console.print(diff_mcp)
-        else:
-            console.print("[dim]No .mcp.json differences.[/dim]")
+            any_diff = True
+
+    if not any_diff:
+        console.print("[dim]Workspace already matches the saved profile.[/dim]")
 
 
 @handle_errors
