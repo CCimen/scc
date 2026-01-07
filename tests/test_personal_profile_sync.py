@@ -70,3 +70,24 @@ def test_import_scans_missing_index(monkeypatch, tmp_path: Path) -> None:
 
     result = personal_profiles.import_profiles_from_repo(repo_path)
     assert result.imported == 1
+
+
+def test_import_preview_does_not_write(monkeypatch, tmp_path: Path) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    monkeypatch.setattr(config_module, "CONFIG_DIR", config_dir)
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    _write_profile(workspace, {"enabledPlugins": {"x@y": True}}, {})
+
+    repo_path = tmp_path / "repo"
+    personal_profiles.export_profiles_to_repo(repo_path)
+
+    new_config = tmp_path / "config-import"
+    new_config.mkdir()
+    monkeypatch.setattr(config_module, "CONFIG_DIR", new_config)
+
+    preview = personal_profiles.import_profiles_from_repo(repo_path, dry_run=True)
+    assert preview.imported == 1
+    assert list(personal_profiles.list_personal_profiles()) == []

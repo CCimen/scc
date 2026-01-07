@@ -183,6 +183,9 @@ scc profile save
 # Apply or preview
 scc profile apply
 scc profile apply --preview
+
+# Check status/drift
+scc profile status
 ```
 
 Sync across machines with any git host:
@@ -229,6 +232,7 @@ scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
 | `scc profile save` | Save current workspace settings as a personal profile |
 | `scc profile apply` | Apply profile to current workspace |
 | `scc profile diff` | Show diff between profile and workspace |
+| `scc profile status` | Show whether a profile exists and if drift is detected |
 | `scc profile export --repo PATH` | Export profiles to a local repo |
 | `scc profile import --repo PATH` | Import profiles from a local repo |
 | `scc profile sync --repo PATH` | Pull/import + export + optional commit/push |

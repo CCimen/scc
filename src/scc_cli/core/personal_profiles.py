@@ -355,6 +355,7 @@ def export_profiles_to_repo(
 def import_profiles_from_repo(
     repo_path: Path,
     force: bool = False,
+    dry_run: bool = False,
 ) -> ProfileImportResult:
     warnings: list[str] = []
     imported = 0
@@ -415,7 +416,8 @@ def import_profiles_from_repo(
                 skipped += 1
                 continue
 
-        _write_json(dest_path, data)
+        if not dry_run:
+            _write_json(dest_path, data)
         imported += 1
 
     return ProfileImportResult(imported=imported, skipped=skipped, warnings=warnings)

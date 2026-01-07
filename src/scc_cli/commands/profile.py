@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 from rich.table import Table
 
+from .. import config as config_module
 from ..cli_common import console, handle_errors
 from ..confirm import Confirm
 from ..core.exit_codes import EXIT_USAGE
@@ -23,6 +24,7 @@ from ..core.personal_profiles import (
     get_repo_profile_dir,
     import_profiles_from_repo,
     list_personal_profiles,
+    load_applied_state,
     load_personal_profile_with_status,
     load_workspace_mcp_with_status,
     load_workspace_settings_with_status,
@@ -46,6 +48,14 @@ profile_app = typer.Typer(
 
 def _resolve_workspace(workspace: str | None) -> Path:
     return Path(workspace) if workspace else Path.cwd()
+
+
+def _print_stack_summary(workspace: Path, profile_id: str | None) -> None:
+    team = config_module.get_selected_profile() or "none"
+    personal = profile_id or "none"
+    console.print(
+        f"[dim]Active stack: team={team} | personal={personal} | workspace={workspace}[/dim]"
+    )
 
 
 def _resolve_repo_path(repo: str) -> Path:
@@ -99,6 +109,7 @@ def _ensure_git_repo(repo_path: Path, commit_requested: bool) -> bool:
         console.print(
             "[yellow]Repo is not a git repository; export will skip commit/push.[/yellow]"
         )
+        console.print("[dim]Tip: run git init if you want to version these files.[/dim]")
         return False
 
     if is_interactive_allowed():
@@ -162,9 +173,24 @@ def _ensure_commit_allowed(repo_path: Path, force: bool) -> None:
 
 
 @handle_errors
-def list_cmd() -> None:
+def list_cmd(
+    workspace: str | None = typer.Option(None, "--workspace", help="Filter to a workspace"),
+) -> None:
     """List saved personal profiles."""
-    profiles = list_personal_profiles()
+    if workspace:
+        ws_path = _resolve_workspace(workspace)
+        profile, corrupt = load_personal_profile_with_status(ws_path)
+        if corrupt:
+            console.print("[red]Personal profile file is invalid JSON.[/red]")
+            raise typer.Exit(EXIT_USAGE)
+        if profile is None:
+            console.print("[yellow]No personal profile found for this project.[/yellow]")
+            console.print("[dim]Run: scc profile save[/dim]")
+            return
+        profiles = [profile]
+    else:
+        profiles = list_personal_profiles()
+
     if not profiles:
         console.print("[dim]No personal profiles saved yet.[/dim]")
         return
@@ -204,6 +230,8 @@ def save_cmd(
         raise typer.Exit(EXIT_USAGE)
 
     profile = save_personal_profile(ws_path, settings or {}, mcp or {})
+    _print_stack_summary(ws_path, profile.repo_id)
+    console.print("[dim]Scope: personal profile (project only)[/dim]")
     console.print(f"[green]Saved personal profile[/green] for [cyan]{profile.repo_id}[/cyan]")
     console.print(f"[dim]{profile.path}[/dim]")
 
@@ -223,6 +251,7 @@ def apply_cmd(
         raise typer.Exit(EXIT_USAGE)
     if profile is None:
         console.print("[yellow]No personal profile found for this project.[/yellow]")
+        console.print("[dim]Run: scc profile save[/dim]")
         return
 
     if detect_drift(ws_path) and not force:
@@ -267,6 +296,8 @@ def apply_cmd(
         write_workspace_mcp(ws_path, merged_mcp)
 
     save_applied_state(ws_path, profile.profile_id, compute_fingerprints(ws_path))
+    _print_stack_summary(ws_path, profile.repo_id)
+    console.print("[dim]Scope: personal profile (project only)[/dim]")
     console.print(f"[green]Applied personal profile[/green] for {profile.repo_id}")
 
 
@@ -282,6 +313,7 @@ def diff_cmd(
         raise typer.Exit(EXIT_USAGE)
     if profile is None:
         console.print("[yellow]No personal profile found for this project.[/yellow]")
+        console.print("[dim]Run: scc profile save[/dim]")
         return
 
     existing_settings, settings_invalid = load_workspace_settings_with_status(ws_path)
@@ -297,7 +329,9 @@ def diff_cmd(
     existing_mcp = existing_mcp or {}
 
     diff_settings = build_diff_text(
-        "settings.local.json", existing_settings, profile.settings or {}
+        f"settings.local.json ({profile.repo_id})",
+        existing_settings,
+        profile.settings or {},
     )
     if diff_settings:
         console.print(diff_settings)
@@ -305,11 +339,35 @@ def diff_cmd(
         console.print("[dim]No settings.local.json differences.[/dim]")
 
     if profile.mcp:
-        diff_mcp = build_diff_text(".mcp.json", existing_mcp, profile.mcp or {})
+        diff_mcp = build_diff_text(
+            f".mcp.json ({profile.repo_id})",
+            existing_mcp,
+            profile.mcp or {},
+        )
         if diff_mcp:
             console.print(diff_mcp)
         else:
             console.print("[dim]No .mcp.json differences.[/dim]")
+
+
+@handle_errors
+def status_cmd(
+    workspace: str | None = typer.Option(None, "--workspace", help="Workspace path"),
+) -> None:
+    """Show personal profile status for this workspace."""
+    ws_path = _resolve_workspace(workspace)
+    profile, corrupt = load_personal_profile_with_status(ws_path)
+    if corrupt:
+        console.print("[red]Personal profile file is invalid JSON.[/red]")
+        raise typer.Exit(EXIT_USAGE)
+
+    applied = load_applied_state(ws_path)
+    drift = detect_drift(ws_path) if applied else False
+
+    _print_stack_summary(ws_path, profile.repo_id if profile else None)
+    console.print(f"[dim]Profile: {profile.repo_id if profile else 'none'}[/dim]")
+    console.print(f"[dim]Applied: {applied.applied_at if applied else 'never'}[/dim]")
+    console.print(f"[dim]Drift: {'yes' if drift else 'no'}[/dim]")
 
 
 @handle_errors
@@ -355,7 +413,8 @@ def export_cmd(
         return
 
     console.print(f"[green]Exported {result.exported} profile(s).[/green]")
-    console.print(f"[dim]{result.profile_dir}[/dim]")
+    console.print(f"[dim]Profiles: {result.profile_dir}[/dim]")
+    console.print(f"[dim]Index: {result.index_path}[/dim]")
 
     if commit:
         if not is_repo:
@@ -383,6 +442,8 @@ def export_cmd(
 def import_cmd(
     repo: str = typer.Option(..., "--repo", help="Path to repo for import"),
     force: bool = typer.Option(False, "--force", help="Overwrite local profiles"),
+    preview: bool = typer.Option(False, "--preview", help="Show changes without writing"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Alias for --preview"),
 ) -> None:
     """Import personal profiles from a local repo path."""
     repo_path = _resolve_repo_path(repo)
@@ -400,10 +461,18 @@ def import_cmd(
         if not Confirm.ask("Continue importing profiles?", default=True):
             return
 
-    result = import_profiles_from_repo(repo_path, force=force)
+    result = import_profiles_from_repo(repo_path, force=force, dry_run=preview or dry_run)
 
     for warning in result.warnings:
         console.print(f"[yellow]{warning}[/yellow]")
+
+    if preview or dry_run:
+        console.print(
+            f"[green]Preview:[/green] would import {result.imported} profile(s)."
+            f" Skipped {result.skipped}."
+        )
+        console.print("[dim]No files were written.[/dim]")
+        return
 
     console.print(
         f"[green]Imported {result.imported} profile(s).[/green] Skipped {result.skipped}."
@@ -472,6 +541,7 @@ profile_app.command("list")(list_cmd)
 profile_app.command("save")(save_cmd)
 profile_app.command("apply")(apply_cmd)
 profile_app.command("diff")(diff_cmd)
+profile_app.command("status")(status_cmd)
 profile_app.command("export")(export_cmd)
 profile_app.command("import")(import_cmd)
 profile_app.command("sync")(sync_cmd)
