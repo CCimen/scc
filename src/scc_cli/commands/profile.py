@@ -270,6 +270,7 @@ def save_cmd(
 
     existing_profile, _ = load_personal_profile_with_status(ws_path)
     profile = save_personal_profile(ws_path, settings or {}, mcp or {})
+    save_applied_state(ws_path, profile.profile_id, compute_fingerprints(ws_path))
     _print_stack_summary(ws_path, profile.repo_id)
     console.print("[dim]Scope: personal profile (project only)[/dim]")
     console.print(f"[green]Saved personal profile[/green] for [cyan]{profile.repo_id}[/cyan]")
@@ -466,6 +467,22 @@ def status_cmd(
                 )
                 write_workspace_settings(ws_path, workspace_settings)
                 console.print("[green]Imported sandbox settings into workspace.[/green]")
+                if profile is not None and is_interactive_allowed():
+                    if Confirm.ask(
+                        "Save these changes to your personal profile now?",
+                        default=True,
+                    ):
+                        updated_profile = save_personal_profile(
+                            ws_path,
+                            workspace_settings,
+                            load_workspace_mcp_with_status(ws_path)[0] or {},
+                        )
+                        save_applied_state(
+                            ws_path,
+                            updated_profile.profile_id,
+                            compute_fingerprints(ws_path),
+                        )
+                        console.print("[green]Personal profile updated.[/green]")
                 drift = detect_drift(ws_path) if applied else False
         else:
             console.print("[dim]Run scc profile save interactively to import these changes.[/dim]")
