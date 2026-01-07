@@ -76,3 +76,24 @@ def test_drift_detection(tmp_path: Path) -> None:
 
     _write_json(settings_path, {"enabledPlugins": {"a@b": False}})
     assert personal_profiles.detect_drift(tmp_path) is True
+
+
+def test_compute_sandbox_import_candidates() -> None:
+    workspace = {
+        "enabledPlugins": {"alpha@market": True},
+        "extraKnownMarketplaces": {"official": {"source": {"path": "x"}}},
+    }
+    sandbox = {
+        "enabledPlugins": {"alpha@market": True, "beta@market": True},
+        "extraKnownMarketplaces": {
+            "official": {"source": {"path": "x"}},
+            "extra": {"source": {"path": "y"}},
+        },
+    }
+
+    missing_plugins, missing_marketplaces = personal_profiles.compute_sandbox_import_candidates(
+        workspace, sandbox
+    )
+
+    assert missing_plugins == ["beta@market"]
+    assert list(missing_marketplaces.keys()) == ["extra"]

@@ -12,12 +12,14 @@ import typer
 from rich.table import Table
 
 from .. import config as config_module
+from .. import docker as docker_module
 from ..cli_common import console, handle_errors
 from ..confirm import Confirm
 from ..core.exit_codes import EXIT_USAGE
 from ..core.personal_profiles import (
     build_diff_text,
     compute_fingerprints,
+    compute_sandbox_import_candidates,
     detect_drift,
     export_profiles_to_repo,
     extract_personal_plugins,
@@ -56,6 +58,12 @@ def _print_stack_summary(workspace: Path, profile_id: str | None) -> None:
     console.print(
         f"[dim]Active stack: team={team} | personal={personal} | workspace={workspace}[/dim]"
     )
+
+
+def _format_preview(items: list[str], limit: int = 5) -> str:
+    if len(items) <= limit:
+        return ", ".join(items)
+    return ", ".join(items[:limit]) + f" (+{len(items) - limit} more)"
 
 
 def _resolve_repo_path(repo: str) -> Path:
@@ -224,6 +232,57 @@ def save_cmd(
     if mcp_invalid:
         console.print("[red]Invalid JSON in .mcp.json[/red]")
         raise typer.Exit(EXIT_USAGE)
+
+    sandbox_settings = docker_module.get_sandbox_settings()
+    missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
+        settings or {}, sandbox_settings
+    )
+
+    if missing_plugins or missing_marketplaces:
+        console.print(
+            "[yellow]Detected plugin changes in sandbox global settings that are not in this workspace.[/yellow]"
+        )
+        if missing_plugins:
+            console.print(f"[dim]Plugins: {_format_preview(missing_plugins)}[/dim]")
+        if missing_marketplaces:
+            console.print(
+                f"[dim]Marketplaces: {_format_preview(sorted(missing_marketplaces.keys()))}[/dim]"
+            )
+
+        if is_interactive_allowed():
+            if Confirm.ask(
+                "Import these into .claude/settings.local.json before saving?",
+                default=True,
+            ):
+                workspace_settings = settings or {}
+                plugins_value = workspace_settings.get("enabledPlugins")
+                if isinstance(plugins_value, list):
+                    plugins_map = {str(p): True for p in plugins_value}
+                elif isinstance(plugins_value, dict):
+                    plugins_map = dict(plugins_value)
+                else:
+                    plugins_map = {}
+
+                for plugin in missing_plugins:
+                    plugins_map[plugin] = True
+
+                if plugins_map:
+                    workspace_settings["enabledPlugins"] = plugins_map
+
+                marketplaces_value = workspace_settings.get("extraKnownMarketplaces")
+                if isinstance(marketplaces_value, dict):
+                    marketplaces_map = dict(marketplaces_value)
+                else:
+                    marketplaces_map = {}
+                marketplaces_map.update(missing_marketplaces)
+                if marketplaces_map:
+                    workspace_settings["extraKnownMarketplaces"] = marketplaces_map
+
+                write_workspace_settings(ws_path, workspace_settings)
+                settings = workspace_settings
+                console.print("[green]Imported sandbox settings into workspace.[/green]")
+        else:
+            console.print("[dim]Run this command interactively to import them before saving.[/dim]")
 
     if settings is None and mcp is None:
         console.print("[yellow]No workspace settings found to save.[/yellow]")
