@@ -229,11 +229,14 @@ def save_cmd(
         console.print("[yellow]No workspace settings found to save.[/yellow]")
         raise typer.Exit(EXIT_USAGE)
 
+    existing_profile, _ = load_personal_profile_with_status(ws_path)
     profile = save_personal_profile(ws_path, settings or {}, mcp or {})
     _print_stack_summary(ws_path, profile.repo_id)
     console.print("[dim]Scope: personal profile (project only)[/dim]")
     console.print(f"[green]Saved personal profile[/green] for [cyan]{profile.repo_id}[/cyan]")
     console.print(f"[dim]{profile.path}[/dim]")
+    if existing_profile is None:
+        console.print("[dim]Tip: this profile auto-applies on scc start for this project.[/dim]")
 
 
 @handle_errors
@@ -254,17 +257,6 @@ def apply_cmd(
         console.print("[dim]Run: scc profile save[/dim]")
         return
 
-    if detect_drift(ws_path) and not force:
-        if is_interactive_allowed():
-            console.print("[yellow]Workspace overrides detected since last apply.[/yellow]")
-            if not Confirm.ask("Apply personal profile anyway?", default=False):
-                return
-        else:
-            console.print(
-                "[red]Workspace drift detected.[/red] Use --force to apply in non-interactive mode."
-            )
-            raise typer.Exit(EXIT_USAGE)
-
     existing_settings, settings_invalid = load_workspace_settings_with_status(ws_path)
     existing_mcp, mcp_invalid = load_workspace_mcp_with_status(ws_path)
     if settings_invalid:
@@ -276,6 +268,33 @@ def apply_cmd(
 
     existing_settings = existing_settings or {}
     existing_mcp = existing_mcp or {}
+
+    if detect_drift(ws_path) and not force:
+        if is_interactive_allowed():
+            console.print("[yellow]Workspace overrides detected since last apply.[/yellow]")
+            if Confirm.ask("Preview changes before applying?", default=True):
+                diff_settings = build_diff_text(
+                    f"settings.local.json ({profile.repo_id})",
+                    existing_settings,
+                    merge_personal_settings(ws_path, existing_settings, profile.settings or {}),
+                )
+                if diff_settings:
+                    console.print(diff_settings)
+                if profile.mcp:
+                    diff_mcp = build_diff_text(
+                        f".mcp.json ({profile.repo_id})",
+                        existing_mcp,
+                        merge_personal_mcp(existing_mcp, profile.mcp or {}),
+                    )
+                    if diff_mcp:
+                        console.print(diff_mcp)
+            if not Confirm.ask("Apply personal profile anyway?", default=False):
+                return
+        else:
+            console.print(
+                "[red]Workspace drift detected.[/red] Use --force to apply in non-interactive mode."
+            )
+            raise typer.Exit(EXIT_USAGE)
 
     merged_settings = merge_personal_settings(ws_path, existing_settings, profile.settings or {})
     merged_mcp = merge_personal_mcp(existing_mcp, profile.mcp or {})
