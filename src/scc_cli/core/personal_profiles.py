@@ -573,6 +573,45 @@ def extract_personal_mcp(profile: PersonalProfile) -> dict[str, Any]:
     return profile.mcp or {}
 
 
+def _normalize_plugins(value: Any) -> dict[str, bool]:
+    if isinstance(value, list):
+        return {str(p): True for p in value}
+    if isinstance(value, dict):
+        return {str(k): bool(v) for k, v in value.items()}
+    return {}
+
+
+def _normalize_marketplaces(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def compute_sandbox_import_candidates(
+    workspace_settings: dict[str, Any] | None,
+    sandbox_settings: dict[str, Any] | None,
+) -> tuple[list[str], dict[str, Any]]:
+    """Return plugins/marketplaces present in sandbox settings but missing in workspace."""
+    if not sandbox_settings:
+        return [], {}
+
+    workspace_settings = workspace_settings or {}
+
+    workspace_plugins = _normalize_plugins(workspace_settings.get("enabledPlugins"))
+    sandbox_plugins = _normalize_plugins(sandbox_settings.get("enabledPlugins"))
+    missing_plugins = sorted([p for p in sandbox_plugins if p not in workspace_plugins])
+
+    workspace_marketplaces = _normalize_marketplaces(
+        workspace_settings.get("extraKnownMarketplaces")
+    )
+    sandbox_marketplaces = _normalize_marketplaces(sandbox_settings.get("extraKnownMarketplaces"))
+    missing_marketplaces = {
+        name: config
+        for name, config in sandbox_marketplaces.items()
+        if name not in workspace_marketplaces
+    }
+
+    return missing_plugins, missing_marketplaces
+
+
 def build_diff_text(label: str, before: dict[str, Any], after: dict[str, Any]) -> str:
     import difflib
 
