@@ -354,6 +354,12 @@ def apply_cmd(
     merged_settings = merge_personal_settings(ws_path, existing_settings, profile.settings or {})
     merged_mcp = merge_personal_mcp(existing_mcp, profile.mcp or {})
 
+    if merged_settings == existing_settings and merged_mcp == existing_mcp:
+        _print_stack_summary(ws_path, profile.repo_id)
+        console.print("[dim]Scope: personal profile (project only)[/dim]")
+        console.print("[dim]Workspace already matches the saved profile.[/dim]")
+        return
+
     if preview or dry_run:
         any_diff = False
         diff_settings = build_diff_text("settings.local.json", existing_settings, merged_settings)
