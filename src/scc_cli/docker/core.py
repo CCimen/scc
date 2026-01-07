@@ -109,7 +109,27 @@ def get_docker_version() -> str | None:
 
 def get_docker_desktop_version() -> str | None:
     """Get Docker Desktop version string, if available."""
-    return run_command(["docker", "desktop", "version"], timeout=5)
+
+    def _extract_desktop_version(text: str) -> str | None:
+        if not text:
+            return None
+        match = re.search(r"Docker Desktop\s+([0-9]+\.[0-9]+\.[0-9]+)", text, re.I)
+        if match:
+            return match.group(1)
+        match = re.search(r"Desktop\s+version\s*:?\s*([0-9]+\.[0-9]+\.[0-9]+)", text, re.I)
+        if match:
+            return match.group(1)
+        return None
+
+    platform_name = run_command(
+        ["docker", "version", "--format", "{{.Server.Platform.Name}}"], timeout=5
+    )
+    desktop_version = _extract_desktop_version(platform_name or "")
+    if desktop_version:
+        return desktop_version
+
+    desktop_output = run_command(["docker", "desktop", "version"], timeout=5)
+    return _extract_desktop_version(desktop_output or "")
 
 
 def generate_container_name(workspace: Path, branch: str | None = None) -> str:
