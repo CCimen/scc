@@ -33,6 +33,7 @@ from .config import (
 # Environment checks
 from .environment import (
     check_docker,
+    check_docker_desktop,
     check_docker_running,
     check_docker_sandbox,
     check_git,
@@ -77,6 +78,7 @@ def run_all_checks() -> list[CheckResult]:
     # Environment checks
     results.append(check_git())
     results.append(check_docker())
+    results.append(check_docker_desktop())
     results.append(check_docker_sandbox())
     results.append(check_docker_running())
 
@@ -139,6 +141,7 @@ __all__ = [
     # Environment checks
     "check_git",
     "check_docker",
+    "check_docker_desktop",
     "check_docker_sandbox",
     "check_docker_running",
     "check_wsl2",

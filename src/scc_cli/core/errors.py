@@ -80,7 +80,10 @@ class SandboxNotAvailableError(PrerequisiteError):
 
     user_message: str = field(default="Docker sandbox feature is not available")
     suggested_action: str = field(
-        default="Ensure Docker Desktop is version 4.50+ and sandbox feature is enabled"
+        default=(
+            "Ensure Docker Desktop 4.50+ is installed and the sandbox CLI is available. "
+            "Run 'docker sandbox --help' to verify and check your PATH for Docker Desktop."
+        )
     )
 
 

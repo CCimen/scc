@@ -680,6 +680,7 @@ class TestRunAllChecks:
         with (
             patch("scc_cli.doctor.check_git", return_value=mock_git),
             patch("scc_cli.doctor.check_docker", return_value=mock_docker),
+            patch("scc_cli.doctor.check_docker_desktop", return_value=mock_docker),
             patch("scc_cli.doctor.check_docker_sandbox", return_value=mock_sandbox),
             patch("scc_cli.doctor.check_docker_running", return_value=mock_daemon),
             patch("scc_cli.doctor.check_wsl2", return_value=(mock_wsl2, False)),
