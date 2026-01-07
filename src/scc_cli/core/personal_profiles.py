@@ -612,6 +612,41 @@ def compute_sandbox_import_candidates(
     return missing_plugins, missing_marketplaces
 
 
+def merge_sandbox_imports(
+    workspace_settings: dict[str, Any],
+    missing_plugins: list[str],
+    missing_marketplaces: dict[str, Any],
+) -> dict[str, Any]:
+    if not missing_plugins and not missing_marketplaces:
+        return workspace_settings
+
+    merged = dict(workspace_settings)
+
+    plugins_value = merged.get("enabledPlugins")
+    if isinstance(plugins_value, list):
+        plugins_map = {str(p): True for p in plugins_value}
+    elif isinstance(plugins_value, dict):
+        plugins_map = dict(plugins_value)
+    else:
+        plugins_map = {}
+
+    for plugin in missing_plugins:
+        plugins_map[plugin] = True
+    if plugins_map:
+        merged["enabledPlugins"] = plugins_map
+
+    marketplaces_value = merged.get("extraKnownMarketplaces")
+    if isinstance(marketplaces_value, dict):
+        marketplaces_map = dict(marketplaces_value)
+    else:
+        marketplaces_map = {}
+    marketplaces_map.update(missing_marketplaces)
+    if marketplaces_map:
+        merged["extraKnownMarketplaces"] = marketplaces_map
+
+    return merged
+
+
 def build_diff_text(label: str, before: dict[str, Any], after: dict[str, Any]) -> str:
     import difflib
 

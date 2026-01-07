@@ -32,6 +32,7 @@ from ..core.personal_profiles import (
     load_workspace_settings_with_status,
     merge_personal_mcp,
     merge_personal_settings,
+    merge_sandbox_imports,
     save_applied_state,
     save_personal_profile,
     write_workspace_mcp,
@@ -254,30 +255,9 @@ def save_cmd(
                 "Import these into .claude/settings.local.json before saving?",
                 default=True,
             ):
-                workspace_settings = settings or {}
-                plugins_value = workspace_settings.get("enabledPlugins")
-                if isinstance(plugins_value, list):
-                    plugins_map = {str(p): True for p in plugins_value}
-                elif isinstance(plugins_value, dict):
-                    plugins_map = dict(plugins_value)
-                else:
-                    plugins_map = {}
-
-                for plugin in missing_plugins:
-                    plugins_map[plugin] = True
-
-                if plugins_map:
-                    workspace_settings["enabledPlugins"] = plugins_map
-
-                marketplaces_value = workspace_settings.get("extraKnownMarketplaces")
-                if isinstance(marketplaces_value, dict):
-                    marketplaces_map = dict(marketplaces_value)
-                else:
-                    marketplaces_map = {}
-                marketplaces_map.update(missing_marketplaces)
-                if marketplaces_map:
-                    workspace_settings["extraKnownMarketplaces"] = marketplaces_map
-
+                workspace_settings = merge_sandbox_imports(
+                    settings or {}, missing_plugins, missing_marketplaces
+                )
                 write_workspace_settings(ws_path, workspace_settings)
                 settings = workspace_settings
                 console.print("[green]Imported sandbox settings into workspace.[/green]")
@@ -327,6 +307,21 @@ def apply_cmd(
 
     existing_settings = existing_settings or {}
     existing_mcp = existing_mcp or {}
+
+    missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
+        existing_settings, docker_module.get_sandbox_settings()
+    )
+    if missing_plugins or missing_marketplaces:
+        console.print(
+            "[yellow]Sandbox has plugin changes not yet in the workspace settings.[/yellow]"
+        )
+        if missing_plugins:
+            console.print(f"[dim]Plugins: {_format_preview(missing_plugins)}[/dim]")
+        if missing_marketplaces:
+            console.print(
+                f"[dim]Marketplaces: {_format_preview(sorted(missing_marketplaces.keys()))}[/dim]"
+            )
+        console.print("[dim]Run scc profile save to import these changes.[/dim]")
 
     if detect_drift(ws_path) and not force:
         if is_interactive_allowed():
@@ -439,8 +434,41 @@ def status_cmd(
         console.print("[red]Personal profile file is invalid JSON.[/red]")
         raise typer.Exit(EXIT_USAGE)
 
+    settings, settings_invalid = load_workspace_settings_with_status(ws_path)
+    if settings_invalid:
+        console.print("[red]Invalid JSON in .claude/settings.local.json[/red]")
+        raise typer.Exit(EXIT_USAGE)
+
     applied = load_applied_state(ws_path)
     drift = detect_drift(ws_path) if applied else False
+
+    missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
+        settings or {}, docker_module.get_sandbox_settings()
+    )
+
+    if missing_plugins or missing_marketplaces:
+        console.print(
+            "[yellow]Sandbox has plugin changes not yet in the workspace settings.[/yellow]"
+        )
+        if missing_plugins:
+            console.print(f"[dim]Plugins: {_format_preview(missing_plugins)}[/dim]")
+        if missing_marketplaces:
+            console.print(
+                f"[dim]Marketplaces: {_format_preview(sorted(missing_marketplaces.keys()))}[/dim]"
+            )
+        if is_interactive_allowed():
+            if Confirm.ask(
+                "Import sandbox settings into .claude/settings.local.json now?",
+                default=False,
+            ):
+                workspace_settings = merge_sandbox_imports(
+                    settings or {}, missing_plugins, missing_marketplaces
+                )
+                write_workspace_settings(ws_path, workspace_settings)
+                console.print("[green]Imported sandbox settings into workspace.[/green]")
+                drift = detect_drift(ws_path) if applied else False
+        else:
+            console.print("[dim]Run scc profile save interactively to import these changes.[/dim]")
 
     _print_stack_summary(ws_path, profile.repo_id if profile else None)
     console.print(f"[dim]Profile: {profile.repo_id if profile else 'none'}[/dim]")

@@ -97,3 +97,18 @@ def test_compute_sandbox_import_candidates() -> None:
 
     assert missing_plugins == ["beta@market"]
     assert list(missing_marketplaces.keys()) == ["extra"]
+
+
+def test_merge_sandbox_imports() -> None:
+    workspace = {
+        "enabledPlugins": {"alpha@market": True},
+        "extraKnownMarketplaces": {"official": {"source": {"path": "x"}}},
+    }
+    merged = personal_profiles.merge_sandbox_imports(
+        workspace,
+        ["beta@market"],
+        {"extra": {"source": {"path": "y"}}},
+    )
+
+    assert merged["enabledPlugins"]["beta@market"] is True
+    assert "extra" in merged["extraKnownMarketplaces"]
