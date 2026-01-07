@@ -405,6 +405,11 @@ def start(
         "--no-interactive",
         help="Fail fast if interactive input would be required",
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        hidden=True,
+    ),
     allow_suspicious_workspace: bool = typer.Option(
         False,
         "--allow-suspicious-workspace",
@@ -420,6 +425,21 @@ def start(
 
     # Capture original CWD for entry_dir tracking (before any directory changes)
     original_cwd = Path.cwd()
+
+    if isinstance(debug, bool) and debug:
+        err_console.print(
+            "[red]Error:[/red] --debug is a global flag and must be placed before the command.",
+            highlight=False,
+        )
+        err_console.print(
+            "[dim]Use: scc --debug start <workspace>[/dim]",
+            highlight=False,
+        )
+        err_console.print(
+            "[dim]With uv: uv run scc --debug start <workspace>[/dim]",
+            highlight=False,
+        )
+        raise typer.Exit(EXIT_USAGE)
 
     # ── Fast Fail: Validate mode flags before any processing ──────────────────
     from scc_cli.ui.gate import validate_mode_flags
