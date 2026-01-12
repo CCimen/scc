@@ -52,12 +52,15 @@ class SyncResult:
         marketplaces_materialized: list[str] | None = None,
         warnings: list[str] | None = None,
         settings_path: Path | None = None,
+        rendered_settings: dict[str, Any] | None = None,
     ) -> None:
         self.success = success
         self.plugins_enabled = plugins_enabled or []
         self.marketplaces_materialized = marketplaces_materialized or []
         self.warnings = warnings or []
         self.settings_path = settings_path
+        # Computed settings dict for container injection (when write_to_workspace=False)
+        self.rendered_settings = rendered_settings
 
 
 def sync_marketplace_settings(
@@ -67,6 +70,8 @@ def sync_marketplace_settings(
     org_config_url: str | None = None,
     force_refresh: bool = False,
     dry_run: bool = False,
+    write_to_workspace: bool = True,
+    container_path_prefix: str = "",
 ) -> SyncResult:
     """Sync marketplace settings for a project.
 
@@ -77,7 +82,7 @@ def sync_marketplace_settings(
     4. Render settings to Claude format
     5. Merge with existing user settings (non-destructive)
     6. Save managed state tracking
-    7. Write settings.local.json (unless dry_run)
+    7. Write settings.local.json (unless dry_run or write_to_workspace=False)
 
     Args:
         project_dir: Project root directory
@@ -86,9 +91,17 @@ def sync_marketplace_settings(
         org_config_url: URL where org config was fetched (for tracking)
         force_refresh: Force re-materialization of marketplaces
         dry_run: If True, compute but don't write files
+        write_to_workspace: If False, skip writing settings.local.json
+            and instead return rendered_settings for container injection.
+            This prevents host Claude from seeing container-only plugins.
+        container_path_prefix: Path prefix for marketplace paths in container.
+            When set (e.g., "/workspace"), paths become absolute container paths
+            like "/workspace/.claude/.scc-marketplaces/...". Required when
+            write_to_workspace=False since settings will be in container HOME.
 
     Returns:
-        SyncResult with success status and details
+        SyncResult with success status and details. When write_to_workspace=False,
+        rendered_settings contains the computed settings for container injection.
 
     Raises:
         SyncError: On validation or processing errors
@@ -212,10 +225,18 @@ def sync_marketplace_settings(
         "enabled": effective.enabled,
         "extra_marketplaces": effective.extra_marketplaces,
     }
-    rendered = render_settings(effective_dict, materialized)
+    # Pass path_prefix for container-only mode (absolute paths in container HOME)
+    rendered = render_settings(effective_dict, materialized, path_prefix=container_path_prefix)
 
-    # ── Step 5: Merge with existing settings ─────────────────────────────────
-    merged = merge_settings(project_dir, rendered)
+    # ── Step 5: Merge with existing settings (only if writing to workspace) ───
+    # When write_to_workspace=False, we skip merging because settings go to
+    # container HOME, not the workspace settings.local.json
+    if write_to_workspace:
+        merged = merge_settings(project_dir, rendered)
+    else:
+        # For container-only mode, use rendered settings directly
+        # (no merging with workspace settings since we're not writing there)
+        merged = rendered
 
     # ── Step 6: Prepare managed state ────────────────────────────────────────
     managed_state = ManagedState(
@@ -226,18 +247,26 @@ def sync_marketplace_settings(
         team_id=team_id,
     )
 
-    # ── Step 7: Write files (unless dry_run) ─────────────────────────────────
+    # ── Step 7: Write files (unless dry_run or write_to_workspace=False) ─────
     settings_path = project_dir / ".claude" / "settings.local.json"
 
-    if not dry_run:
+    if not dry_run and write_to_workspace:
         # Ensure .claude directory exists
         claude_dir = project_dir / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write settings
+        # Write settings to workspace (host-visible)
         settings_path.write_text(json.dumps(merged, indent=2))
 
         # Save managed state
+        save_managed_state(project_dir, managed_state)
+    elif not dry_run and not write_to_workspace:
+        # Container-only mode: ensure .claude dir exists for marketplaces
+        # (marketplaces are still materialized to workspace for bind-mount access)
+        claude_dir = project_dir / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save managed state (for future cleanup)
         save_managed_state(project_dir, managed_state)
 
     return SyncResult(
@@ -245,7 +274,9 @@ def sync_marketplace_settings(
         plugins_enabled=list(effective.enabled),
         marketplaces_materialized=list(materialized.keys()),
         warnings=warnings,
-        settings_path=settings_path if not dry_run else None,
+        settings_path=settings_path if (not dry_run and write_to_workspace) else None,
+        # Return rendered settings for container injection when not writing to workspace
+        rendered_settings=merged if not write_to_workspace else None,
     )
 
 

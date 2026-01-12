@@ -11,7 +11,7 @@ This module handles Docker container creation and execution for launch command:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ... import config, docker, git, sessions
 from ...contexts import WorkContext, record_context
@@ -30,12 +30,27 @@ def launch_sandbox(
     current_branch: str | None,
     should_continue_session: bool,
     fresh: bool,
+    plugin_settings: dict[str, Any] | None = None,
 ) -> None:
     """
     Execute the Docker sandbox with all configurations applied.
 
     Handles container creation, session recording, and process handoff.
     Safety-net policy from org config is extracted and mounted read-only.
+    Plugin settings are injected to container HOME (not workspace) to prevent
+    host Claude from seeing SCC-managed plugins.
+
+    Args:
+        workspace_path: Path to the actual workspace for session recording.
+        mount_path: Docker mount path (may differ for worktrees).
+        team: Team profile name.
+        session_name: Optional session name.
+        current_branch: Git branch name.
+        should_continue_session: Whether to continue existing session.
+        fresh: Force new container.
+        plugin_settings: Plugin settings dict to inject into container HOME.
+            Contains extraKnownMarketplaces and enabledPlugins with absolute
+            paths pointing to the bind-mounted workspace.
     """
     # Load org config for safety-net policy injection
     # This is already cached by _configure_team_settings(), so it's a fast read
@@ -117,7 +132,13 @@ def launch_sandbox(
     # Pass org_config for safety-net policy injection (mounted read-only)
     # Pass workspace_path as container_workdir so Claude's CWD is the actual workspace
     # (mount_path may be a parent directory for worktree support)
-    docker.run(docker_cmd, org_config=org_config, container_workdir=workspace_path)
+    # Pass plugin_settings for container HOME injection (prevents host leakage)
+    docker.run(
+        docker_cmd,
+        org_config=org_config,
+        container_workdir=workspace_path,
+        plugin_settings=plugin_settings,
+    )
 
 
 def extract_container_name(docker_cmd: list[str], is_resume: bool) -> str | None:

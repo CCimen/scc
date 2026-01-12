@@ -27,6 +27,7 @@ from scc_cli.marketplace.constants import MANAGED_STATE_FILE
 def render_settings(
     effective_plugins: dict[str, Any],
     materialized_marketplaces: dict[str, Any],
+    path_prefix: str = "",
 ) -> dict[str, Any]:
     """Render effective plugins and marketplaces to Claude settings format.
 
@@ -46,6 +47,11 @@ def render_settings(
             - relative_path: Path relative to project root
             - source_type: Type of source (github, git, directory, url)
             - canonical_name: The actual name from marketplace.json (what Claude Code sees)
+        path_prefix: Optional prefix to prepend to marketplace paths. When settings
+            will be written to container HOME (not workspace), this should be the
+            container's workspace mount path (e.g., "/workspace") so paths resolve
+            correctly. Example: relative_path ".claude/.scc-marketplaces/foo"
+            becomes "/workspace/.claude/.scc-marketplaces/foo".
 
     Returns:
         Dict with Claude Code settings structure:
@@ -75,12 +81,21 @@ def render_settings(
         # Use canonical name as the key - this is what Claude Code expects
         canonical_name = marketplace_data.get("canonical_name", alias_name)
 
+        # Apply path prefix if provided (for container HOME settings)
+        # When settings are in container HOME, we need absolute paths since
+        # relative paths won't resolve from ~/ context
+        if path_prefix:
+            # Combine prefix with relative path, handling double slashes
+            full_path = f"{path_prefix.rstrip('/')}/{relative_path.lstrip('/')}"
+        else:
+            full_path = relative_path
+
         # All local marketplaces use source.source: directory
         # This is because they've been cloned/downloaded to a local path
         extra_marketplaces[canonical_name] = {
             "source": {
                 "source": "directory",
-                "path": relative_path,
+                "path": full_path,
             }
         }
 
