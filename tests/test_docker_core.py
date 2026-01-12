@@ -282,11 +282,11 @@ class TestBuildCommand:
 
         assert "-c" not in cmd
         assert "--resume" not in cmd
-        # Without session flags, command should end with 'claude'
-        assert cmd[-1] == "claude"
-        # Verify expected command structure: docker sandbox run claude
+        # Without session flags, command should end with bypass permissions flag
+        assert cmd[-1] == "--dangerously-skip-permissions"
+        # Verify expected command structure: docker sandbox run claude --dangerously-skip-permissions
         # (no explicit volume mount - Docker sandbox auto-mounts it)
-        assert cmd == ["docker", "sandbox", "run", "claude"]
+        assert cmd == ["docker", "sandbox", "run", "claude", "--dangerously-skip-permissions"]
 
     def test_detached_mode_includes_d_flag(self):
         """When detached=True, command should include -d flag."""
@@ -294,7 +294,7 @@ class TestBuildCommand:
 
         assert "-d" in cmd
         # Agent name is ALWAYS required by docker sandbox run
-        assert cmd == ["docker", "sandbox", "run", "-d", "claude"]
+        assert cmd == ["docker", "sandbox", "run", "-d", "claude", "--dangerously-skip-permissions"]
 
     def test_detached_mode_includes_claude_agent(self):
         """When detached=True, command should still include claude agent (required by docker)."""
