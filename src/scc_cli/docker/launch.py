@@ -226,6 +226,7 @@ def run(
     ensure_credentials: bool = True,
     org_config: dict[str, Any] | None = None,
     container_workdir: Path | None = None,
+    plugin_settings: dict[str, Any] | None = None,
 ) -> int:
     """
     Execute the Docker command with optional org configuration.
@@ -243,6 +244,9 @@ def run(
             If None, uses the -w value from cmd (mount path).
             For worktrees, this should be the actual workspace path so Claude
             finds .claude/settings.local.json.
+        plugin_settings: Plugin settings dict to inject into container HOME.
+            Contains extraKnownMarketplaces and enabledPlugins. Injected to
+            /home/agent/.claude/settings.json to prevent host leakage.
 
     Raises:
         SandboxLaunchError: If Docker command fails to start
@@ -269,6 +273,7 @@ def run(
         ensure_credentials=ensure_credentials,
         org_config=org_config,
         container_workdir=container_workdir,
+        plugin_settings=plugin_settings,
     )
 
 
@@ -279,6 +284,7 @@ def run_sandbox(
     ensure_credentials: bool = True,
     org_config: dict[str, Any] | None = None,
     container_workdir: Path | None = None,
+    plugin_settings: dict[str, Any] | None = None,
 ) -> int:
     """
     Run Claude in a Docker sandbox with credential persistence.
@@ -286,7 +292,8 @@ def run_sandbox(
     Uses SYNCHRONOUS detached→symlink→exec pattern to eliminate race condition:
     1. Start container in DETACHED mode (no Claude running yet)
     2. Create symlinks BEFORE Claude starts (race eliminated!)
-    3. Exec Claude interactively using docker exec
+    3. Inject plugin settings to container HOME (if provided)
+    4. Exec Claude interactively using docker exec
 
     This replaces the previous fork-and-inject pattern which had a fundamental
     race condition: parent became Docker at T+0, child created symlinks at T+2s,
@@ -305,6 +312,9 @@ def run_sandbox(
             (-w flag for docker exec). If None, defaults to workspace.
             For worktrees, this should be the actual workspace path so Claude
             finds .claude/settings.local.json.
+        plugin_settings: Plugin settings dict to inject into container HOME.
+            Contains extraKnownMarketplaces and enabledPlugins. Injected to
+            /home/agent/.claude/settings.json to prevent host leakage.
 
     Returns:
         Exit code from Docker process
@@ -373,6 +383,17 @@ def run_sandbox(
             # STEP 5: Start background migration loop for first-time login
             # This runs in background to capture OAuth tokens during login
             _start_migration_loop(container_id)
+
+            # STEP 5.5: Inject plugin settings to container HOME (if provided)
+            # This writes extraKnownMarketplaces and enabledPlugins to
+            # /home/agent/.claude/settings.json - preventing host leakage
+            # while ensuring container Claude can access SCC-managed plugins
+            if plugin_settings:
+                if not inject_plugin_settings_to_container(container_id, plugin_settings):
+                    err_line(
+                        "Warning: Failed to inject plugin settings. "
+                        "SCC-managed plugins may not be available."
+                    )
 
             # STEP 6: Exec Claude interactively (replaces current process)
             # Claude binary is at /home/agent/.local/bin/claude
@@ -557,6 +578,73 @@ def reset_global_settings() -> bool:
     """
     # Write empty settings to the volume (overwrites any existing)
     return inject_file_to_sandbox_volume("settings.json", "{}")
+
+
+def inject_plugin_settings_to_container(
+    container_id: str,
+    settings: dict[str, Any],
+) -> bool:
+    """
+    Inject plugin settings into container HOME directory.
+
+    This writes settings to /home/agent/.claude/settings.json inside the container.
+    Used for container-only plugin configuration to prevent host Claude from
+    seeing SCC-managed plugins.
+
+    The settings contain extraKnownMarketplaces and enabledPlugins with absolute
+    paths pointing to the bind-mounted workspace.
+
+    Args:
+        container_id: Docker container ID to inject settings into
+        settings: Settings dict containing extraKnownMarketplaces and enabledPlugins
+
+    Returns:
+        True if injection successful, False otherwise
+    """
+    try:
+        # Serialize settings to JSON
+        settings_json = json.dumps(settings, indent=2)
+
+        # Use docker exec to write settings to container HOME
+        # First ensure the .claude directory exists
+        mkdir_result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "mkdir",
+                "-p",
+                "/home/agent/.claude",
+            ],
+            capture_output=True,
+            timeout=10,
+        )
+
+        if mkdir_result.returncode != 0:
+            return False
+
+        # Write settings via sh -c and echo/printf
+        # Using printf to handle special characters properly
+        # Escape single quotes in JSON for shell
+        escaped_json = settings_json.replace("'", "'\"'\"'")
+
+        write_result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "sh",
+                "-c",
+                f"printf '%s' '{escaped_json}' > /home/agent/.claude/settings.json",
+            ],
+            capture_output=True,
+            timeout=10,
+        )
+
+        return write_result.returncode == 0
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 def get_or_create_container(

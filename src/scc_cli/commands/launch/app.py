@@ -299,8 +299,13 @@ def _sync_marketplace_settings(
     Orchestrates the full marketplace pipeline:
     1. Compute effective plugins for team
     2. Materialize required marketplaces
-    3. Render and merge settings
-    4. Write settings.local.json
+    3. Render settings (NOT written to workspace to prevent host leakage)
+    4. Return rendered_settings for container injection
+
+    IMPORTANT: This uses container-only mode to prevent host Claude from seeing
+    SCC-managed plugins. Marketplaces are still materialized to workspace (for
+    container access via bind-mount), but settings.local.json is NOT written.
+    Instead, rendered_settings is returned for injection into container HOME.
 
     Args:
         workspace_path: Path to the workspace directory.
@@ -308,7 +313,8 @@ def _sync_marketplace_settings(
         org_config_url: URL of the org config (for tracking).
 
     Returns:
-        SyncResult with details, or None if no sync needed.
+        SyncResult with details (including rendered_settings for container injection),
+        or None if no sync needed.
 
     Raises:
         typer.Exit: If marketplace sync fails critically.
@@ -324,11 +330,20 @@ def _sync_marketplace_settings(
         "[cyan]Syncing marketplace settings...[/cyan]", console=console, spinner=Spinners.NETWORK
     ):
         try:
+            # Use container-only mode:
+            # - write_to_workspace=False: Don't write settings.local.json (prevents host leakage)
+            # - container_path_prefix: Workspace path for absolute paths in container
+            #
+            # Docker sandbox mounts workspace at the same absolute path, so paths like
+            # "/Users/foo/project/.claude/.scc-marketplaces/..." will resolve correctly
+            # when settings are in container HOME (/home/agent/.claude/settings.json)
             result = sync_marketplace_settings(
                 project_dir=workspace_path,
                 org_config_data=org_config,
                 team_id=team,
                 org_config_url=org_config_url,
+                write_to_workspace=False,  # Container-only mode
+                container_path_prefix=str(workspace_path),  # Absolute paths for container
             )
 
             # Display any warnings
@@ -348,11 +363,7 @@ def _sync_marketplace_settings(
                     f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
                 )
 
-            # NOTE: We intentionally do NOT inject marketplace settings to Docker volume.
-            # Workspace-relative paths (.claude/.scc-marketplaces/...) only resolve
-            # correctly from the workspace directory. The container runs with -w <workspace>
-            # so Claude Code reads settings.local.json from the workspace context.
-
+            # rendered_settings will be passed to launch_sandbox for container injection
             return result
 
         except SyncError as e:
@@ -618,13 +629,14 @@ def start(
     # ── Step 6: Team configuration ───────────────────────────────────────────
     # Skip team config in standalone mode (no org config to apply)
     # In offline mode, team config still applies from cached org config
+    sync_result: SyncResult | None = None
     if not dry_run and not standalone:
         _configure_team_settings(team, cfg)
 
         # ── Step 6.5: Sync marketplace settings ────────────────────────────────
         # Skip sync in offline mode (can't fetch remote data)
         if not offline:
-            _sync_marketplace_settings(workspace_path, team)
+            sync_result = _sync_marketplace_settings(workspace_path, team)
 
     # ── Step 6.55: Apply personal profile (local overlay) ─────────────────────
     personal_profile_id = None
@@ -707,6 +719,8 @@ def start(
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
     should_continue_session = resume or continue_session
+    # Extract plugin settings from sync result for container injection
+    plugin_settings = sync_result.rendered_settings if sync_result else None
     launch_sandbox(
         workspace_path=workspace_path,
         mount_path=mount_path,
@@ -715,6 +729,7 @@ def start(
         current_branch=current_branch,
         should_continue_session=should_continue_session,
         fresh=fresh,
+        plugin_settings=plugin_settings,
     )
 
 
@@ -1349,7 +1364,8 @@ def run_start_wizard_flow(
         workspace_path = validate_and_resolve_workspace(workspace)
         workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps=False)
         _configure_team_settings(team, cfg)
-        _sync_marketplace_settings(workspace_path, team)
+        sync_result = _sync_marketplace_settings(workspace_path, team)
+        plugin_settings = sync_result.rendered_settings if sync_result else None
         mount_path, current_branch = resolve_mount_and_branch(workspace_path)
         launch_sandbox(
             workspace_path=workspace_path,
@@ -1359,6 +1375,7 @@ def run_start_wizard_flow(
             current_branch=current_branch,
             should_continue_session=False,
             fresh=False,
+            plugin_settings=plugin_settings,
         )
         return True
     except Exception as e:

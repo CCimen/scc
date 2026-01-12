@@ -386,7 +386,8 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings
-        _sync_marketplace_settings(workspace_path, team)
+        sync_result = _sync_marketplace_settings(workspace_path, team)
+        plugin_settings = sync_result.rendered_settings if sync_result else None
 
         # Resolve mount path and branch
         mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
@@ -407,6 +408,7 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
             current_branch=current_branch,
             should_continue_session=False,
             fresh=False,
+            plugin_settings=plugin_settings,
         )
         return True
 
@@ -485,7 +487,8 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings
-        _sync_marketplace_settings(workspace_path, team)
+        sync_result = _sync_marketplace_settings(workspace_path, team)
+        plugin_settings = sync_result.rendered_settings if sync_result else None
 
         # Resolve mount path and branch
         mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
@@ -512,6 +515,7 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
             current_branch=current_branch,
             should_continue_session=True,  # Resume existing container
             fresh=False,
+            plugin_settings=plugin_settings,
         )
         return True
 
