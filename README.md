@@ -48,6 +48,7 @@ When you run `scc` or `scc start`:
 - **Shows Quick Resume** if you have recent sessions for this workspace
 - **Prints brief context** (workspace root, entry directory, team) before launching
 - **Applies personal profile** (if saved) after team config, before workspace overrides
+- **Bypass mode enabled**: Permission prompts are skipped by default since the Docker sandbox already provides isolation. Press `Shift+Tab` inside Claude to toggle permissions back on if needed
 - **Safety guard**: Won't auto-launch from suspicious directories (home, `/tmp`). Explicit paths like `scc start ~/` prompt for confirmation
 
 **Keyboard shortcuts in interactive mode:**
