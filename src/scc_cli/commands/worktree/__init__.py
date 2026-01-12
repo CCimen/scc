@@ -27,7 +27,7 @@ from .container_commands import (
     stop_cmd,
 )
 from .context_commands import context_clear_cmd
-from .session_commands import session_list_cmd, sessions_cmd
+from .session_commands import session_list_cmd, session_prune_cmd, sessions_cmd
 from .worktree_commands import (
     worktree_create_cmd,
     worktree_enter_cmd,
@@ -63,6 +63,7 @@ __all__ = [
     # Session commands
     "sessions_cmd",
     "session_list_cmd",
+    "session_prune_cmd",
     # Context commands
     "context_clear_cmd",
     # Pure helpers

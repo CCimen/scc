@@ -34,6 +34,7 @@ from ..keys import (
     RecentWorkspacesRequested,
     RefreshRequested,
     SessionResumeRequested,
+    SettingsRequested,
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
@@ -80,6 +81,7 @@ class Dashboard:
             custom_keys={
                 "r": "refresh",
                 "n": "new_session",
+                "s": "settings",
                 "w": "recent_workspaces",
                 "i": "git_init",
                 "c": "create_worktree",
@@ -743,6 +745,9 @@ class Dashboard:
                         return_to=self.state.active_tab.name,
                         reason="dashboard_new_session",
                     )
+                elif action.custom_key == "s":
+                    # User pressed 's' - open settings and maintenance screen
+                    raise SettingsRequested(return_to=self.state.active_tab.name)
                 elif action.custom_key == "w":
                     # User pressed 'w' - show recent workspaces picker
                     # Only active on Worktrees tab

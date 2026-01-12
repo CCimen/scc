@@ -15,7 +15,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .core.errors import SCCError
-from .core.exit_codes import EXIT_CANCELLED
+from .core.exit_codes import EXIT_CANCELLED, EXIT_PREREQ, get_error_footer
 from .output_mode import is_json_command_mode
 from .panels import create_warning_panel
 from .ui.prompts import render_error
@@ -90,6 +90,11 @@ def handle_errors(func: F) -> F:
                 raise typer.Exit(get_exit_code_for_exception(e))
             # Human mode: use stderr for errors (stdout purity for shell wrappers)
             render_error(err_console, e, debug=state.debug)
+            # Show actionable hint if available (footer has its own styling)
+            # Pass exception for contextual hints (e.g., governance target)
+            footer = get_error_footer(e.exit_code, exc=e)
+            if footer:
+                err_console.print(f"\n{footer}")
             raise typer.Exit(e.exit_code)
         except KeyboardInterrupt:
             if is_json_command_mode():
@@ -129,7 +134,13 @@ def handle_errors(func: F) -> F:
                         "Run with 'scc --debug <command>' for full traceback",
                     )
                 )
-            raise typer.Exit(5)
+            # Show actionable hint for unexpected errors (treated as prerequisite issues)
+            # Use a variable to ensure consistency between footer and exit code
+            exit_code = EXIT_PREREQ
+            footer = get_error_footer(exit_code)
+            if footer:
+                err_console.print(f"\n{footer}")
+            raise typer.Exit(exit_code)
 
     return cast(F, wrapper)
 

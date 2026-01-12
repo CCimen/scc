@@ -89,3 +89,46 @@ def get_exit_code_for_exception(exc: Exception) -> int:
 
     # Fallback for unmapped exceptions
     return EXIT_NOT_FOUND
+
+
+# Error footer mappings - actionable hints for common error scenarios
+# Use [dim]Try:[/dim] prefix to keep the command visible while dimming the prefix
+ERROR_FOOTERS: dict[int, str] = {
+    EXIT_NOT_FOUND: "[dim]Try:[/dim] [cyan]scc status[/cyan] or check your selection",
+    EXIT_USAGE: "[dim]Try:[/dim] [cyan]scc <command> --help[/cyan]",
+    EXIT_CONFIG: "[dim]Try:[/dim] [cyan]scc setup[/cyan] or [cyan]scc reset --config[/cyan]",
+    EXIT_TOOL: "[dim]Try:[/dim] [cyan]scc doctor[/cyan]",
+    EXIT_PREREQ: "[dim]Try:[/dim] [cyan]scc doctor[/cyan]",
+    EXIT_GOVERNANCE: "[dim]Try:[/dim] [cyan]scc unblock[/cyan] or [cyan]scc exceptions create[/cyan]",
+}
+
+
+def get_error_footer(exit_code: int, exc: Exception | None = None) -> str | None:
+    """Return an actionable hint for a given exit code.
+
+    These footers help users recover from errors by suggesting relevant commands.
+    For governance errors, includes the specific target in the hint if available.
+
+    Args:
+        exit_code: The exit code to get a footer for.
+        exc: Optional exception to extract contextual info (e.g., blocked item).
+
+    Returns:
+        A rich-formatted hint string, or None if no hint is available.
+
+    Examples:
+        >>> get_error_footer(EXIT_PREREQ)
+        "[dim]Try:[/dim] [cyan]scc doctor[/cyan]"
+        >>> get_error_footer(EXIT_SUCCESS)
+        None
+    """
+    # For governance errors, try to include the specific target
+    if exit_code == EXIT_GOVERNANCE and exc is not None:
+        target = getattr(exc, "item", None)
+        if target:
+            return (
+                f"[dim]Try:[/dim] [cyan]scc unblock {target}[/cyan] "
+                f"or [cyan]scc exceptions create[/cyan]"
+            )
+
+    return ERROR_FOOTERS.get(exit_code)
