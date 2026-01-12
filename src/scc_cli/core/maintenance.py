@@ -82,7 +82,7 @@ class PathInfo:
                     if self.size_bytes >= 10
                     else f"{self.size_bytes} {unit}"
                 )
-            self.size_bytes /= 1024
+            self.size_bytes = int(self.size_bytes / 1024)
         return f"{self.size_bytes:.1f} TB"
 
 
@@ -109,11 +109,11 @@ class ResetResult:
         """Human-readable bytes freed."""
         if self.bytes_freed == 0:
             return "0 B"
-        size = self.bytes_freed
+        size: float = self.bytes_freed
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024:
-                return f"{size:.1f} {unit}" if size >= 10 else f"{size} {unit}"
-            size /= 1024
+                return f"{size:.1f} {unit}" if size >= 10 else f"{int(size)} {unit}"
+            size = size / 1024
         return f"{size:.1f} TB"
 
 
@@ -469,18 +469,8 @@ def cleanup_expired_exceptions(dry_run: bool = False) -> ResetResult:
 
     # Count expired before cleanup
     try:
-        exceptions = user_store.load()
-        now = datetime.now(timezone.utc)
-        expired_count = 0
-        for exc in exceptions:
-            expires_at = exc.get("expires_at")
-            if expires_at:
-                try:
-                    exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-                    if exp_dt < now:
-                        expired_count += 1
-                except (ValueError, TypeError):
-                    pass
+        exception_file = user_store.read()
+        expired_count = sum(1 for e in exception_file.exceptions if e.is_expired())
         result.removed_count = expired_count
     except Exception:
         result.removed_count = 0
@@ -494,8 +484,8 @@ def cleanup_expired_exceptions(dry_run: bool = False) -> ResetResult:
         return result
 
     try:
-        # The UserStore.cleanup() method removes expired
-        user_store.cleanup()
+        # prune_expired removes expired exceptions
+        user_store.prune_expired()
         result.message = f"Removed {result.removed_count} expired exceptions"
     except Exception as e:
         result.success = False
@@ -566,7 +556,7 @@ def prune_containers(dry_run: bool = False) -> ResetResult:
     )
 
     try:
-        from .sandbox import docker
+        from .sandbox import docker  # type: ignore[import-untyped]
 
         # Get stopped containers
         all_containers = docker._list_all_sandbox_containers()
@@ -991,7 +981,7 @@ def preview_operation(action_id: str, **kwargs: Any) -> MaintenancePreview:
         user_store = UserStore()
         paths = [user_store.path]
         try:
-            item_count = len(user_store.load())
+            item_count = len(user_store.read().exceptions)
         except Exception:
             item_count = 0
         bytes_estimate = _get_size(user_store.path)

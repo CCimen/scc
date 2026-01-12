@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from typing import Annotated
 
 import typer
@@ -104,12 +105,12 @@ def _print_preview(preview: MaintenancePreview) -> None:
     if preview.item_count > 0:
         console.print(f"  Items: {preview.item_count}")
     if preview.bytes_estimate > 0:
-        size = preview.bytes_estimate
+        size: float = preview.bytes_estimate
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024:
                 console.print(f"  Size: {size:.1f} {unit}")
                 break
-            size /= 1024
+            size = size / 1024
     if preview.backup_will_be_created:
         console.print("  [dim]Backup will be created (may contain sensitive tokens)[/dim]")
 
@@ -463,23 +464,23 @@ def reset_cmd(
 
         try:
             with MaintenanceLock():
-                results = factory_reset(
+                factory_results = factory_reset(
                     dry_run=dry_run,
                     create_backup=not no_backup,
                     continue_on_error=continue_on_error,
                 )
 
                 if json_output:
-                    _print_json_results(results)
+                    _print_json_results(factory_results)
                 else:
                     console.print()
-                    for result in results:
+                    for result in factory_results:
                         _print_result(result)
                     console.print()
-                    total_bytes = sum(r.bytes_freed for r in results)
+                    total_bytes = sum(r.bytes_freed for r in factory_results)
                     console.print(f"[bold]Total freed: {total_bytes / 1024:.1f} KB[/bold]")
 
-                if not all(r.success for r in results):
+                if not all(r.success for r in factory_results):
                     raise typer.Exit(1)
 
         except MaintenanceLockError as e:
@@ -489,7 +490,7 @@ def reset_cmd(
         return
 
     # Build list of operations to perform
-    operations: list[tuple[str, callable, RiskTier, dict]] = []
+    operations: list[tuple[str, Callable[..., ResetResult], RiskTier, dict]] = []
 
     if cache:
         operations.append(("clear_cache", clear_cache, RiskTier.SAFE, {}))

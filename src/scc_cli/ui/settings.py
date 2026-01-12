@@ -193,14 +193,15 @@ def _get_actions_for_category(category: Category) -> list[SettingsAction]:
     return [a for a in SETTINGS_ACTIONS if a.category == category]
 
 
-def _format_bytes(size: int) -> str:
+def _format_bytes(size_bytes: int) -> str:
     """Format bytes as human-readable string."""
-    if size == 0:
+    if size_bytes == 0:
         return "0 B"
+    size: float = size_bytes
     for unit in ["B", "KB", "MB", "GB"]:
         if size < 1024:
-            return f"{size:.1f} {unit}" if size >= 10 else f"{size} {unit}"
-        size /= 1024
+            return f"{size:.1f} {unit}" if size >= 10 else f"{int(size)} {unit}"
+        size = size / 1024
     return f"{size:.1f} TB"
 
 
@@ -453,7 +454,7 @@ class SettingsScreen:
                     return "Configuration reset. Run 'scc setup' to reconfigure."
 
                 case "factory_reset":
-                    result = factory_reset()
+                    _results = factory_reset()  # Returns list[ResetResult]
                     return "Factory reset complete. Run 'scc setup' to reconfigure."
 
                 case "run_doctor":
@@ -463,7 +464,7 @@ class SettingsScreen:
                     from ..doctor.render import run_doctor as core_run_doctor
 
                     self._console.print()
-                    result = core_run_doctor(workspace=Path.cwd())
+                    _doctor_result = core_run_doctor(workspace=Path.cwd())
                     Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
                     return None  # No toast, doctor has its own output
 
@@ -502,13 +503,13 @@ class SettingsScreen:
             perms = p.permissions if p.exists else "-"
             table.add_row(
                 p.name,
-                p.path,
+                str(p.path),
                 p.size_human if p.exists else "-",
                 f"{exists} {perms}",
             )
 
         table.add_section()
-        table.add_row("Total", "", total, "")
+        table.add_row("Total", "", str(total), "")
 
         self._console.print(table)
         self._console.print()

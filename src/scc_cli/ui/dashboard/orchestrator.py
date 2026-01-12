@@ -196,10 +196,10 @@ def run_dashboard() -> None:
         except SettingsRequested as settings_req:
             # User pressed 's' - open settings and maintenance screen
             restore_tab = settings_req.return_to
-            result = _handle_settings()
+            settings_result = _handle_settings()
 
-            if result:
-                toast_message = result  # Success message from settings action
+            if settings_result:
+                toast_message = settings_result  # Success message from settings action
             # Loop continues to reload dashboard
 
 
