@@ -402,6 +402,10 @@ def run_sandbox(
             exec_workdir = container_workdir if container_workdir else workspace
             exec_cmd = ["docker", "exec", "-it", "-w", str(exec_workdir), container_id, "claude"]
 
+            # Skip permission prompts by default - safe since we're in a sandbox container
+            # The Docker sandbox already provides isolation, so the extra prompts are redundant
+            exec_cmd.append("--dangerously-skip-permissions")
+
             # Add Claude-specific flags
             if continue_session:
                 exec_cmd.append("-c")

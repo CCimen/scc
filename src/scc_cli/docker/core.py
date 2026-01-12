@@ -269,6 +269,10 @@ def build_command(
     # Agent name is ALWAYS required (docker sandbox run requires <agent>)
     cmd.append("claude")
 
+    # Skip permission prompts by default - safe since we're in a sandbox container
+    # The Docker sandbox already provides isolation, so the extra prompts are redundant
+    cmd.append("--dangerously-skip-permissions")
+
     # In interactive mode (not detached), add Claude-specific arguments
     # In detached mode, skip these - we'll pass them via docker exec later
     if not detached:
