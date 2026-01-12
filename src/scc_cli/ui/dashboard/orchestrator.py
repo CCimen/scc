@@ -25,6 +25,7 @@ from ..keys import (
     RecentWorkspacesRequested,
     RefreshRequested,
     SessionResumeRequested,
+    SettingsRequested,
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
@@ -191,6 +192,15 @@ def run_dashboard() -> None:
             verbose_worktrees = verbose_req.verbose
             toast_message = "Status on" if verbose_worktrees else "Status off"
             # Loop continues with new verbose setting
+
+        except SettingsRequested as settings_req:
+            # User pressed 's' - open settings and maintenance screen
+            restore_tab = settings_req.return_to
+            settings_result = _handle_settings()
+
+            if settings_result:
+                toast_message = settings_result  # Success message from settings action
+            # Loop continues to reload dashboard
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -697,6 +707,27 @@ def _handle_clone() -> bool:
     # For now, just inform user of git clone option
     # Full interactive clone can be added in a future phase
     return False
+
+
+def _handle_settings() -> str | None:
+    """Handle settings and maintenance screen request from dashboard.
+
+    Shows the settings and maintenance TUI, allowing users to perform
+    maintenance operations like clearing cache, pruning sessions, etc.
+
+    Returns:
+        Success message string if an action was performed, None if cancelled.
+    """
+    from ..settings import run_settings_screen
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    try:
+        return run_settings_screen()
+    except Exception as e:
+        console.print(f"[red]Error in settings screen: {e}[/red]")
+        return None
 
 
 def _show_onboarding_banner() -> None:

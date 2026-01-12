@@ -17,7 +17,7 @@ from .container_commands import (
     list_cmd,
 )
 from .context_commands import context_clear_cmd
-from .session_commands import session_list_cmd
+from .session_commands import session_list_cmd, session_prune_cmd
 from .worktree_commands import (
     worktree_create_cmd,
     worktree_enter_cmd,
@@ -102,6 +102,7 @@ session_app = typer.Typer(
 
 # Wire session commands
 session_app.command("list")(session_list_cmd)
+session_app.command("prune")(session_prune_cmd)
 
 
 @session_app.callback(invoke_without_command=True)

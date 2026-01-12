@@ -191,6 +191,23 @@ class VerboseToggleRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class SettingsRequested(Exception):  # noqa: N818
+    """Raised when user presses 's' to open settings and maintenance screen.
+
+    This is a control flow signal that allows the dashboard to request
+    opening the Settings & Maintenance TUI without coupling to CLI logic.
+
+    The orchestrator catches this and shows the settings screen.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "STATUS").
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -320,6 +337,7 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     # Actions
     KeyDoc("r", "Refresh data", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("n", "New session", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("s", "Settings & maintenance", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("t", "Switch team", section="Actions"),
     # Worktrees tab actions
     KeyDoc("w", "Recent workspaces", section="Worktrees", modes=("DASHBOARD",)),
@@ -412,6 +430,8 @@ DEFAULT_KEY_MAP: dict[str, ActionType] = {
     "a": ActionType.TOGGLE_ALL,
     # Cancel and quit
     readchar.key.ESC: ActionType.CANCEL,
+    "\x1b": ActionType.CANCEL,  # Raw escape character (fallback)
+    "\x1b\x1b": ActionType.CANCEL,  # Double escape (macOS quirk on some systems)
     "q": ActionType.QUIT,
     # Help
     "?": ActionType.HELP,

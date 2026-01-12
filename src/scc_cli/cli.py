@@ -37,6 +37,7 @@ from .commands.init import init_cmd
 from .commands.launch import start
 from .commands.org import org_app
 from .commands.profile import profile_app
+from .commands.reset import reset_cmd
 from .commands.support import support_app
 from .commands.team import team_app
 from .commands.worktree import (
@@ -168,6 +169,9 @@ def main_callback(
                         dry_run=False,
                         json_output=False,
                         pretty=False,
+                        non_interactive=False,
+                        debug=False,
+                        allow_suspicious_workspace=False,
                     )
                     return
 
@@ -189,6 +193,9 @@ def main_callback(
                     dry_run=False,
                     json_output=False,
                     pretty=False,
+                    non_interactive=False,
+                    debug=False,
+                    allow_suspicious_workspace=False,
                 )
             elif workspace_detected:
                 # Strong signal found (git repo or .scc.yaml) → use smart start flow
@@ -209,6 +216,9 @@ def main_callback(
                     dry_run=False,
                     json_output=False,
                     pretty=False,
+                    non_interactive=False,
+                    debug=False,
+                    allow_suspicious_workspace=False,
                 )
             else:
                 # No strong signal (not in git repo, no .scc.yaml) → show dashboard
@@ -235,6 +245,9 @@ def main_callback(
                 dry_run=False,
                 json_output=False,
                 pretty=False,
+                non_interactive=False,
+                debug=False,
+                allow_suspicious_workspace=False,
             )
 
 
@@ -276,6 +289,7 @@ app.command(name="doctor", rich_help_panel=PANEL_ADMIN)(doctor_cmd)
 app.command(name="update", rich_help_panel=PANEL_ADMIN)(update_cmd)
 app.command(name="status", rich_help_panel=PANEL_ADMIN)(status_cmd)
 app.command(name="statusline", rich_help_panel=PANEL_ADMIN)(statusline_cmd)
+app.command(name="reset", rich_help_panel=PANEL_ADMIN)(reset_cmd)
 
 # Add stats sub-app
 app.add_typer(stats_app, name="stats", rich_help_panel=PANEL_ADMIN)
@@ -297,6 +311,67 @@ app.add_typer(org_app, name="org", rich_help_panel=PANEL_GOVERNANCE)
 app.add_typer(session_app, name="session", rich_help_panel=PANEL_WORKSPACE)
 app.add_typer(container_app, name="container", rich_help_panel=PANEL_WORKSPACE)
 app.add_typer(context_app, name="context", rich_help_panel=PANEL_WORKSPACE)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shell Completion
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def completion_cmd(
+    shell: str = typer.Argument(
+        ...,
+        help="Shell type (bash, zsh, fish).",
+    ),
+) -> None:
+    """Generate shell completion script.
+
+    Prints the completion script to stdout for the specified shell.
+
+    \b
+    Installation:
+      # Bash (add to ~/.bashrc)
+      eval "$(scc completion bash)"
+
+      # Zsh (add to ~/.zshrc)
+      eval "$(scc completion zsh)"
+
+      # Fish (add to ~/.config/fish/completions/scc.fish)
+      scc completion fish > ~/.config/fish/completions/scc.fish
+    """
+    import click.shell_completion as shell_completion
+
+    shell_lower = shell.lower()
+    prog_name = "scc"
+    complete_var = f"_{prog_name.upper().replace('-', '_')}_COMPLETE"
+    complete_func = f"_{prog_name.replace('-', '_')}_completion"
+
+    template_vars = {
+        "complete_var": complete_var,
+        "prog_name": prog_name,
+        "complete_func": complete_func,
+    }
+
+    if shell_lower == "bash":
+        source = shell_completion._SOURCE_BASH
+        script = source % template_vars
+        console.print(script, highlight=False)
+    elif shell_lower == "zsh":
+        source = shell_completion._SOURCE_ZSH
+        script = source % template_vars
+        console.print(script, highlight=False)
+    elif shell_lower == "fish":
+        source = shell_completion._SOURCE_FISH
+        script = source % template_vars
+        console.print(script, highlight=False)
+    else:
+        console.print(f"[red]Unknown shell: {shell}[/red]")
+        console.print("[dim]Supported shells: bash, zsh, fish[/dim]")
+        raise typer.Exit(1)
+
+
+# Register completion command
+app.command(name="completion", rich_help_panel=PANEL_ADMIN)(completion_cmd)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
