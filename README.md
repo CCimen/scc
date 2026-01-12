@@ -32,10 +32,12 @@ SCC isolates AI execution in containers, enforces branch safety, and prevents de
 **Requires:** Python 3.10+, Docker Desktop 4.50+, Git 2.30+
 
 ```bash
-pip install scc-cli      # Install
+uv tool install scc-cli  # Install (recommended)
 scc setup                # Configure (paste your org URL, pick your team)
 cd ~/project && scc      # Auto-detect workspace and launch (or scc start ~/project)
 ```
+
+> **Alternative:** `pip install scc-cli` works if you don't have [uv](https://docs.astral.sh/uv/).
 
 Run `scc doctor` to verify your environment or troubleshoot issues.
 
@@ -51,6 +53,7 @@ When you run `scc` or `scc start`:
 **Keyboard shortcuts in interactive mode:**
 - `Enter` — Select/resume session
 - `n` — Start new session
+- `s` — Settings & maintenance
 - `Esc` — Go back
 - `q` — Quit
 
@@ -239,6 +242,17 @@ scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
 | `scc profile import --repo PATH` | Import profiles from a local repo |
 | `scc profile sync --repo PATH` | Pull/import + export + optional commit/push |
 
+### Maintenance
+
+| Command | Description |
+|---------|-------------|
+| `scc reset` | Interactive maintenance hub (cache, sessions, config) |
+| `scc reset --cache` | Clear cache files |
+| `scc reset --sessions` | Prune old sessions (keeps recent 20) |
+| `scc reset --all` | Factory reset (removes all SCC data) |
+| `scc config paths` | Show file locations and sizes |
+| `scc sessions prune` | Clean up old sessions |
+
 ### Governance & Admin
 
 | Command | Description |
@@ -247,6 +261,7 @@ scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
 | `scc exceptions list` | View active exceptions |
 | `scc audit plugins` | Audit installed plugins |
 | `scc support bundle` | Generate support bundle for troubleshooting |
+| `scc completion bash` | Generate shell completions (bash/zsh/fish) |
 
 Run `scc <command> --help` for options. See **[CLI Reference](https://scc-cli.dev/reference/cli/overview/)** for the complete command list (40+ commands).
 
@@ -334,6 +349,8 @@ session:
 ~/.cache/scc/                # Cache (safe to delete)
 <repo>/.scc.yaml             # Project-specific config
 ```
+
+Run `scc config paths` to see all locations with sizes and permissions.
 
 ---
 
