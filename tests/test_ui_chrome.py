@@ -244,8 +244,8 @@ class TestTabRendering:
         tab_row = chrome._render_tabs()
 
         # The active tab (index 1 = Containers) should be styled differently
-        # Check that Containers is bracketed (our active indicator)
-        assert "[Containers]" in str(tab_row)
+        # Check that Containers has space padding (pill-style indicator)
+        assert " Containers " in str(tab_row)
 
 
 class TestFooterHintsDisplay:
@@ -271,8 +271,8 @@ class TestFooterHintsDisplay:
         result = render_chrome(config, body)
         output = self._render_to_string(result)
 
-        # Should have separator between hints
-        assert "│" in output
+        # Should have middot separator between hints
+        assert "·" in output
 
     def test_footer_hint_shows_key_and_action(self) -> None:
         """Each hint shows both key and action description."""

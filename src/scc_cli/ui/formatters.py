@@ -136,6 +136,8 @@ def format_team(
 def format_container(container: ContainerInfo) -> ListItem[ContainerInfo]:
     """Format a container for display in a picker or list.
 
+    Uses ● for running containers and ○ for stopped, with simplified time.
+
     Args:
         container: Container information from Docker.
 
@@ -154,29 +156,31 @@ def format_container(container: ContainerInfo) -> ListItem[ContainerInfo]:
         >>> item.label
         'scc-main'
     """
-    # Build description parts
-    desc_parts: list[str] = []
+    # Determine if container is running
+    is_running = container.status.startswith("Up") if container.status else False
 
-    if container.profile:
-        desc_parts.append(container.profile)
+    # Build description parts with middot separators
+    desc_parts: list[str] = []
 
     if container.workspace:
         # Show just the workspace name (last path component)
         workspace_name = container.workspace.split("/")[-1]
         desc_parts.append(workspace_name)
 
+    # Add status indicator with time
     if container.status:
-        # Simplify status (e.g., "Up 2 hours" -> "Up 2h")
-        status_short = _shorten_docker_status(container.status)
-        desc_parts.append(status_short)
-
-    # Determine if container is running
-    is_running = container.status.startswith("Up") if container.status else False
+        time_str = _extract_container_time(container.status)
+        if is_running:
+            # Running: filled circle with time
+            desc_parts.append(f"● {time_str}")
+        else:
+            # Stopped: hollow circle
+            desc_parts.append("○ stopped")
 
     return ListItem(
         value=container,
         label=container.name,
-        description="  ".join(desc_parts),
+        description=" · ".join(desc_parts),
         metadata={
             "running": "yes" if is_running else "no",
             "id": container.id[:12],  # Short container ID
@@ -299,9 +303,9 @@ def format_context(
     Args:
         context: Work context to format.
         is_running: Whether the context's container is running.
-            True = show 🟢 (running), False = show ⚫ (stopped), None = no indicator.
+            True = show ● (running), False = show ○ (stopped), None = no indicator.
         is_current_branch: Whether this context matches the current git branch.
-            True = show ★ indicator, False/None = no indicator.
+            True = show ◆ indicator, False/None = no indicator.
 
     Returns:
         ListItem suitable for ListScreen display.
@@ -318,12 +322,12 @@ def format_context(
         ... )
         >>> item = format_context(ctx)
         >>> item.label
-        '📌 platform · api · main'
+        '★ platform · api · main'
         >>> item = format_context(ctx, is_running=True)
-        >>> '🟢' in item.label
+        >>> '●' in item.label
         True
         >>> item = format_context(ctx, is_current_branch=True)
-        >>> '★' in item.label
+        >>> '◆' in item.label
         True
     """
     # Build label parts
@@ -331,17 +335,17 @@ def format_context(
 
     # Add pinned indicator
     if context.pinned:
-        parts.append("📌")
+        parts.append("★")
 
     # Add current branch indicator (matches CWD branch)
     if is_current_branch is True:
-        parts.append("★")
+        parts.append("◆")
 
     # Add status indicator (running/stopped)
     if is_running is True:
-        parts.append("🟢")
+        parts.append("●")
     elif is_running is False:
-        parts.append("⚫")
+        parts.append("○")
 
     # Add display label
     parts.append(context.display_label)
@@ -411,6 +415,43 @@ def _format_relative_time(iso_timestamp: str) -> str:
         return f"{weeks}w ago"
     except (ValueError, TypeError):
         return ""
+
+
+def _extract_container_time(status: str) -> str:
+    """Extract just the time duration from Docker status.
+
+    Converts Docker's verbose status to compact time:
+    - "Up 2 hours" -> "2h"
+    - "Up About an hour" -> "1h"
+    - "Up 25 hours" -> "25h"
+    - "Up Less than a second" -> "<1s"
+    - "Exited (0) 5 minutes ago" -> "5m"
+
+    Args:
+        status: Full Docker status string.
+
+    Returns:
+        Compact time string (e.g., "2h", "25h", "5m").
+    """
+    import re
+
+    # Handle "About an hour" -> "1h"
+    if "About an hour" in status:
+        return "1h"
+    if "About a minute" in status:
+        return "1m"
+    if "Less than a second" in status:
+        return "<1s"
+
+    # Extract number and unit from status
+    # Matches patterns like "Up 2 hours", "Up 25 hours", "Exited (0) 5 minutes ago"
+    match = re.search(r"(\d+)\s*(second|minute|hour|day|week)s?", status)
+    if match:
+        number = match.group(1)
+        unit = match.group(2)[0]  # First letter: s, m, h, d, w
+        return f"{number}{unit}"
+
+    return ""
 
 
 def _shorten_docker_status(status: str) -> str:

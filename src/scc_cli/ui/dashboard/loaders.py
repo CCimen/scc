@@ -12,27 +12,32 @@ Loaders handle errors gracefully, returning placeholder items on failure.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ..list_screen import ListItem
 from .models import DashboardTab, TabData
 
 
-def _load_status_tab_data() -> TabData:
-    """Load Status tab data showing system overview.
+def _load_status_tab_data(refresh_at: datetime | None = None) -> TabData:
+    """Load Status tab data showing quick actions and context.
 
     The Status tab displays:
-    - Current team and organization info
-    - Sync status with remote config
-    - Resource counts for quick overview
-    - Optional enhancements (statusline)
+    - Primary actions (start session, resume)
+    - Current team and organization context
+    - Quick access to settings & maintenance
+
+    Diagnostic info (Docker, Sandbox, Statusline) is in `scc doctor`.
 
     Returns:
-        TabData with status summary items.
+        TabData with status items.
     """
     # Import here to avoid circular imports
-    from ... import config, docker, sessions
+    from ... import config, sessions
     from ...docker import core as docker_core
+
+    # Suppress unused import warning - refresh_at kept for API compatibility
+    _ = refresh_at
 
     items: list[ListItem[Any]] = []
 
@@ -40,10 +45,40 @@ def _load_status_tab_data() -> TabData:
     items.append(
         ListItem(
             value="start_session",
-            label="Start new session",
-            description="Launch Claude in a workspace",
+            label="New session",
+            description="",
         )
     )
+
+    # Resume last session (quick action)
+    try:
+        recent_session = sessions.get_most_recent()
+        if recent_session:
+            workspace = recent_session.get("workspace", "")
+            workspace_name = workspace.split("/")[-1] if workspace else "unknown"
+            last_used = recent_session.get("last_used")
+            last_used_display = ""
+            if last_used:
+                try:
+                    dt = datetime.fromisoformat(last_used)
+                    last_used_display = sessions.format_relative_time(dt)
+                except ValueError:
+                    last_used_display = last_used
+            # Build middot-separated description for scannability
+            desc_parts = [workspace_name]
+            if recent_session.get("branch"):
+                desc_parts.append(str(recent_session.get("branch")))
+            if last_used_display:
+                desc_parts.append(last_used_display)
+            items.append(
+                ListItem(
+                    value={"_action": "resume_last_session", "session": recent_session},
+                    label="Resume last",
+                    description=" · ".join(desc_parts),
+                )
+            )
+    except Exception:
+        pass
 
     # Load current team info
     try:
@@ -55,16 +90,16 @@ def _load_status_tab_data() -> TabData:
             items.append(
                 ListItem(
                     value="team",
-                    label="Team",
-                    description=f"{team} (Enter to switch)",
+                    label=f"Team: {team}",
+                    description="",
                 )
             )
         else:
             items.append(
                 ListItem(
                     value="team",
-                    label="Team",
-                    description="No team selected (Enter to choose)",
+                    label="Team: none",
+                    description="",
                 )
             )
 
@@ -72,8 +107,7 @@ def _load_status_tab_data() -> TabData:
         if org_source and isinstance(org_source, dict):
             org_url = org_source.get("url", "")
             if org_url:
-                # Extract domain for display
-                domain = org_url.replace("https://", "").replace("http://", "").split("/")[0]
+                # Get org name, fallback to domain
                 org_name = None
                 try:
                     org_config = config.load_cached_org_config()
@@ -82,23 +116,23 @@ def _load_status_tab_data() -> TabData:
                 except Exception:
                     org_name = None
 
-                desc = domain
-                if org_name:
-                    desc = f"{org_name} ({domain})"
+                if not org_name:
+                    # Extract domain as fallback
+                    org_name = org_url.replace("https://", "").replace("http://", "").split("/")[0]
 
                 items.append(
                     ListItem(
                         value="organization",
-                        label="Organization",
-                        description=desc,
+                        label=f"Organization: {org_name}",
+                        description="",
                     )
                 )
         elif user_config.get("standalone"):
             items.append(
                 ListItem(
                     value="organization",
-                    label="Mode",
-                    description="Standalone (no remote config)",
+                    label="Mode: standalone",
+                    description="",
                 )
             )
 
@@ -106,12 +140,12 @@ def _load_status_tab_data() -> TabData:
         items.append(
             ListItem(
                 value="config_error",
-                label="Configuration",
-                description="Error loading config",
+                label="Config: error",
+                description="",
             )
         )
 
-    # Load container count
+    # Container count (summary - details in Containers tab)
     try:
         containers = docker_core.list_scc_containers()
         running = sum(1 for c in containers if "Up" in c.status)
@@ -119,63 +153,21 @@ def _load_status_tab_data() -> TabData:
         items.append(
             ListItem(
                 value="containers",
-                label="Containers",
-                description=f"{running} running, {total} total",
+                label=f"Containers: {running}/{total} running",
+                description="",
             )
         )
     except Exception:
-        items.append(
-            ListItem(
-                value="containers",
-                label="Containers",
-                description="Unable to query Docker",
-            )
-        )
+        pass  # Don't show if Docker unavailable
 
-    # Load session count
-    try:
-        recent_sessions = sessions.list_recent(limit=100)
-        session_count = len(recent_sessions)
-        items.append(
-            ListItem(
-                value="sessions",
-                label="Sessions",
-                description=f"{session_count} recorded",
-            )
+    # Settings shortcut
+    items.append(
+        ListItem(
+            value="settings",
+            label="Settings",
+            description="",
         )
-    except Exception:
-        items.append(
-            ListItem(
-                value="sessions",
-                label="Sessions",
-                description="Error loading sessions",
-            )
-        )
-
-    # Check statusline status (optional enhancement)
-    try:
-        settings = docker.get_sandbox_settings()
-        has_statusline = settings is not None and "statusLine" in settings
-        if has_statusline:
-            items.append(
-                ListItem(
-                    value="statusline_installed",
-                    label="Statusline",
-                    description="✓ Installed",
-                )
-            )
-        else:
-            items.append(
-                ListItem(
-                    value="statusline_not_installed",
-                    label="Statusline",
-                    description="Not installed - Enter to install",
-                    governance_status="warning",
-                )
-            )
-    except Exception:
-        # Docker not available - don't show statusline option
-        pass
+    )
 
     return TabData(
         tab=DashboardTab.STATUS,
@@ -267,11 +259,12 @@ def _load_sessions_tab_data() -> TabData:
                 desc_parts.append(str(session["last_used"]))
 
             # Store full session dict for details pane access
+            # Use middot separators for scannability
             items.append(
                 ListItem(
                     value=session,
                     label=name,
-                    description="  ".join(desc_parts),
+                    description=" · ".join(desc_parts),
                 )
             )
 

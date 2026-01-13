@@ -405,7 +405,7 @@ def pick_context_quick_resume(
     if not contexts:
         new_session_desc = "No sessions yet — press Enter to start"
     new_session_item: ListItem[WorkContext | object] = ListItem(
-        label=f"➕ New session ({team_label})",
+        label=f"+ New session ({team_label})",
         description=new_session_desc,
         value=NEW_SESSION_SENTINEL,
     )
@@ -413,7 +413,7 @@ def pick_context_quick_resume(
     switch_team_item: ListItem[WorkContext | object] | None = None
     if not standalone:
         switch_team_item = ListItem(
-            label="👥 Switch team",
+            label="Switch team",
             description="Choose a different team",
             value=SWITCH_TEAM_SENTINEL,
         )

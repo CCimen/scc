@@ -657,7 +657,7 @@ class TestQuickResumeCurrentBranch:
 
         item = format_context(ctx, is_current_branch=is_current)
 
-        assert "★" in item.label
+        assert "◆" in item.label
         assert item.metadata["current_branch"] == "yes"
 
     def test_current_branch_no_highlight_when_different(self) -> None:
@@ -680,7 +680,7 @@ class TestQuickResumeCurrentBranch:
 
         item = format_context(ctx, is_current_branch=is_current)
 
-        assert "★" not in item.label
+        assert "◆" not in item.label
         assert item.metadata["current_branch"] == "no"
 
     def test_current_branch_none_no_highlights(self) -> None:
@@ -703,7 +703,7 @@ class TestQuickResumeCurrentBranch:
 
         item = format_context(ctx, is_current_branch=is_current)
 
-        assert "★" not in item.label
+        assert "◆" not in item.label
         assert item.metadata["current_branch"] == "no"
 
     def test_pick_context_quick_resume_accepts_current_branch(self) -> None:
@@ -741,5 +741,5 @@ class TestQuickResumeCurrentBranch:
                 assert len(items) == 3
                 assert "New session" in items[0].label
                 assert "Switch team" in items[1].label
-                # The context item should have ★ indicator since worktree_name == current_branch
-                assert "★" in items[2].label
+                # The context item should have ◆ indicator since worktree_name == current_branch
+                assert "◆" in items[2].label

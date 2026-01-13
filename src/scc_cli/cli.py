@@ -146,34 +146,8 @@ def main_callback(
                 else:
                     raise typer.Exit(0)
 
-                # Offer to start immediately after setup/standalone choice
-                start_now = Prompt.ask(
-                    "[cyan]Start a session now?[/cyan]",
-                    choices=["yes", "no"],
-                    default="yes",
-                )
-                if start_now == "yes":
-                    ctx.invoke(
-                        start,
-                        workspace=str(cwd) if workspace_detected else None,
-                        team=None,
-                        session_name=None,
-                        resume=False,
-                        select=False,
-                        continue_session=False,
-                        worktree_name=None,
-                        fresh=False,
-                        install_deps=False,
-                        offline=False,
-                        standalone=False,
-                        dry_run=False,
-                        json_output=False,
-                        pretty=False,
-                        non_interactive=False,
-                        debug=False,
-                        allow_suspicious_workspace=False,
-                    )
-                    return
+                # Setup complete - return to prompt
+                return
 
             if interactive:
                 # -i flag: force interactive workspace picker via start -i
@@ -197,31 +171,8 @@ def main_callback(
                     debug=False,
                     allow_suspicious_workspace=False,
                 )
-            elif workspace_detected:
-                # Strong signal found (git repo or .scc.yaml) → use smart start flow
-                # This shows Quick Resume (if sessions exist) or launches immediately
-                ctx.invoke(
-                    start,
-                    workspace=str(cwd),
-                    team=None,
-                    session_name=None,
-                    resume=False,
-                    select=False,
-                    continue_session=False,
-                    worktree_name=None,
-                    fresh=False,
-                    install_deps=False,
-                    offline=False,
-                    standalone=False,
-                    dry_run=False,
-                    json_output=False,
-                    pretty=False,
-                    non_interactive=False,
-                    debug=False,
-                    allow_suspicious_workspace=False,
-                )
             else:
-                # No strong signal (not in git repo, no .scc.yaml) → show dashboard
+                # Always show dashboard in interactive mode
                 from .ui.dashboard import run_dashboard
 
                 run_dashboard()

@@ -108,8 +108,8 @@ class TestFormatContainer:
         assert item.label == "scc-main"
         assert item.value == container
 
-    def test_includes_profile_in_description(self) -> None:
-        """Include profile in description."""
+    def test_includes_running_indicator_in_description(self) -> None:
+        """Include running indicator in description."""
         container = ContainerInfo(
             id="abc123def456",
             name="scc-main",
@@ -118,7 +118,8 @@ class TestFormatContainer:
         )
         item = format_container(container)
 
-        assert "team-a" in item.description
+        # Shows running indicator ● with time (profile no longer shown)
+        assert "●" in item.description
 
     def test_includes_workspace_name_only(self) -> None:
         """Include just workspace directory name, not full path."""
@@ -339,7 +340,7 @@ class TestFormatContext:
         )
         item = format_context(ctx)
 
-        assert item.label == "📌 platform · api · main"
+        assert item.label == "★ platform · api · main"
 
     def test_unpinned_context_no_pin_indicator(self) -> None:
         """Unpinned context has no pin indicator."""
@@ -353,7 +354,7 @@ class TestFormatContext:
         item = format_context(ctx)
 
         assert item.label == "platform · api · main"
-        assert "📌" not in item.label
+        assert "★" not in item.label
 
     def test_includes_relative_time_in_description(self) -> None:
         """Include relative time in description."""
@@ -455,7 +456,7 @@ class TestFormatContext:
         assert unpinned_item.metadata["pinned"] == "no"
 
     def test_running_container_shows_green_indicator(self) -> None:
-        """Running container shows 🟢 indicator."""
+        """Running container shows ● indicator."""
         ctx = WorkContext(
             team="platform",
             repo_root=Path("/code/api"),
@@ -464,11 +465,11 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_running=True)
 
-        assert "🟢" in item.label
-        assert item.label == "🟢 platform · api · main"
+        assert "●" in item.label
+        assert item.label == "● platform · api · main"
 
     def test_stopped_container_shows_dark_indicator(self) -> None:
-        """Stopped container shows ⚫ indicator."""
+        """Stopped container shows ○ indicator."""
         ctx = WorkContext(
             team="platform",
             repo_root=Path("/code/api"),
@@ -477,8 +478,8 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_running=False)
 
-        assert "⚫" in item.label
-        assert item.label == "⚫ platform · api · main"
+        assert "○" in item.label
+        assert item.label == "○ platform · api · main"
 
     def test_unknown_running_status_no_indicator(self) -> None:
         """Unknown running status (None) shows no indicator."""
@@ -490,8 +491,8 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_running=None)
 
-        assert "🟢" not in item.label
-        assert "⚫" not in item.label
+        assert "●" not in item.label
+        assert "○" not in item.label
         assert item.label == "platform · api · main"
 
     def test_pinned_and_running_shows_both_indicators(self) -> None:
@@ -506,7 +507,7 @@ class TestFormatContext:
         item = format_context(ctx, is_running=True)
 
         # Order: pinned first, then running status
-        assert item.label == "📌 🟢 platform · api · main"
+        assert item.label == "★ ● platform · api · main"
 
     def test_pinned_and_stopped_shows_both_indicators(self) -> None:
         """Pinned and stopped context shows both indicators."""
@@ -519,7 +520,7 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_running=False)
 
-        assert item.label == "📌 ⚫ platform · api · main"
+        assert item.label == "★ ○ platform · api · main"
 
     def test_metadata_includes_running_status_yes(self) -> None:
         """Metadata includes running=yes when container is running."""
@@ -561,8 +562,8 @@ class TestFormatContext:
     # Current branch indicator tests
     # =========================================================================
 
-    def test_current_branch_shows_star_indicator(self) -> None:
-        """Current branch context shows ★ indicator."""
+    def test_current_branch_shows_diamond_indicator(self) -> None:
+        """Current branch context shows ◆ indicator."""
         ctx = WorkContext(
             team="platform",
             repo_root=Path("/code/api"),
@@ -571,11 +572,11 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_current_branch=True)
 
-        assert "★" in item.label
-        assert item.label == "★ platform · api · main"
+        assert "◆" in item.label
+        assert item.label == "◆ platform · api · main"
 
-    def test_non_current_branch_no_star_indicator(self) -> None:
-        """Non-current branch context shows no ★ indicator."""
+    def test_non_current_branch_no_diamond_indicator(self) -> None:
+        """Non-current branch context shows no ◆ indicator."""
         ctx = WorkContext(
             team="platform",
             repo_root=Path("/code/api"),
@@ -584,7 +585,7 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_current_branch=False)
 
-        assert "★" not in item.label
+        assert "◆" not in item.label
         assert item.label == "platform · api · main"
 
     def test_unknown_current_branch_no_indicator(self) -> None:
@@ -597,7 +598,7 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_current_branch=None)
 
-        assert "★" not in item.label
+        assert "◆" not in item.label
 
     def test_pinned_and_current_branch_shows_both_indicators(self) -> None:
         """Pinned and current branch context shows both indicators in correct order."""
@@ -610,11 +611,11 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_current_branch=True)
 
-        # Order: 📌 ★ display_label
-        assert item.label == "📌 ★ platform · api · main"
+        # Order: ★ ◆ display_label (pinned, current_branch)
+        assert item.label == "★ ◆ platform · api · main"
 
     def test_pinned_running_and_current_branch_shows_all_indicators(self) -> None:
-        """Context with all indicators shows them in correct order: 📌 ★ 🟢."""
+        """Context with all indicators shows them in correct order: ★ ◆ ●."""
         ctx = WorkContext(
             team="platform",
             repo_root=Path("/code/api"),
@@ -624,8 +625,8 @@ class TestFormatContext:
         )
         item = format_context(ctx, is_running=True, is_current_branch=True)
 
-        # Order: 📌 ★ 🟢 display_label
-        assert item.label == "📌 ★ 🟢 platform · api · main"
+        # Order: ★ ◆ ● display_label (pinned, current_branch, running)
+        assert item.label == "★ ◆ ● platform · api · main"
 
     def test_metadata_includes_current_branch_status_yes(self) -> None:
         """Metadata includes current_branch='yes' when is_current_branch=True."""

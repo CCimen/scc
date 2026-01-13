@@ -19,6 +19,7 @@ from ...console import get_err_console
 if TYPE_CHECKING:
     from rich.console import Console
 
+from ...confirm import Confirm
 from ..keys import (
     ContainerRemoveRequested,
     ContainerResumeRequested,
@@ -822,6 +823,179 @@ def _handle_container_remove(container_id: str, container_name: str) -> tuple[bo
     )
 
 
+def _handle_container_action_menu(container_id: str, container_name: str) -> str | None:
+    """Show a container actions menu and execute the selected action."""
+    import subprocess
+
+    from ... import docker
+    from ..list_screen import ListItem, ListScreen
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    status = docker.get_container_status(container_name) or ""
+    is_running = status.startswith("Up")
+
+    items: list[ListItem[str]] = []
+
+    if is_running:
+        items.append(
+            ListItem(
+                value="attach_shell",
+                label="Attach shell",
+                description="docker exec -it <container> bash",
+            )
+        )
+        items.append(
+            ListItem(
+                value="stop",
+                label="Stop container",
+                description="Stop running container",
+            )
+        )
+    else:
+        items.append(
+            ListItem(
+                value="resume",
+                label="Resume container",
+                description="Start stopped container",
+            )
+        )
+        items.append(
+            ListItem(
+                value="delete",
+                label="Delete container",
+                description="Remove stopped container",
+            )
+        )
+
+    if not items:
+        return "No actions available"
+
+    screen = ListScreen(items, title=f"Actions — {container_name}")
+    selected = screen.run()
+    if not selected:
+        return "Cancelled"
+
+    if selected == "attach_shell":
+        cmd = ["docker", "exec", "-it", container_name, "bash"]
+        result = subprocess.run(cmd)
+        return "Shell closed" if result.returncode == 0 else "Shell exited with errors"
+
+    if selected == "stop":
+        _, message = _handle_container_stop(container_id, container_name)
+        return message
+
+    if selected == "resume":
+        _, message = _handle_container_resume(container_id, container_name)
+        return message
+
+    if selected == "delete":
+        _, message = _handle_container_remove(container_id, container_name)
+        return message
+
+    return None
+
+
+def _handle_session_action_menu(session: dict[str, Any]) -> str | None:
+    """Show a session actions menu and execute the selected action."""
+    from ... import sessions as session_store
+    from ..list_screen import ListItem, ListScreen
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    items: list[ListItem[str]] = [
+        ListItem(value="resume", label="Resume session", description="Continue this session"),
+    ]
+
+    items.append(
+        ListItem(
+            value="remove",
+            label="Remove from history",
+            description="Does not delete any containers",
+        )
+    )
+
+    screen = ListScreen(items, title="Session Actions")
+    selected = screen.run()
+    if not selected:
+        return "Cancelled"
+
+    if selected == "resume":
+        try:
+            _handle_session_resume(session)
+            return "Resumed session"
+        except Exception:
+            return "Resume failed"
+
+    if selected == "remove":
+        workspace = session.get("workspace")
+        branch = session.get("branch")
+        if not workspace:
+            return "Missing workspace"
+        removed = session_store.remove_session(workspace, branch)
+        return "Removed from history" if removed else "No matching session found"
+
+    return None
+
+
+def _handle_worktree_action_menu(worktree_path: str) -> str | None:
+    """Show a worktree actions menu and execute the selected action."""
+    import subprocess
+    from pathlib import Path
+
+    from ..list_screen import ListItem, ListScreen
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    items: list[ListItem[str]] = [
+        ListItem(value="start", label="Start session here", description="Launch Claude"),
+        ListItem(
+            value="open_shell",
+            label="Open shell",
+            description="cd into this worktree",
+        ),
+        ListItem(
+            value="remove",
+            label="Remove worktree",
+            description="git worktree remove <path>",
+        ),
+    ]
+
+    screen = ListScreen(items, title=f"Worktree Actions — {Path(worktree_path).name}")
+    selected = screen.run()
+    if not selected:
+        return "Cancelled"
+
+    if selected == "start":
+        # Reuse worktree start flow directly
+        result = _handle_worktree_start(worktree_path)
+        if result is None:
+            return "Cancelled"
+        return "Started session" if result else "Start cancelled"
+
+    if selected == "open_shell":
+        console.print(f"[cyan]cd {worktree_path}[/cyan]")
+        console.print("[dim]Copy/paste to jump into this worktree.[/dim]")
+        return "Path copied to screen"
+
+    if selected == "remove":
+        if not Confirm.ask(
+            "[yellow]Remove this worktree? This cannot be undone.[/yellow]",
+            default=False,
+        ):
+            return "Cancelled"
+        try:
+            subprocess.run(["git", "worktree", "remove", "--force", worktree_path], check=True)
+            return "Worktree removed"
+        except Exception:
+            return "Failed to remove worktree"
+
+    return None
+
+
 def _handle_settings() -> str | None:
     """Handle settings and maintenance screen request from dashboard.
 
@@ -852,6 +1026,7 @@ def _show_onboarding_banner() -> None:
     Waits for user to press any key before continuing.
     """
     import readchar
+    from rich import box
     from rich.panel import Panel
 
     console = get_err_console()
@@ -869,7 +1044,8 @@ def _show_onboarding_banner() -> None:
         Panel(
             message,
             title="[bold]Getting Started[/bold]",
-            border_style="cyan",
+            border_style="bright_black",
+            box=box.ROUNDED,
             padding=(1, 2),
         )
     )
