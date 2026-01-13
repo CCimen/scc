@@ -41,12 +41,10 @@ class TestPromptOrgUrl:
             "[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]"
         )
 
-    def test_returns_none_for_standalone(self):
-        """Should return None when user chooses standalone mode."""
+    def test_returns_false_for_standalone(self):
+        """Should return False when user chooses standalone mode (choice 2)."""
         mock_console = MagicMock()
-        with (
-            patch("scc_cli.setup.Confirm.ask", return_value=False),  # No org URL
-        ):
+        with patch("scc_cli.setup.Prompt.ask", return_value="2"):
             result = setup.prompt_has_org_config(mock_console)
         assert result is False
 
@@ -262,19 +260,29 @@ class TestSaveSetupConfig:
 class TestRunSetupWizard:
     """Integration tests for run_setup_wizard() function."""
 
+    @staticmethod
+    def _create_mock_console() -> MagicMock:
+        """Create a mock console with proper size attributes."""
+        mock_console = MagicMock()
+        mock_console.size.width = 120
+        mock_console.size.height = 40
+        return mock_console
+
     def test_full_org_config_flow(self, tmp_path):
         """Should complete full org config setup flow."""
-        mock_console = MagicMock()
+        mock_console = self._create_mock_console()
         sample_config = {
             "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {"description": "Dev team"}},
         }
         with (
-            patch("scc_cli.setup.prompt_has_org_config", return_value=True),
+            patch("scc_cli.setup._render_setup_header"),
+            patch("scc_cli.setup._render_setup_layout"),
+            # Mode=0 (org), Profile=0 (first), Hooks=0 (enable), Confirm=0 (apply)
+            patch("scc_cli.setup._select_option", side_effect=[0, 0, 0, 0]),
             patch("scc_cli.setup.prompt_org_url", return_value="https://example.org/config.json"),
             patch("scc_cli.setup.fetch_and_validate_org_config", return_value=sample_config),
-            patch("scc_cli.setup.prompt_profile_selection", return_value="dev"),
-            patch("scc_cli.setup.prompt_hooks_enablement", return_value=True),
+            patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
             patch("scc_cli.setup.show_setup_complete"),
         ):
@@ -283,10 +291,13 @@ class TestRunSetupWizard:
 
     def test_standalone_flow(self, tmp_path):
         """Should complete standalone setup flow."""
-        mock_console = MagicMock()
+        mock_console = self._create_mock_console()
         with (
-            patch("scc_cli.setup.prompt_has_org_config", return_value=False),  # Standalone
-            patch("scc_cli.setup.prompt_hooks_enablement", return_value=False),
+            patch("scc_cli.setup._render_setup_header"),
+            patch("scc_cli.setup._render_setup_layout"),
+            # Mode=1 (standalone), Hooks=0 (enable), Confirm=0 (apply)
+            patch("scc_cli.setup._select_option", side_effect=[1, 0, 0]),
+            patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
             patch("scc_cli.setup.show_setup_complete"),
         ):
@@ -295,21 +306,23 @@ class TestRunSetupWizard:
 
     def test_auth_retry_flow(self, tmp_path):
         """Should retry with auth on 401."""
-        mock_console = MagicMock()
+        mock_console = self._create_mock_console()
         sample_config = {
             "organization": {"name": "Test Org"},
             "profiles": {},
         }
         with (
-            patch("scc_cli.setup.prompt_has_org_config", return_value=True),
+            patch("scc_cli.setup._render_setup_header"),
+            patch("scc_cli.setup._render_setup_layout"),
+            # Mode=0 (org), Auth=0 (env var), Hooks=0 (enable), Confirm=0 (apply)
+            patch("scc_cli.setup._select_option", side_effect=[0, 0, 0, 0]),
             patch("scc_cli.setup.prompt_org_url", return_value="https://example.org/config.json"),
             patch(
                 "scc_cli.setup.fetch_and_validate_org_config",
                 side_effect=[None, sample_config],  # First fails (401), second succeeds
             ),
-            patch("scc_cli.setup.prompt_auth_method", return_value="env:TOKEN"),
-            patch("scc_cli.setup.prompt_profile_selection", return_value=None),
-            patch("scc_cli.setup.prompt_hooks_enablement", return_value=False),
+            patch("scc_cli.setup.Prompt.ask", return_value="MY_TOKEN"),  # Env var name
+            patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
             patch("scc_cli.setup.show_setup_complete"),
         ):
