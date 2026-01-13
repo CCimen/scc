@@ -844,19 +844,19 @@ class Dashboard:
                 if self.state.active_tab == DashboardTab.CONTAINERS:
                     from ...docker.core import ContainerInfo
 
-                    container: ContainerInfo | None = None
+                    action_container: ContainerInfo | None = None
                     if isinstance(current.value, ContainerInfo):
-                        container = current.value
+                        action_container = current.value
                     elif isinstance(current.value, str):
-                        container = ContainerInfo(
+                        action_container = ContainerInfo(
                             id=current.value,
                             name=current.label,
                             status="",
                         )
-                    if container:
+                    if action_container:
                         raise ContainerActionMenuRequested(
-                            container_id=container.id,
-                            container_name=container.name,
+                            container_id=action_container.id,
+                            container_name=action_container.name,
                             return_to=self.state.active_tab.name,
                         )
 
@@ -966,9 +966,9 @@ class Dashboard:
 
                         from ...docker.core import ContainerInfo
 
-                        container: ContainerInfo | None = None
+                        key_container: ContainerInfo | None = None
                         if isinstance(current.value, ContainerInfo):
-                            container = current.value
+                            key_container = current.value
                         elif isinstance(current.value, str):
                             # Legacy fallback when value is container ID
                             status = None
@@ -976,32 +976,32 @@ class Dashboard:
                                 parts = current.description.split("  ")
                                 if len(parts) >= 3:
                                     status = parts[2]
-                            container = ContainerInfo(
+                            key_container = ContainerInfo(
                                 id=current.value,
                                 name=current.label,
                                 status=status or "",
                             )
 
-                        if not container:
+                        if not key_container:
                             self.state.status_message = "Unable to read container metadata"
                             return True
 
                         if action.custom_key == "K":
                             raise ContainerStopRequested(
-                                container_id=container.id,
-                                container_name=container.name,
+                                container_id=key_container.id,
+                                container_name=key_container.name,
                                 return_to=self.state.active_tab.name,
                             )
                         if action.custom_key == "R":
                             raise ContainerResumeRequested(
-                                container_id=container.id,
-                                container_name=container.name,
+                                container_id=key_container.id,
+                                container_name=key_container.name,
                                 return_to=self.state.active_tab.name,
                             )
                         if action.custom_key == "D":
                             raise ContainerRemoveRequested(
-                                container_id=container.id,
-                                container_name=container.name,
+                                container_id=key_container.id,
+                                container_name=key_container.name,
                                 return_to=self.state.active_tab.name,
                             )
 
