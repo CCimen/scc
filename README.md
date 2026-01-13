@@ -51,11 +51,15 @@ When you run `scc` or `scc start`:
 - **Bypass mode enabled**: Permission prompts are skipped by default since the Docker sandbox already provides isolation. Press `Shift+Tab` inside Claude to toggle permissions back on if needed
 - **Safety guard**: Won't auto-launch from suspicious directories (home, `/tmp`). Explicit paths like `scc start ~/` prompt for confirmation
 
-**Keyboard shortcuts in interactive mode:**
-- `Enter` — Select/resume session
+**Keyboard shortcuts in dashboard:**
+- `↑↓` — Navigate list
+- `Enter` — Open action menu (containers/sessions/worktrees)
+- `Tab` — Switch between tabs
 - `n` — Start new session
+- `t` — Switch team
+- `r` — Refresh
 - `s` — Settings & maintenance
-- `Esc` — Go back
+- `?` — Help
 - `q` — Quit
 
 ---
