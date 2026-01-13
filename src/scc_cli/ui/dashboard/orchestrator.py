@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 from ..keys import (
+    ContainerActionMenuRequested,
     ContainerRemoveRequested,
     ContainerResumeRequested,
     ContainerStopRequested,
@@ -27,13 +28,16 @@ from ..keys import (
     GitInitRequested,
     RecentWorkspacesRequested,
     RefreshRequested,
+    SessionActionMenuRequested,
     SessionResumeRequested,
     SettingsRequested,
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
     VerboseToggleRequested,
+    WorktreeActionMenuRequested,
 )
+from ...confirm import Confirm
 from ..list_screen import ListState
 from ._dashboard import Dashboard
 from .loaders import _load_all_tab_data
@@ -69,10 +73,16 @@ def run_dashboard() -> None:
     toast_message: str | None = None
     # Track verbose worktree status display (persists across reloads)
     verbose_worktrees: bool = False
+    # Track last refresh timestamp for status tab
+    last_refresh_at = None
 
     while True:
         # Load real data for all tabs (pass verbose flag for worktrees)
-        tabs = _load_all_tab_data(verbose_worktrees=verbose_worktrees)
+        from datetime import datetime
+
+        if last_refresh_at is None:
+            last_refresh_at = datetime.now()
+        tabs = _load_all_tab_data(verbose_worktrees=verbose_worktrees, refresh_at=last_refresh_at)
 
         # Determine initial tab (restore previous or default to STATUS)
         initial_tab = DashboardTab.STATUS
@@ -120,6 +130,7 @@ def run_dashboard() -> None:
         except RefreshRequested as refresh_req:
             # User pressed 'r' - just reload data
             restore_tab = refresh_req.return_to
+            last_refresh_at = datetime.now()
             # Loop continues with fresh data (no additional action needed)
 
         except SessionResumeRequested as resume_req:
@@ -234,6 +245,27 @@ def run_dashboard() -> None:
             toast_message = (
                 message if message else ("Container removed" if success else "Remove failed")
             )
+
+        except ContainerActionMenuRequested as menu_req:
+            restore_tab = menu_req.return_to
+            menu_result = _handle_container_action_menu(
+                menu_req.container_id,
+                menu_req.container_name,
+            )
+            if isinstance(menu_result, str):
+                toast_message = menu_result
+
+        except SessionActionMenuRequested as menu_req:
+            restore_tab = menu_req.return_to
+            menu_result = _handle_session_action_menu(menu_req.session)
+            if isinstance(menu_result, str):
+                toast_message = menu_result
+
+        except WorktreeActionMenuRequested as menu_req:
+            restore_tab = menu_req.return_to
+            menu_result = _handle_worktree_action_menu(menu_req.worktree_path)
+            if isinstance(menu_result, str):
+                toast_message = menu_result
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -820,6 +852,179 @@ def _handle_container_remove(container_id: str, container_name: str) -> tuple[bo
     return success, (
         f"Removed {container_name}" if success else f"Failed to remove {container_name}"
     )
+
+
+def _handle_container_action_menu(container_id: str, container_name: str) -> str | None:
+    """Show a container actions menu and execute the selected action."""
+    import subprocess
+
+    from ..list_screen import ListItem, ListScreen
+    from ... import docker
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    status = docker.get_container_status(container_name) or ""
+    is_running = status.startswith("Up")
+
+    items: list[ListItem[str]] = []
+
+    if is_running:
+        items.append(
+            ListItem(
+                value="attach_shell",
+                label="Attach shell",
+                description="docker exec -it <container> bash",
+            )
+        )
+        items.append(
+            ListItem(
+                value="stop",
+                label="Stop container",
+                description="Stop running container",
+            )
+        )
+    else:
+        items.append(
+            ListItem(
+                value="resume",
+                label="Resume container",
+                description="Start stopped container",
+            )
+        )
+        items.append(
+            ListItem(
+                value="delete",
+                label="Delete container",
+                description="Remove stopped container",
+            )
+        )
+
+    if not items:
+        return "No actions available"
+
+    screen = ListScreen(items, title=f"Actions — {container_name}")
+    selected = screen.run()
+    if not selected:
+        return "Cancelled"
+
+    if selected.value == "attach_shell":
+        cmd = ["docker", "exec", "-it", container_name, "bash"]
+        result = subprocess.run(cmd)
+        return "Shell closed" if result.returncode == 0 else "Shell exited with errors"
+
+    if selected.value == "stop":
+        _, message = _handle_container_stop(container_id, container_name)
+        return message
+
+    if selected.value == "resume":
+        _, message = _handle_container_resume(container_id, container_name)
+        return message
+
+    if selected.value == "delete":
+        _, message = _handle_container_remove(container_id, container_name)
+        return message
+
+    return None
+
+
+def _handle_session_action_menu(session: dict[str, Any]) -> str | None:
+    """Show a session actions menu and execute the selected action."""
+    from ..list_screen import ListItem, ListScreen
+    from ... import sessions as session_store
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    items: list[ListItem[str]] = [
+        ListItem(value="resume", label="Resume session", description="Continue this session"),
+    ]
+
+    items.append(
+        ListItem(
+            value="remove",
+            label="Remove from history",
+            description="Does not delete any containers",
+        )
+    )
+
+    screen = ListScreen(items, title="Session Actions")
+    selected = screen.run()
+    if not selected:
+        return "Cancelled"
+
+    if selected.value == "resume":
+        try:
+            _handle_session_resume(session)
+            return "Resumed session"
+        except Exception:
+            return "Resume failed"
+
+    if selected.value == "remove":
+        workspace = session.get("workspace")
+        branch = session.get("branch")
+        if not workspace:
+            return "Missing workspace"
+        removed = session_store.remove_session(workspace, branch)
+        return "Removed from history" if removed else "No matching session found"
+
+    return None
+
+
+def _handle_worktree_action_menu(worktree_path: str) -> str | None:
+    """Show a worktree actions menu and execute the selected action."""
+    from pathlib import Path
+    import subprocess
+
+    from ..list_screen import ListItem, ListScreen
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    items: list[ListItem[str]] = [
+        ListItem(value="start", label="Start session here", description="Launch Claude"),
+        ListItem(
+            value="open_shell",
+            label="Open shell",
+            description="cd into this worktree",
+        ),
+        ListItem(
+            value="remove",
+            label="Remove worktree",
+            description="git worktree remove <path>",
+        ),
+    ]
+
+    screen = ListScreen(items, title=f"Worktree Actions — {Path(worktree_path).name}")
+    selected = screen.run()
+    if not selected:
+        return "Cancelled"
+
+    if selected.value == "start":
+        # Reuse worktree start flow directly
+        result = _handle_worktree_start(worktree_path)
+        if result is None:
+            return "Cancelled"
+        return "Started session" if result else "Start cancelled"
+
+    if selected.value == "open_shell":
+        console.print(f"[cyan]cd {worktree_path}[/cyan]")
+        console.print("[dim]Copy/paste to jump into this worktree.[/dim]")
+        return "Path copied to screen"
+
+    if selected.value == "remove":
+        if not Confirm.ask(
+            "[yellow]Remove this worktree? This cannot be undone.[/yellow]",
+            default=False,
+        ):
+            return "Cancelled"
+        try:
+            subprocess.run(["git", "worktree", "remove", "--force", worktree_path], check=True)
+            return "Worktree removed"
+        except Exception:
+            return "Failed to remove worktree"
+
+    return None
 
 
 def _handle_settings() -> str | None:

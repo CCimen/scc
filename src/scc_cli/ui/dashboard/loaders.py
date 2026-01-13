@@ -12,13 +12,14 @@ Loaders handle errors gracefully, returning placeholder items on failure.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ..list_screen import ListItem
 from .models import DashboardTab, TabData
 
 
-def _load_status_tab_data() -> TabData:
+def _load_status_tab_data(refresh_at: datetime | None = None) -> TabData:
     """Load Status tab data showing system overview.
 
     The Status tab displays:
@@ -44,6 +45,54 @@ def _load_status_tab_data() -> TabData:
             description="Launch Claude in a workspace",
         )
     )
+
+    # Resume last session (quick action)
+    try:
+        recent_session = sessions.get_most_recent()
+        if recent_session:
+            workspace = recent_session.get("workspace", "")
+            workspace_name = workspace.split("/")[-1] if workspace else "unknown"
+            last_used = recent_session.get("last_used")
+            last_used_display = ""
+            if last_used:
+                try:
+                    from datetime import datetime
+
+                    dt = datetime.fromisoformat(last_used)
+                    last_used_display = sessions.format_relative_time(dt)
+                except ValueError:
+                    last_used_display = last_used
+            desc_parts = [workspace_name]
+            if recent_session.get("branch"):
+                desc_parts.append(str(recent_session.get("branch")))
+            if last_used_display:
+                desc_parts.append(last_used_display)
+            items.append(
+                ListItem(
+                    value={"_action": "resume_last_session", "session": recent_session},
+                    label="Resume last session",
+                    description="  ".join(desc_parts),
+                )
+            )
+    except Exception:
+        pass
+
+    # Last refresh timestamp (best-effort)
+    if refresh_at is not None:
+        try:
+            from datetime import datetime
+
+            if isinstance(refresh_at, datetime):
+                refreshed = sessions.format_relative_time(refresh_at)
+                items.append(
+                    ListItem(
+                        value="refresh",
+                        label="Last refresh",
+                        description=refreshed,
+                    )
+                )
+        except Exception:
+            pass
 
     # Load current team info
     try:
@@ -131,6 +180,20 @@ def _load_status_tab_data() -> TabData:
                 description="Unable to query Docker",
             )
         )
+
+    # Docker health signal (best-effort)
+    try:
+        docker_version = docker.get_docker_version()
+        sandbox_ok = docker.check_docker_sandbox()
+        docker_label = "Docker"
+        docker_desc = docker_version or "Not installed"
+        if docker_version:
+            docker_desc = docker_version.replace("Docker version ", "")
+        items.append(ListItem(value="docker", label=docker_label, description=docker_desc))
+        sandbox_desc = "Available" if sandbox_ok else "Unavailable"
+        items.append(ListItem(value="sandbox", label="Sandbox", description=sandbox_desc))
+    except Exception:
+        items.append(ListItem(value="docker", label="Docker", description="Unavailable"))
 
     # Load session count
     try:
@@ -386,7 +449,7 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
                 ListItem(
                     value="no_worktrees",
                     label="No worktrees",
-                    description="Press 'w' recent | 'i' init | 'c' clone",
+                    description="Press 'w' for recent, 'c' to create, 'v' for status",
                 )
             )
 
@@ -405,8 +468,8 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
             items=[
                 ListItem(
                     value="no_git",
-                    label="Not available",
-                    description="Press 'w' recent | 'i' init | 'c' clone",
+                    label="Not a git repo",
+                    description="Press 'i' to init or 'c' to clone",
                 )
             ],
             count_active=0,
@@ -414,7 +477,11 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
         )
 
 
-def _load_all_tab_data(verbose_worktrees: bool = False) -> dict[DashboardTab, TabData]:
+def _load_all_tab_data(
+    *,
+    verbose_worktrees: bool = False,
+    refresh_at: datetime | None = None,
+) -> dict[DashboardTab, TabData]:
     """Load data for all dashboard tabs.
 
     Args:
@@ -425,7 +492,7 @@ def _load_all_tab_data(verbose_worktrees: bool = False) -> dict[DashboardTab, Ta
         Dictionary mapping each tab to its data.
     """
     return {
-        DashboardTab.STATUS: _load_status_tab_data(),
+        DashboardTab.STATUS: _load_status_tab_data(refresh_at=refresh_at),
         DashboardTab.CONTAINERS: _load_containers_tab_data(),
         DashboardTab.SESSIONS: _load_sessions_tab_data(),
         DashboardTab.WORKTREES: _load_worktrees_tab_data(verbose=verbose_worktrees),
