@@ -29,6 +29,11 @@ MIN_DOCKER_VERSION = "4.50.0"
 # Label prefix for SCC containers
 LABEL_PREFIX = "scc"
 
+# Docker sandbox labels (Docker Desktop)
+SANDBOX_LABEL_KEY = "docker/sandbox"
+SANDBOX_AGENT_LABEL = "com.docker.sandbox.agent"
+SANDBOX_WORKDIR_LABEL = "com.docker.sandbox.workingDirectory"
+
 
 @dataclass
 class ContainerInfo:
@@ -341,6 +346,56 @@ def remove_container(container_name: str, force: bool = False) -> bool:
     return run_command_bool(cmd, timeout=30)
 
 
+def _list_sandbox_containers_by_label() -> list[ContainerInfo]:
+    """List Claude sandboxes using Docker Desktop label metadata.
+
+    Returns containers with workspace paths when available via labels.
+    Falls back to empty list on any error.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"label={SANDBOX_LABEL_KEY}=true",
+                "--filter",
+                f"label={SANDBOX_AGENT_LABEL}=claude",
+                "--format",
+                f'{{{{.ID}}}}\t{{{{.Names}}}}\t{{{{.Status}}}}\t{{{{.Label "{SANDBOX_WORKDIR_LABEL}"}}}}',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        if result.returncode != 0:
+            return []
+
+        containers: list[ContainerInfo] = []
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                workspace = parts[3] if len(parts) > 3 else None
+                if workspace == "":
+                    workspace = None
+                containers.append(
+                    ContainerInfo(
+                        id=parts[0],
+                        name=parts[1],
+                        status=parts[2],
+                        workspace=workspace,
+                    )
+                )
+
+        return containers
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return []
+
+
 def _list_all_sandbox_containers() -> list[ContainerInfo]:
     """
     List ALL Claude Code sandbox containers (running AND stopped).
@@ -350,8 +405,13 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
 
     Returns list of ContainerInfo objects sorted by most recent first.
     """
+    # Prefer label-based discovery for richer metadata (workspace path).
+    containers = _list_sandbox_containers_by_label()
+    if containers:
+        return containers
+
     try:
-        # Get ALL containers (not just running) filtered by sandbox image
+        # Fallback: filter by sandbox image (older Docker versions)
         result = subprocess.run(
             [
                 "docker",
@@ -370,12 +430,12 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
         if result.returncode != 0:
             return []
 
-        containers = []
+        containers_fallback: list[ContainerInfo] = []
         for line in result.stdout.strip().split("\n"):
             if line:
                 parts = line.split("\t")
                 if len(parts) >= 3:
-                    containers.append(
+                    containers_fallback.append(
                         ContainerInfo(
                             id=parts[0],
                             name=parts[1],
@@ -383,13 +443,16 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
                         )
                     )
 
-        return containers
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return containers_fallback
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return []
 
 
 def list_scc_containers() -> list[ContainerInfo]:
-    """Return all SCC-managed containers (running and stopped)."""
+    """Return all SCC-managed containers (running and stopped).
+
+    Includes Docker Desktop Claude sandboxes which do not support SCC labels.
+    """
     try:
         result = subprocess.run(
             [
@@ -409,7 +472,7 @@ def list_scc_containers() -> list[ContainerInfo]:
         if result.returncode != 0:
             return []
 
-        containers = []
+        containers: list[ContainerInfo] = []
         for line in result.stdout.strip().split("\n"):
             if line:
                 parts = line.split("\t")
@@ -425,9 +488,17 @@ def list_scc_containers() -> list[ContainerInfo]:
                         )
                     )
 
+        # Merge in Docker sandbox containers (dedupe by ID)
+        sandbox_containers = _list_all_sandbox_containers()
+        if sandbox_containers:
+            existing_ids = {c.id for c in containers}
+            for container in sandbox_containers:
+                if container.id not in existing_ids:
+                    containers.append(container)
+
         return containers
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return []
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return _list_all_sandbox_containers()
 
 
 def list_running_sandboxes() -> list[ContainerInfo]:

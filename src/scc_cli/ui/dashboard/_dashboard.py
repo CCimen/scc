@@ -28,6 +28,9 @@ from ..chrome import Chrome, ChromeConfig, FooterHint
 from ..keys import (
     Action,
     ActionType,
+    ContainerRemoveRequested,
+    ContainerResumeRequested,
+    ContainerStopRequested,
     CreateWorktreeRequested,
     GitInitRequested,
     KeyReader,
@@ -77,6 +80,7 @@ class Dashboard:
         # 'n' (new session) is also screen-specific to avoid global key conflicts
         # 'w', 'i', 'c' are for Worktrees tab: recent workspaces, git init, create/clone
         # 'v' toggles verbose status display in Worktrees tab
+        # 'K'/'R'/'D' are for Containers tab: stop/resume/delete (uppercase avoids filter collisions)
         reader = KeyReader(
             custom_keys={
                 "r": "refresh",
@@ -86,6 +90,9 @@ class Dashboard:
                 "i": "git_init",
                 "c": "create_worktree",
                 "v": "verbose_toggle",
+                "K": "container_stop",
+                "R": "container_resume",
+                "D": "container_remove",
             },
             enable_filter=True,
         )
@@ -275,6 +282,9 @@ class Dashboard:
 
     def _render_container_details(self, item: ListItem[Any]) -> RenderableType:
         """Render details for a container item using structured key/value table."""
+        from ...docker.core import ContainerInfo
+        from ..formatters import _shorten_docker_status
+
         # Header
         header = Text()
         header.append("Container Details\n", style="bold cyan")
@@ -287,24 +297,47 @@ class Dashboard:
 
         table.add_row("Name", Text(item.label, style="bold"))
 
-        # Short container ID
-        container_id = item.value[:12] if len(item.value) > 12 else item.value
-        table.add_row("ID", container_id)
+        container: ContainerInfo | None = None
+        if isinstance(item.value, ContainerInfo):
+            container = item.value
+        elif isinstance(item.value, str):
+            # Legacy fallback when value is container ID
+            profile = None
+            workspace = None
+            status = None
+            if item.description:
+                parts = item.description.split("  ")
+                if len(parts) >= 1 and parts[0]:
+                    profile = parts[0]
+                if len(parts) >= 2 and parts[1]:
+                    workspace = parts[1]
+                if len(parts) >= 3 and parts[2]:
+                    status = parts[2]
+            container = ContainerInfo(
+                id=item.value,
+                name=item.label,
+                status=status or "",
+                profile=profile,
+                workspace=workspace,
+            )
 
-        # Parse description into fields if available
-        if item.description:
-            parts = item.description.split("  ")
-            if len(parts) >= 1 and parts[0]:
-                table.add_row("Profile", parts[0])
-            if len(parts) >= 2 and parts[1]:
-                table.add_row("Workspace", parts[1])
-            if len(parts) >= 3 and parts[2]:
-                table.add_row("Status", parts[2])
+        if container:
+            container_id = container.id[:12] if len(container.id) > 12 else container.id
+            table.add_row("ID", container_id)
+
+            if container.profile:
+                table.add_row("Profile", container.profile)
+            if container.workspace:
+                table.add_row("Workspace", container.workspace)
+            if container.status:
+                table.add_row("Status", _shorten_docker_status(container.status))
 
         # Commands section
         commands = Text()
         commands.append("\nCommands\n", style="dim")
         commands.append(f"  docker exec -it {item.label} bash\n", style="cyan")
+        commands.append(f"  scc stop {item.label}\n", style="cyan")
+        commands.append("  scc prune  # remove stopped containers\n", style="cyan")
 
         return Group(header, table, commands)
 
@@ -511,6 +544,19 @@ class Dashboard:
         # Sessions tab quick hint
         if self.state.active_tab == DashboardTab.SESSIONS and not show_details:
             hints.append(FooterHint("Enter", "details/resume"))
+
+        # Containers tab quick actions (stop/resume/delete)
+        if self.state.active_tab == DashboardTab.CONTAINERS and not show_details:
+            current = self.state.list_state.current_item
+            if current and not self.state.is_placeholder_selected():
+                running = ""
+                if current.metadata and isinstance(current.metadata, dict):
+                    running = current.metadata.get("running", "")
+                if running == "yes":
+                    hints.append(FooterHint("K", "stop"))
+                elif running == "no":
+                    hints.append(FooterHint("R", "resume"))
+                    hints.append(FooterHint("D", "delete"))
 
         # Tab navigation and refresh
         hints.append(FooterHint("Tab", "switch tab"))
@@ -795,5 +841,53 @@ class Dashboard:
                             return_to=self.state.active_tab.name,
                             verbose=new_verbose,
                         )
+                elif action.custom_key in {"K", "R", "D"}:
+                    # Container actions: stop/resume/delete
+                    if self.state.active_tab == DashboardTab.CONTAINERS:
+                        current = self.state.list_state.current_item
+                        if not current or self.state.is_placeholder_selected():
+                            self.state.status_message = "No container selected"
+                            return True
+
+                        from ...docker.core import ContainerInfo
+
+                        container: ContainerInfo | None = None
+                        if isinstance(current.value, ContainerInfo):
+                            container = current.value
+                        elif isinstance(current.value, str):
+                            # Legacy fallback when value is container ID
+                            status = None
+                            if current.description:
+                                parts = current.description.split("  ")
+                                if len(parts) >= 3:
+                                    status = parts[2]
+                            container = ContainerInfo(
+                                id=current.value,
+                                name=current.label,
+                                status=status or "",
+                            )
+
+                        if not container:
+                            self.state.status_message = "Unable to read container metadata"
+                            return True
+
+                        if action.custom_key == "K":
+                            raise ContainerStopRequested(
+                                container_id=container.id,
+                                container_name=container.name,
+                                return_to=self.state.active_tab.name,
+                            )
+                        if action.custom_key == "R":
+                            raise ContainerResumeRequested(
+                                container_id=container.id,
+                                container_name=container.name,
+                                return_to=self.state.active_tab.name,
+                            )
+                        if action.custom_key == "D":
+                            raise ContainerRemoveRequested(
+                                container_id=container.id,
+                                container_name=container.name,
+                                return_to=self.state.active_tab.name,
+                            )
 
         return None

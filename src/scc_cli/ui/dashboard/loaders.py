@@ -34,7 +34,7 @@ def _load_status_tab_data() -> TabData:
     from ... import config, docker, sessions
     from ...docker import core as docker_core
 
-    items: list[ListItem[str]] = []
+    items: list[ListItem[Any]] = []
 
     # Start new session (primary action)
     items.append(
@@ -193,47 +193,27 @@ def _load_containers_tab_data() -> TabData:
         TabData with container list items.
     """
     from ...docker import core as docker_core
+    from ..formatters import format_container
 
-    items: list[ListItem[str]] = []
+    items: list[ListItem[Any]] = []
 
     try:
         containers = docker_core.list_scc_containers()
         running_count = 0
 
         for container in containers:
-            is_running = "Up" in container.status
+            is_running = "Up" in container.status if container.status else False
             if is_running:
                 running_count += 1
 
-            # Build description from available info
-            desc_parts = []
-            if container.profile:
-                desc_parts.append(container.profile)
-            if container.workspace:
-                # Show just the workspace name
-                workspace_name = container.workspace.split("/")[-1]
-                desc_parts.append(workspace_name)
-            if container.status:
-                # Simplify status (e.g., "Up 2 hours" → "Up 2h")
-                status_short = container.status.replace(" hours", "h").replace(" hour", "h")
-                status_short = status_short.replace(" minutes", "m").replace(" minute", "m")
-                status_short = status_short.replace(" days", "d").replace(" day", "d")
-                desc_parts.append(status_short)
-
-            items.append(
-                ListItem(
-                    value=container.id,
-                    label=container.name,
-                    description="  ".join(desc_parts),
-                )
-            )
+            items.append(format_container(container))
 
         if not items:
             items.append(
                 ListItem(
                     value="no_containers",
                     label="No containers",
-                    description="Run 'scc start' to create one",
+                    description="Press 'n' to start or run `scc start <path>`",
                 )
             )
 

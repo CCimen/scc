@@ -208,6 +208,36 @@ class SettingsRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class ContainerStopRequested(Exception):  # noqa: N818
+    """Raised when user requests stopping a container from the dashboard."""
+
+    def __init__(self, container_id: str, container_name: str, return_to: str = "") -> None:
+        self.container_id = container_id
+        self.container_name = container_name
+        self.return_to = return_to
+        super().__init__()
+
+
+class ContainerResumeRequested(Exception):  # noqa: N818
+    """Raised when user requests resuming a container from the dashboard."""
+
+    def __init__(self, container_id: str, container_name: str, return_to: str = "") -> None:
+        self.container_id = container_id
+        self.container_name = container_name
+        self.return_to = return_to
+        super().__init__()
+
+
+class ContainerRemoveRequested(Exception):  # noqa: N818
+    """Raised when user requests removing a container from the dashboard."""
+
+    def __init__(self, container_id: str, container_name: str, return_to: str = "") -> None:
+        self.container_id = container_id
+        self.container_name = container_name
+        self.return_to = return_to
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -343,6 +373,10 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("w", "Recent workspaces", section="Worktrees", modes=("DASHBOARD",)),
     KeyDoc("i", "Initialize git repo", section="Worktrees", modes=("DASHBOARD",)),
     KeyDoc("c", "Create worktree / clone", section="Worktrees", modes=("DASHBOARD",)),
+    # Containers tab actions (uppercase to avoid filter collisions)
+    KeyDoc("K", "Stop container", section="Containers", modes=("DASHBOARD",)),
+    KeyDoc("R", "Resume container", section="Containers", modes=("DASHBOARD",)),
+    KeyDoc("D", "Delete container", section="Containers", modes=("DASHBOARD",)),
     # Exit
     KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
     KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),

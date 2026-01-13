@@ -505,7 +505,8 @@ class TestLoadContainersTabData:
             data = _load_containers_tab_data()
 
             assert len(data.items) == 1
-            assert data.items[0].value == "abc123"
+            # Value is now a ContainerInfo object for full metadata access
+            assert data.items[0].value.id == "abc123"
             assert data.items[0].label == "scc-myproject"
             assert "dev" in data.items[0].description
             assert "myproject" in data.items[0].description
