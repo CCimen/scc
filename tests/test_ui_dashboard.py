@@ -426,10 +426,11 @@ class TestLoadStatusTabData:
 
                     team_item = next((item for item in data.items if item.value == "team"), None)
                     assert team_item is not None
-                    assert "production-team" in team_item.description
+                    # Team name is in the label using colon syntax
+                    assert "production-team" in team_item.label
 
     def test_handles_no_team_selected(self) -> None:
-        """Shows 'No team selected' when no team configured."""
+        """Shows 'Team: none' when no team configured."""
         with patch("scc_cli.config.load_user_config") as mock_config:
             with patch("scc_cli.sessions.list_recent") as mock_sessions:
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
@@ -441,7 +442,8 @@ class TestLoadStatusTabData:
 
                     team_item = next((item for item in data.items if item.value == "team"), None)
                     assert team_item is not None
-                    assert "No team selected" in team_item.description
+                    # Uses colon syntax: "Team: none"
+                    assert "none" in team_item.label
 
     def test_includes_container_count(self) -> None:
         """Includes container count in status."""
@@ -463,8 +465,8 @@ class TestLoadStatusTabData:
                         (item for item in data.items if item.value == "containers"), None
                     )
                     assert containers_item is not None
-                    assert "1 running" in containers_item.description
-                    assert "2 total" in containers_item.description
+                    # Container count in label using colon syntax: "Containers: 1/2 running"
+                    assert "1/2 running" in containers_item.label
 
     def test_handles_config_error_gracefully(self) -> None:
         """Shows error message when config fails to load."""
@@ -475,7 +477,8 @@ class TestLoadStatusTabData:
 
             error_item = next((item for item in data.items if item.value == "config_error"), None)
             assert error_item is not None
-            assert "Error loading config" in error_item.description
+            # Config error in label using colon syntax: "Config: error"
+            assert "error" in error_item.label
 
 
 class TestLoadContainersTabData:
@@ -508,8 +511,9 @@ class TestLoadContainersTabData:
             # Value is now a ContainerInfo object for full metadata access
             assert data.items[0].value.id == "abc123"
             assert data.items[0].label == "scc-myproject"
-            assert "dev" in data.items[0].description
+            # Description shows: workspace name · status indicator · time
             assert "myproject" in data.items[0].description
+            assert "●" in data.items[0].description  # Running indicator
 
     def test_counts_running_containers(self) -> None:
         """Correctly counts running vs total containers."""

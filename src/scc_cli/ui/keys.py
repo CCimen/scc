@@ -238,6 +238,34 @@ class ContainerRemoveRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class ContainerActionMenuRequested(Exception):  # noqa: N818
+    """Raised when user requests the container actions menu from the dashboard."""
+
+    def __init__(self, container_id: str, container_name: str, return_to: str = "") -> None:
+        self.container_id = container_id
+        self.container_name = container_name
+        self.return_to = return_to
+        super().__init__()
+
+
+class SessionActionMenuRequested(Exception):  # noqa: N818
+    """Raised when user requests the session actions menu from the dashboard."""
+
+    def __init__(self, session: dict[str, Any], return_to: str = "") -> None:
+        self.session = session
+        self.return_to = return_to
+        super().__init__()
+
+
+class WorktreeActionMenuRequested(Exception):  # noqa: N818
+    """Raised when user requests the worktree actions menu from the dashboard."""
+
+    def __init__(self, worktree_path: str, return_to: str = "") -> None:
+        self.worktree_path = worktree_path
+        self.return_to = return_to
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -360,7 +388,8 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("Space", "Toggle selection", section="Selection", modes=("MULTI_SELECT",)),
     KeyDoc("a", "Toggle all items", section="Selection", modes=("MULTI_SELECT",)),
     KeyDoc("Enter", "Confirm selection", section="Selection", modes=("MULTI_SELECT",)),
-    KeyDoc("Enter", "View details", section="Selection", modes=("DASHBOARD",)),
+    KeyDoc("Enter", "Primary action", section="Selection", modes=("DASHBOARD",)),
+    KeyDoc("Space", "Toggle details", section="Selection", modes=("DASHBOARD",)),
     # Tab navigation (dashboard only)
     KeyDoc("Tab", "Next tab", section="Tabs", modes=("DASHBOARD",)),
     KeyDoc("Shift+Tab", "Previous tab", section="Tabs", modes=("DASHBOARD",)),
@@ -377,6 +406,7 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("K", "Stop container", section="Containers", modes=("DASHBOARD",)),
     KeyDoc("R", "Resume container", section="Containers", modes=("DASHBOARD",)),
     KeyDoc("D", "Delete container", section="Containers", modes=("DASHBOARD",)),
+    KeyDoc("a", "Actions menu", section="Actions", modes=("DASHBOARD",)),
     # Exit
     KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
     KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),

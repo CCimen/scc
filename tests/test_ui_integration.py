@@ -810,10 +810,12 @@ class TestDetailsPane:
             ),
         }
 
-    def test_enter_on_resource_tab_opens_details(
+    def test_enter_on_container_tab_raises_action_menu(
         self, resource_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """Enter on a resource tab (not Status) opens details pane."""
+        """Enter on Containers tab raises ContainerActionMenuRequested."""
+        from scc_cli.ui.keys import ContainerActionMenuRequested
+
         state = DashboardState(
             active_tab=DashboardTab.CONTAINERS,
             tabs=resource_tab_data,
@@ -821,31 +823,48 @@ class TestDetailsPane:
         )
         dashboard = Dashboard(state)
 
-        assert dashboard.state.details_open is False
-
         select_action = Action(action_type=ActionType.SELECT, state_changed=True)
-        result = dashboard._handle_action(select_action)
 
-        assert result is True
-        assert dashboard.state.details_open is True
+        with pytest.raises(ContainerActionMenuRequested) as exc_info:
+            dashboard._handle_action(select_action)
 
-    def test_enter_when_details_open_closes_details(
+        assert exc_info.value.container_name == "scc-main"
+        assert exc_info.value.return_to == "CONTAINERS"
+
+    def test_enter_on_session_tab_raises_resume(
         self, resource_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """Enter when details already open toggles it closed."""
+        """Enter on Sessions tab raises SessionResumeRequested (primary action is resume)."""
+        from scc_cli.ui.keys import SessionResumeRequested
+
+        # Update Sessions tab to have a dict value (required for session resume)
+        resource_tab_data[DashboardTab.SESSIONS] = TabData(
+            tab=DashboardTab.SESSIONS,
+            title="Sessions",
+            items=[
+                ListItem(
+                    value={"id": "s1", "name": "session-1"},
+                    label="session-1",
+                    description="platform",
+                )
+            ],
+            count_active=1,
+            count_total=1,
+        )
+
         state = DashboardState(
-            active_tab=DashboardTab.CONTAINERS,
+            active_tab=DashboardTab.SESSIONS,
             tabs=resource_tab_data,
-            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
-            details_open=True,
+            list_state=ListState(items=resource_tab_data[DashboardTab.SESSIONS].items),
         )
         dashboard = Dashboard(state)
 
         select_action = Action(action_type=ActionType.SELECT, state_changed=True)
-        result = dashboard._handle_action(select_action)
 
-        assert result is True
-        assert dashboard.state.details_open is False
+        with pytest.raises(SessionResumeRequested) as exc_info:
+            dashboard._handle_action(select_action)
+
+        assert exc_info.value.return_to == "SESSIONS"
 
     def test_esc_closes_details_before_clearing_filter(
         self, resource_tab_data: dict[DashboardTab, TabData]
@@ -939,7 +958,11 @@ class TestDetailsPane:
         assert result is True  # State changed (status_message set)
         assert dashboard.state.details_open is False
         assert dashboard.state.status_message is not None
-        assert "git" in dashboard.state.status_message.lower()  # Contains git guidance
+        # Contains worktree creation guidance (c to create, w for recent, v for status)
+        assert (
+            "worktrees" in dashboard.state.status_message.lower()
+            or "'c'" in dashboard.state.status_message
+        )
 
     def test_is_placeholder_selected_detects_placeholders(
         self, placeholder_tab_data: dict[DashboardTab, TabData]
@@ -1035,25 +1058,26 @@ class TestDetailsPane:
         assert "navigate" in hint_actions
         assert "refresh" in hint_actions
 
-    def test_resource_tab_shows_esc_close_when_details_open(
+    def test_resource_tab_shows_esc_clear_filter_when_filtering(
         self, resource_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """Resource tab with details_open shows 'Esc close' in footer hints."""
+        """Resource tab with active filter shows 'Esc clear filter' in footer hints."""
         state = DashboardState(
             active_tab=DashboardTab.CONTAINERS,
             tabs=resource_tab_data,
             list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
-            details_open=True,
         )
+        # Set a filter query
+        state.list_state.filter_query = "scc"
         dashboard = Dashboard(state)
 
         config = dashboard._get_chrome_config()
 
-        # Footer hints should show "Esc close"
+        # Footer hints should show "Esc clear filter" when filtering
         hint_keys = [h.key for h in config.footer_hints]
         hint_actions = [h.action for h in config.footer_hints]
         assert "Esc" in hint_keys
-        assert "close" in hint_actions
+        assert "clear filter" in hint_actions
 
     def test_startable_placeholder_shows_enter_start_hint(
         self, resource_tab_data: dict[DashboardTab, TabData]

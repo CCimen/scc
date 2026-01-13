@@ -347,7 +347,7 @@ def pick_workspace_source(
                 # Valid project with git - show with confidence
                 items.append(
                     ListItem(
-                        label="📍 Current directory",
+                        label="• Current directory",
                         description=cwd_name,
                         value=WorkspaceSource.CURRENT_DIR,
                     )
@@ -356,7 +356,7 @@ def pick_workspace_source(
                 # Has project markers but no git
                 items.append(
                     ListItem(
-                        label="📍 Current directory",
+                        label="• Current directory",
                         description=f"{cwd_name} (no git)",
                         value=WorkspaceSource.CURRENT_DIR,
                     )
@@ -365,7 +365,7 @@ def pick_workspace_source(
             # Not a project but still allow - show with hint about git
             items.append(
                 ListItem(
-                    label="📍 Current directory",
+                    label="• Current directory",
                     description=f"{cwd_name} (no git)",
                     value=WorkspaceSource.CURRENT_DIR,
                 )
@@ -374,7 +374,7 @@ def pick_workspace_source(
     # Add standard options
     items.append(
         ListItem(
-            label="📂 Recent workspaces",
+            label="• Recent workspaces",
             description="Continue working on previous project",
             value=WorkspaceSource.RECENT,
         )
@@ -383,7 +383,7 @@ def pick_workspace_source(
     if has_team_repos:
         items.append(
             ListItem(
-                label="🏢 Team repositories",
+                label="• Team repositories",
                 description="Choose from team's common repos",
                 value=WorkspaceSource.TEAM_REPOS,
             )
@@ -392,12 +392,12 @@ def pick_workspace_source(
     items.extend(
         [
             ListItem(
-                label="📁 Enter path",
+                label="• Enter path",
                 description="Specify a local directory path",
                 value=WorkspaceSource.CUSTOM,
             ),
             ListItem(
-                label="🔗 Clone repository",
+                label="• Clone repository",
                 description="Clone a Git repository",
                 value=WorkspaceSource.CLONE,
             ),

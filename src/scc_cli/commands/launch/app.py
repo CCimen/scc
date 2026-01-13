@@ -826,7 +826,7 @@ def interactive_start(
     if not standalone_mode and not effective_team and available_teams:
         # Org mode with no active team - skip to team picker
         should_skip_quick_resume = True
-        console.print("[dim]💡 Select a team first to see team-specific sessions[/dim]")
+        console.print("[dim]Tip: Select a team first to see team-specific sessions[/dim]")
         console.print()
 
     if not should_skip_quick_resume:

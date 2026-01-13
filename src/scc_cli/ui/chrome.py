@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.text import Text
@@ -229,7 +230,7 @@ class ChromeConfig:
             )
 
         return cls(
-            title="SCC Dashboard",
+            title="[cyan]SCC[/cyan] Dashboard",
             show_tabs=True,
             tabs=tuple(tabs),
             active_tab_index=active,
@@ -317,7 +318,8 @@ class Chrome:
             Group(*elements),
             title=title,
             title_align="left",
-            border_style="blue",
+            border_style="bright_black",
+            box=box.ROUNDED,
             padding=(0, 1),
         )
 
@@ -338,15 +340,16 @@ class Chrome:
         return f" {sep} ".join(parts)
 
     def _render_tabs(self) -> Text:
-        """Render the tab row."""
+        """Render the tab row with pill-style active indicator."""
         text = Text()
         for i, tab in enumerate(self.config.tabs):
             if i > 0:
-                text.append("  ")
+                text.append("   ")  # 3 spaces between tabs
             if i == self.config.active_tab_index:
-                text.append(f"[{tab}]", style="bold cyan")
+                # Active tab: inverse background (pill effect)
+                text.append(f" {tab} ", style="black on cyan")
             else:
-                text.append(f" {tab} ", style="dim")
+                text.append(tab, style="dim")
         text.append("\n")
         return text
 
@@ -368,7 +371,7 @@ class Chrome:
         text.append(Borders.FOOTER_SEPARATOR * 40 + "\n", style="dim")
         for i, hint in enumerate(self.config.footer_hints):
             if i > 0:
-                text.append(f" {Indicators.get('VERTICAL_LINE')} ", style="dim")
+                text.append("  ·  ", style="dim")  # Middot separator
             # Dimmed hints (e.g., teams in standalone mode) show in strike-through dim
             if hint.dimmed:
                 text.append(hint.key, style="dim strike")
