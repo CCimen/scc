@@ -841,7 +841,13 @@ class TestDetailsPane:
         resource_tab_data[DashboardTab.SESSIONS] = TabData(
             tab=DashboardTab.SESSIONS,
             title="Sessions",
-            items=[ListItem(value={"id": "s1", "name": "session-1"}, label="session-1", description="platform")],
+            items=[
+                ListItem(
+                    value={"id": "s1", "name": "session-1"},
+                    label="session-1",
+                    description="platform",
+                )
+            ],
             count_active=1,
             count_total=1,
         )
@@ -953,7 +959,10 @@ class TestDetailsPane:
         assert dashboard.state.details_open is False
         assert dashboard.state.status_message is not None
         # Contains worktree creation guidance (c to create, w for recent, v for status)
-        assert "worktrees" in dashboard.state.status_message.lower() or "'c'" in dashboard.state.status_message
+        assert (
+            "worktrees" in dashboard.state.status_message.lower()
+            or "'c'" in dashboard.state.status_message
+        )
 
     def test_is_placeholder_selected_detects_placeholders(
         self, placeholder_tab_data: dict[DashboardTab, TabData]
