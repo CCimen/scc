@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 from ..keys import (
+    ContainerRemoveRequested,
+    ContainerResumeRequested,
+    ContainerStopRequested,
     CreateWorktreeRequested,
     GitInitRequested,
     RecentWorkspacesRequested,
@@ -201,6 +204,36 @@ def run_dashboard() -> None:
             if settings_result:
                 toast_message = settings_result  # Success message from settings action
             # Loop continues to reload dashboard
+
+        except ContainerStopRequested as container_req:
+            restore_tab = container_req.return_to
+            success, message = _handle_container_stop(
+                container_req.container_id,
+                container_req.container_name,
+            )
+            toast_message = (
+                message if message else ("Container stopped" if success else "Stop failed")
+            )
+
+        except ContainerResumeRequested as container_req:
+            restore_tab = container_req.return_to
+            success, message = _handle_container_resume(
+                container_req.container_id,
+                container_req.container_name,
+            )
+            toast_message = (
+                message if message else ("Container resumed" if success else "Resume failed")
+            )
+
+        except ContainerRemoveRequested as container_req:
+            restore_tab = container_req.return_to
+            success, message = _handle_container_remove(
+                container_req.container_id,
+                container_req.container_name,
+            )
+            toast_message = (
+                message if message else ("Container removed" if success else "Remove failed")
+            )
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -711,6 +744,82 @@ def _handle_clone() -> bool:
     # For now, just inform user of git clone option
     # Full interactive clone can be added in a future phase
     return False
+
+
+def _handle_container_stop(container_id: str, container_name: str) -> tuple[bool, str | None]:
+    """Stop a container from the dashboard."""
+    from rich.status import Status
+
+    from ... import docker
+    from ...theme import Spinners
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    status = docker.get_container_status(container_name)
+    if status and status.startswith("Up") is False:
+        return True, f"Already stopped: {container_name}"
+
+    with Status(
+        f"[cyan]Stopping {container_name}...[/cyan]",
+        console=console,
+        spinner=Spinners.DOCKER,
+    ):
+        success = docker.stop_container(container_id)
+
+    return success, (f"Stopped {container_name}" if success else f"Failed to stop {container_name}")
+
+
+def _handle_container_resume(container_id: str, container_name: str) -> tuple[bool, str | None]:
+    """Resume a container from the dashboard."""
+    from rich.status import Status
+
+    from ... import docker
+    from ...theme import Spinners
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    status = docker.get_container_status(container_name)
+    if status and status.startswith("Up"):
+        return True, f"Already running: {container_name}"
+
+    with Status(
+        f"[cyan]Starting {container_name}...[/cyan]",
+        console=console,
+        spinner=Spinners.DOCKER,
+    ):
+        success = docker.resume_container(container_id)
+
+    return success, (
+        f"Resumed {container_name}" if success else f"Failed to resume {container_name}"
+    )
+
+
+def _handle_container_remove(container_id: str, container_name: str) -> tuple[bool, str | None]:
+    """Remove a stopped container from the dashboard."""
+    from rich.status import Status
+
+    from ... import docker
+    from ...theme import Spinners
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    status = docker.get_container_status(container_name)
+    if status and status.startswith("Up"):
+        return False, f"Stop {container_name} before deleting"
+
+    with Status(
+        f"[cyan]Removing {container_name}...[/cyan]",
+        console=console,
+        spinner=Spinners.DOCKER,
+    ):
+        success = docker.remove_container(container_name or container_id)
+
+    return success, (
+        f"Removed {container_name}" if success else f"Failed to remove {container_name}"
+    )
 
 
 def _handle_settings() -> str | None:

@@ -60,7 +60,8 @@ class TabData:
         tab: The tab identifier.
         title: Display title for the tab content area.
         items: List items to display in this tab. Value type varies by tab:
-            - Containers/Worktrees: str (container ID or worktree name)
+            - Containers: ContainerInfo (preferred) or str (container ID)
+            - Worktrees: str (worktree name)
             - Sessions: dict[str, Any] (full session data for details pane)
         count_active: Number of active items (e.g., running containers).
         count_total: Total number of items.
