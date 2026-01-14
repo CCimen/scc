@@ -65,6 +65,7 @@ class ChromeConfig:
         tabs: List of tab names when show_tabs=True.
         active_tab_index: Index of currently active tab.
         show_search: Whether to show search/filter row.
+        search_hint: Placeholder text when no filter query is active.
         footer_hints: List of keybinding hints for footer.
     """
 
@@ -75,6 +76,7 @@ class ChromeConfig:
     tabs: tuple[str, ...] = ()
     active_tab_index: int = 0
     show_search: bool = True
+    search_hint: str = "type to search"
     footer_hints: tuple[FooterHint, ...] = ()
 
     @classmethod
@@ -191,6 +193,7 @@ class ChromeConfig:
         *,
         standalone: bool = False,
         details_open: bool = False,
+        search_hint: str = "type to search",
         custom_hints: tuple[FooterHint, ...] | None = None,
     ) -> ChromeConfig:
         """Create standard config for dashboard view.
@@ -200,6 +203,7 @@ class ChromeConfig:
             active: Index of active tab (0-based).
             standalone: If True, dim the "t teams" hint (not available without org).
             details_open: If True, show "Esc close" instead of "Enter details".
+            search_hint: Placeholder text when filter input is idle.
             custom_hints: Optional custom footer hints to override defaults.
                 When provided, these hints are used instead of the standard set.
 
@@ -235,6 +239,7 @@ class ChromeConfig:
             tabs=tuple(tabs),
             active_tab_index=active,
             show_search=True,
+            search_hint=search_hint,
             footer_hints=footer_hints,
         )
 
@@ -258,6 +263,7 @@ class ChromeConfig:
             tabs=self.tabs,
             active_tab_index=self.active_tab_index,
             show_search=self.show_search,
+            search_hint=self.search_hint,
             footer_hints=self.footer_hints,
         )
 
@@ -323,64 +329,92 @@ class Chrome:
             padding=(0, 1),
         )
 
-    def _build_title(self) -> str:
-        """Build the panel title string.
+    def _build_title(self) -> Text:
+        """Build the panel title renderable.
 
         Format: "Title │ context_label │ subtitle"
         - If only subtitle: "Title │ subtitle"
         - If only context: "Title │ context_label"
         - If neither: "Title"
         """
-        parts = [self.config.title]
+        segments: list[Text] = []
+        segments.append(Text.from_markup(self.config.title))
+
         if self.config.context_label:
-            parts.append(self.config.context_label)
+            segments.append(Text(self.config.context_label, style="dim"))
         if self.config.subtitle:
-            parts.append(self.config.subtitle)
-        sep = Indicators.get("VERTICAL_LINE")
-        return f" {sep} ".join(parts)
+            segments.append(Text(self.config.subtitle, style="dim"))
+
+        sep = f" {Indicators.get('VERTICAL_LINE')} "
+        title = Text()
+        for index, segment in enumerate(segments):
+            if index > 0:
+                title.append(sep, style="dim")
+            title.append(segment)
+        return title
 
     def _render_tabs(self) -> Text:
-        """Render the tab row with pill-style active indicator."""
-        text = Text()
+        """Render the tab row with underline-style active indicator."""
+        tab_line = Text()
+        underline_line = Text()
+        separator = "   "
+
         for i, tab in enumerate(self.config.tabs):
             if i > 0:
-                text.append("   ")  # 3 spaces between tabs
-            if i == self.config.active_tab_index:
-                # Active tab: inverse background (pill effect)
-                text.append(f" {tab} ", style="black on cyan")
-            else:
-                text.append(tab, style="dim")
-        text.append("\n")
-        return text
+                tab_line.append(separator)
+                underline_line.append(" " * len(separator))
+
+            is_active = i == self.config.active_tab_index
+            segment = tab
+            tab_style = "bold cyan" if is_active else "dim"
+            tab_line.append(segment, style=tab_style)
+
+            underline_char = Indicators.get("HORIZONTAL_LINE")
+            underline = underline_char * len(segment) if is_active else " " * len(segment)
+            underline_style = "cyan" if is_active else "dim"
+            underline_line.append(underline, style=underline_style)
+
+        return Text.assemble(tab_line, "\n", underline_line, "\n")
 
     def _render_search(self, query: str) -> Text:
         """Render the search/filter row."""
         text = Text()
         if query:
-            text.append(f"{Indicators.get('SEARCH_ICON')} ", style="dim")
-            text.append(query, style="yellow")
-            text.append(Indicators.get("TEXT_CURSOR"), style="yellow bold")
+            text.append("Filter", style="cyan")
+            text.append(": ", style="dim")
+            text.append(query, style="white")
+            text.append(Indicators.get("TEXT_CURSOR"), style="cyan")
         else:
-            text.append("Type to filter...", style="dim italic")
+            text.append("Filter: ", style="dim")
+            if "/" in self.config.search_hint:
+                before, after = self.config.search_hint.split("/", 1)
+                text.append(before, style="dim italic")
+                text.append("/", style="cyan")
+                text.append(after, style="dim italic")
+            else:
+                text.append(self.config.search_hint, style="dim italic")
         text.append("\n")
         return text
 
     def _render_footer(self) -> Text:
         """Render the footer hints row."""
-        text = Text()
-        text.append(Borders.FOOTER_SEPARATOR * 40 + "\n", style="dim")
+        hints = Text()
         for i, hint in enumerate(self.config.footer_hints):
             if i > 0:
-                text.append("  ·  ", style="dim")  # Middot separator
-            # Dimmed hints (e.g., teams in standalone mode) show in strike-through dim
+                hints.append("  ·  ", style="dim")
             if hint.dimmed:
-                text.append(hint.key, style="dim strike")
-                text.append(" ", style="dim")
-                text.append(hint.action, style="dim strike")
+                hints.append(hint.key, style="dim strike")
+                hints.append(" ", style="dim")
+                hints.append(hint.action, style="dim strike")
             else:
-                text.append(hint.key, style="cyan bold")
-                text.append(" ", style="dim")
-                text.append(hint.action, style="dim")
+                hints.append(hint.key, style="cyan bold")
+                hints.append(" ", style="dim")
+                hints.append(hint.action, style="dim")
+
+        separator_len = max(32, len(hints.plain))
+        text = Text()
+        text.append(Borders.FOOTER_SEPARATOR * separator_len + "\n", style="dim")
+        text.append(hints)
         return text
 
 

@@ -415,22 +415,25 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("↑ / k", "Move cursor up", section="Navigation"),
     KeyDoc("↓ / j", "Move cursor down", section="Navigation"),
     # Filtering
-    KeyDoc("type", "Filter items by text", section="Filtering"),
+    KeyDoc("/", "Focus filter input", section="Filtering", modes=("DASHBOARD",)),
+    KeyDoc("Type", "Filter items by text", section="Filtering", modes=("PICKER", "MULTI_SELECT")),
+    KeyDoc("Type", "Filter items after /", section="Filtering", modes=("DASHBOARD",)),
     KeyDoc("Backspace", "Delete filter character", section="Filtering"),
+    KeyDoc("Esc", "Clear filter / close details", section="Filtering", modes=("DASHBOARD",)),
     # Selection (mode-specific)
     KeyDoc("Enter", "Select item", section="Selection", modes=("PICKER",)),
     KeyDoc("Space", "Toggle selection", section="Selection", modes=("MULTI_SELECT",)),
     KeyDoc("a", "Toggle all items", section="Selection", modes=("MULTI_SELECT",)),
     KeyDoc("Enter", "Confirm selection", section="Selection", modes=("MULTI_SELECT",)),
     KeyDoc("Enter", "Primary action", section="Selection", modes=("DASHBOARD",)),
-    KeyDoc("Space", "Toggle details", section="Selection", modes=("DASHBOARD",)),
+    KeyDoc("Space", "Toggle details panel", section="Selection", modes=("DASHBOARD",)),
     # Tab navigation (dashboard only)
     KeyDoc("Tab", "Next tab", section="Tabs", modes=("DASHBOARD",)),
     KeyDoc("Shift+Tab", "Previous tab", section="Tabs", modes=("DASHBOARD",)),
     # Actions
     KeyDoc("r", "Refresh data", section="Actions", modes=("DASHBOARD",)),
-    KeyDoc("n", "New session", section="Actions", modes=("DASHBOARD",)),
-    KeyDoc("s", "Settings & maintenance", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("n", "New session (start wizard)", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("s", "Open settings & maintenance", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("t", "Switch team", section="Actions"),
     # Worktrees tab actions
     KeyDoc("w", "Recent workspaces", section="Worktrees", modes=("DASHBOARD",)),
@@ -440,14 +443,14 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("K", "Stop container", section="Containers", modes=("DASHBOARD",)),
     KeyDoc("R", "Resume container", section="Containers", modes=("DASHBOARD",)),
     KeyDoc("D", "Delete container", section="Containers", modes=("DASHBOARD",)),
-    KeyDoc("a", "Actions menu", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("a", "Open actions menu", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("p", "Profile menu", section="Actions", modes=("DASHBOARD",)),
     KeyDoc("i", "Import sandbox plugins", section="Profiles", modes=("DASHBOARD",)),
     # Exit
     KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
     KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),
     # Help
-    KeyDoc("?", "Show this help", section="Help"),
+    KeyDoc("?", "Show shortcuts", section="Help"),
 )
 
 
@@ -597,15 +600,18 @@ def map_key_to_action(
     custom_keys: dict[str, str] | None = None,
     enable_filter: bool = True,
     filter_active: bool = False,
+    filter_mode: bool = False,
+    require_filter_mode: bool = False,
 ) -> Action[None]:
     """Map a key press to a semantic action.
 
     The mapping process follows this priority:
-    1. If filter_active and key is j/k, treat as FILTER_CHAR (user is typing)
-    2. Check DEFAULT_KEY_MAP for standard actions
-    3. Check custom_keys for caller-defined actions
-    4. If enable_filter and printable, return FILTER_CHAR
-    5. Otherwise, return no-op (state_changed=False)
+    1. If filter_mode and key is printable, treat as FILTER_CHAR
+    2. If filter_active and key is j/k, treat as FILTER_CHAR (user is typing)
+    3. Check DEFAULT_KEY_MAP for standard actions
+    4. Check custom_keys for caller-defined actions
+    5. If enable_filter and printable, return FILTER_CHAR
+    6. Otherwise, return no-op (state_changed=False)
 
     Args:
         key: The key that was pressed (from read_key()).
@@ -613,6 +619,8 @@ def map_key_to_action(
         enable_filter: Whether to treat printable chars as filter input.
         filter_active: Whether a filter query is currently active. When True,
             j/k become filter characters instead of navigation shortcuts.
+        filter_mode: Whether filter input is explicitly active (captures all text).
+        require_filter_mode: If True, only allow filtering when filter_mode is active.
 
     Returns:
         An Action describing the semantic meaning of the key press.
@@ -628,6 +636,13 @@ def map_key_to_action(
         >>> action.custom_key
         's'
     """
+    if filter_mode and enable_filter and len(key) == 1 and key.isprintable():
+        return Action(
+            action_type=ActionType.FILTER_CHAR,
+            filter_char=key,
+            should_exit=False,
+        )
+
     # Priority 1: When filter is active, certain mapped keys become filter characters
     # (user is typing, arrow keys still work for navigation)
     # j/k = vim navigation, t = team switch, a = toggle all, n = new session, r = refresh
@@ -649,7 +664,7 @@ def map_key_to_action(
         )
         return Action(action_type=action_type, should_exit=should_exit)
 
-    # Priority 2: Check custom keys
+    # Priority 3: Check custom keys
     if custom_keys and key in custom_keys:
         return Action(
             action_type=ActionType.CUSTOM,
@@ -657,8 +672,8 @@ def map_key_to_action(
             should_exit=False,
         )
 
-    # Priority 3: Printable character for filter
-    if enable_filter and is_printable(key):
+    # Priority 4: Printable character for filter
+    if enable_filter and is_printable(key) and not require_filter_mode:
         return Action(
             action_type=ActionType.FILTER_CHAR,
             filter_char=key,
@@ -691,17 +706,20 @@ class KeyReader:
         *,
         custom_keys: dict[str, str] | None = None,
         enable_filter: bool = True,
+        require_filter_mode: bool = False,
     ) -> None:
         """Initialize the key reader.
 
         Args:
             custom_keys: Custom key bindings mapping key → action name.
             enable_filter: Whether to enable type-to-filter behavior.
+            require_filter_mode: If True, filter input only when filter_mode is active.
         """
         self.custom_keys = custom_keys or {}
         self.enable_filter = enable_filter
+        self.require_filter_mode = require_filter_mode
 
-    def read(self, *, filter_active: bool = False) -> Action[None]:
+    def read(self, *, filter_active: bool = False, filter_mode: bool = False) -> Action[None]:
         """Read a key and return the corresponding action.
 
         This method blocks until a key is pressed, then maps it
@@ -711,6 +729,7 @@ class KeyReader:
             filter_active: Whether a filter query is currently active.
                 When True, j/k become filter characters instead of
                 navigation shortcuts (arrow keys still work).
+            filter_mode: Whether filter input is explicitly active.
 
         Returns:
             The Action corresponding to the pressed key.
@@ -721,6 +740,8 @@ class KeyReader:
             custom_keys=self.custom_keys,
             enable_filter=self.enable_filter,
             filter_active=filter_active,
+            filter_mode=filter_mode,
+            require_filter_mode=self.require_filter_mode,
         )
 
 

@@ -327,8 +327,9 @@ class TestDashboardChromeConfig:
         config = dashboard._get_chrome_config()
 
         hint_keys = [h.key for h in config.footer_hints]
-        assert "Tab" in hint_keys  # Tab switching
-        assert "q" in hint_keys  # Quit
+        assert "Tab" in hint_keys
+        assert "/" in hint_keys
+        assert "?" in hint_keys
 
 
 class TestDashboardRendering:
@@ -656,7 +657,7 @@ class TestLoadWorktreesTabData:
 
             data = _load_worktrees_tab_data()
 
-            assert "*modified" in data.items[0].description
+            assert "modified" in data.items[0].description
 
     def test_shows_no_worktrees_message_when_not_git_repo(self) -> None:
         """Shows message when not in a git repository."""

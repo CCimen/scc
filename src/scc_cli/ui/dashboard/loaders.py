@@ -380,12 +380,12 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
 
             desc_parts = []
             if wt.branch:
-                desc_parts.append(wt.branch)
+                desc_parts.append(git.get_display_branch(wt.branch))
 
             # Show status markers when verbose
             if verbose:
                 if wt.status_timed_out:
-                    desc_parts.append("…")  # Timeout indicator
+                    desc_parts.append("status timeout")
                 else:
                     status_parts = []
                     if wt.staged_count > 0:
@@ -397,9 +397,9 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
                     if status_parts:
                         desc_parts.append(" ".join(status_parts))
                     elif not wt.has_changes:
-                        desc_parts.append(".")  # Clean indicator
+                        desc_parts.append("clean")
             elif wt.has_changes:
-                desc_parts.append("*modified")
+                desc_parts.append("modified")
 
             if wt.is_current:
                 desc_parts.append("(current)")
@@ -417,7 +417,7 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
                 ListItem(
                     value="no_worktrees",
                     label="No worktrees",
-                    description="Press 'w' recent | 'i' init | 'c' clone",
+                    description="Press w for recent · i to init · c to clone",
                 )
             )
 
@@ -437,7 +437,7 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
                 ListItem(
                     value="no_git",
                     label="Not available",
-                    description="Press 'w' recent | 'i' init | 'c' clone",
+                    description="Press w for recent · i to init · c to clone",
                 )
             ],
             count_active=0,

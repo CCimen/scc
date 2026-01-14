@@ -15,9 +15,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich import box
 from rich.console import Group, RenderableType
 from rich.live import Live
-from rich.padding import Padding
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
@@ -99,8 +100,10 @@ class Dashboard:
                 "K": "container_stop",
                 "R": "container_resume",
                 "D": "container_remove",
+                "/": "filter_mode",
             },
             enable_filter=True,
+            require_filter_mode=True,
         )
 
         with Live(
@@ -112,7 +115,10 @@ class Dashboard:
             while True:
                 # Pass filter_active based on actual filter state, not always True
                 # When filter is empty, j/k navigate; when typing, j/k become filter chars
-                action = reader.read(filter_active=bool(self.state.list_state.filter_query))
+                action = reader.read(
+                    filter_active=self.state.filter_mode,
+                    filter_mode=self.state.filter_mode,
+                )
 
                 # Help overlay dismissal: any key while help is visible just closes help
                 # This is the standard pattern for modal overlays in Rich Live applications
@@ -214,7 +220,7 @@ class Dashboard:
         # Render status message if present (transient toast)
         if self.state.status_message:
             text.append("\n")
-            text.append(f"{Indicators.get('INFO_ICON')} ", style="yellow")
+            text.append("Note: ", style="yellow")
             text.append(self.state.status_message, style="yellow")
             text.append("\n")
 
@@ -240,31 +246,30 @@ class Dashboard:
         Returns:
             Combined renderable.
         """
-        # Wrap details in consistent padding for visual balance
-        padded_details = Padding(details, (0, 0, 0, 1))  # Left padding
+        details_panel = Panel(
+            details,
+            border_style="bright_black",
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
 
         if side_by_side:
-            # Use Table.grid for side-by-side with vertical separator
-            # Table handles row height automatically (no fixed separator height)
             table = Table.grid(expand=True, padding=(0, 1))
-            table.add_column("list", ratio=1, no_wrap=False)
+            table.add_column("list", ratio=3, no_wrap=False)
             table.add_column("sep", width=1, style="dim", justify="center")
-            table.add_column("details", ratio=1, no_wrap=False)
-
-            # Single vertical bar - Rich expands it to match row height
-            table.add_row(list_body, Indicators.get("VERTICAL_LINE"), padded_details)
+            table.add_column("details", ratio=2, no_wrap=False)
+            table.add_row(list_body, Indicators.get("VERTICAL_LINE"), details_panel)
             return table
-        else:
-            # Stacked: list above details with thin separator
-            # Use same visual weight as side-by-side for smooth switching
-            separator = Text(Indicators.get("HORIZONTAL_LINE") * 30, style="dim")
-            return Group(
-                list_body,
-                Text(""),  # Blank line for spacing
-                separator,
-                Text(""),  # Blank line for spacing
-                padded_details,
-            )
+
+        separator_width = max(24, min(90, self._console.size.width - 6))
+        separator = Text(Indicators.get("HORIZONTAL_LINE") * separator_width, style="dim")
+        return Group(
+            list_body,
+            Text(""),
+            separator,
+            Text(""),
+            details_panel,
+        )
 
     def _render_details_pane(self) -> RenderableType:
         """Render details pane content for the current item.
@@ -292,20 +297,25 @@ class Dashboard:
         else:
             return Text("Details not available", style="dim")
 
+    def _build_details_header(self, title: str) -> Text:
+        """Build a consistent header for details panels."""
+        width = max(20, min(40, self._console.size.width // 3))
+        header = Text()
+        header.append(f"{title}\n", style="bold cyan")
+        header.append(Indicators.get("HORIZONTAL_LINE") * width, style="dim")
+        return header
+
     def _render_container_details(self, item: ListItem[Any]) -> RenderableType:
         """Render details for a container item using structured key/value table."""
         from ...docker.core import ContainerInfo
         from ..formatters import _shorten_docker_status
 
-        # Header
-        header = Text()
-        header.append("Container Details\n", style="bold cyan")
-        header.append(Indicators.get("HORIZONTAL_LINE") * 20, style="dim")
+        header = self._build_details_header("Container Details")
 
         # Key/value table
         table = Table.grid(padding=(0, 1))
         table.add_column("key", style="dim", width=10)
-        table.add_column("value")
+        table.add_column("value", overflow="fold")
 
         table.add_row("Name", Text(item.label, style="bold"))
 
@@ -360,15 +370,12 @@ class Dashboard:
         """
         session = item.value
 
-        # Header
-        header = Text()
-        header.append("Session Details\n", style="bold cyan")
-        header.append(Indicators.get("HORIZONTAL_LINE") * 20, style="dim")
+        header = self._build_details_header("Session Details")
 
         # Key/value table
         table = Table.grid(padding=(0, 1))
         table.add_column("key", style="dim", width=10)
-        table.add_column("value")
+        table.add_column("value", overflow="fold")
 
         table.add_row("Name", Text(item.label, style="bold"))
 
@@ -406,29 +413,43 @@ class Dashboard:
 
     def _render_worktree_details(self, item: ListItem[Any]) -> RenderableType:
         """Render details for a worktree item using structured key/value table."""
-        # Header
-        header = Text()
-        header.append("Worktree Details\n", style="bold cyan")
-        header.append(Indicators.get("HORIZONTAL_LINE") * 20, style="dim")
+        header = self._build_details_header("Worktree Details")
 
         # Key/value table
         table = Table.grid(padding=(0, 1))
         table.add_column("key", style="dim", width=10)
-        table.add_column("value")
+        table.add_column("value", overflow="fold")
 
         table.add_row("Name", Text(item.label, style="bold"))
         table.add_row("Path", item.value)
 
-        # Parse description into fields (branch  *modified  (current))
+        # Parse description into fields (branch  modified  +1 !2 ?3  (current))
         if item.description:
-            parts = item.description.split("  ")
+            parts = [part for part in item.description.split("  ") if part]
             for part in parts:
                 if part.startswith("(") and part.endswith(")"):
-                    table.add_row("Status", Text(part, style="green"))
-                elif part == "*modified":
+                    status_label = part.strip("()").replace("_", " ").title()
+                    table.add_row("Status", Text(status_label, style="green"))
+                    continue
+
+                if part == "modified":
                     table.add_row("Changes", Text("Modified", style="yellow"))
-                elif part:
-                    table.add_row("Branch", part)
+                    continue
+
+                if part == "clean":
+                    table.add_row("Status", Text("Clean", style="green"))
+                    continue
+
+                if part == "status timeout":
+                    table.add_row("Status", Text("Git status timed out", style="yellow"))
+                    continue
+
+                change_summary = self._format_worktree_change_summary(part)
+                if change_summary:
+                    table.add_row("Changes", Text(change_summary, style="yellow"))
+                    continue
+
+                table.add_row("Branch", part)
 
         # Commands section
         commands = Text()
@@ -436,6 +457,28 @@ class Dashboard:
         commands.append(f"  scc start {item.value}\n", style="cyan")
 
         return Group(header, table, commands)
+
+    def _format_worktree_change_summary(self, part: str) -> str | None:
+        """Format git status counts from a worktree description segment."""
+        tokens = part.split()
+        if not tokens:
+            return None
+
+        if not all(token[:1] in {"+", "!", "?"} for token in tokens):
+            return None
+
+        summaries: list[str] = []
+        labels = {"+": "staged", "!": "modified", "?": "untracked"}
+        for token in tokens:
+            prefix = token[:1]
+            count = token[1:]
+            if not count:
+                continue
+            label = labels.get(prefix)
+            if label:
+                summaries.append(f"{label} {count}")
+
+        return " · ".join(summaries) if summaries else None
 
     def _get_placeholder_tip(self, value: str | dict[str, Any]) -> str:
         """Get contextual help tip for placeholder items.
@@ -447,22 +490,15 @@ class Dashboard:
         """
         tips: dict[str, str] = {
             # Container placeholders (first-time user friendly)
-            "no_containers": (
-                "No containers running. Press 'n' to start a new session, "
-                "or run `scc start <path>` from the terminal."
-            ),
+            "no_containers": "No containers running. Press n to start or run `scc start <path>`.",
             # Session placeholders (first-time user friendly)
-            "no_sessions": ("No sessions recorded yet. Press 'n' to create your first session!"),
+            "no_sessions": "No sessions yet. Press n to create your first session.",
             # Worktree placeholders - updated with actionable shortcuts
-            "no_worktrees": (
-                "No worktrees yet. Press 'c' to create, 'w' for recent, or 'v' for status."
-            ),
-            "no_git": ("Not in a git repository. Press 'i' to init or 'c' to clone."),
+            "no_worktrees": "No worktrees yet. Press c to create, w for recent, v for status.",
+            "no_git": "Not a git repository. Press i to init or c to clone.",
             # Error placeholders (actionable doctor suggestion)
-            "error": (
-                "Unable to load data. Run `scc doctor` to check Docker status and diagnose issues."
-            ),
-            "config_error": ("Configuration issue detected. Run `scc doctor` to diagnose and fix."),
+            "error": "Unable to load data. Run `scc doctor` to diagnose.",
+            "config_error": "Configuration issue detected. Run `scc doctor` to fix it.",
         }
 
         # Extract placeholder key from dict if needed
@@ -472,148 +508,78 @@ class Dashboard:
 
         return tips.get(str(placeholder_key), "No details available for this item.")
 
-    def _compute_footer_hints(self, standalone: bool, show_details: bool) -> tuple[FooterHint, ...]:
-        """Compute context-aware footer hints based on current state.
-
-        Hints reflect available actions for the current selection:
-        - Details open: "Esc close"
-        - Status tab: Enter on actionable rows (start/team/resources/statusline)
-        - Startable placeholder: "Enter start"
-        - Non-startable placeholder: No Enter hint
-        - Real item: "Enter details"
-
-        Args:
-            standalone: Whether running in standalone mode (dims team hint).
-            show_details: Whether the details pane is currently showing.
-
-        Returns:
-            Tuple of FooterHint objects for the chrome footer.
-        """
+    def _compute_footer_hints(
+        self, _standalone: bool, show_details: bool
+    ) -> tuple[FooterHint, ...]:
+        """Compute concise footer hints for the active tab."""
         hints: list[FooterHint] = [FooterHint("↑↓", "navigate")]
+        current = self.state.list_state.current_item
 
-        # Determine primary action hint based on context
-        if show_details:
-            # Details pane is open
-            current = self.state.list_state.current_item
-            if current and not self.state.is_placeholder_selected():
-                if self.state.active_tab == DashboardTab.SESSIONS:
-                    hints.append(FooterHint("Enter", "resume"))
-                elif self.state.active_tab == DashboardTab.WORKTREES:
-                    hints.append(FooterHint("Enter", "start"))
-                elif self.state.active_tab == DashboardTab.CONTAINERS:
-                    hints.append(FooterHint("Enter", "actions"))
-                else:
-                    hints.append(FooterHint("Enter", "open"))
-            hints.append(FooterHint("Space", "close"))
-        elif self.state.active_tab == DashboardTab.STATUS:
-            current = self.state.list_state.current_item
+        primary_action: str | None = None
+        if self.state.active_tab == DashboardTab.STATUS:
             if current:
                 if isinstance(current.value, dict):
                     if current.value.get("_action") == "resume_last_session":
-                        hints.append(FooterHint("Enter", "resume"))
-                        # Note: No "Space details" - details not available in Status tab
+                        primary_action = "resume"
                 elif isinstance(current.value, str):
                     if current.value == "start_session":
-                        hints.append(FooterHint("Enter", "start"))
+                        primary_action = "start"
                     elif current.value == "team":
-                        hints.append(FooterHint("Enter", "switch team"))
-                    elif current.value in {"containers", "sessions", "worktrees"}:
-                        hints.append(FooterHint("Enter", "open"))
+                        primary_action = "switch"
+                    elif current.value in {
+                        "containers",
+                        "sessions",
+                        "worktrees",
+                        "settings",
+                        "profile",
+                    }:
+                        primary_action = "open"
                     elif current.value == "statusline_not_installed":
-                        hints.append(FooterHint("Enter", "install"))
-                    elif current.value == "settings":
-                        hints.append(FooterHint("Enter", "open"))
-                    elif current.value == "profile":
-                        hints.append(FooterHint("Enter", "open"))
+                        primary_action = "install"
         elif self.state.is_placeholder_selected():
-            # Check if placeholder is startable
-            current = self.state.list_state.current_item
             is_startable = False
             if current:
                 if isinstance(current.value, str):
                     is_startable = current.value in {"no_containers", "no_sessions"}
                 elif isinstance(current.value, dict):
                     is_startable = current.value.get("_startable", False)
-
             if is_startable:
-                hints.append(FooterHint("Enter", "start"))
-            # Non-startable placeholders get no Enter hint
+                primary_action = "start"
         else:
-            # Real item selected - show primary action and details toggle
             if self.state.active_tab == DashboardTab.SESSIONS:
-                hints.append(FooterHint("Enter", "resume"))
+                primary_action = "resume"
             elif self.state.active_tab == DashboardTab.WORKTREES:
-                hints.append(FooterHint("Enter", "start"))
+                primary_action = "start"
             elif self.state.active_tab == DashboardTab.CONTAINERS:
-                hints.append(FooterHint("Enter", "actions"))
+                primary_action = "actions"
             else:
-                hints.append(FooterHint("Enter", "open"))
+                primary_action = "open"
+
+        if primary_action:
+            hints.append(FooterHint("Enter", primary_action))
+
+        if show_details:
+            hints.append(FooterHint("Space", "close"))
+        elif (
+            self.state.active_tab != DashboardTab.STATUS
+            and not self.state.is_placeholder_selected()
+        ):
             hints.append(FooterHint("Space", "details"))
 
-        # Worktrees tab specific actions
         if self.state.active_tab == DashboardTab.WORKTREES and not show_details:
-            current = self.state.list_state.current_item
-            # Detect if we're in a git repo based on placeholder type
             is_git_repo = True
             if current and isinstance(current.value, str):
                 is_git_repo = current.value not in {"no_git", "no_worktrees"}
+            hints.append(FooterHint("c", "create" if is_git_repo else "clone"))
 
-            if not is_git_repo:
-                # Not in git repo: show w (recent), i (init), c (clone)
-                hints.append(FooterHint("w", "recent"))
-                hints.append(FooterHint("i", "init"))
-                hints.append(FooterHint("c", "clone"))
-            else:
-                # In git repo: show c (create worktree), v (status toggle)
-                hints.append(FooterHint("c", "create"))
-                # Show v toggle with current state indicator
-                status_label = "status off" if self.state.verbose_worktrees else "status"
-                hints.append(FooterHint("v", status_label))
+        hints.append(FooterHint("Tab", "tabs"))
 
-        # Sessions tab quick hint
-        if self.state.active_tab == DashboardTab.SESSIONS and not show_details:
-            hints.append(FooterHint("Enter", "resume"))
-            hints.append(FooterHint("a", "actions"))
-
-        # Containers tab quick actions (stop/resume/delete)
-        if self.state.active_tab == DashboardTab.CONTAINERS and not show_details:
-            current = self.state.list_state.current_item
-            if current and not self.state.is_placeholder_selected():
-                running = ""
-                if current.metadata and isinstance(current.metadata, dict):
-                    running = current.metadata.get("running", "")
-                if running == "yes":
-                    hints.append(FooterHint("K", "stop"))
-                    hints.append(FooterHint("a", "actions"))
-                elif running == "no":
-                    hints.append(FooterHint("R", "resume"))
-                    hints.append(FooterHint("D", "delete"))
-                    hints.append(FooterHint("a", "actions"))
-
-        # Worktrees tab actions menu
-        if self.state.active_tab == DashboardTab.WORKTREES and not show_details:
-            current = self.state.list_state.current_item
-            if current and not self.state.is_placeholder_selected():
-                hints.append(FooterHint("a", "actions"))
-
-        # Filter hint when active
-        if self.state.list_state.filter_query:
+        if self.state.filter_mode or self.state.list_state.filter_query:
             hints.append(FooterHint("Esc", "clear filter"))
+        else:
+            hints.append(FooterHint("/", "filter"))
 
-        # Tab navigation and refresh
-        hints.append(FooterHint("Tab", "switch tab"))
-        hints.append(FooterHint("r", "refresh"))
-
-        # Global actions (only show 'p' and 'i' when filter is empty)
-        if not self.state.list_state.filter_query:
-            hints.append(FooterHint("p", "profile"))
-            # Show 'i' for import on Status tab
-            if self.state.active_tab == DashboardTab.STATUS:
-                hints.append(FooterHint("i", "import"))
-        hints.append(FooterHint("t", "teams", dimmed=standalone))
-        hints.append(FooterHint("q", "quit"))
-        hints.append(FooterHint("?", "help"))
-
+        hints.append(FooterHint("?", "more"))
         return tuple(hints)
 
     def _get_chrome_config(self) -> ChromeConfig:
@@ -627,12 +593,14 @@ class Dashboard:
 
         # Compute dynamic footer hints based on current context
         footer_hints = self._compute_footer_hints(standalone, show_details)
+        search_hint = "type to search" if self.state.filter_mode else "press / to search"
 
         return ChromeConfig.for_dashboard(
             tab_names,
             active_index,
             standalone=standalone,
             details_open=show_details,
+            search_hint=search_hint,
             custom_hints=footer_hints,
         )
 
@@ -675,21 +643,23 @@ class Dashboard:
                 self.state = self.state.prev_tab()
 
             case ActionType.FILTER_CHAR:
-                if action.filter_char:
+                if action.filter_char and self.state.filter_mode:
                     self.state.list_state.add_filter_char(action.filter_char)
 
             case ActionType.FILTER_DELETE:
-                self.state.list_state.delete_filter_char()
+                if self.state.filter_mode or self.state.list_state.filter_query:
+                    self.state.list_state.delete_filter_char()
 
             case ActionType.CANCEL:
                 # ESC precedence: details → filter → no-op
                 if self.state.details_open:
                     self.state.details_open = False
-                    return True  # Refresh to hide details
-                if self.state.list_state.filter_query:
+                    return True
+                if self.state.filter_mode or self.state.list_state.filter_query:
                     self.state.list_state.clear_filter()
-                    return True  # Refresh to show unfiltered list
-                return None  # No-op
+                    self.state.filter_mode = False
+                    return True
+                return None
 
             case ActionType.QUIT:
                 return False
@@ -916,6 +886,9 @@ class Dashboard:
 
             case ActionType.CUSTOM:
                 # Handle dashboard-specific custom keys (not in DEFAULT_KEY_MAP)
+                if action.custom_key == "/":
+                    self.state.filter_mode = True
+                    return True
                 if action.custom_key == "r":
                     # User pressed 'r' - signal orchestrator to reload tab data
                     # Uses .name (stable identifier) not .value (display string)

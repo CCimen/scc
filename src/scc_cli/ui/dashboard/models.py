@@ -95,6 +95,7 @@ class DashboardState:
         status_message: Transient message to display (cleared on next action).
         details_open: Whether the details pane is visible.
         help_visible: Whether the help overlay is shown (rendered inside Live).
+        filter_mode: Whether filter input is explicitly active.
     """
 
     active_tab: DashboardTab
@@ -104,6 +105,7 @@ class DashboardState:
     details_open: bool = False
     help_visible: bool = False
     verbose_worktrees: bool = False  # Toggle for worktree status display
+    filter_mode: bool = False
 
     @property
     def current_tab_data(self) -> TabData:
@@ -163,6 +165,8 @@ class DashboardState:
             active_tab=tab,
             tabs=self.tabs,
             list_state=new_list_state,
+            verbose_worktrees=self.verbose_worktrees,
+            filter_mode=False,
         )
 
     def next_tab(self) -> DashboardState:

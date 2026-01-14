@@ -298,15 +298,19 @@ class TestKeyReader:
 
     def test_key_reader_initialization(self) -> None:
         """KeyReader initializes with custom keys and filter setting."""
-        reader = KeyReader(custom_keys={"s": "shell"}, enable_filter=False)
+        reader = KeyReader(
+            custom_keys={"s": "shell"}, enable_filter=False, require_filter_mode=True
+        )
         assert reader.custom_keys == {"s": "shell"}
         assert reader.enable_filter is False
+        assert reader.require_filter_mode is True
 
     def test_key_reader_defaults(self) -> None:
         """KeyReader has sensible defaults."""
         reader = KeyReader()
         assert reader.custom_keys == {}
         assert reader.enable_filter is True
+        assert reader.require_filter_mode is False
 
 
 class TestTeamSwitchConsistency:

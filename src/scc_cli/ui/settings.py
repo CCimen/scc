@@ -207,13 +207,13 @@ def _get_risk_badge(tier: RiskTier) -> Text:
     """
     match tier:
         case RiskTier.SAFE:
-            return Text.from_markup("[green]SAFE [dim]✓[/dim][/green]")
+            return Text.from_markup("[green]SAFE[/green]")
         case RiskTier.CHANGES_STATE:
-            return Text.from_markup("[yellow]CHANGES STATE [dim]![/dim][/yellow]")
+            return Text.from_markup("[yellow]CHANGES STATE[/yellow]")
         case RiskTier.DESTRUCTIVE:
-            return Text.from_markup("[red]DESTRUCTIVE [dim]!![/dim][/red]")
+            return Text.from_markup("[red]DESTRUCTIVE[/red]")
         case RiskTier.FACTORY_RESET:
-            return Text.from_markup("[bold red]VERY DESTRUCTIVE [dim]☠[/dim][/bold red]")
+            return Text.from_markup("[bold red]VERY DESTRUCTIVE[/bold red]")
         case _:
             return Text("UNKNOWN")
 
@@ -1174,15 +1174,20 @@ class SettingsScreen:
         profile = get_selected_profile()
         org = get_organization_name()
         header = Text()
-        header.append("Profile: ", style="dim")
+        header.append("Profile", style="dim")
+        header.append(": ", style="dim")
         header.append(profile or "standalone", style="cyan")
         if org:
-            header.append("  Org: ", style="dim")
+            header.append(f" {Indicators.get('VERTICAL_LINE')} ", style="dim")
+            header.append("Org", style="dim")
+            header.append(": ", style="dim")
             header.append(org, style="cyan")
         header.append("\n")
 
+        from rich import box
+
         # Two-column layout
-        layout = Table.grid(padding=1)
+        layout = Table.grid(padding=(0, 2))
         layout.add_column()  # Categories
         layout.add_column()  # Actions
 
@@ -1197,19 +1202,22 @@ class SettingsScreen:
         # Render action list for current category
         actions = _get_actions_for_category(self._active_category)
         action_text = Text()
+        label_width = max((len(action.label) for action in actions), default=0)
+        separator_width = max(18, min(36, label_width + 8))
 
         for i, action in enumerate(actions):
             is_selected = i == self._cursor
 
             # Add separator before Factory reset (last action in Maintenance)
             if action.id == "factory_reset":
-                action_text.append("  ───────────────────────────\n", style="dim")
+                line = Indicators.get("HORIZONTAL_LINE") * separator_width
+                action_text.append(f"  {line}\n", style="dim")
 
             prefix = Indicators.get("CURSOR") + " " if is_selected else "  "
 
             action_text.append(prefix, style="cyan" if is_selected else "")
             action_text.append(
-                action.label,
+                action.label.ljust(label_width),
                 style="bold" if is_selected else "",
             )
             action_text.append("  ")
@@ -1218,8 +1226,20 @@ class SettingsScreen:
             action_text.append(f"  {action.description}\n", style="dim")
 
         layout.add_row(
-            Panel(cat_text, title="Categories", border_style="dim"),
-            Panel(action_text, title="Actions", border_style="dim"),
+            Panel(
+                cat_text,
+                title="[dim]Categories[/dim]",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(0, 1),
+            ),
+            Panel(
+                action_text,
+                title="[dim]Actions[/dim]",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(0, 1),
+            ),
         )
 
         # Receipt line (shows last action result)
@@ -1227,36 +1247,35 @@ class SettingsScreen:
         if self._last_result:
             receipt.append("✓ ", style="green")
             receipt.append(self._last_result, style="green")
-            receipt.append("\n\n")
+            receipt.append("\n")
 
         # Footer hints
+        hint_pairs = [
+            ("↑↓", "navigate"),
+            ("←→/Tab", "switch category"),
+            ("Enter", "select"),
+            ("i", "info"),
+            ("p", "preview"),
+            ("?", "help"),
+            ("Esc", "back"),
+        ]
         hints = Text()
-        hints.append("↑↓ ", style="dim")
-        hints.append("navigate", style="dim")
-        hints.append(" │ ", style="dim")
-        hints.append("←→/Tab ", style="dim")
-        hints.append("switch category", style="dim")
-        hints.append(" │ ", style="dim")
-        hints.append("Enter ", style="dim")
-        hints.append("select", style="dim")
-        hints.append(" │ ", style="dim")
-        hints.append("i ", style="dim")
-        hints.append("info", style="dim")
-        hints.append(" │ ", style="dim")
-        hints.append("p ", style="dim")
-        hints.append("preview", style="dim")
-        hints.append(" │ ", style="dim")
-        hints.append("? ", style="dim")
-        hints.append("help", style="dim")
-        hints.append(" │ ", style="dim")
-        hints.append("Esc ", style="dim")
-        hints.append("back", style="dim")
+        for i, (key, hint_action) in enumerate(hint_pairs):
+            if i > 0:
+                hints.append(" · ", style="dim")
+            hints.append(key, style="cyan bold")
+            hints.append(" ", style="dim")
+            hints.append(hint_action, style="dim")
+
+        separator_width = max(32, min(72, self._console.size.width - 8))
+        separator = Text(Indicators.get("HORIZONTAL_LINE") * separator_width, style="dim")
+        hint_block = Group(separator, hints)
 
         # Build full screen content
         content = (
-            Group(header, layout, receipt, hints)
+            Group(header, layout, receipt, hint_block)
             if self._last_result
-            else Group(header, layout, hints)
+            else Group(header, layout, hint_block)
         )
 
         # Help panel overlay
@@ -1281,8 +1300,9 @@ class SettingsScreen:
             help_text.append("Show this help\n")
             help_panel = Panel(
                 help_text,
-                title="Help",
-                border_style="cyan",
+                title="[cyan]Help[/cyan]",
+                border_style="bright_black",
+                box=box.ROUNDED,
             )
             dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
             content = Group(header, layout, help_panel, dismiss)
@@ -1296,8 +1316,9 @@ class SettingsScreen:
             info_text.append(_get_risk_badge(action.risk_tier))
             info = Panel(
                 info_text,
-                title="Action Info",
-                border_style="cyan",
+                title="[cyan]Action Info[/cyan]",
+                border_style="bright_black",
+                box=box.ROUNDED,
             )
             dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
             content = Group(header, layout, info, dismiss)
@@ -1334,17 +1355,24 @@ class SettingsScreen:
 
             preview_panel = Panel(
                 preview_text,
-                title="Preview",
-                border_style="yellow",
+                title="[yellow]Preview[/yellow]",
+                border_style="bright_black",
+                box=box.ROUNDED,
             )
             dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
             content = Group(header, layout, preview_panel, dismiss)
 
+        title = Text()
+        title.append("Settings", style="bold cyan")
+        title.append(" & ", style="dim")
+        title.append("Maintenance", style="dim")
+
         return Panel(
             content,
-            title="[bold cyan]Settings & Maintenance[/bold cyan]",
-            border_style="cyan",
-            padding=(1, 2),
+            title=title,
+            border_style="bright_black",
+            box=box.ROUNDED,
+            padding=(0, 1),
         )
 
 

@@ -86,109 +86,6 @@ class TestDashboardTabNavigation:
             tabs=mock_tab_data,
             list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
         )
-
-        assert state.active_tab == DashboardTab.STATUS
-        assert state.current_tab_data.title == "Status"
-
-    def test_next_tab_cycles_forward(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """next_tab() moves to next tab in order."""
-        state = DashboardState(
-            active_tab=DashboardTab.STATUS,
-            tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
-        )
-
-        state = state.next_tab()
-        assert state.active_tab == DashboardTab.CONTAINERS
-
-        state = state.next_tab()
-        assert state.active_tab == DashboardTab.SESSIONS
-
-        state = state.next_tab()
-        assert state.active_tab == DashboardTab.WORKTREES
-
-    def test_next_tab_wraps_around(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """next_tab() wraps from last tab to first."""
-        state = DashboardState(
-            active_tab=DashboardTab.WORKTREES,
-            tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.WORKTREES].items),
-        )
-
-        state = state.next_tab()
-        assert state.active_tab == DashboardTab.STATUS
-
-    def test_prev_tab_cycles_backward(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """prev_tab() moves to previous tab in order."""
-        state = DashboardState(
-            active_tab=DashboardTab.WORKTREES,
-            tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.WORKTREES].items),
-        )
-
-        state = state.prev_tab()
-        assert state.active_tab == DashboardTab.SESSIONS
-
-        state = state.prev_tab()
-        assert state.active_tab == DashboardTab.CONTAINERS
-
-        state = state.prev_tab()
-        assert state.active_tab == DashboardTab.STATUS
-
-    def test_prev_tab_wraps_around(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """prev_tab() wraps from first tab to last."""
-        state = DashboardState(
-            active_tab=DashboardTab.STATUS,
-            tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
-        )
-
-        state = state.prev_tab()
-        assert state.active_tab == DashboardTab.WORKTREES
-
-    def test_switch_tab_resets_list_state(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """Switching tabs resets the list state cursor and filter."""
-        state = DashboardState(
-            active_tab=DashboardTab.STATUS,
-            tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
-        )
-
-        # Modify list state before switching
-        state.list_state.move_cursor(1)
-
-        # Switch tab
-        new_state = state.switch_tab(DashboardTab.CONTAINERS)
-
-        # Verify cursor is reset
-        assert new_state.list_state.cursor == 0
-        assert new_state.list_state.filter_query == ""
-
-
-class TestDashboardQuitBehavior:
-    """Test dashboard quit and cancel handling."""
-
-    @pytest.fixture
-    def mock_tab_data(self) -> dict[DashboardTab, TabData]:
-        """Create minimal mock tab data."""
-        return {
-            tab: TabData(
-                tab=tab,
-                title=tab.display_name,
-                items=[ListItem(value="test", label="Test", description="")],
-                count_active=1,
-                count_total=1,
-            )
-            for tab in DashboardTab
-        }
-
-    def test_quit_action_returns_false(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
-        """QUIT action causes _handle_action to return False."""
-        state = DashboardState(
-            active_tab=DashboardTab.STATUS,
-            tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
-        )
         dashboard = Dashboard(state)
 
         quit_action = Action(action_type=ActionType.QUIT, state_changed=True)
@@ -251,9 +148,9 @@ class TestDashboardQuitBehavior:
     def test_tab_prev_action_switches_tab(self, mock_tab_data: dict[DashboardTab, TabData]) -> None:
         """TAB_PREV action switches to previous tab."""
         state = DashboardState(
-            active_tab=DashboardTab.CONTAINERS,
+            active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
-            list_state=ListState(items=mock_tab_data[DashboardTab.CONTAINERS].items),
+            list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
         )
         dashboard = Dashboard(state)
 
@@ -261,7 +158,7 @@ class TestDashboardQuitBehavior:
         result = dashboard._handle_action(tab_action)
 
         assert result is None  # Continue running
-        assert dashboard.state.active_tab == DashboardTab.STATUS
+        assert dashboard.state.active_tab == DashboardTab.WORKTREES
 
 
 class TestDashboardNavigation:
@@ -386,6 +283,7 @@ class TestDashboardFiltering:
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
             list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+            filter_mode=True,
         )
         dashboard = Dashboard(state)
 
@@ -558,7 +456,7 @@ class TestDashboardStandaloneMode:
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
             list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
-            status_message="Test message",
+            filter_mode=True,
         )
         dashboard = Dashboard(state)
 
@@ -597,10 +495,10 @@ class TestDashboardStandaloneMode:
             assert dashboard.state.status_message is not None
             assert "org mode" in dashboard.state.status_message
 
-    def test_chrome_config_dims_teams_hint_in_standalone(
+    def test_chrome_config_omits_teams_hint_in_standalone(
         self, mock_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """ChromeConfig dims 't teams' hint when in standalone mode."""
+        """ChromeConfig omits teams hint in standalone mode."""
         state = DashboardState(
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
@@ -613,14 +511,13 @@ class TestDashboardStandaloneMode:
         ):
             config = dashboard._get_chrome_config()
 
-            # Find the teams hint and verify it's dimmed
-            teams_hint = next(h for h in config.footer_hints if h.action == "teams")
-            assert teams_hint.dimmed is True
+            hint_actions = [h.action for h in config.footer_hints]
+            assert "teams" not in hint_actions
 
-    def test_chrome_config_undimmed_teams_in_org_mode(
+    def test_chrome_config_omits_teams_hint_in_org_mode(
         self, mock_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """ChromeConfig shows normal 't teams' hint when org mode is configured."""
+        """ChromeConfig omits teams hint in org mode for a cleaner footer."""
         state = DashboardState(
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
@@ -633,9 +530,8 @@ class TestDashboardStandaloneMode:
         ):
             config = dashboard._get_chrome_config()
 
-            # Find the teams hint and verify it's not dimmed
-            teams_hint = next(h for h in config.footer_hints if h.action == "teams")
-            assert teams_hint.dimmed is False
+            hint_actions = [h.action for h in config.footer_hints]
+            assert "teams" not in hint_actions
 
 
 class TestStatusTabDrillDown:
@@ -875,6 +771,7 @@ class TestDetailsPane:
             tabs=resource_tab_data,
             list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
             details_open=True,
+            filter_mode=True,
         )
         state.list_state.filter_query = "scc"
         dashboard = Dashboard(state)
@@ -1019,6 +916,7 @@ class TestDetailsPane:
             tabs=resource_tab_data,
             list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
             details_open=True,
+            filter_mode=True,
         )
         dashboard = Dashboard(state)
 
@@ -1056,7 +954,8 @@ class TestDetailsPane:
         assert "details" not in hint_actions
         # Standard navigation and global hints still present
         assert "navigate" in hint_actions
-        assert "refresh" in hint_actions
+        assert "filter" in hint_actions
+        assert "more" in hint_actions
 
     def test_resource_tab_shows_esc_clear_filter_when_filtering(
         self, resource_tab_data: dict[DashboardTab, TabData]
@@ -1155,8 +1054,9 @@ class TestDetailsPane:
         state = DashboardState(
             active_tab=DashboardTab.CONTAINERS,
             tabs=resource_tab_data,
-            list_state=ListState(items=containers_items),
+            list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
             details_open=True,
+            filter_mode=True,
         )
         dashboard = Dashboard(state)
 

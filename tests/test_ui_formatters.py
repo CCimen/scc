@@ -259,7 +259,7 @@ class TestFormatWorktree:
         wt = WorktreeInfo(path="/home/user/my-project", branch="main", has_changes=True)
         item = format_worktree(wt)
 
-        assert "*modified" in item.description
+        assert "modified" in item.description
 
     def test_includes_current_indicator_in_description(self) -> None:
         """Include (current) indicator in description."""
