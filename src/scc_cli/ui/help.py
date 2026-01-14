@@ -25,6 +25,7 @@ from rich.table import Table
 from rich.text import Text
 
 from ..theme import Indicators
+from .chrome import apply_layout, get_layout_metrics
 
 if TYPE_CHECKING:
     from rich.console import Console, RenderableType
@@ -82,16 +83,28 @@ def get_help_entries_grouped(mode: HelpMode) -> dict[str, list[tuple[str, str]]]
     return get_keybindings_grouped_by_section(mode_name)
 
 
-def render_help_content(mode: HelpMode) -> RenderableType:
+def render_help_content(
+    mode: HelpMode,
+    *,
+    console: Console | None = None,
+    max_width: int = 104,
+) -> RenderableType:
     """Render help content for a given mode with section headers.
 
     Args:
         mode: The current screen mode.
+        console: Console for layout sizing (optional).
+        max_width: Maximum content width for the help panel.
 
     Returns:
         A Rich renderable with the help content organized by section.
     """
     from rich.console import Group
+
+    if console is None:
+        from ..console import get_err_console
+
+        console = get_err_console()
 
     grouped = get_help_entries_grouped(mode)
 
@@ -132,13 +145,16 @@ def render_help_content(mode: HelpMode) -> RenderableType:
     title.append(f" {Indicators.get('VERTICAL_LINE')} ", style="dim")
     title.append(mode_display, style="dim")
 
-    return Panel(
+    metrics = get_layout_metrics(console, max_width=max_width)
+    panel = Panel(
         Group(*renderables),
         title=title,
         title_align="left",
         border_style="bright_black",
         padding=(1, 2),
+        width=metrics.content_width if metrics.apply else None,
     )
+    return apply_layout(panel, metrics) if metrics.apply else panel
 
 
 def show_help_overlay(mode: HelpMode, console: Console | None = None) -> None:
@@ -153,7 +169,8 @@ def show_help_overlay(mode: HelpMode, console: Console | None = None) -> None:
 
         console = get_err_console()
 
-    content = render_help_content(mode)
+    assert console is not None
+    content = render_help_content(mode, console=console)
     console.print(content)
 
     # Wait for any key to dismiss

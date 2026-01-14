@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 from rich.live import Live
 from rich.text import Text
@@ -52,7 +52,8 @@ from .formatters import (
     format_team,
     format_worktree,
 )
-from .keys import BACK, ActionType, KeyReader, TeamSwitchRequested
+from .keys import BACK as BACK_SENTINEL
+from .keys import ActionType, KeyReader, TeamSwitchRequested, _BackSentinel
 from .list_screen import ListItem, ListMode, ListScreen, ListState
 
 # Re-export for backwards compatibility
@@ -138,6 +139,7 @@ def pick_team(
         items=items,
         title=title,
         subtitle=subtitle or f"{len(teams)} teams available",
+        allow_back=False,
     )
 
 
@@ -170,6 +172,7 @@ def pick_container(
         items=items,
         title=title,
         subtitle=subtitle or f"{len(containers)} containers",
+        allow_back=False,
     )
 
 
@@ -260,6 +263,7 @@ def pick_session(
         items=items,
         title=title,
         subtitle=subtitle or f"{len(sessions)} sessions",
+        allow_back=False,
     )
 
 
@@ -295,6 +299,7 @@ def pick_worktree(
         title=title,
         subtitle=subtitle or f"{len(worktrees)} worktrees",
         initial_filter=initial_filter,
+        allow_back=False,
     )
 
 
@@ -341,6 +346,7 @@ def pick_context(
         items=items,
         title=title,
         subtitle=subtitle or f"{len(contexts)} recent contexts",
+        allow_back=False,
     )
 
 
@@ -470,6 +476,32 @@ def _get_running_workspaces() -> set[str]:
         return set()
 
 
+@overload
+def _run_single_select_picker(
+    items: list[ListItem[T]],
+    *,
+    title: str,
+    subtitle: str | None = None,
+    standalone: bool = False,
+    allow_back: Literal[True],
+    context_label: str | None = None,
+    initial_filter: str = "",
+) -> T | _BackSentinel | None: ...
+
+
+@overload
+def _run_single_select_picker(
+    items: list[ListItem[T]],
+    *,
+    title: str,
+    subtitle: str | None = None,
+    standalone: bool = False,
+    allow_back: Literal[False] = False,
+    context_label: str | None = None,
+    initial_filter: str = "",
+) -> T | None: ...
+
+
 def _run_single_select_picker(
     items: list[ListItem[T]],
     *,
@@ -479,7 +511,7 @@ def _run_single_select_picker(
     allow_back: bool = False,
     context_label: str | None = None,
     initial_filter: str = "",
-) -> T | None:
+) -> T | _BackSentinel | None:
     """Run the interactive single-selection picker loop.
 
     This is the core picker implementation that handles:
@@ -555,14 +587,14 @@ def _run_single_select_picker(
         config = ChromeConfig.for_picker(title, subtitle, standalone=standalone)
         if context_label:
             config = config.with_context(context_label)
-        chrome = Chrome(config)
+        chrome = Chrome(config, console=console)
         return chrome.render(body, search_query=filter_query)
 
     # Run the picker loop
     with Live(
         render(),
         console=console,
-        auto_refresh=False,  # Manual refresh for instant response
+        auto_refresh=False,
         transient=True,
     ) as live:
         while True:
@@ -576,24 +608,26 @@ def _run_single_select_picker(
                     state.move_cursor(1)
 
                 case ActionType.SELECT:
-                    # Return selected value
+                    # Enter = select current item
                     current = state.current_item
                     if current is not None:
                         return current.value
                     return None
 
+                case ActionType.CUSTOM:
+                    pass
+
                 case ActionType.CANCEL:
-                    # Esc: back to previous screen (if allowed) or cancel
+                    # Esc = go back to previous screen (optional)
                     if allow_back:
-                        return BACK  # type: ignore[return-value]
+                        return BACK_SENTINEL
                     return None
 
                 case ActionType.QUIT:
-                    # q: always quit entirely
+                    # q = quit app entirely
                     return None
 
                 case ActionType.TEAM_SWITCH:
-                    # Signal caller to redirect to team selection
                     raise TeamSwitchRequested()
 
                 case ActionType.FILTER_CHAR:
@@ -627,17 +661,6 @@ def _run_quick_resume_picker(
     - a: Toggle all-teams view (TOGGLE_ALL_TEAMS)
     - Esc: Go back to previous screen (BACK)
     - q: Cancel the entire wizard (CANCELLED)
-
-    Args:
-        items: List items to display (first item should be "New Session" sentinel).
-        title: Title for chrome header.
-        subtitle: Optional subtitle.
-        standalone: If True, dim the "t teams" hint (not available without org).
-        context_label: Optional context label (e.g., "Team: platform") shown in header.
-
-    Returns:
-        Tuple of (QuickResumeResult, selected WorkContext or None).
-        Returns None for context when NEW_SESSION is selected.
     """
     if not items:
         return (QuickResumeResult.NEW_SESSION, None)
@@ -646,7 +669,6 @@ def _run_quick_resume_picker(
 
     console = get_err_console()
     state = ListState(items=items)
-    # Custom keys: 'n' for new session, 'a' for toggle all teams
     reader = KeyReader(
         custom_keys={"n": "new_session", "a": "toggle_all_teams"},
         enable_filter=True,
@@ -695,7 +717,7 @@ def _run_quick_resume_picker(
         config = ChromeConfig.for_quick_resume(title, subtitle, standalone=standalone)
         if context_label:
             config = config.with_context(context_label)
-        chrome = Chrome(config)
+        chrome = Chrome(config, console=console)
         return chrome.render(body, search_query=filter_query)
 
     # Run the picker loop
@@ -734,7 +756,7 @@ def _run_quick_resume_picker(
                     if action.custom_key == "new_session":
                         # n = explicitly start new session (skip resume)
                         return (QuickResumeResult.NEW_SESSION, None)
-                    elif action.custom_key == "toggle_all_teams":
+                    if action.custom_key == "toggle_all_teams":
                         # a = toggle all teams view (caller handles reload)
                         return (QuickResumeResult.TOGGLE_ALL_TEAMS, None)
 

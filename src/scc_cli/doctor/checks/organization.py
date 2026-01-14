@@ -55,11 +55,20 @@ def check_org_config_reachable() -> CheckResult | None:
     if not url:
         return None
 
-    auth = org_source.get("auth")
+    auth_spec = org_source.get("auth")
+    auth_header = org_source.get("auth_header")
 
     # Try to fetch org config
     try:
-        org_config, etag, status = fetch_org_config(url, auth=auth, etag=None)
+        from ...remote import resolve_auth
+
+        auth = resolve_auth(auth_spec) if auth_spec else None
+        org_config, etag, status = fetch_org_config(
+            url,
+            auth=auth,
+            etag=None,
+            auth_header=auth_header,
+        )
     except Exception as e:
         return CheckResult(
             name="Org Config",

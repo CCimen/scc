@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rich import box
-from rich.console import Group
+from rich.console import Console, Group
+from rich.padding import Padding
 from rich.panel import Panel
 from rich.text import Text
 
@@ -46,6 +47,81 @@ class FooterHint:
     key: str
     action: str
     dimmed: bool = False
+
+
+@dataclass(frozen=True)
+class LayoutMetrics:
+    """Layout metrics for consistent TUI framing and spacing."""
+
+    content_width: int
+    left_pad: int
+    should_center: bool
+    tight_height: bool
+    apply: bool
+    pad_x: int
+
+    def inner_width(self, *, padding_x: int = 1, border: int = 2) -> int:
+        """Return usable inner width for content rendering."""
+        width = self.content_width - border - 2 * padding_x
+        return max(1, width)
+
+
+def get_layout_metrics(
+    console: Console,
+    *,
+    max_width: int = 104,
+    gutter: int = 28,
+    min_width: int = 40,
+    pad_x: int = 2,
+) -> LayoutMetrics:
+    """Compute shared layout metrics for interactive TUI screens."""
+    width = getattr(console.size, "width", 0)
+    height = getattr(console.size, "height", 0)
+    if not isinstance(width, int) or not isinstance(height, int):
+        return LayoutMetrics(
+            content_width=max_width,
+            left_pad=0,
+            should_center=False,
+            tight_height=False,
+            apply=False,
+            pad_x=0,
+        )
+
+    tight_height = height < 28
+
+    if not console.is_terminal or console.is_dumb_terminal:
+        return LayoutMetrics(
+            content_width=max_width,
+            left_pad=0,
+            should_center=False,
+            tight_height=tight_height,
+            apply=False,
+            pad_x=0,
+        )
+
+    pad_x = 1 if width < 90 else pad_x
+    usable_width = max(0, width - 2 * pad_x)
+    content_width = min(max_width, usable_width)
+    content_width = max(min_width, content_width)
+    content_width = min(content_width, usable_width) if usable_width > 0 else 0
+    should_center = width >= max_width + 2 * gutter
+    left_pad = max(0, (width - content_width) // 2) if should_center else pad_x
+
+    return LayoutMetrics(
+        content_width=content_width,
+        left_pad=left_pad,
+        should_center=should_center,
+        tight_height=tight_height,
+        apply=True,
+        pad_x=pad_x,
+    )
+
+
+def apply_layout(renderable: RenderableType, metrics: LayoutMetrics) -> RenderableType:
+    """Apply left padding for centered or inset layouts."""
+    if not metrics.apply or metrics.left_pad <= 0:
+        return renderable
+    return Padding(renderable, (0, 0, 0, metrics.left_pad))
 
 
 @dataclass(frozen=True)
@@ -278,13 +354,19 @@ class Chrome:
         config: The ChromeConfig defining layout options.
     """
 
-    def __init__(self, config: ChromeConfig) -> None:
+    def __init__(
+        self, config: ChromeConfig, *, console: Console | None = None, max_width: int = 104
+    ) -> None:
         """Initialize chrome renderer.
 
         Args:
             config: Layout configuration.
+            console: Console for layout sizing (optional).
+            max_width: Maximum content width for the chrome frame.
         """
         self.config = config
+        self._console = console
+        self._max_width = max_width
 
     def render(
         self,
@@ -301,11 +383,23 @@ class Chrome:
         Returns:
             A Rich renderable combining all chrome elements.
         """
+        metrics: LayoutMetrics | None = None
+        panel_width: int | None = None
+        inner_width: int | None = None
+        tight_height = False
+
+        if self._console is not None:
+            metrics = get_layout_metrics(self._console, max_width=self._max_width)
+            tight_height = metrics.tight_height
+            if metrics.apply:
+                panel_width = metrics.content_width
+                inner_width = metrics.inner_width(padding_x=1, border=2)
+
         elements: list[RenderableType] = []
 
         # Tabs row (if enabled)
         if self.config.show_tabs:
-            elements.append(self._render_tabs())
+            elements.append(self._render_tabs(tight_height=tight_height))
 
         # Search row (if enabled and has query)
         if self.config.show_search:
@@ -316,18 +410,23 @@ class Chrome:
 
         # Footer hints
         if self.config.footer_hints:
-            elements.append(self._render_footer())
+            elements.append(self._render_footer(inner_width=inner_width))
 
         # Combine into panel with title
         title = self._build_title()
-        return Panel(
+        panel = Panel(
             Group(*elements),
             title=title,
             title_align="left",
             border_style="bright_black",
             box=box.ROUNDED,
             padding=(0, 1),
+            width=panel_width,
         )
+
+        if metrics is not None and metrics.apply:
+            return apply_layout(panel, metrics)
+        return panel
 
     def _build_title(self) -> Text:
         """Build the panel title renderable.
@@ -353,7 +452,7 @@ class Chrome:
             title.append(segment)
         return title
 
-    def _render_tabs(self) -> Text:
+    def _render_tabs(self, *, tight_height: bool = False) -> Text:
         """Render the tab row with underline-style active indicator."""
         tab_line = Text()
         underline_line = Text()
@@ -374,6 +473,8 @@ class Chrome:
             underline_style = "cyan" if is_active else "dim"
             underline_line.append(underline, style=underline_style)
 
+        if tight_height:
+            return Text.assemble(tab_line, "\n", underline_line)
         return Text.assemble(tab_line, "\n", underline_line, "\n")
 
     def _render_search(self, query: str) -> Text:
@@ -396,7 +497,7 @@ class Chrome:
         text.append("\n")
         return text
 
-    def _render_footer(self) -> Text:
+    def _render_footer(self, *, inner_width: int | None = None) -> Text:
         """Render the footer hints row."""
         hints = Text()
         for i, hint in enumerate(self.config.footer_hints):
@@ -412,6 +513,8 @@ class Chrome:
                 hints.append(hint.action, style="dim")
 
         separator_len = max(32, len(hints.plain))
+        if inner_width:
+            separator_len = max(separator_len, inner_width)
         text = Text()
         text.append(Borders.FOOTER_SEPARATOR * separator_len + "\n", style="dim")
         text.append(hints)
@@ -423,6 +526,8 @@ def render_chrome(
     body: RenderableType,
     *,
     search_query: str = "",
+    console: Console | None = None,
+    max_width: int = 104,
 ) -> RenderableType:
     """Convenience function to render chrome without instantiating Chrome class.
 
@@ -430,9 +535,11 @@ def render_chrome(
         config: Chrome configuration.
         body: Body content to wrap.
         search_query: Current search/filter query.
+        console: Console for layout sizing (optional).
+        max_width: Maximum content width for the chrome frame.
 
     Returns:
         Complete rendered chrome with body.
     """
-    chrome = Chrome(config)
+    chrome = Chrome(config, console=console, max_width=max_width)
     return chrome.render(body, search_query=search_query)

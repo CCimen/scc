@@ -42,6 +42,7 @@ from ..core.maintenance import (
     reset_exceptions,
 )
 from ..theme import Indicators
+from .chrome import apply_layout, get_layout_metrics
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -1170,6 +1171,13 @@ class SettingsScreen:
 
     def _render(self) -> RenderableType:
         """Render the settings screen."""
+        metrics = get_layout_metrics(self._console, max_width=104)
+        inner_width = (
+            metrics.inner_width(padding_x=1, border=2)
+            if metrics.apply
+            else self._console.size.width
+        )
+
         # Profile header
         profile = get_selected_profile()
         org = get_organization_name()
@@ -1267,7 +1275,7 @@ class SettingsScreen:
             hints.append(" ", style="dim")
             hints.append(hint_action, style="dim")
 
-        separator_width = max(32, min(72, self._console.size.width - 8))
+        separator_width = max(32, min(72, inner_width))
         separator = Text(Indicators.get("HORIZONTAL_LINE") * separator_width, style="dim")
         hint_block = Group(separator, hints)
 
@@ -1367,13 +1375,15 @@ class SettingsScreen:
         title.append(" & ", style="dim")
         title.append("Maintenance", style="dim")
 
-        return Panel(
+        panel = Panel(
             content,
             title=title,
             border_style="bright_black",
             box=box.ROUNDED,
             padding=(0, 1),
+            width=metrics.content_width if metrics.apply else None,
         )
+        return apply_layout(panel, metrics) if metrics.apply else panel
 
 
 def run_settings_screen(initial_category: str | None = None) -> str | None:

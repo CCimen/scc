@@ -19,7 +19,7 @@ from typing import Any, cast
 import readchar
 from rich import box
 from rich.columns import Columns
-from rich.console import Console
+from rich.console import Console, RenderableType
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
@@ -27,12 +27,31 @@ from rich.text import Text
 
 from . import config
 from .confirm import Confirm
-from .remote import fetch_org_config, save_to_cache
+from .remote import (
+    fetch_org_config,
+    looks_like_github_url,
+    looks_like_gitlab_url,
+    save_to_cache,
+)
 from .theme import Borders, Indicators, Spinners
+from .ui.chrome import LayoutMetrics, apply_layout, get_layout_metrics
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Arrow-Key Selection Component
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _layout_metrics(console: Console) -> LayoutMetrics:
+    """Return layout metrics for setup rendering."""
+    return get_layout_metrics(console, max_width=104)
+
+
+def _print_padded(console: Console, renderable: RenderableType, metrics: LayoutMetrics) -> None:
+    """Print with layout padding when applicable."""
+    if metrics.apply:
+        console.print(apply_layout(renderable, metrics))
+    else:
+        console.print(renderable)
 
 
 def _build_hint_text(hints: list[tuple[str, str]]) -> Text:
@@ -64,15 +83,18 @@ def _select_option(
         Selected index (0-based), or None if cancelled.
     """
     cursor = default
-    label_width = max((len(label) for label, _, _ in options), default=0)
+    metrics = _layout_metrics(console)
+    content_width = metrics.content_width
+    min_label_width = min(36, max(24, content_width // 3))
+    label_width = max(min_label_width, max((len(label) for label, _, _ in options), default=0))
     tag_width = max((len(tag) for _, tag, _ in options), default=0)
     cursor_symbol = Indicators.get("CURSOR")
 
     def _render_options() -> int:
         """Render options and return line count."""
-        lines = 0
-        console.print()
-        lines += 1
+        body = Text()
+        if not metrics.tight_height:
+            body.append("\n")
 
         for i, (label, tag, desc) in enumerate(options):
             is_selected = i == cursor
@@ -85,18 +107,17 @@ def _select_option(
                 padding = label_width - len(label) + (3 if tag_width else 2)
                 line.append(" " * max(2, padding))
                 line.append(tag, style="cyan" if is_selected else "dim")
-            console.print(line)
-            lines += 1
+            body.append_text(line)
+            body.append("\n")
             if desc:
-                console.print(f"    [dim]{desc}[/dim]")
-                lines += 1
+                body.append(f"    {desc}\n", style="dim")
 
-            if i < len(options) - 1:
-                console.print()
-                lines += 1
+            if i < len(options) - 1 and not metrics.tight_height:
+                body.append("\n")
 
-        console.print()
-        lines += 1
+        if not metrics.tight_height:
+            body.append("\n")
+
         hints = _build_hint_text(
             [
                 ("↑↓", "navigate"),
@@ -104,12 +125,32 @@ def _select_option(
                 ("Esc", "cancel"),
             ]
         )
-        separator_len = max(32, len(hints.plain))
-        console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
-        lines += 1
-        console.print(hints)
-        lines += 1
-        return lines
+        inner_width = (
+            metrics.inner_width(padding_x=1, border=2)
+            if metrics.should_center and metrics.apply
+            else content_width
+        )
+        separator_len = max(len(hints.plain), inner_width)
+        body.append(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
+        body.append("\n")
+        body.append_text(hints)
+
+        renderable: RenderableType = body
+        if metrics.apply and metrics.should_center:
+            renderable = Panel(
+                body,
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(0, 1),
+                width=metrics.content_width,
+            )
+
+        if metrics.apply:
+            renderable = apply_layout(renderable, metrics)
+
+        line_count = len(console.render_lines(renderable, pad=False, new_lines=True))
+        console.print(renderable)
+        return line_count
 
     # Hide cursor for smoother redraws
     sys.stdout.write("\033[?25l")
@@ -206,6 +247,7 @@ def _build_config_preview(
     *,
     org_url: str | None,
     auth: str | None,
+    auth_header: str | None,
     profile: str | None,
     hooks_enabled: bool | None,
     standalone: bool | None,
@@ -229,6 +271,12 @@ def _build_config_preview(
             "org.auth",
             _format_preview_value(auth),
         )
+        if auth_header:
+            _append_dot_leader(
+                preview,
+                "org.auth_header",
+                _format_preview_value(auth_header),
+            )
         _append_dot_leader(
             preview,
             "profile",
@@ -253,6 +301,7 @@ def _build_proposed_config(
     *,
     org_url: str | None,
     auth: str | None,
+    auth_header: str | None,
     profile: str | None,
     hooks_enabled: bool,
     standalone: bool,
@@ -267,10 +316,13 @@ def _build_proposed_config(
         user_config["standalone"] = True
         user_config["organization_source"] = None
     elif org_url:
-        user_config["organization_source"] = {
+        org_source: dict[str, Any] = {
             "url": org_url,
             "auth": auth,
         }
+        if auth_header:
+            org_source["auth_header"] = auth_header
+        user_config["organization_source"] = org_source
         user_config["selected_profile"] = profile
     return user_config
 
@@ -294,6 +346,7 @@ def _build_config_changes(before: dict[str, Any], after: dict[str, Any]) -> Text
     keys = [
         "organization_source.url",
         "organization_source.auth",
+        "organization_source.auth_header",
         "selected_profile",
         "hooks.enabled",
         "standalone",
@@ -318,9 +371,13 @@ def _render_setup_header(console: Console, *, step_index: int, subtitle: str | N
     """Render the setup step header with underline-style tabs."""
     console.clear()
 
+    metrics = _layout_metrics(console)
+    content_width = metrics.content_width
+
     console.print()
-    console.print(Text("SCC Setup", style="bold white"), justify="center")
-    console.print()
+    _print_padded(console, Text("SCC Setup", style="bold white"), metrics)
+    if not metrics.tight_height:
+        console.print()
 
     tabs = Text()
     underline = Text()
@@ -346,15 +403,17 @@ def _render_setup_header(console: Console, *, step_index: int, subtitle: str | N
         )
         underline.append(underline_segment, style="cyan" if is_active else "dim")
 
-    console.print(tabs)
-    console.print(underline)
+    _print_padded(console, tabs, metrics)
+    _print_padded(console, underline, metrics)
 
-    separator_len = max(32, min(console.size.width - 4, len(tabs.plain)))
-    console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
+    if not metrics.should_center:
+        separator_len = max(len(tabs.plain), content_width)
+        _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
 
     if subtitle:
-        console.print()
-        console.print(f"  {subtitle}", style="dim")
+        if not metrics.tight_height:
+            console.print()
+        _print_padded(console, f"  {subtitle}", metrics)
         console.print()
     else:
         console.print()
@@ -374,34 +433,47 @@ def _render_setup_layout(
     """Render a two-pane setup layout with a shared header."""
     _render_setup_header(console, step_index=step_index, subtitle=subtitle)
 
-    left_panel = Panel.fit(
+    metrics = _layout_metrics(console)
+    content_width = metrics.content_width
+    width = console.size.width
+    stacked_width = content_width
+    column_width = max(32, (content_width - 4) // 2)
+
+    expand_panels = width >= 100
+
+    left_panel = Panel(
         left_body,
         title=f"[dim]{left_title}[/dim]",
         border_style="bright_black",
         padding=(0, 1),
         box=box.ROUNDED,
+        width=stacked_width if width < 100 else column_width,
+        expand=expand_panels,
     )
-    right_panel = Panel.fit(
+    right_panel = Panel(
         right_body,
         title=f"[dim]{right_title}[/dim]",
         border_style="bright_black",
         padding=(0, 1),
         box=box.ROUNDED,
+        width=stacked_width if width < 100 else column_width,
+        expand=expand_panels,
     )
 
-    width = console.size.width
     if width < 100:
-        console.print(left_panel)
-        console.print()
-        console.print(right_panel)
+        _print_padded(console, left_panel, metrics)
+        if not metrics.tight_height:
+            console.print()
+        _print_padded(console, right_panel, metrics)
     else:
-        console.print(Columns([left_panel, right_panel], expand=True, equal=True))
+        columns = Columns([left_panel, right_panel], expand=False, equal=True)
+        _print_padded(console, columns, metrics)
 
     console.print()
     if footer_hint:
-        separator_len = max(32, min(console.size.width - 4, len(footer_hint)))
-        console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
-        console.print(f"  [dim]{footer_hint}[/dim]")
+        separator_len = max(len(footer_hint), content_width)
+        _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
+        _print_padded(console, f"  [dim]{footer_hint}[/dim]", metrics)
         return
 
     hints = _build_hint_text(
@@ -411,9 +483,9 @@ def _render_setup_layout(
             ("Esc", "cancel"),
         ]
     )
-    separator_len = max(32, min(console.size.width - 4, len(hints.plain)))
-    console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
-    console.print(hints)
+    separator_len = max(len(hints.plain), content_width)
+    _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
+    _print_padded(console, hints, metrics)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -455,7 +527,7 @@ def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
 
         # Validate HTTPS
         if url.startswith("http://"):
-            console.print("[red]HTTP URLs are not allowed. Please use HTTPS.[/red]")
+            console.print("[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]")
             continue
 
         if not url.startswith("https://"):
@@ -522,7 +594,10 @@ def prompt_auth_method(console: Console, *, rendered: bool = False) -> str | Non
 
 
 def fetch_and_validate_org_config(
-    console: Console, url: str, auth: str | None
+    console: Console,
+    url: str,
+    auth: str | None,
+    auth_header: str | None = None,
 ) -> dict[str, Any] | None:
     """Fetch and validate the organization config from a URL.
 
@@ -530,13 +605,19 @@ def fetch_and_validate_org_config(
         console: Rich console for output
         url: HTTPS URL to org config
         auth: Auth spec (env:VAR, command:CMD) or None
+        auth_header: Optional header name for auth (e.g., PRIVATE-TOKEN)
 
     Returns:
         Organization config dict if successful, None if auth required (401).
     """
     console.print()
     with console.status("Fetching organization config...", spinner=Spinners.NETWORK):
-        config_data, etag, status = fetch_org_config(url, auth=auth, etag=None)
+        config_data, etag, status = fetch_org_config(
+            url,
+            auth=auth,
+            etag=None,
+            auth_header=auth_header,
+        )
 
     if status == 401:
         console.print("[yellow]Authentication required (401)[/yellow]")
@@ -551,7 +632,7 @@ def fetch_and_validate_org_config(
         return None
 
     org_name = config_data.get("organization", {}).get("name", "Unknown")
-    console.print(f"[green]✓ Connected to: {org_name}[/green]")
+    console.print(f"[green]Connected to: {org_name}[/green]")
 
     # Save org config to cache so team commands can access it
     # Use default TTL of 24 hours (can be overridden in config defaults)
@@ -672,6 +753,7 @@ def save_setup_config(
     console: Console,
     org_url: str | None,
     auth: str | None,
+    auth_header: str | None,
     profile: str | None,
     hooks_enabled: bool,
     standalone: bool = False,
@@ -682,6 +764,7 @@ def save_setup_config(
         console: Rich console for output
         org_url: Organization config URL or None
         auth: Auth spec or None
+        auth_header: Optional auth header for org fetch
         profile: Selected profile name or None
         hooks_enabled: Whether git hooks are enabled
         standalone: Whether running in standalone mode
@@ -699,10 +782,13 @@ def save_setup_config(
         user_config["standalone"] = True
         user_config["organization_source"] = None
     elif org_url:
-        user_config["organization_source"] = {
+        org_source: dict[str, Any] = {
             "url": org_url,
             "auth": auth,
         }
+        if auth_header:
+            org_source["auth_header"] = auth_header
+        user_config["organization_source"] = org_source
         user_config["selected_profile"] = profile
 
     # Save to config file
@@ -731,8 +817,12 @@ def show_setup_complete(
     # Clear screen for clean completion display
     console.clear()
     console.print()
-    console.print("                    [bold green]✓ Setup Complete[/bold green]")
-    console.print()
+
+    metrics = _layout_metrics(console)
+    content_width = metrics.content_width
+    _print_padded(console, Text("Setup Complete", style="bold green"), metrics)
+    if not metrics.tight_height:
+        console.print()
 
     # Build content
     content = Text()
@@ -751,17 +841,31 @@ def show_setup_complete(
         border_style="bright_black",
         box=box.ROUNDED,
         padding=(1, 2),
-        width=min(55, console.size.width - 4),
+        width=min(content_width, 80),
     )
-    console.print(main_panel)
+    _print_padded(console, main_panel, metrics)
 
     # Next steps
-    console.print()
-    console.print("  [bold white]Get started[/bold white]")
-    console.print()
-    console.print("  [cyan]scc start ~/project[/cyan]   [dim]Launch Claude in a workspace[/dim]")
-    console.print("  [cyan]scc team list[/cyan]         [dim]List available teams[/dim]")
-    console.print("  [cyan]scc doctor[/cyan]            [dim]Check system health[/dim]")
+    if not metrics.tight_height:
+        console.print()
+    _print_padded(console, "  [bold white]Get started[/bold white]", metrics)
+    if not metrics.tight_height:
+        console.print()
+    _print_padded(
+        console,
+        "  [cyan]scc start ~/project[/cyan]   [dim]Launch Claude in a workspace[/dim]",
+        metrics,
+    )
+    _print_padded(
+        console,
+        "  [cyan]scc team list[/cyan]         [dim]List available teams[/dim]",
+        metrics,
+    )
+    _print_padded(
+        console,
+        "  [cyan]scc doctor[/cyan]            [dim]Check system health[/dim]",
+        metrics,
+    )
     console.print()
 
 
@@ -769,6 +873,7 @@ def _build_setup_summary(
     *,
     org_url: str | None,
     auth: str | None,
+    auth_header: str | None,
     profile: str | None,
     hooks_enabled: bool,
     standalone: bool,
@@ -792,6 +897,8 @@ def _build_setup_summary(
             _line("Org URL", org_url)
         _line("Profile", profile or "none")
         _line("Auth", auth or "none")
+        if auth_header:
+            _line("Auth Header", auth_header)
 
     _line("Hooks", "enabled" if hooks_enabled else "disabled")
     _line("Config dir", str(config.CONFIG_DIR))
@@ -803,6 +910,7 @@ def _confirm_setup(
     *,
     org_url: str | None,
     auth: str | None,
+    auth_header: str | None = None,
     profile: str | None,
     hooks_enabled: bool,
     standalone: bool,
@@ -813,6 +921,7 @@ def _confirm_setup(
     summary = _build_setup_summary(
         org_url=org_url,
         auth=auth,
+        auth_header=auth_header,
         profile=profile,
         hooks_enabled=hooks_enabled,
         standalone=standalone,
@@ -820,14 +929,16 @@ def _confirm_setup(
     )
 
     if not rendered:
+        metrics = _layout_metrics(console)
         panel = Panel(
             summary,
             title="[bold cyan]Review & Confirm[/bold cyan]",
             border_style="bright_black",
             box=box.ROUNDED,
             padding=(1, 2),
+            width=min(metrics.content_width, 80),
         )
-        console.print(panel)
+        _print_padded(console, panel, metrics)
         console.print()
 
     return Confirm.ask("[cyan]Apply these settings?[/cyan]", default=True)
@@ -872,6 +983,7 @@ def run_setup_wizard(console: Console) -> bool:
     has_org_config = selected == 0
     standalone = not has_org_config
     org_name = None
+    auth_header: str | None = None
 
     if has_org_config:
         # Get org URL - single centered panel
@@ -885,22 +997,28 @@ def run_setup_wizard(console: Console) -> bool:
         org_help.append("  • Example: ", style="dim")
         org_help.append("https://example.com/scc/org.json", style="cyan dim")
 
+        metrics = _layout_metrics(console)
         org_panel = Panel(
             org_help,
             title="[bold cyan]Organization URL[/bold cyan]",
             border_style="bright_black",
             box=box.ROUNDED,
             padding=(1, 2),
-            width=min(65, console.size.width - 4),
+            width=min(metrics.content_width, 80),
         )
         console.print()
-        console.print(org_panel)
+        _print_padded(console, org_panel, metrics)
         console.print()
 
         org_url = prompt_org_url(console, rendered=True)
 
         # Try to fetch without auth first
-        org_config = fetch_and_validate_org_config(console, org_url, auth=None)
+        org_config = fetch_and_validate_org_config(
+            console,
+            org_url,
+            auth=None,
+            auth_header=None,
+        )
 
         # If 401, prompt for auth and retry
         auth = None
@@ -923,7 +1041,16 @@ def run_setup_wizard(console: Console) -> bool:
 
             if auth_choice == 0:
                 console.print()
-                var_name = Prompt.ask("[cyan]Environment variable name[/cyan]")
+                if looks_like_gitlab_url(org_url):
+                    default_var = "GITLAB_TOKEN"
+                elif looks_like_github_url(org_url):
+                    default_var = "GITHUB_TOKEN"
+                else:
+                    default_var = "SCC_ORG_TOKEN"
+                var_name = Prompt.ask(
+                    "[cyan]Environment variable name[/cyan]",
+                    default=default_var,
+                )
                 auth = f"env:{var_name}"
             elif auth_choice == 1:
                 console.print()
@@ -931,8 +1058,17 @@ def run_setup_wizard(console: Console) -> bool:
                 auth = f"command:{command}"
             # else: auth stays None (skip)
 
+            if auth and looks_like_gitlab_url(org_url):
+                console.print("[dim]GitLab detected. Default header: PRIVATE-TOKEN.[/dim]")
+                auth_header = Prompt.ask("[cyan]Auth header[/cyan]", default="PRIVATE-TOKEN")
+
             if auth:
-                org_config = fetch_and_validate_org_config(console, org_url, auth=auth)
+                org_config = fetch_and_validate_org_config(
+                    console,
+                    org_url,
+                    auth=auth,
+                    auth_header=auth_header,
+                )
 
         if org_config is None:
             console.print("[red]Could not fetch organization config[/red]")
@@ -978,6 +1114,7 @@ def run_setup_wizard(console: Console) -> bool:
         preview = _build_config_preview(
             org_url=None,
             auth=None,
+            auth_header=None,
             profile=None,
             hooks_enabled=None,
             standalone=True,
@@ -1014,6 +1151,7 @@ def run_setup_wizard(console: Console) -> bool:
     proposed = _build_proposed_config(
         org_url=org_url,
         auth=auth,
+        auth_header=auth_header,
         profile=profile,
         hooks_enabled=bool(hooks_enabled),
         standalone=standalone,
@@ -1024,18 +1162,19 @@ def run_setup_wizard(console: Console) -> bool:
     _render_setup_header(console, step_index=5, subtitle="Review and confirm your settings.")
 
     # Single centered Changes panel
+    metrics = _layout_metrics(console)
     changes_panel = Panel(
         changes,
         title="[bold cyan]Changes[/bold cyan]",
         border_style="bright_black",
         box=box.ROUNDED,
         padding=(1, 2),
-        width=min(60, console.size.width - 4),
+        width=min(metrics.content_width, 80),
     )
     console.print()
-    console.print(changes_panel)
+    _print_padded(console, changes_panel, metrics)
     console.print()
-    console.print("[dim]  This will update your config file.[/dim]")
+    _print_padded(console, "[dim]  This will update your config file.[/dim]", metrics)
 
     # Arrow-key confirm selection
     confirm_options = [
@@ -1053,6 +1192,7 @@ def run_setup_wizard(console: Console) -> bool:
         console,
         org_url=org_url,
         auth=auth,
+        auth_header=auth_header,
         profile=profile,
         hooks_enabled=hooks_enabled,
         standalone=standalone,
@@ -1097,6 +1237,7 @@ def run_non_interactive_setup(
             console,
             org_url=None,
             auth=None,
+            auth_header=None,
             profile=None,
             hooks_enabled=False,
             standalone=True,
@@ -1108,8 +1249,15 @@ def run_non_interactive_setup(
         console.print("[red]Organization URL required (use --org-url)[/red]")
         return False
 
+    auth_header = "PRIVATE-TOKEN" if auth and looks_like_gitlab_url(org_url) else None
+
     # Fetch org config
-    org_config = fetch_and_validate_org_config(console, org_url, auth=auth)
+    org_config = fetch_and_validate_org_config(
+        console,
+        org_url,
+        auth=auth,
+        auth_header=auth_header,
+    )
 
     if org_config is None:
         console.print("[red]Could not fetch organization config[/red]")
@@ -1128,6 +1276,7 @@ def run_non_interactive_setup(
         console,
         org_url=org_url,
         auth=auth,
+        auth_header=auth_header,
         profile=team,
         hooks_enabled=True,  # Default to enabled for non-interactive
     )

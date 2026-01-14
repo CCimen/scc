@@ -25,7 +25,7 @@ from rich.text import Text
 # Import config for standalone mode detection
 from ... import config as scc_config
 from ...theme import Indicators
-from ..chrome import Chrome, ChromeConfig, FooterHint
+from ..chrome import Chrome, ChromeConfig, FooterHint, get_layout_metrics
 from ..keys import (
     Action,
     ActionType,
@@ -75,6 +75,7 @@ class Dashboard:
         self._console = get_err_console()
         # Track last layout mode for hysteresis (prevents flip-flop at resize boundary)
         self._last_side_by_side: bool | None = None
+        self._layout_width: int | None = None
 
     def run(self) -> None:
         """Run the interactive dashboard.
@@ -152,11 +153,19 @@ class Dashboard:
         if self.state.help_visible:
             from ..help import HelpMode, render_help_content
 
-            return render_help_content(HelpMode.DASHBOARD)
+            return render_help_content(HelpMode.DASHBOARD, console=self._console, max_width=120)
 
         list_body = self._render_list_body()
         config = self._get_chrome_config()
-        chrome = Chrome(config)
+        chrome = Chrome(config, console=self._console, max_width=120)
+
+        metrics = get_layout_metrics(self._console, max_width=120)
+        available_width = (
+            metrics.inner_width(padding_x=1, border=2)
+            if metrics.apply
+            else self._console.size.width
+        )
+        self._layout_width = available_width
 
         # Check if details should be shown (render rule: not on Status tab)
         show_details = self.state.details_open and self.state.active_tab != DashboardTab.STATUS
@@ -168,10 +177,9 @@ class Dashboard:
 
             # Responsive layout with hysteresis to prevent flip-flop at resize boundary
             # Thresholds: ≥112 → side-by-side, ≤108 → stacked, 109-111 → maintain previous
-            terminal_width = self._console.size.width
-            if terminal_width >= 112:
+            if available_width >= 112:
                 side_by_side = True
-            elif terminal_width <= 108:
+            elif available_width <= 108:
                 side_by_side = False
             elif self._last_side_by_side is not None:
                 # In dead zone (109-111): maintain previous layout
@@ -181,7 +189,11 @@ class Dashboard:
                 side_by_side = False
 
             self._last_side_by_side = side_by_side
-            body = self._render_split_view(list_body, details, side_by_side=side_by_side)
+            body = self._render_split_view(
+                list_body,
+                details,
+                side_by_side=side_by_side,
+            )
 
         return chrome.render(body, search_query=self.state.list_state.filter_query)
 
@@ -261,7 +273,8 @@ class Dashboard:
             table.add_row(list_body, Indicators.get("VERTICAL_LINE"), details_panel)
             return table
 
-        separator_width = max(24, min(90, self._console.size.width - 6))
+        available_width = self._layout_width or self._console.size.width
+        separator_width = max(24, min(90, available_width - 6))
         separator = Text(Indicators.get("HORIZONTAL_LINE") * separator_width, style="dim")
         return Group(
             list_body,
@@ -299,7 +312,8 @@ class Dashboard:
 
     def _build_details_header(self, title: str) -> Text:
         """Build a consistent header for details panels."""
-        width = max(20, min(40, self._console.size.width // 3))
+        available_width = self._layout_width or self._console.size.width
+        width = max(20, min(40, available_width // 3))
         header = Text()
         header.append(f"{title}\n", style="bold cyan")
         header.append(Indicators.get("HORIZONTAL_LINE") * width, style="dim")
