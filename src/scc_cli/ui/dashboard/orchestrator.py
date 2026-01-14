@@ -21,19 +21,24 @@ if TYPE_CHECKING:
 
 from ...confirm import Confirm
 from ..keys import (
+    ContainerActionMenuRequested,
     ContainerRemoveRequested,
     ContainerResumeRequested,
     ContainerStopRequested,
     CreateWorktreeRequested,
     GitInitRequested,
+    ProfileMenuRequested,
     RecentWorkspacesRequested,
     RefreshRequested,
+    SandboxImportRequested,
+    SessionActionMenuRequested,
     SessionResumeRequested,
     SettingsRequested,
     StartRequested,
     StatuslineInstallRequested,
     TeamSwitchRequested,
     VerboseToggleRequested,
+    WorktreeActionMenuRequested,
 )
 from ..list_screen import ListState
 from ._dashboard import Dashboard
@@ -235,6 +240,48 @@ def run_dashboard() -> None:
             toast_message = (
                 message if message else ("Container removed" if success else "Remove failed")
             )
+
+        except ProfileMenuRequested as profile_req:
+            # User pressed 'p' - show profile quick menu
+            restore_tab = profile_req.return_to
+            profile_result = _handle_profile_menu()
+
+            if profile_result:
+                toast_message = profile_result  # Success message from profile action
+
+        except SandboxImportRequested as import_req:
+            # User pressed 'i' - import sandbox plugins
+            restore_tab = import_req.return_to
+            import_result = _handle_sandbox_import()
+
+            if import_result:
+                toast_message = import_result  # Success message from import
+
+        except ContainerActionMenuRequested as action_req:
+            # User triggered container action menu (Enter or Space on container)
+            restore_tab = action_req.return_to
+            action_result = _handle_container_action_menu(
+                action_req.container_id, action_req.container_name
+            )
+
+            if action_result:
+                toast_message = action_result
+
+        except SessionActionMenuRequested as action_req:
+            # User triggered session action menu (Enter or Space on session)
+            restore_tab = action_req.return_to
+            action_result = _handle_session_action_menu(action_req.session)
+
+            if action_result:
+                toast_message = action_result
+
+        except WorktreeActionMenuRequested as action_req:
+            # User triggered worktree action menu (Enter or Space on worktree)
+            restore_tab = action_req.return_to
+            action_result = _handle_worktree_action_menu(action_req.worktree_path)
+
+            if action_result:
+                toast_message = action_result
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -924,8 +971,8 @@ def _handle_session_action_menu(session: dict[str, Any]) -> str | None:
 
     if selected == "resume":
         try:
-            _handle_session_resume(session)
-            return "Resumed session"
+            success = _handle_session_resume(session)
+            return "Resumed session" if success else "Resume failed"
         except Exception:
             return "Resume failed"
 
@@ -1015,6 +1062,266 @@ def _handle_settings() -> str | None:
     except Exception as e:
         console.print(f"[red]Error in settings screen: {e}[/red]")
         return None
+
+
+def _handle_profile_menu() -> str | None:
+    """Handle profile quick menu request from dashboard.
+
+    Shows a quick menu with profile actions: save, apply, diff, settings.
+
+    Returns:
+        Success message string if an action was performed, None if cancelled.
+    """
+    from pathlib import Path
+
+    from ..list_screen import ListItem, ListScreen
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    items: list[ListItem[str]] = [
+        ListItem(
+            value="save",
+            label="Save current settings",
+            description="Capture workspace settings to profile",
+        ),
+        ListItem(
+            value="apply",
+            label="Apply saved profile",
+            description="Restore settings from profile",
+        ),
+        ListItem(
+            value="diff",
+            label="Show diff",
+            description="Compare profile vs workspace",
+        ),
+        ListItem(
+            value="settings",
+            label="Open in Settings",
+            description="Full profile management",
+        ),
+    ]
+
+    screen = ListScreen(items, title="[cyan]Profile[/cyan]")
+    selected = screen.run()
+
+    if not selected:
+        return None
+
+    # Import profile functions
+    from ...core.personal_profiles import (
+        compute_fingerprints,
+        load_personal_profile,
+        load_workspace_mcp,
+        load_workspace_settings,
+        merge_personal_mcp,
+        merge_personal_settings,
+        save_applied_state,
+        save_personal_profile,
+        write_workspace_mcp,
+        write_workspace_settings,
+    )
+
+    workspace = Path.cwd()
+
+    if selected == "save":
+        try:
+            settings = load_workspace_settings(workspace)
+            mcp = load_workspace_mcp(workspace)
+            save_personal_profile(workspace, settings, mcp)
+            return "Profile saved"
+        except Exception as e:
+            console.print(f"[red]Save failed: {e}[/red]")
+            return "Profile save failed"
+
+    if selected == "apply":
+        profile = load_personal_profile(workspace)
+        if not profile:
+            console.print("[yellow]No profile saved for this workspace[/yellow]")
+            return "No profile to apply"
+        try:
+            # Load current workspace settings
+            current_settings = load_workspace_settings(workspace) or {}
+            current_mcp = load_workspace_mcp(workspace) or {}
+
+            # Merge profile into workspace
+            if profile.settings:
+                merged_settings = merge_personal_settings(
+                    workspace, current_settings, profile.settings
+                )
+                write_workspace_settings(workspace, merged_settings)
+
+            if profile.mcp:
+                merged_mcp = merge_personal_mcp(current_mcp, profile.mcp)
+                write_workspace_mcp(workspace, merged_mcp)
+
+            # Update applied state
+            fingerprints = compute_fingerprints(workspace)
+            save_applied_state(workspace, profile.profile_id, fingerprints)
+
+            return "Profile applied"
+        except Exception as e:
+            console.print(f"[red]Apply failed: {e}[/red]")
+            return "Profile apply failed"
+
+    if selected == "diff":
+        profile = load_personal_profile(workspace)
+        if not profile:
+            console.print("[yellow]No profile saved for this workspace[/yellow]")
+            return "No profile to compare"
+
+        # Show structured diff overlay
+        from rich import box
+        from rich.panel import Panel
+
+        from ...core.personal_profiles import (
+            compute_structured_diff,
+            load_workspace_mcp,
+            load_workspace_settings,
+        )
+
+        current_settings = load_workspace_settings(workspace) or {}
+        current_mcp = load_workspace_mcp(workspace) or {}
+
+        diff = compute_structured_diff(
+            workspace_settings=current_settings,
+            profile_settings=profile.settings,
+            workspace_mcp=current_mcp,
+            profile_mcp=profile.mcp,
+        )
+
+        if diff.is_empty:
+            console.print("[green]✓ Profile is in sync with workspace[/green]")
+            return "Profile in sync"
+
+        # Build diff content
+        lines: list[str] = []
+        current_section = ""
+        indicators = {
+            "added": "[green]+[/green]",
+            "removed": "[red]−[/red]",
+            "modified": "[yellow]~[/yellow]",
+        }
+        section_names = {
+            "plugins": "plugins",
+            "mcp_servers": "mcp_servers",
+            "marketplaces": "marketplaces",
+        }
+
+        for item in diff.items[:12]:  # Smart fallback: limit to 12 items
+            if item.section != current_section:
+                if current_section:
+                    lines.append("")
+                lines.append(f"  [bold]{section_names.get(item.section, item.section)}[/bold]")
+                current_section = item.section
+            indicator = indicators.get(item.status, " ")
+            modifier = "  [dim](modified)[/dim]" if item.status == "modified" else ""
+            lines.append(f"    {indicator} {item.name}{modifier}")
+
+        if diff.total_count > 12:
+            lines.append("")
+            lines.append(f"  [dim]+ {diff.total_count - 12} more...[/dim]")
+
+        lines.append("")
+        lines.append(f"  [dim]{diff.total_count} difference(s)[/dim]")
+
+        console.print()
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold]Profile Diff[/bold]",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+        return "Diff shown"
+
+    if selected == "settings":
+        # Open settings TUI on Profiles tab
+        from ..settings import run_settings_screen
+
+        return run_settings_screen(initial_category="PROFILES")
+
+    return None
+
+
+def _handle_sandbox_import() -> str | None:
+    """Handle sandbox plugin import request from dashboard.
+
+    Detects plugins installed in the sandbox but not in the workspace settings,
+    and prompts the user to import them.
+
+    Returns:
+        Success message string if imports were made, None if cancelled or no imports.
+    """
+    import os
+    from pathlib import Path
+
+    from ...core.personal_profiles import (
+        compute_sandbox_import_candidates,
+        load_workspace_settings,
+        merge_sandbox_imports,
+        write_workspace_settings,
+    )
+    from ...docker.launch import get_sandbox_settings
+
+    console = get_err_console()
+    _prepare_for_nested_ui(console)
+
+    workspace = Path(os.getcwd())
+
+    # Get current workspace settings
+    workspace_settings = load_workspace_settings(workspace) or {}
+
+    # Get sandbox settings from Docker volume
+    console.print("[dim]Checking sandbox for plugin changes...[/dim]")
+    sandbox_settings = get_sandbox_settings()
+
+    if not sandbox_settings:
+        console.print("[yellow]No sandbox settings found.[/yellow]")
+        console.print("[dim]Start a session first to create sandbox settings.[/dim]")
+        return None
+
+    # Compute what's in sandbox but not in workspace
+    missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
+        workspace_settings, sandbox_settings
+    )
+
+    if not missing_plugins and not missing_marketplaces:
+        console.print("[green]✓ No new plugins to import.[/green]")
+        console.print("[dim]Workspace is in sync with sandbox.[/dim]")
+        return "No imports needed"
+
+    # Show preview of what will be imported
+    console.print()
+    console.print("[yellow]Sandbox plugins available for import:[/yellow]")
+    if missing_plugins:
+        for plugin in missing_plugins:
+            console.print(f"  [cyan]+[/cyan] {plugin}")
+    if missing_marketplaces:
+        for name in sorted(missing_marketplaces.keys()):
+            console.print(f"  [cyan]+[/cyan] marketplace: {name}")
+    console.print()
+
+    # Confirm import
+    if not Confirm.ask("Import these into workspace settings?", default=True):
+        return None
+
+    # Merge and write to workspace settings
+    try:
+        merged_settings = merge_sandbox_imports(
+            workspace_settings, missing_plugins, missing_marketplaces
+        )
+        write_workspace_settings(workspace, merged_settings)
+
+        total = len(missing_plugins) + len(missing_marketplaces)
+        console.print(f"[green]✓ Imported {total} item(s) to workspace settings.[/green]")
+        return f"Imported {total} plugin(s)"
+
+    except Exception as e:
+        console.print(f"[red]Import failed: {e}[/red]")
+        return "Import failed"
 
 
 def _show_onboarding_banner() -> None:
