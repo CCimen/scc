@@ -44,13 +44,14 @@ from ..core.maintenance import (
 from ..theme import Indicators
 
 if TYPE_CHECKING:
-    pass
+    from pathlib import Path
 
 
 class Category(Enum):
     """Categories for the settings screen."""
 
     MAINTENANCE = auto()
+    PROFILES = auto()
     DIAGNOSTICS = auto()
     ABOUT = auto()
 
@@ -136,6 +137,35 @@ SETTINGS_ACTIONS: list[SettingsAction] = [
         risk_tier=RiskTier.FACTORY_RESET,
         category=Category.MAINTENANCE,
     ),
+    # Profiles (Tier 0 = Safe for read-only, Tier 1 for state changes)
+    SettingsAction(
+        id="profile_save",
+        label="Save profile",
+        description="Capture current workspace settings",
+        risk_tier=RiskTier.SAFE,
+        category=Category.PROFILES,
+    ),
+    SettingsAction(
+        id="profile_apply",
+        label="Apply profile",
+        description="Restore saved settings to workspace",
+        risk_tier=RiskTier.CHANGES_STATE,
+        category=Category.PROFILES,
+    ),
+    SettingsAction(
+        id="profile_diff",
+        label="Show diff",
+        description="Compare profile vs workspace",
+        risk_tier=RiskTier.SAFE,
+        category=Category.PROFILES,
+    ),
+    SettingsAction(
+        id="profile_sync",
+        label="Sync profiles",
+        description="Export/import via repo",
+        risk_tier=RiskTier.SAFE,  # Opens picker with internal confirmations
+        category=Category.PROFILES,
+    ),
     # Diagnostics
     SettingsAction(
         id="run_doctor",
@@ -213,10 +243,14 @@ class SettingsScreen:
     risk-appropriate confirmation for each action.
     """
 
-    def __init__(self) -> None:
-        """Initialize the settings screen."""
+    def __init__(self, initial_category: Category | None = None) -> None:
+        """Initialize the settings screen.
+
+        Args:
+            initial_category: Optional category to start on. Defaults to MAINTENANCE.
+        """
         self._console = get_err_console()
-        self._active_category = Category.MAINTENANCE
+        self._active_category = initial_category or Category.MAINTENANCE
         self._cursor = 0
         self._last_result: str | None = None  # Last action result (receipt line)
         self._show_info = False  # Info panel for current action
@@ -457,6 +491,18 @@ class SettingsScreen:
                     _results = factory_reset()  # Returns list[ResetResult]
                     return "Factory reset complete. Run 'scc setup' to reconfigure."
 
+                case "profile_save":
+                    return self._profile_save()
+
+                case "profile_apply":
+                    return self._profile_apply()
+
+                case "profile_diff":
+                    return self._profile_diff()
+
+                case "profile_sync":
+                    return self._profile_sync()
+
                 case "run_doctor":
                     # Run doctor using core function (not Typer command)
                     from pathlib import Path
@@ -579,6 +625,548 @@ class SettingsScreen:
         self._console.print(f"[bold cyan]SCC CLI[/bold cyan] version {version}")
         self._console.print()
         Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+
+    def _profile_save(self) -> str | None:
+        """Save current workspace settings as a personal profile."""
+        from pathlib import Path
+
+        from ..core.personal_profiles import (
+            compute_fingerprints,
+            load_workspace_mcp,
+            load_workspace_settings,
+            save_applied_state,
+            save_personal_profile,
+        )
+
+        workspace = Path.cwd()
+        self._console.print()
+        self._console.print("[bold]Save Personal Profile[/bold]")
+        self._console.print()
+
+        # Load current workspace settings
+        settings = load_workspace_settings(workspace)
+        mcp = load_workspace_mcp(workspace)
+
+        if not settings and not mcp:
+            self._console.print("[yellow]No workspace settings found to save.[/yellow]")
+            self._console.print("[dim]Create .claude/settings.local.json or .mcp.json first.[/dim]")
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Save the profile
+        profile = save_personal_profile(workspace, settings, mcp)
+
+        # Save applied state for drift detection
+        fingerprints = compute_fingerprints(workspace)
+        save_applied_state(workspace, profile.profile_id, fingerprints)
+
+        self._console.print(f"[green]✓[/green] Profile saved: {profile.path.name}")
+        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+        return "Profile saved"
+
+    def _profile_apply(self) -> str | None:
+        """Apply saved profile to current workspace."""
+        from pathlib import Path
+
+        from ..core.personal_profiles import (
+            compute_fingerprints,
+            load_personal_profile,
+            load_workspace_mcp,
+            load_workspace_settings,
+            merge_personal_mcp,
+            merge_personal_settings,
+            save_applied_state,
+            write_workspace_mcp,
+            write_workspace_settings,
+        )
+
+        workspace = Path.cwd()
+        self._console.print()
+        self._console.print("[bold]Apply Personal Profile[/bold]")
+        self._console.print()
+
+        # Load profile
+        profile = load_personal_profile(workspace)
+        if not profile:
+            self._console.print("[yellow]No profile saved for this workspace.[/yellow]")
+            self._console.print("[dim]Use 'Save profile' first.[/dim]")
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Load current workspace settings
+        current_settings = load_workspace_settings(workspace) or {}
+        current_mcp = load_workspace_mcp(workspace) or {}
+
+        # Merge profile into workspace
+        if profile.settings:
+            merged_settings = merge_personal_settings(workspace, current_settings, profile.settings)
+            write_workspace_settings(workspace, merged_settings)
+
+        if profile.mcp:
+            merged_mcp = merge_personal_mcp(current_mcp, profile.mcp)
+            write_workspace_mcp(workspace, merged_mcp)
+
+        # Update applied state
+        fingerprints = compute_fingerprints(workspace)
+        save_applied_state(workspace, profile.profile_id, fingerprints)
+
+        self._console.print("[green]✓[/green] Profile applied to workspace")
+        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+        return "Profile applied"
+
+    def _profile_diff(self) -> str | None:
+        """Show diff between profile and workspace settings with visual overlay."""
+        from pathlib import Path
+
+        from rich import box
+
+        from ..core.personal_profiles import (
+            compute_structured_diff,
+            load_personal_profile,
+            load_workspace_mcp,
+            load_workspace_settings,
+        )
+
+        workspace = Path.cwd()
+
+        # Load profile
+        profile = load_personal_profile(workspace)
+        if not profile:
+            self._console.print()
+            self._console.print("[yellow]No profile saved for this workspace.[/yellow]")
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Load current workspace settings
+        current_settings = load_workspace_settings(workspace) or {}
+        current_mcp = load_workspace_mcp(workspace) or {}
+
+        # Compute structured diff
+        diff = compute_structured_diff(
+            workspace_settings=current_settings,
+            profile_settings=profile.settings,
+            workspace_mcp=current_mcp,
+            profile_mcp=profile.mcp,
+        )
+
+        if diff.is_empty:
+            self._console.print()
+            self._console.print("[green]✓ Profile is in sync with workspace[/green]")
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Build diff content grouped by section
+        lines: list[str] = []
+        current_section = ""
+        rendered_lines = 0
+        max_lines = 12  # Smart fallback threshold
+        truncated = False
+
+        # Status indicators
+        indicators = {
+            "added": "[green]+[/green]",
+            "removed": "[red]−[/red]",
+            "modified": "[yellow]~[/yellow]",
+        }
+
+        # Section display names
+        section_names = {
+            "plugins": "plugins",
+            "mcp_servers": "mcp_servers",
+            "marketplaces": "marketplaces",
+        }
+
+        for item in diff.items:
+            # Check if we need to truncate
+            if rendered_lines >= max_lines and not truncated:
+                truncated = True
+                break
+
+            # Add section header if new section
+            if item.section != current_section:
+                if current_section:
+                    lines.append("")  # Blank line between sections
+                    rendered_lines += 1
+                lines.append(f"  [bold]{section_names.get(item.section, item.section)}[/bold]")
+                rendered_lines += 1
+                current_section = item.section
+
+            # Add item with indicator
+            indicator = indicators.get(item.status, " ")
+            modifier = "(modified)" if item.status == "modified" else ""
+            if modifier:
+                lines.append(f"    {indicator} {item.name}  [dim]{modifier}[/dim]")
+            else:
+                lines.append(f"    {indicator} {item.name}")
+            rendered_lines += 1
+
+        # Add truncation indicator if needed
+        if truncated:
+            remaining = diff.total_count - (
+                rendered_lines - len(set(i.section for i in diff.items))
+            )
+            lines.append("")
+            lines.append(f"  [dim]+ {remaining} more items...[/dim]")
+
+        # Add footer
+        lines.append("")
+        lines.append(f"  [dim]{diff.total_count} difference(s) · Esc close[/dim]")
+
+        # Create panel content
+        content = "\n".join(lines)
+
+        # Render the diff overlay
+        self._console.print()
+        self._console.print(
+            Panel(
+                content,
+                title="[bold]Profile Diff[/bold]",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+        return None
+
+    def _profile_sync(self) -> str | None:
+        """Sync profiles with a repository using overlay picker."""
+        from pathlib import Path
+
+        from .list_screen import ListItem, ListScreen
+
+        # Get default/last-used repo path
+        default_path = self._get_sync_repo_path()
+
+        # Build picker items: path row + operations
+        items: list[ListItem[str]] = [
+            ListItem(
+                value="change_path",
+                label=f"📁 {default_path}",
+                description="Change path",
+            ),
+            ListItem(
+                value="export",
+                label="Export",
+                description="Save profiles to folder",
+            ),
+            ListItem(
+                value="import",
+                label="Import",
+                description="Load profiles from folder",
+            ),
+            ListItem(
+                value="full_sync",
+                label="Full sync",
+                description="Load then save  (advanced)",
+            ),
+        ]
+
+        # Show picker with styled title (matching dashboard pattern)
+        screen = ListScreen(items, title="[cyan]Sync[/cyan] Profiles")
+        selected = screen.run()
+
+        if not selected:
+            return None
+
+        repo_path = Path(default_path).expanduser()
+
+        # Handle path change
+        if selected == "change_path":
+            return self._sync_change_path(default_path)
+
+        # Handle export
+        if selected == "export":
+            return self._sync_export(repo_path)
+
+        # Handle import
+        if selected == "import":
+            return self._sync_import(repo_path)
+
+        # Handle full sync
+        if selected == "full_sync":
+            return self._sync_full(repo_path)
+
+        return None
+
+    def _get_sync_repo_path(self) -> str:
+        """Get the default/last-used sync repository path."""
+        from .. import config as scc_config
+
+        # Try to get from user config
+        try:
+            cfg = scc_config.load_user_config()
+            last_repo = cfg.get("sync", {}).get("last_repo")
+            if last_repo:
+                return str(last_repo)
+        except Exception:
+            pass
+
+        # Default path
+        return "~/dotfiles/scc-profiles"
+
+    def _save_sync_repo_path(self, path: str) -> None:
+        """Save the sync repository path to user config."""
+        from .. import config as scc_config
+
+        try:
+            cfg = scc_config.load_user_config()
+            if "sync" not in cfg:
+                cfg["sync"] = {}
+            cfg["sync"]["last_repo"] = path
+            scc_config.save_user_config(cfg)
+        except Exception:
+            pass  # Non-critical, ignore errors
+
+    def _sync_change_path(self, current_path: str) -> str | None:
+        """Handle path editing for sync."""
+        from rich import box
+
+        # Show styled panel for path input
+        self._console.print()
+        panel = Panel(
+            f"[dim]Current:[/dim] {current_path}\n\n"
+            "[dim]Enter new path or press Enter to keep current[/dim]",
+            title="[cyan]Edit[/cyan] Repository Path",
+            border_style="cyan",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+        self._console.print(panel)
+        new_path = Prompt.ask("[cyan]Path[/cyan]", default=current_path)
+
+        if new_path and new_path != current_path:
+            self._save_sync_repo_path(new_path)
+            self._console.print(f"\n[green]✓[/green] Path updated to: {new_path}")
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+
+        # Return to sync picker with new path
+        return self._profile_sync()
+
+    def _sync_export(self, repo_path: Path) -> str | None:
+        """Export profiles to repository."""
+
+        from rich import box
+
+        from ..core.personal_profiles import (
+            export_profiles_to_repo,
+            list_personal_profiles,
+        )
+
+        self._console.print()
+
+        # Check if we have profiles to export
+        profiles = list_personal_profiles()
+        if not profiles:
+            self._console.print(
+                Panel(
+                    "[yellow]✗ No profiles to export[/yellow]\n\n"
+                    "Save a profile first with 'Save profile' action.",
+                    title="[cyan]Sync[/cyan] Profiles",
+                    border_style="bright_black",
+                    box=box.ROUNDED,
+                    padding=(1, 2),
+                )
+            )
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Check if directory exists, offer to create
+        if not repo_path.exists():
+            self._console.print()
+            self._console.print(
+                Panel(
+                    f"[yellow]Path does not exist:[/yellow]\n  {repo_path}",
+                    title="[cyan]Create[/cyan] Directory",
+                    border_style="yellow",
+                    box=box.ROUNDED,
+                    padding=(1, 2),
+                )
+            )
+            create = Confirm.ask("[cyan]Create directory?[/cyan]", default=True)
+            if not create:
+                return None
+            repo_path.mkdir(parents=True, exist_ok=True)
+            self._console.print(f"[green]✓[/green] Created {repo_path}")
+
+        # Export
+        self._console.print(f"[dim]Exporting to {repo_path}...[/dim]")
+        result = export_profiles_to_repo(repo_path, profiles)
+
+        # Show result
+        lines = [f"[green]✓ Exported {result.exported} profile(s)[/green]"]
+        for profile in profiles:
+            lines.append(f"  [green]+[/green] {profile.repo_id}")
+
+        if result.warnings:
+            lines.append("")
+            for warning in result.warnings:
+                lines.append(f"  [yellow]![/yellow] {warning}")
+
+        # Add hint about local-only operation
+        lines.append("")
+        lines.append("[dim]Files written locally · no git commit/push[/dim]")
+        lines.append("[dim]For git: scc profile export --repo PATH --commit --push[/dim]")
+
+        self._console.print()
+        self._console.print(
+            Panel(
+                "\n".join(lines),
+                title="[cyan]Sync[/cyan] Profiles",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+        # Save path for next time
+        self._save_sync_repo_path(str(repo_path))
+
+        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+        return f"Exported {result.exported} profile(s)"
+
+    def _sync_import(self, repo_path: Path) -> str | None:
+        """Import profiles from repository with preview."""
+
+        from rich import box
+
+        from ..core.personal_profiles import import_profiles_from_repo
+
+        self._console.print()
+
+        # Check if repo exists
+        if not repo_path.exists():
+            self._console.print(
+                Panel(
+                    f"[yellow]✗ Path not found[/yellow]\n\n{repo_path}",
+                    title="[cyan]Sync[/cyan] Profiles",
+                    border_style="bright_black",
+                    box=box.ROUNDED,
+                    padding=(1, 2),
+                )
+            )
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Preview (dry-run)
+        self._console.print(f"[dim]Checking {repo_path}...[/dim]")
+        preview = import_profiles_from_repo(repo_path, dry_run=True)
+
+        if preview.imported == 0 and preview.skipped == 0:
+            self._console.print()
+            self._console.print(
+                Panel(
+                    "[dim]No profiles found in repository.[/dim]",
+                    title="[cyan]Sync[/cyan] Profiles",
+                    border_style="bright_black",
+                    box=box.ROUNDED,
+                    padding=(1, 2),
+                )
+            )
+            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+            return None
+
+        # Show preview and ask for confirmation
+        lines = [f"[cyan]Import preview from {repo_path}[/cyan]", ""]
+        lines.append(f"  {preview.imported} profile(s) will be imported")
+        if preview.skipped > 0:
+            lines.append(f"  {preview.skipped} profile(s) unchanged")
+
+        self._console.print()
+        self._console.print(
+            Panel(
+                "\n".join(lines),
+                title="[cyan]Sync[/cyan] Profiles",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+        # Confirm import
+        if not Confirm.ask("Import now?", default=True):
+            return None
+
+        # Actually import
+        result = import_profiles_from_repo(repo_path, dry_run=False)
+
+        # Show result panel
+        lines = [f"[green]✓ Imported {result.imported} profile(s)[/green]"]
+        lines.append("")
+        lines.append("[dim]Profiles copied locally · no git pull[/dim]")
+        lines.append("[dim]For git: scc profile import --repo PATH --pull[/dim]")
+
+        self._console.print()
+        self._console.print(
+            Panel(
+                "\n".join(lines),
+                title="[cyan]Sync[/cyan] Profiles",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+        # Save path for next time
+        self._save_sync_repo_path(str(repo_path))
+
+        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+        return f"Imported {result.imported} profile(s)"
+
+    def _sync_full(self, repo_path: Path) -> str | None:
+        """Full sync: import then export."""
+
+        from rich import box
+
+        from ..core.personal_profiles import (
+            export_profiles_to_repo,
+            import_profiles_from_repo,
+            list_personal_profiles,
+        )
+
+        self._console.print()
+        self._console.print(f"[dim]Full sync with {repo_path}...[/dim]")
+
+        # Check if repo exists for import
+        imported = 0
+        if repo_path.exists():
+            self._console.print("[dim]Step 1: Importing...[/dim]")
+            import_result = import_profiles_from_repo(repo_path, dry_run=False)
+            imported = import_result.imported
+        else:
+            self._console.print("[dim]Step 1: Skipped (repo not found)[/dim]")
+            repo_path.mkdir(parents=True, exist_ok=True)
+
+        # Export
+        self._console.print("[dim]Step 2: Exporting...[/dim]")
+        profiles = list_personal_profiles()
+        exported = 0
+        if profiles:
+            export_result = export_profiles_to_repo(repo_path, profiles)
+            exported = export_result.exported
+
+        # Show result
+        self._console.print()
+        self._console.print(
+            Panel(
+                f"[green]✓ Sync complete[/green]\n\n"
+                f"  Imported: {imported} profile(s)\n"
+                f"  Exported: {exported} profile(s)\n\n"
+                f"[dim]Files synced locally · no git operations[/dim]\n"
+                f"[dim]For git: scc profile sync --repo PATH --pull --commit --push[/dim]",
+                title="[cyan]Sync[/cyan] Profiles",
+                border_style="bright_black",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+        # Save path for next time
+        self._save_sync_repo_path(str(repo_path))
+
+        Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
+        return f"Synced: {imported} imported, {exported} exported"
 
     def _render(self) -> RenderableType:
         """Render the settings screen."""
@@ -760,13 +1348,25 @@ class SettingsScreen:
         )
 
 
-def run_settings_screen() -> str | None:
+def run_settings_screen(initial_category: str | None = None) -> str | None:
     """Run the settings screen and return result.
 
     This is the main entry point called from the dashboard orchestrator.
 
+    Args:
+        initial_category: Optional category name to start on (e.g., "PROFILES").
+                          Defaults to "MAINTENANCE" if not specified or invalid.
+
     Returns:
         Success message if an action was performed, None if cancelled.
     """
-    screen = SettingsScreen()
+    # Parse category from string if provided
+    category: Category | None = None
+    if initial_category:
+        try:
+            category = Category[initial_category.upper()]
+        except KeyError:
+            pass  # Invalid category, use default
+
+    screen = SettingsScreen(initial_category=category)
     return screen.run()

@@ -266,6 +266,40 @@ class WorktreeActionMenuRequested(Exception):  # noqa: N818
         super().__init__()
 
 
+class ProfileMenuRequested(Exception):  # noqa: N818
+    """Raised when user presses 'p' to open profile quick menu.
+
+    This is a control flow signal that allows the dashboard to request
+    showing the profile management menu.
+
+    The orchestrator catches this and shows the profile menu.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "STATUS").
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
+class SandboxImportRequested(Exception):  # noqa: N818
+    """Raised when user presses 'i' to import sandbox plugins.
+
+    This is a control flow signal that allows the dashboard to request
+    importing plugins from a sandbox container to the workspace settings.
+
+    The orchestrator catches this and runs the import flow.
+
+    Attributes:
+        return_to: Tab name to restore after flow (e.g., "STATUS").
+    """
+
+    def __init__(self, return_to: str = "") -> None:
+        self.return_to = return_to
+        super().__init__()
+
+
 class ActionType(Enum):
     """Types of actions that can result from key handling.
 
@@ -407,6 +441,8 @@ KEYBINDING_DOCS: tuple[KeyDoc, ...] = (
     KeyDoc("R", "Resume container", section="Containers", modes=("DASHBOARD",)),
     KeyDoc("D", "Delete container", section="Containers", modes=("DASHBOARD",)),
     KeyDoc("a", "Actions menu", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("p", "Profile menu", section="Actions", modes=("DASHBOARD",)),
+    KeyDoc("i", "Import sandbox plugins", section="Profiles", modes=("DASHBOARD",)),
     # Exit
     KeyDoc("Esc", "Cancel / go back", section="Exit", modes=("PICKER", "MULTI_SELECT")),
     KeyDoc("q", "Quit", section="Exit", modes=("DASHBOARD",)),

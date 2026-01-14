@@ -35,8 +35,10 @@ from ..keys import (
     CreateWorktreeRequested,
     GitInitRequested,
     KeyReader,
+    ProfileMenuRequested,
     RecentWorkspacesRequested,
     RefreshRequested,
+    SandboxImportRequested,
     SessionActionMenuRequested,
     SessionResumeRequested,
     SettingsRequested,
@@ -89,6 +91,7 @@ class Dashboard:
                 "r": "refresh",
                 "n": "new_session",
                 "s": "settings",
+                "p": "profile_menu",
                 "w": "recent_workspaces",
                 "i": "git_init",
                 "c": "create_worktree",
@@ -508,7 +511,7 @@ class Dashboard:
                 if isinstance(current.value, dict):
                     if current.value.get("_action") == "resume_last_session":
                         hints.append(FooterHint("Enter", "resume"))
-                        hints.append(FooterHint("Space", "details"))
+                        # Note: No "Space details" - details not available in Status tab
                 elif isinstance(current.value, str):
                     if current.value == "start_session":
                         hints.append(FooterHint("Enter", "start"))
@@ -597,7 +600,12 @@ class Dashboard:
         hints.append(FooterHint("Tab", "switch tab"))
         hints.append(FooterHint("r", "refresh"))
 
-        # Global actions
+        # Global actions (only show 'p' and 'i' when filter is empty)
+        if not self.state.list_state.filter_query:
+            hints.append(FooterHint("p", "profile"))
+            # Show 'i' for import on Status tab
+            if self.state.active_tab == DashboardTab.STATUS:
+                hints.append(FooterHint("i", "import"))
         hints.append(FooterHint("t", "teams", dimmed=standalone))
         hints.append(FooterHint("q", "quit"))
         hints.append(FooterHint("?", "help"))
@@ -743,6 +751,10 @@ class Dashboard:
                         # Statusline row: Enter triggers installation
                         if current.value == "statusline_not_installed":
                             raise StatuslineInstallRequested(return_to=self.state.active_tab.name)
+
+                        # Profile row: Enter opens profile menu
+                        if current.value == "profile":
+                            raise ProfileMenuRequested(return_to=self.state.active_tab.name)
                 else:
                     # Resource tabs handling (Containers, Worktrees, Sessions)
                     current = self.state.list_state.current_item
@@ -909,15 +921,25 @@ class Dashboard:
                 elif action.custom_key == "s":
                     # User pressed 's' - open settings and maintenance screen
                     raise SettingsRequested(return_to=self.state.active_tab.name)
+                elif action.custom_key == "p":
+                    # User pressed 'p' - open profile menu
+                    # Only works when filter is empty to avoid conflict with type-to-filter
+                    if not self.state.list_state.filter_query:
+                        raise ProfileMenuRequested(return_to=self.state.active_tab.name)
+                    # When filter is active, 'p' is treated as filter char (handled by KeyReader)
                 elif action.custom_key == "w":
                     # User pressed 'w' - show recent workspaces picker
                     # Only active on Worktrees tab
                     if self.state.active_tab == DashboardTab.WORKTREES:
                         raise RecentWorkspacesRequested(return_to=self.state.active_tab.name)
                 elif action.custom_key == "i":
-                    # User pressed 'i' - initialize git repo
-                    # Only active on Worktrees tab when not in a git repo
-                    if self.state.active_tab == DashboardTab.WORKTREES:
+                    # User pressed 'i' - context-aware action
+                    # Status tab: import sandbox plugins (only when filter is empty)
+                    if self.state.active_tab == DashboardTab.STATUS:
+                        if not self.state.list_state.filter_query:
+                            raise SandboxImportRequested(return_to=self.state.active_tab.name)
+                    # Worktrees tab: initialize git repo (only when not in a git repo)
+                    elif self.state.active_tab == DashboardTab.WORKTREES:
                         current = self.state.list_state.current_item
                         # Only show when not in git repo (placeholder is no_git or no_worktrees)
                         is_non_git = (

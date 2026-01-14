@@ -46,6 +46,16 @@ class AppliedState:
 
 
 @dataclass
+class ProfileStatus:
+    """Profile status for TUI display."""
+
+    exists: bool
+    has_drift: bool
+    import_count: int
+    saved_at: str | None
+
+
+@dataclass
 class ProfileExportResult:
     exported: int
     profile_dir: Path
@@ -660,3 +670,139 @@ def build_diff_text(label: str, before: dict[str, Any], after: dict[str, Any]) -
         lineterm="",
     )
     return "\n".join(diff_lines)
+
+
+@dataclass
+class DiffItem:
+    """A single diff item for the TUI overlay."""
+
+    name: str
+    status: str  # "added" (+), "removed" (-), "modified" (~)
+    section: str  # "plugins", "mcp_servers", "marketplaces"
+
+
+@dataclass
+class StructuredDiff:
+    """Structured diff for TUI display."""
+
+    items: list[DiffItem]
+    total_count: int
+
+    @property
+    def is_empty(self) -> bool:
+        return len(self.items) == 0
+
+
+def compute_structured_diff(
+    workspace_settings: dict[str, Any] | None,
+    profile_settings: dict[str, Any] | None,
+    workspace_mcp: dict[str, Any] | None,
+    profile_mcp: dict[str, Any] | None,
+) -> StructuredDiff:
+    """Compute structured diff between workspace and profile for TUI display.
+
+    Args:
+        workspace_settings: Current workspace settings (settings.local.json)
+        profile_settings: Saved profile settings
+        workspace_mcp: Current workspace MCP config (.mcp.json)
+        profile_mcp: Saved profile MCP config
+
+    Returns:
+        StructuredDiff with items showing additions, removals, modifications
+    """
+    items: list[DiffItem] = []
+
+    workspace_settings = workspace_settings or {}
+    profile_settings = profile_settings or {}
+    workspace_mcp = workspace_mcp or {}
+    profile_mcp = profile_mcp or {}
+
+    # Compare plugins
+    ws_plugins = _normalize_plugins(workspace_settings.get("enabledPlugins"))
+    prof_plugins = _normalize_plugins(profile_settings.get("enabledPlugins"))
+
+    # Plugins in profile but not workspace (would be added on apply)
+    for plugin in sorted(prof_plugins.keys()):
+        if plugin not in ws_plugins:
+            items.append(DiffItem(name=plugin, status="added", section="plugins"))
+
+    # Plugins in workspace but not profile (would be removed on apply)
+    for plugin in sorted(ws_plugins.keys()):
+        if plugin not in prof_plugins:
+            items.append(DiffItem(name=plugin, status="removed", section="plugins"))
+
+    # Compare marketplaces
+    ws_markets = _normalize_marketplaces(workspace_settings.get("extraKnownMarketplaces"))
+    prof_markets = _normalize_marketplaces(profile_settings.get("extraKnownMarketplaces"))
+
+    for name in sorted(prof_markets.keys()):
+        if name not in ws_markets:
+            items.append(DiffItem(name=name, status="added", section="marketplaces"))
+        elif prof_markets[name] != ws_markets[name]:
+            items.append(DiffItem(name=name, status="modified", section="marketplaces"))
+
+    for name in sorted(ws_markets.keys()):
+        if name not in prof_markets:
+            items.append(DiffItem(name=name, status="removed", section="marketplaces"))
+
+    # Compare MCP servers
+    ws_servers = workspace_mcp.get("mcpServers", {})
+    prof_servers = profile_mcp.get("mcpServers", {})
+
+    for name in sorted(prof_servers.keys()):
+        if name not in ws_servers:
+            items.append(DiffItem(name=name, status="added", section="mcp_servers"))
+        elif prof_servers[name] != ws_servers[name]:
+            items.append(DiffItem(name=name, status="modified", section="mcp_servers"))
+
+    for name in sorted(ws_servers.keys()):
+        if name not in prof_servers:
+            items.append(DiffItem(name=name, status="removed", section="mcp_servers"))
+
+    return StructuredDiff(items=items, total_count=len(items))
+
+
+def get_profile_status(workspace: Path) -> ProfileStatus:
+    """Get profile status for TUI display.
+
+    Returns a ProfileStatus with:
+    - exists: Whether a saved profile exists for this workspace
+    - has_drift: Whether workspace has drifted from last-applied profile
+    - import_count: Number of sandbox plugins available for import
+    - saved_at: When the profile was last saved (ISO format)
+    """
+    profile = load_personal_profile(workspace)
+
+    if not profile:
+        return ProfileStatus(
+            exists=False,
+            has_drift=False,
+            import_count=0,
+            saved_at=None,
+        )
+
+    # Check for drift
+    has_drift = detect_drift(workspace)
+
+    # Check for sandbox import candidates
+    import_count = 0
+    try:
+        from ..docker.launch import get_sandbox_settings
+
+        sandbox_settings = get_sandbox_settings()
+        if sandbox_settings:
+            workspace_settings = load_workspace_settings(workspace) or {}
+            missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
+                workspace_settings, sandbox_settings
+            )
+            import_count = len(missing_plugins) + len(missing_marketplaces)
+    except Exception:
+        # If docker is unavailable or errors, just return 0 imports
+        pass
+
+    return ProfileStatus(
+        exists=True,
+        has_drift=has_drift,
+        import_count=import_count,
+        saved_at=profile.saved_at,
+    )

@@ -25,6 +25,7 @@ def _load_status_tab_data(refresh_at: datetime | None = None) -> TabData:
     The Status tab displays:
     - Primary actions (start session, resume)
     - Current team and organization context
+    - Personal profile status
     - Quick access to settings & maintenance
 
     Diagnostic info (Docker, Sandbox, Statusline) is in `scc doctor`.
@@ -33,7 +34,11 @@ def _load_status_tab_data(refresh_at: datetime | None = None) -> TabData:
         TabData with status items.
     """
     # Import here to avoid circular imports
+    import os
+    from pathlib import Path
+
     from ... import config, sessions
+    from ...core.personal_profiles import get_profile_status
     from ...docker import core as docker_core
 
     # Suppress unused import warning - refresh_at kept for API compatibility
@@ -102,6 +107,39 @@ def _load_status_tab_data(refresh_at: datetime | None = None) -> TabData:
                     description="",
                 )
             )
+
+        # Profile status (with inline indicators)
+        # Format: "Profile: saved · ✓ synced" following Team pattern
+        try:
+            workspace = Path(os.getcwd())
+            profile_status = get_profile_status(workspace)
+
+            if profile_status.exists:
+                # Build middot-separated status indicators
+                if profile_status.import_count > 0:
+                    # Imports available takes priority
+                    profile_label = f"Profile: saved · ↓ {profile_status.import_count} importable"
+                elif profile_status.has_drift:
+                    profile_label = "Profile: saved · ◇ drifted"
+                else:
+                    profile_label = "Profile: saved · ✓ synced"
+                items.append(
+                    ListItem(
+                        value="profile",
+                        label=profile_label,
+                        description="",
+                    )
+                )
+            else:
+                items.append(
+                    ListItem(
+                        value="profile",
+                        label="Profile: none",
+                        description="",
+                    )
+                )
+        except Exception:
+            pass  # Don't show if profile check fails
 
         # Organization/sync status
         if org_source and isinstance(org_source, dict):
