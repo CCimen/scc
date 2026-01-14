@@ -521,6 +521,10 @@ class Dashboard:
                         hints.append(FooterHint("Enter", "open"))
                     elif current.value == "statusline_not_installed":
                         hints.append(FooterHint("Enter", "install"))
+                    elif current.value == "settings":
+                        hints.append(FooterHint("Enter", "open"))
+                    elif current.value == "profile":
+                        hints.append(FooterHint("Enter", "open"))
         elif self.state.is_placeholder_selected():
             # Check if placeholder is startable
             current = self.state.list_state.current_item
@@ -755,6 +759,10 @@ class Dashboard:
                         # Profile row: Enter opens profile menu
                         if current.value == "profile":
                             raise ProfileMenuRequested(return_to=self.state.active_tab.name)
+
+                        # Settings row: Enter opens settings and maintenance screen
+                        if current.value == "settings":
+                            raise SettingsRequested(return_to=self.state.active_tab.name)
                 else:
                     # Resource tabs handling (Containers, Worktrees, Sessions)
                     current = self.state.list_state.current_item
