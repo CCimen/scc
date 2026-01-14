@@ -13,13 +13,13 @@ Philosophy: "Get started in under 60 seconds"
 - Clear guidance
 """
 
-import sys
 from typing import Any, cast
 
 import readchar
 from rich import box
 from rich.columns import Columns
 from rich.console import Console, RenderableType
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
@@ -83,15 +83,16 @@ def _select_option(
         Selected index (0-based), or None if cancelled.
     """
     cursor = default
-    metrics = _layout_metrics(console)
-    content_width = metrics.content_width
-    min_label_width = min(36, max(24, content_width // 3))
-    label_width = max(min_label_width, max((len(label) for label, _, _ in options), default=0))
-    tag_width = max((len(tag) for _, tag, _ in options), default=0)
     cursor_symbol = Indicators.get("CURSOR")
 
-    def _render_options() -> int:
-        """Render options and return line count."""
+    def _render_options() -> RenderableType:
+        """Render options for the live picker."""
+        metrics = _layout_metrics(console)
+        content_width = metrics.content_width
+        min_label_width = min(36, max(24, content_width // 3))
+        label_width = max(min_label_width, max((len(label) for label, _, _ in options), default=0))
+        tag_width = max((len(tag) for _, tag, _ in options), default=0)
+
         body = Text()
         if not metrics.tight_height:
             body.append("\n")
@@ -148,41 +149,24 @@ def _select_option(
         if metrics.apply:
             renderable = apply_layout(renderable, metrics)
 
-        line_count = len(console.render_lines(renderable, pad=False, new_lines=True))
-        console.print(renderable)
-        return line_count
+        return renderable
 
-    # Hide cursor for smoother redraws
-    sys.stdout.write("\033[?25l")
-    sys.stdout.flush()
-
-    try:
-        lines_rendered = _render_options()
-
+    with Live(_render_options(), console=console, auto_refresh=False, transient=True) as live:
         while True:
-            # Read key
             key = readchar.readkey()
 
-            # Handle navigation
             if key in (readchar.key.UP, "k"):
                 cursor = (cursor - 1) % len(options)
+                live.update(_render_options(), refresh=True)
             elif key in (readchar.key.DOWN, "j"):
                 cursor = (cursor + 1) % len(options)
+                live.update(_render_options(), refresh=True)
             elif key in (readchar.key.ENTER, "\r", "\n"):
                 return cursor
             elif key in (readchar.key.ESC, "q"):
                 return None
             else:
-                continue  # Ignore other keys, don't redraw
-
-            # Move cursor up to redraw (clear previous render)
-            sys.stdout.write(f"\033[{lines_rendered}A\033[J")
-            sys.stdout.flush()
-            lines_rendered = _render_options()
-    finally:
-        # Always restore cursor visibility
-        sys.stdout.write("\033[?25h")
-        sys.stdout.flush()
+                continue
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
