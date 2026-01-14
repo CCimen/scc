@@ -271,8 +271,21 @@ def format_worktree(worktree: WorktreeInfo) -> ListItem[WorktreeInfo]:
         # Use display-friendly name (strip SCC prefix)
         desc_parts.append(get_display_branch(worktree.branch))
 
-    if worktree.has_changes:
-        desc_parts.append("*modified")
+    status_parts: list[str] = []
+    if worktree.staged_count:
+        status_parts.append(f"+{worktree.staged_count}")
+    if worktree.modified_count:
+        status_parts.append(f"!{worktree.modified_count}")
+    if worktree.untracked_count:
+        status_parts.append(f"?{worktree.untracked_count}")
+
+    if status_parts:
+        desc_parts.append(" ".join(status_parts))
+    elif worktree.has_changes:
+        desc_parts.append("modified")
+
+    if worktree.status_timed_out:
+        desc_parts.append("status timeout")
 
     if worktree.is_current:
         desc_parts.append("(current)")

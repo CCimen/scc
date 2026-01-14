@@ -329,9 +329,9 @@ class ListScreen(Generic[T]):
 
             # Governance indicator
             if item.governance_status == "blocked":
-                text.append("⛔ ", style="red")
+                text.append(f"{Indicators.get('CROSS')} ", style="red")
             elif item.governance_status == "warning":
-                text.append("⚠️  ", style="yellow")
+                text.append(f"{Indicators.get('WARNING')} ", style="yellow")
 
             # Label and description
             label_style = "bold" if is_cursor else ""

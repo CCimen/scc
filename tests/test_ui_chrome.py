@@ -14,6 +14,7 @@ from io import StringIO
 from rich.console import Console
 from rich.text import Text
 
+from scc_cli.theme import Indicators
 from scc_cli.ui.chrome import Chrome, ChromeConfig, FooterHint, render_chrome
 
 
@@ -244,8 +245,8 @@ class TestTabRendering:
         tab_row = chrome._render_tabs()
 
         # The active tab (index 1 = Containers) should be styled differently
-        # Check that Containers has space padding (pill-style indicator)
-        assert " Containers " in str(tab_row)
+        assert "Containers" in tab_row.plain
+        assert Indicators.get("HORIZONTAL_LINE") in tab_row.plain
 
 
 class TestFooterHintsDisplay:
@@ -318,7 +319,8 @@ class TestSearchRowRendering:
         result = render_chrome(config, body, search_query="")
         output = self._render_to_string(result)
 
-        assert "Type to filter" in output
+        assert "Filter:" in output
+        assert "type to search" in output
 
     def test_search_row_shows_query_when_provided(self) -> None:
         """Search row shows the query when provided."""

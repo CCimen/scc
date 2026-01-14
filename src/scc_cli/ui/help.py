@@ -101,14 +101,14 @@ def render_help_content(mode: HelpMode) -> RenderableType:
         # Section header
         section_header = Text()
         sep = Indicators.get("HORIZONTAL_LINE")
-        section_header.append(f"{sep}{sep}{sep} {section_name} ", style="dim")
-        section_header.append(sep * max(0, 30 - len(section_name)), style="dim")
+        section_header.append(f"{sep}{sep}{sep} {section_name} ", style="dim cyan")
+        section_header.append(sep * max(0, 36 - len(section_name)), style="dim")
         renderables.append(section_header)
 
         # Section table
-        table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
-        table.add_column("Key", style="cyan bold", width=12)
-        table.add_column("Action", style="dim")
+        table = Table(show_header=False, box=None, padding=(0, 1, 0, 0))
+        table.add_column("Key", style="cyan bold", width=14)
+        table.add_column("Action", style="white")
 
         for key, desc in entries:
             table.add_row(key, desc)
@@ -124,14 +124,19 @@ def render_help_content(mode: HelpMode) -> RenderableType:
     }.get(mode, "Unknown")
 
     footer = Text()
-    footer.append("Press any key to dismiss", style="dim italic")
+    footer.append("Press any key to close", style="dim italic")
     renderables.append(footer)
+
+    title = Text()
+    title.append("Keyboard Shortcuts", style="bold cyan")
+    title.append(f" {Indicators.get('VERTICAL_LINE')} ", style="dim")
+    title.append(mode_display, style="dim")
 
     return Panel(
         Group(*renderables),
-        title=f"[bold]Keyboard Shortcuts[/bold] {Indicators.get('VERTICAL_LINE')} {mode_display}",
+        title=title,
         title_align="left",
-        border_style="blue",
+        border_style="bright_black",
         padding=(1, 2),
     )
 

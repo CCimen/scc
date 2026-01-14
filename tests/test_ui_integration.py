@@ -597,10 +597,10 @@ class TestDashboardStandaloneMode:
             assert dashboard.state.status_message is not None
             assert "org mode" in dashboard.state.status_message
 
-    def test_chrome_config_dims_teams_hint_in_standalone(
+    def test_chrome_config_omits_teams_hint_in_standalone(
         self, mock_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """ChromeConfig dims 't teams' hint when in standalone mode."""
+        """ChromeConfig omits teams hint in standalone mode."""
         state = DashboardState(
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
@@ -613,14 +613,13 @@ class TestDashboardStandaloneMode:
         ):
             config = dashboard._get_chrome_config()
 
-            # Find the teams hint and verify it's dimmed
-            teams_hint = next(h for h in config.footer_hints if h.action == "teams")
-            assert teams_hint.dimmed is True
+            hint_actions = [h.action for h in config.footer_hints]
+            assert "teams" not in hint_actions
 
-    def test_chrome_config_undimmed_teams_in_org_mode(
+    def test_chrome_config_omits_teams_hint_in_org_mode(
         self, mock_tab_data: dict[DashboardTab, TabData]
     ) -> None:
-        """ChromeConfig shows normal 't teams' hint when org mode is configured."""
+        """ChromeConfig omits teams hint in org mode for a cleaner footer."""
         state = DashboardState(
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
@@ -633,9 +632,8 @@ class TestDashboardStandaloneMode:
         ):
             config = dashboard._get_chrome_config()
 
-            # Find the teams hint and verify it's not dimmed
-            teams_hint = next(h for h in config.footer_hints if h.action == "teams")
-            assert teams_hint.dimmed is False
+            hint_actions = [h.action for h in config.footer_hints]
+            assert "teams" not in hint_actions
 
 
 class TestStatusTabDrillDown:
@@ -1056,7 +1054,8 @@ class TestDetailsPane:
         assert "details" not in hint_actions
         # Standard navigation and global hints still present
         assert "navigate" in hint_actions
-        assert "refresh" in hint_actions
+        assert "filter" in hint_actions
+        assert "more" in hint_actions
 
     def test_resource_tab_shows_esc_clear_filter_when_filtering(
         self, resource_tab_data: dict[DashboardTab, TabData]
