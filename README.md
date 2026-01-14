@@ -57,6 +57,7 @@ When you run `scc` or `scc start`:
 - `Tab` — Switch between tabs
 - `n` — Start new session
 - `t` — Switch team
+- `p` — Profile quick menu (save/apply/diff)
 - `r` — Refresh
 - `s` — Settings & maintenance
 - `?` — Help
@@ -198,12 +199,21 @@ scc profile apply --preview
 scc profile status
 ```
 
-Sync across machines with any git host:
+**TUI Integration:** Press `p` in the dashboard or go to **Settings → Profiles** for visual profile management:
+- Save/Apply/Diff profiles without CLI commands
+- **Sync profiles** overlay for export/import to a local folder
+- Import preview shows what will change before applying
+
+**Sync across machines:**
 
 ```bash
-scc profile export --repo ~/dotfiles/scc-profiles
+# Via TUI: Settings → Profiles → Sync profiles
+# Or via CLI with git operations:
+scc profile export --repo ~/dotfiles/scc-profiles --commit --push
 scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
 ```
+
+> **Note:** TUI sync writes files locally only (no git). Use CLI flags `--commit --push` for git operations.
 
 ---
 
