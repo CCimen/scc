@@ -158,7 +158,7 @@ class TestDashboardTabNavigation:
         result = dashboard._handle_action(tab_action)
 
         assert result is None  # Continue running
-        assert dashboard.state.active_tab == DashboardTab.STATUS
+        assert dashboard.state.active_tab == DashboardTab.WORKTREES
 
 
 class TestDashboardNavigation:
@@ -283,6 +283,7 @@ class TestDashboardFiltering:
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
             list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+            filter_mode=True,
         )
         dashboard = Dashboard(state)
 
@@ -455,8 +456,8 @@ class TestDashboardStandaloneMode:
             active_tab=DashboardTab.STATUS,
             tabs=mock_tab_data,
             list_state=ListState(items=mock_tab_data[DashboardTab.STATUS].items),
+            filter_mode=True,
         )
-
         dashboard = Dashboard(state)
 
         # Any action should clear the message
@@ -772,6 +773,7 @@ class TestDetailsPane:
             details_open=True,
             filter_mode=True,
         )
+        state.list_state.filter_query = "scc"
         dashboard = Dashboard(state)
 
         cancel_action = Action(action_type=ActionType.CANCEL, state_changed=True)
@@ -914,6 +916,7 @@ class TestDetailsPane:
             tabs=resource_tab_data,
             list_state=ListState(items=resource_tab_data[DashboardTab.CONTAINERS].items),
             details_open=True,
+            filter_mode=True,
         )
         dashboard = Dashboard(state)
 
