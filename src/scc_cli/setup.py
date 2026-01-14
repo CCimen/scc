@@ -28,10 +28,23 @@ from rich.text import Text
 from . import config
 from .confirm import Confirm
 from .remote import fetch_org_config, save_to_cache
+from .theme import Borders, Indicators, Spinners
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Arrow-Key Selection Component
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _build_hint_text(hints: list[tuple[str, str]]) -> Text:
+    """Build a compact hint line with middot separators."""
+    text = Text()
+    for index, (key, action) in enumerate(hints):
+        if index > 0:
+            text.append(" · ", style="dim")
+        text.append(key, style="cyan bold")
+        text.append(" ", style="dim")
+        text.append(action, style="dim")
+    return text
 
 
 def _select_option(
@@ -39,7 +52,7 @@ def _select_option(
     options: list[tuple[str, str, str]],
     *,
     default: int = 0,
-) -> int:
+) -> int | None:
     """Interactive arrow-key selection for setup options.
 
     Args:
@@ -48,9 +61,12 @@ def _select_option(
         default: Default selected index.
 
     Returns:
-        Selected index (0-based).
+        Selected index (0-based), or None if cancelled.
     """
     cursor = default
+    label_width = max((len(label) for label, _, _ in options), default=0)
+    tag_width = max((len(tag) for _, tag, _ in options), default=0)
+    cursor_symbol = Indicators.get("CURSOR")
 
     def _render_options() -> int:
         """Render options and return line count."""
@@ -59,46 +75,39 @@ def _select_option(
         lines += 1
 
         for i, (label, tag, desc) in enumerate(options):
-            if i == cursor:
-                # Selected: bold with › cursor, tag right-aligned
-                line = Text()
-                line.append("  ")
-                line.append("›", style="cyan")
-                line.append(f" {label}", style="bold white")
-                if tag:
-                    # Right-align tag
-                    padding = 30 - len(label)
-                    line.append(" " * max(2, padding))
-                    line.append(tag, style="cyan")
-                console.print(line)
+            is_selected = i == cursor
+            line = Text()
+            line.append("  ")
+            line.append(cursor_symbol if is_selected else " ", style="cyan" if is_selected else "")
+            line.append(" ")
+            line.append(label, style="bold white" if is_selected else "dim")
+            if tag:
+                padding = label_width - len(label) + (3 if tag_width else 2)
+                line.append(" " * max(2, padding))
+                line.append(tag, style="cyan" if is_selected else "dim")
+            console.print(line)
+            lines += 1
+            if desc:
+                console.print(f"    [dim]{desc}[/dim]")
                 lines += 1
-                if desc:
-                    console.print(f"    [dim]{desc}[/dim]")
-                    lines += 1
-            else:
-                # Unselected: all dim
-                line = Text()
-                line.append("    ")
-                line.append(label, style="dim")
-                if tag:
-                    padding = 30 - len(label)
-                    line.append(" " * max(2, padding))
-                    line.append(tag, style="dim")
-                console.print(line)
-                lines += 1
-                if desc:
-                    console.print(f"    [dim]{desc}[/dim]")
-                    lines += 1
 
-            # Add spacing between options
             if i < len(options) - 1:
                 console.print()
                 lines += 1
 
-        # Footer hints
         console.print()
         lines += 1
-        console.print("[dim]  ↑↓ select  ·  enter confirm  ·  esc cancel[/dim]")
+        hints = _build_hint_text(
+            [
+                ("↑↓", "navigate"),
+                ("Enter", "confirm"),
+                ("Esc", "cancel"),
+            ]
+        )
+        separator_len = max(32, len(hints.plain))
+        console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
+        lines += 1
+        console.print(hints)
         lines += 1
         return lines
 
@@ -121,7 +130,7 @@ def _select_option(
             elif key in (readchar.key.ENTER, "\r", "\n"):
                 return cursor
             elif key in (readchar.key.ESC, "q"):
-                return default  # Return default on cancel
+                return None
             else:
                 continue  # Ignore other keys, don't redraw
 
@@ -306,35 +315,48 @@ def _build_config_changes(before: dict[str, Any], after: dict[str, Any]) -> Text
 
 
 def _render_setup_header(console: Console, *, step_index: int, subtitle: str | None = None) -> None:
-    """Render the setup step header with pill-style tabs."""
+    """Render the setup step header with underline-style tabs."""
     console.clear()
 
-    # Title
     console.print()
-    console.print("                    [bold white]SCC Setup[/bold white]")
+    console.print(Text("SCC Setup", style="bold white"), justify="center")
     console.print()
 
-    # Pill-style tabs with inverse for active (no brackets)
     tabs = Text()
-    tabs.append("   ")
+    underline = Text()
+    separator = "   "
+
     for idx, step in enumerate(SETUP_STEPS):
-        if idx == step_index:
-            # Active tab: inverse background (space padding for pill effect)
-            tabs.append(f" {step} ", style="black on cyan")
-        elif idx < step_index:
-            # Completed: green
-            tabs.append(step, style="green")
+        if idx > 0:
+            tabs.append(separator)
+            underline.append(" " * len(separator))
+
+        is_active = idx == step_index
+        is_complete = idx < step_index
+        if is_active:
+            tab_style = "bold cyan"
+        elif is_complete:
+            tab_style = "green"
         else:
-            # Future: dim
-            tabs.append(step, style="dim")
-        tabs.append("   ")
+            tab_style = "dim"
+
+        tabs.append(step, style=tab_style)
+        underline_segment = (
+            Indicators.get("HORIZONTAL_LINE") * len(step) if is_active else " " * len(step)
+        )
+        underline.append(underline_segment, style="cyan" if is_active else "dim")
 
     console.print(tabs)
-    console.print("━" * min(console.size.width, 72), style="dim")
-    console.print()
+    console.print(underline)
+
+    separator_len = max(32, min(console.size.width - 4, len(tabs.plain)))
+    console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
 
     if subtitle:
+        console.print()
         console.print(f"  {subtitle}", style="dim")
+        console.print()
+    else:
         console.print()
 
 
@@ -352,19 +374,18 @@ def _render_setup_layout(
     """Render a two-pane setup layout with a shared header."""
     _render_setup_header(console, step_index=step_index, subtitle=subtitle)
 
-    # Use rounded box for softer aesthetic
     left_panel = Panel.fit(
         left_body,
-        title=left_title,
-        border_style="cyan",
-        padding=(1, 2),
+        title=f"[dim]{left_title}[/dim]",
+        border_style="bright_black",
+        padding=(0, 1),
         box=box.ROUNDED,
     )
     right_panel = Panel.fit(
         right_body,
-        title=right_title,
-        border_style="blue",
-        padding=(1, 2),
+        title=f"[dim]{right_title}[/dim]",
+        border_style="bright_black",
+        padding=(0, 1),
         box=box.ROUNDED,
     )
 
@@ -376,10 +397,23 @@ def _render_setup_layout(
     else:
         console.print(Columns([left_panel, right_panel], expand=True, equal=True))
 
-    # Consistent footer hint bar with middot separators
     console.print()
-    console.print("─" * min(console.size.width, 72), style="dim")
-    console.print("  [dim]↑↓ select  ·  enter confirm  ·  esc cancel[/dim]")
+    if footer_hint:
+        separator_len = max(32, min(console.size.width - 4, len(footer_hint)))
+        console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
+        console.print(f"  [dim]{footer_hint}[/dim]")
+        return
+
+    hints = _build_hint_text(
+        [
+            ("↑↓", "navigate"),
+            ("Enter", "confirm"),
+            ("Esc", "cancel"),
+        ]
+    )
+    separator_len = max(32, min(console.size.width - 4, len(hints.plain)))
+    console.print(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
+    console.print(hints)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -421,11 +455,11 @@ def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
 
         # Validate HTTPS
         if url.startswith("http://"):
-            console.print("[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]")
+            console.print("[red]HTTP URLs are not allowed. Please use HTTPS.[/red]")
             continue
 
         if not url.startswith("https://"):
-            console.print("[red]✗ URL must start with https://[/red]")
+            console.print("[red]URL must start with https://[/red]")
             continue
 
         return url
@@ -501,20 +535,19 @@ def fetch_and_validate_org_config(
         Organization config dict if successful, None if auth required (401).
     """
     console.print()
-    console.print("[dim]Fetching organization config...[/dim]")
-
-    config_data, etag, status = fetch_org_config(url, auth=auth, etag=None)
+    with console.status("Fetching organization config...", spinner=Spinners.NETWORK):
+        config_data, etag, status = fetch_org_config(url, auth=auth, etag=None)
 
     if status == 401:
-        console.print("[yellow]⚠️ Authentication required (401)[/yellow]")
+        console.print("[yellow]Authentication required (401)[/yellow]")
         return None
 
     if status == 403:
-        console.print("[red]✗ Access denied (403)[/red]")
+        console.print("[red]Access denied (403)[/red]")
         return None
 
     if status != 200 or config_data is None:
-        console.print(f"[red]✗ Failed to fetch config (status: {status})[/red]")
+        console.print(f"[red]Failed to fetch config (status: {status})[/red]")
         return None
 
     org_name = config_data.get("organization", {}).get("name", "Unknown")
@@ -567,7 +600,7 @@ def build_profile_table(profiles: dict[str, Any]) -> tuple[Table, list[str]]:
         box=box.SIMPLE,
         show_header=False,
         padding=(0, 2),
-        border_style="dim",
+        border_style="bright_black",
     )
     table.add_column("Option", style="yellow", width=4)
     table.add_column("Profile", style="cyan", min_width=15)
@@ -705,20 +738,12 @@ def show_setup_complete(
     content = Text()
 
     if standalone:
-        content.append("  Mode", style="dim")
-        content.append(" ··········· ", style="dim")
-        content.append("Standalone\n", style="white")
+        _append_dot_leader(content, "mode", "standalone", value_style="white")
     elif org_name:
-        content.append("  Organization", style="dim")
-        content.append(" ·· ", style="dim")
-        content.append(f"{org_name}\n", style="white")
-        content.append("  Profile", style="dim")
-        content.append(" ········ ", style="dim")
-        content.append(f"{profile or 'none'}\n", style="white")
+        _append_dot_leader(content, "organization", org_name, value_style="white")
+        _append_dot_leader(content, "profile", profile or "none", value_style="white")
 
-    content.append("  Config", style="dim")
-    content.append(" ········· ", style="dim")
-    content.append(f"{config.CONFIG_DIR}\n", style="cyan")
+    _append_dot_leader(content, "config", str(config.CONFIG_DIR), value_style="cyan")
 
     # Main panel
     main_panel = Panel(
@@ -798,7 +823,8 @@ def _confirm_setup(
         panel = Panel(
             summary,
             title="[bold cyan]Review & Confirm[/bold cyan]",
-            border_style="cyan",
+            border_style="bright_black",
+            box=box.ROUNDED,
             padding=(1, 2),
         )
         console.print(panel)
@@ -840,7 +866,12 @@ def run_setup_wizard(console: Console) -> bool:
     ]
 
     selected = _select_option(console, mode_options, default=0)
+    if selected is None:
+        console.print("[yellow]Setup cancelled.[/yellow]")
+        return False
     has_org_config = selected == 0
+    standalone = not has_org_config
+    org_name = None
 
     if has_org_config:
         # Get org URL - single centered panel
@@ -850,12 +881,13 @@ def run_setup_wizard(console: Console) -> bool:
         org_help.append("Your platform team provides this URL.\n\n", style="dim")
         org_help.append("  • Must be HTTPS\n", style="dim")
         org_help.append("  • Points to your org-config.json\n", style="dim")
+        org_help.append("  • If the URL loads without a token, skip auth\n", style="dim")
         org_help.append("  • Example: ", style="dim")
         org_help.append("https://example.com/scc/org.json", style="cyan dim")
 
         org_panel = Panel(
             org_help,
-            title="[bold]Organization URL[/bold]",
+            title="[bold cyan]Organization URL[/bold cyan]",
             border_style="bright_black",
             box=box.ROUNDED,
             padding=(1, 2),
@@ -885,6 +917,9 @@ def run_setup_wizard(console: Console) -> bool:
             ]
 
             auth_choice = _select_option(console, auth_options, default=0)
+            if auth_choice is None:
+                console.print("[yellow]Setup cancelled.[/yellow]")
+                return False
 
             if auth_choice == 0:
                 console.print()
@@ -900,8 +935,10 @@ def run_setup_wizard(console: Console) -> bool:
                 org_config = fetch_and_validate_org_config(console, org_url, auth=auth)
 
         if org_config is None:
-            console.print("[red]✗ Could not fetch organization config[/red]")
+            console.print("[red]Could not fetch organization config[/red]")
             return False
+
+        org_name = org_config.get("organization", {}).get("name")
 
         # Profile selection with arrow-key navigation
         profiles = org_config.get("profiles", {})
@@ -920,6 +957,9 @@ def run_setup_wizard(console: Console) -> bool:
             profile_options.append(("No profile", "skip", "Continue without a team profile"))
 
             profile_choice = _select_option(console, profile_options, default=0)
+            if profile_choice is None:
+                console.print("[yellow]Setup cancelled.[/yellow]")
+                return False
             if profile_choice < len(profile_list):
                 profile = profile_list[profile_choice]
             else:
@@ -928,159 +968,101 @@ def run_setup_wizard(console: Console) -> bool:
             console.print("[dim]No profiles configured in org config.[/dim]")
             profile = None
 
-        # Hooks with arrow-key selection
-        _render_setup_header(
-            console, step_index=4, subtitle="Optional safety guardrails for protected branches."
-        )
-
-        hooks_options = [
-            ("Enable hooks", "recommended", "Block direct pushes to main, master, develop"),
-            ("Skip hooks", "", "No git hook protection"),
-        ]
-
-        hooks_choice = _select_option(console, hooks_options, default=0)
-        hooks_enabled = hooks_choice == 0
-
-        # Confirm - single centered panel showing changes
-        org_name = org_config.get("organization", {}).get("name")
-        proposed = _build_proposed_config(
-            org_url=org_url,
-            auth=auth,
-            profile=profile,
-            hooks_enabled=bool(hooks_enabled),
-            standalone=False,
-        )
-        existing = config.load_user_config()
-        changes = _build_config_changes(existing, proposed)
-
-        _render_setup_header(console, step_index=5, subtitle="Review and confirm your settings.")
-
-        # Single centered Changes panel
-        changes_panel = Panel(
-            changes,
-            title="[bold]Changes[/bold]",
-            border_style="bright_black",
-            box=box.ROUNDED,
-            padding=(1, 2),
-            width=min(60, console.size.width - 4),
-        )
-        console.print()
-        console.print(changes_panel)
-        console.print()
-        console.print("[dim]  This will update your config file.[/dim]")
-
-        # Arrow-key confirm selection
-        confirm_options = [
-            ("Apply changes", "", "Write config and complete setup"),
-            ("Cancel", "", "Exit without saving"),
-        ]
-        confirm_choice = _select_option(console, confirm_options, default=0)
-
-        if confirm_choice != 0:
-            console.print("[yellow]Setup cancelled.[/yellow]")
-            return False
-
-        # Save config
-        save_setup_config(
-            console,
-            org_url=org_url,
-            auth=auth,
-            profile=profile,
-            hooks_enabled=hooks_enabled,
-        )
-
-        # Complete
-        show_setup_complete(console, org_name=org_name, profile=profile)
-
     else:
-        # Standalone mode
         standalone_left = Text()
         standalone_left.append("Standalone mode selected.\n\n")
-        standalone_left.append("• No org config will be used\n", style="dim")
-        standalone_left.append("• You can switch later by running scc setup\n", style="dim")
+        standalone_left.append("• No organization config required\n", style="dim")
+        standalone_left.append("• You can switch later with `scc setup`\n", style="dim")
+        standalone_left.append("• Teams and profiles stay disabled\n", style="dim")
 
         preview = _build_config_preview(
             org_url=None,
             auth=None,
             profile=None,
-            hooks_enabled=hooks_enabled,
+            hooks_enabled=None,
             standalone=True,
         )
 
         _render_setup_layout(
             console,
-            step_index=0,
+            step_index=1,
             subtitle="Standalone mode (no organization config).",
             left_title="Standalone",
             left_body=standalone_left,
             right_title="Config Preview",
             right_body=preview,
-            footer_hint="Press Enter to continue",
+            footer_hint="Next: configure hooks",
         )
 
-        # Hooks with arrow-key selection (standalone)
-        _render_setup_header(
-            console, step_index=4, subtitle="Optional safety guardrails for protected branches."
-        )
+    # Hooks with arrow-key selection
+    _render_setup_header(
+        console, step_index=4, subtitle="Optional safety guardrails for protected branches."
+    )
 
-        hooks_options = [
-            ("Enable hooks", "recommended", "Block direct pushes to main, master, develop"),
-            ("Skip hooks", "", "No git hook protection"),
-        ]
+    hooks_options = [
+        ("Enable hooks", "recommended", "Block direct pushes to main, master, develop"),
+        ("Skip hooks", "", "No git hook protection"),
+    ]
 
-        hooks_choice = _select_option(console, hooks_options, default=0)
-        hooks_enabled = hooks_choice == 0
+    hooks_choice = _select_option(console, hooks_options, default=0)
+    if hooks_choice is None:
+        console.print("[yellow]Setup cancelled.[/yellow]")
+        return False
+    hooks_enabled = hooks_choice == 0
 
-        # Confirm - single centered panel showing changes
-        proposed = _build_proposed_config(
-            org_url=None,
-            auth=None,
-            profile=None,
-            hooks_enabled=bool(hooks_enabled),
-            standalone=True,
-        )
-        existing = config.load_user_config()
-        changes = _build_config_changes(existing, proposed)
+    # Confirm - single centered panel showing changes
+    proposed = _build_proposed_config(
+        org_url=org_url,
+        auth=auth,
+        profile=profile,
+        hooks_enabled=bool(hooks_enabled),
+        standalone=standalone,
+    )
+    existing = config.load_user_config()
+    changes = _build_config_changes(existing, proposed)
 
-        _render_setup_header(console, step_index=5, subtitle="Review and confirm your settings.")
+    _render_setup_header(console, step_index=5, subtitle="Review and confirm your settings.")
 
-        # Single centered Changes panel
-        changes_panel = Panel(
-            changes,
-            title="[bold]Changes[/bold]",
-            border_style="bright_black",
-            box=box.ROUNDED,
-            padding=(1, 2),
-            width=min(60, console.size.width - 4),
-        )
-        console.print()
-        console.print(changes_panel)
-        console.print()
-        console.print("[dim]  This will update your config file.[/dim]")
+    # Single centered Changes panel
+    changes_panel = Panel(
+        changes,
+        title="[bold cyan]Changes[/bold cyan]",
+        border_style="bright_black",
+        box=box.ROUNDED,
+        padding=(1, 2),
+        width=min(60, console.size.width - 4),
+    )
+    console.print()
+    console.print(changes_panel)
+    console.print()
+    console.print("[dim]  This will update your config file.[/dim]")
 
-        # Arrow-key confirm selection
-        confirm_options = [
-            ("Apply changes", "", "Write config and complete setup"),
-            ("Cancel", "", "Exit without saving"),
-        ]
-        confirm_choice = _select_option(console, confirm_options, default=0)
+    # Arrow-key confirm selection
+    confirm_options = [
+        ("Apply changes", "", "Write config and complete setup"),
+        ("Cancel", "", "Exit without saving"),
+    ]
+    confirm_choice = _select_option(console, confirm_options, default=0)
 
-        if confirm_choice != 0:
-            console.print("[yellow]Setup cancelled.[/yellow]")
-            return False
+    if confirm_choice is None or confirm_choice != 0:
+        console.print("[yellow]Setup cancelled.[/yellow]")
+        return False
 
-        # Save config
-        save_setup_config(
-            console,
-            org_url=None,
-            auth=None,
-            profile=None,
-            hooks_enabled=hooks_enabled,
-            standalone=True,
-        )
+    # Save config
+    save_setup_config(
+        console,
+        org_url=org_url,
+        auth=auth,
+        profile=profile,
+        hooks_enabled=hooks_enabled,
+        standalone=standalone,
+    )
 
-        # Complete
+    # Complete
+    if standalone:
         show_setup_complete(console, standalone=True)
+    else:
+        show_setup_complete(console, org_name=org_name, profile=profile)
 
     return True
 
@@ -1123,14 +1105,14 @@ def run_non_interactive_setup(
         return True
 
     if not org_url:
-        console.print("[red]✗ Organization URL required (use --org-url)[/red]")
+        console.print("[red]Organization URL required (use --org-url)[/red]")
         return False
 
     # Fetch org config
     org_config = fetch_and_validate_org_config(console, org_url, auth=auth)
 
     if org_config is None:
-        console.print("[red]✗ Could not fetch organization config[/red]")
+        console.print("[red]Could not fetch organization config[/red]")
         return False
 
     # Validate team if provided
@@ -1138,7 +1120,7 @@ def run_non_interactive_setup(
         profiles = org_config.get("profiles", {})
         if team not in profiles:
             available = ", ".join(profiles.keys())
-            console.print(f"[red]✗ Team '{team}' not found. Available: {available}[/red]")
+            console.print(f"[red]Team '{team}' not found. Available: {available}[/red]")
             return False
 
     # Save config
