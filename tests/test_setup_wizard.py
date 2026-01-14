@@ -220,6 +220,7 @@ class TestSaveSetupConfig:
                 mock_console,
                 org_url="https://example.org/config.json",
                 auth="env:TOKEN",
+                auth_header="PRIVATE-TOKEN",
                 profile="platform",
                 hooks_enabled=True,
             )
@@ -227,6 +228,7 @@ class TestSaveSetupConfig:
             saved_config = mock_save.call_args[0][0]
             assert saved_config["organization_source"]["url"] == "https://example.org/config.json"
             assert saved_config["organization_source"]["auth"] == "env:TOKEN"
+            assert saved_config["organization_source"]["auth_header"] == "PRIVATE-TOKEN"
             assert saved_config["selected_profile"] == "platform"
             assert saved_config["hooks"]["enabled"] is True
 
@@ -242,6 +244,7 @@ class TestSaveSetupConfig:
                 mock_console,
                 org_url=None,  # Standalone
                 auth=None,
+                auth_header=None,
                 profile=None,
                 hooks_enabled=False,
                 standalone=True,

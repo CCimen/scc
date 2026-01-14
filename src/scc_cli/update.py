@@ -422,6 +422,7 @@ def check_org_config_update(
         return OrgConfigUpdateResult(status="standalone")
 
     auth_spec = org_source.get("auth")
+    auth_header = org_source.get("auth_header")
 
     # Check throttle (unless forced)
     if not force and not _should_check_org_config():
@@ -449,7 +450,12 @@ def check_org_config_update(
 
     # Attempt to fetch with ETag
     try:
-        config, new_etag, status = remote.fetch_org_config(url, auth=auth, etag=etag)
+        config, new_etag, status = remote.fetch_org_config(
+            url,
+            auth=auth,
+            etag=etag,
+            auth_header=auth_header,
+        )
     except Exception:
         # Network error - use cache silently
         _mark_org_config_check_done()

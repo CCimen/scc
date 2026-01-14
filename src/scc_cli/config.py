@@ -45,7 +45,7 @@ LEGACY_CONFIG_DIR = Path.home() / ".config" / "scc-cli"
 
 USER_CONFIG_DEFAULTS = {
     "config_version": "1.0.0",
-    "organization_source": None,  # Set during setup: {"url": "...", "auth": "..."}
+    "organization_source": None,  # Set during setup: {"url": "...", "auth": "...", "auth_header": "..."}
     "selected_profile": None,
     "standalone": False,
     "workspace_team_map": {},

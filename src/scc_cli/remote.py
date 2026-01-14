@@ -70,6 +70,26 @@ class ConfigValidationError(Exception):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def looks_like_github_url(url: str) -> bool:
+    """Best-effort detection for GitHub URLs."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    return "github" in host or "raw.githubusercontent.com" in host
+
+
+def looks_like_gitlab_url(url: str) -> bool:
+    """Best-effort detection for GitLab URLs (including self-hosted)."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    path = (parsed.path or "").lower()
+
+    if "gitlab" in host:
+        return True
+
+    gitlab_markers = ("/-/raw/", "/api/v4/", "/-/files/")
+    return any(marker in path for marker in gitlab_markers)
+
+
 def validate_org_config_url(url: str) -> str:
     """Validate and normalize org config URL. HTTPS only.
 
@@ -146,15 +166,34 @@ def resolve_auth(auth_spec: str | None, *, from_remote: bool = False) -> str | N
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _build_auth_headers(auth: str | None, auth_header: str | None = None) -> dict[str, str]:
+    """Build auth headers for org config fetch."""
+    if not auth:
+        return {}
+
+    header_name = (auth_header or "Authorization").strip()
+    if header_name.lower() == "authorization":
+        value = auth
+        if not auth.lower().startswith(("bearer ", "basic ")):
+            value = f"Bearer {auth}"
+        return {"Authorization": value}
+
+    return {header_name: auth}
+
+
 def fetch_org_config(
-    url: str, auth: str | None, etag: str | None = None
+    url: str,
+    auth: str | None,
+    etag: str | None = None,
+    auth_header: str | None = None,
 ) -> tuple[dict[str, Any] | None, str | None, int]:
     """Fetch org config from URL with ETag support.
 
     Args:
         url: HTTPS URL to fetch from (validated)
-        auth: Auth token for Authorization header
+        auth: Auth token for header
         etag: Previous ETag for conditional request
+        auth_header: Custom header name (defaults to Authorization)
 
     Returns:
         Tuple of (config_dict, new_etag, status_code)
@@ -166,11 +205,7 @@ def fetch_org_config(
     # Validate URL (HTTPS enforcement)
     url = validate_org_config_url(url)
 
-    headers = {}
-
-    # Add Authorization header if auth provided
-    if auth:
-        headers["Authorization"] = f"Bearer {auth}"
+    headers = _build_auth_headers(auth, auth_header)
 
     # Add If-None-Match header for conditional request
     if etag:
@@ -390,6 +425,7 @@ def load_org_config(
         return None
 
     auth_spec = org_source.get("auth")
+    auth_header = org_source.get("auth_header")
 
     # Try to load from cache
     cached_config, meta = load_from_cache()
@@ -408,7 +444,12 @@ def load_org_config(
     auth = resolve_auth(auth_spec)
     etag = meta.get("org_config", {}).get("etag") if meta else None
 
-    config, new_etag, status = fetch_org_config(url, auth=auth, etag=etag)
+    config, new_etag, status = fetch_org_config(
+        url,
+        auth=auth,
+        etag=etag,
+        auth_header=auth_header,
+    )
 
     # 304 Not Modified - use cached version
     if status == 304 and cached_config is not None:

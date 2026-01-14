@@ -220,6 +220,22 @@ class TestFetchOrgConfig:
         assert "Bearer my-token" in responses.calls[0].request.headers["Authorization"]
 
     @responses.activate
+    def test_fetch_with_custom_auth_header(self):
+        """Should include custom auth header when specified."""
+        url = "https://example.org/config.json"
+        responses.add(
+            responses.GET,
+            url,
+            json={"organization": {"name": "Test"}},
+            status=200,
+        )
+
+        remote.fetch_org_config(url, auth="gitlab-token", etag=None, auth_header="PRIVATE-TOKEN")
+
+        assert "PRIVATE-TOKEN" in responses.calls[0].request.headers
+        assert responses.calls[0].request.headers["PRIVATE-TOKEN"] == "gitlab-token"
+
+    @responses.activate
     def test_fetch_with_etag_sends_if_none_match(self, sample_org_config):
         """Should send If-None-Match header when etag provided."""
         url = "https://example.org/config.json"

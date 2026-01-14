@@ -404,12 +404,21 @@ def pick_workspace_source(
         ]
     )
 
+    if allow_back:
+        return _run_single_select_picker(
+            items=items,
+            title="Where is your project?",
+            subtitle=subtitle,
+            standalone=standalone,
+            allow_back=True,
+            context_label=resolved_context_label,
+        )
     return _run_single_select_picker(
         items=items,
         title="Where is your project?",
         subtitle=subtitle,
         standalone=standalone,
-        allow_back=allow_back,
+        allow_back=False,
         context_label=resolved_context_label,
     )
 

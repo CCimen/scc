@@ -291,7 +291,7 @@ class ListScreen(Generic[T]):
         config = self._get_chrome_config()
 
         # Render with chrome
-        chrome = Chrome(config)
+        chrome = Chrome(config, console=self._console)
         return chrome.render(body, search_query=self.state.filter_query)
 
     def _render_list_body(self) -> Text:
