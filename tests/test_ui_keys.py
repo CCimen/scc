@@ -96,6 +96,18 @@ class TestActionKeyMapping:
         action = map_key_to_action(readchar.key.TAB)
         assert action.action_type == ActionType.TAB_NEXT
 
+    def test_shift_tab_fallback_maps_to_tab_prev(self) -> None:
+        """Shift+Tab fallback sequence maps to TAB_PREV action."""
+        action = map_key_to_action("\x1b[Z")
+        assert action.action_type == ActionType.TAB_PREV
+
+    def test_shift_tab_key_maps_to_tab_prev_when_available(self) -> None:
+        """SHIFT_TAB key maps to TAB_PREV when provided by readchar."""
+        shift_tab = getattr(readchar.key, "SHIFT_TAB", None)
+        if shift_tab:
+            action = map_key_to_action(shift_tab)
+            assert action.action_type == ActionType.TAB_PREV
+
     def test_backspace_maps_to_filter_delete(self) -> None:
         """Backspace key maps to FILTER_DELETE action."""
         action = map_key_to_action(readchar.key.BACKSPACE)
