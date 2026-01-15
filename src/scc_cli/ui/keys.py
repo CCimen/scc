@@ -516,38 +516,64 @@ def get_keybindings_grouped_by_section(mode: str) -> dict[str, list[tuple[str, s
 # Key Mappings (Runtime Behavior)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+_SHIFT_TAB_FALLBACKS: tuple[str, ...] = ("\x1b[Z", "\x1b[1;2Z")
+
+
 # Default key mappings for navigation and common actions.
 # These are shared across all list modes.
 # NOTE: Dashboard-specific keys like 'r' (refresh) should NOT be here.
 # They are handled explicitly in the Dashboard component.
-DEFAULT_KEY_MAP: dict[str, ActionType] = {
-    # Arrow key navigation
-    readchar.key.UP: ActionType.NAVIGATE_UP,
-    readchar.key.DOWN: ActionType.NAVIGATE_DOWN,
-    # Vim-style navigation
-    "k": ActionType.NAVIGATE_UP,
-    "j": ActionType.NAVIGATE_DOWN,
-    # Selection and confirmation
-    readchar.key.ENTER: ActionType.SELECT,
-    readchar.key.SPACE: ActionType.TOGGLE,
-    "a": ActionType.TOGGLE_ALL,
-    # Cancel and quit
-    readchar.key.ESC: ActionType.CANCEL,
-    "\x1b": ActionType.CANCEL,  # Raw escape character (fallback)
-    "\x1b\x1b": ActionType.CANCEL,  # Double escape (macOS quirk on some systems)
-    "q": ActionType.QUIT,
-    # Help
-    "?": ActionType.HELP,
-    # Tab navigation
-    readchar.key.TAB: ActionType.TAB_NEXT,
-    readchar.key.SHIFT_TAB: ActionType.TAB_PREV,
-    # Filter control
-    readchar.key.BACKSPACE: ActionType.FILTER_DELETE,
-    # Team switching
-    "t": ActionType.TEAM_SWITCH,
-    # Note: "n" (new session) is NOT in DEFAULT_KEY_MAP because it's screen-specific.
-    # It's added via custom_keys only to Quick Resume and Dashboard where it makes sense.
-}
+
+
+def _get_shift_tab_keys() -> list[str]:
+    keys: list[str] = []
+    shift_tab = getattr(readchar.key, "SHIFT_TAB", None)
+    if isinstance(shift_tab, str) and shift_tab:
+        keys.append(shift_tab)
+
+    for fallback in _SHIFT_TAB_FALLBACKS:
+        if fallback not in keys:
+            keys.append(fallback)
+
+    return keys
+
+
+def _build_default_key_map() -> dict[str, ActionType]:
+    key_map: dict[str, ActionType] = {
+        # Arrow key navigation
+        readchar.key.UP: ActionType.NAVIGATE_UP,
+        readchar.key.DOWN: ActionType.NAVIGATE_DOWN,
+        # Vim-style navigation
+        "k": ActionType.NAVIGATE_UP,
+        "j": ActionType.NAVIGATE_DOWN,
+        # Selection and confirmation
+        readchar.key.ENTER: ActionType.SELECT,
+        readchar.key.SPACE: ActionType.TOGGLE,
+        "a": ActionType.TOGGLE_ALL,
+        # Cancel and quit
+        readchar.key.ESC: ActionType.CANCEL,
+        "\x1b": ActionType.CANCEL,  # Raw escape character (fallback)
+        "\x1b\x1b": ActionType.CANCEL,  # Double escape (macOS quirk on some systems)
+        "q": ActionType.QUIT,
+        # Help
+        "?": ActionType.HELP,
+        # Tab navigation
+        readchar.key.TAB: ActionType.TAB_NEXT,
+        # Filter control
+        readchar.key.BACKSPACE: ActionType.FILTER_DELETE,
+        # Team switching
+        "t": ActionType.TEAM_SWITCH,
+        # Note: "n" (new session) is NOT in DEFAULT_KEY_MAP because it's screen-specific.
+        # It's added via custom_keys only to Quick Resume and Dashboard where it makes sense.
+    }
+
+    for shift_tab_key in _get_shift_tab_keys():
+        key_map[shift_tab_key] = ActionType.TAB_PREV
+
+    return key_map
+
+
+DEFAULT_KEY_MAP = _build_default_key_map()
 
 
 def read_key() -> str:
