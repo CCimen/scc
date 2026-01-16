@@ -65,7 +65,7 @@ def _target_type_to_flag(target_type: str) -> str:
     """Convert target type to CLI flag name.
 
     Args:
-        target_type: One of "plugin", "mcp_server", "base_image"
+        target_type: One of "plugin", "mcp_server"
 
     Returns:
         CLI flag name like "--allow-plugin"
@@ -73,7 +73,6 @@ def _target_type_to_flag(target_type: str) -> str:
     type_map = {
         "plugin": "--allow-plugin",
         "mcp_server": "--allow-mcp",
-        "base_image": "--allow-image",
     }
     return type_map.get(target_type, f"--allow-{target_type}")
 
@@ -86,8 +85,8 @@ def generate_unblock_command(
     """Generate an unblock command for a delegation denial.
 
     Args:
-        target: The denied item (plugin name, server name, image ref)
-        target_type: One of "plugin", "mcp_server", "base_image"
+        target: The denied item (plugin name or server name)
+        target_type: One of "plugin", "mcp_server"
         ttl: Time-to-live for the override (default 8h)
 
     Returns:
@@ -105,8 +104,8 @@ def generate_policy_exception_command(
     """Generate a policy exception command for a security block.
 
     Args:
-        target: The blocked item (plugin name, server name, image ref)
-        target_type: One of "plugin", "mcp_server", "base_image"
+        target: The blocked item (plugin name or server name)
+        target_type: One of "plugin", "mcp_server"
         ttl: Time-to-live for the exception (default 8h)
 
     Returns:
@@ -210,7 +209,7 @@ def format_block_message(
 
     Args:
         target: The blocked/denied item
-        target_type: One of "plugin", "mcp_server", "base_image"
+        target_type: One of "plugin", "mcp_server"
         block_type: "security" for blocks, "delegation" for denials
         blocked_by: Pattern that caused the block (for security blocks)
         reason: Reason for denial (for delegation denials)
@@ -259,6 +258,5 @@ def _format_target_type(target_type: str) -> str:
     type_map = {
         "plugin": "Plugin",
         "mcp_server": "MCP server",
-        "base_image": "Base image",
     }
     return type_map.get(target_type, target_type.replace("_", " ").title())

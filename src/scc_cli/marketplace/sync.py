@@ -22,16 +22,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from scc_cli.marketplace.adapter import translate_org_config
 from scc_cli.marketplace.managed import ManagedState, save_managed_state
 from scc_cli.marketplace.materialize import MaterializationError, materialize_marketplace
 from scc_cli.marketplace.normalize import matches_pattern
 from scc_cli.marketplace.render import check_conflicts, merge_settings, render_settings
 from scc_cli.marketplace.resolve import resolve_effective_config
-from scc_cli.marketplace.schema import (
-    MarketplaceSource,
-    OrganizationConfig,
-)
+from scc_cli.marketplace.schema import OrganizationConfig, normalize_org_config_data
 
 
 class SyncError(Exception):
@@ -110,10 +106,9 @@ def sync_marketplace_settings(
     warnings: list[str] = []
 
     # ── Step 1: Parse org config ─────────────────────────────────────────────
-    # Translate external format (JSON Schema) to internal format (Pydantic)
+    # Org config is already validated by JSON Schema before caching.
     try:
-        internal_data = translate_org_config(org_config_data)
-        org_config = OrganizationConfig.model_validate(internal_data)
+        org_config = OrganizationConfig.model_validate(normalize_org_config_data(org_config_data))
     except Exception as e:
         raise SyncError(f"Invalid org config: {e}") from e
 
@@ -121,36 +116,32 @@ def sync_marketplace_settings(
     if team_id is None:
         raise SyncError("team_id is required for marketplace sync")
 
-    # Use resolve_effective_config for federation support (T2a-24)
+    # Use resolve_effective_config for federation support
     # This handles both inline and federated teams uniformly
     effective_config = resolve_effective_config(org_config, team_id=team_id)
 
-    # Convert to Phase 1 format for backward compatibility
-    effective, effective_marketplaces = effective_config.to_phase1_format()
-
     # Check for blocked plugins that user has installed
     # First, check if org-enabled plugins were blocked
-    if effective.blocked:
+    if effective_config.blocked_plugins:
         existing = _load_existing_plugins(project_dir)
         conflict_warnings = check_conflicts(
             existing_plugins=existing,
             blocked_plugins=[
                 {"plugin_id": b.plugin_id, "reason": b.reason, "pattern": b.pattern}
-                for b in effective.blocked
+                for b in effective_config.blocked_plugins
             ],
         )
         warnings.extend(conflict_warnings)
 
     # Also check user's existing plugins against security.blocked_plugins patterns
     security = org_config.security
-    if security and security.blocked_plugins:
+    if security.blocked_plugins:
         existing = _load_existing_plugins(project_dir)
-        blocked_reason = security.blocked_reason or "Blocked by organization policy"
         for plugin in existing:
             for pattern in security.blocked_plugins:
                 if matches_pattern(plugin, pattern):
                     warnings.append(
-                        f"⚠️ Plugin '{plugin}' is blocked by team policy: {blocked_reason} "
+                        f"⚠️ Plugin '{plugin}' is blocked by organization policy "
                         f"(matched pattern: {pattern})"
                     )
                     break  # Only one warning per plugin
@@ -160,13 +151,13 @@ def sync_marketplace_settings(
     marketplaces_used = set()
 
     # Determine which marketplaces are needed
-    for plugin_ref in effective.enabled:
+    for plugin_ref in effective_config.enabled_plugins:
         if "@" in plugin_ref:
             marketplace_name = plugin_ref.split("@")[1]
             marketplaces_used.add(marketplace_name)
 
     # Also include any extra marketplaces from the effective result
-    for marketplace_name in effective.extra_marketplaces:
+    for marketplace_name in effective_config.extra_marketplaces:
         marketplaces_used.add(marketplace_name)
 
     # Materialize each marketplace
@@ -178,13 +169,9 @@ def sync_marketplace_settings(
             continue
 
         # Find source configuration from effective marketplaces (includes team sources for federated)
-        # This is the key change for T2a-24: effective_marketplaces comes from resolve_effective_config
-        source = effective_marketplaces.get(marketplace_name)
+        source = effective_config.marketplaces.get(marketplace_name)
         if source is None:
-            # Fallback to org config lookup for backwards compatibility
-            source = _find_marketplace_source(org_config, marketplace_name)
-        if source is None:
-            warnings.append(f"Marketplace '{marketplace_name}' not found in org config")
+            warnings.append(f"Marketplace '{marketplace_name}' not defined in effective config")
             continue
 
         try:
@@ -222,8 +209,8 @@ def sync_marketplace_settings(
 
     # ── Step 4: Render settings ──────────────────────────────────────────────
     effective_dict = {
-        "enabled": effective.enabled,
-        "extra_marketplaces": effective.extra_marketplaces,
+        "enabled": effective_config.enabled_plugins,
+        "extra_marketplaces": effective_config.extra_marketplaces,
     }
     # Pass path_prefix for container-only mode (absolute paths in container HOME)
     rendered = render_settings(effective_dict, materialized, path_prefix=container_path_prefix)
@@ -240,7 +227,7 @@ def sync_marketplace_settings(
 
     # ── Step 6: Prepare managed state ────────────────────────────────────────
     managed_state = ManagedState(
-        managed_plugins=list(effective.enabled),
+        managed_plugins=list(effective_config.enabled_plugins),
         managed_marketplaces=[m.get("relative_path", "") for m in materialized.values()],
         last_sync=datetime.now(timezone.utc),
         org_config_url=org_config_url,
@@ -271,7 +258,7 @@ def sync_marketplace_settings(
 
     return SyncResult(
         success=True,
-        plugins_enabled=list(effective.enabled),
+        plugins_enabled=list(effective_config.enabled_plugins),
         marketplaces_materialized=list(materialized.keys()),
         warnings=warnings,
         settings_path=settings_path if (not dry_run and write_to_workspace) else None,
@@ -294,17 +281,3 @@ def _load_existing_plugins(project_dir: Path) -> list[str]:
         return []
     except (json.JSONDecodeError, OSError):
         return []
-
-
-def _find_marketplace_source(
-    org_config: OrganizationConfig, marketplace_name: str
-) -> MarketplaceSource | None:
-    """Find marketplace source configuration by name."""
-    if org_config.marketplaces is None:
-        return None
-
-    for name, source in org_config.marketplaces.items():
-        if name == marketplace_name:
-            return source
-
-    return None

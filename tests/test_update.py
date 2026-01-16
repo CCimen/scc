@@ -546,7 +546,10 @@ class TestCheckOrgConfigUpdate:
         """200 response returns updated status and saves to cache."""
         user_config = {"organization_source": {"url": "https://example.com/config.json"}}
 
-        new_config = {"organization": {"name": "Test Org"}}
+        new_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+        }
 
         with patch("scc_cli.remote.load_from_cache", return_value=(None, None)):
             with patch("scc_cli.remote.resolve_auth", return_value=None):

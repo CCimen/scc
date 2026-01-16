@@ -16,10 +16,6 @@
             "*.untrusted.com",
             "localhost:*"
         ],
-        "blocked_base_images": [
-            "*:latest",
-            "*:dev"
-        ],
         "allow_stdio_mcp": false
     },
     "defaults": {
@@ -44,9 +40,6 @@
                 "backend-java",
                 "dotnet-sql",
                 "python-data"
-            ],
-            "allow_network_override": [
-                "corp-proxy-only"
             ]
         },
         "projects": {

@@ -19,6 +19,15 @@ if TYPE_CHECKING:
     pass
 
 
+def make_org_config_data(**overrides: dict) -> dict:
+    config = {
+        "schema_version": "1.0.0",
+        "organization": {"name": "Test Org", "id": "test-org"},
+    }
+    config.update(overrides)
+    return config
+
+
 class TestSyncError:
     """Tests for SyncError exception."""
 
@@ -113,10 +122,9 @@ class TestSyncMarketplaceSettingsValidation:
         """Should raise SyncError when team_id is None."""
         from scc_cli.marketplace.sync import SyncError, sync_marketplace_settings
 
-        valid_config = {
-            "schema_version": 1,
-            "name": "Test Org",
-        }
+        valid_config = make_org_config_data(
+            profiles={"test-team": {}},
+        )
 
         with pytest.raises(SyncError, match="team_id is required"):
             sync_marketplace_settings(
@@ -132,40 +140,32 @@ class TestSyncMarketplaceSettingsOrchestration:
     @pytest.fixture
     def minimal_org_config(self) -> dict:
         """Minimal valid org config."""
-        return {
-            "schema_version": 1,
-            "name": "Test Org",
-            "defaults": {
+        return make_org_config_data(
+            defaults={
                 "enabled_plugins": ["plugin-a@claude-plugins-official"],
             },
-            "profiles": {
-                "test-team": {
-                    "name": "Test Team",
-                },
+            profiles={
+                "test-team": {},
             },
-        }
+        )
 
     @pytest.fixture
     def org_config_with_marketplace(self) -> dict:
         """Org config with custom marketplace."""
-        return {
-            "schema_version": 1,
-            "name": "Test Org",
-            "marketplaces": {
+        return make_org_config_data(
+            marketplaces={
                 "internal": {
                     "source": "directory",
                     "path": "/path/to/plugins",
                 },
             },
-            "defaults": {
+            defaults={
                 "enabled_plugins": ["my-plugin@internal"],
             },
-            "profiles": {
-                "test-team": {
-                    "name": "Test Team",
-                },
+            profiles={
+                "test-team": {},
             },
-        }
+        )
 
     def test_computes_effective_plugins(self, tmp_path: Path, minimal_org_config: dict) -> None:
         """Should compute effective plugins for team."""
@@ -197,16 +197,14 @@ class TestSyncMarketplaceSettingsOrchestration:
         """Should warn when marketplace source is not found."""
         from scc_cli.marketplace.sync import sync_marketplace_settings
 
-        config = {
-            "schema_version": 1,
-            "name": "Test Org",
-            "defaults": {
+        config = make_org_config_data(
+            defaults={
                 "enabled_plugins": ["plugin@missing-marketplace"],
             },
-            "profiles": {
-                "test-team": {"name": "Test"},
+            profiles={
+                "test-team": {},
             },
-        }
+        )
 
         result = sync_marketplace_settings(
             project_dir=tmp_path,
@@ -381,14 +379,14 @@ class TestBlockedPluginWarnings:
         )
 
         config = {
-            "schema_version": 1,
-            "name": "Test Org",
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
             "security": {
                 "blocked_plugins": ["bad-plugin@*"],
-                "blocked_reason": "Security risk",
             },
+            "delegation": {"teams": {"allow_additional_plugins": ["*"]}},
             "profiles": {
-                "test-team": {"name": "Test"},
+                "test-team": {},
             },
         }
 
@@ -448,66 +446,6 @@ class TestLoadExistingPlugins:
         assert result == []
 
 
-class TestFindMarketplaceSource:
-    """Tests for _find_marketplace_source helper."""
-
-    def test_returns_none_when_no_marketplaces(self) -> None:
-        """Should return None when org config has no marketplaces."""
-        from scc_cli.marketplace.schema import OrganizationConfig
-        from scc_cli.marketplace.sync import _find_marketplace_source
-
-        config = OrganizationConfig.model_validate(
-            {
-                "schema_version": 1,
-                "name": "Test Org",
-            }
-        )
-
-        result = _find_marketplace_source(config, "any-marketplace")
-        assert result is None
-
-    def test_returns_none_when_not_found(self) -> None:
-        """Should return None when marketplace not found."""
-        from scc_cli.marketplace.schema import OrganizationConfig
-        from scc_cli.marketplace.sync import _find_marketplace_source
-
-        config = OrganizationConfig.model_validate(
-            {
-                "schema_version": 1,
-                "name": "Test Org",
-                "marketplaces": {
-                    "existing": {"source": "directory", "path": "/path"},
-                },
-            }
-        )
-
-        result = _find_marketplace_source(config, "missing")
-        assert result is None
-
-    def test_returns_source_when_found(self) -> None:
-        """Should return source when marketplace found."""
-        from scc_cli.marketplace.schema import (
-            MarketplaceSourceDirectory,
-            OrganizationConfig,
-        )
-        from scc_cli.marketplace.sync import _find_marketplace_source
-
-        config = OrganizationConfig.model_validate(
-            {
-                "schema_version": 1,
-                "name": "Test Org",
-                "marketplaces": {
-                    "internal": {"source": "directory", "path": "/path/to/plugins"},
-                },
-            }
-        )
-
-        result = _find_marketplace_source(config, "internal")
-        assert result is not None
-        assert isinstance(result, MarketplaceSourceDirectory)
-        assert result.path == "/path/to/plugins"
-
-
 class TestForceRefreshBehavior:
     """Tests for force_refresh parameter handling."""
 
@@ -533,19 +471,17 @@ class TestForceRefreshBehavior:
             plugins_available=["plugin"],
         )
 
-        config = {
-            "schema_version": 1,
-            "name": "Test Org",
-            "marketplaces": {
+        config = make_org_config_data(
+            marketplaces={
                 "internal": {"source": "directory", "path": "/path"},
             },
-            "defaults": {
+            defaults={
                 "enabled_plugins": ["plugin@internal"],
             },
-            "profiles": {
-                "test-team": {"name": "Test"},
+            profiles={
+                "test-team": {},
             },
-        }
+        )
 
         sync_marketplace_settings(
             project_dir=tmp_path,

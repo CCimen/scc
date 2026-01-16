@@ -3,16 +3,39 @@ Unit tests for marketplace schema models.
 
 Tests cover:
 - MarketplaceSource discriminated union (GitHub, Git, URL, Directory)
-- OrganizationConfig validation
-- TeamProfile with allowed_plugins null/array semantics
-- SecurityConfig with blocked patterns
-- DefaultsConfig with plugin lists
+- OrganizationConfig validation and federation
+- DefaultsConfig allowlist and defaults behavior
+- TeamProfile core fields and federation settings
+- SecurityConfig policy fields
 
 TDD: These tests are written BEFORE implementation.
 """
 
 import pytest
 from pydantic import ValidationError
+
+
+def make_org_config(**kwargs):
+    from scc_cli.marketplace.schema import OrganizationConfig, OrganizationInfo
+
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs):
+    from scc_cli.marketplace.schema import TeamProfile
+
+    return TeamProfile(**kwargs)
 
 
 class TestMarketplaceSourceGitHub:
@@ -338,55 +361,47 @@ class TestTeamProfile:
     """Tests for team profile model."""
 
     def test_minimal_team_profile(self) -> None:
-        """Team profile with only required name."""
-        from scc_cli.marketplace.schema import TeamProfile
-
-        profile = TeamProfile(name="Backend Team")
-        assert profile.name == "Backend Team"
+        """Team profile with default fields only."""
+        profile = make_team_profile()
         assert profile.description == ""
         assert profile.additional_plugins == []
-        assert profile.allowed_plugins is None  # null means allow all
+        assert profile.additional_mcp_servers == []
+        assert profile.network_policy is None
+        assert profile.session.timeout_hours is None
+        assert profile.session.auto_resume is None
+        assert profile.delegation is None
+        assert profile.config_source is None
+        assert profile.trust is None
 
-    def test_team_profile_with_all_fields(self) -> None:
-        """Team profile with all optional fields."""
-        from scc_cli.marketplace.schema import TeamProfile
-
-        profile = TeamProfile(
-            name="Security Team",
-            description="High-security environment with strict plugin allowlist",
-            additional_plugins=["security-scanner@internal"],
-            disabled_plugins=["*debug*"],
-            allowed_plugins=["security-scanner@internal", "code-review@internal"],
-            extra_marketplaces=["security-tools"],
+    def test_team_profile_with_fields(self) -> None:
+        """Team profile with optional overrides."""
+        from scc_cli.marketplace.schema import (
+            MCPServerConfig,
+            SessionConfig,
+            TeamDelegationConfig,
         )
-        assert profile.name == "Security Team"
-        assert profile.allowed_plugins is not None
-        assert len(profile.allowed_plugins) == 2
 
-    def test_allowed_plugins_null_means_allow_all(self) -> None:
-        """null allowed_plugins means no restrictions."""
-        from scc_cli.marketplace.schema import TeamProfile
-
-        profile = TeamProfile(name="Open Team", allowed_plugins=None)
-        assert profile.allowed_plugins is None
-
-    def test_allowed_plugins_empty_list_means_allow_none(self) -> None:
-        """Empty allowed_plugins list means block all additional."""
-        from scc_cli.marketplace.schema import TeamProfile
-
-        profile = TeamProfile(name="Locked Team", allowed_plugins=[])
-        assert profile.allowed_plugins == []
-
-    def test_allowed_plugins_wildcard_means_allow_all(self) -> None:
-        """Wildcard ["*"] means explicit unrestricted (allow all).
-
-        Semantic: ["*"] = explicit allow-all via fnmatch pattern.
-        Functionally equivalent to None but explicitly configured.
-        """
-        from scc_cli.marketplace.schema import TeamProfile
-
-        profile = TeamProfile(name="Open Team", allowed_plugins=["*"])
-        assert profile.allowed_plugins == ["*"]
+        profile = make_team_profile(
+            description="High-security environment",
+            additional_plugins=["security-scanner@internal"],
+            additional_mcp_servers=[
+                MCPServerConfig(
+                    name="audit",
+                    type="sse",
+                    url="https://mcp.example.com",
+                )
+            ],
+            network_policy="isolated",
+            session=SessionConfig(timeout_hours=4, auto_resume=False),
+            delegation=TeamDelegationConfig(allow_project_overrides=True),
+        )
+        assert profile.description == "High-security environment"
+        assert profile.additional_plugins == ["security-scanner@internal"]
+        assert profile.additional_mcp_servers[0].name == "audit"
+        assert profile.network_policy == "isolated"
+        assert profile.session.timeout_hours == 4
+        assert profile.delegation is not None
+        assert profile.delegation.allow_project_overrides is True
 
 
 class TestSecurityConfig:
@@ -398,21 +413,28 @@ class TestSecurityConfig:
 
         security = SecurityConfig()
         assert security.blocked_plugins == []
-        assert security.blocked_reason == "Blocked by organization policy"
-        assert security.allow_implicit_marketplaces is True
+        assert security.blocked_mcp_servers == []
+        assert security.allow_stdio_mcp is False
+        assert security.allowed_stdio_prefixes == []
+        assert security.safety_net is None
 
     def test_security_with_blocked_patterns(self) -> None:
-        """Security config with blocked plugin patterns."""
-        from scc_cli.marketplace.schema import SecurityConfig
+        """Security config with explicit policy fields."""
+        from scc_cli.marketplace.schema import SafetyNetConfig, SecurityConfig
 
         security = SecurityConfig(
             blocked_plugins=["risky-*@*", "*-deprecated@internal"],
-            blocked_reason="Security review pending - see ticket SEC-123",
-            allow_implicit_marketplaces=False,
+            blocked_mcp_servers=["internal-*"],
+            allow_stdio_mcp=True,
+            allowed_stdio_prefixes=["/usr/local/bin"],
+            safety_net=SafetyNetConfig(action="warn", block_reset_hard=False),
         )
         assert len(security.blocked_plugins) == 2
-        assert "SEC-123" in security.blocked_reason
-        assert security.allow_implicit_marketplaces is False
+        assert "internal-*" in security.blocked_mcp_servers
+        assert security.allow_stdio_mcp is True
+        assert security.allowed_stdio_prefixes == ["/usr/local/bin"]
+        assert security.safety_net is not None
+        assert security.safety_net.action == "warn"
 
 
 class TestOrganizationConfig:
@@ -420,14 +442,14 @@ class TestOrganizationConfig:
 
     def test_minimal_org_config(self) -> None:
         """Minimal valid org config with required fields only."""
-        from scc_cli.marketplace.schema import OrganizationConfig
+        from scc_cli.marketplace.schema import OrganizationInfo
 
-        config = OrganizationConfig(
-            name="Sundsvall Municipality",
-            schema_version=1,
+        config = make_org_config(
+            organization=OrganizationInfo(name="Sundsvall Municipality", id="sundsvall")
         )
-        assert config.name == "Sundsvall Municipality"
-        assert config.schema_version == 1
+        assert config.organization.name == "Sundsvall Municipality"
+        assert config.organization.id == "sundsvall"
+        assert config.schema_version == "1.0.0"
         assert config.marketplaces == {}
         assert config.profiles == {}
 
@@ -436,14 +458,13 @@ class TestOrganizationConfig:
         from scc_cli.marketplace.schema import (
             DefaultsConfig,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
+            OrganizationInfo,
             SecurityConfig,
             TeamProfile,
         )
 
-        config = OrganizationConfig(
-            name="Sundsvall Municipality",
-            schema_version=1,
+        config = make_org_config(
+            organization=OrganizationInfo(name="Sundsvall Municipality", id="sundsvall"),
             marketplaces={
                 "internal": MarketplaceSourceGitHub(
                     source="github",
@@ -456,7 +477,7 @@ class TestOrganizationConfig:
             ),
             profiles={
                 "backend": TeamProfile(
-                    name="Backend Team",
+                    description="Backend Team",
                     additional_plugins=["api-tools@internal"],
                 ),
             },
@@ -473,8 +494,11 @@ class TestOrganizationConfig:
         from scc_cli.marketplace.schema import OrganizationConfig
 
         data = {
-            "name": "Test Org",
-            "schema_version": 1,
+            "schema_version": "1.0.0",
+            "organization": {
+                "name": "Test Org",
+                "id": "test-org",
+            },
             "marketplaces": {
                 "internal-plugins": {
                     "source": "github",
@@ -487,42 +511,40 @@ class TestOrganizationConfig:
             },
             "profiles": {
                 "backend": {
-                    "name": "Backend Team",
+                    "description": "Backend Team",
                     "additional_plugins": ["api-tools@internal-plugins"],
                 }
             },
         }
         config = OrganizationConfig.model_validate(data)
-        assert config.name == "Test Org"
+        assert config.organization.name == "Test Org"
         assert "internal-plugins" in config.marketplaces
         assert config.marketplaces["internal-plugins"].source == "github"
 
     def test_invalid_schema_version(self) -> None:
-        """Schema version must be 1."""
-        from scc_cli.marketplace.schema import OrganizationConfig
+        """Schema version must match current schema."""
+        from scc_cli.marketplace.schema import OrganizationConfig, OrganizationInfo
 
         with pytest.raises(ValidationError) as exc_info:
             OrganizationConfig(
-                name="Test",
-                schema_version=2,  # Not supported yet
+                schema_version="2.0.0",
+                organization=OrganizationInfo(name="Test", id="test"),
             )
         assert "schema_version" in str(exc_info.value)
 
     def test_org_config_to_dict(self) -> None:
         """Org config can be serialized back to dict."""
-        from scc_cli.marketplace.schema import OrganizationConfig
+        from scc_cli.marketplace.schema import OrganizationInfo
 
-        config = OrganizationConfig(
-            name="Test",
-            schema_version=1,
-        )
+        config = make_org_config(organization=OrganizationInfo(name="Test", id="test"))
         data = config.model_dump()
-        assert data["name"] == "Test"
-        assert data["schema_version"] == 1
+        assert data["organization"]["name"] == "Test"
+        assert data["organization"]["id"] == "test"
+        assert data["schema_version"] == "1.0.0"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 2: Federation Models (ConfigSource, TrustGrant, TeamConfig)
+# Federation Models (ConfigSource, TrustGrant, TeamConfig)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -718,8 +740,8 @@ class TestTeamConfig:
         """Minimal valid team config."""
         from scc_cli.marketplace.schema import TeamConfig
 
-        config = TeamConfig(schema_version=1)
-        assert config.schema_version == 1
+        config = TeamConfig(schema_version="1.0.0")
+        assert config.schema_version == "1.0.0"
         assert config.enabled_plugins == []
         assert config.disabled_plugins == []
         assert config.marketplaces == {}
@@ -729,7 +751,7 @@ class TestTeamConfig:
         from scc_cli.marketplace.schema import TeamConfig
 
         config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["custom-tool@team-plugins"],
             disabled_plugins=["debug-*"],
         )
@@ -744,7 +766,7 @@ class TestTeamConfig:
         )
 
         config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "team-plugins": MarketplaceSourceGitHub(
                     source="github",
@@ -762,7 +784,7 @@ class TestTeamConfig:
         from scc_cli.marketplace.schema import TeamConfig
 
         data = {
-            "schema_version": 1,
+            "schema_version": "1.0.0",
             "enabled_plugins": ["tool-a@team-mp"],
             "marketplaces": {
                 "team-mp": {
@@ -773,15 +795,15 @@ class TestTeamConfig:
             },
         }
         config = TeamConfig.model_validate(data)
-        assert config.schema_version == 1
+        assert config.schema_version == "1.0.0"
         assert "team-mp" in config.marketplaces
 
     def test_team_config_invalid_schema_version(self) -> None:
-        """Team config schema version must be 1."""
+        """Team config schema version must match current schema."""
         from scc_cli.marketplace.schema import TeamConfig
 
         with pytest.raises(ValidationError):
-            TeamConfig(schema_version=2)
+            TeamConfig(schema_version="2.0.0")
 
 
 class TestTeamProfileWithFederation:
@@ -795,7 +817,6 @@ class TestTeamProfileWithFederation:
         )
 
         profile = TeamProfile(
-            name="Backend Team",
             config_source=ConfigSourceGitHub(
                 source="github",
                 owner="sundsvall-backend",
@@ -810,7 +831,6 @@ class TestTeamProfileWithFederation:
         from scc_cli.marketplace.schema import TeamProfile, TrustGrant
 
         profile = TeamProfile(
-            name="Backend Team",
             trust=TrustGrant(
                 inherit_org_marketplaces=True,
                 allow_additional_marketplaces=True,
@@ -829,7 +849,6 @@ class TestTeamProfileWithFederation:
         )
 
         profile = TeamProfile(
-            name="Backend Team",
             description="Team manages own config with org oversight",
             config_source=ConfigSourceGitHub(
                 source="github",
@@ -846,14 +865,13 @@ class TestTeamProfileWithFederation:
         assert profile.trust is not None
 
     def test_team_profile_inline_without_federation(self) -> None:
-        """TeamProfile without config_source uses inline config (Phase 1)."""
+        """TeamProfile without config_source uses inline config."""
         from scc_cli.marketplace.schema import TeamProfile
 
         profile = TeamProfile(
-            name="Simple Team",
+            description="Simple Team",
             additional_plugins=["tool@internal"],
         )
-        # No config_source = inline/Phase 1 mode
         assert profile.config_source is None
         assert profile.trust is None
 
@@ -861,17 +879,15 @@ class TestTeamProfileWithFederation:
         """OrganizationConfig with a federated team profile."""
         from scc_cli.marketplace.schema import (
             ConfigSourceGitHub,
-            OrganizationConfig,
+            OrganizationInfo,
             TeamProfile,
             TrustGrant,
         )
 
-        config = OrganizationConfig(
-            name="Sundsvall Municipality",
-            schema_version=1,
+        config = make_org_config(
+            organization=OrganizationInfo(name="Sundsvall Municipality", id="sundsvall"),
             profiles={
                 "backend": TeamProfile(
-                    name="Backend Team",
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="sundsvall-backend",

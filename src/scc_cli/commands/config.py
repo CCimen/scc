@@ -450,41 +450,10 @@ def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:
         console.print(
             f"  [red]✗[/red] [bold]{item.item}[/bold] [dim](blocked by pattern '{item.blocked_by}' from {item.source})[/dim]"
         )
-        # Infer target type from source or pattern
-        target_type = _infer_target_type(item.item, item.source)
-        cmd = generate_policy_exception_command(item.item, target_type)
+        cmd = generate_policy_exception_command(item.item, item.target_type)
         console.print("      [dim]To request exception (requires PR):[/dim]")
         console.print(f"      [cyan]{cmd}[/cyan]")
     console.print()
-
-
-def _infer_target_type(item: str, source: str) -> str:
-    """Infer target type from item name or source context.
-
-    Args:
-        item: The item name (plugin, server, image)
-        source: The source context (e.g., "org.security")
-
-    Returns:
-        One of "plugin", "mcp_server", or "base_image"
-    """
-    # Check for common patterns
-    item_lower = item.lower()
-
-    # Image patterns (contains : or @ for tags/digests, or common registries)
-    if (
-        ":" in item
-        or "@" in item
-        or any(reg in item_lower for reg in ["docker", "ghcr.io", "registry", ".io/", ".com/"])
-    ):
-        return "base_image"
-
-    # MCP server patterns (often have -api, -server, -mcp suffix or look like URLs)
-    if any(pattern in item_lower for pattern in ["-api", "-server", "-mcp", "/"]):
-        return "mcp_server"
-
-    # Default to plugin (most common case for blocked items)
-    return "plugin"
 
 
 def _render_denied_additions(denied_additions: list[profiles.DelegationDenied]) -> None:
@@ -496,9 +465,7 @@ def _render_denied_additions(denied_additions: list[profiles.DelegationDenied]) 
         console.print(
             f"  [yellow]⚠[/yellow] [bold]{denied.item}[/bold] [dim](requested by {denied.requested_by}: {denied.reason})[/dim]"
         )
-        # Infer target type from item name
-        target_type = _infer_target_type(denied.item, denied.requested_by)
-        cmd = generate_unblock_command(denied.item, target_type)
+        cmd = generate_unblock_command(denied.item, denied.target_type)
         console.print("      [dim]To unblock locally:[/dim]")
         console.print(f"      [cyan]{cmd}[/cyan]")
     console.print()
@@ -557,8 +524,6 @@ def _render_active_exceptions() -> int:
             targets.extend(f"plugin:{p}" for p in exc.allow.plugins)
         if exc.allow.mcp_servers:
             targets.extend(f"mcp:{s}" for s in exc.allow.mcp_servers)
-        if exc.allow.base_images:
-            targets.extend(f"image:{i}" for i in exc.allow.base_images)
 
         target_str = ", ".join(targets) if targets else "none"
 

@@ -78,9 +78,18 @@ def org_config_with_profiles() -> dict:
             "id": "acme-corp",
         },
         "profiles": {
-            "backend": {"description": "Backend team"},
-            "frontend": {"description": "Frontend team"},
-            "platform": {"description": "Platform team"},
+            "backend": {
+                # No config_source = inline team
+                "description": "Backend team (inline)",
+            },
+            "frontend": {
+                "description": "Frontend team (federated)",
+                "config_source": {
+                    "source": "github",
+                    "owner": "acme",
+                    "repo": "frontend-config",
+                },
+            },
         },
     }
 
@@ -708,7 +717,6 @@ class TestTeamSwitchFederated:
     def org_config_with_federated_team(self) -> dict:
         """Org config with a federated team (has config_source)."""
         return {
-            "name": "acme-corp",
             "schema_version": "1.0.0",
             "organization": {
                 "name": "acme-corp",
@@ -716,18 +724,15 @@ class TestTeamSwitchFederated:
             },
             "profiles": {
                 "backend": {
-                    "name": "backend",
                     "description": "Backend team (inline)",
                     # No config_source = inline team
                 },
                 "frontend": {
-                    "name": "frontend",
                     "description": "Frontend team (federated)",
                     "config_source": {
-                        "github": {
-                            "owner": "acme",
-                            "repo": "frontend-config",
-                        }
+                        "source": "github",
+                        "owner": "acme",
+                        "repo": "frontend-config",
                     },
                     "trust": {
                         "inherit_org_marketplaces": True,
@@ -949,19 +954,20 @@ class TestTeamInfoFederated:
     def org_config_with_federated_team(self) -> dict:
         """Org config with a federated team (has config_source)."""
         return {
-            "name": "acme-corp",
             "schema_version": "1.0.0",
             "organization": {"name": "acme-corp", "id": "acme-corp"},
             "profiles": {
                 "backend": {
-                    "name": "backend",
                     "description": "Backend team (inline)",
                     # No config_source = inline team
                 },
                 "frontend": {
-                    "name": "frontend",
                     "description": "Frontend team (federated)",
-                    "config_source": {"github": {"owner": "acme", "repo": "frontend-config"}},
+                    "config_source": {
+                        "source": "github",
+                        "owner": "acme",
+                        "repo": "frontend-config",
+                    },
                     "trust": {
                         "inherit_org_marketplaces": True,
                         "allow_additional_marketplaces": True,

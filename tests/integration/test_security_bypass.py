@@ -13,7 +13,7 @@ These tests verify that security policies cannot be bypassed through:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -21,16 +21,40 @@ from scc_cli.marketplace.compute import compute_effective_plugins
 from scc_cli.marketplace.normalize import matches_any_pattern, matches_pattern
 from scc_cli.marketplace.schema import (
     DefaultsConfig,
+    DelegationConfig,
+    DelegationTeamsConfig,
     MarketplaceSourceDirectory,
     MarketplaceSourceGitHub,
     OrganizationConfig,
+    OrganizationInfo,
     SecurityConfig,
     TeamProfile,
 )
-from scc_cli.marketplace.trust import (
-    TrustViolationError,
-    validate_marketplace_source,
-)
+from scc_cli.marketplace.trust import TrustViolationError, validate_marketplace_source
+
+
+def make_org_config(**kwargs: Any) -> OrganizationConfig:
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs: Any) -> TeamProfile:
+    return TeamProfile(**kwargs)
+
+
+def allow_all_delegation() -> DelegationConfig:
+    return DelegationConfig(
+        teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+    )
+
 
 if TYPE_CHECKING:
     pass
@@ -82,9 +106,7 @@ class TestCaseInsensitivePatternMatching:
 
     def test_blocked_plugins_blocks_case_variations(self) -> None:
         """security.blocked_plugins must block all case variations of a pattern."""
-        org_config = OrganizationConfig(
-            name="Security Test Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(
                     source="github",
@@ -95,9 +117,9 @@ class TestCaseInsensitivePatternMatching:
             defaults=DefaultsConfig(
                 enabled_plugins=[],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "test-team": TeamProfile(
-                    name="Test Team",
+                "test-team": make_team_profile(
                     additional_plugins=[
                         "MALICIOUS-tool@shared",  # UPPERCASE
                         "Malicious-Exploit@shared",  # Mixed case
@@ -108,7 +130,6 @@ class TestCaseInsensitivePatternMatching:
             },
             security=SecurityConfig(
                 blocked_plugins=["malicious-*"],  # lowercase pattern
-                blocked_reason="Blocked for security",
             ),
         )
 
@@ -134,9 +155,7 @@ class TestCaseInsensitivePatternMatching:
 
     def test_blocked_plugins_with_uppercase_pattern(self) -> None:
         """UPPERCASE patterns in blocked_plugins must match lowercase plugins."""
-        org_config = OrganizationConfig(
-            name="Uppercase Pattern Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(
                     source="github",
@@ -145,9 +164,9 @@ class TestCaseInsensitivePatternMatching:
                 ),
             },
             defaults=DefaultsConfig(enabled_plugins=[]),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "dangerous-tool@shared",
                         "DANGEROUS-exploit@shared",
@@ -156,7 +175,6 @@ class TestCaseInsensitivePatternMatching:
             },
             security=SecurityConfig(
                 blocked_plugins=["DANGEROUS-*"],  # UPPERCASE pattern
-                blocked_reason="Security policy",
             ),
         )
 
@@ -193,9 +211,7 @@ class TestSecurityBlockingIntegration:
 
     def test_security_blocks_override_team_additions(self) -> None:
         """Security blocked_plugins must block even team-added plugins."""
-        org_config = OrganizationConfig(
-            name="Strict Security Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "internal": MarketplaceSourceGitHub(
                     source="github",
@@ -206,9 +222,9 @@ class TestSecurityBlockingIntegration:
             defaults=DefaultsConfig(
                 enabled_plugins=["approved-tool@internal"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "forbidden-tool@internal",  # Will be blocked
                         "allowed-tool@internal",
@@ -217,7 +233,6 @@ class TestSecurityBlockingIntegration:
             },
             security=SecurityConfig(
                 blocked_plugins=["forbidden-*"],
-                blocked_reason="Policy violation",
             ),
         )
 
@@ -233,9 +248,7 @@ class TestSecurityBlockingIntegration:
 
     def test_security_blocks_default_plugins(self) -> None:
         """Security can block even default-enabled plugins."""
-        org_config = OrganizationConfig(
-            name="Retroactive Block Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(
                     source="github",
@@ -250,11 +263,10 @@ class TestSecurityBlockingIntegration:
                 ],
             ),
             profiles={
-                "team": TeamProfile(name="Team"),
+                "team": make_team_profile(),
             },
             security=SecurityConfig(
                 blocked_plugins=["legacy-*"],
-                blocked_reason="Deprecated and insecure",
             ),
         )
 

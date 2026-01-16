@@ -4,7 +4,7 @@ TDD approach: Write tests first, implement to make them pass.
 
 Tests cover:
 - BlockReason enum (SECURITY vs DELEGATION)
-- AllowTargets dataclass (plugins, mcp_servers, base_images)
+- AllowTargets dataclass (plugins, mcp_servers)
 - Exception dataclass with all fields
 - ExceptionFile envelope with schema versioning
 - JSON serialization/deserialization with stable ordering
@@ -82,7 +82,6 @@ class TestAllowTargets:
         targets = AllowTargets()
         assert targets.plugins == []
         assert targets.mcp_servers == []
-        assert targets.base_images == []
 
     def test_with_plugins(self):
         """AllowTargets stores plugin IDs."""
@@ -91,7 +90,6 @@ class TestAllowTargets:
         targets = AllowTargets(plugins=["plugin-a", "plugin-b"])
         assert targets.plugins == ["plugin-a", "plugin-b"]
         assert targets.mcp_servers == []
-        assert targets.base_images == []
 
     def test_with_mcp_servers(self):
         """AllowTargets stores MCP server names."""
@@ -100,13 +98,6 @@ class TestAllowTargets:
         targets = AllowTargets(mcp_servers=["jira-api", "confluence"])
         assert targets.mcp_servers == ["jira-api", "confluence"]
 
-    def test_with_base_images(self):
-        """AllowTargets stores base image refs/patterns."""
-        from scc_cli.models.exceptions import AllowTargets
-
-        targets = AllowTargets(base_images=["nginx:*", "python:3.11"])
-        assert targets.base_images == ["nginx:*", "python:3.11"]
-
     def test_with_all_targets(self):
         """AllowTargets stores all target types."""
         from scc_cli.models.exceptions import AllowTargets
@@ -114,11 +105,9 @@ class TestAllowTargets:
         targets = AllowTargets(
             plugins=["plugin-a"],
             mcp_servers=["jira-api"],
-            base_images=["nginx:1.25"],
         )
         assert targets.plugins == ["plugin-a"]
         assert targets.mcp_servers == ["jira-api"]
-        assert targets.base_images == ["nginx:1.25"]
 
     def test_is_empty_true(self):
         """is_empty returns True for empty targets."""
@@ -138,29 +127,27 @@ class TestAllowTargets:
         """AllowTargets serializes to dict."""
         from scc_cli.models.exceptions import AllowTargets
 
-        targets = AllowTargets(plugins=["a"], mcp_servers=["b"], base_images=["c"])
+        targets = AllowTargets(plugins=["a"], mcp_servers=["b"])
         d = targets.to_dict()
-        assert d == {"plugins": ["a"], "mcp_servers": ["b"], "base_images": ["c"]}
+        assert d == {"plugins": ["a"], "mcp_servers": ["b"]}
 
     def test_from_dict(self):
         """AllowTargets deserializes from dict."""
         from scc_cli.models.exceptions import AllowTargets
 
-        d = {"plugins": ["a"], "mcp_servers": ["b"], "base_images": ["c"]}
+        d = {"plugins": ["a"], "mcp_servers": ["b"]}
         targets = AllowTargets.from_dict(d)
         assert targets.plugins == ["a"]
         assert targets.mcp_servers == ["b"]
-        assert targets.base_images == ["c"]
 
     def test_from_dict_missing_keys(self):
         """AllowTargets handles missing keys gracefully."""
         from scc_cli.models.exceptions import AllowTargets
 
-        d = {"plugins": ["a"]}  # Missing mcp_servers and base_images
+        d = {"plugins": ["a"]}  # Missing mcp_servers
         targets = AllowTargets.from_dict(d)
         assert targets.plugins == ["a"]
         assert targets.mcp_servers == []
-        assert targets.base_images == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -307,7 +294,7 @@ class TestException:
         assert d["id"] == "local-20251221-a3f2"
         assert d["reason"] == "Testing"
         assert d["scope"] == "local"
-        assert d["allow"] == {"plugins": [], "mcp_servers": ["jira-api"], "base_images": []}
+        assert d["allow"] == {"plugins": [], "mcp_servers": ["jira-api"]}
         assert d["created_by"] == "dev@example.com"
 
     def test_from_dict(self):

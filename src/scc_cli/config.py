@@ -8,12 +8,10 @@ Config structure:
 - ~/.config/scc/config.json - User preferences and org source URL
 - ~/.cache/scc/ - Cache directory (regenerable)
 
-Migrate from ~/.config/scc-cli/ to ~/.config/scc/ automatically when needed.
 """
 
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 from datetime import datetime
@@ -34,9 +32,6 @@ SESSIONS_FILE = CONFIG_DIR / "sessions.json"
 
 # Cache directory (regenerable, safe to delete)
 CACHE_DIR = Path.home() / ".cache" / "scc"
-
-# Legacy config directory (for migration)
-LEGACY_CONFIG_DIR = Path.home() / ".config" / "scc-cli"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -81,56 +76,6 @@ def get_config_file() -> Path:
 def get_cache_dir() -> Path:
     """Get the cache directory path."""
     return CACHE_DIR
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Migration from scc-cli to scc
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def migrate_config_if_needed() -> bool:
-    """Migrate from legacy scc-cli directory to scc.
-
-    Uses atomic swap pattern for safety:
-    1. Create new structure in temp location
-    2. Copy & transform
-    3. Atomic rename (commit point)
-    4. Preserve old directory (don't delete)
-
-    Returns:
-        True if migration was performed, False if already migrated or fresh install
-    """
-    # Already migrated - new config exists
-    if CONFIG_DIR.exists():
-        return False
-
-    # Fresh install - no legacy config
-    if not LEGACY_CONFIG_DIR.exists():
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        return False
-
-    # Create temp directory for atomic operation
-    temp_dir = CONFIG_DIR.with_suffix(".tmp")
-
-    try:
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy all files from old to temp
-        for item in LEGACY_CONFIG_DIR.iterdir():
-            if item.is_file():
-                shutil.copy2(item, temp_dir / item.name)
-            elif item.is_dir():
-                shutil.copytree(item, temp_dir / item.name)
-
-        # Atomic rename (commit point)
-        temp_dir.rename(CONFIG_DIR)
-
-        return True
-
-    except Exception:
-        # Cleanup temp on failure, preserve old
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        raise
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -368,12 +313,6 @@ def mark_onboarding_seen() -> None:
 
 def init_config(console: Console) -> None:
     """Initialize configuration directory and files."""
-    # Run migration if needed
-    migrated = migrate_config_if_needed()
-    if migrated:
-        console.print(f"[yellow]⚠️  Migrated config from {LEGACY_CONFIG_DIR} to {CONFIG_DIR}[/]")
-        console.print("[dim]Old directory preserved. You may delete it manually.[/]")
-
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     if not CONFIG_FILE.exists():
@@ -454,66 +393,8 @@ def get_recent_workspaces(limit: int = 10) -> list[Any]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Backward Compatibility Aliases
+# Organization Config
 # ═══════════════════════════════════════════════════════════════════════════════
-
-# These are kept for backward compatibility with existing code
-# that imports from config module
-
-
-def load_config() -> dict[str, Any]:
-    """Alias for load_user_config (backward compatibility)."""
-    return load_user_config()
-
-
-def save_config(config: dict[str, Any]) -> None:
-    """Alias for save_user_config (backward compatibility)."""
-    save_user_config(config)
-
-
-def get_team_config(team: str) -> dict[str, Any] | None:
-    """Get configuration for a specific team (stub for compatibility).
-
-    Note: Team config now comes from remote org config, not local config.
-    This function is kept for backward compatibility but returns None.
-    Use profiles.py for team/profile resolution.
-    """
-    return None
-
-
-def list_available_teams() -> list[str]:
-    """List available team profile names (stub for compatibility).
-
-    Note: Teams now come from remote org config, not local config.
-    This function is kept for backward compatibility but returns empty list.
-    Use profiles.py for team/profile listing.
-    """
-    return []
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Legacy aliases (deprecated - will be removed in future versions)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# These constants are kept for backward compatibility only
-INTERNAL_DEFAULTS = USER_CONFIG_DEFAULTS
-DEFAULT_CONFIG = USER_CONFIG_DEFAULTS.copy()
-
-
-def load_org_config() -> dict[str, Any] | None:
-    """Deprecated: Org config is now fetched remotely.
-
-    Use remote.load_org_config() instead.
-    """
-    return None
-
-
-def save_org_config(org_config: dict[str, Any]) -> None:
-    """Deprecated: Org config is now remote.
-
-    This function is a no-op for backward compatibility.
-    """
-    pass
 
 
 def is_organization_configured() -> bool:
@@ -524,15 +405,6 @@ def is_organization_configured() -> bool:
     config = load_user_config()
     org_source = config.get("organization_source")
     return bool(org_source and org_source.get("url"))
-
-
-def get_organization_name() -> str | None:
-    """Get organization name (deprecated).
-
-    Note: Organization name now comes from remote org config.
-    Returns None - use remote.load_org_config() instead.
-    """
-    return None
 
 
 def load_cached_org_config() -> dict[Any, Any] | None:
@@ -554,11 +426,6 @@ def load_cached_org_config() -> dict[Any, Any] | None:
         return cast(dict[Any, Any], json.loads(content))
     except (json.JSONDecodeError, OSError):
         return None
-
-
-def load_teams_config() -> dict[str, Any]:
-    """Alias for load_user_config (backward compatibility)."""
-    return load_user_config()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

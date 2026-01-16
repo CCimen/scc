@@ -1,8 +1,8 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://scc-cli.dev/schemas/team-config.v1.json",
-    "title": "SCC Team Config v1",
-    "description": "Schema for external team configuration files (Phase 2: Federated Team Configs)",
+    "title": "SCC Team Config",
+    "description": "Schema for external team configuration files (federated teams)",
     "type": "object",
     "properties": {
         "$schema": {
@@ -10,9 +10,9 @@
             "description": "JSON Schema reference URL"
         },
         "schema_version": {
-            "type": "integer",
-            "const": 1,
-            "description": "Schema version (must be 1)"
+            "type": "string",
+            "const": "1.0.0",
+            "description": "Schema version (must be 1.0.0)"
         },
         "enabled_plugins": {
             "type": "array",

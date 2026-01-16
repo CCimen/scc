@@ -57,7 +57,7 @@ class TestOrgValidate:
         """validate should succeed for valid config file."""
         from scc_cli.commands.org import org_validate_cmd
 
-        # Create a minimal valid config (matches v1 schema requirements)
+        # Create a minimal valid config (matches schema requirements)
         config_file = tmp_path / "org.json"
         config_file.write_text(
             json.dumps(
@@ -69,7 +69,6 @@ class TestOrgValidate:
             try:
                 org_validate_cmd(
                     source=str(config_file),
-                    schema_version="v1",
                     json_output=False,
                     pretty=False,
                 )
@@ -85,7 +84,7 @@ class TestOrgValidate:
         config_file.write_text(
             json.dumps(
                 {
-                    "schema_version": "v1"
+                    "schema_version": "1.0.0"
                     # Missing organization field
                 }
             )
@@ -95,7 +94,6 @@ class TestOrgValidate:
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source=str(config_file),
-                    schema_version="v1",
                     json_output=False,
                     pretty=False,
                 )
@@ -115,7 +113,6 @@ class TestOrgValidate:
         try:
             org_validate_cmd(
                 source=str(config_file),
-                schema_version="v1",
                 json_output=True,
                 pretty=False,
             )
@@ -136,7 +133,7 @@ class TestOrgValidate:
         config_file.write_text(
             json.dumps(
                 {
-                    "schema_version": "v1"
+                    "schema_version": "1.0.0"
                     # Missing organization
                 }
             )
@@ -145,7 +142,6 @@ class TestOrgValidate:
         try:
             org_validate_cmd(
                 source=str(config_file),
-                schema_version="v1",
                 json_output=True,
                 pretty=False,
             )
@@ -166,7 +162,6 @@ class TestOrgValidate:
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source="/nonexistent/path/config.json",
-                    schema_version="v1",
                     json_output=False,
                     pretty=False,
                 )
@@ -183,7 +178,6 @@ class TestOrgValidate:
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 org_validate_cmd(
                     source=str(config_file),
-                    schema_version="v1",
                     json_output=False,
                     pretty=False,
                 )
@@ -204,7 +198,6 @@ class TestOrgSchema:
 
         try:
             org_schema_cmd(
-                schema_version="v1",
                 json_output=False,
                 pretty=False,
             )
@@ -222,7 +215,6 @@ class TestOrgSchema:
 
         try:
             org_schema_cmd(
-                schema_version="v1",
                 json_output=True,
                 pretty=False,
             )
@@ -234,19 +226,6 @@ class TestOrgSchema:
         assert output["kind"] == "OrgSchema"
         assert output["apiVersion"] == "scc.cli/v1"
         assert "schema" in output["data"]
-
-    def test_schema_invalid_version(self) -> None:
-        """schema with invalid version should fail."""
-        from scc_cli.commands.org import org_schema_cmd
-
-        with patch("scc_cli.commands.org.schema_cmd.console"):
-            with pytest.raises(click.exceptions.Exit) as exc_info:
-                org_schema_cmd(
-                    schema_version="v99",
-                    json_output=False,
-                    pretty=False,
-                )
-            assert exc_info.value.exit_code == 3  # EXIT_CONFIG
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -264,10 +243,11 @@ class TestSemanticValidation:
         # With dict-based schema, duplicate keys are impossible
         # This test verifies the function handles dict profiles correctly
         config = {
-            "organization": {"name": "Test"},
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test", "id": "test"},
             "profiles": {
-                "backend": {"plugins": []},
-                "frontend": {"plugins": []},
+                "backend": {"additional_plugins": []},
+                "frontend": {"additional_plugins": []},
             },
         }
 
@@ -280,12 +260,14 @@ class TestSemanticValidation:
 
         # Modern schema: profiles at TOP LEVEL as dict
         config = {
+            "schema_version": "1.0.0",
             "organization": {
                 "name": "Test",
+                "id": "test",
                 "default_profile": "nonexistent",
             },
             "profiles": {
-                "backend": {"plugins": []},
+                "backend": {"additional_plugins": []},
             },
         }
 
@@ -298,13 +280,15 @@ class TestSemanticValidation:
 
         # Modern schema: profiles at TOP LEVEL as dict
         config = {
+            "schema_version": "1.0.0",
             "organization": {
                 "name": "Test",
+                "id": "test",
                 "default_profile": "backend",
             },
             "profiles": {
-                "backend": {"plugins": []},
-                "frontend": {"plugins": []},
+                "backend": {"additional_plugins": []},
+                "frontend": {"additional_plugins": []},
             },
         }
 
@@ -339,16 +323,16 @@ class TestBuildValidationData:
     def test_builds_correct_structure_valid(self) -> None:
         """build_validation_data should return correct structure for valid config."""
         from scc_cli.commands.org import build_validation_data
+        from scc_cli.core.constants import CURRENT_SCHEMA_VERSION
 
         result = build_validation_data(
             source="/path/to/config.json",
             schema_errors=[],
             semantic_errors=[],
-            schema_version="v1",
         )
 
         assert result["source"] == "/path/to/config.json"
-        assert result["schema_version"] == "v1"
+        assert result["schema_version"] == CURRENT_SCHEMA_VERSION
         assert result["valid"] is True
         assert result["schema_errors"] == []
         assert result["semantic_errors"] == []
@@ -356,14 +340,15 @@ class TestBuildValidationData:
     def test_builds_correct_structure_invalid(self) -> None:
         """build_validation_data should return correct structure for invalid config."""
         from scc_cli.commands.org import build_validation_data
+        from scc_cli.core.constants import CURRENT_SCHEMA_VERSION
 
         result = build_validation_data(
             source="/path/to/config.json",
             schema_errors=["Missing required field: organization"],
             semantic_errors=["Duplicate profile name: backend"],
-            schema_version="v1",
         )
 
+        assert result["schema_version"] == CURRENT_SCHEMA_VERSION
         assert result["valid"] is False
         assert len(result["schema_errors"]) == 1
         assert len(result["semantic_errors"]) == 1

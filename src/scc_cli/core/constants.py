@@ -93,9 +93,5 @@ def _get_version() -> str:
 
 CLI_VERSION = _get_version()
 
-# Schema versions this CLI can understand
-# v1: Full-featured format with delegation, security policies, marketplace
-SUPPORTED_SCHEMA_VERSIONS = ("v1",)
-
 # Current schema version used for validation
 CURRENT_SCHEMA_VERSION = "1.0.0"

@@ -23,7 +23,9 @@ class TestPromptOrgUrl:
     def test_accepts_valid_https_url(self):
         """Should accept valid HTTPS URL."""
         mock_console = MagicMock()
-        with patch("scc_cli.setup.Prompt.ask", return_value="https://example.org/config.json"):
+        with patch(
+            "scc_cli.setup.prompt_with_layout", return_value="https://example.org/config.json"
+        ):
             result = setup.prompt_org_url(mock_console)
         assert result == "https://example.org/config.json"
 
@@ -31,7 +33,7 @@ class TestPromptOrgUrl:
         """Should reject HTTP URL and prompt again."""
         mock_console = MagicMock()
         with patch(
-            "scc_cli.setup.Prompt.ask",
+            "scc_cli.setup.prompt_with_layout",
             side_effect=["http://example.org/config.json", "https://example.org/config.json"],
         ):
             result = setup.prompt_org_url(mock_console)
@@ -44,7 +46,7 @@ class TestPromptOrgUrl:
     def test_returns_false_for_standalone(self):
         """Should return False when user chooses standalone mode (choice 2)."""
         mock_console = MagicMock()
-        with patch("scc_cli.setup.Prompt.ask", return_value="2"):
+        with patch("scc_cli.setup.prompt_with_layout", return_value="2"):
             result = setup.prompt_has_org_config(mock_console)
         assert result is False
 
@@ -60,7 +62,7 @@ class TestPromptAuthMethod:
     def test_returns_env_auth_spec(self):
         """Should return env:VAR format."""
         mock_console = MagicMock()
-        with patch("scc_cli.setup.Prompt.ask", side_effect=["1", "GITLAB_TOKEN"]):
+        with patch("scc_cli.setup.prompt_with_layout", side_effect=["1", "GITLAB_TOKEN"]):
             result = setup.prompt_auth_method(mock_console)
         assert result == "env:GITLAB_TOKEN"
 
@@ -68,7 +70,7 @@ class TestPromptAuthMethod:
         """Should return command:CMD format."""
         mock_console = MagicMock()
         with patch(
-            "scc_cli.setup.Prompt.ask",
+            "scc_cli.setup.prompt_with_layout",
             side_effect=["2", "op read op://Dev/token"],
         ):
             result = setup.prompt_auth_method(mock_console)
@@ -77,7 +79,7 @@ class TestPromptAuthMethod:
     def test_returns_none_for_skip(self):
         """Should return None when user skips auth."""
         mock_console = MagicMock()
-        with patch("scc_cli.setup.Prompt.ask", return_value="3"):
+        with patch("scc_cli.setup.prompt_with_layout", return_value="3"):
             result = setup.prompt_auth_method(mock_console)
         assert result is None
 
@@ -94,6 +96,7 @@ class TestFetchAndValidateOrgConfig:
         """Should return config on successful fetch."""
         mock_console = MagicMock()
         sample_config = {
+            "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {"description": "Dev team"}},
         }
@@ -115,7 +118,10 @@ class TestFetchAndValidateOrgConfig:
     def test_retries_with_auth_on_401(self):
         """Should retry fetch with auth after 401."""
         mock_console = MagicMock()
-        sample_config = {"organization": {"name": "Test"}}
+        sample_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test", "id": "test"},
+        }
         with patch(
             "scc_cli.setup.fetch_org_config",
             side_effect=[
@@ -153,7 +159,7 @@ class TestPromptProfileSelection:
                 "api": {"description": "API team"},
             }
         }
-        with patch("scc_cli.setup.Prompt.ask", return_value="1"):
+        with patch("scc_cli.setup.prompt_with_layout", return_value="1"):
             result = setup.prompt_profile_selection(mock_console, org_config)
         assert result in ["platform", "api"]
 
@@ -165,7 +171,7 @@ class TestPromptProfileSelection:
                 "platform": {"description": "Platform team"},
             }
         }
-        with patch("scc_cli.setup.Prompt.ask", return_value="0"):
+        with patch("scc_cli.setup.prompt_with_layout", return_value="0"):
             result = setup.prompt_profile_selection(mock_console, org_config)
         assert result is None
 
@@ -188,14 +194,14 @@ class TestPromptHooksEnablement:
     def test_returns_true_when_user_accepts(self):
         """Should return True when user accepts hooks."""
         mock_console = MagicMock()
-        with patch("scc_cli.setup.Confirm.ask", return_value=True):
+        with patch("scc_cli.setup.confirm_with_layout", return_value=True):
             result = setup.prompt_hooks_enablement(mock_console)
         assert result is True
 
     def test_returns_false_when_user_declines(self):
         """Should return False when user declines hooks."""
         mock_console = MagicMock()
-        with patch("scc_cli.setup.Confirm.ask", return_value=False):
+        with patch("scc_cli.setup.confirm_with_layout", return_value=False):
             result = setup.prompt_hooks_enablement(mock_console)
         assert result is False
 
@@ -275,6 +281,7 @@ class TestRunSetupWizard:
         """Should complete full org config setup flow."""
         mock_console = self._create_mock_console()
         sample_config = {
+            "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {"description": "Dev team"}},
         }
@@ -311,7 +318,8 @@ class TestRunSetupWizard:
         """Should retry with auth on 401."""
         mock_console = self._create_mock_console()
         sample_config = {
-            "organization": {"name": "Test Org"},
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {},
         }
         with (
@@ -324,7 +332,7 @@ class TestRunSetupWizard:
                 "scc_cli.setup.fetch_and_validate_org_config",
                 side_effect=[None, sample_config],  # First fails (401), second succeeds
             ),
-            patch("scc_cli.setup.Prompt.ask", return_value="MY_TOKEN"),  # Env var name
+            patch("scc_cli.setup.prompt_with_layout", return_value="MY_TOKEN"),  # Env var name
             patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
             patch("scc_cli.setup.show_setup_complete"),
@@ -345,7 +353,8 @@ class TestNonInteractiveSetup:
         """Should setup with all CLI arguments provided."""
         mock_console = MagicMock()
         sample_config = {
-            "organization": {"name": "Test Org"},
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {}},
         }
         with (

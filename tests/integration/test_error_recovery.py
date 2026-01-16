@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -26,11 +26,38 @@ from scc_cli.marketplace.normalize import (
 )
 from scc_cli.marketplace.schema import (
     DefaultsConfig,
+    DelegationConfig,
+    DelegationTeamsConfig,
     MarketplaceSourceGitHub,
     OrganizationConfig,
+    OrganizationInfo,
     SecurityConfig,
     TeamProfile,
 )
+
+
+def make_org_config(**kwargs: Any) -> OrganizationConfig:
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs: Any) -> TeamProfile:
+    return TeamProfile(**kwargs)
+
+
+def allow_all_delegation() -> DelegationConfig:
+    return DelegationConfig(
+        teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+    )
+
 
 if TYPE_CHECKING:
     pass
@@ -135,9 +162,7 @@ class TestAmbiguousMarketplaceError:
 
     def test_ambiguous_error_in_compute_effective_plugins(self) -> None:
         """AmbiguousMarketplaceError should propagate from compute_effective_plugins."""
-        org_config = OrganizationConfig(
-            name="Multi-Marketplace Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "market-a": MarketplaceSourceGitHub(
                     source="github",
@@ -151,9 +176,9 @@ class TestAmbiguousMarketplaceError:
                 ),
             },
             defaults=DefaultsConfig(enabled_plugins=[]),
+            delegation=allow_all_delegation(),
             profiles={
-                "test-team": TeamProfile(
-                    name="Test Team",
+                "test-team": make_team_profile(
                     additional_plugins=["bare-plugin"],  # No @marketplace suffix!
                 ),
             },
@@ -265,23 +290,22 @@ class TestCorruptCacheRecovery:
         """Config missing required fields should fail validation."""
         incomplete_file = tmp_path / "incomplete.json"
         incomplete_config = {
-            "name": "Test Org",
-            # Missing: schema_version, marketplaces, defaults, profiles, security
+            "organization": {"name": "Test Org", "id": "test-org"},
+            # Missing: schema_version
         }
         incomplete_file.write_text(json.dumps(incomplete_config))
 
         data = json.loads(incomplete_file.read_text())
 
-        # Attempting to create OrganizationConfig should fail
         with pytest.raises((TypeError, ValueError)):
-            OrganizationConfig(**data)
+            OrganizationConfig.model_validate(data)
 
     def test_wrong_schema_version(self, tmp_path: Path) -> None:
         """Config with unsupported schema version should fail validation."""
         wrong_version_file = tmp_path / "wrong_version.json"
         wrong_version_config = {
-            "name": "Test Org",
-            "schema_version": 999,  # Unsupported version
+            "schema_version": "999.0.0",  # Unsupported version
+            "organization": {"name": "Test Org", "id": "test-org"},
             "marketplaces": {},
             "defaults": {},
             "profiles": {},
@@ -291,9 +315,8 @@ class TestCorruptCacheRecovery:
 
         data = json.loads(wrong_version_file.read_text())
 
-        # Should fail validation due to unsupported version
         with pytest.raises(ValueError) as exc_info:
-            OrganizationConfig(**data)
+            OrganizationConfig.model_validate(data)
 
         assert "schema_version" in str(exc_info.value).lower() or "999" in str(exc_info.value)
 
@@ -368,33 +391,29 @@ class TestConfigurationRecovery:
         """Marketplace source missing required field should raise error."""
         with pytest.raises((TypeError, ValueError)):
             # Missing owner and repo
-            MarketplaceSourceGitHub(source="github")  # Missing owner/repo
+            MarketplaceSourceGitHub.model_validate({"source": "github"})
 
     def test_security_config_with_invalid_pattern(self) -> None:
         """SecurityConfig accepts any pattern - validation happens at match time."""
         # This should be accepted - patterns are validated during matching, not creation
         security = SecurityConfig(
             blocked_plugins=["valid-*", "[invalid-bracket", "normal@*"],
-            blocked_reason="Test",
         )
         assert len(security.blocked_plugins) == 3
 
-    def test_team_profile_name_is_optional(self) -> None:
-        """TeamProfile name is optional - profile key serves as identifier."""
-        # Empty name is allowed (defaults to None)
-        profile = TeamProfile()
-        assert profile.name is None
+    def test_team_profile_description_defaults(self) -> None:
+        """TeamProfile description defaults to empty string."""
+        profile = make_team_profile()
+        assert profile.description == ""
 
-        # Explicit name can be set
-        profile_with_name = TeamProfile(name="Custom Name")
-        assert profile_with_name.name == "Custom Name"
+        profile_with_description = make_team_profile(description="Custom Team")
+        assert profile_with_description.description == "Custom Team"
 
     def test_organization_config_empty_name_rejected(self) -> None:
         """OrganizationConfig with empty name should be rejected."""
         with pytest.raises(ValueError):
-            OrganizationConfig(
-                name="",  # Empty name
-                schema_version=1,
+            make_org_config(
+                organization=OrganizationInfo(name="", id="test-org"),
             )
 
     def test_defaults_config_with_invalid_plugin_refs(self) -> None:
@@ -411,12 +430,10 @@ class TestTeamNotFoundRecovery:
 
     def test_nonexistent_team_raises_error(self) -> None:
         """Requesting nonexistent team should raise clear error."""
-        org_config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={},
             profiles={
-                "existing-team": TeamProfile(name="Existing Team"),
+                "existing-team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
@@ -426,12 +443,10 @@ class TestTeamNotFoundRecovery:
 
     def test_case_sensitive_team_lookup(self) -> None:
         """Team lookup is case-sensitive."""
-        org_config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={},
             profiles={
-                "backend": TeamProfile(name="Backend Team"),
+                "backend": make_team_profile(),
             },
             security=SecurityConfig(),
         )

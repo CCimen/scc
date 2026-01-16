@@ -17,12 +17,6 @@
             "*-dev",
             "localhost:*"
         ],
-        "blocked_base_images": [
-            "*:latest",
-            "*:dev",
-            "*:nightly",
-            "docker.io/library/*"
-        ],
         "allow_stdio_mcp": false
     },
     "defaults": {
@@ -42,8 +36,7 @@
     "delegation": {
         "teams": {
             "allow_additional_plugins": [],
-            "allow_additional_mcp_servers": [],
-            "allow_network_override": []
+            "allow_additional_mcp_servers": []
         },
         "projects": {
             "inherit_team_delegation": false

@@ -16,9 +16,6 @@
             "*.untrusted.com",
             "localhost:*"
         ],
-        "blocked_base_images": [
-            "*:latest"
-        ],
         "allow_stdio_mcp": false
     },
     "defaults": {

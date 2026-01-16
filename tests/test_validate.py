@@ -14,7 +14,7 @@ from scc_cli import validate
 
 @pytest.fixture
 def valid_org_config():
-    """Create a valid organization config matching v1 schema."""
+    """Create a valid organization config matching the schema."""
     return {
         "schema_version": "1.0.0",
         "min_cli_version": "1.0.0",
@@ -26,7 +26,6 @@ def valid_org_config():
         "security": {
             "blocked_plugins": ["malicious-*"],
             "blocked_mcp_servers": ["*.untrusted.com"],
-            "blocked_base_images": ["*:latest"],
         },
         "profiles": {
             "backend": {
@@ -65,21 +64,11 @@ def minimal_org_config():
 class TestLoadBundledSchema:
     """Tests for load_bundled_schema function."""
 
-    def test_load_bundled_schema_v1(self):
-        """Should load v1 schema from package resources."""
-        schema = validate.load_bundled_schema("v1")
+    def test_load_bundled_schema(self):
+        """Should load the bundled schema from package resources."""
+        schema = validate.load_bundled_schema()
         assert schema["$id"] == "https://scc-cli.dev/schemas/org-v1.json"
         assert "organization" in schema["properties"]
-
-    def test_load_bundled_schema_default_version(self):
-        """Should default to v1 schema."""
-        schema = validate.load_bundled_schema()
-        assert "organization" in schema["properties"]
-
-    def test_load_bundled_schema_invalid_version(self):
-        """Should raise error for unknown schema version."""
-        with pytest.raises(FileNotFoundError):
-            validate.load_bundled_schema("v99")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -168,34 +157,25 @@ class TestValidateOrgConfig:
 class TestCheckSchemaVersion:
     """Tests for check_schema_version function."""
 
-    def test_compatible_same_version(self):
-        """Same major version should be compatible."""
+    def test_schema_version_matches_current(self):
+        """Exact schema version match is compatible."""
         compatible, message = validate.check_schema_version("1.0.0", "1.0.0")
         assert compatible is True
         assert message is None
 
-    def test_compatible_minor_upgrade(self):
-        """Higher minor version should be compatible with warning."""
-        compatible, message = validate.check_schema_version("1.5.0", "1.2.0")
-        assert compatible is True
-        # May include warning about newer config
-
-    def test_compatible_patch_upgrade(self):
-        """Higher patch version should be compatible."""
-        compatible, message = validate.check_schema_version("1.0.5", "1.0.0")
-        assert compatible is True
-
-    def test_incompatible_major_upgrade(self):
-        """Higher major version should be incompatible."""
-        compatible, message = validate.check_schema_version("2.0.0", "1.0.0")
+    def test_schema_version_mismatch_is_incompatible(self):
+        """Any mismatch should be incompatible."""
+        compatible, message = validate.check_schema_version("1.0.1", "1.0.0")
         assert compatible is False
         assert message is not None
-        assert "upgrade" in message.lower()
+        assert "Expected" in message
 
-    def test_compatible_cli_higher_version(self):
-        """CLI higher than config should be compatible."""
-        compatible, message = validate.check_schema_version("1.0.0", "1.5.0")
-        assert compatible is True
+    def test_schema_version_invalid_format(self):
+        """Invalid schema_version format should be incompatible."""
+        compatible, message = validate.check_schema_version("invalid", "1.0.0")
+        assert compatible is False
+        assert message is not None
+        assert "Invalid schema_version format" in message
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -90,6 +90,7 @@ def example_org_config() -> dict[str, Any]:
         return data
     # Fallback if example doesn't exist
     return {
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "security": {
             "safety_net": {
@@ -539,7 +540,8 @@ class TestSafetyNetE2EFlow:
     def test_e2e_missing_safety_net_uses_default(self, temp_cache_dir: Path) -> None:
         """E2E with org config missing safety_net uses default policy."""
         org_config_without_safety_net = {
-            "organization": {"name": "Test Org"},
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
             "security": {"blocked_plugins": []},
         }
 

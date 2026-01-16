@@ -7,7 +7,7 @@ preserving security boundaries.
 Key concepts:
 - BlockReason: Distinguishes SECURITY (policy-only override) from
   DELEGATION (local override allowed)
-- AllowTargets: Specifies plugins, mcp_servers, base_images to allow
+- AllowTargets: Specifies plugins and mcp_servers to allow
 - Exception: A single time-bounded exception with metadata
 - ExceptionFile: Envelope with schema versioning for forward compatibility
 """
@@ -42,23 +42,20 @@ class AllowTargets:
     SCC-shaped targets only:
     - plugins: Plugin IDs/names to allow
     - mcp_servers: SCC-managed MCP server names to allow
-    - base_images: Docker image refs/patterns to allow
     """
 
     plugins: list[str] = field(default_factory=list)
     mcp_servers: list[str] = field(default_factory=list)
-    base_images: list[str] = field(default_factory=list)
 
     def is_empty(self) -> bool:
         """Return True if no targets are specified."""
-        return not self.plugins and not self.mcp_servers and not self.base_images
+        return not self.plugins and not self.mcp_servers
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "plugins": self.plugins,
             "mcp_servers": self.mcp_servers,
-            "base_images": self.base_images,
         }
 
     @classmethod
@@ -67,7 +64,6 @@ class AllowTargets:
         return cls(
             plugins=d.get("plugins", []),
             mcp_servers=d.get("mcp_servers", []),
-            base_images=d.get("base_images", []),
         )
 
 

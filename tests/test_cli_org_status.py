@@ -452,7 +452,7 @@ class TestOrgStatusVersionCompatibility:
         org_config = {
             "schema_version": "1.0.0",
             "min_cli_version": "1.0.0",  # Lower than current
-            "organization": {"name": "test-org"},
+            "organization": {"name": "test-org", "id": "test-org"},
             "profiles": {},
         }
 
@@ -483,7 +483,7 @@ class TestOrgStatusVersionCompatibility:
         org_config = {
             "schema_version": "1.0.0",
             "min_cli_version": "99.0.0",  # Higher than any current version
-            "organization": {"name": "test-org"},
+            "organization": {"name": "test-org", "id": "test-org"},
             "profiles": {},
         }
 

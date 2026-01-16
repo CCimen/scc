@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 
 from ...cli_common import console, handle_errors
+from ...core.constants import CURRENT_SCHEMA_VERSION
 from ...core.exit_codes import EXIT_CONFIG, EXIT_VALIDATION
 from ...json_output import build_envelope
 from ...kinds import Kind
@@ -20,9 +21,6 @@ from ._builders import build_validation_data, check_semantic_errors
 @handle_errors
 def org_validate_cmd(
     source: str = typer.Argument(..., help="Path to config file to validate"),
-    schema_version: str = typer.Option(
-        "v1", "--schema-version", "-s", help="Schema version (default: v1)"
-    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
@@ -48,7 +46,6 @@ def org_validate_cmd(
                     source=source,
                     schema_errors=[f"File not found: {source}"],
                     semantic_errors=[],
-                    schema_version=schema_version,
                 )
                 envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
                 print_json(envelope)
@@ -66,7 +63,6 @@ def org_validate_cmd(
                     source=source,
                     schema_errors=[f"Invalid JSON: {e}"],
                     semantic_errors=[],
-                    schema_version=schema_version,
                 )
                 envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
                 print_json(envelope)
@@ -75,7 +71,7 @@ def org_validate_cmd(
         raise typer.Exit(EXIT_CONFIG)
 
     # Validate against schema
-    schema_errors = validate_org_config(config, schema_version)
+    schema_errors = validate_org_config(config)
 
     # Check semantic errors (only if schema is valid)
     semantic_errors: list[str] = []
@@ -87,7 +83,6 @@ def org_validate_cmd(
         source=source,
         schema_errors=schema_errors,
         semantic_errors=semantic_errors,
-        schema_version=schema_version,
     )
 
     # JSON output mode
@@ -111,7 +106,7 @@ def org_validate_cmd(
                 "Validation Passed",
                 {
                     "Source": source,
-                    "Schema Version": schema_version,
+                    "Schema Version": CURRENT_SCHEMA_VERSION,
                     "Status": "Valid",
                 },
             )

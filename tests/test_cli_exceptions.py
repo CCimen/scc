@@ -51,7 +51,6 @@ def make_exception(
         allow=AllowTargets(
             plugins=plugins or [],
             mcp_servers=mcp_servers or [],
-            base_images=[],
         ),
     )
 
@@ -67,7 +66,7 @@ def make_expired_exception(id: str = "local-20251220-dead") -> SccException:
         expires_at=expired.isoformat(),
         reason="Expired test",
         scope="local",
-        allow=AllowTargets(plugins=["old-plugin"], mcp_servers=[], base_images=[]),
+        allow=AllowTargets(plugins=["old-plugin"], mcp_servers=[]),
     )
 
 
@@ -243,29 +242,6 @@ class TestExceptionsCreateCommand:
                     "4h",
                     "--reason",
                     "Vendor demo",
-                ],
-            )
-
-        assert result.exit_code == 0
-        mock_user_store.write.assert_called_once()
-
-    def test_create_with_base_image(self, mock_user_store, mock_repo_store):
-        """Should create exception for base image."""
-        with (
-            patch("scc_cli.commands.exceptions._get_user_store", return_value=mock_user_store),
-            patch("scc_cli.commands.exceptions._get_repo_store", return_value=mock_repo_store),
-        ):
-            result = runner.invoke(
-                cli.app,
-                [
-                    "exceptions",
-                    "create",
-                    "--allow-image",
-                    "custom:latest",
-                    "--ttl",
-                    "8h",
-                    "--reason",
-                    "Custom image test",
                 ],
             )
 

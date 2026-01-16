@@ -127,7 +127,7 @@ class TestCleanupWorktreeRmtreeFallback:
 
         # Run cleanup with force=True (skips uncommitted change check)
         with patch(
-            "scc_cli.ui.git_interactive.Confirm.ask", return_value=False
+            "scc_cli.ui.git_interactive.confirm_with_layout", return_value=False
         ):  # Don't delete branch
             result = git.cleanup_worktree(
                 repo,
@@ -159,7 +159,7 @@ class TestCleanupWorktreeRmtreeFallback:
         # Corrupt worktree to trigger rmtree fallback
         (worktree_path / ".git").write_text("corrupted")
 
-        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):
+        with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
             git.cleanup_worktree(
                 repo,
                 worktree_setup["worktree_name"],
@@ -189,7 +189,7 @@ class TestCleanupWorktreeRmtreeFallback:
         uncommitted_file.write_text("data that will be lost")
 
         # Force cleanup (skips confirmation)
-        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):
+        with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
             result = git.cleanup_worktree(
                 worktree_setup["repo"],
                 worktree_setup["worktree_name"],

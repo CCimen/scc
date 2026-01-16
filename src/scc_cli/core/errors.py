@@ -56,6 +56,14 @@ class DockerNotFoundError(PrerequisiteError):
 
 
 @dataclass
+class DockerDaemonNotRunningError(PrerequisiteError):
+    """Docker Desktop is installed but not running."""
+
+    user_message: str = field(default="Docker Desktop is not running")
+    suggested_action: str = field(default="Start Docker Desktop and try again")
+
+
+@dataclass
 class DockerVersionError(PrerequisiteError):
     """Docker version is too old for sandbox feature."""
 
@@ -273,7 +281,7 @@ class ProfileNotFoundError(ConfigError):
 class PolicyViolationError(ConfigError):
     """Security policy violation during config processing.
 
-    Raised when a plugin, MCP server, or other item is blocked by
+    Raised when a plugin or MCP server is blocked by
     organization security policies.
     """
 
@@ -298,7 +306,6 @@ class PolicyViolationError(ConfigError):
             type_to_flag = {
                 "plugin": "--allow-plugin",
                 "mcp_server": "--allow-mcp",
-                "base_image": "--allow-image",
             }
             flag = type_to_flag.get(self.item_type, f"--allow-{self.item_type}")
             quoted_item = shlex.quote(self.item)

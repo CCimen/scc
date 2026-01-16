@@ -22,10 +22,6 @@
         "blocked_mcp_servers": [
             "*.untrusted.com"
         ],
-        "blocked_base_images": [
-            "*:latest",
-            "*:dev"
-        ],
         "allow_stdio_mcp": false,
         "safety_net": {
             "action": "block",

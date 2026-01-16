@@ -1,38 +1,47 @@
 """
 Pydantic models for marketplace organization configuration.
 
-This module defines the data models for:
-- MarketplaceSource: Discriminated union for GitHub, Git, URL, Directory sources
-- OrganizationConfig: Complete org config with marketplaces, defaults, profiles, security
-- TeamProfile: Team-specific plugin configuration
-- SecurityConfig: Organization security policies
-- DefaultsConfig: Organization-wide defaults
-
-All models support JSON serialization/deserialization via Pydantic v2.
+These models mirror the org-v1 JSON schema and provide typed access for:
+- Marketplace sources (github/git/url/directory)
+- Federation config sources (github/git/url)
+- Organization defaults, security, delegation, and profiles
+- Federated team config files
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from scc_cli.core.constants import CURRENT_SCHEMA_VERSION
+
+
+class StrictModel(BaseModel):
+    """Base model with strict field validation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def normalize_org_config_data(config: dict[str, Any]) -> dict[str, Any]:
+    """Normalize org config data for Pydantic validation.
+
+    Removes JSON Schema metadata keys that are not part of the Pydantic models.
+    """
+    if "$schema" not in config:
+        return config
+    normalized = dict(config)
+    normalized.pop("$schema", None)
+    return normalized
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Marketplace Source Models
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class MarketplaceSourceGitHub(BaseModel):
-    """GitHub repository marketplace source.
-
-    Example:
-        >>> source = MarketplaceSourceGitHub(
-        ...     source="github",
-        ...     owner="sundsvall",
-        ...     repo="claude-plugins",
-        ...     branch="main",
-        ... )
-    """
+class MarketplaceSourceGitHub(StrictModel):
+    """GitHub repository marketplace source."""
 
     source: Literal["github"]
     owner: Annotated[
@@ -57,17 +66,8 @@ class MarketplaceSourceGitHub(BaseModel):
     )
 
 
-class MarketplaceSourceGit(BaseModel):
-    """Generic Git repository marketplace source.
-
-    Supports both HTTPS and SSH URLs.
-
-    Example:
-        >>> source = MarketplaceSourceGit(
-        ...     source="git",
-        ...     url="https://gitlab.example.se/ai/plugins.git",
-        ... )
-    """
+class MarketplaceSourceGit(StrictModel):
+    """Generic Git repository marketplace source."""
 
     source: Literal["git"]
     url: Annotated[
@@ -81,17 +81,8 @@ class MarketplaceSourceGit(BaseModel):
     path: str = Field(default="/", description="Path within repository to marketplace root")
 
 
-class MarketplaceSourceURL(BaseModel):
-    """URL-based marketplace source.
-
-    Downloads marketplace from HTTPS URL. HTTP is forbidden for security.
-
-    Example:
-        >>> source = MarketplaceSourceURL(
-        ...     source="url",
-        ...     url="https://plugins.sundsvall.se/marketplace.json",
-        ... )
-    """
+class MarketplaceSourceURL(StrictModel):
+    """URL-based marketplace source (HTTPS only)."""
 
     source: Literal["url"]
     url: Annotated[
@@ -111,23 +102,13 @@ class MarketplaceSourceURL(BaseModel):
     )
 
 
-class MarketplaceSourceDirectory(BaseModel):
-    """Local directory marketplace source.
-
-    Points to a local filesystem path containing marketplace plugins.
-
-    Example:
-        >>> source = MarketplaceSourceDirectory(
-        ...     source="directory",
-        ...     path="/opt/scc/marketplaces/internal",
-        ... )
-    """
+class MarketplaceSourceDirectory(StrictModel):
+    """Local directory marketplace source."""
 
     source: Literal["directory"]
     path: str = Field(description="Local filesystem path (absolute or relative to org config)")
 
 
-# Discriminated union for all marketplace source types
 MarketplaceSource = Annotated[
     MarketplaceSourceGitHub
     | MarketplaceSourceGit
@@ -138,23 +119,12 @@ MarketplaceSource = Annotated[
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Config Source Models (Phase 2: Federation)
+# Config Source Models (Federation)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ConfigSourceGitHub(BaseModel):
-    """GitHub repository config source for team config files.
-
-    Similar to MarketplaceSourceGitHub but with path defaulting to ""
-    (empty string) instead of "/" to avoid path join issues.
-
-    Example:
-        >>> source = ConfigSourceGitHub(
-        ...     source="github",
-        ...     owner="sundsvall-backend",
-        ...     repo="team-config",
-        ... )
-    """
+class ConfigSourceGitHub(StrictModel):
+    """GitHub repository config source for external team config files."""
 
     source: Literal["github"]
     owner: Annotated[
@@ -179,18 +149,8 @@ class ConfigSourceGitHub(BaseModel):
     )
 
 
-class ConfigSourceGit(BaseModel):
-    """Generic Git repository config source for team config files.
-
-    Similar to MarketplaceSourceGit but with path defaulting to ""
-    (empty string) instead of "/" to avoid path join issues.
-
-    Example:
-        >>> source = ConfigSourceGit(
-        ...     source="git",
-        ...     url="https://gitlab.sundsvall.se/teams/backend-config.git",
-        ... )
-    """
+class ConfigSourceGit(StrictModel):
+    """Generic Git repository config source for external team config files."""
 
     source: Literal["git"]
     url: Annotated[
@@ -204,17 +164,8 @@ class ConfigSourceGit(BaseModel):
     path: str = Field(default="", description="Path within repository to config file")
 
 
-class ConfigSourceURL(BaseModel):
-    """URL-based config source for team config files.
-
-    Downloads team config from HTTPS URL. HTTP is forbidden for security.
-
-    Example:
-        >>> source = ConfigSourceURL(
-        ...     source="url",
-        ...     url="https://teams.sundsvall.se/backend/team-config.json",
-        ... )
-    """
+class ConfigSourceURL(StrictModel):
+    """URL-based config source for external team config files (HTTPS only)."""
 
     source: Literal["url"]
     url: Annotated[
@@ -230,34 +181,14 @@ class ConfigSourceURL(BaseModel):
     )
 
 
-# Discriminated union for all config source types
-# Note: No directory source for security (teams can't reference local paths)
 ConfigSource = Annotated[
     ConfigSourceGitHub | ConfigSourceGit | ConfigSourceURL,
     Field(discriminator="source"),
 ]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Trust Grant Model (Phase 2: Federation)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class TrustGrant(BaseModel):
-    """Trust delegation from org to team.
-
-    Controls what marketplaces a federated team can use:
-    - inherit_org_marketplaces: Whether team can use org-defined marketplaces
-    - allow_additional_marketplaces: Whether team can define own marketplaces
-    - marketplace_source_patterns: URL patterns allowed for team marketplaces
-
-    Example:
-        >>> trust = TrustGrant(
-        ...     inherit_org_marketplaces=True,
-        ...     allow_additional_marketplaces=True,
-        ...     marketplace_source_patterns=["github.com/sundsvall-*/**"],
-        ... )
-    """
+class TrustGrant(StrictModel):
+    """Trust delegation from org to team."""
 
     inherit_org_marketplaces: bool = Field(
         default=True,
@@ -278,31 +209,72 @@ class TrustGrant(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class DefaultsConfig(BaseModel):
-    """Organization-wide default settings.
+class SafetyNetConfig(StrictModel):
+    """Configuration for the scc-safety-net plugin."""
 
-    These settings apply to all teams unless overridden.
+    action: Literal["block", "warn", "allow"] = Field(
+        default="block",
+        description="Action mode: block (stop execution), warn (show warning but allow), allow (no checks)",
+    )
+    block_force_push: bool = Field(default=True, description="Block git push --force")
+    block_reset_hard: bool = Field(default=True, description="Block git reset --hard")
+    block_branch_force_delete: bool = Field(default=True, description="Block git branch -D")
+    block_checkout_restore: bool = Field(default=True, description="Block git checkout/restore")
+    block_clean: bool = Field(default=True, description="Block git clean -f")
+    block_stash_destructive: bool = Field(default=True, description="Block git stash drop/clear")
 
-    Semantics for allowed_plugins:
-        - None (missing): Unrestricted - all plugins allowed
-        - []: Deny all - no plugins allowed
-        - ["*"]: Explicit unrestricted via wildcard
-        - ["pattern@marketplace"]: Specific whitelist with fnmatch patterns
 
-    Example:
-        >>> defaults = DefaultsConfig(
-        ...     enabled_plugins=["code-review@internal"],
-        ...     disabled_plugins=["debug-*"],
-        ...     allowed_plugins=["*@internal"],  # Only internal marketplace
-        ... )
-    """
+class SecurityConfig(StrictModel):
+    """Organization security policies."""
 
-    # Governance field
+    blocked_plugins: list[str] = Field(
+        default_factory=list,
+        description="Glob patterns for plugins blocked org-wide",
+    )
+    blocked_mcp_servers: list[str] = Field(
+        default_factory=list,
+        description="Glob patterns for MCP servers blocked org-wide",
+    )
+    allow_stdio_mcp: bool = Field(
+        default=False,
+        description="Whether stdio-type MCP servers are allowed",
+    )
+    allowed_stdio_prefixes: list[str] = Field(
+        default_factory=list,
+        description="Absolute path prefixes where stdio commands must reside",
+    )
+    safety_net: SafetyNetConfig | None = Field(
+        default=None,
+        description="Safety net settings for the scc-safety-net plugin",
+    )
+
+
+class SessionConfig(StrictModel):
+    """Session defaults and overrides."""
+
+    timeout_hours: int | None = Field(
+        default=None,
+        description="Session timeout in hours",
+        ge=1,
+        le=24,
+    )
+    auto_resume: bool | None = Field(
+        default=None,
+        description="Whether sessions can be automatically resumed",
+    )
+
+
+class DefaultsConfig(StrictModel):
+    """Organization-wide default settings."""
+
     allowed_plugins: list[str] | None = Field(
         default=None,
-        description="Allowed plugins (None=unrestricted, []=deny all, ['*']=explicit unrestricted)",
+        description="Allowlist for plugins teams/projects can add",
     )
-    # Activation fields
+    allowed_mcp_servers: list[str] | None = Field(
+        default=None,
+        description="Allowlist patterns for MCP servers teams/projects can add",
+    )
     enabled_plugins: list[str] = Field(
         default_factory=list,
         description="Plugins enabled for all teams by default",
@@ -315,25 +287,194 @@ class DefaultsConfig(BaseModel):
         default_factory=list,
         description="Marketplaces exposed to all teams (for browsing, not auto-enabling)",
     )
+    cache_ttl_hours: int = Field(
+        default=24,
+        description="Organization config cache TTL in hours",
+        ge=1,
+        le=168,
+    )
+    network_policy: Literal["corp-proxy-only", "unrestricted", "isolated"] | None = Field(
+        default=None,
+        description="Network access policy",
+    )
+    session: SessionConfig = Field(
+        default_factory=SessionConfig,
+        description="Default session settings",
+    )
 
 
-class TeamConfig(BaseModel):
-    """External team configuration file (Phase 2: Federation).
+class MCPServerConfig(StrictModel):
+    """MCP server definition."""
 
-    This is the schema for team-config.json files stored in team repos.
-    Teams define their own plugins and marketplaces here.
+    name: str = Field(description="MCP server name")
+    type: Literal["sse", "stdio", "http"] = Field(description="MCP server connection type")
+    url: str | None = Field(default=None, description="MCP server URL (sse/http)")
+    command: str | None = Field(default=None, description="Command to run (stdio)")
+    args: list[str] | None = Field(default=None, description="Command arguments (stdio)")
+    env: dict[str, str] | None = Field(
+        default=None,
+        description="Environment variables for stdio servers",
+    )
+    headers: dict[str, str] | None = Field(
+        default=None,
+        description="HTTP headers for sse/http servers",
+    )
 
-    Example:
-        >>> config = TeamConfig(
-        ...     schema_version=1,
-        ...     enabled_plugins=["custom-tool@team-mp"],
-        ...     marketplaces={"team-mp": github_source},
-        ... )
-    """
+
+class TeamDelegationConfig(StrictModel):
+    """Team-level delegation to projects."""
+
+    allow_project_overrides: bool = Field(
+        default=False,
+        description="Whether projects can add to this team's config",
+    )
+
+
+class TeamProfile(StrictModel):
+    """Team-specific configuration."""
+
+    description: str = Field(default="", description="Team description for UI display")
+    additional_plugins: list[str] = Field(
+        default_factory=list,
+        description="Plugins to add beyond org defaults",
+    )
+    additional_mcp_servers: list[MCPServerConfig] = Field(
+        default_factory=list,
+        description="Additional MCP servers for this team",
+    )
+    network_policy: Literal["corp-proxy-only", "unrestricted", "isolated"] | None = Field(
+        default=None,
+        description="Override network policy for this team",
+    )
+    session: SessionConfig = Field(
+        default_factory=SessionConfig,
+        description="Team session overrides",
+    )
+    delegation: TeamDelegationConfig | None = Field(
+        default=None,
+        description="Team-level delegation to projects",
+    )
+    config_source: ConfigSource | None = Field(
+        default=None,
+        description="External config source (if set, team is federated)",
+    )
+    trust: TrustGrant | None = Field(
+        default=None,
+        description="Trust delegation controls for federated teams",
+    )
+
+
+class DelegationTeamsConfig(StrictModel):
+    """Delegation rules for teams."""
+
+    allow_additional_plugins: list[str] = Field(
+        default_factory=list,
+        description="Team names or patterns allowed to add plugins",
+    )
+    allow_additional_mcp_servers: list[str] = Field(
+        default_factory=list,
+        description="Team names or patterns allowed to add MCP servers",
+    )
+
+
+class DelegationProjectsConfig(StrictModel):
+    """Project-level delegation settings."""
+
+    inherit_team_delegation: bool = Field(
+        default=False,
+        description="Whether teams can delegate to projects (master switch)",
+    )
+
+
+class DelegationConfig(StrictModel):
+    """Delegation rules controlling what teams/projects can add."""
+
+    teams: DelegationTeamsConfig = Field(default_factory=DelegationTeamsConfig)
+    projects: DelegationProjectsConfig = Field(default_factory=DelegationProjectsConfig)
+
+
+class StatsConfig(StrictModel):
+    """Usage statistics configuration."""
+
+    enabled: bool | None = Field(
+        default=None,
+        description="Whether to collect usage statistics",
+    )
+    user_identity_mode: Literal["hash", "clear", "anonymous"] | None = Field(
+        default=None,
+        description="How to identify users in stats",
+    )
+    retention_days: int | None = Field(
+        default=None,
+        description="Number of days to retain stats",
+        ge=1,
+        le=365,
+    )
+
+
+class OrganizationInfo(StrictModel):
+    """Organization identification."""
+
+    name: str = Field(min_length=1, description="Display name of the organization")
+    id: str = Field(pattern=r"^[a-z0-9-]+$", description="URL-safe organization identifier")
+    contact: str | None = Field(default=None, description="Contact email or URL")
+
+
+class OrganizationConfig(StrictModel):
+    """Complete organization configuration."""
+
+    schema_version: str = Field(description="Semantic version of the schema")
+    min_cli_version: str | None = Field(
+        default=None,
+        description="Minimum SCC CLI version required",
+    )
+    organization: OrganizationInfo
+    marketplaces: dict[str, MarketplaceSource] = Field(
+        default_factory=dict,
+        description="Named marketplace sources (key = marketplace name)",
+    )
+    defaults: DefaultsConfig = Field(
+        default_factory=DefaultsConfig,
+        description="Organization-wide default settings",
+    )
+    delegation: DelegationConfig = Field(
+        default_factory=DelegationConfig,
+        description="Delegation rules",
+    )
+    profiles: dict[str, TeamProfile] = Field(
+        default_factory=dict,
+        description="Team profiles (key = profile name)",
+    )
+    security: SecurityConfig = Field(
+        default_factory=SecurityConfig,
+        description="Organization security policies",
+    )
+    stats: StatsConfig | None = Field(
+        default=None,
+        description="Usage statistics configuration",
+    )
+
+    @field_validator("schema_version")
+    @classmethod
+    def validate_schema_version(cls, v: str) -> str:
+        if v != CURRENT_SCHEMA_VERSION:
+            msg = f"Unsupported schema_version: {v}. Expected {CURRENT_SCHEMA_VERSION}."
+            raise ValueError(msg)
+        return v
+
+    def get_team(self, team_id: str) -> TeamProfile | None:
+        return self.profiles.get(team_id)
+
+    def list_teams(self) -> list[str]:
+        return list(self.profiles.keys())
+
+
+class TeamConfig(StrictModel):
+    """External team configuration file (federation)."""
 
     schema_version: Annotated[
-        int,
-        Field(description="Schema version for forward compatibility"),
+        str,
+        Field(description="Schema version (must match org schema version)"),
     ]
     enabled_plugins: list[str] = Field(
         default_factory=list,
@@ -350,157 +491,8 @@ class TeamConfig(BaseModel):
 
     @field_validator("schema_version")
     @classmethod
-    def validate_schema_version(cls, v: int) -> int:
-        """Ensure schema version is supported."""
-        if v != 1:
-            msg = f"Unsupported schema_version: {v}. Only version 1 is supported."
+    def validate_schema_version(cls, v: str) -> str:
+        if v != CURRENT_SCHEMA_VERSION:
+            msg = f"Unsupported schema_version: {v}. Expected {CURRENT_SCHEMA_VERSION}."
             raise ValueError(msg)
         return v
-
-
-class TeamProfile(BaseModel):
-    """Team-specific configuration.
-
-    Teams inherit org defaults and can add/disable plugins.
-    allowed_plugins provides an allowlist filter (null = allow all).
-
-    Phase 2 adds optional federation fields:
-    - config_source: External config location (if set, team is federated)
-    - trust: Trust delegation controls for federated teams
-
-    Example:
-        >>> profile = TeamProfile(
-        ...     description="Backend Team",
-        ...     additional_plugins=["api-tools@internal"],
-        ... )
-    """
-
-    # Note: 'name' is optional - the display name comes from the profile key
-    # or can be explicitly set here for a custom display name
-    name: str | None = Field(
-        default=None, description="Optional team display name (defaults to profile key)"
-    )
-    description: str = Field(default="", description="Team description for UI display")
-    additional_plugins: list[str] = Field(
-        default_factory=list,
-        description="Plugins to add beyond org defaults",
-    )
-    disabled_plugins: list[str] = Field(
-        default_factory=list,
-        description="Glob patterns for plugins to remove from defaults",
-    )
-    allowed_plugins: list[str] | None = Field(
-        default=None,
-        description="Allowlist (null = allow all, [] = allow none)",
-    )
-    extra_marketplaces: list[str] = Field(
-        default_factory=list,
-        description="Additional marketplaces for this team",
-    )
-    # Phase 2: Federation fields
-    config_source: ConfigSource | None = Field(
-        default=None,
-        description="External config source (if set, team is federated)",
-    )
-    trust: TrustGrant | None = Field(
-        default=None,
-        description="Trust delegation controls for federated teams",
-    )
-
-
-class SecurityConfig(BaseModel):
-    """Organization security policies.
-
-    Blocked plugins are enforced org-wide and cannot be overridden by teams.
-
-    Example:
-        >>> security = SecurityConfig(
-        ...     blocked_plugins=["risky-tool@*"],
-        ...     blocked_reason="Security review pending",
-        ... )
-    """
-
-    blocked_plugins: list[str] = Field(
-        default_factory=list,
-        description="Glob patterns for plugins blocked org-wide",
-    )
-    blocked_reason: str = Field(
-        default="Blocked by organization policy",
-        description="Message shown when plugin is blocked",
-    )
-    allow_implicit_marketplaces: bool = Field(
-        default=True,
-        description="Whether to allow claude-plugins-official",
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Organization Configuration
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class OrganizationConfig(BaseModel):
-    """Complete organization configuration.
-
-    This is the top-level model representing an org.json configuration file.
-
-    Example:
-        >>> config = OrganizationConfig(
-        ...     name="Sundsvall Municipality",
-        ...     schema_version=1,
-        ...     marketplaces={"internal": source},
-        ...     profiles={"backend": profile},
-        ... )
-    """
-
-    name: Annotated[str, Field(min_length=1, description="Organization display name")]
-    schema_version: Annotated[
-        int,
-        Field(
-            description="Schema version for forward compatibility",
-        ),
-    ]
-    marketplaces: dict[str, MarketplaceSource] = Field(
-        default_factory=dict,
-        description="Named marketplace sources (key = marketplace name)",
-    )
-    defaults: DefaultsConfig = Field(
-        default_factory=DefaultsConfig,
-        description="Organization-wide default settings",
-    )
-    profiles: dict[str, TeamProfile] = Field(
-        default_factory=dict,
-        description="Team profiles (key = profile name)",
-    )
-    security: SecurityConfig = Field(
-        default_factory=SecurityConfig,
-        description="Organization security policies",
-    )
-
-    @field_validator("schema_version")
-    @classmethod
-    def validate_schema_version(cls, v: int) -> int:
-        """Ensure schema version is supported."""
-        if v != 1:
-            msg = f"Unsupported schema_version: {v}. Only version 1 is supported."
-            raise ValueError(msg)
-        return v
-
-    def get_team(self, team_id: str) -> TeamProfile | None:
-        """Get a team profile by ID.
-
-        Args:
-            team_id: The profile key (not display name)
-
-        Returns:
-            TeamProfile if found, None otherwise
-        """
-        return self.profiles.get(team_id)
-
-    def list_teams(self) -> list[str]:
-        """List all team profile IDs.
-
-        Returns:
-            List of profile keys (not display names)
-        """
-        return list(self.profiles.keys())

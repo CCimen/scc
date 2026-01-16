@@ -14,9 +14,6 @@ Package Structure:
 - render.py: Orchestration and Rich terminal rendering
 """
 
-# Re-export the config module for backward compatibility with tests
-from scc_cli import config
-
 # Import all check functions from checks/ package
 from scc_cli.doctor.checks import (
     _escape_rich,
@@ -32,7 +29,6 @@ from scc_cli.doctor.checks import (
     check_git,
     check_git_version_for_worktrees,
     check_marketplace_auth_available,
-    check_migration_status,
     check_org_config_reachable,
     check_proxy_environment,
     check_user_config_valid,
@@ -62,8 +58,6 @@ from scc_cli.doctor.render import (
 from scc_cli.doctor.types import CheckResult, DoctorResult, JsonValidationResult
 
 __all__ = [
-    # Config module (for backward compatibility with tests)
-    "config",
     # Dataclasses
     "CheckResult",
     "DoctorResult",
@@ -92,7 +86,6 @@ __all__ = [
     "check_credential_injection",
     "check_cache_readable",
     "check_cache_ttl_status",
-    "check_migration_status",
     "check_exception_stores",
     "check_proxy_environment",
     "run_all_checks",

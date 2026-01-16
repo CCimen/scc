@@ -2,10 +2,9 @@
 
 TDD tests written BEFORE implementation:
 
-Flag Consolidation (from plan):
-- --resume (-r): Auto-resume most recent session (takes over --continue behavior)
-- --select (-s): Interactive session picker (new clear name)
-- --continue (-c): Hidden alias for --resume (backward compatibility)
+Flag behavior:
+- --resume (-r): Auto-resume most recent session
+- --select (-s): Interactive session picker
 """
 
 import re
@@ -75,7 +74,7 @@ class TestResumeFlag:
         standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.app.sessions.list_recent",
                 return_value=[standalone_session],
@@ -110,7 +109,7 @@ class TestResumeFlag:
         standalone_session = {**mock_session, "team": None}
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.app.sessions.list_recent",
                 return_value=[standalone_session],
@@ -140,7 +139,7 @@ class TestResumeFlag:
         """--resume with no sessions should show appropriate error."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.sessions.list_recent", return_value=[]),
         ):
             # Use --standalone flag to bypass team filtering
@@ -165,7 +164,7 @@ class TestSelectFlag:
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.app.sessions.list_recent", return_value=standalone_sessions
             ),
@@ -202,7 +201,7 @@ class TestSelectFlag:
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.app.sessions.list_recent", return_value=standalone_sessions
             ),
@@ -235,7 +234,7 @@ class TestSelectFlag:
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.sessions.list_recent", return_value=[]),
         ):
             # Use --standalone flag to bypass team filtering
@@ -252,7 +251,7 @@ class TestSelectFlag:
         with (
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.app.sessions.list_recent", return_value=standalone_sessions
             ),
@@ -265,92 +264,6 @@ class TestSelectFlag:
 
         # User cancellation should exit with EXIT_CANCELLED
         assert result.exit_code == EXIT_CANCELLED
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for --continue (hidden alias)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestContinueAlias:
-    """--continue should work as hidden alias for --resume."""
-
-    def test_continue_is_alias_for_resume(self, mock_session):
-        """--continue should have same behavior as --resume."""
-        # Mock session with no team (standalone mode)
-        standalone_session = {**mock_session, "team": None}
-        with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
-            patch(
-                "scc_cli.commands.launch.app.sessions.list_recent",
-                return_value=[standalone_session],
-            ) as mock_list,
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker", "run"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(mock_session["workspace"], False),
-            ),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.sandbox.sessions.record_session"),
-            patch("os.path.exists", return_value=True),
-            patch("pathlib.Path.exists", return_value=True),
-        ):
-            # Use --standalone flag to bypass team filtering
-            _result = runner.invoke(app, ["start", "--continue", "--standalone"])
-
-        # Should behave like --resume (call list_recent)
-        mock_list.assert_called_once()
-
-    def test_continue_short_c_flag_works(self, mock_session):
-        """-c short flag should work as alias."""
-        # Mock session with no team (standalone mode)
-        standalone_session = {**mock_session, "team": None}
-        with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
-            patch(
-                "scc_cli.commands.launch.app.sessions.list_recent",
-                return_value=[standalone_session],
-            ) as mock_list,
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker", "run"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(mock_session["workspace"], False),
-            ),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.sandbox.sessions.record_session"),
-            patch("os.path.exists", return_value=True),
-            patch("pathlib.Path.exists", return_value=True),
-        ):
-            # Use --standalone flag to bypass team filtering
-            _result = runner.invoke(app, ["start", "-c", "--standalone"])
-
-        mock_list.assert_called_once()
-
-    def test_continue_flag_is_hidden(self):
-        """--continue should be hidden from help output."""
-        result = runner.invoke(app, ["start", "--help"])
-        output = strip_ansi(result.output)
-
-        # Check that --continue is NOT in help but --resume IS
-        # This is the expected behavior for hidden alias
-        assert "--resume" in output
-        assert "--select" in output
-        # --continue should be hidden (not shown in help)
-        # This assertion will verify the "hidden" property
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -367,7 +280,8 @@ class TestFlagMutualExclusivity:
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch(
                 "scc_cli.commands.launch.app.sessions.get_most_recent", return_value=mock_session
@@ -415,7 +329,8 @@ class TestSmartWorkspaceDetection:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             # Smart detection returns detected workspace
             patch(
@@ -450,7 +365,8 @@ class TestSmartWorkspaceDetection:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             # Smart detection returns None (not in a git repo)
             patch(
@@ -472,7 +388,8 @@ class TestSmartWorkspaceDetection:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch(
                 "scc_cli.commands.launch.app.is_interactive_allowed", return_value=False
@@ -489,7 +406,8 @@ class TestSmartWorkspaceDetection:
             patch("scc_cli.commands.launch.app.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             # Detection would succeed, but should not be called when -i is used
             patch(
@@ -516,7 +434,8 @@ class TestSmartWorkspaceDetection:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch(
                 "scc_cli.commands.launch.app.git.detect_workspace_root",

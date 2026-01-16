@@ -155,45 +155,6 @@ def check_cache_ttl_status() -> CheckResult | None:
         )
 
 
-def check_migration_status() -> CheckResult:
-    """Check if legacy configuration has been migrated.
-
-    Returns:
-        CheckResult with migration status.
-    """
-    from ... import config
-
-    legacy_dir = config.LEGACY_CONFIG_DIR
-    new_dir = config.CONFIG_DIR
-
-    # Both new and legacy exist - warn about cleanup
-    if legacy_dir.exists() and new_dir.exists():
-        return CheckResult(
-            name="Migration",
-            passed=False,
-            message=f"Legacy config still exists at {legacy_dir}",
-            fix_hint="You may delete the old directory manually",
-            severity="warning",
-        )
-
-    # Only legacy exists - needs migration
-    if legacy_dir.exists() and not new_dir.exists():
-        return CheckResult(
-            name="Migration",
-            passed=False,
-            message="Config migration needed",
-            fix_hint="Run any scc command to trigger automatic migration",
-            severity="warning",
-        )
-
-    # New config exists or fresh install
-    return CheckResult(
-        name="Migration",
-        passed=True,
-        message="No legacy configuration found",
-    )
-
-
 def check_exception_stores() -> CheckResult:
     """Check if exception stores are readable and valid.
 

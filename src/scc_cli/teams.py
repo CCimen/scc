@@ -1,16 +1,10 @@
-"""
-Team profile management.
-
-Simplified architecture: SCC generates extraKnownMarketplaces + enabledPlugins,
-Claude Code handles plugin fetching, installation, and updates natively.
-"""
+"""Team profile helpers for organization configuration."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from . import config as config_module
 from .theme import Indicators
 
 if TYPE_CHECKING:
@@ -109,26 +103,12 @@ class TeamInfo:
         )
 
 
-def list_teams(
-    cfg: dict[str, Any], org_config: dict[str, Any] | None = None
-) -> list[dict[str, Any]]:
-    """List available teams from configuration.
+def list_teams(org_config: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """List available teams from organization configuration."""
+    if not org_config:
+        return []
 
-    Args:
-        cfg: User config (used for legacy fallback)
-        org_config: Organization config with profiles. If provided, uses
-            NEW architecture. If None, falls back to legacy behavior.
-
-    Returns:
-        List of team dicts with name, description, plugin
-    """
-    # NEW architecture: use org_config for profiles
-    if org_config is not None:
-        profiles = org_config.get("profiles", {})
-    else:
-        # Legacy fallback
-        profiles = cfg.get("profiles", {})
-
+    profiles = org_config.get("profiles", {})
     teams = []
     for name, info in profiles.items():
         teams.append(
@@ -142,197 +122,69 @@ def list_teams(
     return teams
 
 
-def get_team_details(
-    team: str, cfg: dict[str, Any], org_config: dict[str, Any] | None = None
-) -> dict[str, Any] | None:
-    """Get detailed information for a specific team.
+def get_team_details(team: str, org_config: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Get detailed information for a specific team."""
+    if not org_config:
+        return None
 
-    Args:
-        team: Team/profile name.
-        cfg: User config (used for legacy fallback).
-        org_config: Organization config. If provided, uses NEW architecture.
-
-    Returns:
-        Team details dict, or None if team doesn't exist.
-    """
-    # NEW architecture: use org_config for profiles
-    if org_config is not None:
-        profiles = org_config.get("profiles", {})
-        # Marketplaces is a dict where keys are marketplace names
-        marketplaces = org_config.get("marketplaces", {})
-    else:
-        # Legacy fallback
-        profiles = cfg.get("profiles", {})
-        marketplaces = {}
+    profiles = org_config.get("profiles", {})
+    marketplaces = org_config.get("marketplaces", {})
 
     team_info = profiles.get(team)
     if not team_info:
         return None
 
-    # Get plugins from new schema (additional_plugins is a list)
     plugins = team_info.get("additional_plugins", [])
 
-    # Get marketplace info
-    if org_config is not None:
-        # NEW: look up marketplace by name from org_config
-        # Marketplace name can be explicit in profile, or inferred from plugins
-        marketplace_name = team_info.get("marketplace")
-        if marketplace_name and marketplace_name in marketplaces:
-            marketplace_info = marketplaces[marketplace_name]
-            # New schema: {"source": "github", "owner": "...", "repo": "..."}
-            return {
-                "name": team,
-                "description": team_info.get("description", ""),
-                "plugins": plugins,
-                "marketplace": marketplace_name,
-                "marketplace_type": marketplace_info.get("source"),
-                "marketplace_repo": marketplace_info.get("repo"),
-            }
+    marketplace_names = sorted(
+        {plugin_id.split("@")[1] for plugin_id in plugins if "@" in plugin_id}
+    )
+    marketplace_label: str | None = None
+    marketplace_type: str | None = None
+    marketplace_repo: str | None = None
+
+    if len(marketplace_names) == 1:
+        marketplace_label = marketplace_names[0]
+        marketplace_info = marketplaces.get(marketplace_label, {})
+        marketplace_type = marketplace_info.get("source")
+        if marketplace_type == "github":
+            owner = marketplace_info.get("owner")
+            repo = marketplace_info.get("repo")
+            if owner and repo:
+                marketplace_repo = f"{owner}/{repo}"
+            else:
+                marketplace_repo = repo
+        elif marketplace_type == "git":
+            marketplace_repo = marketplace_info.get("url")
+        elif marketplace_type == "url":
+            marketplace_repo = marketplace_info.get("url")
+        elif marketplace_type == "directory":
+            marketplace_repo = marketplace_info.get("path")
         else:
-            # No explicit marketplace - infer from first plugin if available
-            first_marketplace = None
-            if plugins:
-                for plugin_id in plugins:
-                    if "@" in plugin_id:
-                        first_marketplace = plugin_id.split("@")[1]
-                        break
-            return {
-                "name": team,
-                "description": team_info.get("description", ""),
-                "plugins": plugins,
-                "marketplace": first_marketplace,
-                "marketplace_type": marketplaces.get(first_marketplace, {}).get("source")
-                if first_marketplace
-                else None,
-                "marketplace_repo": marketplaces.get(first_marketplace, {}).get("repo")
-                if first_marketplace
-                else None,
-            }
-    else:
-        # Legacy: single marketplace in cfg
-        marketplace = cfg.get("marketplace", {})
-        return {
-            "name": team,
-            "description": team_info.get("description", ""),
-            "plugins": plugins,  # List of plugin identifiers
-            "marketplace": marketplace.get("name"),
-            "marketplace_repo": marketplace.get("repo"),
-        }
+            marketplace_repo = marketplace_info.get("repo")
+    elif marketplace_names:
+        marketplace_label = ", ".join(marketplace_names)
 
-
-def get_team_sandbox_settings(team_name: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Generate sandbox settings for a team profile.
-
-    Return settings.json content with extraKnownMarketplaces
-    and enabledPlugins configured for Claude Code.
-
-    This is the core function of the simplified architecture:
-    - SCC injects these settings into the Docker sandbox volume
-    - Claude Code sees extraKnownMarketplaces and fetches the marketplace
-    - Claude Code installs the specified plugins automatically
-    - Teams maintain their plugins in the marketplace repo
-
-    Args:
-        team_name: Name of the team profile (e.g., "api-team").
-        cfg: Optional config dict. If None, load from config file.
-
-    Returns:
-        Dict with extraKnownMarketplaces and enabledPlugins for settings.json.
-        Return empty dict if team has no plugins configured.
-    """
-    if cfg is None:
-        cfg = config_module.load_config()
-
-    profile = cfg.get("profiles", {}).get(team_name, {})
-    plugins = profile.get("additional_plugins", [])
-
-    # No plugins configured for this profile
-    if not plugins:
-        return {}
-
-    # Get marketplace config for building extraKnownMarketplaces
-    marketplace = cfg.get("marketplace", {})
-    marketplace_name = marketplace.get("name", "sundsvall")
-    marketplace_repo = marketplace.get("repo", "sundsvall/claude-plugins-marketplace")
-
-    # Generate settings that Claude Code understands
     return {
-        "extraKnownMarketplaces": {
-            marketplace_name: {
-                "source": {
-                    "source": "github",
-                    "repo": marketplace_repo,
-                }
-            }
-        },
-        "enabledPlugins": plugins,
+        "name": team,
+        "description": team_info.get("description", ""),
+        "plugins": plugins,
+        "marketplace": marketplace_label,
+        "marketplace_type": marketplace_type,
+        "marketplace_repo": marketplace_repo,
     }
-
-
-def get_team_plugin_id(team_name: str, cfg: dict[str, Any] | None = None) -> str | None:
-    """Get the first plugin ID for a team (e.g., "api-team@sundsvall").
-
-    For teams with multiple plugins, returns the first one.
-    Use get_team_plugins() to get all plugins.
-
-    Args:
-        team_name: Name of the team profile.
-        cfg: Optional config dict. If None, load from config file.
-
-    Returns:
-        First plugin ID string, or None if team has no plugins configured.
-    """
-    if cfg is None:
-        cfg = config_module.load_config()
-
-    profile = cfg.get("profiles", {}).get(team_name, {})
-    plugins: list[str] = profile.get("additional_plugins", [])
-
-    if not plugins:
-        return None
-
-    return plugins[0]
-
-
-def get_team_plugins(team_name: str, cfg: dict[str, Any] | None = None) -> list[str]:
-    """Get all plugin IDs for a team.
-
-    Args:
-        team_name: Name of the team profile.
-        cfg: Optional config dict. If None, load from config file.
-
-    Returns:
-        List of plugin ID strings, or empty list if team has no plugins.
-    """
-    if cfg is None:
-        cfg = config_module.load_config()
-
-    profile = cfg.get("profiles", {}).get(team_name, {})
-    plugins: list[str] = profile.get("additional_plugins", [])
-    return plugins
 
 
 def validate_team_profile(
     team_name: str,
-    cfg: dict[str, Any] | None = None,
     org_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate a team profile configuration.
-
-    Args:
-        team_name: Name of the team/profile to validate.
-        cfg: User config (for marketplace info when org_config not provided).
-        org_config: Organization config with profiles and marketplaces.
-            If provided, uses org_config for profiles. If None, reads
-            profiles from cfg.
 
     Returns:
         Dict with keys: valid (bool), team (str), plugins (list of str),
         errors (list of str), warnings (list of str).
     """
-    if cfg is None:
-        cfg = config_module.load_config()
-
     result: dict[str, Any] = {
         "valid": True,
         "team": team_name,
@@ -341,15 +193,14 @@ def validate_team_profile(
         "warnings": [],
     }
 
-    # Use org_config for profiles if provided, otherwise use cfg
-    if org_config is not None:
-        profiles = org_config.get("profiles", {})
-        marketplaces = org_config.get("marketplaces", {})
-    else:
-        profiles = cfg.get("profiles", {})
-        marketplaces = {}
+    if not org_config:
+        result["valid"] = False
+        result["errors"].append("No organization configuration found")
+        return result
 
-    # Check if team exists
+    profiles = org_config.get("profiles", {})
+    marketplaces = org_config.get("marketplaces", {})
+
     if team_name not in profiles:
         result["valid"] = False
         result["errors"].append(f"Team '{team_name}' not found in profiles")
@@ -358,23 +209,14 @@ def validate_team_profile(
     profile = profiles[team_name]
     result["plugins"] = profile.get("additional_plugins", [])
 
-    # Check marketplace configuration
-    if org_config is not None:
-        # Validate that plugins reference known marketplaces
-        for plugin_id in result["plugins"]:
-            if "@" in plugin_id:
-                marketplace_name = plugin_id.split("@")[1]
-                if marketplace_name not in marketplaces:
-                    result["warnings"].append(
-                        f"Marketplace '{marketplace_name}' for plugin '{plugin_id}' not found"
-                    )
-    else:
-        # Check single marketplace config
-        marketplace = cfg.get("marketplace", {})
-        if not marketplace.get("repo"):
-            result["warnings"].append("No marketplace repo configured")
+    for plugin_id in result["plugins"]:
+        if "@" in plugin_id:
+            marketplace_name = plugin_id.split("@")[1]
+            if marketplace_name not in marketplaces:
+                result["warnings"].append(
+                    f"Marketplace '{marketplace_name}' for plugin '{plugin_id}' not found"
+                )
 
-    # Check if plugins are configured (not required for 'base' or 'default' profile)
     if not result["plugins"] and team_name not in ("base", "default"):
         result["warnings"].append(
             f"Team '{team_name}' has no plugins configured - using base settings"

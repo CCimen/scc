@@ -34,15 +34,6 @@ class TestGenerateUnblockCommand:
         assert "scc unblock vendor-tools" in cmd
         assert "--ttl 8h" in cmd
 
-    def test_generate_unblock_for_base_image(self):
-        """Generate unblock command for a denied base image."""
-        from scc_cli.utils.fixit import generate_unblock_command
-
-        cmd = generate_unblock_command("nginx:1.25", "base_image")
-
-        assert "scc unblock nginx:1.25" in cmd
-        assert "--ttl 8h" in cmd
-
 
 class TestGeneratePolicyExceptionCommand:
     """Tests for generating policy exception commands for security blocks."""
@@ -69,14 +60,6 @@ class TestGeneratePolicyExceptionCommand:
         assert "scc exceptions create" in cmd
         assert "--policy" in cmd
         assert "--allow-mcp internal-api" in cmd
-
-    def test_generate_policy_exception_for_base_image(self):
-        """Generate policy exception command for a blocked base image."""
-        from scc_cli.utils.fixit import generate_policy_exception_command
-
-        cmd = generate_policy_exception_command("custom:latest", "base_image")
-
-        assert "--allow-image custom:latest" in cmd
 
 
 class TestShellQuoting:
@@ -223,17 +206,3 @@ class TestIntegrationScenarios:
         assert "scc exceptions create" in msg
         assert "--policy" in msg
         assert "--allow-plugin vendor-tools" in msg
-
-    def test_base_image_denial_scenario(self):
-        """Full scenario: Base image denied by delegation."""
-        from scc_cli.utils.fixit import format_block_message
-
-        msg = format_block_message(
-            target="custom-image:v1",
-            target_type="base_image",
-            block_type="delegation",
-            reason="team not delegated for base image additions",
-        )
-
-        assert "custom-image:v1" in msg
-        assert "scc unblock" in msg

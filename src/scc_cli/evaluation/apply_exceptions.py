@@ -44,21 +44,19 @@ def _matches_target(pattern: str, target: str) -> bool:
 
 
 def _get_allowed_targets(
-    allow: AllowTargets, target_type: Literal["plugin", "mcp_server", "base_image"]
+    allow: AllowTargets, target_type: Literal["plugin", "mcp_server"]
 ) -> list[str]:
     """Get the list of allowed targets for a specific type."""
     if target_type == "plugin":
         return allow.plugins or []
-    elif target_type == "mcp_server":
+    if target_type == "mcp_server":
         return allow.mcp_servers or []
-    elif target_type == "base_image":
-        return allow.base_images or []
     return []
 
 
 def _find_matching_exception(
     target: str,
-    target_type: Literal["plugin", "mcp_server", "base_image"],
+    target_type: Literal["plugin", "mcp_server"],
     exceptions: list[SccException],
 ) -> SccException | None:
     """Find the first non-expired exception that matches the target.

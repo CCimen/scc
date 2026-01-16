@@ -25,7 +25,8 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
-from ..config import get_organization_name, get_selected_profile
+from .. import config
+from ..config import get_selected_profile
 from ..console import get_err_console
 from ..core.maintenance import (
     RiskTier,
@@ -1180,16 +1181,21 @@ class SettingsScreen:
 
         # Profile header
         profile = get_selected_profile()
-        org = get_organization_name()
+        org_name = None
+        org_config = config.load_cached_org_config()
+        if org_config:
+            org_data = org_config.get("organization", {})
+            org_name = org_data.get("name") or org_data.get("id")
+
         header = Text()
         header.append("Profile", style="dim")
         header.append(": ", style="dim")
         header.append(profile or "standalone", style="cyan")
-        if org:
+        if org_name:
             header.append(f" {Indicators.get('VERTICAL_LINE')} ", style="dim")
             header.append("Org", style="dim")
             header.append(": ", style="dim")
-            header.append(org, style="cyan")
+            header.append(org_name, style="cyan")
         header.append("\n")
 
         from rich import box

@@ -50,6 +50,7 @@ def full_safety_net_policy() -> dict[str, Any]:
 def org_config_with_safety_net(full_safety_net_policy: dict[str, Any]) -> dict[str, Any]:
     """Org config with safety_net section."""
     return {
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "security": {"safety_net": full_safety_net_policy},
     }
@@ -100,7 +101,10 @@ class TestExtractSafetyNetPolicy:
 
     def test_extract_returns_none_when_security_section_missing(self) -> None:
         """Return None when security section is missing."""
-        org_config = {"organization": {"name": "Test Org"}}
+        org_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+        }
 
         result = extract_safety_net_policy(org_config)
 

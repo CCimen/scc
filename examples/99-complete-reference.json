@@ -17,11 +17,6 @@
             "*.blocked.com",
             "specific-server"
         ],
-        "blocked_base_images": [
-            "*:latest",
-            "*:dev",
-            "docker.io/untrusted/*"
-        ],
         "allow_stdio_mcp": true,
         "allowed_stdio_prefixes": [
             "/usr/local/bin",
@@ -52,10 +47,6 @@
                 "team-a",
                 "team-b",
                 "special-team"
-            ],
-            "allow_network_override": [
-                "corp-proxy-only",
-                "isolated"
             ]
         },
         "projects": {

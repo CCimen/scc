@@ -7,6 +7,7 @@ import json
 import typer
 
 from ...cli_common import console, handle_errors
+from ...core.constants import CURRENT_SCHEMA_VERSION
 from ...core.exit_codes import EXIT_CONFIG
 from ...json_output import build_envelope
 from ...kinds import Kind
@@ -17,9 +18,6 @@ from ...validate import load_bundled_schema
 
 @handle_errors
 def org_schema_cmd(
-    schema_version: str = typer.Option(
-        "v1", "--version", "-v", help="Schema version to print (default: v1)"
-    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
@@ -39,23 +37,23 @@ def org_schema_cmd(
 
     # Load schema
     try:
-        schema = load_bundled_schema(schema_version)
+        schema = load_bundled_schema()
     except FileNotFoundError:
         if json_output:
             with json_output_mode():
                 envelope = build_envelope(
                     Kind.ORG_SCHEMA,
-                    data={"error": f"Schema version '{schema_version}' not found"},
+                    data={"error": "Bundled schema not found"},
                     ok=False,
-                    errors=[f"Schema version '{schema_version}' not found"],
+                    errors=["Bundled schema not found"],
                 )
                 print_json(envelope)
                 raise typer.Exit(EXIT_CONFIG)
         console.print(
             create_error_panel(
                 "Schema Not Found",
-                f"Schema version '{schema_version}' does not exist.",
-                "Available version: v1",
+                "Bundled organization schema is missing.",
+                "Reinstall SCC CLI or check your installation.",
             )
         )
         raise typer.Exit(EXIT_CONFIG)
@@ -64,7 +62,7 @@ def org_schema_cmd(
     if json_output:
         with json_output_mode():
             data = {
-                "schema_version": schema_version,
+                "schema_version": CURRENT_SCHEMA_VERSION,
                 "schema": schema,
             }
             envelope = build_envelope(Kind.ORG_SCHEMA, data=data)

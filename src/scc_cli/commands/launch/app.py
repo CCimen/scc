@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import typer
-from rich.prompt import Prompt
 from rich.status import Status
 
 from ... import config, docker, git, sessions, setup, teams
@@ -26,7 +25,6 @@ from ...cli_common import (
     err_console,
     handle_errors,
 )
-from ...confirm import Confirm
 from ...contexts import load_recent_contexts, normalize_path
 from ...core import personal_profiles
 from ...core.errors import WorkspaceNotFoundError
@@ -37,7 +35,9 @@ from ...marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_warning_panel
 from ...theme import Colors, Indicators, Spinners, get_brand_header
+from ...ui.chrome import print_with_layout, render_with_layout
 from ...ui.gate import is_interactive_allowed
+from ...ui.keys import _BackSentinel
 from ...ui.picker import (
     QuickResumeResult,
     TeamSwitchRequested,
@@ -45,8 +45,10 @@ from ...ui.picker import (
     pick_team,
 )
 from ...ui.prompts import (
+    confirm_with_layout,
     prompt_custom_workspace,
     prompt_repo_url,
+    prompt_with_layout,
     select_session,
 )
 from ...ui.wizard import (
@@ -150,12 +152,20 @@ def _resolve_session_selection(
                 highlight=False,
             )
             raise typer.Exit(EXIT_USAGE)
-        workspace, team, session_name, worktree_name = interactive_start(
-            cfg, standalone_override=standalone_override, team_override=team
+        workspace_result, team, session_name, worktree_name = cast(
+            tuple[str | None, str | None, str | None, str | None],
+            interactive_start(cfg, standalone_override=standalone_override, team_override=team),
         )
-        if workspace is None:
+        if workspace_result is None:
             return None, team, None, None, True, False
-        return workspace, team, session_name, worktree_name, False, False  # user picked
+        return (
+            workspace_result,
+            team,
+            session_name,
+            worktree_name,
+            False,
+            False,
+        )
 
     # Handle --select: interactive session picker
     if select and workspace is None:
@@ -273,14 +283,16 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
         # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
 
-        validation = teams.validate_team_profile(team, cfg, org_config=org_config)
+        validation = teams.validate_team_profile(team, org_config)
         if not validation["valid"]:
-            console.print(
+            print_with_layout(
+                console,
                 create_warning_panel(
                     "Team Not Found",
                     f"No team profile named '{team}'.",
                     "Run 'scc team list' to see available profiles",
-                )
+                ),
+                constrain=True,
             )
             raise typer.Exit(1)
 
@@ -350,30 +362,31 @@ def _sync_marketplace_settings(
             if result.warnings:
                 console.print()
                 for warning in result.warnings:
-                    console.print(f"[yellow]{warning}[/yellow]")
+                    print_with_layout(console, f"[yellow]{warning}[/yellow]")
                 console.print()
 
             # Log success
             if result.plugins_enabled:
-                console.print(
-                    f"[green]{Indicators.get('PASS')} Enabled {len(result.plugins_enabled)} team plugin(s)[/green]"
+                print_with_layout(
+                    console,
+                    f"[green]{Indicators.get('PASS')} Enabled {len(result.plugins_enabled)} team plugin(s)[/green]",
                 )
             if result.marketplaces_materialized:
-                console.print(
-                    f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]"
+                print_with_layout(
+                    console,
+                    f"[green]{Indicators.get('PASS')} Materialized {len(result.marketplaces_materialized)} marketplace(s)[/green]",
                 )
 
             # rendered_settings will be passed to launch_sandbox for container injection
             return result
 
         except SyncError as e:
-            console.print(
-                create_warning_panel(
-                    "Marketplace Sync Failed",
-                    str(e),
-                    "Team plugins may not be available. Use --dry-run to diagnose.",
-                )
+            panel = create_warning_panel(
+                "Marketplace Sync Failed",
+                str(e),
+                "Team plugins may not be available. Use --dry-run to diagnose.",
             )
+            print_with_layout(console, panel, constrain=True)
             # Non-fatal: continue without marketplace sync
             return None
 
@@ -400,19 +413,19 @@ def _apply_personal_profile(
     if drift and not personal_profiles.workspace_has_overrides(workspace_path):
         drift = False
 
-    if drift and not is_interactive_allowed(
-        json_mode=json_mode, no_interactive_flag=non_interactive
-    ):
-        if not json_mode:
-            console.print(
-                "[yellow]Workspace overrides detected; personal profile not applied.[/yellow]"
-            )
-        return profile.profile_id, False
-
-    if drift and not json_mode:
-        console.print("[yellow]Workspace overrides detected.[/yellow]")
-        if not Confirm.ask("Apply personal profile anyway?", default=False):
+        if drift and not is_interactive_allowed(
+            json_mode=json_mode, no_interactive_flag=non_interactive
+        ):
+            if not json_mode:
+                console.print(
+                    "[yellow]Workspace overrides detected; personal profile not applied.[/yellow]"
+                )
             return profile.profile_id, False
+
+        if drift and not json_mode:
+            console.print("[yellow]Workspace overrides detected.[/yellow]")
+            if not confirm_with_layout(console, "Apply personal profile anyway?", default=False):
+                return profile.profile_id, False
 
     existing_settings, settings_invalid = personal_profiles.load_workspace_settings_with_status(
         workspace_path
@@ -475,7 +488,6 @@ def start(
     session_name: str | None = typer.Option(None, "--session", help="Session name"),
     resume: bool = typer.Option(False, "-r", "--resume", help="Resume most recent session"),
     select: bool = typer.Option(False, "-s", "--select", help="Select from recent sessions"),
-    continue_session: bool = typer.Option(False, "-c", "--continue", hidden=True),
     worktree_name: str | None = typer.Option(None, "-w", "--worktree", help="Worktree name"),
     fresh: bool = typer.Option(False, "--fresh", help="Force new container"),
     install_deps: bool = typer.Option(False, "--install-deps", help="Install dependencies"),
@@ -562,11 +574,7 @@ def start(
         if not setup.maybe_run_setup(console):
             raise typer.Exit(1)
 
-    cfg = config.load_config()
-
-    # Treat --continue as alias for --resume (backward compatibility)
-    if continue_session:
-        resume = True
+    cfg = config.load_user_config()
 
     # ── Step 2: Session selection (interactive, --select, --resume) ──────────
     workspace, team, session_name, worktree_name, cancelled, was_auto_detected = (
@@ -718,7 +726,7 @@ def start(
     warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
-    should_continue_session = resume or continue_session
+    should_continue_session = resume
     # Extract plugin settings from sync result for container injection
     plugin_settings = sync_result.rendered_settings if sync_result else None
     launch_sandbox(
@@ -740,7 +748,7 @@ def interactive_start(
     allow_back: bool = False,
     standalone_override: bool = False,
     team_override: str | None = None,
-) -> tuple[str | None, str | None, str | None, str | None]:
+) -> tuple[str | _BackSentinel | None, str | None, str | None, str | None]:
     """Guide user through interactive session setup.
 
     Prompt for team selection, workspace source, optional worktree creation,
@@ -784,7 +792,9 @@ def interactive_start(
         - Cancel: (None, None, None, None) if user pressed q
         - Back: (BACK, None, None, None) if allow_back and user pressed Esc
     """
-    console.print(get_brand_header(), style=Colors.BRAND)
+    header = get_brand_header()
+    header_renderable = render_with_layout(console, header)
+    console.print(header_renderable, style=Colors.BRAND)
 
     # Determine mode: standalone vs organization
     # CLI --standalone flag overrides config setting
@@ -809,7 +819,7 @@ def interactive_start(
 
     # Get available teams (from org config if available)
     org_config = config.load_cached_org_config()
-    available_teams = teams.list_teams(cfg, org_config)
+    available_teams = teams.list_teams(org_config)
 
     # Track if user dismissed global Quick Resume (to skip workspace-scoped QR)
     user_dismissed_quick_resume = False
@@ -885,7 +895,8 @@ def interactive_start(
                                 and selected_context.team != effective_team
                             ):
                                 console.print()
-                                if not Confirm.ask(
+                                if not confirm_with_layout(
+                                    console,
                                     f"[yellow]Resume session from team '{selected_context.team}'?[/yellow]\n"
                                     f"[dim]This will use {selected_context.team} plugins for this session.[/dim]",
                                     default=False,
@@ -901,7 +912,7 @@ def interactive_start(
                     case QuickResumeResult.BACK:
                         # User pressed Esc - go back if we can (Dashboard context)
                         if allow_back:
-                            return (BACK, None, None, None)  # type: ignore[return-value]
+                            return (BACK, None, None, None)
                         # CLI context: no previous screen, treat as cancel
                         return (None, None, None, None)
 
@@ -1019,7 +1030,7 @@ def interactive_start(
                             raise TeamSwitchRequested()  # Will be caught by mega-loop
                         elif allow_back:
                             # Esc in standalone mode with allow_back: return to dashboard
-                            return (BACK, None, None, None)  # type: ignore[return-value]
+                            return (BACK, None, None, None)
                         else:
                             # Esc in standalone CLI mode: cancel wizard
                             return (None, None, None, None)
@@ -1180,36 +1191,13 @@ def interactive_start(
                                         and selected_context.team != current_team
                                     ):
                                         console.print()
-                                        if not Confirm.ask(
-                                            f"[yellow]Resume session from team '{selected_context.team}'?[/yellow]\n"
-                                            f"[dim]This will use {selected_context.team} plugins for this session.[/dim]",
-                                            default=False,
-                                        ):
-                                            continue  # Back to workspace QR picker loop
-                                    return (
-                                        str(selected_context.worktree_path),
-                                        selected_context.team,
-                                        selected_context.last_session_id,
-                                        None,  # worktree_name - not creating new worktree
-                                    )
+                                    if not confirm_with_layout(
+                                        console,
+                                        "[yellow]Workspace overrides detected. Apply anyway?[/yellow]",
+                                        default=False,
+                                    ):
+                                        continue
 
-                            case QuickResumeResult.NEW_SESSION:
-                                # User pressed 'n' - continue with fresh session
-                                break  # Exit workspace QR loop
-
-                            case QuickResumeResult.BACK:
-                                # User pressed Esc - go back to workspace picker (Step 2)
-                                workspace = None
-                                break  # Exit workspace QR loop
-
-                            case QuickResumeResult.TOGGLE_ALL_TEAMS:
-                                # User pressed 'a' - toggle all-teams view
-                                if standalone_mode:
-                                    console.print(
-                                        "[dim]All teams view is unavailable in standalone mode[/dim]"
-                                    )
-                                    console.print()
-                                    continue
                                 workspace_qr_show_all = not workspace_qr_show_all
                                 continue  # Re-render workspace QR
 
@@ -1237,7 +1225,8 @@ def interactive_start(
     # Step 3: Worktree option
     worktree_name = None
     console.print()
-    if Confirm.ask(
+    if confirm_with_layout(
+        console,
         "[cyan]Create a worktree for isolated feature development?[/cyan]",
         default=False,
     ):
@@ -1247,7 +1236,8 @@ def interactive_start(
         # Check if directory is a git repository
         if not git.is_git_repo(workspace_path):
             console.print()
-            if Confirm.ask(
+            if confirm_with_layout(
+                console,
                 "[yellow]⚠️ Not a git repository. Initialize git?[/yellow]",
                 default=False,
             ):
@@ -1272,7 +1262,8 @@ def interactive_start(
         if can_create_worktree and git.is_git_repo(workspace_path):
             if not git.has_commits(workspace_path):
                 console.print()
-                if Confirm.ask(
+                if confirm_with_layout(
+                    console,
                     "[yellow]⚠️ Worktree requires initial commit. "
                     "Create empty initial commit?[/yellow]",
                     default=True,
@@ -1295,12 +1286,14 @@ def interactive_start(
 
         # Only ask for worktree name if we have a valid git repo with commits
         if can_create_worktree:
-            worktree_name = Prompt.ask("[cyan]Feature/worktree name[/cyan]")
+            worktree_name = prompt_with_layout(console, "[cyan]Feature/worktree name[/cyan]")
 
     # Step 4: Session name
+    console.print()
     session_name = (
-        Prompt.ask(
-            "\n[cyan]Session name[/cyan] [dim](optional, for easy resume)[/dim]",
+        prompt_with_layout(
+            console,
+            "[cyan]Session name[/cyan] [dim](optional, for easy resume)[/dim]",
             default="",
         )
         or None
@@ -1340,7 +1333,7 @@ def run_start_wizard_flow(
         if not setup.maybe_run_setup(console):
             return None  # Error during setup
 
-    cfg = config.load_config()
+    cfg = config.load_user_config()
 
     # Step 2: Run interactive wizard
     # Note: standalone_override=False (default) is correct here - dashboard path
@@ -1358,10 +1351,12 @@ def run_start_wizard_flow(
     if workspace is None:
         return None  # Quit app
 
+    workspace_value = cast(str, workspace)
+
     try:
         with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
             docker.check_docker_available()
-        workspace_path = validate_and_resolve_workspace(workspace)
+        workspace_path = validate_and_resolve_workspace(workspace_value)
         workspace_path = prepare_workspace(workspace_path, worktree_name, install_deps=False)
         _configure_team_settings(team, cfg)
         sync_result = _sync_marketplace_settings(workspace_path, team)

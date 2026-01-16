@@ -220,7 +220,8 @@ class TestBundleDataCollection:
         from scc_cli.commands.support import build_bundle_data
 
         with patch(
-            "scc_cli.commands.support.config.load_config", return_value={"selected_profile": "test"}
+            "scc_cli.commands.support.config.load_user_config",
+            return_value={"selected_profile": "test"},
         ):
             result = build_bundle_data()
 

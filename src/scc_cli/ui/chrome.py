@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from rich import box
 from rich.console import Console, Group
+from rich.constrain import Constrain
 from rich.padding import Padding
 from rich.panel import Panel
 from rich.text import Text
@@ -117,11 +118,55 @@ def get_layout_metrics(
     )
 
 
-def apply_layout(renderable: RenderableType, metrics: LayoutMetrics) -> RenderableType:
-    """Apply left padding for centered or inset layouts."""
-    if not metrics.apply or metrics.left_pad <= 0:
+def apply_layout(
+    renderable: RenderableType, metrics: LayoutMetrics, *, constrain: bool = False
+) -> RenderableType:
+    """Apply layout padding with optional width constraint."""
+    if not metrics.apply:
+        return renderable
+    if constrain and metrics.content_width > 0:
+        renderable = Constrain(renderable, metrics.content_width)
+    if metrics.left_pad <= 0:
         return renderable
     return Padding(renderable, (0, 0, 0, metrics.left_pad))
+
+
+def render_with_layout(
+    console: Console,
+    renderable: RenderableType,
+    *,
+    metrics: LayoutMetrics | None = None,
+    max_width: int | None = None,
+    constrain: bool = False,
+) -> RenderableType:
+    """Return a renderable aligned to layout metrics."""
+    if metrics is None:
+        metrics = (
+            get_layout_metrics(console, max_width=max_width)
+            if max_width is not None
+            else get_layout_metrics(console)
+        )
+    return apply_layout(renderable, metrics, constrain=constrain)
+
+
+def print_with_layout(
+    console: Console,
+    renderable: RenderableType,
+    *,
+    metrics: LayoutMetrics | None = None,
+    max_width: int | None = None,
+    constrain: bool = False,
+) -> None:
+    """Print a renderable aligned to layout metrics."""
+    console.print(
+        render_with_layout(
+            console,
+            renderable,
+            metrics=metrics,
+            max_width=max_width,
+            constrain=constrain,
+        )
+    )
 
 
 @dataclass(frozen=True)

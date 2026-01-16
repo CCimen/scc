@@ -32,7 +32,7 @@ class TestDryRunBasicBehavior:
         mock_docker_run = MagicMock()
 
         with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
+            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
                 with patch(
                     "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
@@ -45,7 +45,6 @@ class TestDryRunBasicBehavior:
                                     session_name=None,
                                     resume=False,
                                     select=False,
-                                    continue_session=False,
                                     worktree_name=None,
                                     fresh=False,
                                     install_deps=False,
@@ -67,7 +66,7 @@ class TestDryRunBasicBehavior:
         (tmp_path / ".git").mkdir()
 
         with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
+            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
                 with patch(
                     "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
@@ -79,7 +78,6 @@ class TestDryRunBasicBehavior:
                                 session_name=None,
                                 resume=False,
                                 select=False,
-                                continue_session=False,
                                 worktree_name=None,
                                 fresh=False,
                                 install_deps=False,
@@ -113,7 +111,7 @@ class TestDryRunTeamConfig:
 
         with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
             with patch(
-                "scc_cli.commands.launch.app.config.load_config",
+                "scc_cli.commands.launch.app.config.load_user_config",
                 return_value={"selected_profile": "platform"},
             ):
                 with patch(
@@ -132,7 +130,6 @@ class TestDryRunTeamConfig:
                                     session_name=None,
                                     resume=False,
                                     select=False,
-                                    continue_session=False,
                                     worktree_name=None,
                                     fresh=False,
                                     install_deps=False,
@@ -163,7 +160,7 @@ class TestDryRunJsonOutput:
         (tmp_path / ".git").mkdir()
 
         with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
+            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
                 with patch(
                     "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
@@ -175,7 +172,6 @@ class TestDryRunJsonOutput:
                                 session_name=None,
                                 resume=False,
                                 select=False,
-                                continue_session=False,
                                 worktree_name=None,
                                 fresh=False,
                                 install_deps=False,
@@ -200,7 +196,7 @@ class TestDryRunJsonOutput:
         (tmp_path / ".git").mkdir()
 
         with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
+            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
                 with patch(
                     "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
@@ -212,7 +208,6 @@ class TestDryRunJsonOutput:
                                 session_name=None,
                                 resume=False,
                                 select=False,
-                                continue_session=False,
                                 worktree_name=None,
                                 fresh=False,
                                 install_deps=False,
@@ -323,7 +318,7 @@ class TestDryRunExitCodes:
         exit_code = None
 
         with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_config", return_value={}):
+            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
                 with patch(
                     "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
                 ):
@@ -335,7 +330,6 @@ class TestDryRunExitCodes:
                                 session_name=None,
                                 resume=False,
                                 select=False,
-                                continue_session=False,
                                 worktree_name=None,
                                 fresh=False,
                                 install_deps=False,

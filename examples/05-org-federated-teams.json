@@ -16,9 +16,6 @@
             "*.untrusted.com",
             "localhost:*"
         ],
-        "blocked_base_images": [
-            "*:latest"
-        ],
         "allow_stdio_mcp": false
     },
     "defaults": {
@@ -57,7 +54,7 @@
                 "owner": "example-org",
                 "repo": "platform-team-config",
                 "branch": "main",
-                "path": ""
+                "path": "/"
             },
             "trust": {
                 "inherit_org_marketplaces": true,

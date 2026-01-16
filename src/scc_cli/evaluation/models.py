@@ -20,8 +20,8 @@ class BlockedItem:
     Local overrides have no effect on these.
     """
 
-    target: str  # The blocked item (plugin name, MCP server, image ref)
-    target_type: Literal["plugin", "mcp_server", "base_image"]
+    target: str  # The blocked item (plugin name or MCP server)
+    target_type: Literal["plugin", "mcp_server"]
     reason: BlockReason  # Always SECURITY for blocked items
     message: str  # Human-readable explanation
 
@@ -35,7 +35,7 @@ class DeniedAddition:
     """
 
     target: str  # The denied item
-    target_type: Literal["plugin", "mcp_server", "base_image"]
+    target_type: Literal["plugin", "mcp_server"]
     reason: BlockReason  # Always DELEGATION for denied additions
     message: str  # Human-readable explanation
 
@@ -49,7 +49,7 @@ class Decision:
     """
 
     item: str  # The item being decided on
-    item_type: Literal["plugin", "mcp_server", "base_image"]
+    item_type: Literal["plugin", "mcp_server"]
     result: Literal["allowed", "blocked", "denied"]
     reason: str  # Human-readable explanation
     source: Literal["policy", "org", "team", "project", "repo", "user"] | None

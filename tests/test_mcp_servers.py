@@ -60,7 +60,7 @@ def org_config_with_mcp() -> dict[str, Any]:
         },
         "defaults": {
             "allowed_plugins": ["test-plugin"],
-            "allowed_mcp_servers": ["*.sundsvall.se", "internal-*"],
+            "allowed_mcp_servers": ["*.sundsvall.se", "internal-*", "finance-*"],
         },
         "delegation": {
             "teams": {
@@ -128,7 +128,7 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should not raise - returns empty list on valid config
-        result = validate.validate_org_config(org_config, schema_version="v1")
+        result = validate.validate_org_config(org_config)
         assert result == [] or result is None
 
     def test_valid_stdio_server(self, mcp_server_stdio):
@@ -144,7 +144,7 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should not raise - returns empty list on valid config
-        result = validate.validate_org_config(org_config, schema_version="v1")
+        result = validate.validate_org_config(org_config)
         assert result == [] or result is None
 
     def test_sse_requires_url(self):
@@ -162,7 +162,7 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should return validation errors
-        result = validate.validate_org_config(org_config, schema_version="v1")
+        result = validate.validate_org_config(org_config)
         assert result and len(result) > 0
 
     def test_stdio_requires_command(self):
@@ -180,7 +180,7 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should return validation errors
-        result = validate.validate_org_config(org_config, schema_version="v1")
+        result = validate.validate_org_config(org_config)
         assert result and len(result) > 0
 
     def test_invalid_type_rejected(self):
@@ -198,7 +198,7 @@ class TestMCPServerSchemaValidation:
             },
         }
         # Should return validation errors
-        result = validate.validate_org_config(org_config, schema_version="v1")
+        result = validate.validate_org_config(org_config)
         assert result and len(result) > 0
 
 
@@ -212,7 +212,7 @@ class TestMCPServerInProfiles:
 
     def test_profile_can_have_mcp_servers(self, org_config_with_mcp):
         """Profile should be able to define MCP servers."""
-        result = validate.validate_org_config(org_config_with_mcp, schema_version="v1")
+        result = validate.validate_org_config(org_config_with_mcp)
         assert result == [] or result is None
 
     def test_profile_mcp_servers_inherit_from_defaults(self, org_config_with_mcp, tmp_path):

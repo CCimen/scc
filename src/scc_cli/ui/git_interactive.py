@@ -17,12 +17,10 @@ from pathlib import Path
 
 from rich import box
 from rich.console import Console
-from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from ..confirm import Confirm
 from ..core.constants import WORKTREE_BRANCH_PREFIX
 from ..core.errors import (
     CloneError,
@@ -51,7 +49,9 @@ from ..services.git.worktree import (
 )
 from ..theme import Indicators, Spinners
 from ..utils.locks import file_lock, lock_path
+from .chrome import get_layout_metrics, print_with_layout
 from .git_render import render_worktrees_table
+from .prompts import confirm_with_layout, prompt_with_layout
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Branch Safety - Interactive UI
@@ -79,7 +79,8 @@ def check_branch_safety(path: Path, console: Console) -> bool:
     if current in PROTECTED_BRANCHES:
         console.print()
 
-        # Visual speed bump - warning panel
+        metrics = get_layout_metrics(console)
+
         warning = create_warning_panel(
             "Protected Branch",
             f"You are on branch '{current}'\n\n"
@@ -87,10 +88,9 @@ def check_branch_safety(path: Path, console: Console) -> bool:
             "Direct pushes to protected branches are blocked by git hooks.",
             "Create a feature branch for isolated, safe development",
         )
-        console.print(warning)
+        print_with_layout(console, warning, metrics=metrics, constrain=True)
         console.print()
 
-        # Interactive options table
         options_table = Table(
             box=box.SIMPLE,
             show_header=False,
@@ -105,10 +105,11 @@ def check_branch_safety(path: Path, console: Console) -> bool:
         options_table.add_row("[2]", "Continue", "Stay on protected branch (pushes blocked)")
         options_table.add_row("[3]", "Cancel", "Exit without starting")
 
-        console.print(options_table)
+        print_with_layout(console, options_table, metrics=metrics, constrain=True)
         console.print()
 
-        choice = Prompt.ask(
+        choice = prompt_with_layout(
+            console,
             "[cyan]Select option[/cyan]",
             choices=["1", "2", "3", "create", "continue", "cancel"],
             default="1",
@@ -116,7 +117,7 @@ def check_branch_safety(path: Path, console: Console) -> bool:
 
         if choice in ["1", "create"]:
             console.print()
-            name = Prompt.ask("[cyan]Feature name[/cyan]")
+            name = prompt_with_layout(console, "[cyan]Feature name[/cyan]")
             safe_name = sanitize_branch_name(name)
             branch_name = f"{WORKTREE_BRANCH_PREFIX}{safe_name}"
 
@@ -132,32 +133,40 @@ def check_branch_safety(path: Path, console: Console) -> bool:
                     )
                 except subprocess.CalledProcessError:
                     console.print()
-                    console.print(
+                    print_with_layout(
+                        console,
                         create_error_panel(
                             "Branch Creation Failed",
                             f"Could not create branch '{branch_name}'",
                             "Check if the branch already exists or if there are uncommitted changes",
-                        )
+                        ),
+                        metrics=metrics,
+                        constrain=True,
                     )
                     return False
 
             console.print()
-            console.print(
+            print_with_layout(
+                console,
                 create_success_panel(
                     "Branch Created",
                     {
                         "Branch": branch_name,
                         "Base": current,
                     },
-                )
+                ),
+                metrics=metrics,
+                constrain=True,
             )
             return True
 
         elif choice in ["2", "continue"]:
             console.print()
-            console.print(
+            print_with_layout(
+                console,
                 "[dim]→ Continuing on protected branch. "
-                "Push attempts will be blocked by git hooks.[/dim]"
+                "Push attempts will be blocked by git hooks.[/dim]",
+                metrics=metrics,
             )
             return True
 
@@ -539,7 +548,11 @@ def cleanup_worktree(
 
             # Skip confirmation prompt if --yes was provided
             if not skip_confirm:
-                if not Confirm.ask("[yellow]Delete worktree anyway?[/yellow]", default=False):
+                if not confirm_with_layout(
+                    console,
+                    "[yellow]Delete worktree anyway?[/yellow]",
+                    default=False,
+                ):
                     console.print("[dim]Cleanup cancelled.[/dim]")
                     return False
 
@@ -577,8 +590,10 @@ def cleanup_worktree(
     # Ask about branch deletion (auto-delete if --yes was provided)
     console.print()
     branch_deleted = False
-    should_delete_branch = skip_confirm or Confirm.ask(
-        f"[cyan]Also delete branch '{branch_name}'?[/cyan]", default=False
+    should_delete_branch = skip_confirm or confirm_with_layout(
+        console,
+        f"[cyan]Also delete branch '{branch_name}'?[/cyan]",
+        default=False,
     )
     if should_delete_branch:
         with console.status("[cyan]Deleting branch...[/cyan]", spinner=Spinners.DEFAULT):

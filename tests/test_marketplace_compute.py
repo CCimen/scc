@@ -10,7 +10,42 @@ Tests cover:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
+
+if TYPE_CHECKING:
+    from scc_cli.marketplace.schema import DelegationConfig, OrganizationConfig, TeamProfile
+
+
+def make_org_config(**kwargs: Any) -> OrganizationConfig:
+    from scc_cli.marketplace.schema import OrganizationConfig, OrganizationInfo
+
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs: Any) -> TeamProfile:
+    from scc_cli.marketplace.schema import TeamProfile
+
+    return TeamProfile(**kwargs)
+
+
+def allow_all_delegation() -> DelegationConfig:
+    from scc_cli.marketplace.schema import DelegationConfig, DelegationTeamsConfig
+
+    return DelegationConfig(
+        teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+    )
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BlockedPlugin Dataclass Tests
@@ -104,15 +139,9 @@ class TestComputeEffectivePluginsBasic:
     def test_minimal_config_returns_empty(self) -> None:
         """Minimal config with no plugins should return empty effective plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            OrganizationConfig,
-            TeamProfile,
-        )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"base": TeamProfile(name="Base Team")},
+        config = make_org_config(
+            profiles={"base": make_team_profile()},
         )
         result = compute_effective_plugins(config, team_id="base")
 
@@ -124,19 +153,13 @@ class TestComputeEffectivePluginsBasic:
     def test_defaults_enabled_plugins_are_included(self) -> None:
         """Defaults enabled_plugins should appear in effective.enabled."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal", "linter@internal"],
             ),
-            profiles={"backend": TeamProfile(name="Backend Team")},
+            profiles={"backend": make_team_profile()},
         )
         result = compute_effective_plugins(config, team_id="backend")
 
@@ -149,12 +172,9 @@ class TestComputeEffectivePluginsBasic:
             TeamNotFoundError,
             compute_effective_plugins,
         )
-        from scc_cli.marketplace.schema import OrganizationConfig, TeamProfile
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="Backend Team")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
         )
 
         with pytest.raises(TeamNotFoundError) as exc_info:
@@ -174,21 +194,15 @@ class TestComputeEffectivePluginsMerging:
     def test_profile_additional_plugins_merged_with_defaults(self) -> None:
         """Profile additional_plugins should be merged with defaults.enabled_plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend Team",
+                "backend": make_team_profile(
                     additional_plugins=["api-tools@internal"],
                 ),
             },
@@ -203,21 +217,15 @@ class TestComputeEffectivePluginsMerging:
     def test_duplicate_plugins_are_deduplicated(self) -> None:
         """Same plugin in defaults and additional should appear only once."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend Team",
+                "backend": make_team_profile(
                     additional_plugins=["code-review@internal"],  # duplicate
                 ),
             },
@@ -239,23 +247,15 @@ class TestComputeEffectivePluginsDisabled:
     def test_disabled_pattern_removes_matching_plugins(self) -> None:
         """Profile disabled_plugins should remove matching plugins from enabled."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["debug-tool@internal", "code-review@internal"],
+                disabled_plugins=["debug-*@*"],
             ),
             profiles={
-                "production": TeamProfile(
-                    name="Production Team",
-                    disabled_plugins=["debug-*@*"],
-                ),
+                "production": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="production")
@@ -269,23 +269,15 @@ class TestComputeEffectivePluginsDisabled:
     def test_disabled_exact_match(self) -> None:
         """Exact plugin name should work as disabled pattern."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["tool-a@internal", "tool-b@internal"],
+                disabled_plugins=["tool-a@internal"],
             ),
             profiles={
-                "minimal": TeamProfile(
-                    name="Minimal",
-                    disabled_plugins=["tool-a@internal"],
-                ),
+                "minimal": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="minimal")
@@ -306,22 +298,17 @@ class TestComputeEffectivePluginsAllowed:
     def test_allowed_plugins_null_means_allow_all(self) -> None:
         """allowed_plugins=None should allow all plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal", "linter@internal"],
+                allowed_plugins=None,
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "open": TeamProfile(
-                    name="Open Team",
-                    allowed_plugins=None,  # null = allow all
+                "open": make_team_profile(
+                    additional_plugins=["extra-tool@internal"],
                 ),
             },
         )
@@ -329,28 +316,23 @@ class TestComputeEffectivePluginsAllowed:
 
         assert "code-review@internal" in result.enabled
         assert "linter@internal" in result.enabled
+        assert "extra-tool@internal" in result.enabled
         assert result.not_allowed == []
 
     def test_allowed_plugins_empty_list_blocks_additional(self) -> None:
         """allowed_plugins=[] should block all team additional plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal"],
+                allowed_plugins=[],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "locked": TeamProfile(
-                    name="Locked Team",
+                "locked": make_team_profile(
                     additional_plugins=["extra-tool@internal"],
-                    allowed_plugins=[],  # empty = block additional
                 ),
             },
         )
@@ -365,23 +347,17 @@ class TestComputeEffectivePluginsAllowed:
     def test_allowed_plugins_filters_additional(self) -> None:
         """Only additional plugins in allowed_plugins list should be enabled."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal"],
+                allowed_plugins=["api-tools@internal"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "restricted": TeamProfile(
-                    name="Restricted Team",
+                "restricted": make_team_profile(
                     additional_plugins=["api-tools@internal", "risky-tool@internal"],
-                    allowed_plugins=["api-tools@internal"],  # only this one allowed
                 ),
             },
         )
@@ -407,25 +383,17 @@ class TestComputeEffectivePluginsBlocked:
     def test_blocked_plugins_removes_from_enabled(self) -> None:
         """Security blocked_plugins should remove matching plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            SecurityConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, SecurityConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review@internal", "risky-tool@internal"],
             ),
             security=SecurityConfig(
                 blocked_plugins=["risky-*@*"],
-                blocked_reason="Security review pending",
             ),
             profiles={
-                "backend": TeamProfile(name="Backend Team"),
+                "backend": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="backend")
@@ -434,7 +402,7 @@ class TestComputeEffectivePluginsBlocked:
         assert "risky-tool@internal" not in result.enabled
         assert len(result.blocked) == 1
         assert result.blocked[0].plugin_id == "risky-tool@internal"
-        assert result.blocked[0].reason == "Security review pending"
+        assert result.blocked[0].reason == "Blocked by security policy"
         assert result.blocked[0].pattern == "risky-*@*"
         # code-review should remain
         assert "code-review@internal" in result.enabled
@@ -442,22 +410,15 @@ class TestComputeEffectivePluginsBlocked:
     def test_blocked_applies_to_additional_plugins(self) -> None:
         """Blocked patterns should also apply to profile additional_plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            OrganizationConfig,
-            SecurityConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import SecurityConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             security=SecurityConfig(
                 blocked_plugins=["dangerous-*@*"],
-                blocked_reason="Forbidden",
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "dev": TeamProfile(
-                    name="Dev Team",
+                "dev": make_team_profile(
                     additional_plugins=["dangerous-util@internal", "safe-tool@internal"],
                 ),
             },
@@ -471,24 +432,19 @@ class TestComputeEffectivePluginsBlocked:
     def test_blocked_takes_precedence_over_allowed(self) -> None:
         """Blocked plugins should be blocked even if in allowed_plugins list."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            OrganizationConfig,
-            SecurityConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, SecurityConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
+            defaults=DefaultsConfig(
+                allowed_plugins=["evil@internal"],
+            ),
             security=SecurityConfig(
                 blocked_plugins=["evil@internal"],
-                blocked_reason="Blocked by org security policy",
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Team",
+                "team": make_team_profile(
                     additional_plugins=["evil@internal"],
-                    allowed_plugins=["evil@internal"],  # allowed but blocked!
                 ),
             },
         )
@@ -510,73 +466,31 @@ class TestComputeEffectivePluginsMarketplaces:
     def test_defaults_extra_marketplaces_included(self) -> None:
         """Defaults extra_marketplaces should appear in result."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 extra_marketplaces=["experimental"],
             ),
             profiles={
-                "team": TeamProfile(name="Team"),
+                "team": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="team")
 
         assert "experimental" in result.extra_marketplaces
 
-    def test_profile_extra_marketplaces_merged(self) -> None:
-        """Profile extra_marketplaces should merge with defaults."""
-        from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
-
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            defaults=DefaultsConfig(
-                extra_marketplaces=["org-internal"],
-            ),
-            profiles={
-                "team": TeamProfile(
-                    name="Team",
-                    extra_marketplaces=["team-specific"],
-                ),
-            },
-        )
-        result = compute_effective_plugins(config, team_id="team")
-
-        assert "org-internal" in result.extra_marketplaces
-        assert "team-specific" in result.extra_marketplaces
-
     def test_duplicate_marketplaces_are_deduplicated(self) -> None:
         """Same marketplace in defaults and profile should appear once."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
-                extra_marketplaces=["shared"],
+                extra_marketplaces=["shared", "shared"],
             ),
             profiles={
-                "team": TeamProfile(
-                    name="Team",
-                    extra_marketplaces=["shared"],  # duplicate
-                ),
+                "team": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="team")
@@ -595,16 +509,9 @@ class TestComputeEffectivePluginsNormalization:
     def test_bare_plugin_name_auto_resolves_single_marketplace(self) -> None:
         """Bare plugin name should auto-resolve when org has 1 marketplace."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            MarketplaceSourceGitHub,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, MarketplaceSourceGitHub
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             marketplaces={
                 "internal": MarketplaceSourceGitHub(
                     source="github",
@@ -616,7 +523,7 @@ class TestComputeEffectivePluginsNormalization:
                 enabled_plugins=["code-review"],  # bare name, no @marketplace
             ),
             profiles={
-                "team": TeamProfile(name="Team"),
+                "team": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="team")
@@ -627,21 +534,15 @@ class TestComputeEffectivePluginsNormalization:
     def test_bare_plugin_name_resolves_to_official_when_no_marketplaces(self) -> None:
         """Bare plugin name should resolve to claude-plugins-official when 0 org marketplaces."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             marketplaces={},  # no org marketplaces
             defaults=DefaultsConfig(
                 enabled_plugins=["code-review"],  # bare name
             ),
             profiles={
-                "team": TeamProfile(name="Team"),
+                "team": make_team_profile(),
             },
         )
         result = compute_effective_plugins(config, team_id="team")
@@ -653,16 +554,9 @@ class TestComputeEffectivePluginsNormalization:
         """Bare plugin name with 2+ org marketplaces should raise error."""
         from scc_cli.marketplace.compute import compute_effective_plugins
         from scc_cli.marketplace.normalize import AmbiguousMarketplaceError
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            MarketplaceSourceGitHub,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, MarketplaceSourceGitHub
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             marketplaces={
                 "internal": MarketplaceSourceGitHub(
                     source="github",
@@ -679,7 +573,7 @@ class TestComputeEffectivePluginsNormalization:
                 enabled_plugins=["ambiguous-tool"],  # bare name, 2 marketplaces!
             ),
             profiles={
-                "team": TeamProfile(name="Team"),
+                "team": make_team_profile(),
             },
         )
 
@@ -696,19 +590,15 @@ class TestComputeEffectivePluginsFullWorkflow:
     """Integration tests for complete plugin computation workflow."""
 
     def test_complex_scenario_with_all_features(self) -> None:
-        """Full workflow: defaults + additional + disabled + allowed + blocked."""
+        """Full workflow: defaults + additional + allowlist + blocked + disabled."""
         from scc_cli.marketplace.compute import compute_effective_plugins
         from scc_cli.marketplace.schema import (
             DefaultsConfig,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
             SecurityConfig,
-            TeamProfile,
         )
 
-        config = OrganizationConfig(
-            name="Sundsvall Municipality",
-            schema_version=1,
+        config = make_org_config(
             marketplaces={
                 "internal": MarketplaceSourceGitHub(
                     source="github",
@@ -722,26 +612,21 @@ class TestComputeEffectivePluginsFullWorkflow:
                     "linter@internal",
                     "debug-tool@internal",
                 ],
+                disabled_plugins=["debug-*@*"],
+                allowed_plugins=["api-tools@internal", "evil-plugin@internal"],
                 extra_marketplaces=["experimental"],
             ),
             security=SecurityConfig(
                 blocked_plugins=["evil-*@*"],
-                blocked_reason="Security policy violation",
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend Team",
+                "backend": make_team_profile(
                     description="Backend developers",
                     additional_plugins=[
                         "api-tools@internal",
                         "evil-plugin@internal",  # should be blocked
                     ],
-                    disabled_plugins=["debug-*@*"],  # removes debug-tool
-                    allowed_plugins=[
-                        "api-tools@internal",
-                        "evil-plugin@internal",  # allowed but blocked
-                    ],
-                    extra_marketplaces=["backend-tools"],
                 ),
             },
         )
@@ -760,68 +645,59 @@ class TestComputeEffectivePluginsFullWorkflow:
         # Blocked: evil-plugin matched evil-*@*
         assert len(result.blocked) == 1
         assert result.blocked[0].plugin_id == "evil-plugin@internal"
-        assert result.blocked[0].reason == "Security policy violation"
+        assert result.blocked[0].reason == "Blocked by security policy"
 
-        # Extra marketplaces: defaults + profile
+        # Extra marketplaces: defaults only
         assert "experimental" in result.extra_marketplaces
-        assert "backend-tools" in result.extra_marketplaces
 
     def test_order_of_operations(self) -> None:
-        """Verify: normalize → merge → disable → allow filter → block."""
+        """Verify: normalize → disable defaults → allowlist → block."""
         from scc_cli.marketplace.compute import compute_effective_plugins
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            SecurityConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, SecurityConfig
 
         # This test verifies the order of operations matters:
-        # 1. Merge defaults + additional
-        # 2. Apply disabled_plugins (removes from merged)
-        # 3. Apply allowed_plugins filter (for additional only)
-        # 4. Apply blocked_plugins (final security gate)
+        # 1. Apply defaults.disabled_plugins
+        # 2. Add delegated additional plugins (allowlist enforced)
+        # 3. Apply security.blocked_plugins (final gate)
 
-        config = OrganizationConfig(
-            name="Test",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["tool-a@internal", "tool-b@internal"],
+                disabled_plugins=["tool-a@internal"],
+                allowed_plugins=["tool-c@internal", "tool-d@internal"],
             ),
             security=SecurityConfig(
                 blocked_plugins=["tool-c@internal"],
-                blocked_reason="Blocked",
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "tool-c@internal",
                         "tool-d@internal",
                         "tool-e@internal",
                     ],
-                    disabled_plugins=["tool-a@internal"],
-                    # tool-c and tool-d are allowed, tool-e is not in allowlist
-                    allowed_plugins=["tool-c@internal", "tool-d@internal"],
                 ),
             },
         )
         result = compute_effective_plugins(config, team_id="team")
 
-        # tool-a: disabled by profile
+        # tool-a: disabled by defaults
         assert "tool-a@internal" in result.disabled
         assert "tool-a@internal" not in result.enabled
 
         # tool-b: from defaults, not disabled, not blocked
         assert "tool-b@internal" in result.enabled
 
-        # tool-c: allowed by team but blocked by security
+        # tool-c: allowed but blocked by security
         assert "tool-c@internal" not in result.enabled
         assert len(result.blocked) == 1
         assert result.blocked[0].plugin_id == "tool-c@internal"
 
         # tool-d: allowed additional, enabled
         assert "tool-d@internal" in result.enabled
+        # tool-e: not allowlisted
+        assert "tool-e@internal" in result.not_allowed
 
         # tool-e: not in allowlist, should be in not_allowed
         assert "tool-e@internal" not in result.enabled
@@ -829,7 +705,7 @@ class TestComputeEffectivePluginsFullWorkflow:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# compute_effective_plugins_federated() Tests (Phase 2)
+# compute_effective_plugins_federated() Tests (Federated)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -839,23 +715,16 @@ class TestComputeEffectivePluginsFederated:
     def test_step1_org_defaults_enabled_plugins(self) -> None:
         """Step 1: Start with org defaults.enabled_plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["default-plugin@internal"],
             ),
-            profiles={"backend": TeamProfile(name="Backend")},
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
-        team_config = TeamConfig(schema_version=1)
+        team_config = TeamConfig(schema_version="1.0.0")
 
         result = compute_effective_plugins_federated(
             config=config, team_id="backend", team_config=team_config
@@ -865,24 +734,18 @@ class TestComputeEffectivePluginsFederated:
     def test_step2_team_config_enabled_plugins(self) -> None:
         """Step 2: Add team config enabled_plugins."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["default-plugin@internal"],
             ),
-            profiles={"backend": TeamProfile(name="Backend")},
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-plugin@internal"],
         )
 
@@ -896,24 +759,18 @@ class TestComputeEffectivePluginsFederated:
     def test_step3_team_config_disabled_plugins(self) -> None:
         """Step 3: Apply team config disabled_plugins patterns."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["old-tool@internal", "new-tool@internal"],
             ),
-            profiles={"backend": TeamProfile(name="Backend")},
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             disabled_plugins=["old-*@*"],  # Team disables old-* pattern
         )
 
@@ -928,24 +785,18 @@ class TestComputeEffectivePluginsFederated:
     def test_step4_org_defaults_disabled_plugins(self) -> None:
         """Step 4: Apply org defaults.disabled_plugins patterns."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 disabled_plugins=["legacy-*@*"],  # Org defaults disables legacy-*
             ),
-            profiles={"backend": TeamProfile(name="Backend")},
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["legacy-tool@internal", "modern-tool@internal"],
         )
 
@@ -957,60 +808,45 @@ class TestComputeEffectivePluginsFederated:
         assert "legacy-tool@internal" in result.disabled
         assert "modern-tool@internal" in result.enabled
 
-    def test_step5_allowed_plugins_skipped_for_federated(self) -> None:
-        """Step 5: allowed_plugins filter is SKIPPED for federated teams."""
+    def test_step5_allowed_plugins_enforced_for_federated(self) -> None:
+        """Step 5: allowed_plugins filter applies to federated teams."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={
-                "backend": TeamProfile(
-                    name="Backend",
-                    allowed_plugins=["only-this@internal"],  # Would block if inline
-                )
-            },
+        config = make_org_config(
+            defaults=DefaultsConfig(
+                allowed_plugins=["only-this@internal"],
+            ),
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
-            enabled_plugins=["other-plugin@internal"],  # Not in allowed_plugins
+            schema_version="1.0.0",
+            enabled_plugins=["other-plugin@internal"],  # Not in allowlist
         )
 
         result = compute_effective_plugins_federated(
             config=config, team_id="backend", team_config=team_config
         )
-        # Federated teams ignore allowed_plugins restriction
-        assert "other-plugin@internal" in result.enabled
-        assert "other-plugin@internal" not in result.not_allowed
+        assert "other-plugin@internal" not in result.enabled
+        assert "other-plugin@internal" in result.not_allowed
 
     def test_step6_security_blocked_always_enforced(self) -> None:
         """Step 6: Apply org security.blocked_plugins (ALWAYS enforced)."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            OrganizationConfig,
-            SecurityConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import SecurityConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             security=SecurityConfig(
                 blocked_plugins=["risky-*@*"],
-                blocked_reason="Security review required",
             ),
-            profiles={"backend": TeamProfile(name="Backend")},
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["risky-tool@internal", "safe-tool@internal"],
         )
 
@@ -1021,37 +857,29 @@ class TestComputeEffectivePluginsFederated:
         assert "risky-tool@internal" not in result.enabled
         assert len(result.blocked) == 1
         assert result.blocked[0].plugin_id == "risky-tool@internal"
-        assert result.blocked[0].reason == "Security review required"
+        assert result.blocked[0].reason == "Blocked by security policy"
         assert result.blocked[0].pattern == "risky-*@*"
         assert "safe-tool@internal" in result.enabled
 
     def test_full_6_step_precedence(self) -> None:
         """Complete test of all 6 steps in precedence order."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            SecurityConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, SecurityConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["default-a@internal", "default-b@internal"],
                 disabled_plugins=["team-disabled-by-org@*"],
             ),
             security=SecurityConfig(
                 blocked_plugins=["blocked-*@*"],
-                blocked_reason="Blocked by org",
             ),
-            profiles={"backend": TeamProfile(name="Backend")},
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[
                 "team-c@internal",
                 "team-disabled-by-org@internal",
@@ -1084,14 +912,12 @@ class TestComputeEffectivePluginsFederated:
             TeamNotFoundError,
             compute_effective_plugins_federated,
         )
-        from scc_cli.marketplace.schema import OrganizationConfig, TeamConfig
+        from scc_cli.marketplace.schema import TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={},
         )
-        team_config = TeamConfig(schema_version=1)
+        team_config = TeamConfig(schema_version="1.0.0")
 
         with pytest.raises(TeamNotFoundError) as exc_info:
             compute_effective_plugins_federated(
@@ -1099,50 +925,37 @@ class TestComputeEffectivePluginsFederated:
             )
         assert exc_info.value.team_id == "unknown"
 
-    def test_collects_extra_marketplaces_from_both_sources(self) -> None:
-        """Extra marketplaces should combine defaults + team."""
+    def test_collects_extra_marketplaces_from_defaults(self) -> None:
+        """Extra marketplaces should come from org defaults."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, TeamConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(extra_marketplaces=["org-mp"]),
-            profiles={"backend": TeamProfile(name="Backend", extra_marketplaces=["profile-mp"])},
+            profiles={"backend": make_team_profile()},
             marketplaces={"internal": {"source": "directory", "path": "/plugins"}},
         )
-        team_config = TeamConfig(schema_version=1)
+        team_config = TeamConfig(schema_version="1.0.0")
 
         result = compute_effective_plugins_federated(
             config=config, team_id="backend", team_config=team_config
         )
 
-        assert "org-mp" in result.extra_marketplaces
-        assert "profile-mp" in result.extra_marketplaces
+        assert result.extra_marketplaces == ["org-mp"]
 
     def test_normalizes_plugin_references(self) -> None:
         """Plugin references should be normalized with marketplace resolution."""
         from scc_cli.marketplace.compute import compute_effective_plugins_federated
-        from scc_cli.marketplace.schema import (
-            OrganizationConfig,
-            TeamConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import TeamConfig
 
         # Single marketplace - bare names should auto-resolve
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="Backend")},
+        config = make_org_config(
+            delegation=allow_all_delegation(),
+            profiles={"backend": make_team_profile()},
             marketplaces={"only-one": {"source": "directory", "path": "/plugins"}},
         )
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["bare-plugin"],  # Should resolve to @only-one
         )
 

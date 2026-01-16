@@ -80,18 +80,8 @@ def evaluate(config: EffectiveConfig) -> EvaluationResult:
 
 def _normalize_target_type(
     target_type: str,
-) -> Literal["plugin", "mcp_server", "base_image"]:
-    """Normalize target_type to valid literal values.
-
-    Args:
-        target_type: The target type from profiles.py models
-
-    Returns:
-        Normalized target type literal
-    """
+) -> Literal["plugin", "mcp_server"]:
+    """Normalize target_type to valid literal values."""
     if target_type == "mcp_server":
         return "mcp_server"
-    elif target_type == "base_image":
-        return "base_image"
-    else:
-        return "plugin"  # Default to plugin for unknown types
+    return "plugin"

@@ -21,10 +21,9 @@ from .. import config, teams
 from ..cli_common import console, handle_errors, render_responsive_table
 from ..json_command import json_command
 from ..kinds import Kind
-from ..marketplace.adapter import translate_org_config
 from ..marketplace.compute import TeamNotFoundError
 from ..marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
-from ..marketplace.schema import OrganizationConfig
+from ..marketplace.schema import OrganizationConfig, normalize_org_config_data
 from ..marketplace.team_fetch import TeamFetchResult, fetch_team_config
 from ..marketplace.trust import TrustViolationError
 from ..output_mode import is_json_mode, print_human
@@ -93,15 +92,10 @@ def _get_config_source_from_raw(
 
 
 def _parse_config_source(raw_source: dict[str, Any]) -> Any:
-    """Parse raw config_source dict into ConfigSource model.
+    """Parse config_source dict into ConfigSource model.
 
-    The org config uses a nested structure like:
-        {"github": {"owner": "...", "repo": "..."}}
-
-    The Pydantic models use a flat structure with a discriminator field:
+    The org config uses a discriminator field:
         {"source": "github", "owner": "...", "repo": "..."}
-
-    This function bridges the two formats.
 
     Args:
         raw_source: Raw config_source dict from org config
@@ -118,19 +112,14 @@ def _parse_config_source(raw_source: dict[str, Any]) -> Any:
         ConfigSourceURL,
     )
 
-    # Config source is a dict with a single key indicating type
-    # Add the discriminator field when parsing
-    if "github" in raw_source:
-        config_data = {**raw_source["github"], "source": "github"}
-        return ConfigSourceGitHub.model_validate(config_data)
-    elif "git" in raw_source:
-        config_data = {**raw_source["git"], "source": "git"}
-        return ConfigSourceGit.model_validate(config_data)
-    elif "url" in raw_source:
-        config_data = {**raw_source["url"], "source": "url"}
-        return ConfigSourceURL.model_validate(config_data)
-    else:
-        raise ValueError(f"Unknown config_source type: {list(raw_source.keys())}")
+    source_type = raw_source.get("source")
+    if source_type == "github":
+        return ConfigSourceGitHub.model_validate(raw_source)
+    if source_type == "git":
+        return ConfigSourceGit.model_validate(raw_source)
+    if source_type == "url":
+        return ConfigSourceURL.model_validate(raw_source)
+    raise ValueError(f"Unknown config_source type: {source_type}")
 
 
 def _fetch_federated_team_config(
@@ -231,13 +220,10 @@ def team_list(
                 cache_file.write_text(json.dumps(org_config, indent=2))
                 print_human("[green]✓ Team list synced from organization[/green]")
 
-    # Get teams
-    available_teams = teams.list_teams(cfg, org_config=org_config)
+    available_teams = teams.list_teams(org_config)
 
-    # Get current team for marking
     current = cfg.get("selected_profile")
 
-    # Build data structure for JSON output
     team_data = []
     for team in available_teams:
         team_data.append(
@@ -249,7 +235,6 @@ def team_list(
             }
         )
 
-    # Human-readable output
     if not is_json_mode():
         if not available_teams:
             # Provide context-aware messaging based on mode
@@ -271,7 +256,6 @@ def team_list(
                 )
             return {"teams": [], "current": current}
 
-        # Build rows for responsive table
         rows = []
         for team in available_teams:
             name = team["name"]
@@ -335,8 +319,7 @@ def team_current(
         )
         return {"team": None, "profile": None}
 
-    # Get team details
-    details = teams.get_team_details(current, cfg, org_config=org_config)
+    details = teams.get_team_details(current, org_config)
 
     if not details:
         print_human(
@@ -345,7 +328,6 @@ def team_current(
         )
         return {"team": current, "profile": None, "error": "team_not_found"}
 
-    # Human output
     print_human(f"[bold cyan]Current team:[/bold cyan] {current}")
     if details.get("description"):
         print_human(f"[dim]{details['description']}[/dim]")
@@ -390,7 +372,7 @@ def team_switch(
     cfg = config.load_user_config()
     org_config = config.load_cached_org_config()
 
-    available_teams = teams.list_teams(cfg, org_config=org_config)
+    available_teams = teams.list_teams(org_config)
 
     if not available_teams:
         # Provide context-aware messaging based on mode
@@ -406,10 +388,8 @@ def team_switch(
             )
         return {"success": False, "error": "no_teams_available", "previous": None, "current": None}
 
-    # Get current team for picker display
     current = cfg.get("selected_profile")
 
-    # Resolve team name (explicit arg, picker, or error)
     resolved_name: str | None = team_name
 
     if resolved_name is None:
@@ -442,6 +422,14 @@ def team_switch(
                 f"Available: {', '.join(t['name'] for t in available_teams)}"
             )
 
+    if resolved_name is None:
+        return {
+            "success": False,
+            "error": "team_not_selected",
+            "previous": current,
+            "current": None,
+        }
+
     # Validate team exists (when name provided directly as arg)
     team_names = [t["name"] for t in available_teams]
     if resolved_name not in team_names:
@@ -466,7 +454,7 @@ def team_switch(
     if previous and previous != resolved_name:
         print_human(f"[dim]Previous: {previous}[/dim]")
 
-    details = teams.get_team_details(resolved_name, cfg, org_config=org_config)
+    details = teams.get_team_details(resolved_name, org_config)
     if details:
         description = details.get("description")
         plugins = details.get("plugins", [])
@@ -522,10 +510,9 @@ def team_info(
     Displays team description, plugin configuration, marketplace info,
     federation status (federated vs inline), config source, and trust grants.
     """
-    cfg = config.load_user_config()
     org_config = config.load_cached_org_config()
 
-    details = teams.get_team_details(team_name, cfg, org_config=org_config)
+    details = teams.get_team_details(team_name, org_config)
 
     # Detect if team is federated (has config_source)
     raw_source = _get_config_source_from_raw(org_config, team_name)
@@ -534,12 +521,13 @@ def team_info(
     # Get config source description for federated teams
     config_source_display: str | None = None
     if is_federated and raw_source is not None:
-        if "github" in raw_source:
-            gh = raw_source["github"]
-            config_source_display = f"github.com/{gh.get('owner', '?')}/{gh.get('repo', '?')}"
-        elif "git" in raw_source:
-            git = raw_source["git"]
-            url = git.get("url", "")
+        source_type = raw_source.get("source")
+        if source_type == "github":
+            config_source_display = (
+                f"github.com/{raw_source.get('owner', '?')}/{raw_source.get('repo', '?')}"
+            )
+        elif source_type == "git":
+            url = raw_source.get("url", "")
             # Normalize for display
             if url.startswith("https://"):
                 url = url[8:]
@@ -548,8 +536,8 @@ def team_info(
             if url.endswith(".git"):
                 url = url[:-4]
             config_source_display = url
-        elif "url" in raw_source:
-            url = raw_source["url"].get("url", "")
+        elif source_type == "url":
+            url = raw_source.get("url", "")
             if url.startswith("https://"):
                 url = url[8:]
             config_source_display = url
@@ -574,7 +562,7 @@ def team_info(
         return {"team": team_name, "found": False, "profile": None}
 
     # Get validation info
-    validation = teams.validate_team_profile(team_name, cfg, org_config=org_config)
+    validation = teams.validate_team_profile(team_name, org_config)
 
     # Human output
     if not is_json_mode():
@@ -699,10 +687,9 @@ def team_validate(
             "error": "No organization configuration found",
         }
 
-    # Parse org config (translate external format to internal Pydantic format)
+    # Parse org config (validated by JSON Schema when cached)
     try:
-        internal_data = translate_org_config(org_config_data)
-        org_config = OrganizationConfig.model_validate(internal_data)
+        org_config = OrganizationConfig.model_validate(normalize_org_config_data(org_config_data))
     except Exception as e:
         if not is_json_mode():
             console.print(

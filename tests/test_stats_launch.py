@@ -19,9 +19,9 @@ import pytest
 
 @pytest.fixture
 def minimal_org_config_v2():
-    """Minimal v2 org config for testing."""
+    """Minimal v1 org config for testing."""
     return {
-        "schema_version": "2.0",
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "defaults": {
             "allowed_plugins": ["test-plugin"],
@@ -38,7 +38,7 @@ def minimal_org_config_v2():
 def org_config_with_stats():
     """Org config with stats configuration."""
     return {
-        "schema_version": "2.0",
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "defaults": {
             "allowed_plugins": ["test-plugin"],
@@ -59,7 +59,7 @@ def org_config_with_stats():
 def org_config_stats_disabled():
     """Org config with stats disabled."""
     return {
-        "schema_version": "2.0",
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "defaults": {
             "allowed_plugins": ["test-plugin"],
@@ -79,7 +79,7 @@ def org_config_stats_disabled():
 def org_config_stats_anonymous():
     """Org config with anonymous stats (no user identity)."""
     return {
-        "schema_version": "2.0",
+        "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
         "defaults": {
             "allowed_plugins": ["test-plugin"],
@@ -91,7 +91,7 @@ def org_config_stats_anonymous():
         },
         "stats": {
             "enabled": True,
-            "user_identity_mode": "none",
+            "user_identity_mode": "anonymous",
         },
     }
 

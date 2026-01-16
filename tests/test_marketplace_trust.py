@@ -274,7 +274,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["tool@shared"],
             marketplaces={},
         )
@@ -289,7 +289,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import TrustViolationError, validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "team-mp": MarketplaceSourceGitHub(
                     source="github",
@@ -314,7 +314,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "team-mp": MarketplaceSourceGitHub(
                     source="github",
@@ -337,7 +337,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import TrustViolationError, validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "shared": MarketplaceSourceGitHub(  # Same name as org marketplace
                     source="github",
@@ -364,7 +364,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import TrustViolationError, validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "claude-plugins-official": MarketplaceSourceGitHub(
                     source="github",
@@ -394,7 +394,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "github-mp": MarketplaceSourceGitHub(
                     source="github",
@@ -424,7 +424,7 @@ class TestValidateTeamConfigTrust:
         from scc_cli.marketplace.trust import TrustViolationError, validate_team_config_trust
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             marketplaces={
                 "valid-mp": MarketplaceSourceGitHub(
                     source="github",

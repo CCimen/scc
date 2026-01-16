@@ -14,9 +14,6 @@
         "blocked_mcp_servers": [
             "*.untrusted.com"
         ],
-        "blocked_base_images": [
-            "*:latest"
-        ],
         "allow_stdio_mcp": false
     },
     "defaults": {
