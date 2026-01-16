@@ -17,6 +17,7 @@ from pathlib import Path
 from ..core.constants import SANDBOX_IMAGE
 from ..core.errors import (
     ContainerNotFoundError,
+    DockerDaemonNotRunningError,
     DockerNotFoundError,
     DockerVersionError,
     SandboxNotAvailableError,
@@ -75,6 +76,10 @@ def check_docker_available() -> None:
     # Check Docker is installed
     if not _check_docker_installed():
         raise DockerNotFoundError()
+
+    # Check Docker daemon is running
+    if not run_command_bool(["docker", "info"], timeout=5):
+        raise DockerDaemonNotRunningError()
 
     # Check Docker Desktop version when available (sandbox requirement)
     desktop_version = get_docker_desktop_version()

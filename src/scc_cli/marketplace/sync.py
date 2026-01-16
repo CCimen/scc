@@ -27,7 +27,7 @@ from scc_cli.marketplace.materialize import MaterializationError, materialize_ma
 from scc_cli.marketplace.normalize import matches_pattern
 from scc_cli.marketplace.render import check_conflicts, merge_settings, render_settings
 from scc_cli.marketplace.resolve import resolve_effective_config
-from scc_cli.marketplace.schema import OrganizationConfig
+from scc_cli.marketplace.schema import OrganizationConfig, normalize_org_config_data
 
 
 class SyncError(Exception):
@@ -108,7 +108,7 @@ def sync_marketplace_settings(
     # ── Step 1: Parse org config ─────────────────────────────────────────────
     # Org config is already validated by JSON Schema before caching.
     try:
-        org_config = OrganizationConfig.model_validate(org_config_data)
+        org_config = OrganizationConfig.model_validate(normalize_org_config_data(org_config_data))
     except Exception as e:
         raise SyncError(f"Invalid org config: {e}") from e
 

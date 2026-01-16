@@ -106,7 +106,7 @@ class TestWorktreeBranchPrefix:
         console.status.return_value.__exit__ = MagicMock(return_value=False)
 
         with (
-            patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=True),
+            patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=True),
             patch("scc_cli.ui.git_interactive._fetch_branch"),
             patch("scc_cli.ui.git_interactive.install_dependencies"),
         ):
@@ -331,7 +331,7 @@ class TestCheckBranchSafety:
     def test_warns_on_main_branch(self, temp_git_repo_on_main):
         """Main branch should trigger warning and prompt."""
         console = MagicMock()
-        with patch("scc_cli.ui.git_interactive.Prompt.ask") as mock_prompt:
+        with patch("scc_cli.ui.git_interactive.prompt_with_layout") as mock_prompt:
             # User chooses to continue (option 2)
             mock_prompt.return_value = "2"
             result = git.check_branch_safety(temp_git_repo_on_main, console)
@@ -343,7 +343,7 @@ class TestCheckBranchSafety:
     def test_cancel_on_protected_branch_returns_false(self, temp_git_repo_on_main):
         """Cancelling on protected branch should return False."""
         console = MagicMock()
-        with patch("scc_cli.ui.git_interactive.Prompt.ask") as mock_prompt:
+        with patch("scc_cli.ui.git_interactive.prompt_with_layout") as mock_prompt:
             mock_prompt.return_value = "3"  # Cancel
             result = git.check_branch_safety(temp_git_repo_on_main, console)
 
@@ -352,7 +352,7 @@ class TestCheckBranchSafety:
     def test_creates_branch_when_user_chooses(self, temp_git_repo_on_main):
         """Should create feature branch when user chooses option 1."""
         console = MagicMock()
-        with patch("scc_cli.ui.git_interactive.Prompt.ask") as mock_prompt:
+        with patch("scc_cli.ui.git_interactive.prompt_with_layout") as mock_prompt:
             # First call: choose to create branch
             # Second call: branch name
             mock_prompt.side_effect = ["1", "my-new-feature"]
@@ -421,7 +421,7 @@ class TestCreateWorktree:
 
         # Mock _fetch_branch since temp repos don't have remotes
         with (
-            patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=True),
+            patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=True),
             patch("scc_cli.ui.git_interactive._fetch_branch"),  # Skip fetch, no remote in temp repo
             patch("scc_cli.ui.git_interactive.install_dependencies"),  # Skip deps install
         ):
@@ -443,7 +443,7 @@ class TestCreateWorktree:
 
         # Mock _fetch_branch since temp repos don't have remotes
         with (
-            patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=True),
+            patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=True),
             patch("scc_cli.ui.git_interactive._fetch_branch"),  # Skip fetch, no remote in temp repo
             patch("scc_cli.ui.git_interactive.install_dependencies"),  # Skip deps install
         ):
@@ -519,7 +519,7 @@ class TestCleanupWorktree:
         (worktree_path / "uncommitted.txt").write_text("data that would be lost")
 
         # Cleanup with user declining
-        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):
+        with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
             result = git.cleanup_worktree(
                 temp_git_repo,
                 "dirty-feature",
@@ -554,7 +554,7 @@ class TestCleanupWorktree:
         (worktree_path / "uncommitted.txt").write_text("data")
 
         # Don't delete branch
-        with patch("scc_cli.ui.git_interactive.Confirm.ask", return_value=False):
+        with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
             result = git.cleanup_worktree(
                 temp_git_repo,
                 "force-delete",

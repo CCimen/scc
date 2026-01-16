@@ -17,6 +17,7 @@ import pytest
 from scc_cli import docker
 from scc_cli.core.errors import (
     ContainerNotFoundError,
+    DockerDaemonNotRunningError,
     DockerNotFoundError,
     DockerVersionError,
     SandboxLaunchError,
@@ -508,10 +509,20 @@ class TestCheckDockerAvailable:
             with pytest.raises(DockerNotFoundError):
                 docker.check_docker_available()
 
+    def test_raises_daemon_not_running_when_unavailable(self):
+        """Should raise DockerDaemonNotRunningError when daemon isn't running."""
+        with (
+            patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.run_command_bool", return_value=False),
+        ):
+            with pytest.raises(DockerDaemonNotRunningError):
+                docker.check_docker_available()
+
     def test_raises_version_error_when_too_old(self):
         """Should raise DockerVersionError when version is too old."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.run_command_bool", return_value=True),
             patch(
                 "scc_cli.docker.core.get_docker_desktop_version",
                 return_value="Docker Desktop 4.0.0",
@@ -525,6 +536,7 @@ class TestCheckDockerAvailable:
         """Should raise SandboxNotAvailableError when sandbox not available."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.run_command_bool", return_value=True),
             patch("scc_cli.docker.core.get_docker_desktop_version", return_value=None),
             patch("scc_cli.docker.core.check_docker_sandbox", return_value=False),
         ):
@@ -535,6 +547,7 @@ class TestCheckDockerAvailable:
         """Should not raise when all requirements are met."""
         with (
             patch("scc_cli.docker.core._check_docker_installed", return_value=True),
+            patch("scc_cli.docker.core.run_command_bool", return_value=True),
             patch(
                 "scc_cli.docker.core.get_docker_desktop_version",
                 return_value="Docker Desktop 4.50.0",

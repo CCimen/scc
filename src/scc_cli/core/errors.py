@@ -56,6 +56,14 @@ class DockerNotFoundError(PrerequisiteError):
 
 
 @dataclass
+class DockerDaemonNotRunningError(PrerequisiteError):
+    """Docker Desktop is installed but not running."""
+
+    user_message: str = field(default="Docker Desktop is not running")
+    suggested_action: str = field(default="Start Docker Desktop and try again")
+
+
+@dataclass
 class DockerVersionError(PrerequisiteError):
     """Docker version is too old for sandbox feature."""
 

@@ -23,6 +23,7 @@ from rich.table import Table
 
 from scc_cli.confirm import Confirm
 from scc_cli.theme import Borders, Colors
+from scc_cli.ui.chrome import get_layout_metrics, print_with_layout
 
 if TYPE_CHECKING:
     from scc_cli.core.errors import SCCError
@@ -66,8 +67,22 @@ def render_error(console: Console, error: "SCCError", debug: bool = False) -> No
     )
 
     console.print()
-    console.print(panel)
+    print_with_layout(console, panel, constrain=True)
     console.print()
+
+
+def prompt_with_layout(console: Console, prompt: str, **kwargs: Any) -> str:
+    """Prompt for input aligned to centered layouts."""
+    metrics = get_layout_metrics(console)
+    prefix = " " * metrics.left_pad if metrics.apply else ""
+    return Prompt.ask(f"{prefix}{prompt}", **kwargs)
+
+
+def confirm_with_layout(console: Console, prompt: str, **kwargs: Any) -> bool:
+    """Confirm prompt aligned to centered layouts."""
+    metrics = get_layout_metrics(console)
+    prefix = " " * metrics.left_pad if metrics.apply else ""
+    return Confirm.ask(f"{prefix}{prompt}", **kwargs)
 
 
 def select_session(console: Console, sessions_list: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -166,7 +181,8 @@ def prompt_custom_workspace(console: Console) -> str | None:
     Returns:
         Resolved absolute path string, or None if cancelled or path invalid.
     """
-    path = Prompt.ask(f"\n[{Colors.BRAND}]Enter workspace path[/{Colors.BRAND}]")
+    console.print()
+    path = prompt_with_layout(console, f"[{Colors.BRAND}]Enter workspace path[/{Colors.BRAND}]")
 
     if not path:
         return None
@@ -175,7 +191,11 @@ def prompt_custom_workspace(console: Console) -> str | None:
 
     if not expanded.exists():
         console.print(f"[{Colors.ERROR}]Path does not exist: {expanded}[/{Colors.ERROR}]")
-        if Confirm.ask(f"[{Colors.BRAND}]Create this directory?[/{Colors.BRAND}]", default=False):
+        if confirm_with_layout(
+            console,
+            f"[{Colors.BRAND}]Create this directory?[/{Colors.BRAND}]",
+            default=False,
+        ):
             expanded.mkdir(parents=True, exist_ok=True)
             return str(expanded)
         return None
@@ -192,5 +212,8 @@ def prompt_repo_url(console: Console) -> str:
     Returns:
         The entered URL string (may be empty if user pressed Enter).
     """
-    url = Prompt.ask(f"\n[{Colors.BRAND}]Repository URL (HTTPS or SSH)[/{Colors.BRAND}]")
-    return url
+    console.print()
+    return prompt_with_layout(
+        console,
+        f"[{Colors.BRAND}]Repository URL (HTTPS or SSH)[/{Colors.BRAND}]",
+    )

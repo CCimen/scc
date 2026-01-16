@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 from ...confirm import Confirm
+from ..chrome import print_with_layout
 from ..keys import (
     ContainerActionMenuRequested,
     ContainerRemoveRequested,
@@ -336,7 +337,7 @@ def _handle_team_switch() -> None:
 
         available_teams = teams.list_teams(org_config)
         if not available_teams:
-            console.print("[yellow]No teams available[/yellow]")
+            print_with_layout(console, "[yellow]No teams available[/yellow]", max_width=120)
             return
 
         # Get current team for marking
@@ -353,14 +354,22 @@ def _handle_team_switch() -> None:
             team_name = selected.get("name", "")
             cfg["selected_profile"] = team_name
             config.save_user_config(cfg)
-            console.print(f"[green]Switched to team: {team_name}[/green]")
+            print_with_layout(
+                console,
+                f"[green]Switched to team: {team_name}[/green]",
+                max_width=120,
+            )
         # If cancelled, just return to dashboard
 
     except TeamSwitchRequested:
         # Nested team switch (shouldn't happen, but handle gracefully)
         pass
     except Exception as e:
-        console.print(f"[red]Error switching team: {e}[/red]")
+        print_with_layout(
+            console,
+            f"[red]Error switching team: {e}[/red]",
+            max_width=120,
+        )
 
 
 def _handle_start_flow(reason: str) -> bool | None:
@@ -399,9 +408,9 @@ def _handle_start_flow(reason: str) -> bool | None:
 
     # Show contextual message based on reason
     if reason == "no_containers":
-        console.print("[dim]Starting a new session...[/dim]")
+        print_with_layout(console, "[dim]Starting a new session...[/dim]")
     elif reason == "no_sessions":
-        console.print("[dim]Starting your first session...[/dim]")
+        print_with_layout(console, "[dim]Starting your first session...[/dim]")
     console.print()
 
     # Run the wizard with allow_back=True for dashboard context
@@ -1347,14 +1356,17 @@ def _show_onboarding_banner() -> None:
     )
 
     console.print()
-    console.print(
+    print_with_layout(
+        console,
         Panel(
             message,
             title="[bold]Getting Started[/bold]",
             border_style="bright_black",
             box=box.ROUNDED,
             padding=(1, 2),
-        )
+        ),
+        max_width=120,
+        constrain=True,
     )
     console.print()
 

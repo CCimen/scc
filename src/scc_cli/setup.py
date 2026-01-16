@@ -21,12 +21,10 @@ from rich.columns import Columns
 from rich.console import Console, RenderableType
 from rich.live import Live
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
 from . import config
-from .confirm import Confirm
 from .remote import (
     fetch_org_config,
     looks_like_github_url,
@@ -34,7 +32,8 @@ from .remote import (
     save_to_cache,
 )
 from .theme import Borders, Indicators, Spinners
-from .ui.chrome import LayoutMetrics, apply_layout, get_layout_metrics
+from .ui.chrome import LayoutMetrics, apply_layout, get_layout_metrics, print_with_layout
+from .ui.prompts import confirm_with_layout, prompt_with_layout
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Arrow-Key Selection Component
@@ -48,10 +47,7 @@ def _layout_metrics(console: Console) -> LayoutMetrics:
 
 def _print_padded(console: Console, renderable: RenderableType, metrics: LayoutMetrics) -> None:
     """Print with layout padding when applicable."""
-    if metrics.apply:
-        console.print(apply_layout(renderable, metrics))
-    else:
-        console.print(renderable)
+    print_with_layout(console, renderable, metrics=metrics, constrain=True)
 
 
 def _build_hint_text(hints: list[tuple[str, str]]) -> Text:
@@ -485,7 +481,8 @@ def prompt_has_org_config(console: Console, *, rendered: bool = False) -> bool:
     """
     if not rendered:
         console.print()
-    choice = Prompt.ask(
+    choice = prompt_with_layout(
+        console,
         "[cyan]Select mode[/cyan]",
         choices=["1", "2"],
         default="1",
@@ -507,7 +504,7 @@ def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
         console.print()
 
     while True:
-        url = Prompt.ask("[cyan]Organization config URL[/cyan]")
+        url = prompt_with_layout(console, "[cyan]Organization config URL[/cyan]")
 
         # Validate HTTPS
         if url.startswith("http://"):
@@ -554,18 +551,19 @@ def prompt_auth_method(console: Console, *, rendered: bool = False) -> str | Non
         console.print("  [yellow][3][/yellow] Skip authentication (public URL)")
     console.print()
 
-    choice = Prompt.ask(
-        "[cyan]Select option[/cyan]",
+    choice = prompt_with_layout(
+        console,
+        "[cyan]Select auth method[/cyan]",
         choices=["1", "2", "3"],
         default="1",
     )
 
     if choice == "1":
-        var_name = Prompt.ask("[cyan]Environment variable name[/cyan]")
+        var_name = prompt_with_layout(console, "[cyan]Environment variable name[/cyan]")
         return f"env:{var_name}"
 
     if choice == "2":
-        command = Prompt.ask("[cyan]Command to run[/cyan]")
+        command = prompt_with_layout(console, "[cyan]Command to run[/cyan]")
         return f"command:{command}"
 
     # Choice 3: Skip
@@ -686,7 +684,8 @@ def prompt_profile_choice(console: Console, profile_list: list[str]) -> str | No
     if not profile_list:
         return None
     valid_choices = [str(i) for i in range(0, len(profile_list) + 1)]
-    choice_str = Prompt.ask(
+    choice_str = prompt_with_layout(
+        console,
         "[cyan]Select profile[/cyan]",
         default="0" if not profile_list else "1",
         choices=valid_choices,
@@ -722,7 +721,8 @@ def prompt_hooks_enablement(console: Console, *, rendered: bool = False) -> bool
         )
         console.print()
 
-    return Confirm.ask(
+    return confirm_with_layout(
+        console,
         "[cyan]Enable git hooks protection?[/cyan]",
         default=True,
     )
@@ -925,7 +925,7 @@ def _confirm_setup(
         _print_padded(console, panel, metrics)
         console.print()
 
-    return Confirm.ask("[cyan]Apply these settings?[/cyan]", default=True)
+    return confirm_with_layout(console, "[cyan]Apply these settings?[/cyan]", default=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1031,20 +1031,23 @@ def run_setup_wizard(console: Console) -> bool:
                     default_var = "GITHUB_TOKEN"
                 else:
                     default_var = "SCC_ORG_TOKEN"
-                var_name = Prompt.ask(
+                var_name = prompt_with_layout(
+                    console,
                     "[cyan]Environment variable name[/cyan]",
                     default=default_var,
                 )
                 auth = f"env:{var_name}"
             elif auth_choice == 1:
                 console.print()
-                command = Prompt.ask("[cyan]Command to run[/cyan]")
+                command = prompt_with_layout(console, "[cyan]Command to run[/cyan]")
                 auth = f"command:{command}"
             # else: auth stays None (skip)
 
             if auth and looks_like_gitlab_url(org_url):
                 console.print("[dim]GitLab detected. Default header: PRIVATE-TOKEN.[/dim]")
-                auth_header = Prompt.ask("[cyan]Auth header[/cyan]", default="PRIVATE-TOKEN")
+                auth_header = prompt_with_layout(
+                    console, "[cyan]Auth header[/cyan]", default="PRIVATE-TOKEN"
+                )
 
             if auth:
                 org_config = fetch_and_validate_org_config(

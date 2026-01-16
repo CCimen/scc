@@ -17,6 +17,7 @@ from ... import git
 from ...cli_common import MAX_DISPLAY_PATH_LENGTH, PATH_TRUNCATE_LENGTH, console
 from ...output_mode import print_human
 from ...theme import Indicators
+from ...ui.chrome import print_with_layout
 
 if TYPE_CHECKING:
     from .workspace import LaunchContext
@@ -166,9 +167,10 @@ def show_launch_panel(
     )
 
     console.print()
-    console.print(panel)
+    print_with_layout(console, panel, constrain=True)
     console.print()
-    console.print("[dim]Starting Docker sandbox...[/dim]")
+    start_line = "[dim]Starting Docker sandbox...[/dim]"
+    print_with_layout(console, start_line)
     console.print()
 
 
@@ -243,10 +245,10 @@ def show_dry_run_panel(data: dict[str, Any]) -> None:
     )
 
     console.print()
-    console.print(panel)
+    print_with_layout(console, panel, constrain=True)
     console.print()
     if ready:
-        console.print("[dim]Remove --dry-run to launch[/dim]")
+        print_with_layout(console, "[dim]Remove --dry-run to launch[/dim]")
     console.print()
 
 
@@ -305,5 +307,5 @@ def show_launch_context_panel(ctx: LaunchContext) -> None:
     )
 
     console.print()
-    console.print(panel)
+    print_with_layout(console, panel, constrain=True)
     console.print()

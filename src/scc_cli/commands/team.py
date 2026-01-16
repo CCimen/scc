@@ -23,7 +23,7 @@ from ..json_command import json_command
 from ..kinds import Kind
 from ..marketplace.compute import TeamNotFoundError
 from ..marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
-from ..marketplace.schema import OrganizationConfig
+from ..marketplace.schema import OrganizationConfig, normalize_org_config_data
 from ..marketplace.team_fetch import TeamFetchResult, fetch_team_config
 from ..marketplace.trust import TrustViolationError
 from ..output_mode import is_json_mode, print_human
@@ -689,7 +689,7 @@ def team_validate(
 
     # Parse org config (validated by JSON Schema when cached)
     try:
-        org_config = OrganizationConfig.model_validate(org_config_data)
+        org_config = OrganizationConfig.model_validate(normalize_org_config_data(org_config_data))
     except Exception as e:
         if not is_json_mode():
             console.print(

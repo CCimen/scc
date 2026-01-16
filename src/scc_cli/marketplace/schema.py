@@ -10,7 +10,7 @@ These models mirror the org-v1 JSON schema and provide typed access for:
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -21,6 +21,18 @@ class StrictModel(BaseModel):
     """Base model with strict field validation."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+def normalize_org_config_data(config: dict[str, Any]) -> dict[str, Any]:
+    """Normalize org config data for Pydantic validation.
+
+    Removes JSON Schema metadata keys that are not part of the Pydantic models.
+    """
+    if "$schema" not in config:
+        return config
+    normalized = dict(config)
+    normalized.pop("$schema", None)
+    return normalized
 
 
 # ─────────────────────────────────────────────────────────────────────────────
