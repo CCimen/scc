@@ -1,27 +1,25 @@
 """
 Precedence order integration tests for SCC marketplace.
 
-Tests the 5-step and 6-step precedence rules for plugin computation:
+Tests the precedence rules for plugin computation:
 
-Inline Teams (5-step):
-    1. Normalize all plugin references
-    2. Merge defaults.enabled_plugins + profile.additional_plugins
-    3. Apply profile.disabled_plugins patterns
-    4. Apply profile.allowed_plugins filter (additional only)
-    5. Apply security.blocked_plugins (final gate)
+Inline Teams:
+    1. Normalize defaults.enabled_plugins
+    2. Apply defaults.disabled_plugins
+    3. Add profile.additional_plugins if delegated + allowlisted
+    4. Apply security.blocked_plugins (final gate)
 
-Federated Teams (6-step):
+Federated Teams:
     1. Start with org defaults.enabled_plugins
-    2. Add team config enabled_plugins
-    3. Apply team config disabled_plugins patterns
-    4. Apply org defaults.disabled_plugins patterns
-    5. SKIP allowed_plugins (federated teams exempt)
-    6. Apply org security.blocked_plugins (ALWAYS enforced)
+    2. Apply defaults.disabled_plugins
+    3. Add team config enabled_plugins (delegation + allowlist)
+    4. Apply team config disabled_plugins patterns
+    5. Apply org security.blocked_plugins (ALWAYS enforced)
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -37,12 +35,39 @@ from scc_cli.marketplace.normalize import (
 )
 from scc_cli.marketplace.schema import (
     DefaultsConfig,
+    DelegationConfig,
+    DelegationTeamsConfig,
     MarketplaceSourceGitHub,
     OrganizationConfig,
+    OrganizationInfo,
     SecurityConfig,
     TeamConfig,
     TeamProfile,
 )
+
+
+def make_org_config(**kwargs: Any) -> OrganizationConfig:
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs: Any) -> TeamProfile:
+    return TeamProfile(**kwargs)
+
+
+def allow_all_delegation() -> DelegationConfig:
+    return DelegationConfig(
+        teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+    )
+
 
 if TYPE_CHECKING:
     pass
@@ -54,20 +79,18 @@ if TYPE_CHECKING:
 
 
 class TestInlineTeamPrecedence:
-    """Verify 5-step precedence order for inline (non-federated) teams."""
+    """Verify 4-step precedence order for inline (non-federated) teams."""
 
     def test_step1_normalization_applied(self) -> None:
         """Step 1: All plugin references are normalized to canonical form."""
-        org_config = OrganizationConfig(
-            name="Normalization Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "internal": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(enabled_plugins=[]),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "@internal/npm-style",  # npm-style format
                         "standard@internal",  # standard format
@@ -85,20 +108,18 @@ class TestInlineTeamPrecedence:
         # npm-style format should NOT appear in original form
         assert "@internal/npm-style" not in result.enabled
 
-    def test_step2_merge_defaults_and_additional(self) -> None:
-        """Step 2: Merge defaults.enabled_plugins + profile.additional_plugins."""
-        org_config = OrganizationConfig(
-            name="Merge Test",
-            schema_version=1,
+    def test_step3_merge_defaults_and_additional(self) -> None:
+        """Step 3: Merge defaults.enabled_plugins + delegated additional_plugins."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["default-tool@shared", "common-util@shared"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=["extra-tool@shared", "team-specific@shared"],
                 ),
             },
@@ -113,22 +134,18 @@ class TestInlineTeamPrecedence:
         assert "extra-tool@shared" in result.enabled
         assert "team-specific@shared" in result.enabled
 
-    def test_step3_disabled_patterns_applied(self) -> None:
-        """Step 3: profile.disabled_plugins patterns remove from merged set."""
-        org_config = OrganizationConfig(
-            name="Disabled Test",
-            schema_version=1,
+    def test_step2_disabled_patterns_applied(self) -> None:
+        """Step 2: defaults.disabled_plugins patterns remove from merged set."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["deprecated-v1@shared", "current-tool@shared"],
+                disabled_plugins=["deprecated-*"],  # Disable deprecated plugins
             ),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
-                    disabled_plugins=["deprecated-*"],  # Disable deprecated plugins
-                ),
+                "team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
@@ -141,27 +158,23 @@ class TestInlineTeamPrecedence:
         # current-tool should remain enabled
         assert "current-tool@shared" in result.enabled
 
-    def test_step4_allowed_plugins_filter_for_additional_only(self) -> None:
-        """Step 4: allowed_plugins filter applies ONLY to additional_plugins."""
-        org_config = OrganizationConfig(
-            name="Allowed Test",
-            schema_version=1,
+    def test_step3_allowed_plugins_filter_for_additional_only(self) -> None:
+        """Step 3: allowed_plugins filter applies ONLY to additional_plugins."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["default-tool@shared"],  # In defaults
+                allowed_plugins=["allowed-tool@shared"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "allowed-tool@shared",
                         "not-allowed-tool@shared",
                     ],
-                    allowed_plugins=[
-                        "allowed-tool@shared",
-                    ],  # Only this additional is allowed
                 ),
             },
             security=SecurityConfig(),
@@ -177,11 +190,9 @@ class TestInlineTeamPrecedence:
         assert "not-allowed-tool@shared" not in result.enabled
         assert "not-allowed-tool@shared" in result.not_allowed
 
-    def test_step5_security_blocked_final_gate(self) -> None:
-        """Step 5: security.blocked_plugins is the FINAL gate, cannot be bypassed."""
-        org_config = OrganizationConfig(
-            name="Security Gate Test",
-            schema_version=1,
+    def test_step4_security_blocked_final_gate(self) -> None:
+        """Step 4: security.blocked_plugins is the FINAL gate, cannot be bypassed."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
@@ -190,24 +201,19 @@ class TestInlineTeamPrecedence:
                     "blocked-but-default@shared",  # In defaults but blocked
                     "safe-default@shared",
                 ],
+                allowed_plugins=["blocked-additional@shared", "safe-additional@shared"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "blocked-additional@shared",  # In additional but blocked
-                        "safe-additional@shared",
-                    ],
-                    # Even if allowed_plugins includes blocked plugin
-                    allowed_plugins=[
-                        "blocked-additional@shared",
                         "safe-additional@shared",
                     ],
                 ),
             },
             security=SecurityConfig(
-                blocked_plugins=["blocked-*"],
-                blocked_reason="Security policy violation",
+                blocked_plugins=["blocked-*@shared"],
             ),
         )
 
@@ -223,23 +229,21 @@ class TestInlineTeamPrecedence:
 
     def test_empty_allowed_plugins_blocks_all_additional(self) -> None:
         """Empty allowed_plugins list [] blocks ALL additional_plugins."""
-        org_config = OrganizationConfig(
-            name="Empty Allowed Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["default-tool@shared"],
+                allowed_plugins=[],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "extra-tool@shared",
                         "another-tool@shared",
                     ],
-                    allowed_plugins=[],  # Empty list = block all additional
                 ),
             },
             security=SecurityConfig(),
@@ -257,16 +261,14 @@ class TestInlineTeamPrecedence:
 
     def test_none_allowed_plugins_allows_all_additional(self) -> None:
         """None allowed_plugins (default) allows ALL additional_plugins."""
-        org_config = OrganizationConfig(
-            name="None Allowed Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(enabled_plugins=[]),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=[
                         "tool-a@shared",
                         "tool-b@shared",
@@ -295,24 +297,19 @@ class TestPrecedenceOrderMatters:
 
         A plugin disabled by profile should NOT appear in blocked list.
         """
-        org_config = OrganizationConfig(
-            name="Order Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["risky-tool@shared"],
+                disabled_plugins=["risky-*"],
             ),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
-                    disabled_plugins=["risky-*"],  # Team disables this
-                ),
+                "team": make_team_profile(),
             },
             security=SecurityConfig(
                 blocked_plugins=["risky-*"],  # Org also blocks this
-                blocked_reason="Blocked by security",
             ),
         )
 
@@ -330,23 +327,22 @@ class TestPrecedenceOrderMatters:
         A plugin not in allowed_plugins should appear in not_allowed,
         not in blocked.
         """
-        org_config = OrganizationConfig(
-            name="Allowed Order Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
-            defaults=DefaultsConfig(enabled_plugins=[]),
+            defaults=DefaultsConfig(
+                enabled_plugins=[],
+                allowed_plugins=["other-tool@shared"],
+            ),
+            delegation=allow_all_delegation(),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
+                "team": make_team_profile(
                     additional_plugins=["restricted-tool@shared"],
-                    allowed_plugins=["other-tool@shared"],  # restricted not in list
                 ),
             },
             security=SecurityConfig(
                 blocked_plugins=["restricted-*"],
-                blocked_reason="Blocked",
             ),
         )
 
@@ -366,30 +362,26 @@ class TestPrecedenceOrderMatters:
 
 
 class TestFederatedTeamPrecedence:
-    """Verify 6-step precedence order for federated teams."""
+    """Verify 5-step precedence order for federated teams."""
 
     def test_step1_org_defaults_as_base(self) -> None:
         """Step 1: Start with org defaults.enabled_plugins."""
-        org_config = OrganizationConfig(
-            name="Federated Base Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["org-default-a@shared", "org-default-b@shared"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "federated-team": TeamProfile(
-                    name="Federated Team",
-                    # No additional_plugins for federated
-                ),
+                "federated-team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[],  # Empty team config
         )
 
@@ -399,25 +391,24 @@ class TestFederatedTeamPrecedence:
         assert "org-default-a@shared" in result.enabled
         assert "org-default-b@shared" in result.enabled
 
-    def test_step2_team_config_plugins_added(self) -> None:
-        """Step 2: Team config enabled_plugins are added to base."""
-        org_config = OrganizationConfig(
-            name="Federated Add Test",
-            schema_version=1,
+    def test_step3_team_config_plugins_added(self) -> None:
+        """Step 3: Team config enabled_plugins are added to base."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["org-tool@shared"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "federated-team": TeamProfile(name="Federated Team"),
+                "federated-team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-tool@shared", "custom-tool@shared"],
         )
 
@@ -428,25 +419,24 @@ class TestFederatedTeamPrecedence:
         assert "team-tool@shared" in result.enabled
         assert "custom-tool@shared" in result.enabled
 
-    def test_step3_team_disabled_patterns_applied(self) -> None:
-        """Step 3: Team config disabled_plugins patterns remove plugins."""
-        org_config = OrganizationConfig(
-            name="Team Disable Test",
-            schema_version=1,
+    def test_step4_team_disabled_patterns_applied(self) -> None:
+        """Step 4: Team config disabled_plugins patterns remove plugins."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=["old-tool@shared", "new-tool@shared"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "federated-team": TeamProfile(name="Federated Team"),
+                "federated-team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[],
             disabled_plugins=["old-*"],  # Team disables old plugins
         )
@@ -459,11 +449,9 @@ class TestFederatedTeamPrecedence:
         # new-tool should remain
         assert "new-tool@shared" in result.enabled
 
-    def test_step4_org_disabled_patterns_applied(self) -> None:
-        """Step 4: Org defaults.disabled_plugins patterns applied after team's."""
-        org_config = OrganizationConfig(
-            name="Org Disable Test",
-            schema_version=1,
+    def test_step2_org_disabled_patterns_applied(self) -> None:
+        """Step 2: Org defaults.disabled_plugins patterns applied before team additions."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
@@ -471,14 +459,15 @@ class TestFederatedTeamPrecedence:
                 enabled_plugins=["approved-tool@shared"],
                 disabled_plugins=["deprecated-*"],  # Org-level disable
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "federated-team": TeamProfile(name="Federated Team"),
+                "federated-team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["deprecated-v2@shared"],  # Team wants deprecated
         )
 
@@ -490,61 +479,55 @@ class TestFederatedTeamPrecedence:
         # approved should remain
         assert "approved-tool@shared" in result.enabled
 
-    def test_step5_allowed_plugins_not_applied_to_federated(self) -> None:
-        """Step 5: allowed_plugins from profile is NOT applied to federated teams."""
-        org_config = OrganizationConfig(
-            name="Allowed Skip Test",
-            schema_version=1,
+    def test_step3_allowed_plugins_applied_to_federated(self) -> None:
+        """Step 3: defaults.allowed_plugins applies to federated teams."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
-            defaults=DefaultsConfig(enabled_plugins=[]),
+            defaults=DefaultsConfig(
+                enabled_plugins=[],
+                allowed_plugins=["only-this@shared"],
+            ),
+            delegation=allow_all_delegation(),
             profiles={
-                "federated-team": TeamProfile(
-                    name="Federated Team",
-                    # Even with allowed_plugins set, it should be ignored
-                    allowed_plugins=["only-this@shared"],
-                ),
+                "federated-team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[
-                "any-tool@shared",  # Would be blocked by allowed_plugins for inline
+                "any-tool@shared",  # Should be rejected by allowlist
                 "only-this@shared",
             ],
         )
 
         result = compute_effective_plugins_federated(org_config, "federated-team", team_config)
 
-        # Both should be enabled - allowed_plugins is skipped
-        assert "any-tool@shared" in result.enabled
         assert "only-this@shared" in result.enabled
-        # nothing should be in not_allowed
-        assert len(result.not_allowed) == 0
+        assert "any-tool@shared" not in result.enabled
+        assert "any-tool@shared" in result.not_allowed
 
-    def test_step6_security_blocked_always_enforced(self) -> None:
-        """Step 6: security.blocked_plugins is ALWAYS enforced for federated."""
-        org_config = OrganizationConfig(
-            name="Security Always Test",
-            schema_version=1,
+    def test_step5_security_blocked_always_enforced(self) -> None:
+        """Step 5: security.blocked_plugins is ALWAYS enforced for federated."""
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(enabled_plugins=[]),
+            delegation=allow_all_delegation(),
             profiles={
-                "federated-team": TeamProfile(name="Federated Team"),
+                "federated-team": make_team_profile(),
             },
             security=SecurityConfig(
                 blocked_plugins=["malicious-*", "risky-*"],
-                blocked_reason="Org security policy",
             ),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[
                 "malicious-tool@shared",  # Blocked
                 "risky-script@shared",  # Blocked
@@ -731,13 +714,11 @@ class TestURLPatternProperties:
 
 
 class TestExtraMarketplacesPrecedence:
-    """Test extra_marketplaces merging from defaults and profile."""
+    """Test extra_marketplaces from org defaults."""
 
-    def test_extra_marketplaces_merged_from_defaults_and_profile(self) -> None:
-        """Extra marketplaces should include both defaults and profile entries."""
-        org_config = OrganizationConfig(
-            name="Extra Marketplaces Test",
-            schema_version=1,
+    def test_extra_marketplaces_from_defaults(self) -> None:
+        """Extra marketplaces should come from defaults."""
+        org_config = make_org_config(
             marketplaces={
                 "internal": MarketplaceSourceGitHub(source="github", owner="org", repo="internal"),
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="shared"),
@@ -747,46 +728,36 @@ class TestExtraMarketplacesPrecedence:
             },
             defaults=DefaultsConfig(
                 enabled_plugins=[],
-                extra_marketplaces=["internal", "shared"],  # Default exposure
+                extra_marketplaces=["internal", "shared", "experimental"],
             ),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
-                    extra_marketplaces=["experimental"],  # Team-specific
-                ),
+                "team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         result = compute_effective_plugins(org_config, "team")
 
-        # All three should be in extra_marketplaces
         assert "internal" in result.extra_marketplaces
         assert "shared" in result.extra_marketplaces
         assert "experimental" in result.extra_marketplaces
 
     def test_extra_marketplaces_deduplication(self) -> None:
         """Duplicate extra_marketplaces entries should be deduplicated."""
-        org_config = OrganizationConfig(
-            name="Dedup Test",
-            schema_version=1,
+        org_config = make_org_config(
             marketplaces={
                 "shared": MarketplaceSourceGitHub(source="github", owner="org", repo="plugins"),
             },
             defaults=DefaultsConfig(
                 enabled_plugins=[],
-                extra_marketplaces=["shared"],  # In defaults
+                extra_marketplaces=["shared", "shared"],
             ),
             profiles={
-                "team": TeamProfile(
-                    name="Test Team",
-                    extra_marketplaces=["shared"],  # Also in profile
-                ),
+                "team": make_team_profile(),
             },
             security=SecurityConfig(),
         )
 
         result = compute_effective_plugins(org_config, "team")
 
-        # Should only appear once
         assert result.extra_marketplaces.count("shared") == 1

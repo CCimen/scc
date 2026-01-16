@@ -8,7 +8,6 @@
     "security": {
         "blocked_plugins": [],
         "blocked_mcp_servers": [],
-        "blocked_base_images": ["*:latest"],
         "allow_stdio_mcp": false
     },
     "defaults": {

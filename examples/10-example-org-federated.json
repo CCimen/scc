@@ -11,9 +11,6 @@
             "*-experimental",
             "*-beta"
         ],
-        "blocked_base_images": [
-            "*:latest"
-        ],
         "allow_stdio_mcp": false
     },
     "profiles": {

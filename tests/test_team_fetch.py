@@ -27,14 +27,14 @@ class TestTeamFetchResult:
 
         result = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1, "enabled_plugins": []},
+            team_config={"schema_version": "1.0.0", "enabled_plugins": []},
             source_type="github",
             source_url="github.com/org/repo",
             commit_sha="abc123",
         )
         assert result.success is True
         assert result.team_config is not None
-        assert result.team_config["schema_version"] == 1
+        assert result.team_config["schema_version"] == "1.0.0"
 
     def test_failed_result_has_error_message(self) -> None:
         """Failed fetch includes error description."""
@@ -56,7 +56,7 @@ class TestTeamFetchResult:
 
         result = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1},
+            team_config={"schema_version": "1.0.0"},
             source_type="git",
             source_url="gitlab.example.com/team/config",
             commit_sha="deadbeef1234567890",
@@ -71,7 +71,7 @@ class TestTeamFetchResult:
 
         result = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1},
+            team_config={"schema_version": "1.0.0"},
             source_type="url",
             source_url="https://config.example.com/team.json",
             etag='"abc123def456"',
@@ -101,7 +101,7 @@ class TestFetchTeamConfigDispatch:
         with patch("scc_cli.marketplace.team_fetch._fetch_from_github") as mock_github:
             mock_github.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1},
+                team_config={"schema_version": "1.0.0"},
                 source_type="github",
                 source_url="github.com/sundsvall/team-config",
             )
@@ -122,7 +122,7 @@ class TestFetchTeamConfigDispatch:
         with patch("scc_cli.marketplace.team_fetch._fetch_from_git") as mock_git:
             mock_git.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1},
+                team_config={"schema_version": "1.0.0"},
                 source_type="git",
                 source_url="gitlab.example.com/team/config",
             )
@@ -143,7 +143,7 @@ class TestFetchTeamConfigDispatch:
         with patch("scc_cli.marketplace.team_fetch._fetch_from_url") as mock_url:
             mock_url.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1},
+                team_config={"schema_version": "1.0.0"},
                 source_type="url",
                 source_url="config.example.com/team.json",
             )
@@ -172,7 +172,7 @@ class TestFetchFromGitHub:
         )
 
         with patch("scc_cli.marketplace.team_fetch._clone_and_read_config") as mock_clone:
-            mock_clone.return_value = ({"schema_version": 1}, "abc123", None)
+            mock_clone.return_value = ({"schema_version": "1.0.0"}, "abc123", None)
 
             _fetch_from_github(source, "backend")
 
@@ -193,7 +193,7 @@ class TestFetchFromGitHub:
         )
 
         with patch("scc_cli.marketplace.team_fetch._clone_and_read_config") as mock_clone:
-            mock_clone.return_value = ({"schema_version": 1}, "abc123", None)
+            mock_clone.return_value = ({"schema_version": "1.0.0"}, "abc123", None)
 
             _fetch_from_github(source, "backend")
 
@@ -214,7 +214,7 @@ class TestFetchFromGitHub:
         )
 
         with patch("scc_cli.marketplace.team_fetch._clone_and_read_config") as mock_clone:
-            mock_clone.return_value = ({"schema_version": 1}, "abc123", None)
+            mock_clone.return_value = ({"schema_version": "1.0.0"}, "abc123", None)
 
             _fetch_from_github(source, "backend")
 
@@ -240,7 +240,7 @@ class TestFetchFromGit:
         )
 
         with patch("scc_cli.marketplace.team_fetch._clone_and_read_config") as mock_clone:
-            mock_clone.return_value = ({"schema_version": 1}, "deadbeef", None)
+            mock_clone.return_value = ({"schema_version": "1.0.0"}, "deadbeef", None)
 
             _fetch_from_git(source, "backend")
 
@@ -269,14 +269,14 @@ class TestFetchFromURL:
         with patch("scc_cli.marketplace.team_fetch.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = {"schema_version": 1, "enabled_plugins": []}
+            mock_response.json.return_value = {"schema_version": "1.0.0", "enabled_plugins": []}
             mock_response.headers = {"ETag": '"abc123"'}
             mock_get.return_value = mock_response
 
             result = _fetch_from_url(source, "backend")
 
             assert result.success is True
-            assert result.team_config == {"schema_version": 1, "enabled_plugins": []}
+            assert result.team_config == {"schema_version": "1.0.0", "enabled_plugins": []}
             assert result.etag == '"abc123"'
 
     def test_includes_custom_headers(self) -> None:
@@ -293,7 +293,7 @@ class TestFetchFromURL:
         with patch("scc_cli.marketplace.team_fetch.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = {"schema_version": 1}
+            mock_response.json.return_value = {"schema_version": "1.0.0"}
             mock_response.headers = {}
             mock_get.return_value = mock_response
 
@@ -364,7 +364,7 @@ class TestCloneAndReadConfig:
             with patch("pathlib.Path.exists") as mock_exists:
                 mock_exists.return_value = True
                 with patch("pathlib.Path.read_text") as mock_read:
-                    mock_read.return_value = '{"schema_version": 1}'
+                    mock_read.return_value = '{"schema_version": "1.0.0"}'
 
                     # This will fail because subprocess mock isn't complete
                     # but we're testing the pattern
@@ -420,7 +420,7 @@ class TestTeamConfigValidation:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
-                "schema_version": 1,
+                "schema_version": "1.0.0",
                 "enabled_plugins": ["tool@marketplace"],
                 "disabled_plugins": ["blocked@external"],
             }
@@ -456,7 +456,7 @@ class TestFetchWithCaching:
 
             mock_fetch.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1, "enabled_plugins": []},
+                team_config={"schema_version": "1.0.0", "enabled_plugins": []},
                 source_type="url",
                 source_url="https://config.sundsvall.se/backend.json",
                 etag='"v1"',
@@ -500,7 +500,7 @@ class TestSaveTeamConfigCache:
 
         result = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1, "enabled_plugins": []},
+            team_config={"schema_version": "1.0.0", "enabled_plugins": []},
             source_type="url",
             source_url="https://config.sundsvall.se/backend.json",
             etag='"v1"',
@@ -522,7 +522,7 @@ class TestSaveTeamConfigCache:
 
         result = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1},
+            team_config={"schema_version": "1.0.0"},
             source_type="github",
             source_url="github.com/sundsvall/config",
             commit_sha="abc123def456",
@@ -554,7 +554,7 @@ class TestLoadTeamConfigCache:
         cache_dir = tmp_path / "team_configs"
         cache_dir.mkdir(parents=True)
 
-        config = {"schema_version": 1, "enabled_plugins": ["tool@mp"]}
+        config = {"schema_version": "1.0.0", "enabled_plugins": ["tool@mp"]}
         meta = {
             "team_name": "backend",
             "source_type": "url",
@@ -613,7 +613,7 @@ class TestFetchTeamConfigWithFallback:
         cache_dir.mkdir(parents=True)
 
         fresh_time = datetime.now(timezone.utc) - timedelta(hours=1)
-        config = {"schema_version": 1, "enabled_plugins": ["cached@mp"]}
+        config = {"schema_version": "1.0.0", "enabled_plugins": ["cached@mp"]}
         meta = {
             "team_name": "backend",
             "source_type": "url",
@@ -658,7 +658,7 @@ class TestFetchTeamConfigWithFallback:
         cache_dir.mkdir(parents=True)
 
         stale_time = datetime.now(timezone.utc) - timedelta(days=2)
-        config = {"schema_version": 1, "enabled_plugins": ["stale@mp"]}
+        config = {"schema_version": "1.0.0", "enabled_plugins": ["stale@mp"]}
         meta = {
             "team_name": "backend",
             "source_type": "url",
@@ -672,7 +672,7 @@ class TestFetchTeamConfigWithFallback:
         with patch("scc_cli.marketplace.team_fetch.fetch_team_config") as mock_fetch:
             mock_fetch.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1, "enabled_plugins": ["fresh@mp"]},
+                team_config={"schema_version": "1.0.0", "enabled_plugins": ["fresh@mp"]},
                 source_type="url",
                 source_url="https://config.sundsvall.se/backend.json",
                 etag='"v2"',
@@ -710,7 +710,7 @@ class TestFetchTeamConfigWithFallback:
         cache_dir.mkdir(parents=True)
 
         stale_time = datetime.now(timezone.utc) - timedelta(days=3)
-        config = {"schema_version": 1, "enabled_plugins": ["stale@mp"]}
+        config = {"schema_version": "1.0.0", "enabled_plugins": ["stale@mp"]}
         meta = {
             "team_name": "backend",
             "source_type": "url",
@@ -763,7 +763,7 @@ class TestFetchTeamConfigWithFallback:
         cache_dir.mkdir(parents=True)
 
         expired_time = datetime.now(timezone.utc) - timedelta(days=10)
-        config = {"schema_version": 1, "enabled_plugins": ["expired@mp"]}
+        config = {"schema_version": "1.0.0", "enabled_plugins": ["expired@mp"]}
         meta = {
             "team_name": "backend",
             "source_type": "url",
@@ -777,7 +777,7 @@ class TestFetchTeamConfigWithFallback:
         with patch("scc_cli.marketplace.team_fetch.fetch_team_config") as mock_fetch:
             mock_fetch.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1, "enabled_plugins": ["fresh@mp"]},
+                team_config={"schema_version": "1.0.0", "enabled_plugins": ["fresh@mp"]},
                 source_type="url",
                 source_url="https://config.sundsvall.se/backend.json",
                 etag='"v3"',
@@ -814,7 +814,7 @@ class TestFetchTeamConfigWithFallback:
         cache_dir.mkdir(parents=True)
 
         expired_time = datetime.now(timezone.utc) - timedelta(days=10)
-        config = {"schema_version": 1, "enabled_plugins": ["expired@mp"]}
+        config = {"schema_version": "1.0.0", "enabled_plugins": ["expired@mp"]}
         meta = {
             "team_name": "backend",
             "source_type": "url",
@@ -859,7 +859,7 @@ class TestFetchTeamConfigWithFallback:
         with patch("scc_cli.marketplace.team_fetch.fetch_team_config") as mock_fetch:
             mock_fetch.return_value = TeamFetchResult(
                 success=True,
-                team_config={"schema_version": 1, "enabled_plugins": ["new@mp"]},
+                team_config={"schema_version": "1.0.0", "enabled_plugins": ["new@mp"]},
                 source_type="url",
                 source_url="https://config.sundsvall.se/backend.json",
             )
@@ -912,7 +912,7 @@ class TestFallbackFetchResult:
 
         inner_success = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1},
+            team_config={"schema_version": "1.0.0"},
             source_type="url",
             source_url="https://example.com",
         )
@@ -936,7 +936,7 @@ class TestFallbackFetchResult:
 
         inner = TeamFetchResult(
             success=True,
-            team_config={"schema_version": 1},
+            team_config={"schema_version": "1.0.0"},
             source_type="url",
             source_url="https://example.com",
         )

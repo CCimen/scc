@@ -2,8 +2,7 @@
 Profile resolution and marketplace URL logic.
 
 Renamed from teams.py to better reflect profile resolution responsibilities.
-Support new multi-marketplace architecture while maintaining backward compatibility
-with legacy single-marketplace config format.
+Supports multi-marketplace architecture with org/team/project inheritance.
 
 Key features:
 - HTTPS-only enforcement: All marketplace URLs must use HTTPS protocol.
@@ -48,7 +47,7 @@ class BlockedItem:
     item: str
     blocked_by: str  # The pattern that matched
     source: str  # Always "org.security"
-    target_type: str = "plugin"  # "plugin" | "mcp_server" | "base_image"
+    target_type: str = "plugin"  # "plugin" | "mcp_server"
 
 
 @dataclass
@@ -58,7 +57,7 @@ class DelegationDenied:
     item: str
     requested_by: str  # "team" | "project"
     reason: str
-    target_type: str = "plugin"  # "plugin" | "mcp_server" | "base_image"
+    target_type: str = "plugin"  # "plugin" | "mcp_server"
 
 
 @dataclass
@@ -149,56 +148,52 @@ def matches_blocked(item: str, blocked_patterns: list[str]) -> str | None:
     Returns:
         The pattern that matched, or None if no match
     """
-    # Normalize item: strip whitespace and casefold for case-insensitive matching
     normalized_item = item.strip().casefold()
 
     for pattern in blocked_patterns:
-        # Normalize pattern the same way
         normalized_pattern = pattern.strip().casefold()
         if fnmatch(normalized_item, normalized_pattern):
-            return pattern  # Return original pattern for error messages
+            return pattern
     return None
 
 
-def normalize_image_for_policy(ref: str) -> str:
-    """
-    Normalize Docker image reference for policy matching.
+def is_allowed(item: str, allowed_patterns: list[str] | None) -> bool:
+    """Check whether item is allowed by an optional allowlist."""
+    if allowed_patterns is None:
+        return True
+    if not allowed_patterns:
+        return False
+    return matches_blocked(item, allowed_patterns) is not None
 
-    Handle implicit :latest tag - this is crucial for blocking unpinned images.
-    For example, blocking "*:latest" should catch "ubuntu" (which implicitly uses :latest).
 
-    Phase 1 scope: Only handle implicit :latest normalization.
-    NOT full OCI canonicalization (docker.io/library etc) - that's Phase 2.
+def mcp_candidates(server: dict[str, Any]) -> list[str]:
+    """Collect candidate strings for MCP allow/block matching."""
+    candidates: list[str] = []
+    name = server.get("name", "")
+    if name:
+        candidates.append(name)
+    url = server.get("url", "")
+    if url:
+        candidates.append(url)
+        domain = _extract_domain(url)
+        if domain:
+            candidates.append(domain)
+    command = server.get("command", "")
+    if command:
+        candidates.append(command)
+    return candidates
 
-    Args:
-        ref: Docker image reference (e.g., "ubuntu", "python:3.11", "nginx@sha256:...")
 
-    Returns:
-        Normalized reference, casefolded for matching.
-        Empty strings remain empty.
-    """
-    r = ref.strip()
-    if not r:
-        return r
-
-    # If image has a digest (@sha256:...), don't add :latest
-    # Digests are immutable and take precedence over tags
-    if "@" in r:
-        return r.casefold()
-
-    # Check if the last component (after the last /) has an explicit tag
-    # We need to handle registry:port/path:tag correctly
-    last_segment = r.rsplit("/", 1)[-1]
-
-    # If no ":" in the last segment, there's no explicit tag → add :latest
-    # This handles:
-    #   - "ubuntu" → "ubuntu:latest"
-    #   - "ghcr.io/owner/repo" → "ghcr.io/owner/repo:latest"
-    #   - "registry:5000/ns/img" → "registry:5000/ns/img:latest" (port is before /)
-    if ":" not in last_segment:
-        r = f"{r}:latest"
-
-    return r.casefold()
+def is_mcp_allowed(server: dict[str, Any], allowed_patterns: list[str] | None) -> bool:
+    """Check whether MCP server is allowed by patterns."""
+    if allowed_patterns is None:
+        return True
+    if not allowed_patterns:
+        return False
+    for candidate in mcp_candidates(server):
+        if matches_blocked(candidate, allowed_patterns):
+            return True
+    return False
 
 
 def validate_stdio_server(
@@ -312,7 +307,7 @@ def is_team_delegated_for_plugins(org_config: dict[str, Any], team_name: str | N
     """
     Check whether team is allowed to add additional plugins.
 
-    Use fnmatch patterns from delegation.teams.allow_additional_plugins.
+    Uses team-name patterns from delegation.teams.allow_additional_plugins.
     """
     if not team_name:
         return False
@@ -321,18 +316,14 @@ def is_team_delegated_for_plugins(org_config: dict[str, Any], team_name: str | N
     teams_delegation = delegation.get("teams", {})
     allowed_patterns = teams_delegation.get("allow_additional_plugins", [])
 
-    # Check if team name matches any allowed pattern
-    for pattern in allowed_patterns:
-        if pattern == "*" or fnmatch(team_name, pattern):
-            return True
-    return False
+    return matches_blocked(team_name, allowed_patterns) is not None
 
 
 def is_team_delegated_for_mcp(org_config: dict[str, Any], team_name: str | None) -> bool:
     """
     Check whether team is allowed to add MCP servers.
 
-    Use fnmatch patterns from delegation.teams.allow_additional_mcp_servers.
+    Uses team-name patterns from delegation.teams.allow_additional_mcp_servers.
     """
     if not team_name:
         return False
@@ -341,11 +332,7 @@ def is_team_delegated_for_mcp(org_config: dict[str, Any], team_name: str | None)
     teams_delegation = delegation.get("teams", {})
     allowed_patterns = teams_delegation.get("allow_additional_mcp_servers", [])
 
-    # Check if team name matches any allowed pattern
-    for pattern in allowed_patterns:
-        if pattern == "*" or fnmatch(team_name, pattern):
-            return True
-    return False
+    return matches_blocked(team_name, allowed_patterns) is not None
 
 
 def is_project_delegated(org_config: dict[str, Any], team_name: str | None) -> tuple[bool, str]:
@@ -392,7 +379,7 @@ def is_project_delegated(org_config: dict[str, Any], team_name: str | None) -> t
 
 def compute_effective_config(
     org_config: dict[str, Any],
-    team_name: str,
+    team_name: str | None,
     project_config: dict[str, Any] | None = None,
     workspace_path: str | Path | None = None,
 ) -> EffectiveConfig:
@@ -407,7 +394,7 @@ def compute_effective_config(
 
     Args:
         org_config: Organization config (v2 schema)
-        team_name: Name of the team profile to apply
+        team_name: Name of the team profile to apply (optional)
         project_config: Optional project-level config (.scc.yaml content)
         workspace_path: Optional path to workspace directory containing .scc.yaml.
                         If provided, takes precedence over project_config.
@@ -428,7 +415,10 @@ def compute_effective_config(
 
     # Get org defaults
     defaults = org_config.get("defaults", {})
-    default_plugins = defaults.get("allowed_plugins", [])
+    default_plugins = defaults.get("enabled_plugins", [])
+    disabled_plugins = defaults.get("disabled_plugins", [])
+    allowed_plugins = defaults.get("allowed_plugins")
+    allowed_mcp_servers = defaults.get("allowed_mcp_servers")
     default_network_policy = defaults.get("network_policy")
     default_session = defaults.get("session", {})
 
@@ -443,16 +433,20 @@ def compute_effective_config(
             result.blocked_items.append(
                 BlockedItem(item=plugin, blocked_by=blocked_by, source="org.security")
             )
-        else:
-            result.plugins.add(plugin)
-            result.decisions.append(
-                ConfigDecision(
-                    field="plugins",
-                    value=plugin,
-                    reason="Included in organization defaults",
-                    source="org.defaults",
-                )
+            continue
+
+        if matches_blocked(plugin, disabled_plugins):
+            continue
+
+        result.plugins.add(plugin)
+        result.decisions.append(
+            ConfigDecision(
+                field="plugins",
+                value=plugin,
+                reason="Included in organization defaults",
+                source="org.defaults",
             )
+        )
 
     # Set network policy from defaults
     if default_network_policy:
@@ -511,6 +505,17 @@ def compute_effective_config(
             )
             continue
 
+        # Allowlist check
+        if not is_allowed(plugin, allowed_plugins):
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=plugin,
+                    requested_by="team",
+                    reason="Plugin not allowed by defaults.allowed_plugins",
+                )
+            )
+            continue
+
         result.plugins.add(plugin)
         result.decisions.append(
             ConfigDecision(
@@ -553,6 +558,18 @@ def compute_effective_config(
                     item=server_name,
                     requested_by="team",
                     reason=f"Team '{team_name}' not allowed to add MCP servers",
+                    target_type="mcp_server",
+                )
+            )
+            continue
+
+        # Allowlist check
+        if not is_mcp_allowed(server_dict, allowed_mcp_servers):
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=server_name or server_url,
+                    requested_by="team",
+                    reason="MCP server not allowed by defaults.allowed_mcp_servers",
                     target_type="mcp_server",
                 )
             )
@@ -632,6 +649,17 @@ def compute_effective_config(
                 )
                 continue
 
+            # Allowlist check
+            if not is_allowed(plugin, allowed_plugins):
+                result.denied_additions.append(
+                    DelegationDenied(
+                        item=plugin,
+                        requested_by="project",
+                        reason="Plugin not allowed by defaults.allowed_plugins",
+                    )
+                )
+                continue
+
             result.plugins.add(plugin)
             result.decisions.append(
                 ConfigDecision(
@@ -672,6 +700,18 @@ def compute_effective_config(
                         item=server_name,
                         requested_by="project",
                         reason=delegation_reason,
+                        target_type="mcp_server",
+                    )
+                )
+                continue
+
+            # Allowlist check
+            if not is_mcp_allowed(server_dict, allowed_mcp_servers):
+                result.denied_additions.append(
+                    DelegationDenied(
+                        item=server_name or server_url,
+                        requested_by="project",
+                        reason="MCP server not allowed by defaults.allowed_mcp_servers",
                         target_type="mcp_server",
                     )
                 )

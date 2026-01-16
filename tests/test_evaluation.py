@@ -45,19 +45,6 @@ class TestBlockedItem:
         assert item.reason == BlockReason.SECURITY
         assert item.message == "Blocked by org security policy"
 
-    def test_create_delegation_blocked_item(self):
-        """Create a delegation-blocked item (should use DeniedAddition instead)."""
-        from scc_cli.evaluation.models import BlockedItem
-
-        # Security blocks use BlockedItem
-        item = BlockedItem(
-            target="dangerous-image",
-            target_type="base_image",
-            reason=BlockReason.SECURITY,
-            message="Image not in allowlist",
-        )
-        assert item.reason == BlockReason.SECURITY
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DeniedAddition Tests
@@ -495,32 +482,6 @@ class TestApplyLocalOverrides:
         # Still denied
         assert len(new_result.denied_additions) == 1
 
-    def test_local_override_for_base_image(self):
-        """Local override can allow delegation-denied base image."""
-        from scc_cli.evaluation.apply_exceptions import apply_local_overrides
-        from scc_cli.evaluation.models import DeniedAddition, EvaluationResult
-
-        denied = DeniedAddition(
-            target="custom-image:latest",
-            target_type="base_image",
-            reason=BlockReason.DELEGATION,
-            message="Image not pre-approved",
-        )
-        result = EvaluationResult(denied_additions=[denied])
-
-        override = Exception(
-            id="local-20251221-c6f7",
-            created_at="2025-12-21T10:00:00Z",
-            expires_at="2099-12-31T23:59:59Z",
-            reason="Testing custom image",
-            scope="local",
-            allow=AllowTargets(base_images=["custom-image:latest"]),
-        )
-
-        new_result = apply_local_overrides(result, [override], source="user")
-        assert len(new_result.denied_additions) == 0
-        assert new_result.decisions[0].item_type == "base_image"
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Combined Exception Application Tests
@@ -702,7 +663,6 @@ class TestAllowTargetsArchitecturalBoundary:
     Local overrides cannot change it because AllowTargets only includes:
     - plugins (IDs/names)
     - mcp_servers (SCC-managed only)
-    - base_images (refs/patterns)
 
     This is by design - exceptions target specific items, not security config.
     """
@@ -714,7 +674,6 @@ class TestAllowTargetsArchitecturalBoundary:
         # AllowTargets has exactly these three fields
         assert hasattr(targets, "plugins")
         assert hasattr(targets, "mcp_servers")
-        assert hasattr(targets, "base_images")
 
         # Security settings like allow_stdio_mcp are NOT in AllowTargets
         assert not hasattr(targets, "allow_stdio_mcp")
@@ -724,7 +683,7 @@ class TestAllowTargetsArchitecturalBoundary:
     def test_allow_targets_cannot_set_arbitrary_attributes(self):
         """AllowTargets is a dataclass - no arbitrary attribute injection."""
         # This test documents that you can't sneak in security settings
-        # AllowTargets only accepts defined fields (plugins, mcp_servers, base_images)
+        # AllowTargets only accepts defined fields (plugins, mcp_servers)
         _targets = AllowTargets(plugins=["my-plugin"])  # noqa: F841
 
         # Attempting to set allow_stdio_mcp via constructor fails
@@ -735,7 +694,7 @@ class TestAllowTargetsArchitecturalBoundary:
         """Local override has no mechanism to enable allow_stdio_mcp.
 
         This test documents the architectural boundary: the exception system
-        operates on items (plugins, servers, images), not security configuration.
+        operates on items (plugins, servers), not security configuration.
         allow_stdio_mcp is evaluated at config merge time, not exception time.
         """
         from scc_cli.evaluation.apply_exceptions import apply_local_overrides
@@ -967,23 +926,23 @@ class TestEvaluateFunction:
         config = EffectiveConfig(
             blocked_items=[
                 ProfileBlockedItem(
-                    item="blocked-img",
-                    blocked_by="*:latest",
+                    item="blocked-plugin",
+                    blocked_by="blocked-*",
                     source="org.security",
-                    target_type="base_image",
+                    target_type="plugin",
                 ),
             ],
             denied_additions=[
                 DelegationDenied(
-                    item="custom-img",
+                    item="custom-server",
                     requested_by="project",
                     reason="Not allowed",
-                    target_type="base_image",
+                    target_type="mcp_server",
                 ),
             ],
         )
 
         result = evaluate(config)
 
-        assert result.blocked_items[0].target_type == "base_image"
-        assert result.denied_additions[0].target_type == "base_image"
+        assert result.blocked_items[0].target_type == "plugin"
+        assert result.denied_additions[0].target_type == "mcp_server"

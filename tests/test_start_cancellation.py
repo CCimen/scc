@@ -17,7 +17,7 @@ def test_start_cancelled_exits_130_and_message():
     """User cancellation should exit 130 and show a Cancelled message."""
     with (
         patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-        patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+        patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
         patch(
             "scc_cli.commands.launch.app._resolve_session_selection",
             return_value=(None, None, None, None, True, False),

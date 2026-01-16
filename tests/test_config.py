@@ -1,9 +1,6 @@
 """Tests for config module.
 
-These tests verify backward compatibility with the original test expectations,
-updated for the current architecture where org config is fetched remotely.
-
-For comprehensive tests including XDG paths and migration, see test_config_new.py.
+These tests verify config utilities and remote org config helpers.
 """
 
 from scc_cli.config import deep_merge
@@ -64,27 +61,27 @@ class TestDeepMerge:
 class TestLoadSaveConfig:
     """Tests for config loading and saving."""
 
-    def test_save_and_load_config(self, temp_config_dir):
-        """Config should round-trip through save/load."""
+    def test_save_and_load_user_config(self, temp_config_dir):
+        """User config should round-trip through save/load."""
         from scc_cli import config
 
         test_config = {"config_version": "1.0.0", "custom": {"key": "value"}}
-        config.save_config(test_config)
+        config.save_user_config(test_config)
 
-        loaded = config.load_config()
+        loaded = config.load_user_config()
         assert loaded["custom"]["key"] == "value"
 
-    def test_load_config_returns_defaults_when_missing(self, temp_config_dir):
-        """load_config should return defaults when file doesn't exist."""
+    def test_load_user_config_returns_defaults_when_missing(self, temp_config_dir):
+        """load_user_config should return defaults when file doesn't exist."""
         from scc_cli import config
 
-        loaded = config.load_config()
+        loaded = config.load_user_config()
         # config_version is in defaults, not "version" or "profiles"
         assert "config_version" in loaded
         assert loaded["config_version"] == "1.0.0"
 
-    def test_load_config_handles_malformed_json(self, temp_config_dir):
-        """load_config should raise ConfigError for malformed JSON."""
+    def test_load_user_config_handles_malformed_json(self, temp_config_dir):
+        """load_user_config should raise ConfigError for malformed JSON."""
         import pytest
 
         from scc_cli import config
@@ -96,7 +93,7 @@ class TestLoadSaveConfig:
 
         # Should raise ConfigError with actionable guidance
         with pytest.raises(ConfigError) as exc_info:
-            config.load_config()
+            config.load_user_config()
 
         # Verify error has actionable guidance
         assert "Invalid JSON" in exc_info.value.user_message
@@ -122,7 +119,7 @@ class TestOrganizationHelpers:
                 "auth": "env:GITLAB_TOKEN",
             }
         }
-        config.save_config(user_config)
+        config.save_user_config(user_config)
 
         assert config.is_organization_configured() is True
 
@@ -138,45 +135,6 @@ class TestOrganizationHelpers:
 
         # Create user config with empty organization_source
         user_config = {"organization_source": {}}
-        config.save_config(user_config)
+        config.save_user_config(user_config)
 
         assert config.is_organization_configured() is False
-
-    def test_get_organization_name_returns_none(self, temp_config_dir):
-        """get_organization_name should return None (org name comes from remote)."""
-        from scc_cli import config
-
-        # Org name comes from remote config, not local
-        assert config.get_organization_name() is None
-
-    def test_save_org_config_is_noop(self, temp_config_dir):
-        """save_org_config should be a no-op (backward compatibility)."""
-        from scc_cli import config
-
-        # This should not raise and should be a no-op
-        config.save_org_config({"organization": {"name": "Test"}})
-
-        # No organization.json file should be created
-        org_file = temp_config_dir / "organization.json"
-        assert not org_file.exists()
-
-    def test_load_org_config_returns_none(self, temp_config_dir):
-        """load_org_config should return None (org config is remote)."""
-        from scc_cli import config
-
-        # Org config is fetched remotely, not stored locally
-        assert config.load_org_config() is None
-
-    def test_list_available_teams_returns_empty(self, temp_config_dir):
-        """list_available_teams should return empty list (teams from remote)."""
-        from scc_cli import config
-
-        # Teams come from remote org config
-        assert config.list_available_teams() == []
-
-    def test_get_team_config_returns_none(self, temp_config_dir):
-        """get_team_config should return None (teams from remote)."""
-        from scc_cli import config
-
-        # Team config comes from remote org config
-        assert config.get_team_config("any-team") is None

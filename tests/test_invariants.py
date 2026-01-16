@@ -46,9 +46,11 @@ class TestAllowedPluginsSemantics:
         """When allowed_plugins is None (missing), all plugins are allowed."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin-a@marketplace", "plugin-b@marketplace"],
                 # allowed_plugins is missing = unrestricted
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin-a@marketplace"]},
+            },
         }
         violations = validate_config_invariants(config)
         # No violations because missing = unrestricted
@@ -58,25 +60,28 @@ class TestAllowedPluginsSemantics:
         """When allowed_plugins is [], no plugins are allowed."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin-a@marketplace"],
                 "allowed_plugins": [],  # Empty = nothing allowed
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin-a@marketplace"]},
+            },
         }
         violations = validate_config_invariants(config)
-        # Should have 1 violation: plugin-a is enabled but nothing is allowed
+        # Should have 1 violation: plugin-a is not allowed
         assert len(violations) == 1
-        assert violations[0].rule == "enabled_must_be_allowed"
+        assert violations[0].rule == "additional_plugin_not_allowed"
         assert "plugin-a@marketplace" in violations[0].message
-        assert "empty" in violations[0].message.lower()
         assert violations[0].severity == "error"
 
     def test_allowed_plugins_wildcard_means_unrestricted(self) -> None:
         """When allowed_plugins is ["*"], all plugins are allowed."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin-a@marketplace", "plugin-b@marketplace"],
                 "allowed_plugins": ["*"],  # Explicit unrestricted
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin-a@marketplace"]},
+            },
         }
         violations = validate_config_invariants(config)
         # No violations because ["*"] = unrestricted
@@ -87,37 +92,45 @@ class TestEnabledSubsetOfAllowed:
     """Test invariant: enabled plugins must be in allowed list."""
 
     def test_enabled_plugin_in_allowed_list_passes(self) -> None:
-        """Enabled plugin that is in allowed list should pass."""
+        """Additional plugin that is in allowed list should pass."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin-a@marketplace"],
                 "allowed_plugins": ["plugin-a@marketplace", "plugin-b@marketplace"],
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin-a@marketplace"]},
+            },
         }
         violations = validate_config_invariants(config)
         assert len(violations) == 0
 
     def test_enabled_plugin_not_in_allowed_list_fails(self) -> None:
-        """Enabled plugin not in allowed list should fail."""
+        """Additional plugin not in allowed list should fail."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin-c@marketplace"],
                 "allowed_plugins": ["plugin-a@marketplace", "plugin-b@marketplace"],
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin-c@marketplace"]},
+            },
         }
         violations = validate_config_invariants(config)
         assert len(violations) == 1
-        assert violations[0].rule == "enabled_must_be_allowed"
+        assert violations[0].rule == "additional_plugin_not_allowed"
         assert "plugin-c@marketplace" in violations[0].message
         assert violations[0].severity == "error"
 
     def test_multiple_enabled_plugins_not_allowed_produces_multiple_violations(self) -> None:
-        """Multiple enabled plugins not in allowed list should produce multiple violations."""
+        """Multiple additional plugins not in allowed list should produce multiple violations."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin-a@mp", "plugin-b@mp", "plugin-c@mp"],
                 "allowed_plugins": ["plugin-a@mp"],  # Only plugin-a allowed
-            }
+            },
+            "profiles": {
+                "team": {
+                    "additional_plugins": ["plugin-b@mp", "plugin-c@mp"],
+                },
+            },
         }
         violations = validate_config_invariants(config)
         # plugin-b and plugin-c should fail
@@ -130,9 +143,11 @@ class TestEnabledSubsetOfAllowed:
         """Allowed plugins should support fnmatch pattern matching."""
         config = {
             "defaults": {
-                "enabled_plugins": ["safety-net@official", "linter@official"],
                 "allowed_plugins": ["*@official"],  # All plugins from official marketplace
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["safety-net@official", "linter@official"]},
+            },
         }
         violations = validate_config_invariants(config)
         # Both should match the pattern
@@ -142,9 +157,11 @@ class TestEnabledSubsetOfAllowed:
         """Plugin that doesn't match any allowed pattern should fail."""
         config = {
             "defaults": {
-                "enabled_plugins": ["plugin@internal"],
                 "allowed_plugins": ["*@official"],  # Only official marketplace allowed
-            }
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin@internal"]},
+            },
         }
         violations = validate_config_invariants(config)
         assert len(violations) == 1
@@ -179,7 +196,7 @@ class TestEnabledNotInBlocked:
         }
         violations = validate_config_invariants(config)
         assert len(violations) == 1
-        assert violations[0].rule == "enabled_not_blocked"
+        assert violations[0].rule == "plugin_blocked"
         assert "malicious-plugin@marketplace" in violations[0].message
         assert violations[0].severity == "error"
 
@@ -195,7 +212,7 @@ class TestEnabledNotInBlocked:
         }
         violations = validate_config_invariants(config)
         assert len(violations) == 1
-        assert violations[0].rule == "enabled_not_blocked"
+        assert violations[0].rule == "plugin_blocked"
         assert "malicious-crypto-miner@shady" in violations[0].message
 
     def test_multiple_enabled_plugins_blocked_produces_multiple_violations(self) -> None:
@@ -210,7 +227,7 @@ class TestEnabledNotInBlocked:
         }
         violations = validate_config_invariants(config)
         # bad-plugin and evil-plugin should fail
-        blocked_violations = [v for v in violations if v.rule == "enabled_not_blocked"]
+        blocked_violations = [v for v in violations if v.rule == "plugin_blocked"]
         assert len(blocked_violations) == 2
 
 
@@ -221,8 +238,10 @@ class TestCombinedInvariants:
         """Plugin that violates both allowed and blocked should produce violations for both."""
         config = {
             "defaults": {
-                "enabled_plugins": ["malicious-plugin@mp"],
                 "allowed_plugins": ["safe-plugin@mp"],  # malicious not in allowed
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["malicious-plugin@mp"]},
             },
             "security": {
                 "blocked_plugins": ["malicious-*"],  # malicious is also blocked
@@ -232,8 +251,8 @@ class TestCombinedInvariants:
         # Should have 2 violations: not allowed AND blocked
         assert len(violations) == 2
         rules = {v.rule for v in violations}
-        assert "enabled_must_be_allowed" in rules
-        assert "enabled_not_blocked" in rules
+        assert "additional_plugin_not_allowed" in rules
+        assert "plugin_blocked" in rules
 
     def test_no_enabled_plugins_passes(self) -> None:
         """No enabled plugins should always pass."""

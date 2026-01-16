@@ -28,7 +28,10 @@ class TestStatusBasicOutput:
             },
         }
         mock_org = {
-            "name": "Acme Corp",
+            "organization": {
+                "name": "Acme Corp",
+                "id": "acme-corp",
+            }
         }
 
         with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
@@ -204,7 +207,12 @@ class TestStatusJsonOutput:
             "organization_source": {"url": "https://example.org/config.json"},
             "selected_profile": "platform",
         }
-        mock_org = {"name": "Acme Corp"}
+        mock_org = {
+            "organization": {
+                "name": "Acme Corp",
+                "id": "acme-corp",
+            }
+        }
 
         with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
             with patch(
@@ -241,7 +249,12 @@ class TestStatusVerboseMode:
         mock_cfg = {
             "organization_source": {"url": "https://example.org/config.json"},
         }
-        mock_org = {"name": "Acme Corp"}
+        mock_org = {
+            "organization": {
+                "name": "Acme Corp",
+                "id": "acme-corp",
+            }
+        }
 
         with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
             with patch(
@@ -261,14 +274,21 @@ class TestStatusVerboseMode:
             "selected_profile": "platform",
         }
         mock_org = {
+            "organization": {
+                "name": "Acme Corp",
+                "id": "acme-corp",
+            },
+            "delegation": {
+                "teams": {
+                    "allow_additional_plugins": ["platform"],
+                    "allow_additional_mcp_servers": [],
+                }
+            },
             "profiles": {
                 "platform": {
-                    "delegation": {
-                        "allow_additional_plugins": True,
-                        "allow_additional_mcp_servers": False,
-                    },
+                    "description": "Platform team",
                 }
-            }
+            },
         }
 
         with patch("scc_cli.commands.admin.config.load_user_config", return_value=mock_cfg):
@@ -352,7 +372,12 @@ class TestBuildStatusData:
             "organization_source": {"url": "https://example.org/config.json"},
             "selected_profile": "platform",
         }
-        org = {"name": "Acme Corp"}
+        org = {
+            "organization": {
+                "name": "Acme Corp",
+                "id": "acme-corp",
+            }
+        }
         running_containers = []
 
         result = build_status_data(cfg, org, running_containers)

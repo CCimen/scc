@@ -40,7 +40,6 @@ def full_config_environment(tmp_path, monkeypatch):
     monkeypatch.setattr("scc_cli.config.CONFIG_FILE", config_dir / "config.json")
     monkeypatch.setattr("scc_cli.config.SESSIONS_FILE", config_dir / "sessions.json")
     monkeypatch.setattr("scc_cli.config.CACHE_DIR", cache_dir)
-    monkeypatch.setattr("scc_cli.config.LEGACY_CONFIG_DIR", tmp_path / ".config" / "scc-cli")
 
     return {"config_dir": config_dir, "cache_dir": cache_dir, "tmp_path": tmp_path}
 
@@ -49,7 +48,7 @@ def full_config_environment(tmp_path, monkeypatch):
 def sample_org_config():
     """Create a sample org config for testing.
 
-    Uses the current v1 schema format with proper fields:
+    Uses the current schema format with proper fields:
     - security: Hard boundaries (blocked plugins, images, MCP servers)
     - defaults: allowed_plugins, network_policy, session
     - profiles: description, additional_plugins, delegation
@@ -66,7 +65,6 @@ def sample_org_config():
         "security": {
             "blocked_plugins": ["*-experimental"],
             "blocked_mcp_servers": [],
-            "blocked_base_images": ["*:latest"],
             "allow_stdio_mcp": False,
         },
         "defaults": {
@@ -75,6 +73,11 @@ def sample_org_config():
             "session": {
                 "timeout_hours": 10,
                 "auto_resume": True,
+            },
+        },
+        "delegation": {
+            "teams": {
+                "allow_additional_plugins": ["platform", "api"],
             },
         },
         "profiles": {
@@ -205,7 +208,8 @@ class TestStartWorkflow:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
@@ -245,7 +249,7 @@ class TestStartWorkflow:
 
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config") as mock_load_config,
+            patch("scc_cli.commands.launch.app.config.load_user_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
@@ -280,7 +284,8 @@ class TestStartWorkflow:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             # Simulate user cancelling at protected branch prompt
@@ -344,55 +349,6 @@ class TestSessionWorkflow:
 
         assert result.exit_code == 0
         assert "session1" in result.output
-
-    def test_continue_session_auto_selects_recent(self, full_config_environment, git_workspace):
-        """--continue without workspace should use most recent session."""
-        config_dir = full_config_environment["config_dir"]
-        config_dir / "sessions.json"
-
-        # Mock session with no team (standalone mode)
-        mock_session = {
-            "workspace": str(git_workspace),
-            "team": None,  # Standalone mode - no team filtering
-        }
-
-        with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.app.sessions.list_recent") as mock_list,
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
-        ):
-            mock_list.return_value = [mock_session]
-
-            # Use --standalone flag to bypass team filtering
-            result = runner.invoke(app, ["start", "--continue", "--standalone"])
-
-        # Should have resumed the session
-        assert "Resuming" in result.output or mock_list.called
-
-    def test_continue_without_sessions_shows_error(self, full_config_environment):
-        """--continue with no sessions should show appropriate error."""
-        with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
-            patch("scc_cli.commands.launch.app.sessions.list_recent", return_value=[]),
-        ):
-            # Use --standalone flag to bypass team filtering
-            result = runner.invoke(app, ["start", "--continue", "--standalone"])
-
-        assert result.exit_code != 0 or "no recent" in result.output.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -478,39 +434,6 @@ class TestWorktreeWorkflow:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Workflow 7: Config Migration (Legacy → New)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestMigrationWorkflow:
-    """Integration tests for config migration workflow."""
-
-    def test_migration_from_legacy_config(self, tmp_path, monkeypatch):
-        """Should migrate from ~/.config/scc-cli to ~/.config/scc."""
-        # Create legacy config
-        legacy_dir = tmp_path / ".config" / "scc-cli"
-        legacy_dir.mkdir(parents=True)
-        legacy_config = legacy_dir / "config.json"
-        legacy_config.write_text(json.dumps({"selected_profile": "platform"}))
-
-        new_dir = tmp_path / ".config" / "scc"
-
-        monkeypatch.setattr("scc_cli.config.CONFIG_DIR", new_dir)
-        monkeypatch.setattr("scc_cli.config.CONFIG_FILE", new_dir / "config.json")
-        monkeypatch.setattr("scc_cli.config.LEGACY_CONFIG_DIR", legacy_dir)
-
-        from scc_cli import config
-
-        # Force reimport to pick up patched values
-        result = config.migrate_config_if_needed()
-
-        assert result is True
-        assert new_dir.exists()
-        assert (new_dir / "config.json").exists()
-        assert legacy_dir.exists()  # Legacy preserved
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Workflow 8: Offline Mode
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -532,7 +455,7 @@ class TestOfflineWorkflow:
 
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config") as mock_load_config,
+            patch("scc_cli.commands.launch.app.config.load_user_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
@@ -551,7 +474,10 @@ class TestOfflineWorkflow:
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
             }
-            mock_remote.return_value = {"organization": {"name": "Test"}}
+            mock_remote.return_value = {
+                "schema_version": "1.0.0",
+                "organization": {"name": "Test", "id": "test"},
+            }
 
             runner.invoke(app, ["start", str(git_workspace), "--offline"])
 
@@ -574,7 +500,8 @@ class TestStandaloneWorkflow:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
@@ -613,7 +540,8 @@ class TestDepsWorkflow:
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_config", return_value={"standalone": True}
+                "scc_cli.commands.launch.app.config.load_user_config",
+                return_value={"standalone": True},
             ),
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
@@ -654,20 +582,25 @@ class TestDataFlowIntegration:
         from scc_cli.marketplace.compute import compute_effective_plugins
         from scc_cli.marketplace.schema import (
             DefaultsConfig,
+            DelegationConfig,
+            DelegationTeamsConfig,
             OrganizationConfig,
+            OrganizationInfo,
             TeamProfile,
         )
 
         # Create config using Phase 2 Pydantic models
         config = OrganizationConfig(
-            name="Test Organization",
-            schema_version=1,
+            schema_version="1.0.0",
+            organization=OrganizationInfo(name="Test Organization", id="test-org"),
+            delegation=DelegationConfig(
+                teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+            ),
             defaults=DefaultsConfig(
                 enabled_plugins=["code-quality@default"],
             ),
             profiles={
                 "platform": TeamProfile(
-                    name="Platform Team",
                     description="Platform team (Python, FastAPI)",
                     additional_plugins=["python-tools", "fastapi-helper"],
                 ),

@@ -334,7 +334,7 @@ def _handle_team_switch() -> None:
         cfg = config.load_user_config()
         org_config = config.load_cached_org_config()
 
-        available_teams = teams.list_teams(cfg, org_config=org_config)
+        available_teams = teams.list_teams(org_config)
         if not available_teams:
             console.print("[yellow]No teams available[/yellow]")
             return
@@ -462,7 +462,7 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
         workspace_path = resolved_path
 
         # Get current team from config
-        cfg = config.load_config()
+        cfg = config.load_user_config()
         team = cfg.get("selected_profile")
         _configure_team_settings(team, cfg)
 
@@ -564,7 +564,7 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
         workspace_path = resolved_path
 
         # Configure team settings
-        cfg = config.load_config()
+        cfg = config.load_user_config()
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings

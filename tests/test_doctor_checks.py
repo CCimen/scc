@@ -155,7 +155,7 @@ class TestCheckUserConfigValid:
         config_file = tmp_path / "config.json"
         config_file.write_text('{"config_version": "1.0.0", "standalone": false}')
 
-        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+        with patch("scc_cli.config.CONFIG_FILE", config_file):
             result = doctor.check_user_config_valid()
 
         assert result.passed is True
@@ -165,7 +165,7 @@ class TestCheckUserConfigValid:
         """Should return OK (info) when no config file exists."""
         config_file = tmp_path / "config.json"  # Does not exist
 
-        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+        with patch("scc_cli.config.CONFIG_FILE", config_file):
             result = doctor.check_user_config_valid()
 
         assert result.passed is True
@@ -176,7 +176,7 @@ class TestCheckUserConfigValid:
         config_file = tmp_path / "config.json"
         config_file.write_text('{\n  "key": "value"\n  "missing_comma": true\n}')
 
-        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+        with patch("scc_cli.config.CONFIG_FILE", config_file):
             result = doctor.check_user_config_valid()
 
         assert result.passed is False
@@ -190,7 +190,7 @@ class TestCheckUserConfigValid:
         config_file = tmp_path / "config.json"
         config_file.write_text('{\n  "key": "value",\n}')  # Trailing comma
 
-        with patch("scc_cli.doctor.config.CONFIG_FILE", config_file):
+        with patch("scc_cli.config.CONFIG_FILE", config_file):
             result = doctor.check_user_config_valid()
 
         assert result.passed is False
@@ -214,7 +214,7 @@ class TestCheckOrgConfigReachable:
             }
         }
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch("scc_cli.remote.fetch_org_config", return_value=({"org": "test"}, "etag", 200)),
         ):
             result = doctor.check_org_config_reachable()
@@ -231,7 +231,7 @@ class TestCheckOrgConfigReachable:
             }
         }
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch("scc_cli.remote.fetch_org_config", return_value=(None, None, 500)),
         ):
             result = doctor.check_org_config_reachable()
@@ -249,7 +249,7 @@ class TestCheckOrgConfigReachable:
             }
         }
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch("scc_cli.remote.fetch_org_config", return_value=(None, None, 401)),
         ):
             result = doctor.check_org_config_reachable()
@@ -261,7 +261,7 @@ class TestCheckOrgConfigReachable:
     def test_returns_none_for_standalone_mode(self):
         """Should return None when in standalone mode (no org config)."""
         user_config = {"standalone": True, "organization_source": None}
-        with patch("scc_cli.doctor.config.load_user_config", return_value=user_config):
+        with patch("scc_cli.config.load_user_config", return_value=user_config):
             result = doctor.check_org_config_reachable()
 
         assert result is None
@@ -269,7 +269,7 @@ class TestCheckOrgConfigReachable:
     def test_returns_none_when_no_org_source(self):
         """Should return None when organization_source is not configured."""
         user_config = {}
-        with patch("scc_cli.doctor.config.load_user_config", return_value=user_config):
+        with patch("scc_cli.config.load_user_config", return_value=user_config):
             result = doctor.check_org_config_reachable()
 
         assert result is None
@@ -293,7 +293,7 @@ class TestCheckMarketplaceAuthAvailable:
         }
         user_config = {"selected_profile": "dev"}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch(
                 "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
             ),
@@ -319,7 +319,7 @@ class TestCheckMarketplaceAuthAvailable:
         }
         user_config = {"selected_profile": "dev"}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch(
                 "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
             ),
@@ -347,7 +347,7 @@ class TestCheckMarketplaceAuthAvailable:
         # Create a clean environment without GITLAB_TOKEN
         clean_env = {k: v for k, v in os.environ.items() if k != "GITLAB_TOKEN"}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch(
                 "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
             ),
@@ -363,7 +363,7 @@ class TestCheckMarketplaceAuthAvailable:
         """Should return None when no profile is selected."""
         user_config = {"selected_profile": None}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch("scc_cli.doctor.checks.organization.load_cached_org_config", return_value=None),
         ):
             result = doctor.check_marketplace_auth_available()
@@ -374,7 +374,7 @@ class TestCheckMarketplaceAuthAvailable:
         """Should return None when no org config is cached."""
         user_config = {"selected_profile": "dev"}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch("scc_cli.doctor.checks.organization.load_cached_org_config", return_value=None),
         ):
             result = doctor.check_marketplace_auth_available()
@@ -405,7 +405,7 @@ class TestCheckCredentialInjection:
         }
         user_config = {"selected_profile": "dev"}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch(
                 "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
             ),
@@ -427,7 +427,7 @@ class TestCheckCredentialInjection:
         }
         user_config = {"selected_profile": "dev"}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch(
                 "scc_cli.doctor.checks.organization.load_cached_org_config", return_value=org_config
             ),
@@ -442,7 +442,7 @@ class TestCheckCredentialInjection:
         """Should return None when no profile is selected."""
         user_config = {}
         with (
-            patch("scc_cli.doctor.config.load_user_config", return_value=user_config),
+            patch("scc_cli.config.load_user_config", return_value=user_config),
             patch("scc_cli.doctor.checks.organization.load_cached_org_config", return_value=None),
         ):
             result = doctor.check_credential_injection()
@@ -461,9 +461,11 @@ class TestCheckCacheReadable:
     def test_returns_ok_when_cache_valid(self, tmp_path):
         """Should return OK when cache exists and is valid JSON."""
         cache_file = tmp_path / "org_config.json"
-        cache_file.write_text('{"organization": {"name": "Test"}}')
+        cache_file.write_text(
+            '{"schema_version": "1.0.0", "organization": {"name": "Test", "id": "test"}}'
+        )
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_readable()
 
         assert result is not None
@@ -471,7 +473,7 @@ class TestCheckCacheReadable:
 
     def test_returns_warning_when_no_cache(self, tmp_path):
         """Should return warning or info when no cache exists."""
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_readable()
 
         assert result is not None
@@ -483,7 +485,7 @@ class TestCheckCacheReadable:
         cache_file = tmp_path / "org_config.json"
         cache_file.write_text("not valid json {{{")
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_readable()
 
         assert result is not None
@@ -495,7 +497,7 @@ class TestCheckCacheReadable:
         cache_file = tmp_path / "org_config.json"
         cache_file.write_text('{\n  "org": "test"\n  "missing_comma": true\n}')
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_readable()
 
         assert result is not None
@@ -530,7 +532,7 @@ class TestCheckCacheTtlStatus:
             )
         )
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_ttl_status()
 
         assert result is not None
@@ -554,7 +556,7 @@ class TestCheckCacheTtlStatus:
             )
         )
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_ttl_status()
 
         assert result is not None
@@ -563,54 +565,11 @@ class TestCheckCacheTtlStatus:
 
     def test_returns_none_when_no_cache_meta(self, tmp_path):
         """Should return None when no cache metadata exists."""
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.check_cache_ttl_status()
 
         # Should be None or info/warning (no cache to report on)
         assert result is None or result.severity in ["warning", "info"]
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for check_migration_status
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestCheckMigrationStatus:
-    """Tests for check_migration_status() function."""
-
-    def test_returns_ok_when_no_legacy_config(self, tmp_path):
-        """Should return OK when no legacy config exists."""
-        legacy_dir = tmp_path / "scc-cli"
-        new_dir = tmp_path / "scc"
-        new_dir.mkdir()
-
-        with (
-            patch("scc_cli.doctor.config.LEGACY_CONFIG_DIR", legacy_dir),
-            patch("scc_cli.doctor.config.CONFIG_DIR", new_dir),
-        ):
-            result = doctor.check_migration_status()
-
-        assert result is not None
-        assert result.passed is True
-
-    def test_returns_warning_when_legacy_config_exists(self, tmp_path):
-        """Should return warning when legacy config still exists."""
-        legacy_dir = tmp_path / "scc-cli"
-        legacy_dir.mkdir()
-        (legacy_dir / "config.json").write_text("{}")
-        new_dir = tmp_path / "scc"
-        new_dir.mkdir()
-
-        with (
-            patch("scc_cli.doctor.config.LEGACY_CONFIG_DIR", legacy_dir),
-            patch("scc_cli.doctor.config.CONFIG_DIR", new_dir),
-        ):
-            result = doctor.check_migration_status()
-
-        assert result is not None
-        assert result.passed is False
-        assert result.severity == "warning"
-        assert "legacy" in result.message.lower() or "old" in result.message.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -624,9 +583,11 @@ class TestLoadCachedOrgConfig:
     def test_returns_config_when_cache_exists(self, tmp_path):
         """Should return cached config when file exists."""
         cache_file = tmp_path / "org_config.json"
-        cache_file.write_text('{"organization": {"name": "Test Org"}}')
+        cache_file.write_text(
+            '{"schema_version": "1.0.0", "organization": {"name": "Test Org", "id": "test-org"}}'
+        )
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.load_cached_org_config()
 
         assert result is not None
@@ -634,7 +595,7 @@ class TestLoadCachedOrgConfig:
 
     def test_returns_none_when_no_cache(self, tmp_path):
         """Should return None when no cache exists."""
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.load_cached_org_config()
 
         assert result is None
@@ -644,7 +605,7 @@ class TestLoadCachedOrgConfig:
         cache_file = tmp_path / "org_config.json"
         cache_file.write_text("not valid json")
 
-        with patch("scc_cli.doctor.config.CACHE_DIR", tmp_path):
+        with patch("scc_cli.config.CACHE_DIR", tmp_path):
             result = doctor.load_cached_org_config()
 
         assert result is None
@@ -675,7 +636,6 @@ class TestRunAllChecks:
         mock_injection = doctor.CheckResult(name="Injection", passed=True, message="ok")
         mock_cache = doctor.CheckResult(name="Cache", passed=True, message="ok")
         mock_ttl = doctor.CheckResult(name="TTL", passed=True, message="ok")
-        mock_migration = doctor.CheckResult(name="Migration", passed=True, message="ok")
 
         with (
             patch("scc_cli.doctor.check_git", return_value=mock_git),
@@ -691,7 +651,6 @@ class TestRunAllChecks:
             patch("scc_cli.doctor.check_credential_injection", return_value=mock_injection),
             patch("scc_cli.doctor.check_cache_readable", return_value=mock_cache),
             patch("scc_cli.doctor.check_cache_ttl_status", return_value=mock_ttl),
-            patch("scc_cli.doctor.check_migration_status", return_value=mock_migration),
         ):
             results = doctor.run_all_checks()
 

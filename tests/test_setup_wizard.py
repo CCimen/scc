@@ -94,6 +94,7 @@ class TestFetchAndValidateOrgConfig:
         """Should return config on successful fetch."""
         mock_console = MagicMock()
         sample_config = {
+            "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {"description": "Dev team"}},
         }
@@ -115,7 +116,10 @@ class TestFetchAndValidateOrgConfig:
     def test_retries_with_auth_on_401(self):
         """Should retry fetch with auth after 401."""
         mock_console = MagicMock()
-        sample_config = {"organization": {"name": "Test"}}
+        sample_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test", "id": "test"},
+        }
         with patch(
             "scc_cli.setup.fetch_org_config",
             side_effect=[
@@ -275,6 +279,7 @@ class TestRunSetupWizard:
         """Should complete full org config setup flow."""
         mock_console = self._create_mock_console()
         sample_config = {
+            "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {"description": "Dev team"}},
         }
@@ -311,7 +316,8 @@ class TestRunSetupWizard:
         """Should retry with auth on 401."""
         mock_console = self._create_mock_console()
         sample_config = {
-            "organization": {"name": "Test Org"},
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {},
         }
         with (
@@ -345,7 +351,8 @@ class TestNonInteractiveSetup:
         """Should setup with all CLI arguments provided."""
         mock_console = MagicMock()
         sample_config = {
-            "organization": {"name": "Test Org"},
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
             "profiles": {"dev": {}},
         }
         with (

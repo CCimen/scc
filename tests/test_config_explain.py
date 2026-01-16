@@ -176,8 +176,8 @@ def effective_config_full():
 def mock_org_config():
     """Minimal org config for testing."""
     return {
-        "schema_version": "2.0",
-        "organization": {"name": "Test Org"},
+        "schema_version": "1.0.0",
+        "organization": {"name": "Test Org", "id": "test-org"},
         "profiles": {"dev": {"description": "Dev team"}},
     }
 

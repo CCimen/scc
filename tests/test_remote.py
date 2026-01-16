@@ -36,17 +36,20 @@ def sample_org_config():
         "marketplaces": {
             "internal": {
                 "source": "git",
-                "owner": "group",
-                "repo": "claude-marketplace",
-                "host": "gitlab.example.org",
-                "auth": "env:GITLAB_TOKEN",
+                "url": "https://gitlab.example.org/group/claude-marketplace.git",
+                "branch": "main",
+                "path": "/",
+            }
+        },
+        "delegation": {
+            "teams": {
+                "allow_additional_plugins": ["platform"],
             }
         },
         "profiles": {
             "platform": {
                 "description": "Platform team",
-                "plugin": "platform",
-                "marketplace": "internal",
+                "additional_plugins": ["platform@internal"],
             }
         },
         "defaults": {"cache_ttl_hours": 24},
@@ -208,7 +211,10 @@ class TestFetchOrgConfig:
         responses.add(
             responses.GET,
             url,
-            json={"organization": {"name": "Test"}},
+            json={
+                "schema_version": "1.0.0",
+                "organization": {"name": "Test", "id": "test"},
+            },
             status=200,
         )
 
@@ -226,7 +232,10 @@ class TestFetchOrgConfig:
         responses.add(
             responses.GET,
             url,
-            json={"organization": {"name": "Test"}},
+            json={
+                "schema_version": "1.0.0",
+                "organization": {"name": "Test", "id": "test"},
+            },
             status=200,
         )
 
@@ -274,8 +283,11 @@ class TestFetchOrgConfig:
         responses.add(
             responses.GET,
             url,
+            json={
+                "schema_version": "1.0.0",
+                "organization": {"name": "Test", "id": "test"},
+            },
             status=401,
-            body="Unauthorized",
         )
 
         config, etag, status = remote.fetch_org_config(url, auth=None, etag=None)
@@ -290,8 +302,11 @@ class TestFetchOrgConfig:
         responses.add(
             responses.GET,
             url,
+            json={
+                "schema_version": "1.0.0",
+                "organization": {"name": "Test", "id": "test"},
+            },
             status=403,
-            body="Forbidden",
         )
 
         config, etag, status = remote.fetch_org_config(url, auth=None, etag=None)
@@ -600,7 +615,10 @@ class TestLoadOrgConfig:
         monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
 
         # Set up valid cache
-        cached_config = {**sample_org_config, "organization": {"name": "Cached Org"}}
+        cached_config = {
+            **sample_org_config,
+            "organization": {"name": "Cached Org", "id": "cached-org"},
+        }
         config_file = temp_cache_dir / "org_config.json"
         config_file.write_text(json.dumps(cached_config))
 
@@ -833,13 +851,15 @@ class TestValidationGate:
         """Config with invariant violations should raise ConfigValidationError."""
         monkeypatch.setattr(remote, "CACHE_DIR", temp_cache_dir)
 
-        # Config that violates enabled ⊆ allowed invariant
+        # Config that violates additional plugin allowlist invariant
         invalid_config = {
             "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
             "defaults": {
-                "enabled_plugins": ["plugin-a@marketplace"],
-                "allowed_plugins": [],  # Empty = nothing allowed, but plugin-a enabled
+                "allowed_plugins": [],  # Empty = nothing allowed
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["plugin-a@marketplace"]},
             },
         }
 

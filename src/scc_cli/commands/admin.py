@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.status import Status
 from rich.table import Table
 
-from .. import config, docker, doctor, stats
+from .. import config, docker, doctor, profiles, stats
 from ..cli_common import console, handle_errors
 from ..docker.core import ContainerInfo
 from ..json_command import json_command
@@ -118,7 +118,7 @@ def build_status_data(
     # Organization info
     org_source = cfg.get("organization_source") or {}
     org_url = org_source.get("url")
-    org_name = org.get("name") if org else None
+    org_name = org.get("organization", {}).get("name") if org else None
 
     organization = {
         "name": org_name,
@@ -132,17 +132,10 @@ def build_status_data(
 
     # Look up delegation info if org config available
     if org and team_name:
-        # Profiles are at TOP LEVEL of org_config as a DICT (not under "organization")
-        profiles = org.get("profiles", {})
-        profile = profiles.get(team_name)
-        if profile:
-            delegation = profile.get("delegation", {})
-            team_details["delegation"] = {
-                "allow_additional_plugins": delegation.get("allow_additional_plugins", False),
-                "allow_additional_mcp_servers": delegation.get(
-                    "allow_additional_mcp_servers", False
-                ),
-            }
+        team_details["delegation"] = {
+            "allow_additional_plugins": profiles.is_team_delegated_for_plugins(org, team_name),
+            "allow_additional_mcp_servers": profiles.is_team_delegated_for_mcp(org, team_name),
+        }
 
     # Session info
     session: dict[str, Any] = {
@@ -340,7 +333,7 @@ def update_cmd(
     """Check for updates to scc-cli CLI and organization config."""
     from .. import update as update_module
 
-    cfg = config.load_config()
+    cfg = config.load_user_config()
 
     with Status("[cyan]Checking for updates...[/cyan]", console=console, spinner=Spinners.NETWORK):
         result = update_module.check_all_updates(cfg, force=force)

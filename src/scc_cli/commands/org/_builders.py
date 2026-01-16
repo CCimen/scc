@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from scc_cli.core.constants import CURRENT_SCHEMA_VERSION
+
 if TYPE_CHECKING:
     pass
 
@@ -16,7 +18,6 @@ def build_validation_data(
     source: str,
     schema_errors: list[str],
     semantic_errors: list[str],
-    schema_version: str,
 ) -> dict[str, Any]:
     """Build validation result data for JSON output.
 
@@ -24,7 +25,6 @@ def build_validation_data(
         source: Path or URL of validated config
         schema_errors: List of JSON schema validation errors
         semantic_errors: List of semantic validation errors
-        schema_version: Schema version used for validation
 
     Returns:
         Dictionary with validation results
@@ -32,7 +32,7 @@ def build_validation_data(
     is_valid = len(schema_errors) == 0 and len(semantic_errors) == 0
     return {
         "source": source,
-        "schema_version": schema_version,
+        "schema_version": CURRENT_SCHEMA_VERSION,
         "valid": is_valid,
         "schema_errors": schema_errors,
         "semantic_errors": semantic_errors,
@@ -235,7 +235,7 @@ def build_update_data(
 def _parse_config_source(source_dict: dict[str, Any]) -> Any:
     """Parse a config_source dict into the appropriate ConfigSource type.
 
-    Handles discriminated union parsing for github, git, url sources.
+    Expects the org-v1 discriminator format with a ``source`` field.
 
     Args:
         source_dict: Raw config_source dict from org config
@@ -250,15 +250,11 @@ def _parse_config_source(source_dict: dict[str, Any]) -> Any:
         ConfigSourceURL,
     )
 
-    if "github" in source_dict:
-        github_data = source_dict["github"]
-        # Add source discriminator for Pydantic model
-        return ConfigSourceGitHub(source="github", **github_data)
-    elif "git" in source_dict:
-        git_data = source_dict["git"]
-        return ConfigSourceGit(source="git", **git_data)
-    elif "url" in source_dict:
-        url_data = source_dict["url"]
-        return ConfigSourceURL(source="url", **url_data)
-    else:
-        raise ValueError(f"Unknown config_source type: {list(source_dict.keys())}")
+    source_type = source_dict.get("source")
+    if source_type == "github":
+        return ConfigSourceGitHub.model_validate(source_dict)
+    if source_type == "git":
+        return ConfigSourceGit.model_validate(source_dict)
+    if source_type == "url":
+        return ConfigSourceURL.model_validate(source_dict)
+    raise ValueError(f"Unknown config_source type: {source_type}")

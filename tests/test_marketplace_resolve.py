@@ -10,6 +10,7 @@ This module tests:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,11 +29,34 @@ from scc_cli.marketplace.schema import (
     ConfigSourceURL,
     DefaultsConfig,
     MarketplaceSourceGitHub,
-    OrganizationConfig,
-    TeamProfile,
     TrustGrant,
 )
 from scc_cli.marketplace.trust import TrustViolationError
+
+if TYPE_CHECKING:
+    from scc_cli.marketplace.schema import OrganizationConfig, TeamProfile
+
+
+def make_org_config(**kwargs: Any) -> OrganizationConfig:
+    from scc_cli.marketplace.schema import OrganizationConfig, OrganizationInfo
+
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs: Any) -> TeamProfile:
+    from scc_cli.marketplace.schema import TeamProfile
+
+    return TeamProfile(**kwargs)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ConfigFetchError Tests
@@ -292,58 +316,6 @@ class TestEffectiveConfigSourceDescription:
         assert not desc.startswith("https://")
 
 
-class TestEffectiveConfigToPhase1Format:
-    """Tests for EffectiveConfig.to_phase1_format() method."""
-
-    def test_returns_tuple(self) -> None:
-        """Returns tuple of EffectivePlugins and marketplaces dict."""
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins={"plugin-a@shared"},
-            marketplaces={},
-        )
-        result = config.to_phase1_format()
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-
-    def test_plugins_have_enabled_set(self) -> None:
-        """EffectivePlugins contains enabled set."""
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins={"a@x", "b@y"},
-        )
-        plugins, _ = config.to_phase1_format()
-        assert plugins.enabled == {"a@x", "b@y"}
-
-    def test_plugins_have_blocked_list(self) -> None:
-        """EffectivePlugins contains blocked list."""
-        from scc_cli.marketplace.compute import BlockedPlugin
-
-        blocked = [BlockedPlugin(plugin_id="bad@evil", reason="Blocked", pattern="*@evil")]
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins=set(),
-            blocked_plugins=blocked,
-        )
-        plugins, _ = config.to_phase1_format()
-        assert plugins.blocked == blocked
-
-    def test_marketplaces_preserved(self) -> None:
-        """Marketplaces dict is preserved."""
-        mp = MarketplaceSourceGitHub(source="github", owner="org", repo="mp")
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins=set(),
-            marketplaces={"shared": mp},
-        )
-        _, marketplaces = config.to_phase1_format()
-        assert marketplaces == {"shared": mp}
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # resolve_effective_config() Tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -354,10 +326,8 @@ class TestResolveEffectiveConfigInline:
 
     def test_team_not_found_raises(self) -> None:
         """Non-existent team raises TeamNotFoundError."""
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
         )
         with pytest.raises(TeamNotFoundError) as exc_info:
             resolve_effective_config(config, "frontend")
@@ -366,10 +336,8 @@ class TestResolveEffectiveConfigInline:
 
     def test_inline_team_returns_not_federated(self) -> None:
         """Inline team (no config_source) returns is_federated=False."""
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
         )
         result = resolve_effective_config(config, "backend")
         assert result.is_federated is False
@@ -377,14 +345,12 @@ class TestResolveEffectiveConfigInline:
 
     def test_inline_team_uses_compute_effective_plugins(self) -> None:
         """Inline team uses compute_effective_plugins() for resolution."""
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["plugin-a@claude-plugins-official"],
             ),
             profiles={
-                "backend": TeamProfile(name="backend"),
+                "backend": make_team_profile(),
             },
         )
         result = resolve_effective_config(config, "backend")
@@ -400,7 +366,7 @@ class TestResolveEffectiveConfigFederated:
         # Setup mock
         mock_result = MagicMock()
         mock_result.success = True
-        mock_result.result.team_config = {"schema_version": 1, "enabled_plugins": []}
+        mock_result.result.team_config = {"schema_version": "1.0.0", "enabled_plugins": []}
         mock_result.result.source_type = "github"
         mock_result.result.source_url = "github.com/org/repo"
         mock_result.result.commit_sha = "abc123"
@@ -410,12 +376,9 @@ class TestResolveEffectiveConfigFederated:
         mock_result.staleness_warning = None
         mock_fetch.return_value = mock_result
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "frontend": TeamProfile(
-                    name="frontend",
+                "frontend": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="org",
@@ -441,12 +404,9 @@ class TestResolveEffectiveConfigFederated:
         mock_result.result.error = "HTTP 404 Not Found"
         mock_fetch.return_value = mock_result
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "frontend": TeamProfile(
-                    name="frontend",
+                "frontend": make_team_profile(
                     config_source=ConfigSourceURL(
                         source="url",
                         url="https://example.com/config.json",
@@ -465,7 +425,7 @@ class TestResolveEffectiveConfigFederated:
         """Federated resolution tracks cache status."""
         mock_result = MagicMock()
         mock_result.success = True
-        mock_result.result.team_config = {"schema_version": 1, "enabled_plugins": []}
+        mock_result.result.team_config = {"schema_version": "1.0.0", "enabled_plugins": []}
         mock_result.result.source_type = "github"
         mock_result.result.source_url = "github.com/org/repo"
         mock_result.result.commit_sha = None
@@ -475,12 +435,9 @@ class TestResolveEffectiveConfigFederated:
         mock_result.staleness_warning = "Cache is 5 days old"
         mock_fetch.return_value = mock_result
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "frontend": TeamProfile(
-                    name="frontend",
+                "frontend": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="org",
@@ -506,10 +463,8 @@ class TestValidateDefaultsDontNeedOrgMarketplaces:
 
     def test_no_defaults_no_validation_needed(self) -> None:
         """No defaults means no validation needed."""
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
         )
         # Should not raise
         _validate_defaults_dont_need_org_marketplaces(
@@ -522,10 +477,8 @@ class TestValidateDefaultsDontNeedOrgMarketplaces:
         """Defaults without enabled_plugins needs no validation."""
         from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
             defaults=DefaultsConfig(disabled_plugins=["some-plugin"]),
         )
         # Should not raise
@@ -539,10 +492,8 @@ class TestValidateDefaultsDontNeedOrgMarketplaces:
         """Defaults using implicit marketplace (claude-plugins-official) allowed."""
         from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
             defaults=DefaultsConfig(
                 enabled_plugins=["some-plugin@claude-plugins-official"],
             ),
@@ -559,10 +510,8 @@ class TestValidateDefaultsDontNeedOrgMarketplaces:
         from scc_cli.marketplace.schema import DefaultsConfig
 
         org_mp = MarketplaceSourceGitHub(source="github", owner="org", repo="mp")
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
             defaults=DefaultsConfig(
                 enabled_plugins=["plugin-a@shared"],
             ),
@@ -581,10 +530,8 @@ class TestValidateDefaultsDontNeedOrgMarketplaces:
         from scc_cli.marketplace.schema import DefaultsConfig
 
         org_mp = MarketplaceSourceGitHub(source="github", owner="org", repo="mp")
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
-            profiles={"backend": TeamProfile(name="backend")},
+        config = make_org_config(
+            profiles={"backend": make_team_profile()},
             defaults=DefaultsConfig(
                 enabled_plugins=[
                     "plugin-a@shared",

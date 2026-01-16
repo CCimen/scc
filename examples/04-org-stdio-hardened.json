@@ -9,9 +9,6 @@
     "security": {
         "blocked_plugins": [],
         "blocked_mcp_servers": [],
-        "blocked_base_images": [
-            "*:latest"
-        ],
         "allow_stdio_mcp": true,
         "allowed_stdio_prefixes": [
             "/usr/local/bin",

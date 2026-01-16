@@ -1,4 +1,4 @@
-"""Effective config resolution for team profiles (Phase 2: Federation).
+"""Effective config resolution for team profiles.
 
 This module provides:
 - EffectiveConfig: Complete resolved configuration for a team
@@ -6,7 +6,7 @@ This module provides:
 - resolve_effective_config(): Main orchestrator (T2a-18, to be implemented)
 
 EffectiveConfig serves as the unified result type for both inline and federated
-team configurations, providing backwards compatibility via to_phase1_format().
+team configurations.
 
 Design Decision:
     EffectiveConfig wraps the plugin computation results (from compute.py) with
@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 
 from scc_cli.marketplace.compute import (
     BlockedPlugin,
-    EffectivePlugins,
     compute_effective_plugins,
     compute_effective_plugins_federated,
 )
@@ -119,9 +118,6 @@ class EffectiveConfig:
     - Launch Claude Code with the correct plugins
     - Display status information to the user
     - Validate security compliance
-
-    For backwards compatibility, use to_phase1_format() to get the
-    (EffectivePlugins, marketplaces) tuple expected by Phase 1 code.
 
     Attributes:
         team_id: Team/profile identifier
@@ -221,31 +217,6 @@ class EffectiveConfig:
         else:
             return "unknown"
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Phase 1 Compatibility
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def to_phase1_format(self) -> tuple[EffectivePlugins, dict[str, MarketplaceSource]]:
-        """Convert to Phase 1 format for backwards compatibility.
-
-        This adapter method allows EffectiveConfig to work with existing
-        Phase 1 code that expects:
-        - EffectivePlugins for plugin computation results
-        - dict[str, MarketplaceSource] for marketplace configuration
-
-        Returns:
-            Tuple of (EffectivePlugins, marketplaces dict)
-        """
-        plugins = EffectivePlugins(
-            enabled=self.enabled_plugins,
-            blocked=self.blocked_plugins,
-            not_allowed=self.not_allowed_plugins,
-            disabled=self.disabled_plugins,
-            extra_marketplaces=self.extra_marketplaces,
-        )
-
-        return (plugins, self.marketplaces)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Resolution Orchestrator
@@ -258,7 +229,7 @@ def resolve_effective_config(
 ) -> EffectiveConfig:
     """Resolve effective configuration for a team (inline or federated).
 
-    This is the main orchestrator for Phase 2 configuration resolution.
+    This is the main orchestrator for configuration resolution.
     It determines whether a team uses inline or federated configuration
     and applies the appropriate resolution strategy.
 

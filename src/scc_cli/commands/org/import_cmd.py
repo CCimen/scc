@@ -141,7 +141,7 @@ def org_import_cmd(
         raise typer.Exit(EXIT_CONFIG)
 
     # Validate config against schema
-    validation_errors = validate_org_config(config, "v1")
+    validation_errors = validate_org_config(config)
 
     # Build preview data
     preview_data = build_import_preview_data(

@@ -20,7 +20,6 @@ from .cache import (
     check_cache_readable,
     check_cache_ttl_status,
     check_exception_stores,
-    check_migration_status,
     check_proxy_environment,
 )
 
@@ -123,9 +122,6 @@ def run_all_checks() -> list[CheckResult]:
     if ttl_check is not None:
         results.append(ttl_check)
 
-    # Migration check
-    results.append(check_migration_status())
-
     # Exception stores check
     results.append(check_exception_stores())
 
@@ -161,7 +157,6 @@ __all__ = [
     # Cache & state checks
     "check_cache_readable",
     "check_cache_ttl_status",
-    "check_migration_status",
     "check_exception_stores",
     "check_proxy_environment",
     # Orchestration

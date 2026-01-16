@@ -2,13 +2,47 @@
 
 Covers:
 - EffectiveConfig dataclass creation and field validation
-- to_phase1_format() adapter method for backwards compatibility
 - Federated vs inline config detection
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
+
+if TYPE_CHECKING:
+    from scc_cli.marketplace.schema import DelegationConfig, OrganizationConfig, TeamProfile
+
+
+def make_org_config(**kwargs: Any) -> OrganizationConfig:
+    from scc_cli.marketplace.schema import OrganizationConfig, OrganizationInfo
+
+    organization = kwargs.pop(
+        "organization",
+        OrganizationInfo(name="Test Org", id="test-org"),
+    )
+    schema_version = kwargs.pop("schema_version", "1.0.0")
+    return OrganizationConfig(
+        schema_version=schema_version,
+        organization=organization,
+        **kwargs,
+    )
+
+
+def make_team_profile(**kwargs: Any) -> TeamProfile:
+    from scc_cli.marketplace.schema import TeamProfile
+
+    return TeamProfile(**kwargs)
+
+
+def allow_all_delegation() -> DelegationConfig:
+    from scc_cli.marketplace.schema import DelegationConfig, DelegationTeamsConfig
+
+    return DelegationConfig(
+        teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+    )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EffectiveConfig Dataclass Tests
@@ -171,107 +205,6 @@ class TestEffectiveConfigCreation:
         assert config.extra_marketplaces == []
 
 
-class TestEffectiveConfigToPhase1Format:
-    """Tests for to_phase1_format() backwards compatibility adapter."""
-
-    def test_basic_conversion(self) -> None:
-        """to_phase1_format() returns (EffectivePlugins, marketplaces) tuple."""
-        from scc_cli.marketplace.compute import EffectivePlugins
-        from scc_cli.marketplace.resolve import EffectiveConfig
-
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins={"plugin-a@official", "plugin-b@official"},
-            extra_marketplaces=["extra-mp"],
-        )
-
-        plugins, marketplaces = config.to_phase1_format()
-
-        assert isinstance(plugins, EffectivePlugins)
-        assert plugins.enabled == {"plugin-a@official", "plugin-b@official"}
-        assert plugins.extra_marketplaces == ["extra-mp"]
-        assert isinstance(marketplaces, dict)
-
-    def test_blocked_plugins_preserved(self) -> None:
-        """to_phase1_format() preserves blocked plugins."""
-        from scc_cli.marketplace.compute import BlockedPlugin
-        from scc_cli.marketplace.resolve import EffectiveConfig
-
-        blocked = [
-            BlockedPlugin(
-                plugin_id="dangerous@evil",
-                reason="Security risk",
-                pattern="*@evil",
-            ),
-        ]
-
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins=set(),
-            blocked_plugins=blocked,
-        )
-
-        plugins, _ = config.to_phase1_format()
-
-        assert len(plugins.blocked) == 1
-        assert plugins.blocked[0].plugin_id == "dangerous@evil"
-
-    def test_disabled_plugins_preserved(self) -> None:
-        """to_phase1_format() preserves disabled plugins."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
-
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins=set(),
-            disabled_plugins=["disabled@mp"],
-        )
-
-        plugins, _ = config.to_phase1_format()
-
-        assert plugins.disabled == ["disabled@mp"]
-
-    def test_not_allowed_plugins_preserved(self) -> None:
-        """to_phase1_format() preserves not_allowed plugins."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
-
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins=set(),
-            not_allowed_plugins=["not-allowed@mp"],
-        )
-
-        plugins, _ = config.to_phase1_format()
-
-        assert plugins.not_allowed == ["not-allowed@mp"]
-
-    def test_marketplaces_returned_unchanged(self) -> None:
-        """to_phase1_format() returns marketplaces dict unchanged."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
-        from scc_cli.marketplace.schema import MarketplaceSourceGitHub
-
-        mp_source = MarketplaceSourceGitHub(
-            source="github",
-            owner="company",
-            repo="plugins",
-        )
-
-        config = EffectiveConfig(
-            team_id="backend",
-            is_federated=False,
-            enabled_plugins=set(),
-            marketplaces={"shared": mp_source},
-        )
-
-        _, marketplaces = config.to_phase1_format()
-
-        assert "shared" in marketplaces
-        assert marketplaces["shared"] == mp_source
-
-
 class TestEffectiveConfigProperties:
     """Tests for EffectiveConfig computed properties."""
 
@@ -378,20 +311,14 @@ class TestResolveEffectiveConfigInline:
     def test_inline_team_returns_effective_config(self) -> None:
         """Inline teams (no config_source) return EffectiveConfig with is_federated=False."""
         from scc_cli.marketplace.resolve import EffectiveConfig, resolve_effective_config
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["plugin-a@claude-plugins-official"],
             ),
             profiles={
-                "backend": TeamProfile(name="Backend"),
+                "backend": make_team_profile(),
             },
         )
 
@@ -405,21 +332,15 @@ class TestResolveEffectiveConfigInline:
     def test_inline_team_applies_additional_plugins(self) -> None:
         """Inline teams merge defaults + additional plugins."""
         from scc_cli.marketplace.resolve import resolve_effective_config
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["default-plugin@claude-plugins-official"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend",
+                "backend": make_team_profile(
                     additional_plugins=["extra-plugin@claude-plugins-official"],
                 ),
             },
@@ -433,26 +354,18 @@ class TestResolveEffectiveConfigInline:
     def test_inline_team_applies_disabled_plugins(self) -> None:
         """Inline teams apply disabled_plugins patterns."""
         from scc_cli.marketplace.resolve import resolve_effective_config
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=[
                     "plugin-a@claude-plugins-official",
                     "plugin-b@claude-plugins-official",
                 ],
+                disabled_plugins=["plugin-b*"],
             ),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend",
-                    disabled_plugins=["plugin-b*"],
-                ),
+                "backend": make_team_profile(),
             },
         )
 
@@ -465,25 +378,17 @@ class TestResolveEffectiveConfigInline:
     def test_inline_team_applies_security_blocking(self) -> None:
         """Inline teams apply security.blocked_plugins."""
         from scc_cli.marketplace.resolve import resolve_effective_config
-        from scc_cli.marketplace.schema import (
-            DefaultsConfig,
-            OrganizationConfig,
-            SecurityConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import DefaultsConfig, SecurityConfig
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["safe@claude-plugins-official", "risky@dangerous-mp"],
             ),
             profiles={
-                "backend": TeamProfile(name="Backend"),
+                "backend": make_team_profile(),
             },
             security=SecurityConfig(
                 blocked_plugins=["*@dangerous-mp"],
-                blocked_reason="Unapproved marketplace",
             ),
         )
 
@@ -497,13 +402,10 @@ class TestResolveEffectiveConfigInline:
         """Missing team raises TeamNotFoundError."""
         from scc_cli.marketplace.compute import TeamNotFoundError
         from scc_cli.marketplace.resolve import resolve_effective_config
-        from scc_cli.marketplace.schema import OrganizationConfig, TeamProfile
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "backend": TeamProfile(name="Backend"),
+                "backend": make_team_profile(),
             },
         )
 
@@ -515,17 +417,11 @@ class TestResolveEffectiveConfigInline:
     def test_inline_team_collects_marketplaces(self) -> None:
         """Inline teams include org marketplaces in result."""
         from scc_cli.marketplace.resolve import resolve_effective_config
-        from scc_cli.marketplace.schema import (
-            MarketplaceSourceGitHub,
-            OrganizationConfig,
-            TeamProfile,
-        )
+        from scc_cli.marketplace.schema import MarketplaceSourceGitHub
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "backend": TeamProfile(name="Backend"),
+                "backend": make_team_profile(),
             },
             marketplaces={
                 "shared": MarketplaceSourceGitHub(
@@ -551,9 +447,7 @@ class TestResolveEffectiveConfigFederated:
         from scc_cli.marketplace.resolve import resolve_effective_config
         from scc_cli.marketplace.schema import (
             ConfigSourceGitHub,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
 
@@ -563,12 +457,9 @@ class TestResolveEffectiveConfigFederated:
             repo="team-config",
         )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "backend": TeamProfile(
-                    name="Backend",
+                "backend": make_team_profile(
                     config_source=source,
                     trust=TrustGrant(
                         inherit_org_marketplaces=True,
@@ -579,7 +470,7 @@ class TestResolveEffectiveConfigFederated:
 
         # Mock the fetch to return a valid team config
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-plugin@claude-plugins-official"],
         )
 
@@ -612,21 +503,17 @@ class TestResolveEffectiveConfigFederated:
         from scc_cli.marketplace.schema import (
             ConfigSourceGitHub,
             DefaultsConfig,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=["default@claude-plugins-official"],
             ),
+            delegation=allow_all_delegation(),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend",
+                "backend": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="org",
@@ -638,7 +525,7 @@ class TestResolveEffectiveConfigFederated:
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-specific@claude-plugins-official"],
         )
 
@@ -670,19 +557,15 @@ class TestResolveEffectiveConfigFederated:
         from scc_cli.marketplace.resolve import resolve_effective_config
         from scc_cli.marketplace.schema import (
             ConfigSourceGitHub,
-            OrganizationConfig,
             SecurityConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
+            delegation=allow_all_delegation(),
             profiles={
-                "backend": TeamProfile(
-                    name="Backend",
+                "backend": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="org",
@@ -693,12 +576,11 @@ class TestResolveEffectiveConfigFederated:
             },
             security=SecurityConfig(
                 blocked_plugins=["dangerous@evil"],
-                blocked_reason="Security policy",
             ),
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["safe@claude-plugins-official", "dangerous@evil"],
         )
 
@@ -740,18 +622,13 @@ class TestInheritOrgMarketplacesValidation:
         from scc_cli.marketplace.schema import (
             ConfigSourceGitHub,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             profiles={
-                "isolated": TeamProfile(
-                    name="Isolated Team",
+                "isolated": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="team-isolated",
@@ -773,7 +650,7 @@ class TestInheritOrgMarketplacesValidation:
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["plugin@claude-plugins-official"],
         )
 
@@ -807,23 +684,18 @@ class TestInheritOrgMarketplacesValidation:
             ConfigSourceGitHub,
             DefaultsConfig,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=[
                     "standard@claude-plugins-official",  # Implicit marketplace - always available
                 ],
             ),
             profiles={
-                "isolated": TeamProfile(
-                    name="Isolated Team",
+                "isolated": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="team-isolated",
@@ -844,7 +716,7 @@ class TestInheritOrgMarketplacesValidation:
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-plugin@claude-plugins-official"],
         )
 
@@ -878,24 +750,19 @@ class TestInheritOrgMarketplacesValidation:
             ConfigSourceGitHub,
             DefaultsConfig,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
         from scc_cli.marketplace.trust import TrustViolationError
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=[
                     "required-plugin@shared",  # References org marketplace
                 ],
             ),
             profiles={
-                "isolated": TeamProfile(
-                    name="Isolated Team",
+                "isolated": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="team-isolated",
@@ -916,7 +783,7 @@ class TestInheritOrgMarketplacesValidation:
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-plugin@claude-plugins-official"],
         )
 
@@ -952,23 +819,18 @@ class TestInheritOrgMarketplacesValidation:
             ConfigSourceGitHub,
             DefaultsConfig,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=[
                     "required-plugin@shared",  # References org marketplace
                 ],
             ),
             profiles={
-                "standard": TeamProfile(
-                    name="Standard Team",
+                "standard": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="team-standard",
@@ -989,7 +851,7 @@ class TestInheritOrgMarketplacesValidation:
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-plugin@claude-plugins-official"],
         )
 
@@ -1023,16 +885,12 @@ class TestInheritOrgMarketplacesValidation:
             ConfigSourceGitHub,
             DefaultsConfig,
             MarketplaceSourceGitHub,
-            OrganizationConfig,
             TeamConfig,
-            TeamProfile,
             TrustGrant,
         )
         from scc_cli.marketplace.trust import TrustViolationError
 
-        config = OrganizationConfig(
-            name="Test Org",
-            schema_version=1,
+        config = make_org_config(
             defaults=DefaultsConfig(
                 enabled_plugins=[
                     "plugin-a@shared",  # References org marketplace 'shared'
@@ -1041,8 +899,7 @@ class TestInheritOrgMarketplacesValidation:
                 ],
             ),
             profiles={
-                "isolated": TeamProfile(
-                    name="Isolated Team",
+                "isolated": make_team_profile(
                     config_source=ConfigSourceGitHub(
                         source="github",
                         owner="team-isolated",
@@ -1068,7 +925,7 @@ class TestInheritOrgMarketplacesValidation:
         )
 
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["team-plugin@claude-plugins-official"],
         )
 

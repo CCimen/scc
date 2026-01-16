@@ -273,7 +273,7 @@ def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
         # load_cached_org_config() reads from local cache only - safe for offline mode
         org_config = config.load_cached_org_config()
 
-        validation = teams.validate_team_profile(team, cfg, org_config=org_config)
+        validation = teams.validate_team_profile(team, org_config)
         if not validation["valid"]:
             console.print(
                 create_warning_panel(
@@ -475,7 +475,6 @@ def start(
     session_name: str | None = typer.Option(None, "--session", help="Session name"),
     resume: bool = typer.Option(False, "-r", "--resume", help="Resume most recent session"),
     select: bool = typer.Option(False, "-s", "--select", help="Select from recent sessions"),
-    continue_session: bool = typer.Option(False, "-c", "--continue", hidden=True),
     worktree_name: str | None = typer.Option(None, "-w", "--worktree", help="Worktree name"),
     fresh: bool = typer.Option(False, "--fresh", help="Force new container"),
     install_deps: bool = typer.Option(False, "--install-deps", help="Install dependencies"),
@@ -562,11 +561,7 @@ def start(
         if not setup.maybe_run_setup(console):
             raise typer.Exit(1)
 
-    cfg = config.load_config()
-
-    # Treat --continue as alias for --resume (backward compatibility)
-    if continue_session:
-        resume = True
+    cfg = config.load_user_config()
 
     # ── Step 2: Session selection (interactive, --select, --resume) ──────────
     workspace, team, session_name, worktree_name, cancelled, was_auto_detected = (
@@ -718,7 +713,7 @@ def start(
     warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
-    should_continue_session = resume or continue_session
+    should_continue_session = resume
     # Extract plugin settings from sync result for container injection
     plugin_settings = sync_result.rendered_settings if sync_result else None
     launch_sandbox(
@@ -809,7 +804,7 @@ def interactive_start(
 
     # Get available teams (from org config if available)
     org_config = config.load_cached_org_config()
-    available_teams = teams.list_teams(cfg, org_config)
+    available_teams = teams.list_teams(org_config)
 
     # Track if user dismissed global Quick Resume (to skip workspace-scoped QR)
     user_dismissed_quick_resume = False
@@ -1340,7 +1335,7 @@ def run_start_wizard_flow(
         if not setup.maybe_run_setup(console):
             return None  # Error during setup
 
-    cfg = config.load_config()
+    cfg = config.load_user_config()
 
     # Step 2: Run interactive wizard
     # Note: standalone_override=False (default) is correct here - dashboard path

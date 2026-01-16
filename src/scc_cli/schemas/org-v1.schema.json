@@ -5,6 +5,127 @@
     "description": "Schema for SCC organization configuration files with governance features. Supports Phase 2 federated team configs.",
     "type": "object",
     "$defs": {
+        "MarketplaceSource": {
+            "description": "Discriminated union for marketplace source types",
+            "oneOf": [
+                {"$ref": "#/$defs/MarketplaceSourceGitHub"},
+                {"$ref": "#/$defs/MarketplaceSourceGit"},
+                {"$ref": "#/$defs/MarketplaceSourceURL"},
+                {"$ref": "#/$defs/MarketplaceSourceDirectory"}
+            ]
+        },
+        "MarketplaceSourceGitHub": {
+            "type": "object",
+            "description": "GitHub repository marketplace source",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "github",
+                    "description": "Source type discriminator"
+                },
+                "owner": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$",
+                    "description": "GitHub organization or user name"
+                },
+                "repo": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9._-]+$",
+                    "description": "GitHub repository name"
+                },
+                "branch": {
+                    "type": "string",
+                    "default": "main",
+                    "description": "Git branch to use"
+                },
+                "path": {
+                    "type": "string",
+                    "default": "/",
+                    "description": "Path within repository to marketplace root"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "HTTP headers for authentication (supports ${VAR} expansion)"
+                }
+            },
+            "required": ["source", "owner", "repo"],
+            "additionalProperties": false
+        },
+        "MarketplaceSourceGit": {
+            "type": "object",
+            "description": "Generic Git repository marketplace source",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "git",
+                    "description": "Source type discriminator"
+                },
+                "url": {
+                    "type": "string",
+                    "pattern": "^(https://|git@)",
+                    "description": "Git clone URL (HTTPS or SSH)"
+                },
+                "branch": {
+                    "type": "string",
+                    "default": "main",
+                    "description": "Git branch to use"
+                },
+                "path": {
+                    "type": "string",
+                    "default": "/",
+                    "description": "Path within repository to marketplace root"
+                }
+            },
+            "required": ["source", "url"],
+            "additionalProperties": false
+        },
+        "MarketplaceSourceURL": {
+            "type": "object",
+            "description": "URL-based marketplace source (HTTPS only)",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "url",
+                    "description": "Source type discriminator"
+                },
+                "url": {
+                    "type": "string",
+                    "pattern": "^https://",
+                    "description": "HTTPS URL to marketplace manifest (HTTP forbidden)"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "HTTP headers for authentication (supports ${VAR} expansion)"
+                },
+                "materialization_mode": {
+                    "type": "string",
+                    "enum": ["self_contained", "metadata_only", "best_effort"],
+                    "default": "self_contained",
+                    "description": "How to fetch marketplace content"
+                }
+            },
+            "required": ["source", "url"],
+            "additionalProperties": false
+        },
+        "MarketplaceSourceDirectory": {
+            "type": "object",
+            "description": "Local directory marketplace source",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "const": "directory",
+                    "description": "Source type discriminator"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Local filesystem path (absolute or relative to org config)"
+                }
+            },
+            "required": ["source", "path"],
+            "additionalProperties": false
+        },
         "ConfigSource": {
             "description": "Discriminated union for team config source types (no directory for security)",
             "oneOf": [
@@ -130,8 +251,8 @@
         "$schema": {"type": "string", "description": "JSON Schema reference URL"},
         "schema_version": {
             "type": "string",
-            "pattern": "^1\\.[0-9]+\\.[0-9]+$",
-            "description": "Semantic version of this schema (must start with 1.x.x)"
+            "const": "1.0.0",
+            "description": "Schema version (must be 1.0.0)"
         },
         "min_cli_version": {
             "type": "string",
@@ -159,6 +280,12 @@
             },
             "required": ["name", "id"]
         },
+        "marketplaces": {
+            "type": "object",
+            "description": "Marketplace definitions (key = marketplace name)",
+            "additionalProperties": {"$ref": "#/$defs/MarketplaceSource"},
+            "default": {}
+        },
         "security": {
             "type": "object",
             "description": "Hard security boundaries (NEVER overridable by teams or projects)",
@@ -172,11 +299,6 @@
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "fnmatch patterns to block MCP servers in SCC-managed config (org/team/project). Does NOT affect MCP servers bundled inside marketplace plugins."
-                },
-                "blocked_base_images": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Docker base image patterns to block (supports fnmatch wildcards)"
                 },
                 "allow_stdio_mcp": {
                     "type": "boolean",
@@ -241,12 +363,12 @@
                 "allowed_plugins": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Default allowed plugins (can be extended by teams)"
+                    "description": "Allowlist for plugins teams/projects can add"
                 },
                 "allowed_mcp_servers": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Default allowed MCP server patterns"
+                    "description": "Allowlist patterns for MCP servers teams/projects can add"
                 },
                 "enabled_plugins": {
                     "type": "array",
@@ -300,22 +422,17 @@
             "properties": {
                 "teams": {
                     "type": "object",
-                    "description": "What teams are allowed to add",
+                    "description": "Which teams are allowed to add plugins/MCP servers",
                     "properties": {
                         "allow_additional_plugins": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Plugin patterns teams can add (use ['*'] for unrestricted)"
+                            "description": "Team names or patterns allowed to add plugins (use ['*'] for unrestricted)"
                         },
                         "allow_additional_mcp_servers": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Team names or patterns that can add MCP servers"
-                        },
-                        "allow_network_override": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Network policies teams can override to"
+                            "description": "Team names or patterns allowed to add MCP servers (use ['*'] for unrestricted)"
                         }
                     },
                     "additionalProperties": false
@@ -426,7 +543,8 @@
                         "$ref": "#/$defs/TrustGrant",
                         "description": "Trust delegation controls for federated teams"
                     }
-                }
+                },
+                "additionalProperties": false
             }
         },
         "stats": {
@@ -452,5 +570,6 @@
             "additionalProperties": false
         }
     },
-    "required": ["schema_version", "organization"]
+    "required": ["schema_version", "organization"],
+    "additionalProperties": false
 }

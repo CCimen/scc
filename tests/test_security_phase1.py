@@ -2,7 +2,6 @@
 
 TDD tests for Phase 1 security features:
 - Case-insensitive blocking with casefold()
-- Implicit :latest image normalization
 - stdio MCP feature gate and path validation
 
 Reference: SCC v2 Validation Plan (zesty-marinating-swan.md)
@@ -30,7 +29,6 @@ def org_config_with_blocks() -> dict[str, Any]:
         "security": {
             "blocked_plugins": ["Malicious-*", "evil-*"],
             "blocked_mcp_servers": ["untrusted-*"],
-            "blocked_base_images": ["*:latest", "docker.io/*"],
         },
         "defaults": {
             "allowed_plugins": ["approved-plugin"],
@@ -130,72 +128,6 @@ additional_plugins:
         # Should be in blocked_items
         blocked_names = [b.item for b in effective.blocked_items]
         assert "malicious-tool" in blocked_names
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for implicit :latest normalization
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestImageNormalization:
-    """Tests for Docker base image normalization."""
-
-    def test_image_implicit_latest_blocked(self):
-        """Image "ubuntu" (no tag) should be normalized to ubuntu:latest.
-
-        Given: blocked_base_images: ["*:latest"]
-        When: Image "ubuntu" (no tag) is used
-        Then: Image appears in blocked_items (normalized to ubuntu:latest)
-        """
-        # This test will fail until normalize_image_for_policy is implemented
-        ref = profiles.normalize_image_for_policy("ubuntu")
-        assert ref == "ubuntu:latest", "Untagged image should get :latest"
-
-    def test_image_digest_not_forced_latest(self):
-        """Image with digest should NOT have :latest appended.
-
-        Given: blocked_base_images: ["*:latest"]
-        When: Image "nginx@sha256:abc123..." is used
-        Then: Image is NOT blocked (digest overrides tag)
-        """
-        ref = profiles.normalize_image_for_policy("nginx@sha256:abc123")
-        assert ":latest" not in ref, "Digest images should not get :latest"
-        assert "nginx@sha256:abc123" in ref.lower()
-
-    def test_image_explicit_tag_not_latest(self):
-        """Image with explicit tag should NOT have :latest appended.
-
-        Given: blocked_base_images: ["*:latest"]
-        When: Image "python:3.11" is used
-        Then: Image is NOT blocked (explicit tag)
-        """
-        ref = profiles.normalize_image_for_policy("python:3.11")
-        assert ref == "python:3.11", "Explicit tag should be preserved"
-
-    def test_normalization_is_case_insensitive(self):
-        """Normalized images should be casefolded for matching."""
-        ref = profiles.normalize_image_for_policy("Ubuntu")
-        assert ref == "ubuntu:latest", "Should be lowercase"
-
-    def test_empty_string_handled(self):
-        """Empty string should return empty string."""
-        ref = profiles.normalize_image_for_policy("")
-        assert ref == ""
-
-    def test_whitespace_trimmed(self):
-        """Whitespace should be trimmed."""
-        ref = profiles.normalize_image_for_policy("  ubuntu  ")
-        assert ref == "ubuntu:latest"
-
-    def test_registry_with_port_handled(self):
-        """registry:5000/ns/img should normalize correctly."""
-        ref = profiles.normalize_image_for_policy("registry:5000/ns/img")
-        assert ref == "registry:5000/ns/img:latest"
-
-    def test_nested_path_with_tag(self):
-        """ghcr.io/owner/repo:v1 should preserve tag."""
-        ref = profiles.normalize_image_for_policy("ghcr.io/owner/repo:v1")
-        assert ref == "ghcr.io/owner/repo:v1"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

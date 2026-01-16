@@ -53,19 +53,22 @@ def mock_user_config_standalone():
 def mock_org_config_inline_teams():
     """Org config with only inline teams (no federated)."""
     return {
-        "schema_version": "v1",
+        "schema_version": "1.0.0",
         "organization": {
             "name": "Test Org",
             "id": "test-org",
         },
+        "delegation": {
+            "teams": {
+                "allow_additional_plugins": ["developers"],
+            },
+        },
         "profiles": {
             "developers": {
-                "name": "Developers",
                 "description": "Developer team",
                 "additional_plugins": ["code-review@shared"],
             },
             "qa": {
-                "name": "QA Team",
                 "description": "Quality assurance",
                 "additional_plugins": [],
             },
@@ -77,26 +80,28 @@ def mock_org_config_inline_teams():
 def mock_org_config_federated_teams():
     """Org config with federated teams."""
     return {
-        "schema_version": "v1",
+        "schema_version": "1.0.0",
         "organization": {
             "name": "Test Org",
             "id": "test-org",
         },
+        "delegation": {
+            "teams": {
+                "allow_additional_plugins": ["developers"],
+            },
+        },
         "profiles": {
             "developers": {
-                "name": "Developers",
                 "description": "Developer team - inline",
                 "additional_plugins": ["code-review@shared"],
             },
             "external-team": {
-                "name": "External Team",
                 "description": "Federated team",
                 "config_source": {
-                    "github": {
-                        "owner": "example",
-                        "repo": "team-configs",
-                        "path": "external-team.json",
-                    }
+                    "source": "github",
+                    "owner": "example",
+                    "repo": "team-configs",
+                    "path": "external-team.json",
                 },
                 "trust": {
                     "inherit_org_marketplaces": True,
@@ -104,12 +109,10 @@ def mock_org_config_federated_teams():
                 },
             },
             "partner-team": {
-                "name": "Partner Team",
                 "description": "Another federated team",
                 "config_source": {
-                    "url": {
-                        "url": "https://partner.example.com/team-config.json",
-                    }
+                    "source": "url",
+                    "url": "https://partner.example.com/team-config.json",
                 },
                 "trust": {
                     "inherit_org_marketplaces": True,

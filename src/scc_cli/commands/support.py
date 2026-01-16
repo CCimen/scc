@@ -167,7 +167,7 @@ def build_bundle_data(
 
     # Load and redact config
     try:
-        user_config = config.load_config()
+        user_config = config.load_user_config()
         user_config = redact_secrets(user_config)
     except Exception:
         user_config = {"error": "Failed to load config"}

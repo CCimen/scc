@@ -1,6 +1,6 @@
 {
     "$schema": "../src/scc_cli/schemas/team-config.v1.schema.json",
-    "schema_version": 1,
+    "schema_version": "1.0.0",
     "enabled_plugins": [
         "platform-cli-tools@team-internal",
         "monitoring-helper@team-internal",

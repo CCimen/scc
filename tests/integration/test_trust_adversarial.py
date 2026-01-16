@@ -368,7 +368,7 @@ class TestTrustGrantEnforcement:
     def test_team_cannot_add_marketplaces_without_permission(self) -> None:
         """Teams without allow_additional_marketplaces cannot define marketplaces."""
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=["tool@team-mp"],
             marketplaces={
                 "team-mp": MarketplaceSourceGitHub(
@@ -396,7 +396,7 @@ class TestTrustGrantEnforcement:
     def test_team_marketplace_name_collision_with_org(self) -> None:
         """Team cannot define marketplace with same name as org marketplace."""
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[],
             marketplaces={
                 "shared": MarketplaceSourceGitHub(  # Same name as org
@@ -432,7 +432,7 @@ class TestTrustGrantEnforcement:
     def test_team_marketplace_name_collision_with_implicit(self) -> None:
         """Team cannot define marketplace with implicit marketplace name."""
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[],
             marketplaces={
                 "claude-plugins-official": MarketplaceSourceGitHub(  # Reserved name
@@ -460,7 +460,7 @@ class TestTrustGrantEnforcement:
     def test_source_pattern_validation_applied_to_all_team_marketplaces(self) -> None:
         """All team marketplaces must match allowed patterns."""
         team_config = TeamConfig(
-            schema_version=1,
+            schema_version="1.0.0",
             enabled_plugins=[],
             marketplaces={
                 "allowed-mp": MarketplaceSourceGitHub(

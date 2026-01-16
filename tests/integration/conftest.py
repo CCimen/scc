@@ -17,15 +17,26 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from scc_cli.marketplace.schema import (
+    ConfigSourceGitHub,
     DefaultsConfig,
+    DelegationConfig,
+    DelegationTeamsConfig,
     MarketplaceSourceDirectory,
     MarketplaceSourceGitHub,
     OrganizationConfig,
+    OrganizationInfo,
     SecurityConfig,
     TeamConfig,
     TeamProfile,
     TrustGrant,
 )
+
+
+def allow_all_delegation() -> DelegationConfig:
+    return DelegationConfig(
+        teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
+    )
+
 
 if TYPE_CHECKING:
     pass
@@ -81,8 +92,9 @@ def sample_org_config() -> OrganizationConfig:
     - Default enabled plugins
     """
     return OrganizationConfig(
-        name="Test Organization",
-        schema_version=1,
+        schema_version="1.0.0",
+        organization=OrganizationInfo(name="Test Organization", id="test-organization"),
+        delegation=allow_all_delegation(),
         marketplaces={
             "internal": MarketplaceSourceGitHub(
                 source="github",
@@ -105,22 +117,17 @@ def sample_org_config() -> OrganizationConfig:
         ),
         profiles={
             "backend": TeamProfile(
-                name="Backend Team",
                 additional_plugins=["api-tools@internal"],
-                disabled_plugins=[],
             ),
             "frontend": TeamProfile(
-                name="Frontend Team",
                 additional_plugins=["ui-tools@shared"],
-                disabled_plugins=["api-*"],
             ),
             "federated": TeamProfile(
-                name="Federated Team",
-                config_source={
-                    "source": "github",
-                    "owner": "test-team",
-                    "repo": "team-config",
-                },
+                config_source=ConfigSourceGitHub(
+                    source="github",
+                    owner="test-team",
+                    repo="team-config",
+                ),
                 trust=TrustGrant(
                     inherit_org_marketplaces=True,
                     allow_additional_marketplaces=True,
@@ -130,7 +137,6 @@ def sample_org_config() -> OrganizationConfig:
         },
         security=SecurityConfig(
             blocked_plugins=["malicious-*", "unsafe-tool@*"],
-            blocked_reason="Blocked by security policy",
         ),
     )
 
@@ -139,8 +145,9 @@ def sample_org_config() -> OrganizationConfig:
 def org_with_blocked_case_variations() -> OrganizationConfig:
     """Org config with blocked patterns in various cases for case-sensitivity testing."""
     return OrganizationConfig(
-        name="Case Test Org",
-        schema_version=1,
+        schema_version="1.0.0",
+        organization=OrganizationInfo(name="Case Test Org", id="case-test-org"),
+        delegation=allow_all_delegation(),
         marketplaces={
             "shared": MarketplaceSourceGitHub(
                 source="github",
@@ -153,7 +160,6 @@ def org_with_blocked_case_variations() -> OrganizationConfig:
         ),
         profiles={
             "test-team": TeamProfile(
-                name="Test Team",
                 additional_plugins=[
                     "MALICIOUS-tool@shared",
                     "Malicious-Tool@shared",
@@ -164,7 +170,6 @@ def org_with_blocked_case_variations() -> OrganizationConfig:
         },
         security=SecurityConfig(
             blocked_plugins=["Malicious-*"],  # Mixed case pattern
-            blocked_reason="Blocked for security",
         ),
     )
 
@@ -173,8 +178,9 @@ def org_with_blocked_case_variations() -> OrganizationConfig:
 def org_with_multiple_marketplaces() -> OrganizationConfig:
     """Org config with 2+ marketplaces for AmbiguousMarketplaceError testing."""
     return OrganizationConfig(
-        name="Multi-Marketplace Org",
-        schema_version=1,
+        schema_version="1.0.0",
+        organization=OrganizationInfo(name="Multi-Marketplace Org", id="multi-marketplace-org"),
+        delegation=allow_all_delegation(),
         marketplaces={
             "market-a": MarketplaceSourceGitHub(
                 source="github",
@@ -190,7 +196,6 @@ def org_with_multiple_marketplaces() -> OrganizationConfig:
         defaults=DefaultsConfig(enabled_plugins=[]),
         profiles={
             "test-team": TeamProfile(
-                name="Test Team",
                 additional_plugins=["bare-plugin"],  # No @marketplace suffix
             ),
         },
@@ -207,7 +212,7 @@ def org_with_multiple_marketplaces() -> OrganizationConfig:
 def sample_team_config() -> TeamConfig:
     """Create a sample team config for federated testing."""
     return TeamConfig(
-        schema_version=1,
+        schema_version="1.0.0",
         enabled_plugins=[
             "team-tool@team-marketplace",
             "shared-tool@shared",
@@ -230,7 +235,7 @@ def team_config_with_directory_source(tmp_path: Path) -> TeamConfig:
     plugins_dir.mkdir()
 
     return TeamConfig(
-        schema_version=1,
+        schema_version="1.0.0",
         enabled_plugins=["local-tool@local"],
         marketplaces={
             "local": MarketplaceSourceDirectory(

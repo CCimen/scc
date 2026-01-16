@@ -5,7 +5,7 @@ Provide offline-capable validation using bundled JSON schemas.
 Treat $schema field as documentation, not something to fetch at runtime.
 
 Key functions:
-- validate_org_config(): Validate org config against bundled schema (org-v1.schema.json)
+- validate_org_config(): Validate org config against the bundled schema
 - validate_config_invariants(): Validate governance invariants (enabled ⊆ allowed, enabled ∩ blocked = ∅)
 - check_version_compatibility(): Unified version compatibility gate
 - check_schema_version(): Check schema version compatibility
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from jsonschema import Draft7Validator
 
-from .core.constants import CLI_VERSION, CURRENT_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
+from .core.constants import CLI_VERSION, CURRENT_SCHEMA_VERSION
 
 if TYPE_CHECKING:
     pass
@@ -78,25 +78,17 @@ class VersionCompatibility:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def load_bundled_schema(version: str = "v1") -> dict[Any, Any]:
-    """
-    Load schema from package resources.
+ORG_SCHEMA_FILENAME = "org-v1.schema.json"
 
-    Args:
-        version: Schema version (default: "v1")
 
-    Returns:
-        Schema dict
-
-    Raises:
-        FileNotFoundError: If schema version doesn't exist
-    """
-    schema_file = files("scc_cli.schemas").joinpath(f"org-{version}.schema.json")
+def load_bundled_schema() -> dict[Any, Any]:
+    """Load bundled organization schema from package resources."""
+    schema_file = files("scc_cli.schemas").joinpath(ORG_SCHEMA_FILENAME)
     try:
         content = schema_file.read_text()
         return cast(dict[Any, Any], json.loads(content))
     except FileNotFoundError:
-        raise FileNotFoundError(f"Schema version '{version}' not found")
+        raise FileNotFoundError(f"Schema file '{ORG_SCHEMA_FILENAME}' not found")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -104,18 +96,16 @@ def load_bundled_schema(version: str = "v1") -> dict[Any, Any]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def validate_org_config(config: dict[str, Any], schema_version: str = "v1") -> list[str]:
-    """
-    Validate org config against bundled schema.
+def validate_org_config(config: dict[str, Any]) -> list[str]:
+    """Validate org config against bundled schema.
 
     Args:
         config: Organization config dict to validate
-        schema_version: Schema version to validate against (default: "v1")
 
     Returns:
         List of error strings. Empty list means config is valid.
     """
-    schema = load_bundled_schema(schema_version)
+    schema = load_bundled_schema()
     validator = Draft7Validator(schema)
 
     errors = []
@@ -155,77 +145,30 @@ def parse_semver(version_string: str) -> tuple[int, int, int]:
 
 
 def check_schema_version(config_version: str, cli_version: str) -> tuple[bool, str | None]:
-    """
-    Check schema version compatibility.
+    """Check schema version compatibility.
 
-    Compatibility rules:
-    - Same major version: compatible
-    - Config major > CLI major: incompatible (need CLI upgrade)
-    - CLI major > Config major: compatible (CLI is newer)
-    - Higher minor in config: compatible with warning (ignore unknown fields)
+    The CLI only supports a single schema version. The config version must
+    match the CLI's current schema version exactly.
 
     Args:
-        config_version: Schema version from org config (e.g., "1.5.0")
-        cli_version: Current CLI schema version (e.g., "1.2.0")
+        config_version: Schema version from org config (e.g., "1.0.0")
+        cli_version: Current CLI schema version (e.g., "1.0.0")
 
     Returns:
         Tuple of (compatible: bool, message: str | None)
     """
-    config_major, config_minor, _ = parse_semver(config_version)
-    cli_major, cli_minor, _ = parse_semver(cli_version)
+    try:
+        parse_semver(config_version)
+    except ValueError as exc:
+        return (False, f"Invalid schema_version format: {exc}")
 
-    # Different major versions: check if upgrade needed
-    if config_major > cli_major:
+    if config_version != cli_version:
         return (
             False,
-            f"Config requires schema v{config_major}.x but CLI only supports v{cli_major}.x. "
-            f"Please upgrade SCC CLI.",
+            f"Unsupported schema_version '{config_version}'. Expected {cli_version}.",
         )
 
-    # Config minor version higher than CLI: warn but continue
-    if config_major == cli_major and config_minor > cli_minor:
-        return (
-            True,
-            f"Config uses schema {config_version}, CLI supports {cli_version}. "
-            f"Some features may be ignored.",
-        )
-
-    # Compatible
     return (True, None)
-
-
-def detect_schema_version(config: dict[str, Any]) -> str:
-    """
-    Detect schema version from config.
-
-    Currently only v1 is supported. This function validates the format
-    and always returns "v1" for any valid semver.
-
-    Args:
-        config: Organization config dict
-
-    Returns:
-        Schema version string (always "v1")
-
-    Raises:
-        ValueError: If schema_version format is invalid
-    """
-    schema_version = config.get("schema_version", "1.0.0")
-
-    # Validate format (must be X.Y.Z semver)
-    try:
-        parts = schema_version.split(".")
-        if len(parts) != 3:
-            raise ValueError(f"Invalid schema_version format: {schema_version}")
-        # Validate all parts are integers
-        int(parts[0])
-        int(parts[1])
-        int(parts[2])
-    except (ValueError, AttributeError) as e:
-        raise ValueError(f"Invalid schema_version format: {schema_version}") from e
-
-    # Only v1 schema is supported
-    return "v1"
 
 
 def check_min_cli_version(min_version: str, cli_version: str) -> tuple[bool, str | None]:
@@ -293,39 +236,22 @@ def check_version_compatibility(config: dict[str, Any]) -> VersionCompatibility:
     min_cli_version = config.get("min_cli_version")
 
     # Check schema version compatibility
-    if schema_version:
-        try:
-            schema_ok, schema_msg = check_schema_version(schema_version, CURRENT_SCHEMA_VERSION)
-            if not schema_ok:
-                return VersionCompatibility(
-                    compatible=False,
-                    blocking_error=schema_msg,
-                    schema_version=schema_version,
-                    min_cli_version=min_cli_version,
-                )
-            if schema_msg:  # Warning but still compatible
-                warnings.append(schema_msg)
-        except ValueError as e:
-            return VersionCompatibility(
-                compatible=False,
-                blocking_error=f"Invalid schema_version format: {e}",
-                schema_version=schema_version,
-                min_cli_version=min_cli_version,
-            )
+    if not schema_version:
+        return VersionCompatibility(
+            compatible=False,
+            blocking_error="schema_version is required in org config",
+            schema_version=None,
+            min_cli_version=min_cli_version,
+        )
 
-    # Validate schema version is in supported list
-    if schema_version:
-        detected = detect_schema_version(config)
-        if detected not in SUPPORTED_SCHEMA_VERSIONS:
-            return VersionCompatibility(
-                compatible=False,
-                blocking_error=(
-                    f"Schema version '{detected}' is not supported. "
-                    f"Supported versions: {', '.join(SUPPORTED_SCHEMA_VERSIONS)}"
-                ),
-                schema_version=schema_version,
-                min_cli_version=min_cli_version,
-            )
+    schema_ok, schema_msg = check_schema_version(schema_version, CURRENT_SCHEMA_VERSION)
+    if not schema_ok:
+        return VersionCompatibility(
+            compatible=False,
+            blocking_error=schema_msg,
+            schema_version=schema_version,
+            min_cli_version=min_cli_version,
+        )
 
     # Check minimum CLI version
     if min_cli_version:
@@ -364,92 +290,168 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
     """Validate governance invariants on raw dict config.
 
     This function checks semantic constraints that JSON Schema cannot express:
-    - enabled plugins must be subset of allowed (enabled ⊆ allowed)
-    - enabled plugins must not be blocked (enabled ∩ blocked = ∅)
-
-    Called AFTER Pydantic structural validation passes in the Validation Gate.
-    Works on raw dicts because that's what the CLI uses throughout.
-
-    Args:
-        config: Organization config dict (raw, not Pydantic model).
-
-    Returns:
-        List of InvariantViolation objects. Empty list means all invariants satisfied.
-
-    Semantics for allowed_plugins:
-        - Missing/None: unrestricted (all plugins allowed)
-        - []: deny all (no plugins allowed)
-        - ["*"]: explicit unrestricted (all plugins allowed via wildcard)
-        - ["pattern@marketplace"]: specific whitelist with fnmatch patterns
-
-    Examples:
-        >>> config = {"defaults": {"enabled_plugins": ["a@mp"]}}
-        >>> validate_config_invariants(config)  # Missing allowed = unrestricted
-        []
-
-        >>> config = {"defaults": {"enabled_plugins": ["a@mp"], "allowed_plugins": []}}
-        >>> violations = validate_config_invariants(config)  # Empty = deny all
-        >>> len(violations) == 1 and violations[0].rule == "enabled_must_be_allowed"
-        True
+    - Additional plugins must respect allowlists
+    - Security blocklists must not conflict with enabled plugins
+    - MCP servers must respect allowlists and blocklists
     """
-    # Import here to avoid circular dependency
-    from scc_cli.marketplace.normalize import matches_pattern
+    from urllib.parse import urlparse
+
+    from scc_cli.marketplace.normalize import (
+        AmbiguousMarketplaceError,
+        InvalidPluginRefError,
+        matches_pattern,
+        normalize_plugin,
+    )
 
     violations: list[InvariantViolation] = []
 
-    # Extract config sections with safe defaults
     defaults = config.get("defaults", {})
-    enabled = defaults.get("enabled_plugins", [])
-    allowed = defaults.get("allowed_plugins")  # None = unrestricted
-
     security = config.get("security", {})
-    blocked = security.get("blocked_plugins", [])
+    profiles = config.get("profiles", {})
+    org_marketplaces = config.get("marketplaces", {})
+
+    allowed_plugins = defaults.get("allowed_plugins")
+    blocked_plugins = security.get("blocked_plugins", [])
+
+    allowed_mcp_servers = defaults.get("allowed_mcp_servers")
+    blocked_mcp_servers = security.get("blocked_mcp_servers", [])
+
+    def normalize_plugin_safe(ref: str, context: str) -> str | None:
+        try:
+            return normalize_plugin(ref, org_marketplaces)
+        except (AmbiguousMarketplaceError, InvalidPluginRefError, ValueError) as exc:
+            violations.append(
+                InvariantViolation(
+                    rule="invalid_plugin_reference",
+                    message=f"{context} plugin '{ref}' is invalid: {exc}",
+                    severity="error",
+                )
+            )
+            return None
+
+    def is_allowed_by_patterns(value: str, patterns: list[str] | None) -> bool:
+        if patterns is None:
+            return True
+        if not patterns:
+            return False
+        return any(matches_pattern(value, pattern) for pattern in patterns)
+
+    def any_allowed(values: list[str], patterns: list[str] | None) -> bool:
+        if patterns is None:
+            return True
+        if not patterns:
+            return False
+        for candidate in values:
+            if any(matches_pattern(candidate, pattern) for pattern in patterns):
+                return True
+        return False
+
+    def mcp_candidates(server: dict[str, Any]) -> list[str]:
+        candidates: list[str] = []
+        name = server.get("name", "")
+        if name:
+            candidates.append(name)
+        url = server.get("url", "")
+        if url:
+            candidates.append(url)
+            parsed = urlparse(url)
+            if parsed.netloc:
+                candidates.append(parsed.netloc)
+        command = server.get("command", "")
+        if command:
+            candidates.append(command)
+        return candidates
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Invariant 1: enabled ⊆ allowed (enabled plugins must be in allowed list)
+    # Plugins: enforce allowlist for team additions
     # ─────────────────────────────────────────────────────────────────────────
-    if allowed is not None:
-        if allowed == []:
-            # Empty array = nothing allowed (explicit deny all)
-            for plugin in enabled:
+    for team_name, profile in profiles.items():
+        for plugin_ref in profile.get("additional_plugins", []) or []:
+            normalized = normalize_plugin_safe(plugin_ref, f"Team '{team_name}'")
+            if not normalized:
+                continue
+            if not is_allowed_by_patterns(normalized, allowed_plugins):
                 violations.append(
                     InvariantViolation(
-                        rule="enabled_must_be_allowed",
+                        rule="additional_plugin_not_allowed",
                         message=(
-                            f"Plugin '{plugin}' is enabled but allowed_plugins is empty "
-                            "(nothing allowed)"
+                            f"Team '{team_name}' plugin '{normalized}' is not allowed by defaults.allowed_plugins"
                         ),
                         severity="error",
                     )
                 )
-        elif allowed != ["*"]:
-            # Specific whitelist - check each enabled plugin against patterns
-            for plugin in enabled:
-                if not any(matches_pattern(plugin, pattern) for pattern in allowed):
+
+            for pattern in blocked_plugins:
+                if matches_pattern(normalized, pattern):
                     violations.append(
                         InvariantViolation(
-                            rule="enabled_must_be_allowed",
-                            message=f"Plugin '{plugin}' is enabled but not in allowed list",
+                            rule="plugin_blocked",
+                            message=(
+                                f"Team '{team_name}' plugin '{normalized}' matches blocked pattern '{pattern}'"
+                            ),
                             severity="error",
                         )
                     )
-        # If allowed == ["*"], all plugins are allowed (explicit unrestricted)
+                    break
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Invariant 2: enabled ∩ blocked = ∅ (enabled must not be blocked)
-    # ─────────────────────────────────────────────────────────────────────────
-    for plugin in enabled:
-        for pattern in blocked:
-            if matches_pattern(plugin, pattern):
+    # Ensure org defaults are not blocked
+    for plugin_ref in defaults.get("enabled_plugins", []) or []:
+        normalized = normalize_plugin_safe(plugin_ref, "Defaults")
+        if not normalized:
+            continue
+        for pattern in blocked_plugins:
+            if matches_pattern(normalized, pattern):
                 violations.append(
                     InvariantViolation(
-                        rule="enabled_not_blocked",
+                        rule="plugin_blocked",
                         message=(
-                            f"Plugin '{plugin}' is enabled but matches blocked pattern '{pattern}'"
+                            f"Default plugin '{normalized}' matches blocked pattern '{pattern}'"
                         ),
                         severity="error",
                     )
                 )
-                break  # One match is enough to flag this plugin
+                break
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MCP servers: enforce allowlist and blocklist for team additions
+    # ─────────────────────────────────────────────────────────────────────────
+    for team_name, profile in profiles.items():
+        for server in profile.get("additional_mcp_servers", []) or []:
+            candidates = mcp_candidates(server)
+            if not candidates:
+                violations.append(
+                    InvariantViolation(
+                        rule="mcp_missing_identifier",
+                        message=f"Team '{team_name}' MCP server entry is missing identifiers",
+                        severity="error",
+                    )
+                )
+                continue
+
+            if not any_allowed(candidates, allowed_mcp_servers):
+                allowed = allowed_mcp_servers
+                allowed_desc = "[]" if allowed == [] else "defaults.allowed_mcp_servers"
+                violations.append(
+                    InvariantViolation(
+                        rule="mcp_not_allowed",
+                        message=(
+                            f"Team '{team_name}' MCP server '{candidates[0]}' is not allowed by {allowed_desc}"
+                        ),
+                        severity="error",
+                    )
+                )
+
+            for pattern in blocked_mcp_servers:
+                if any(matches_pattern(candidate, pattern) for candidate in candidates):
+                    violations.append(
+                        InvariantViolation(
+                            rule="mcp_blocked",
+                            message=(
+                                f"Team '{team_name}' MCP server '{candidates[0]}' matches blocked pattern '{pattern}'"
+                            ),
+                            severity="error",
+                        )
+                    )
+                    break
 
     return violations

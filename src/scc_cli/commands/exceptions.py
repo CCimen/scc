@@ -109,8 +109,6 @@ def _format_targets(exc: SccException) -> str:
         parts.append(f"plugins: {', '.join(exc.allow.plugins)}")
     if exc.allow.mcp_servers:
         parts.append(f"mcp: {', '.join(exc.allow.mcp_servers)}")
-    if exc.allow.base_images:
-        parts.append(f"images: {', '.join(exc.allow.base_images)}")
     return "; ".join(parts) if parts else "(none)"
 
 
@@ -177,7 +175,6 @@ def exceptions_list(
                 "targets": {
                     "plugins": e.allow.plugins or [],
                     "mcp_servers": e.allow.mcp_servers or [],
-                    "base_images": e.allow.base_images or [],
                 },
             }
             for e in filtered
@@ -265,10 +262,6 @@ def exceptions_create(
         list[str] | None,
         typer.Option("--allow-plugin", help="Allow plugin (repeatable)."),
     ] = None,
-    allow_image: Annotated[
-        list[str] | None,
-        typer.Option("--allow-image", help="Allow base image (repeatable)."),
-    ] = None,
     shared: Annotated[
         bool,
         typer.Option("--shared", help="Save to repo store instead of user store."),
@@ -280,10 +273,9 @@ def exceptions_create(
         console.print("[red]Error: --reason is required.[/red]")
         raise typer.Exit(1)
 
-    if not any([allow_mcp, allow_plugin, allow_image]):
+    if not any([allow_mcp, allow_plugin]):
         console.print(
-            "[red]Error: At least one target required "
-            "(--allow-mcp, --allow-plugin, or --allow-image).[/red]"
+            "[red]Error: At least one target required (--allow-mcp or --allow-plugin).[/red]"
         )
         raise typer.Exit(1)
 
@@ -312,7 +304,6 @@ def exceptions_create(
         allow=AllowTargets(
             plugins=allow_plugin or [],
             mcp_servers=allow_mcp or [],
-            base_images=allow_image or [],
         ),
     )
 
@@ -327,8 +318,6 @@ def exceptions_create(
             console.print(f"      plugins: {exception.allow.plugins}")
         if exception.allow.mcp_servers:
             console.print(f"      mcp_servers: {exception.allow.mcp_servers}")
-        if exception.allow.base_images:
-            console.print(f"      base_images: {exception.allow.base_images}")
         console.print()
         return
 
@@ -641,7 +630,6 @@ def unblock_cmd(
     allow = AllowTargets(
         plugins=[target] if target_type == "plugin" else [],
         mcp_servers=[target] if target_type == "mcp_server" else [],
-        base_images=[target] if target_type == "base_image" else [],
     )
 
     exception = SccException(

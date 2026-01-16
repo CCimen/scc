@@ -17,9 +17,6 @@
             "*.untrusted.com",
             "localhost:*"
         ],
-        "blocked_base_images": [
-            "*:latest"
-        ],
         "allow_stdio_mcp": false
     },
     "defaults": {
@@ -43,8 +40,7 @@
     "delegation": {
         "teams": {
             "allow_additional_plugins": ["*"],
-            "allow_additional_mcp_servers": ["dept44", "ai-team"],
-            "allow_network_override": ["corp-proxy-only"]
+            "allow_additional_mcp_servers": ["dept44", "ai-team"]
         }
     },
     "profiles": {

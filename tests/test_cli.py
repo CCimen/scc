@@ -131,7 +131,7 @@ class TestStartCommand:
 
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
             patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
@@ -156,7 +156,7 @@ class TestStartCommand:
         """Should use cached config only when --offline flag set."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.remote.load_org_config") as mock_remote,
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
@@ -172,7 +172,10 @@ class TestStartCommand:
             ),
             patch("scc_cli.commands.launch.sandbox.docker.run"),
         ):
-            mock_remote.return_value = {"organization": {"name": "Test"}}
+            mock_remote.return_value = {
+                "schema_version": "1.0.0",
+                "organization": {"name": "Test", "id": "test"},
+            }
             runner.invoke(app, ["start", str(tmp_path), "--offline"])
         # Should have passed offline=True to load_org_config
         if mock_remote.called:
@@ -183,7 +186,7 @@ class TestStartCommand:
         """Should skip org config when --standalone flag set."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.docker.check_docker_available"),
             patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
             patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
@@ -317,7 +320,7 @@ class TestStartCommandErrors:
         """Should show helpful message when Docker not installed."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
             patch(
                 "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
@@ -334,7 +337,7 @@ class TestStartCommandErrors:
         """Should show helpful message when Docker version too old."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
             patch(
                 "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
@@ -351,7 +354,7 @@ class TestStartCommandErrors:
         """Should show helpful message when sandbox not available."""
         with (
             patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_config", return_value={}),
+            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
             patch(
                 "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
@@ -455,7 +458,7 @@ class TestUpdateCommand:
         mock_result = MagicMock()
         mock_result.cli_update_available = False
         with (
-            patch("scc_cli.commands.admin.config.load_config", return_value={}),
+            patch("scc_cli.commands.admin.config.load_user_config", return_value={}),
             patch("scc_cli.update.check_all_updates", return_value=mock_result),
             patch("scc_cli.update.render_update_status_panel"),
         ):
@@ -468,7 +471,7 @@ class TestUpdateCommand:
         mock_result = MagicMock()
         mock_result.cli_update_available = True
         with (
-            patch("scc_cli.commands.admin.config.load_config", return_value={}),
+            patch("scc_cli.commands.admin.config.load_user_config", return_value={}),
             patch("scc_cli.update.check_all_updates", return_value=mock_result),
             patch("scc_cli.update.render_update_status_panel"),
         ):

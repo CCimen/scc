@@ -73,7 +73,6 @@ def temp_config_dir(temp_dir, monkeypatch):
     monkeypatch.setattr("scc_cli.config.CONFIG_FILE", config_dir / "config.json")
     monkeypatch.setattr("scc_cli.config.SESSIONS_FILE", config_dir / "sessions.json")
     monkeypatch.setattr("scc_cli.config.CACHE_DIR", cache_dir)
-    monkeypatch.setattr("scc_cli.config.LEGACY_CONFIG_DIR", temp_dir / ".config" / "scc-cli")
 
     yield config_dir
 
