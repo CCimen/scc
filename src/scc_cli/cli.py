@@ -117,14 +117,14 @@ def main_callback(
 
         from . import config as scc_config
         from . import setup as scc_setup
-        from .services.workspace import resolve_launch_context
+        from .application.workspace import ResolveWorkspaceRequest, resolve_workspace
         from .ui.gate import is_interactive_allowed
 
         # Use strong-signal resolver (git or .scc.yaml) for parity with 'scc start'
         # Weak markers (package.json, etc.) are NOT used for auto-launch
         cwd = Path.cwd()
-        result = resolve_launch_context(cwd, workspace_arg=None)
-        workspace_detected = result is not None and result.is_auto_eligible()
+        context = resolve_workspace(ResolveWorkspaceRequest(cwd=cwd, workspace_arg=None))
+        workspace_detected = context is not None and context.is_auto_eligible
 
         if is_interactive_allowed():
             # If no org is configured and standalone isn't explicit, offer setup

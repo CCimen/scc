@@ -9,14 +9,15 @@ Test Categories:
 from __future__ import annotations
 
 from io import StringIO
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from rich.console import Console, RenderableType
 
 from scc_cli.application import dashboard as app_dashboard
+from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.docker.core import ContainerInfo
+from scc_cli.ports.session_models import SessionListResult, SessionSummary
 from scc_cli.ui.dashboard import (
     Dashboard,
     DashboardState,
@@ -36,13 +37,19 @@ def _render_to_str(renderable: RenderableType) -> str:
     return console.file.getvalue()  # type: ignore[union-attr]
 
 
+def _mock_session_service(summaries: list[SessionSummary]) -> MagicMock:
+    service = MagicMock()
+    service.list_recent.return_value = SessionListResult.from_sessions(summaries)
+    return service
+
+
 def _status_item(
     label: str,
     description: str = "",
     *,
     action: app_dashboard.StatusAction | None = None,
     action_tab: DashboardTab | None = None,
-    session: dict[str, Any] | None = None,
+    session: SessionSummary | None = None,
 ) -> ListItem[app_dashboard.DashboardItem]:
     item = app_dashboard.StatusItem(
         label=label,
@@ -69,9 +76,16 @@ def _container_item(
 def _session_item(
     label: str,
     description: str,
-    session: dict[str, object] | None = None,
+    session: SessionSummary | None = None,
 ) -> ListItem[app_dashboard.DashboardItem]:
-    session_data = session or {"name": label}
+    session_data = session or SessionSummary(
+        name=label,
+        workspace="",
+        team=None,
+        last_used=None,
+        container_name=None,
+        branch=None,
+    )
     item = app_dashboard.SessionItem(label=label, description=description, session=session_data)
     return ListItem(value=item, label=label, description=description)
 
@@ -139,7 +153,14 @@ class TestDashboardTabNavigation:
                     _session_item(
                         "session-1",
                         "platform",
-                        session={"name": "session-1", "team": "platform"},
+                        session=SessionSummary(
+                            name="session-1",
+                            workspace="",
+                            team="platform",
+                            last_used=None,
+                            container_name=None,
+                            branch=None,
+                        ),
                     ),
                 ],
                 count_active=1,
@@ -410,6 +431,7 @@ class TestCLIDashboardIntegration:
         modules_to_reset = [
             "scc_cli.cli",
             "scc_cli.commands.launch.flow",
+            "scc_cli.application.workspace",
             "scc_cli.services.workspace",
         ]
         for module in modules_to_reset:
@@ -419,9 +441,9 @@ class TestCLIDashboardIntegration:
     @pytest.mark.xfail(reason="Test isolation issue - passes individually but fails in full suite")
     def test_cli_shows_dashboard_when_no_workspace_detected(self) -> None:
         """CLI shows dashboard when NOT in a valid workspace (e.g., $HOME)."""
-        # Mock resolve_launch_context to return None (no strong signal found)
+        # Mock resolve_workspace to return None (no strong signal found)
         # This simulates being outside a git repo and without .scc.yaml
-        with patch("scc_cli.services.workspace.resolve_launch_context", return_value=None):
+        with patch("scc_cli.application.workspace.resolve_workspace", return_value=None):
             with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
                 with patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard:
                     # Import after patching
@@ -454,7 +476,10 @@ class TestCLIDashboardIntegration:
             is_suspicious=False,
             reason="git repo detected",
         )
-        with patch("scc_cli.services.workspace.resolve_launch_context", return_value=mock_result):
+        with patch(
+            "scc_cli.application.workspace.resolve_workspace",
+            return_value=WorkspaceContext(mock_result),
+        ):
             with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
                 # Import after patching
                 from scc_cli.cli import main_callback
@@ -699,13 +724,15 @@ class TestTabDataLoading:
     def test_load_all_tab_data_returns_all_tabs(self) -> None:
         """_load_all_tab_data returns data for all tabs."""
         with patch("scc_cli.config.load_user_config") as mock_config:
-            with patch("scc_cli.sessions.list_recent") as mock_sessions:
+            with patch(
+                "scc_cli.sessions.get_session_service",
+                return_value=_mock_session_service([]),
+            ):
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
                     with patch(
                         "scc_cli.services.git.worktree.get_worktrees_data"
                     ) as mock_worktrees:
                         mock_config.return_value = {}
-                        mock_sessions.return_value = []
                         mock_docker.return_value = []
                         mock_worktrees.return_value = []
 
@@ -754,7 +781,14 @@ class TestDetailsPane:
                     _session_item(
                         "session-1",
                         "platform",
-                        session={"name": "session-1", "team": "platform"},
+                        session=SessionSummary(
+                            name="session-1",
+                            workspace="",
+                            team="platform",
+                            last_used=None,
+                            container_name=None,
+                            branch=None,
+                        ),
                     )
                 ],
                 count_active=1,
@@ -863,7 +897,14 @@ class TestDetailsPane:
                 _session_item(
                     "session-1",
                     "platform",
-                    session={"id": "s1", "name": "session-1"},
+                    session=SessionSummary(
+                        name="session-1",
+                        workspace="",
+                        team=None,
+                        last_used=None,
+                        container_name=None,
+                        branch=None,
+                    ),
                 )
             ],
             count_active=1,

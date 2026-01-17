@@ -15,6 +15,7 @@ from scc_cli.application.sync_marketplace import (
     SyncResult,
     sync_marketplace_settings,
 )
+from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.errors import WorkspaceNotFoundError
 from scc_cli.core.workspace import ResolverResult
@@ -25,7 +26,6 @@ from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.models import AgentSettings, MountSpec, SandboxHandle, SandboxSpec
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
-from scc_cli.services.workspace import resolve_launch_context
 
 
 @dataclass(frozen=True)
@@ -128,14 +128,16 @@ def start_session(
 
 
 def _resolve_workspace_context(request: StartSessionRequest) -> ResolverResult:
-    result = resolve_launch_context(
-        request.entry_dir,
-        request.workspace_arg,
-        allow_suspicious=request.allow_suspicious,
+    context = resolve_workspace(
+        ResolveWorkspaceRequest(
+            cwd=request.entry_dir,
+            workspace_arg=request.workspace_arg,
+            allow_suspicious=request.allow_suspicious,
+        )
     )
-    if result is None:
+    if context is None:
         raise WorkspaceNotFoundError(path=str(request.workspace_path))
-    return result
+    return context.resolver_result
 
 
 def _compute_effective_config(request: StartSessionRequest) -> EffectiveConfig | None:

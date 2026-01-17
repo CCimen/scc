@@ -3,11 +3,13 @@
 Pure functions with no UI dependencies.
 """
 
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from ...core.constants import WORKTREE_BRANCH_PREFIX
+from ...core.errors import WorktreeCreationError
 from .branch import get_default_branch, sanitize_branch_name
 
 
@@ -442,3 +444,113 @@ def find_main_worktree(repo_path: Path) -> WorktreeInfo | None:
             return wt
 
     return None
+
+
+def fetch_branch(repo_path: Path, branch: str) -> None:
+    """Fetch a branch from origin for worktree creation.
+
+    Raises:
+        WorktreeCreationError: If the fetch fails.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(repo_path), "fetch", "origin", branch],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode == 0:
+        return
+
+    error_msg = result.stderr.strip() if result.stderr else "Unknown fetch error"
+    lower = error_msg.lower()
+    user_message = f"Failed to fetch branch '{branch}'"
+    suggested_action = "Check the branch name and your network connection"
+
+    if "couldn't find remote ref" in lower or "remote ref" in lower and "not found" in lower:
+        user_message = f"Branch '{branch}' not found on origin"
+        suggested_action = "Check the branch name or fetch remote branches"
+    elif "could not resolve host" in lower or "failed to connect" in lower:
+        user_message = "Network error while fetching from origin"
+        suggested_action = "Check your network or VPN connection"
+    elif "permission denied" in lower or "authentication" in lower:
+        user_message = "Authentication error while fetching from origin"
+        suggested_action = "Check your git credentials and remote access"
+
+    raise WorktreeCreationError(
+        name=branch,
+        user_message=user_message,
+        suggested_action=suggested_action,
+        command=f"git -C {repo_path} fetch origin {branch}",
+        stderr=error_msg,
+    )
+
+
+def add_worktree(
+    repo_path: Path,
+    worktree_path: Path,
+    branch_name: str,
+    base_branch: str,
+) -> None:
+    """Create the worktree directory using git worktree add."""
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "worktree",
+                "add",
+                "-b",
+                branch_name,
+                str(worktree_path),
+                f"origin/{base_branch}",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except subprocess.CalledProcessError:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "worktree",
+                "add",
+                "-b",
+                branch_name,
+                str(worktree_path),
+                base_branch,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+
+def remove_worktree(repo_path: Path, worktree_path: Path, *, force: bool) -> None:
+    """Remove a worktree entry and directory."""
+    force_flag = ["--force"] if force else []
+    try:
+        subprocess.run(
+            ["git", "-C", str(repo_path), "worktree", "remove", str(worktree_path)] + force_flag,
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except subprocess.CalledProcessError:
+        shutil.rmtree(worktree_path, ignore_errors=True)
+
+
+def prune_worktrees(repo_path: Path) -> None:
+    """Prune stale worktree metadata."""
+    try:
+        subprocess.run(
+            ["git", "-C", str(repo_path), "worktree", "prune"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return

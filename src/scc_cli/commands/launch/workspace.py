@@ -18,12 +18,14 @@ from typing import TYPE_CHECKING, Any
 import typer
 from rich.status import Status
 
-from ... import config, deps, git
-from ... import platform as platform_module
+from ... import config, git
+from ...adapters.local_platform_probe import LocalPlatformProbe
+from ...application.workspace import WorkspaceValidationResult, validate_workspace
+from ...bootstrap import get_default_adapters
 from ...cli_common import console
 from ...confirm import Confirm
 from ...core.constants import WORKTREE_BRANCH_PREFIX
-from ...core.errors import NotAGitRepoError, WorkspaceNotFoundError
+from ...core.errors import NotAGitRepoError
 from ...core.exit_codes import EXIT_CANCELLED
 from ...core.workspace import ResolverResult
 from ...output_mode import print_human
@@ -121,79 +123,44 @@ def validate_and_resolve_workspace(
         UsageError: If workspace is suspicious in non-interactive mode without --allow-suspicious-workspace.
         typer.Exit: If user declines to continue after warnings.
     """
-    from ...core.errors import UsageError
-    from ...services.workspace.suspicious import get_suspicious_reason, is_suspicious_directory
-
-    if workspace is None:
+    validation = validate_workspace(
+        workspace,
+        allow_suspicious=allow_suspicious,
+        interactive_allowed=is_interactive_allowed(
+            json_mode=json_mode,
+            no_interactive_flag=no_interactive,
+        ),
+        platform_probe=LocalPlatformProbe(),
+    )
+    if validation is None:
         return None
 
-    workspace_path = Path(workspace).expanduser().resolve()
+    _render_workspace_validation(validation)
+    return validation.workspace_path
 
-    if not workspace_path.exists():
-        raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    # Check for suspicious workspace (home, /tmp, system directories)
-    if is_suspicious_directory(workspace_path):
-        reason = get_suspicious_reason(workspace_path) or "Suspicious directory"
-
-        # If --allow-suspicious-workspace is set, skip confirmation entirely
-        if allow_suspicious:
+def _render_workspace_validation(result: WorkspaceValidationResult) -> None:
+    for step in result.steps:
+        if step.warning.emit_stderr:
             print_human(
-                f"[yellow]Warning:[/yellow] {reason}",
+                f"[yellow]Warning:[/yellow] {step.warning.console_message}",
                 file=sys.stderr,
                 highlight=False,
             )
-        elif is_interactive_allowed(json_mode=json_mode, no_interactive_flag=no_interactive):
-            # Interactive mode: warn but allow user to continue
+        if step.confirm_request:
             console.print()
             console.print(
                 create_warning_panel(
-                    "Suspicious Workspace",
-                    reason,
-                    "Consider using a project-specific directory instead.",
+                    step.warning.title,
+                    step.warning.message,
+                    step.warning.suggestion or "",
                 )
             )
             console.print()
-            if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
+            prompt = step.confirm_request.prompt
+            if not Confirm.ask(f"[cyan]{prompt}[/cyan]", default=True):
                 console.print("[dim]Cancelled.[/dim]")
                 raise typer.Exit(EXIT_CANCELLED)
-        else:
-            # Non-interactive mode without flag: block
-            raise UsageError(
-                user_message=f"Refusing to start in suspicious directory: {workspace_path}\n  → {reason}",
-                suggested_action=(
-                    "Either:\n"
-                    f"  • Run: scc start --allow-suspicious-workspace {workspace_path}\n"
-                    "  • Run: scc start --interactive (to choose a different workspace)\n"
-                    "  • Run from a project directory inside a git repository"
-                ),
-            )
-
-    # WSL2 performance warning
-    if platform_module.is_wsl2():
-        is_optimal, warning = platform_module.check_path_performance(workspace_path)
-        if not is_optimal and warning:
-            print_human(
-                "[yellow]Warning:[/yellow] Workspace is on the Windows filesystem."
-                " Performance may be slow.",
-                file=sys.stderr,
-                highlight=False,
-            )
-            if is_interactive_allowed(no_interactive_flag=no_interactive):
-                console.print()
-                console.print(
-                    create_warning_panel(
-                        "Performance Warning",
-                        "Your workspace is on the Windows filesystem.",
-                        "For better performance, move to ~/projects inside WSL.",
-                    )
-                )
-                console.print()
-                if not Confirm.ask("[cyan]Continue anyway?[/cyan]", default=True):
-                    console.print("[dim]Cancelled.[/dim]")
-                    raise typer.Exit(EXIT_CANCELLED)
-
-    return workspace_path
 
 
 def prepare_workspace(
@@ -225,11 +192,12 @@ def prepare_workspace(
 
     # Install dependencies if requested
     if install_deps:
+        installer = get_default_adapters().dependency_installer
         with Status(
             "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
         ):
-            success = deps.auto_install_dependencies(workspace_path)
-        if success:
+            install_result = installer.install(workspace_path)
+        if install_result.success:
             console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
         else:
             console.print("[yellow]⚠ Could not detect package manager or install failed[/yellow]")

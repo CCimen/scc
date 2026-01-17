@@ -137,7 +137,7 @@ def detect_workspace_root(start_dir: Path) -> tuple[Path | None, Path]:
     the user runs `scc start` from a subdirectory or git worktree.
 
     Resolution order:
-    1) git rev-parse --show-toplevel (works for subdirs + worktrees)
+    1) git rev-parse --show-toplevel (handles subdirs + worktrees)
     2) Parent-walk for .scc.yaml (repo root config marker)
     3) Parent-walk for .git (directory OR file - worktree-safe)
     4) None (no workspace detected)
@@ -150,35 +150,16 @@ def detect_workspace_root(start_dir: Path) -> tuple[Path | None, Path]:
         - root: The detected workspace root, or None if not found
         - start_cwd: The original start_dir (preserved for container cwd)
     """
-    start_dir = start_dir.resolve()
+    from scc_cli.services.workspace import resolve_launch_context
 
-    # Priority 1: Use git rev-parse --show-toplevel (handles subdirs + worktrees)
-    if check_git_installed():
-        toplevel = run_command(
-            ["git", "-C", str(start_dir), "rev-parse", "--show-toplevel"],
-            timeout=5,
-        )
-        if toplevel:
-            return (Path(toplevel.strip()), start_dir)
-
-    # Priority 2: Parent-walk for .scc.yaml (SCC project marker)
-    current = start_dir
-    while current != current.parent:
-        scc_config = current / ".scc.yaml"
-        if scc_config.is_file():
-            return (current, start_dir)
-        current = current.parent
-
-    # Priority 3: Parent-walk for .git (directory OR file - worktree-safe)
-    current = start_dir
-    while current != current.parent:
-        git_marker = current / ".git"
-        if git_marker.exists():  # Works for both directory and file
-            return (current, start_dir)
-        current = current.parent
-
-    # No workspace detected
-    return (None, start_dir)
+    result = resolve_launch_context(
+        start_dir,
+        workspace_arg=None,
+        include_git_dir_fallback=True,
+    )
+    if result is None:
+        return (None, start_dir.resolve())
+    return (result.workspace_root, result.entry_dir)
 
 
 def is_file_ignored(file_path: str | Path, repo_root: Path | None = None) -> bool:

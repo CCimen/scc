@@ -1,6 +1,7 @@
 {
   "include": [
-    "src/scc_cli/services"
+    "src",
+    "tests"
   ],
   "exclude": [
     "**/__pycache__",

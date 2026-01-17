@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from scc_cli import config, sessions
-from scc_cli.utils.locks import file_lock, lock_path
+from scc_cli.ports.session_models import SessionRecord
 
 from .backups import _create_backup
 from .health_checks import _get_size
@@ -36,9 +35,9 @@ def prune_sessions(
     )
 
     try:
-        lock_file = lock_path("sessions")
-        with file_lock(lock_file):
-            all_sessions = sessions._load_sessions()
+        store = sessions.get_session_store()
+        with store.lock():
+            all_sessions = store.load_sessions()
             original_count = len(all_sessions)
 
             if original_count == 0:
@@ -47,23 +46,19 @@ def prune_sessions(
 
             cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
 
-            by_team: dict[str | None, list[dict[str, Any]]] = {}
+            by_team: dict[str | None, list[SessionRecord]] = {}
             for session in all_sessions:
-                session_team = session.get("team")
-                if team is not None and session_team != team:
-                    by_team.setdefault(session_team, []).append(session)
-                else:
-                    by_team.setdefault(session_team, []).append(session)
+                by_team.setdefault(session.team, []).append(session)
 
-            kept_sessions: list[dict[str, Any]] = []
+            kept_sessions: list[SessionRecord] = []
             for _team, team_sessions in by_team.items():
-                team_sessions.sort(key=lambda s: s.get("last_used", ""), reverse=True)
+                team_sessions.sort(key=lambda s: s.last_used or "", reverse=True)
 
                 kept = team_sessions[:keep_n]
                 remaining = team_sessions[keep_n:]
 
                 for session in remaining:
-                    last_used = session.get("last_used", "")
+                    last_used = session.last_used or ""
                     if last_used:
                         try:
                             dt = datetime.fromisoformat(last_used.replace("Z", "+00:00"))
@@ -89,7 +84,7 @@ def prune_sessions(
 
             result.bytes_freed = _get_size(config.SESSIONS_FILE)
 
-            sessions._save_sessions(kept_sessions)
+            store.save_sessions(kept_sessions)
 
             new_size = _get_size(config.SESSIONS_FILE)
             result.bytes_freed = result.bytes_freed - new_size
@@ -129,7 +124,8 @@ def delete_all_sessions(
         return result
 
     try:
-        all_sessions = sessions._load_sessions()
+        store = sessions.get_session_store()
+        all_sessions = store.load_sessions()
         result.removed_count = len(all_sessions)
     except Exception:
         result.removed_count = 0

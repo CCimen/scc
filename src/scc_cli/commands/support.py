@@ -10,9 +10,8 @@ from pathlib import Path
 import typer
 
 from ..cli_common import console, handle_errors
-from ..json_output import build_envelope
-from ..kinds import Kind
 from ..output_mode import json_output_mode, print_json, set_pretty_mode
+from ..presentation.json.support_json import build_support_bundle_envelope
 from ..support_bundle import (
     build_bundle_data,
     create_bundle,
@@ -81,7 +80,7 @@ def support_bundle_cmd(
     if json_output:
         with json_output_mode():
             bundle_data = build_bundle_data(redact_paths_flag=redact_paths_flag)
-            envelope = build_envelope(Kind.SUPPORT_BUNDLE, data=bundle_data)
+            envelope = build_support_bundle_envelope(bundle_data)
             print_json(envelope)
             raise typer.Exit(0)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
@@ -16,6 +17,7 @@ def build_fake_adapters() -> DefaultAdapters:
     return DefaultAdapters(
         filesystem=LocalFilesystem(),
         git_client=LocalGitClient(),
+        dependency_installer=LocalDependencyInstaller(),
         remote_fetcher=RequestsFetcher(),
         clock=SystemClock(),
         agent_runner=FakeAgentRunner(),

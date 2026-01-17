@@ -12,9 +12,9 @@ def test_wsl2_warning_emitted_in_non_interactive(tmp_path: Path) -> None:
     workspace.mkdir()
 
     with (
-        patch("scc_cli.commands.launch.workspace.platform_module.is_wsl2", return_value=True),
+        patch("scc_cli.commands.launch.workspace.LocalPlatformProbe.is_wsl2", return_value=True),
         patch(
-            "scc_cli.commands.launch.workspace.platform_module.check_path_performance",
+            "scc_cli.commands.launch.workspace.LocalPlatformProbe.check_path_performance",
             return_value=(False, "warning"),
         ),
         patch("scc_cli.commands.launch.workspace.is_interactive_allowed", return_value=False),

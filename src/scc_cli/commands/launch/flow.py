@@ -28,13 +28,12 @@ from ...contexts import WorkContext, load_recent_contexts, normalize_path, recor
 from ...core import personal_profiles
 from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
-from ...json_output import build_envelope
-from ...kinds import Kind
 from ...marketplace.materialize import materialize_marketplace
 from ...marketplace.resolve import resolve_effective_config
 from ...marketplace.sync import SyncError, SyncResult, sync_marketplace_settings
 from ...output_mode import json_output_mode, print_human, print_json, set_pretty_mode
 from ...panels import create_info_panel, create_warning_panel
+from ...presentation.json.launch_json import build_start_dry_run_envelope
 from ...theme import Colors, Indicators, Spinners, get_brand_header
 from ...ui.chrome import print_with_layout, render_with_layout
 from ...ui.gate import is_interactive_allowed
@@ -120,11 +119,11 @@ def _resolve_session_selection(
         if dry_run:
             from pathlib import Path
 
-            from ...services.workspace import resolve_launch_context
+            from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
 
-            result = resolve_launch_context(Path.cwd(), workspace_arg=None)
-            if result is not None:
-                return str(result.workspace_root), team, None, None, False, True  # auto-detected
+            context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
+            if context is not None:
+                return str(context.workspace_root), team, None, None, False, True  # auto-detected
             # No auto-detect possible, fall through to error
             err_console.print(
                 "[red]Error:[/red] No workspace could be auto-detected.\n"
@@ -141,11 +140,11 @@ def _resolve_session_selection(
             # Try auto-detect before failing
             from pathlib import Path
 
-            from ...services.workspace import resolve_launch_context
+            from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
 
-            result = resolve_launch_context(Path.cwd(), workspace_arg=None)
-            if result is not None:
-                return str(result.workspace_root), team, None, None, False, True  # auto-detected
+            context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
+            if context is not None:
+                return str(context.workspace_root), team, None, None, False, True  # auto-detected
 
             err_console.print(
                 "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
@@ -196,11 +195,11 @@ def _resolve_session_selection(
                 )
             return None, team, None, None, False, False
 
-        recent_sessions = sessions.list_recent(limit=10)
-        if effective_team is None:
-            filtered_sessions = [s for s in recent_sessions if s.get("team") is None]
-        else:
-            filtered_sessions = [s for s in recent_sessions if s.get("team") == effective_team]
+        filtered_sessions = sessions.list_recent(
+            limit=10,
+            team=effective_team,
+            include_all=False,
+        )
 
         if not filtered_sessions:
             if not json_mode:
@@ -210,9 +209,9 @@ def _resolve_session_selection(
         selected = select_session(console, filtered_sessions)
         if selected is None:
             return None, team, None, None, True, False
-        workspace = selected.get("workspace")
+        workspace = selected.workspace
         if not team:
-            team = selected.get("team")
+            team = selected.team
         # --standalone overrides any team from session (standalone means no team)
         if standalone_override:
             team = None
@@ -235,17 +234,17 @@ def _resolve_session_selection(
                 )
             return None, team, None, None, False, False
 
-        recent_sessions = sessions.list_recent(limit=50)
-        if effective_team is None:
-            filtered_sessions = [s for s in recent_sessions if s.get("team") is None]
-        else:
-            filtered_sessions = [s for s in recent_sessions if s.get("team") == effective_team]
+        filtered_sessions = sessions.list_recent(
+            limit=50,
+            team=effective_team,
+            include_all=False,
+        )
 
         if filtered_sessions:
             recent_session = filtered_sessions[0]
-            workspace = recent_session.get("workspace")
+            workspace = recent_session.workspace
             if not team:
-                team = recent_session.get("team")
+                team = recent_session.team
             # --standalone overrides any team from session (standalone means no team)
             if standalone_override:
                 team = None
@@ -819,7 +818,7 @@ def start(
                 if pretty:
                     set_pretty_mode(True)
                 try:
-                    envelope = build_envelope(Kind.START_DRY_RUN, data=dry_run_data)
+                    envelope = build_start_dry_run_envelope(dry_run_data)
                     print_json(envelope)
                 finally:
                     if pretty:
@@ -1152,18 +1151,23 @@ def interactive_start(
                         return (None, None, None, None)
 
                     if source == WorkspaceSource.CURRENT_DIR:
-                        from ...services.workspace import resolve_launch_context
+                        from ...application.workspace import (
+                            ResolveWorkspaceRequest,
+                            resolve_workspace,
+                        )
 
                         # Detect workspace root from CWD (handles subdirs + worktrees)
-                        resolver_result = resolve_launch_context(Path.cwd(), workspace_arg=None)
-                        if resolver_result is not None:
-                            workspace = str(resolver_result.workspace_root)
+                        context = resolve_workspace(
+                            ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None)
+                        )
+                        if context is not None:
+                            workspace = str(context.workspace_root)
                         else:
                             # Fall back to CWD if no workspace root detected
                             workspace = str(Path.cwd())
 
                     elif source == WorkspaceSource.RECENT:
-                        recent = sessions.list_recent(10)
+                        recent = sessions.list_recent(limit=10, include_all=True)
                         picker_result = pick_recent_workspace(
                             recent,
                             standalone=standalone_mode,

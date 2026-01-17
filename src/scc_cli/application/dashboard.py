@@ -6,9 +6,11 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
+from scc_cli.application.sessions import SessionService
 from scc_cli.docker.core import ContainerInfo
+from scc_cli.ports.session_models import SessionFilter, SessionSummary
 from scc_cli.services.git.worktree import WorktreeInfo
 
 
@@ -71,7 +73,7 @@ class StatusItem:
     description: str
     action: StatusAction | None = None
     action_tab: DashboardTab | None = None
-    session: dict[str, Any] | None = None
+    session: SessionSummary | None = None
 
 
 @dataclass(frozen=True)
@@ -99,7 +101,7 @@ class SessionItem:
 
     label: str
     description: str
-    session: dict[str, Any]
+    session: SessionSummary
 
 
 @dataclass(frozen=True)
@@ -200,7 +202,7 @@ class SessionResumeEvent:
     """Event for resuming a session."""
 
     return_to: DashboardTab
-    session: dict[str, Any]
+    session: SessionSummary
 
 
 @dataclass(frozen=True)
@@ -302,7 +304,7 @@ class SessionActionMenuEvent:
     """Event for the session action menu."""
 
     return_to: DashboardTab
-    session: dict[str, Any]
+    session: SessionSummary
 
 
 @dataclass(frozen=True)
@@ -644,12 +646,17 @@ def _apply_container_message(
     return DashboardFlowOutcome(state=next_state)
 
 
-def load_status_tab_data(refresh_at: datetime | None = None) -> DashboardTabData:
+def load_status_tab_data(
+    refresh_at: datetime | None = None,
+    *,
+    session_service: SessionService,
+    format_last_used: Callable[[str], str] | None = None,
+) -> DashboardTabData:
     """Load Status tab data showing quick actions and context."""
     import os
     from pathlib import Path
 
-    from scc_cli import config, sessions
+    from scc_cli import config
     from scc_cli.core.personal_profiles import get_profile_status
     from scc_cli.docker import core as docker_core
 
@@ -666,21 +673,18 @@ def load_status_tab_data(refresh_at: datetime | None = None) -> DashboardTabData
     )
 
     try:
-        recent_session = sessions.get_most_recent()
+        recent_result = session_service.list_recent(SessionFilter(limit=1, include_all=True))
+        recent_session = recent_result.sessions[0] if recent_result.sessions else None
         if recent_session:
-            workspace = recent_session.get("workspace", "")
+            workspace = recent_session.workspace
             workspace_name = workspace.split("/")[-1] if workspace else "unknown"
-            last_used = recent_session.get("last_used")
+            last_used = recent_session.last_used
             last_used_display = ""
             if last_used:
-                try:
-                    dt = datetime.fromisoformat(last_used)
-                    last_used_display = sessions.format_relative_time(dt)
-                except ValueError:
-                    last_used_display = last_used
+                last_used_display = format_last_used(last_used) if format_last_used else last_used
             desc_parts = [workspace_name]
-            if recent_session.get("branch"):
-                desc_parts.append(str(recent_session.get("branch")))
+            if recent_session.branch:
+                desc_parts.append(str(recent_session.branch))
             if last_used_display:
                 desc_parts.append(last_used_display)
             items.append(
@@ -717,8 +721,8 @@ def load_status_tab_data(refresh_at: datetime | None = None) -> DashboardTabData
             )
 
         try:
-            workspace = Path(os.getcwd())
-            profile_status = get_profile_status(workspace)
+            workspace_path = Path(os.getcwd())
+            profile_status = get_profile_status(workspace_path)
 
             if profile_status.exists:
                 if profile_status.import_count > 0:
@@ -865,29 +869,33 @@ def load_containers_tab_data() -> DashboardTabData:
         )
 
 
-def load_sessions_tab_data() -> DashboardTabData:
+def load_sessions_tab_data(
+    *,
+    session_service: SessionService,
+    format_last_used: Callable[[str], str] | None = None,
+) -> DashboardTabData:
     """Load Sessions tab data showing recent Claude sessions."""
-    from scc_cli import sessions
-
     items: list[DashboardItem] = []
 
     try:
-        recent = sessions.list_recent(limit=20)
+        recent_result = session_service.list_recent(SessionFilter(limit=20, include_all=True))
+        recent = recent_result.sessions
 
         for session in recent:
-            name = session.get("name", "Unnamed")
             desc_parts = []
 
-            if session.get("team"):
-                desc_parts.append(str(session["team"]))
-            if session.get("branch"):
-                desc_parts.append(str(session["branch"]))
-            if session.get("last_used"):
-                desc_parts.append(str(session["last_used"]))
+            if session.team:
+                desc_parts.append(str(session.team))
+            if session.branch:
+                desc_parts.append(str(session.branch))
+            if session.last_used:
+                desc_parts.append(
+                    format_last_used(session.last_used) if format_last_used else session.last_used
+                )
 
             items.append(
                 SessionItem(
-                    label=name,
+                    label=session.name or "Unnamed",
                     description=" · ".join(desc_parts),
                     session=session,
                 )
@@ -998,12 +1006,23 @@ def load_worktrees_tab_data(verbose: bool = False) -> DashboardTabData:
         )
 
 
-def load_all_tab_data(verbose_worktrees: bool = False) -> Mapping[DashboardTab, DashboardTabData]:
+def load_all_tab_data(
+    *,
+    session_service: SessionService,
+    format_last_used: Callable[[str], str] | None = None,
+    verbose_worktrees: bool = False,
+) -> Mapping[DashboardTab, DashboardTabData]:
     """Load data for all dashboard tabs."""
     return {
-        DashboardTab.STATUS: load_status_tab_data(),
+        DashboardTab.STATUS: load_status_tab_data(
+            session_service=session_service,
+            format_last_used=format_last_used,
+        ),
         DashboardTab.CONTAINERS: load_containers_tab_data(),
-        DashboardTab.SESSIONS: load_sessions_tab_data(),
+        DashboardTab.SESSIONS: load_sessions_tab_data(
+            session_service=session_service,
+            format_last_used=format_last_used,
+        ),
         DashboardTab.WORKTREES: load_worktrees_tab_data(verbose=verbose_worktrees),
     }
 

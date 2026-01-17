@@ -8,6 +8,7 @@ Flag behavior:
 """
 
 import re
+from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +16,7 @@ from typer.testing import CliRunner
 
 from scc_cli.cli import app
 from scc_cli.core.exit_codes import EXIT_CANCELLED, EXIT_USAGE
+from scc_cli.ports.session_models import SessionSummary
 from tests.fakes import build_fake_adapters
 
 runner = CliRunner()
@@ -32,32 +34,38 @@ def strip_ansi(text: str) -> str:
 
 
 @pytest.fixture
-def mock_session():
+def mock_session() -> SessionSummary:
     """A mock session for testing."""
-    return {
-        "name": "test-session",
-        "workspace": "/home/user/project",
-        "team": "platform",
-        "last_used": "2025-12-22T12:00:00",
-    }
+    return SessionSummary(
+        name="test-session",
+        workspace="/home/user/project",
+        team="platform",
+        last_used="2025-12-22T12:00:00",
+        container_name=None,
+        branch=None,
+    )
 
 
 @pytest.fixture
-def mock_sessions_list():
+def mock_sessions_list() -> list[SessionSummary]:
     """Multiple mock sessions for picker testing."""
     return [
-        {
-            "name": "session-1",
-            "workspace": "/home/user/project1",
-            "team": "platform",
-            "last_used": "2025-12-22T12:00:00",
-        },
-        {
-            "name": "session-2",
-            "workspace": "/home/user/project2",
-            "team": "backend",
-            "last_used": "2025-12-22T11:00:00",
-        },
+        SessionSummary(
+            name="session-1",
+            workspace="/home/user/project1",
+            team="platform",
+            last_used="2025-12-22T12:00:00",
+            container_name=None,
+            branch=None,
+        ),
+        SessionSummary(
+            name="session-2",
+            workspace="/home/user/project2",
+            team="backend",
+            last_used="2025-12-22T11:00:00",
+            container_name=None,
+            branch=None,
+        ),
     ]
 
 
@@ -72,7 +80,7 @@ class TestResumeFlag:
     def test_resume_auto_selects_recent_session(self, mock_session):
         """--resume without workspace should use most recent session."""
         # Mock session with no team (standalone mode)
-        standalone_session = {**mock_session, "team": None}
+        standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
@@ -101,7 +109,7 @@ class TestResumeFlag:
     def test_resume_short_flag_works(self, mock_session):
         """-r short flag should work like --resume."""
         # Mock session with no team (standalone mode)
-        standalone_session = {**mock_session, "team": None}
+        standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
@@ -148,8 +156,8 @@ class TestSelectFlag:
     def test_select_shows_session_picker(self, mock_sessions_list, mock_session):
         """--select should trigger the session picker UI."""
         # Sessions need team=None for standalone mode filtering
-        standalone_sessions = [{**s, "team": None} for s in mock_sessions_list]
-        standalone_session = {**mock_session, "team": None}
+        standalone_sessions = [replace(s, team=None) for s in mock_sessions_list]
+        standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
             patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
@@ -180,8 +188,8 @@ class TestSelectFlag:
     def test_select_short_flag_works(self, mock_sessions_list, mock_session):
         """-s short flag should work like --select."""
         # Sessions need team=None for standalone mode filtering
-        standalone_sessions = [{**s, "team": None} for s in mock_sessions_list]
-        standalone_session = {**mock_session, "team": None}
+        standalone_sessions = [replace(s, team=None) for s in mock_sessions_list]
+        standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
             patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
@@ -226,7 +234,7 @@ class TestSelectFlag:
     def test_select_user_cancels_exits_gracefully(self, mock_sessions_list):
         """--select should exit gracefully when user cancels picker."""
         # Sessions need team=None for standalone mode filtering
-        standalone_sessions = [{**s, "team": None} for s in mock_sessions_list]
+        standalone_sessions = [replace(s, team=None) for s in mock_sessions_list]
         with (
             patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
@@ -310,7 +318,7 @@ class TestSmartWorkspaceDetection:
             # Smart detection returns detected workspace
             patch(
                 "scc_cli.commands.launch.flow.git.detect_workspace_root",
-                return_value=(mock_session["workspace"], detected_path),
+                return_value=(mock_session.workspace, detected_path),
             ) as mock_detect,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
@@ -399,8 +407,8 @@ class TestSmartWorkspaceDetection:
     @pytest.mark.skip(reason="Phase 3 feature: auto-detection feedback not implemented")
     def test_detection_feedback_shown_on_success(self, mock_session):
         """Auto-detected workspace should show brief feedback message."""
-        standalone_sessions = [{**mock_session, "team": None}]
-        standalone_session = {**mock_session, "team": None}
+        standalone_sessions = [replace(mock_session, team=None)]
+        standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
             patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),

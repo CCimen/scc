@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 from rich.console import Console
 
 from scc_cli.application import dashboard as app_dashboard
+from scc_cli.ports.session_models import SessionListResult, SessionSummary
 from scc_cli.ui.dashboard import (
     Dashboard,
     DashboardState,
@@ -28,6 +29,12 @@ from scc_cli.ui.dashboard import (
     _load_worktrees_tab_data,
 )
 from scc_cli.ui.list_screen import ListItem, ListState
+
+
+def _mock_session_service(summaries: list[SessionSummary]) -> MagicMock:
+    service = MagicMock()
+    service.list_recent.return_value = SessionListResult.from_sessions(summaries)
+    return service
 
 
 class TestDashboardTab:
@@ -434,14 +441,16 @@ class TestLoadStatusTabData:
     def test_returns_tab_data_with_status_tab(self) -> None:
         """Returns TabData for STATUS tab."""
         with patch("scc_cli.config.load_user_config") as mock_config:
-            with patch("scc_cli.sessions.list_recent") as mock_sessions:
+            with patch(
+                "scc_cli.sessions.get_session_service",
+                return_value=_mock_session_service([]),
+            ):
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
                     mock_config.return_value = {
                         "selected_profile": "team-a",
                         "standalone": False,
                     }
                     mock_docker.return_value = []
-                    mock_sessions.return_value = []
 
                     data = _load_status_tab_data()
 
@@ -451,13 +460,15 @@ class TestLoadStatusTabData:
     def test_includes_team_info_when_selected(self) -> None:
         """Includes team info when a team is selected."""
         with patch("scc_cli.config.load_user_config") as mock_config:
-            with patch("scc_cli.sessions.list_recent") as mock_sessions:
+            with patch(
+                "scc_cli.sessions.get_session_service",
+                return_value=_mock_session_service([]),
+            ):
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
                     mock_config.return_value = {
                         "selected_profile": "production-team",
                     }
                     mock_docker.return_value = []
-                    mock_sessions.return_value = []
 
                     data = _load_status_tab_data()
 
@@ -477,11 +488,13 @@ class TestLoadStatusTabData:
     def test_handles_no_team_selected(self) -> None:
         """Shows 'Team: none' when no team configured."""
         with patch("scc_cli.config.load_user_config") as mock_config:
-            with patch("scc_cli.sessions.list_recent") as mock_sessions:
+            with patch(
+                "scc_cli.sessions.get_session_service",
+                return_value=_mock_session_service([]),
+            ):
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
                     mock_config.return_value = {}
                     mock_docker.return_value = []
-                    mock_sessions.return_value = []
 
                     data = _load_status_tab_data()
 
@@ -501,7 +514,10 @@ class TestLoadStatusTabData:
     def test_includes_container_count(self) -> None:
         """Includes container count in status."""
         with patch("scc_cli.config.load_user_config") as mock_config:
-            with patch("scc_cli.sessions.list_recent") as mock_sessions:
+            with patch(
+                "scc_cli.sessions.get_session_service",
+                return_value=_mock_session_service([]),
+            ):
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
                     mock_config.return_value = {}
                     # Create mock containers
@@ -510,7 +526,6 @@ class TestLoadStatusTabData:
                     container2 = MagicMock()
                     container2.status = "Exited"
                     mock_docker.return_value = [container1, container2]
-                    mock_sessions.return_value = []
 
                     data = _load_status_tab_data()
 
@@ -531,9 +546,13 @@ class TestLoadStatusTabData:
     def test_handles_config_error_gracefully(self) -> None:
         """Shows error message when config fails to load."""
         with patch("scc_cli.config.load_user_config") as mock_config:
-            mock_config.side_effect = Exception("Config error")
+            with patch(
+                "scc_cli.sessions.get_session_service",
+                return_value=_mock_session_service([]),
+            ):
+                mock_config.side_effect = Exception("Config error")
 
-            data = _load_status_tab_data()
+                data = _load_status_tab_data()
 
             error_item = next(
                 (
@@ -640,9 +659,10 @@ class TestLoadSessionsTabData:
 
     def test_returns_tab_data_with_sessions_tab(self) -> None:
         """Returns TabData for SESSIONS tab."""
-        with patch("scc_cli.sessions.list_recent") as mock_sessions:
-            mock_sessions.return_value = []
-
+        with patch(
+            "scc_cli.sessions.get_session_service",
+            return_value=_mock_session_service([]),
+        ):
             data = _load_sessions_tab_data()
 
             assert data.tab == DashboardTab.SESSIONS
@@ -650,17 +670,18 @@ class TestLoadSessionsTabData:
 
     def test_lists_recent_sessions(self) -> None:
         """Lists recent sessions with metadata."""
-        with patch("scc_cli.sessions.list_recent") as mock_sessions:
-            mock_sessions.return_value = [
-                {
-                    "name": "feature-work",
-                    "container_name": "scc-feature",
-                    "team": "dev-team",
-                    "branch": "feature/new-ui",
-                    "last_used": "2h ago",
-                }
-            ]
-
+        session = SessionSummary(
+            name="feature-work",
+            workspace="/workspace/feature",
+            team="dev-team",
+            last_used="2h ago",
+            container_name="scc-feature",
+            branch="feature/new-ui",
+        )
+        with patch(
+            "scc_cli.sessions.get_session_service",
+            return_value=_mock_session_service([session]),
+        ):
             data = _load_sessions_tab_data()
 
             assert len(data.items) == 1
@@ -669,9 +690,10 @@ class TestLoadSessionsTabData:
 
     def test_shows_no_sessions_message(self) -> None:
         """Shows message when no sessions exist."""
-        with patch("scc_cli.sessions.list_recent") as mock_sessions:
-            mock_sessions.return_value = []
-
+        with patch(
+            "scc_cli.sessions.get_session_service",
+            return_value=_mock_session_service([]),
+        ):
             data = _load_sessions_tab_data()
 
             assert len(data.items) == 1
@@ -682,9 +704,9 @@ class TestLoadSessionsTabData:
 
     def test_handles_sessions_error_gracefully(self) -> None:
         """Shows error message when sessions fail to load."""
-        with patch("scc_cli.sessions.list_recent") as mock_sessions:
-            mock_sessions.side_effect = Exception("Sessions error")
-
+        mock_service = MagicMock()
+        mock_service.list_recent.side_effect = Exception("Sessions error")
+        with patch("scc_cli.sessions.get_session_service", return_value=mock_service):
             data = _load_sessions_tab_data()
 
             assert len(data.items) == 1
@@ -769,41 +791,45 @@ class TestLoadAllTabData:
 
     def test_returns_dict_with_all_tabs(self) -> None:
         """Returns data for all dashboard tabs."""
-        with patch("scc_cli.application.dashboard.load_all_tab_data") as mock_all:
-            mock_all.return_value = {
-                DashboardTab.STATUS: app_dashboard.DashboardTabData(
-                    tab=DashboardTab.STATUS,
-                    title="Status",
-                    items=[],
-                    count_active=0,
-                    count_total=0,
-                ),
-                DashboardTab.CONTAINERS: app_dashboard.DashboardTabData(
-                    tab=DashboardTab.CONTAINERS,
-                    title="Containers",
-                    items=[],
-                    count_active=0,
-                    count_total=0,
-                ),
-                DashboardTab.SESSIONS: app_dashboard.DashboardTabData(
-                    tab=DashboardTab.SESSIONS,
-                    title="Sessions",
-                    items=[],
-                    count_active=0,
-                    count_total=0,
-                ),
-                DashboardTab.WORKTREES: app_dashboard.DashboardTabData(
-                    tab=DashboardTab.WORKTREES,
-                    title="Worktrees",
-                    items=[],
-                    count_active=0,
-                    count_total=0,
-                ),
-            }
+        with patch(
+            "scc_cli.sessions.get_session_service",
+            return_value=_mock_session_service([]),
+        ):
+            with patch("scc_cli.application.dashboard.load_all_tab_data") as mock_all:
+                mock_all.return_value = {
+                    DashboardTab.STATUS: app_dashboard.DashboardTabData(
+                        tab=DashboardTab.STATUS,
+                        title="Status",
+                        items=[],
+                        count_active=0,
+                        count_total=0,
+                    ),
+                    DashboardTab.CONTAINERS: app_dashboard.DashboardTabData(
+                        tab=DashboardTab.CONTAINERS,
+                        title="Containers",
+                        items=[],
+                        count_active=0,
+                        count_total=0,
+                    ),
+                    DashboardTab.SESSIONS: app_dashboard.DashboardTabData(
+                        tab=DashboardTab.SESSIONS,
+                        title="Sessions",
+                        items=[],
+                        count_active=0,
+                        count_total=0,
+                    ),
+                    DashboardTab.WORKTREES: app_dashboard.DashboardTabData(
+                        tab=DashboardTab.WORKTREES,
+                        title="Worktrees",
+                        items=[],
+                        count_active=0,
+                        count_total=0,
+                    ),
+                }
 
-            data = _load_all_tab_data()
+                data = _load_all_tab_data()
 
-            assert DashboardTab.STATUS in data
-            assert DashboardTab.CONTAINERS in data
-            assert DashboardTab.SESSIONS in data
-            assert DashboardTab.WORKTREES in data
+                assert DashboardTab.STATUS in data
+                assert DashboardTab.CONTAINERS in data
+                assert DashboardTab.SESSIONS in data
+                assert DashboardTab.WORKTREES in data

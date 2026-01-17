@@ -5,33 +5,15 @@ worktree command module. These functions are ideal for unit testing without
 mocks and serve as building blocks for the higher-level command logic.
 
 Functions:
-    build_worktree_list_data: Build worktree list data for JSON output.
+    build_worktree_list_data: JSON mapping helper for worktree list output.
     is_container_stopped: Check if a Docker container status indicates stopped.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from ...presentation.json.worktree_json import build_worktree_list_data
 
-
-def build_worktree_list_data(
-    worktrees: list[dict[str, Any]],
-    workspace: str,
-) -> dict[str, Any]:
-    """Build worktree list data for JSON output.
-
-    Args:
-        worktrees: List of worktree dictionaries from ui.list_worktrees()
-        workspace: Path to the workspace
-
-    Returns:
-        Dictionary with worktrees, count, and workspace
-    """
-    return {
-        "worktrees": worktrees,
-        "count": len(worktrees),
-        "workspace": workspace,
-    }
+__all__ = ["build_worktree_list_data", "is_container_stopped"]
 
 
 def is_container_stopped(status: str) -> bool:

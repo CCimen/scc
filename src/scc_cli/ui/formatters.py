@@ -20,13 +20,14 @@ The formatters follow a consistent pattern:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from ..docker.core import ContainerInfo
 from ..git import WorktreeInfo, get_display_branch
+from ..ports.session_models import SessionSummary
 from ..theme import Indicators
 from .list_screen import ListItem
+from .time_format import format_relative_time_compact
 
 if TYPE_CHECKING:
     from ..contexts import WorkContext
@@ -188,50 +189,34 @@ def format_container(container: ContainerInfo) -> ListItem[ContainerInfo]:
     )
 
 
-def format_session(session: dict[str, Any]) -> ListItem[dict[str, Any]]:
-    """Format a session dict for display in a picker.
+def format_session(session: SessionSummary) -> ListItem[SessionSummary]:
+    """Format a session summary for display in a picker.
 
     Args:
-        session: Session dictionary with name, team, branch, etc.
+        session: Session summary with name, team, branch, and timestamps.
 
     Returns:
         ListItem suitable for ListScreen display.
-
-    Example:
-        >>> session = {
-        ...     "name": "project-feature",
-        ...     "team": "platform",
-        ...     "branch": "feature/auth",
-        ...     "last_used": "2 hours ago",
-        ... }
-        >>> item = format_session(session)
-        >>> item.label
-        'project-feature'
     """
-    name = session.get("name", "Unnamed")
+    name = session.name or "Unnamed"
 
-    # Build description parts
     desc_parts: list[str] = []
 
-    if session.get("team"):
-        desc_parts.append(str(session["team"]))
+    if session.team:
+        desc_parts.append(str(session.team))
 
-    if session.get("branch"):
-        desc_parts.append(str(session["branch"]))
+    if session.branch:
+        desc_parts.append(str(session.branch))
 
-    if session.get("last_used"):
-        desc_parts.append(str(session["last_used"]))
-
-    # Check for governance warnings (e.g., expiring exceptions)
-    governance_status: str | None = None
-    if session.get("has_exception_warning"):
-        governance_status = "warning"
+    if session.last_used:
+        relative_time = format_relative_time_compact(session.last_used)
+        desc_parts.append(relative_time or session.last_used)
 
     return ListItem(
         value=session,
         label=name,
         description="  ".join(desc_parts),
-        governance_status=governance_status,
+        governance_status=None,
     )
 
 
@@ -404,30 +389,7 @@ def _format_relative_time(iso_timestamp: str) -> str:
     Returns:
         Human-readable relative time string, or empty if parsing fails.
     """
-    try:
-        # Parse ISO format, handling Z suffix
-        timestamp = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
-        delta = now - timestamp
-
-        seconds = int(delta.total_seconds())
-        if seconds < 0:
-            return ""
-        if seconds < 60:
-            return "just now"
-        if seconds < 3600:
-            minutes = seconds // 60
-            return f"{minutes}m ago"
-        if seconds < 86400:
-            hours = seconds // 3600
-            return f"{hours}h ago"
-        if seconds < 604800:
-            days = seconds // 86400
-            return f"{days}d ago"
-        weeks = seconds // 604800
-        return f"{weeks}w ago"
-    except (ValueError, TypeError):
-        return ""
+    return format_relative_time_compact(iso_timestamp)
 
 
 def _extract_container_time(status: str) -> str:

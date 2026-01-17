@@ -21,9 +21,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import readchar
+
+from scc_cli.ports.session_models import SessionSummary
 
 if TYPE_CHECKING:
     pass
@@ -108,11 +110,11 @@ class SessionResumeRequested(Exception):  # noqa: N818
     The orchestrator (run_dashboard) catches this and calls the resume flow.
 
     Attributes:
-        session: Session dict containing workspace, team, name, etc.
+        session: Session summary containing workspace, team, name, etc.
         return_to: Tab name to restore after flow (e.g., "SESSIONS").
     """
 
-    def __init__(self, session: dict[str, Any], return_to: str = "") -> None:
+    def __init__(self, session: SessionSummary, return_to: str = "") -> None:
         self.session = session
         self.return_to = return_to
         super().__init__()
@@ -251,7 +253,7 @@ class ContainerActionMenuRequested(Exception):  # noqa: N818
 class SessionActionMenuRequested(Exception):  # noqa: N818
     """Raised when user requests the session actions menu from the dashboard."""
 
-    def __init__(self, session: dict[str, Any], return_to: str = "") -> None:
+    def __init__(self, session: SessionSummary, return_to: str = "") -> None:
         self.session = session
         self.return_to = return_to
         super().__init__()

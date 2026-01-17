@@ -20,6 +20,7 @@ import pytest
 from scc_cli.contexts import WorkContext
 from scc_cli.docker.core import ContainerInfo
 from scc_cli.git import WorktreeInfo
+from scc_cli.ports.session_models import SessionSummary
 from scc_cli.ui.formatters import (
     _format_relative_time,
     _shorten_docker_status,
@@ -29,6 +30,25 @@ from scc_cli.ui.formatters import (
     format_team,
     format_worktree,
 )
+
+
+def _session_summary(
+    *,
+    name: str = "my-session",
+    workspace: str = "/tmp/project",
+    team: str | None = None,
+    last_used: str | None = None,
+    container_name: str | None = None,
+    branch: str | None = None,
+) -> SessionSummary:
+    return SessionSummary(
+        name=name,
+        workspace=workspace,
+        team=team,
+        last_used=last_used,
+        container_name=container_name,
+        branch=branch,
+    )
 
 
 class TestFormatTeam:
@@ -172,7 +192,7 @@ class TestFormatSession:
 
     def test_formats_basic_session(self) -> None:
         """Format a basic session."""
-        session = {"name": "my-session"}
+        session = _session_summary()
         item = format_session(session)
 
         assert item.label == "my-session"
@@ -180,42 +200,36 @@ class TestFormatSession:
 
     def test_includes_team_in_description(self) -> None:
         """Include team name in description."""
-        session = {"name": "my-session", "team": "platform"}
+        session = _session_summary(team="platform")
         item = format_session(session)
 
         assert "platform" in item.description
 
     def test_includes_branch_in_description(self) -> None:
         """Include branch name in description."""
-        session = {"name": "my-session", "branch": "feature/auth"}
+        session = _session_summary(branch="feature/auth")
         item = format_session(session)
 
         assert "feature/auth" in item.description
 
     def test_includes_last_used_in_description(self) -> None:
         """Include last used time in description."""
-        session = {"name": "my-session", "last_used": "2 hours ago"}
+        last_used = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        session = _session_summary(last_used=last_used)
         item = format_session(session)
 
-        assert "2 hours ago" in item.description
+        assert "2h ago" in item.description
 
-    def test_exception_warning_governance_status(self) -> None:
-        """Session with exception warning has warning governance status."""
-        session = {"name": "my-session", "has_exception_warning": True}
-        item = format_session(session)
-
-        assert item.governance_status == "warning"
-
-    def test_no_exception_warning_no_governance_status(self) -> None:
-        """Session without exception warning has no governance status."""
-        session = {"name": "my-session", "has_exception_warning": False}
+    def test_governance_status_is_none(self) -> None:
+        """Session format has no governance status."""
+        session = _session_summary()
         item = format_session(session)
 
         assert item.governance_status is None
 
     def test_missing_name_uses_unnamed(self) -> None:
         """Missing name defaults to 'Unnamed'."""
-        session = {}
+        session = _session_summary(name="")
         item = format_session(session)
 
         assert item.label == "Unnamed"

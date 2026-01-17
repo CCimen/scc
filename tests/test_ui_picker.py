@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from scc_cli.ports.session_models import SessionSummary
 from scc_cli.ui.keys import Action, ActionType
 from scc_cli.ui.list_screen import ListItem
 from scc_cli.ui.picker import (
@@ -25,6 +26,22 @@ from scc_cli.ui.picker import (
     pick_team,
     pick_worktree,
 )
+
+
+def _session_summary(
+    *,
+    name: str,
+    team: str | None = None,
+    branch: str | None = None,
+) -> SessionSummary:
+    return SessionSummary(
+        name=name,
+        workspace=f"/workspace/{name}",
+        team=team,
+        last_used=None,
+        container_name=None,
+        branch=branch,
+    )
 
 
 class TestPickTeam:
@@ -292,8 +309,8 @@ class TestPickSession:
     def test_sessions_converted_to_list_items(self) -> None:
         """Sessions are converted using format_session formatter."""
         sessions = [
-            {"name": "session-1", "team": "platform", "branch": "main"},
-            {"name": "session-2", "team": "backend", "branch": "feature"},
+            _session_summary(name="session-1", team="platform", branch="main"),
+            _session_summary(name="session-2", team="backend", branch="feature"),
         ]
 
         with patch("scc_cli.ui.picker._run_single_select_picker") as mock_picker:
@@ -307,7 +324,7 @@ class TestPickSession:
 
     def test_default_subtitle_uses_count(self) -> None:
         """Default subtitle shows session count."""
-        sessions = [{"name": "s1"}]
+        sessions = [_session_summary(name="s1")]
 
         with patch("scc_cli.ui.picker._run_single_select_picker") as mock_picker:
             mock_picker.return_value = None

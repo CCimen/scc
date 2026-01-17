@@ -37,15 +37,16 @@ Example:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from ..ports.session_models import SessionSummary
 from ..services.workspace import is_suspicious_directory
 from .keys import BACK, _BackSentinel
 from .list_screen import ListItem
 from .picker import _run_single_select_picker
+from .time_format import format_relative_time_calendar
 
 if TYPE_CHECKING:
     pass
@@ -122,40 +123,7 @@ def _format_relative_time(iso_timestamp: str) -> str:
         5 days ago → "5d ago"
         older → "Dec 20" (month day format)
     """
-    try:
-        # Handle Z suffix for UTC
-        if iso_timestamp.endswith("Z"):
-            iso_timestamp = iso_timestamp[:-1] + "+00:00"
-
-        timestamp = datetime.fromisoformat(iso_timestamp)
-
-        # Ensure timezone-aware comparison
-        now = datetime.now(timezone.utc)
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-
-        delta = now - timestamp
-        seconds = delta.total_seconds()
-
-        if seconds < 60:
-            return "just now"
-        elif seconds < 3600:
-            minutes = int(seconds / 60)
-            return f"{minutes}m ago"
-        elif seconds < 86400:
-            hours = int(seconds / 3600)
-            return f"{hours}h ago"
-        elif seconds < 172800:  # 2 days
-            return "yesterday"
-        elif seconds < 604800:  # 7 days
-            days = int(seconds / 86400)
-            return f"{days}d ago"
-        else:
-            # Older than a week - show month day
-            return timestamp.strftime("%b %d")
-
-    except (ValueError, AttributeError):
-        return ""
+    return format_relative_time_calendar(iso_timestamp)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -429,7 +397,7 @@ def pick_workspace_source(
 
 
 def pick_recent_workspace(
-    recent: list[dict[str, Any]],
+    recent: list[SessionSummary],
     *,
     standalone: bool = False,
     context_label: str | None = None,
@@ -442,7 +410,7 @@ def pick_recent_workspace(
     - None: User pressed q (quit app entirely)
 
     Args:
-        recent: List of recent session dicts with 'workspace' and 'last_used' keys.
+        recent: List of recent session summaries with workspace and last_used fields.
         standalone: If True, dim the "t teams" hint (not available without org).
         context_label: Optional context label (e.g., "Team: platform") shown in header.
 
@@ -460,8 +428,8 @@ def pick_recent_workspace(
 
     # Add recent workspaces
     for session in recent:
-        workspace = session.get("workspace", "")
-        last_used = session.get("last_used", "")
+        workspace = session.workspace
+        last_used = session.last_used or ""
 
         items.append(
             ListItem(

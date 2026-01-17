@@ -11,6 +11,7 @@ from scc_cli.application.start_session import (
     start_session,
 )
 from scc_cli.application.sync_marketplace import SyncError, SyncResult
+from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.models import MountSpec, SandboxSpec
@@ -100,8 +101,8 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
 
     with (
         patch(
-            "scc_cli.application.start_session.resolve_launch_context",
-            return_value=resolver_result,
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
         ),
         patch(
             "scc_cli.application.start_session.sync_marketplace_settings",
@@ -149,8 +150,8 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
 
     with (
         patch(
-            "scc_cli.application.start_session.resolve_launch_context",
-            return_value=resolver_result,
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
         ),
         patch(
             "scc_cli.application.start_session.sync_marketplace_settings",

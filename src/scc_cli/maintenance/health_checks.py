@@ -143,7 +143,7 @@ def preview_operation(action_id: str, **kwargs: Any) -> MaintenancePreview:
     elif action_id in ("prune_sessions", "delete_all_sessions"):
         paths = [config.SESSIONS_FILE]
         try:
-            item_count = len(sessions._load_sessions())
+            item_count = len(sessions.get_session_store().load_sessions())
         except Exception:
             item_count = 0
         bytes_estimate = _get_size(config.SESSIONS_FILE)

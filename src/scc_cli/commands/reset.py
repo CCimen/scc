@@ -22,6 +22,7 @@ import typer
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
+from ..application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from ..cli_common import handle_errors
 from ..core.exit_codes import (
     EXIT_CANCELLED,
@@ -42,7 +43,6 @@ from ..maintenance import (
     preview_operation,
     run_task,
 )
-from ..services.git import detect_workspace_root
 
 console = Console()
 
@@ -86,8 +86,14 @@ def _normalize_exception_scope(scope: str | None) -> ExceptionScope:
 
 def _resolve_repo_root() -> Path:
     """Resolve repo root for repo-scoped exception tasks."""
-    root, _ = detect_workspace_root(Path.cwd())
-    return root or Path.cwd()
+    context = resolve_workspace(
+        ResolveWorkspaceRequest(
+            cwd=Path.cwd(),
+            workspace_arg=None,
+            include_git_dir_fallback=True,
+        )
+    )
+    return context.workspace_root if context else Path.cwd()
 
 
 def _build_context(
