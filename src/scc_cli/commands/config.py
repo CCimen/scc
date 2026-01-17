@@ -8,11 +8,18 @@ import typer
 from rich import box
 from rich.table import Table
 
-from .. import config, profiles, setup
+from .. import config, setup
+from ..application.compute_effective_config import (
+    BlockedItem,
+    ConfigDecision,
+    DelegationDenied,
+    EffectiveConfig,
+    compute_effective_config,
+)
 from ..cli_common import console, handle_errors
 from ..core import personal_profiles
 from ..core.exit_codes import EXIT_USAGE
-from ..core.maintenance import get_paths, get_total_size
+from ..maintenance import get_paths, get_total_size
 from ..panels import create_error_panel, create_info_panel
 from ..source_resolver import ResolveError, resolve_source
 from ..stores.exception_store import RepoStore, UserStore
@@ -280,7 +287,7 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
     ws_path = Path(workspace_path) if workspace_path else Path.cwd()
 
     # Compute effective config
-    effective = profiles.compute_effective_config(
+    effective = compute_effective_config(
         org_config=org_config,
         team_name=team,
         workspace_path=ws_path,
@@ -321,10 +328,10 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
             console.print()
 
 
-def _render_config_decisions(effective: profiles.EffectiveConfig, field_filter: str | None) -> None:
+def _render_config_decisions(effective: EffectiveConfig, field_filter: str | None) -> None:
     """Render config decisions grouped by field."""
     # Group decisions by field
-    by_field: dict[str, list[profiles.ConfigDecision]] = {}
+    by_field: dict[str, list[ConfigDecision]] = {}
     for decision in effective.decisions:
         field = decision.field.split(".")[0]  # Get top-level field
         if field_filter and field != field_filter:
@@ -441,7 +448,7 @@ def _render_personal_profile(ws_path: Path, field_filter: str | None) -> None:
     console.print()
 
 
-def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:
+def _render_blocked_items(blocked_items: list[BlockedItem]) -> None:
     """Render blocked items with patterns and fix-it commands."""
     from scc_cli.utils.fixit import generate_policy_exception_command
 
@@ -456,7 +463,7 @@ def _render_blocked_items(blocked_items: list[profiles.BlockedItem]) -> None:
     console.print()
 
 
-def _render_denied_additions(denied_additions: list[profiles.DelegationDenied]) -> None:
+def _render_denied_additions(denied_additions: list[DelegationDenied]) -> None:
     """Render denied additions with reasons and fix-it commands."""
     from scc_cli.utils.fixit import generate_unblock_command
 

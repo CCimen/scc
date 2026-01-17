@@ -18,7 +18,7 @@ import pytest
 from typer.testing import CliRunner
 
 from scc_cli import cli
-from scc_cli.profiles import (
+from scc_cli.application.compute_effective_config import (
     BlockedItem,
     ConfigDecision,
     DelegationDenied,
@@ -199,7 +199,7 @@ class TestConfigExplainBasic:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_basic,
             ),
         ):
@@ -218,7 +218,7 @@ class TestConfigExplainBasic:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_basic,
             ),
         ):
@@ -238,7 +238,7 @@ class TestConfigExplainBasic:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_basic,
             ),
         ):
@@ -266,7 +266,7 @@ class TestConfigExplainBlocked:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_blocked,
             ),
         ):
@@ -285,7 +285,7 @@ class TestConfigExplainBlocked:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_blocked,
             ),
         ):
@@ -313,7 +313,7 @@ class TestConfigExplainDenied:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_denied,
             ),
         ):
@@ -332,7 +332,7 @@ class TestConfigExplainDenied:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_denied,
             ),
         ):
@@ -360,7 +360,7 @@ class TestConfigExplainFieldFilter:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_full,
             ),
         ):
@@ -380,7 +380,7 @@ class TestConfigExplainFieldFilter:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_full,
             ),
         ):
@@ -410,7 +410,7 @@ class TestConfigExplainWorkspace:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_basic,
             ) as mock_compute,
         ):
@@ -431,7 +431,7 @@ class TestConfigExplainWorkspace:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_basic,
             ) as mock_compute,
         ):
@@ -526,7 +526,7 @@ class TestConfigExplainMCPServers:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_mcp,
             ),
         ):
@@ -545,7 +545,7 @@ class TestConfigExplainMCPServers:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_mcp,
             ),
         ):
@@ -564,7 +564,7 @@ class TestConfigExplainMCPServers:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective_config_with_mcp,
             ),
         ):
@@ -633,7 +633,7 @@ class TestConfigExplainGoldenBlockedItems:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -675,7 +675,7 @@ class TestConfigExplainGoldenBlockedItems:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -722,7 +722,7 @@ class TestConfigExplainGoldenDeniedAdditions:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -763,7 +763,7 @@ class TestConfigExplainGoldenDeniedAdditions:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -823,7 +823,7 @@ class TestConfigExplainGoldenActiveExceptions:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
             patch("scc_cli.commands.config.UserStore") as mock_user_store,
@@ -880,7 +880,7 @@ class TestConfigExplainGoldenActiveExceptions:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
             patch("scc_cli.commands.config.UserStore") as mock_user_store,
@@ -934,7 +934,7 @@ class TestConfigExplainGoldenActiveExceptions:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
             patch("scc_cli.commands.config.UserStore") as mock_user_store,
@@ -1002,7 +1002,7 @@ class TestConfigExplainGoldenCombined:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
         ):
@@ -1045,7 +1045,7 @@ class TestConfigExplainGoldenCombined:
             ),
             patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
             patch(
-                "scc_cli.commands.config.profiles.compute_effective_config",
+                "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
         ):

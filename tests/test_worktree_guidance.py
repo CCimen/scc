@@ -13,7 +13,7 @@ def test_warns_when_in_main_repo() -> None:
     with (
         patch("scc_cli.commands.launch.render.git.is_git_repo", return_value=True),
         patch("scc_cli.commands.launch.render.git.is_worktree", return_value=False),
-        patch("scc_cli.commands.launch.render.print_human") as mock_print,
+        patch("scc_cli.commands.launch.render.print_with_layout") as mock_print,
     ):
         warn_if_non_worktree(workspace, json_mode=False)
 
@@ -27,7 +27,7 @@ def test_no_warning_for_worktree() -> None:
     with (
         patch("scc_cli.commands.launch.render.git.is_git_repo", return_value=True),
         patch("scc_cli.commands.launch.render.git.is_worktree", return_value=True),
-        patch("scc_cli.commands.launch.render.print_human") as mock_print,
+        patch("scc_cli.commands.launch.render.print_with_layout") as mock_print,
     ):
         warn_if_non_worktree(workspace, json_mode=False)
 
@@ -40,7 +40,7 @@ def test_no_warning_for_non_repo() -> None:
 
     with (
         patch("scc_cli.commands.launch.render.git.is_git_repo", return_value=False),
-        patch("scc_cli.commands.launch.render.print_human") as mock_print,
+        patch("scc_cli.commands.launch.render.print_with_layout") as mock_print,
     ):
         warn_if_non_worktree(workspace, json_mode=False)
 

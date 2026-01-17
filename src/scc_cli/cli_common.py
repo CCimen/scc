@@ -14,6 +14,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from .core.error_mapping import to_exit_code, to_human_message
 from .core.errors import SCCError
 from .core.exit_codes import EXIT_CANCELLED, EXIT_PREREQ, get_error_footer
 from .output_mode import is_json_command_mode
@@ -81,13 +82,12 @@ def handle_errors(func: F) -> F:
         except SCCError as e:
             if is_json_command_mode():
                 # JSON mode: emit structured error envelope to stdout
-                from .core.exit_codes import get_exit_code_for_exception
                 from .json_output import build_error_envelope
                 from .output_mode import print_json
 
                 envelope = build_error_envelope(e)
                 print_json(envelope)
-                raise typer.Exit(get_exit_code_for_exception(e))
+                raise typer.Exit(to_exit_code(e))
             # Human mode: use stderr for errors (stdout purity for shell wrappers)
             render_error(err_console, e, debug=state.debug)
             # Show actionable hint if available (footer has its own styling)
@@ -130,7 +130,7 @@ def handle_errors(func: F) -> F:
                 err_console.print(
                     create_warning_panel(
                         "Unexpected Error",
-                        str(e),
+                        to_human_message(e),
                         "Run with 'scc --debug <command>' for full traceback",
                     )
                 )

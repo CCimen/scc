@@ -29,48 +29,14 @@ class TestDryRunBasicBehavior:
         # Create a minimal workspace
         (tmp_path / ".git").mkdir()
 
-        mock_docker_run = MagicMock()
+        mock_start_session = MagicMock()
 
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.app.docker.run", mock_docker_run):
-                        with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
-                            try:
-                                start(
-                                    workspace=str(tmp_path),
-                                    team=None,
-                                    session_name=None,
-                                    resume=False,
-                                    select=False,
-                                    worktree_name=None,
-                                    fresh=False,
-                                    install_deps=False,
-                                    offline=False,
-                                    standalone=False,
-                                    dry_run=True,
-                                )
-                            except click.exceptions.Exit:
-                                pass  # Expected exit
-
-        # Docker run should NOT have been called
-        mock_docker_run.assert_not_called()
-
-    def test_dry_run_shows_workspace_path(self, tmp_path, monkeypatch, capsys):
-        """--dry-run should display the workspace path."""
-        from scc_cli.commands.launch import start
-
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
-                with patch(
-                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
-                ):
-                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
+                    with patch("scc_cli.commands.launch.flow.start_session", mock_start_session):
                         try:
                             start(
                                 workspace=str(tmp_path),
@@ -86,7 +52,39 @@ class TestDryRunBasicBehavior:
                                 dry_run=True,
                             )
                         except click.exceptions.Exit:
-                            pass
+                            pass  # Expected exit
+
+        # Sandbox launch should NOT have been called
+        mock_start_session.assert_not_called()
+
+    def test_dry_run_shows_workspace_path(self, tmp_path, monkeypatch, capsys):
+        """--dry-run should display the workspace path."""
+        from scc_cli.commands.launch import start
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
+                ):
+                    try:
+                        start(
+                            workspace=str(tmp_path),
+                            team=None,
+                            session_name=None,
+                            resume=False,
+                            select=False,
+                            worktree_name=None,
+                            fresh=False,
+                            install_deps=False,
+                            offline=False,
+                            standalone=False,
+                            dry_run=True,
+                        )
+                    except click.exceptions.Exit:
+                        pass
 
         captured = capsys.readouterr()
         assert str(tmp_path) in captured.out or "Workspace" in captured.out
@@ -109,36 +107,35 @@ class TestDryRunTeamConfig:
 
         mock_org = {"profiles": {"platform": {"description": "Platform team"}}}
 
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
             with patch(
-                "scc_cli.commands.launch.app.config.load_user_config",
+                "scc_cli.commands.launch.flow.config.load_user_config",
                 return_value={"selected_profile": "platform"},
             ):
                 with patch(
-                    "scc_cli.commands.launch.app.config.load_cached_org_config",
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config",
                     return_value=mock_org,
                 ):
-                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
-                        with patch(
-                            "scc_cli.commands.launch.app.teams.validate_team_profile",
-                            return_value={"valid": True},
-                        ):
-                            try:
-                                start(
-                                    workspace=str(tmp_path),
-                                    team="platform",
-                                    session_name=None,
-                                    resume=False,
-                                    select=False,
-                                    worktree_name=None,
-                                    fresh=False,
-                                    install_deps=False,
-                                    offline=False,
-                                    standalone=False,
-                                    dry_run=True,
-                                )
-                            except click.exceptions.Exit:
-                                pass
+                    with patch(
+                        "scc_cli.commands.launch.flow.teams.validate_team_profile",
+                        return_value={"valid": True},
+                    ):
+                        try:
+                            start(
+                                workspace=str(tmp_path),
+                                team="platform",
+                                session_name=None,
+                                resume=False,
+                                select=False,
+                                worktree_name=None,
+                                fresh=False,
+                                install_deps=False,
+                                offline=False,
+                                standalone=False,
+                                dry_run=True,
+                            )
+                        except click.exceptions.Exit:
+                            pass
 
         captured = capsys.readouterr()
         assert "platform" in captured.out
@@ -159,30 +156,29 @@ class TestDryRunJsonOutput:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
-                        try:
-                            start(
-                                workspace=str(tmp_path),
-                                team=None,
-                                session_name=None,
-                                resume=False,
-                                select=False,
-                                worktree_name=None,
-                                fresh=False,
-                                install_deps=False,
-                                offline=False,
-                                standalone=False,
-                                dry_run=True,
-                                json_output=True,
-                                pretty=False,
-                            )
-                        except click.exceptions.Exit:
-                            pass
+                    try:
+                        start(
+                            workspace=str(tmp_path),
+                            team=None,
+                            session_name=None,
+                            resume=False,
+                            select=False,
+                            worktree_name=None,
+                            fresh=False,
+                            install_deps=False,
+                            offline=False,
+                            standalone=False,
+                            dry_run=True,
+                            json_output=True,
+                            pretty=False,
+                        )
+                    except click.exceptions.Exit:
+                        pass
 
         captured = capsys.readouterr()
         output = json.loads(captured.out)
@@ -195,30 +191,29 @@ class TestDryRunJsonOutput:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
-                        try:
-                            start(
-                                workspace=str(tmp_path),
-                                team=None,
-                                session_name=None,
-                                resume=False,
-                                select=False,
-                                worktree_name=None,
-                                fresh=False,
-                                install_deps=False,
-                                offline=False,
-                                standalone=False,
-                                dry_run=True,
-                                json_output=True,
-                                pretty=False,
-                            )
-                        except click.exceptions.Exit:
-                            pass
+                    try:
+                        start(
+                            workspace=str(tmp_path),
+                            team=None,
+                            session_name=None,
+                            resume=False,
+                            select=False,
+                            worktree_name=None,
+                            fresh=False,
+                            install_deps=False,
+                            offline=False,
+                            standalone=False,
+                            dry_run=True,
+                            json_output=True,
+                            pretty=False,
+                        )
+                    except click.exceptions.Exit:
+                        pass
 
         captured = capsys.readouterr()
         output = json.loads(captured.out)
@@ -317,29 +312,28 @@ class TestDryRunExitCodes:
 
         exit_code = None
 
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False):
-            with patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}):
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}):
                 with patch(
-                    "scc_cli.commands.launch.app.config.load_cached_org_config", return_value={}
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.app.docker.check_docker_available"):
-                        try:
-                            start(
-                                workspace=str(tmp_path),
-                                team=None,
-                                session_name=None,
-                                resume=False,
-                                select=False,
-                                worktree_name=None,
-                                fresh=False,
-                                install_deps=False,
-                                offline=False,
-                                standalone=False,
-                                dry_run=True,
-                            )
-                            exit_code = 0  # If no exit raised, exit code is 0
-                        except click.exceptions.Exit as e:
-                            exit_code = e.exit_code
+                    try:
+                        start(
+                            workspace=str(tmp_path),
+                            team=None,
+                            session_name=None,
+                            resume=False,
+                            select=False,
+                            worktree_name=None,
+                            fresh=False,
+                            install_deps=False,
+                            offline=False,
+                            standalone=False,
+                            dry_run=True,
+                        )
+                        exit_code = 0  # If no exit raised, exit code is 0
+                    except click.exceptions.Exit as e:
+                        exit_code = e.exit_code
 
         assert exit_code == 0
 

@@ -38,6 +38,7 @@ from scc_cli.marketplace.schema import (
     MarketplaceSourceGitHub,
     MarketplaceSourceURL,
 )
+from scc_cli.ports.remote_fetcher import RemoteFetcher
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Exceptions
@@ -396,6 +397,7 @@ def download_and_extract(
     target_dir: Path,
     headers: dict[str, str] | None = None,
     fallback_name: str = "",
+    fetcher: RemoteFetcher | None = None,
 ) -> DownloadResult:
     """Download and extract marketplace from URL.
 
@@ -404,6 +406,7 @@ def download_and_extract(
         target_dir: Directory to extract into
         headers: Optional HTTP headers
         fallback_name: Fallback name if marketplace.json doesn't specify one
+        fetcher: Optional RemoteFetcher for HTTP downloads
 
     Returns:
         DownloadResult with success status, ETag, and canonical name
@@ -411,90 +414,97 @@ def download_and_extract(
     import tarfile
     import tempfile
 
-    import requests
+    remote_fetcher = fetcher
+    if remote_fetcher is None:
+        from scc_cli.bootstrap import get_default_adapters
+
+        remote_fetcher = get_default_adapters().remote_fetcher
 
     try:
-        # Download archive
-        response = requests.get(url, headers=headers, timeout=60)
-        response.raise_for_status()
-
-        etag = response.headers.get("ETag")
-
-        # Save to temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as tmp:
-            tmp.write(response.content)
-            tmp_path = Path(tmp.name)
-
-        try:
-            # Clean target directory if exists
-            if target_dir.exists():
-                shutil.rmtree(target_dir)
-            target_dir.mkdir(parents=True)
-
-            # Extract archive (path-safe)
-            with tarfile.open(tmp_path, "r:*") as tar:
-                safe_members: list[tarfile.TarInfo] = []
-                for member in tar.getmembers():
-                    member_path = PurePosixPath(member.name)
-                    windows_member_path = PureWindowsPath(member.name)
-                    if member_path.is_absolute() or windows_member_path.is_absolute():
-                        return DownloadResult(
-                            success=False,
-                            error=f"Unsafe archive member (absolute path): {member.name}",
-                        )
-                    if ".." in member_path.parts or ".." in windows_member_path.parts:
-                        return DownloadResult(
-                            success=False,
-                            error=f"Unsafe archive member (path traversal): {member.name}",
-                        )
-                    if "" in member_path.parts or "" in windows_member_path.parts:
-                        return DownloadResult(
-                            success=False,
-                            error=f"Unsafe archive member (empty path segment): {member.name}",
-                        )
-                    if "\\" in member.name or windows_member_path.drive:
-                        return DownloadResult(
-                            success=False,
-                            error=f"Unsafe archive member (windows path): {member.name}",
-                        )
-                    if (
-                        member.islnk()
-                        or member.issym()
-                        or member.ischr()
-                        or member.isblk()
-                        or member.isfifo()
-                    ):
-                        return DownloadResult(
-                            success=False,
-                            error=f"Unsafe archive member (link/device): {member.name}",
-                        )
-                    safe_members.append(member)
-
-                tar.extractall(target_dir, members=safe_members)
-
-            # Discover plugins and canonical name
-            discovery = _discover_plugins(target_dir, fallback_name=fallback_name)
-
-            if discovery is None:
-                return DownloadResult(
-                    success=False,
-                    error="Missing .claude-plugin/marketplace.json",
-                )
-
-            return DownloadResult(
-                success=True,
-                etag=etag,
-                plugins=discovery.plugins,
-                canonical_name=discovery.canonical_name,
-            )
-        finally:
-            tmp_path.unlink(missing_ok=True)
-
-    except requests.RequestException as e:
+        response = remote_fetcher.get(url, headers=headers, timeout=60)
+    except Exception as exc:
         return DownloadResult(
             success=False,
-            error=str(e),
+            error=str(exc),
         )
+
+    if response.status_code != 200:
+        return DownloadResult(
+            success=False,
+            error=f"HTTP {response.status_code}: Failed to download marketplace",
+        )
+
+    etag = response.headers.get("ETag")
+
+    # Save to temp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as tmp:
+        tmp.write(response.content)
+        tmp_path = Path(tmp.name)
+
+    try:
+        # Clean target directory if exists
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        target_dir.mkdir(parents=True)
+
+        # Extract archive (path-safe)
+        with tarfile.open(tmp_path, "r:*") as tar:
+            safe_members: list[tarfile.TarInfo] = []
+            for member in tar.getmembers():
+                member_path = PurePosixPath(member.name)
+                windows_member_path = PureWindowsPath(member.name)
+                if member_path.is_absolute() or windows_member_path.is_absolute():
+                    return DownloadResult(
+                        success=False,
+                        error=f"Unsafe archive member (absolute path): {member.name}",
+                    )
+                if ".." in member_path.parts or ".." in windows_member_path.parts:
+                    return DownloadResult(
+                        success=False,
+                        error=f"Unsafe archive member (path traversal): {member.name}",
+                    )
+                if "" in member_path.parts or "" in windows_member_path.parts:
+                    return DownloadResult(
+                        success=False,
+                        error=f"Unsafe archive member (empty path segment): {member.name}",
+                    )
+                if "\\" in member.name or windows_member_path.drive:
+                    return DownloadResult(
+                        success=False,
+                        error=f"Unsafe archive member (windows path): {member.name}",
+                    )
+                if (
+                    member.islnk()
+                    or member.issym()
+                    or member.ischr()
+                    or member.isblk()
+                    or member.isfifo()
+                ):
+                    return DownloadResult(
+                        success=False,
+                        error=f"Unsafe archive member (link/device): {member.name}",
+                    )
+                safe_members.append(member)
+
+            tar.extractall(target_dir, members=safe_members)
+
+        # Discover plugins and canonical name
+        discovery = _discover_plugins(target_dir, fallback_name=fallback_name)
+
+        if discovery is None:
+            return DownloadResult(
+                success=False,
+                error="Missing .claude-plugin/marketplace.json",
+            )
+
+        return DownloadResult(
+            success=True,
+            etag=etag,
+            plugins=discovery.plugins,
+            canonical_name=discovery.canonical_name,
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -705,6 +715,7 @@ def materialize_url(
     name: str,
     source: dict[str, Any] | MarketplaceSourceURL,
     project_dir: Path,
+    fetcher: RemoteFetcher | None = None,
 ) -> MaterializedMarketplace:
     """Materialize a URL marketplace source.
 
@@ -712,6 +723,7 @@ def materialize_url(
         name: Marketplace name (key in org config) - the "alias"
         source: URL source configuration
         project_dir: Project root directory
+        fetcher: Optional RemoteFetcher for URL downloads
 
     Returns:
         MaterializedMarketplace with materialization details including canonical_name
@@ -742,7 +754,13 @@ def materialize_url(
         headers = {k: os.path.expandvars(v) for k, v in headers.items()}
 
     # Pass name as fallback in case marketplace.json doesn't specify one
-    result = download_and_extract(url, target_dir, headers=headers, fallback_name=name)
+    result = download_and_extract(
+        url,
+        target_dir,
+        headers=headers,
+        fallback_name=name,
+        fetcher=fetcher,
+    )
 
     if not result.success:
         raise MaterializationError(result.error or "Download failed", name)
@@ -775,6 +793,7 @@ def materialize_marketplace(
     source: MarketplaceSource,
     project_dir: Path,
     force_refresh: bool = False,
+    fetcher: RemoteFetcher | None = None,
 ) -> MaterializedMarketplace:
     """Materialize a marketplace source to local filesystem.
 
@@ -786,6 +805,7 @@ def materialize_marketplace(
         source: Marketplace source configuration (discriminated union)
         project_dir: Project root directory
         force_refresh: Skip cache freshness check
+        fetcher: Optional RemoteFetcher for URL sources
 
     Returns:
         MaterializedMarketplace with materialization details
@@ -834,7 +854,7 @@ def materialize_marketplace(
     elif isinstance(source, MarketplaceSourceDirectory):
         result = materialize_directory(name, source, project_dir)
     elif isinstance(source, MarketplaceSourceURL):
-        result = materialize_url(name, source, project_dir)
+        result = materialize_url(name, source, project_dir, fetcher=fetcher)
     else:
         raise MaterializationError(f"Unknown source type: {source.source}", name)
 

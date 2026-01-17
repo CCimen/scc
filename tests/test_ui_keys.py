@@ -358,11 +358,13 @@ class TestTeamSwitchConsistency:
         """Dashboard handles TEAM_SWITCH by raising TeamSwitchRequested."""
         from unittest.mock import patch
 
+        from scc_cli.application import dashboard as app_dashboard
         from scc_cli.ui.dashboard import Dashboard, DashboardState, DashboardTab, TabData
         from scc_cli.ui.list_screen import ListItem, ListState
 
         # Create minimal dashboard state
-        items: list[ListItem[str]] = [ListItem(value="test", label="Test")]
+        status_item = app_dashboard.StatusItem(label="Test", description="")
+        items = [ListItem(value=status_item, label="Test", description="")]
         tab_data = TabData(
             tab=DashboardTab.STATUS,
             title="Status",

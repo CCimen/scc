@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__
-from .core.errors import SCCError
+from .core.error_mapping import to_json_payload
 from .kinds import Kind
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -128,20 +128,7 @@ def build_error_envelope(exc: Exception) -> dict[str, Any]:
     # Generate ISO 8601 timestamp in UTC
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Build error data depending on exception type
-    error_data: dict[str, Any] = {
-        "error_type": type(exc).__name__,
-    }
-
-    if isinstance(exc, SCCError):
-        error_data["user_message"] = exc.user_message
-        if exc.suggested_action:
-            error_data["suggested_action"] = exc.suggested_action
-        if exc.debug_context:
-            error_data["debug_context"] = exc.debug_context
-        error_message = exc.user_message
-    else:
-        error_message = str(exc)
+    payload = to_json_payload(exc)
 
     return {
         "apiVersion": API_VERSION,
@@ -152,8 +139,8 @@ def build_error_envelope(exc: Exception) -> dict[str, Any]:
         },
         "status": {
             "ok": False,
-            "errors": [error_message],
+            "errors": payload["errors"],
             "warnings": [],
         },
-        "data": error_data,
+        "data": payload["data"],
     }

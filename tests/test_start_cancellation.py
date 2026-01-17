@@ -16,10 +16,10 @@ runner = CliRunner()
 def test_start_cancelled_exits_130_and_message():
     """User cancellation should exit 130 and show a Cancelled message."""
     with (
-        patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-        patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
+        patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
         patch(
-            "scc_cli.commands.launch.app._resolve_session_selection",
+            "scc_cli.commands.launch.flow._resolve_session_selection",
             return_value=(None, None, None, None, True, False),
         ),
     ):
@@ -32,8 +32,8 @@ def test_start_cancelled_exits_130_and_message():
 def test_start_offline_without_cache_exits_config():
     """--offline with no cache should exit with EXIT_CONFIG and message."""
     with (
-        patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-        patch("scc_cli.commands.launch.app.config.load_cached_org_config", return_value=None),
+        patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+        patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value=None),
     ):
         result = runner.invoke(app, ["start", "--offline"])
 

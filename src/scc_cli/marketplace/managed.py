@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from scc_cli.marketplace.constants import MANAGED_STATE_FILE
+from scc_cli.ports.filesystem import Filesystem
 
 
 @dataclass
@@ -83,29 +84,46 @@ class ManagedState:
         )
 
 
-def load_managed_state(project_dir: Path) -> ManagedState:
+def load_managed_state(
+    project_dir: Path,
+    filesystem: Filesystem | None = None,
+) -> ManagedState:
     """Load managed state from .scc-managed.json.
 
     Args:
         project_dir: Project root directory
+        filesystem: Optional filesystem port for IO
 
     Returns:
         ManagedState with tracking data, or empty state if file doesn't exist
     """
     managed_path = project_dir / ".claude" / MANAGED_STATE_FILE
 
-    if not managed_path.exists():
+    if filesystem is None:
+        if not managed_path.exists():
+            return ManagedState()
+
+        try:
+            return ManagedState.from_dict(json.loads(managed_path.read_text()))
+        except json.JSONDecodeError:
+            # Corrupted file - return empty state
+            return ManagedState()
+
+    if not filesystem.exists(managed_path):
         return ManagedState()
 
     try:
-        data: dict[str, Any] = json.loads(managed_path.read_text())
-        return ManagedState.from_dict(data)
+        return ManagedState.from_dict(json.loads(filesystem.read_text(managed_path)))
     except json.JSONDecodeError:
         # Corrupted file - return empty state
         return ManagedState()
 
 
-def save_managed_state(project_dir: Path, state: ManagedState) -> None:
+def save_managed_state(
+    project_dir: Path,
+    state: ManagedState,
+    filesystem: Filesystem | None = None,
+) -> None:
     """Save managed state to .scc-managed.json.
 
     Creates .claude directory if it doesn't exist.
@@ -113,23 +131,35 @@ def save_managed_state(project_dir: Path, state: ManagedState) -> None:
     Args:
         project_dir: Project root directory
         state: ManagedState to persist
+        filesystem: Optional filesystem port for IO
     """
     claude_dir = project_dir / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
-
     managed_path = claude_dir / MANAGED_STATE_FILE
-    managed_path.write_text(json.dumps(state.to_dict(), indent=2))
+
+    if filesystem is None:
+        claude_dir.mkdir(parents=True, exist_ok=True)
+        managed_path.write_text(json.dumps(state.to_dict(), indent=2))
+        return
+
+    filesystem.mkdir(claude_dir, parents=True, exist_ok=True)
+    filesystem.write_text(managed_path, json.dumps(state.to_dict(), indent=2))
 
 
-def clear_managed_state(project_dir: Path) -> None:
+def clear_managed_state(project_dir: Path, filesystem: Filesystem | None = None) -> None:
     """Remove managed state file.
 
     Used for reset operations. Preserves .claude directory and other files.
 
     Args:
         project_dir: Project root directory
+        filesystem: Optional filesystem port for IO
     """
     managed_path = project_dir / ".claude" / MANAGED_STATE_FILE
 
-    if managed_path.exists():
-        managed_path.unlink()
+    if filesystem is None:
+        if managed_path.exists():
+            managed_path.unlink()
+        return
+
+    if filesystem.exists(managed_path):
+        filesystem.unlink(managed_path)

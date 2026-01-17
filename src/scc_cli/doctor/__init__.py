@@ -44,15 +44,15 @@ from scc_cli.doctor.checks import (
 )
 
 # Import orchestration and rendering functions from render.py
+from scc_cli.doctor.core import run_doctor
 from scc_cli.doctor.render import (
-    build_doctor_json_data,
     is_first_run,
     quick_check,
     render_doctor_compact,
     render_doctor_results,
     render_quick_status,
-    run_doctor,
 )
+from scc_cli.doctor.serialization import build_doctor_json_data
 
 # Import types from types.py
 from scc_cli.doctor.types import CheckResult, DoctorResult, JsonValidationResult

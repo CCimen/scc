@@ -26,7 +26,9 @@ import requests
 
 from scc_cli.auth import is_remote_command_allowed
 from scc_cli.auth import resolve_auth as _resolve_auth_impl
+from scc_cli.bootstrap import get_default_adapters
 from scc_cli.output_mode import print_human
+from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.utils.locks import file_lock, lock_path
 
 if TYPE_CHECKING:
@@ -186,6 +188,7 @@ def fetch_org_config(
     auth: str | None,
     etag: str | None = None,
     auth_header: str | None = None,
+    fetcher: RemoteFetcher | None = None,
 ) -> tuple[dict[str, Any] | None, str | None, int]:
     """Fetch org config from URL with ETag support.
 
@@ -194,6 +197,7 @@ def fetch_org_config(
         auth: Auth token for header
         etag: Previous ETag for conditional request
         auth_header: Custom header name (defaults to Authorization)
+        fetcher: Optional RemoteFetcher override
 
     Returns:
         Tuple of (config_dict, new_etag, status_code)
@@ -211,8 +215,10 @@ def fetch_org_config(
     if etag:
         headers["If-None-Match"] = etag
 
+    remote_fetcher = fetcher or get_default_adapters().remote_fetcher
+
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = remote_fetcher.get(url, headers=headers, timeout=30)
         status = response.status_code
 
         # 304 Not Modified - use cached version
@@ -225,7 +231,7 @@ def fetch_org_config(
 
         # Parse JSON response
         try:
-            config = response.json()
+            config = json.loads(response.text)
         except json.JSONDecodeError:
             return (None, None, -1)  # Invalid JSON
 

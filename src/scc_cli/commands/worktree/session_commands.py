@@ -11,7 +11,7 @@ from rich.prompt import Confirm
 from ... import config, sessions
 from ...cli_common import console, handle_errors, render_responsive_table
 from ...core.exit_codes import EXIT_CANCELLED
-from ...core.maintenance import prune_sessions as maintenance_prune_sessions
+from ...maintenance import prune_sessions as maintenance_prune_sessions
 from ...panels import create_warning_panel
 from ...ui.picker import TeamSwitchRequested, pick_session
 

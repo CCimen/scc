@@ -26,7 +26,8 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from .. import config, profiles
+from .. import config
+from ..application.compute_effective_config import compute_effective_config
 from ..cli_common import handle_errors
 from ..cli_helpers import create_audit_record, require_reason_for_governance
 from ..evaluation import EvaluationResult, evaluate
@@ -507,7 +508,7 @@ def get_current_denials() -> EvaluationResult:
         return EvaluationResult()
 
     # Compute effective config for current workspace
-    effective = profiles.compute_effective_config(
+    effective = compute_effective_config(
         org_config=org_config,
         team_name=team,
         workspace_path=Path.cwd(),

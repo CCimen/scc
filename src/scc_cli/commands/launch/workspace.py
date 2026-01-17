@@ -29,6 +29,7 @@ from ...core.workspace import ResolverResult
 from ...output_mode import print_human
 from ...panels import create_info_panel, create_success_panel, create_warning_panel
 from ...theme import Indicators, Spinners
+from ...ui import check_branch_safety, create_worktree
 from ...ui.gate import is_interactive_allowed
 
 if TYPE_CHECKING:
@@ -211,7 +212,7 @@ def prepare_workspace(
 
     # Handle worktree creation
     if worktree_name:
-        workspace_path = git.create_worktree(workspace_path, worktree_name)
+        workspace_path = create_worktree(workspace_path, worktree_name)
         console.print(
             create_success_panel(
                 "Worktree Created",
@@ -235,7 +236,7 @@ def prepare_workspace(
 
     # Check git safety (handles protected branch warnings)
     if workspace_path.exists():
-        if not git.check_branch_safety(workspace_path, console):
+        if not check_branch_safety(workspace_path, console):
             console.print("[dim]Cancelled.[/dim]")
             raise typer.Exit(EXIT_CANCELLED)
 

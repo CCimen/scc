@@ -17,6 +17,7 @@ import pytest
 
 from scc_cli import git
 from scc_cli.core.errors import WorktreeCreationError
+from scc_cli.ui import check_branch_safety, cleanup_worktree, create_worktree, list_worktrees
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures - Real Git Repos
@@ -110,7 +111,7 @@ class TestWorktreeBranchPrefix:
             patch("scc_cli.ui.git_interactive._fetch_branch"),
             patch("scc_cli.ui.git_interactive.install_dependencies"),
         ):
-            worktree_path = git.create_worktree(
+            worktree_path = create_worktree(
                 temp_git_repo,
                 "test-prefix",
                 console=console,
@@ -323,7 +324,7 @@ class TestCheckBranchSafety:
     def test_allows_feature_branch_without_prompt(self, temp_git_repo_on_feature):
         """Feature branches should pass without any prompts."""
         console = MagicMock()
-        result = git.check_branch_safety(temp_git_repo_on_feature, console)
+        result = check_branch_safety(temp_git_repo_on_feature, console)
         assert result is True
         # Should not have shown any warning panels
         console.print.assert_not_called()
@@ -334,7 +335,7 @@ class TestCheckBranchSafety:
         with patch("scc_cli.ui.git_interactive.prompt_with_layout") as mock_prompt:
             # User chooses to continue (option 2)
             mock_prompt.return_value = "2"
-            result = git.check_branch_safety(temp_git_repo_on_main, console)
+            result = check_branch_safety(temp_git_repo_on_main, console)
 
         assert result is True
         # Should have printed warning
@@ -345,7 +346,7 @@ class TestCheckBranchSafety:
         console = MagicMock()
         with patch("scc_cli.ui.git_interactive.prompt_with_layout") as mock_prompt:
             mock_prompt.return_value = "3"  # Cancel
-            result = git.check_branch_safety(temp_git_repo_on_main, console)
+            result = check_branch_safety(temp_git_repo_on_main, console)
 
         assert result is False
 
@@ -356,7 +357,7 @@ class TestCheckBranchSafety:
             # First call: choose to create branch
             # Second call: branch name
             mock_prompt.side_effect = ["1", "my-new-feature"]
-            result = git.check_branch_safety(temp_git_repo_on_main, console)
+            result = check_branch_safety(temp_git_repo_on_main, console)
 
         assert result is True
         # Verify branch was actually created
@@ -368,7 +369,7 @@ class TestCheckBranchSafety:
         non_repo = tmp_path / "not-a-repo"
         non_repo.mkdir()
         console = MagicMock()
-        result = git.check_branch_safety(non_repo, console)
+        result = check_branch_safety(non_repo, console)
         assert result is True
 
 
@@ -425,7 +426,7 @@ class TestCreateWorktree:
             patch("scc_cli.ui.git_interactive._fetch_branch"),  # Skip fetch, no remote in temp repo
             patch("scc_cli.ui.git_interactive.install_dependencies"),  # Skip deps install
         ):
-            worktree_path = git.create_worktree(
+            worktree_path = create_worktree(
                 temp_git_repo,
                 "test-feature",
                 console=console,
@@ -447,7 +448,7 @@ class TestCreateWorktree:
             patch("scc_cli.ui.git_interactive._fetch_branch"),  # Skip fetch, no remote in temp repo
             patch("scc_cli.ui.git_interactive.install_dependencies"),  # Skip deps install
         ):
-            worktree_path = git.create_worktree(
+            worktree_path = create_worktree(
                 temp_git_repo,
                 "my-feature",
                 console=console,
@@ -479,7 +480,7 @@ class TestCreateWorktree:
             ) as mock_install,
         ):
             with pytest.raises(WorktreeCreationError):
-                git.create_worktree(temp_git_repo, "fail", console=console)
+                create_worktree(temp_git_repo, "fail", console=console)
 
         assert mock_install.called
 
@@ -520,7 +521,7 @@ class TestCleanupWorktree:
 
         # Cleanup with user declining
         with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
-            result = git.cleanup_worktree(
+            result = cleanup_worktree(
                 temp_git_repo,
                 "dirty-feature",
                 force=False,
@@ -555,7 +556,7 @@ class TestCleanupWorktree:
 
         # Don't delete branch
         with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
-            result = git.cleanup_worktree(
+            result = cleanup_worktree(
                 temp_git_repo,
                 "force-delete",
                 force=True,
@@ -569,7 +570,7 @@ class TestCleanupWorktree:
     def test_returns_false_for_nonexistent_worktree(self, temp_git_repo):
         """Should return False if worktree doesn't exist."""
         console = MagicMock()
-        result = git.cleanup_worktree(
+        result = cleanup_worktree(
             temp_git_repo,
             "nonexistent-worktree",
             force=False,
@@ -588,7 +589,7 @@ class TestListWorktrees:
 
     def test_lists_main_worktree(self, temp_git_repo):
         """Should list at least the main worktree."""
-        worktrees = git.list_worktrees(temp_git_repo)
+        worktrees = list_worktrees(temp_git_repo)
         assert len(worktrees) >= 1
 
     def test_lists_created_worktree(self, temp_git_repo):
@@ -604,7 +605,7 @@ class TestListWorktrees:
             capture_output=True,
         )
 
-        worktrees = git.list_worktrees(temp_git_repo)
+        worktrees = list_worktrees(temp_git_repo)
         paths = [str(w.path) for w in worktrees]
         assert any("list-test" in p for p in paths)
 

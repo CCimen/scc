@@ -357,7 +357,7 @@ class TestDetectWorkspaceRoot:
         subdir.mkdir()
 
         # Mock git not being available
-        with patch("scc_cli.git.check_git_installed", return_value=False):
+        with patch("scc_cli.services.git.core.check_git_installed", return_value=False):
             root, start_cwd = detect_workspace_root(subdir)
 
         assert root == project
@@ -376,7 +376,7 @@ class TestDetectWorkspaceRoot:
         subdir.mkdir()
 
         # Mock git not being available to test fallback to .git file detection
-        with patch("scc_cli.git.check_git_installed", return_value=False):
+        with patch("scc_cli.services.git.core.check_git_installed", return_value=False):
             root, start_cwd = detect_workspace_root(subdir)
 
         assert root == worktree
@@ -392,7 +392,7 @@ class TestDetectWorkspaceRoot:
         nested = plain_dir / "deep" / "path"
         nested.mkdir(parents=True)
 
-        with patch("scc_cli.git.check_git_installed", return_value=False):
+        with patch("scc_cli.services.git.core.check_git_installed", return_value=False):
             root, start_cwd = detect_workspace_root(nested)
 
         assert root is None
@@ -430,7 +430,7 @@ class TestDetectWorkspaceRoot:
         deep = project / "packages" / "core" / "src"
         deep.mkdir(parents=True)
 
-        with patch("scc_cli.git.check_git_installed", return_value=False):
+        with patch("scc_cli.services.git.core.check_git_installed", return_value=False):
             root, start_cwd = detect_workspace_root(deep)
 
         assert root == project

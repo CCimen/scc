@@ -365,7 +365,7 @@ class TestComputeEffectiveConfigBasicMerge:
 
     def test_org_defaults_only(self, valid_org_config):
         """With no team or project, should return org defaults."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         result = compute_effective_config(
             org_config=valid_org_config, team_name=None, project_config=None
@@ -380,7 +380,7 @@ class TestComputeEffectiveConfigBasicMerge:
 
     def test_team_extends_org_defaults(self, valid_org_config):
         """Team profile should extend org defaults, not replace."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         result = compute_effective_config(
             org_config=valid_org_config,
@@ -399,7 +399,7 @@ class TestComputeEffectiveConfigBasicMerge:
 
     def test_project_extends_team_when_delegated(self, valid_org_config, project_config):
         """Project should extend team config when delegation allows."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Ensure delegation is enabled
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
@@ -423,7 +423,7 @@ class TestComputeEffectiveConfigBasicMerge:
 
     def test_minimal_config_uses_defaults(self, minimal_org_config):
         """Minimal config should use sensible defaults."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         result = compute_effective_config(
             org_config=minimal_org_config, team_name=None, project_config=None
@@ -452,7 +452,7 @@ class TestComputeEffectiveConfigDelegation:
         Even if team says allow_project_overrides: true, org's inherit_team_delegation: false
         should prevent project from adding anything.
         """
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Org says: NO delegation to projects (master switch OFF)
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = False
@@ -479,7 +479,7 @@ class TestComputeEffectiveConfigDelegation:
 
     def test_org_enables_but_team_disables_delegation(self, valid_org_config, project_config):
         """When org enables but team disables, project additions should be rejected."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Org says: delegation CAN happen (master switch ON)
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
@@ -504,7 +504,7 @@ class TestComputeEffectiveConfigDelegation:
 
     def test_both_org_and_team_enable_delegation(self, valid_org_config, project_config):
         """When both org and team enable, project additions should be allowed."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
         valid_org_config["profiles"]["urban-planning"]["delegation"]["allow_project_overrides"] = (
@@ -522,7 +522,7 @@ class TestComputeEffectiveConfigDelegation:
 
     def test_team_not_in_allowed_list_rejects_additions(self, valid_org_config):
         """Team trying to add plugins not in org's allowed list should be rejected."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Org allows only specific teams to add MCP servers
         valid_org_config["delegation"]["teams"]["allow_additional_mcp_servers"] = [
@@ -549,7 +549,7 @@ class TestComputeEffectiveConfigSecurityBlocks:
 
     def test_blocked_plugin_rejected_from_org_defaults(self, valid_org_config):
         """Plugin in org defaults that matches blocked pattern should be rejected."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Add a blocked plugin pattern
         valid_org_config["security"]["blocked_plugins"] = ["internal-*"]
@@ -574,7 +574,7 @@ class TestComputeEffectiveConfigSecurityBlocks:
 
     def test_blocked_plugin_rejected_from_team(self, valid_org_config):
         """Plugin from team profile matching blocked pattern should be rejected."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Block all gis-* plugins
         valid_org_config["security"]["blocked_plugins"] = ["gis-*"]
@@ -590,7 +590,7 @@ class TestComputeEffectiveConfigSecurityBlocks:
 
     def test_blocked_plugin_rejected_from_project(self, valid_org_config, project_config):
         """Plugin from project matching blocked pattern should be rejected."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Enable delegation
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
@@ -612,7 +612,7 @@ class TestComputeEffectiveConfigSecurityBlocks:
 
     def test_blocked_mcp_server_rejected(self, valid_org_config):
         """MCP server matching blocked pattern should be rejected."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Block all sundsvall.se MCP servers
         valid_org_config["security"]["blocked_mcp_servers"] = ["*.sundsvall.se"]
@@ -629,7 +629,7 @@ class TestComputeEffectiveConfigSecurityBlocks:
 
     def test_security_blocks_cannot_be_overridden(self, valid_org_config):
         """Security blocks apply regardless of delegation settings."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Max delegation enabled
         valid_org_config["delegation"]["teams"]["allow_additional_plugins"] = ["*"]
@@ -653,7 +653,7 @@ class TestComputeEffectiveConfigGlobPatterns:
 
     def test_wildcard_star_matches_multiple_chars(self, valid_org_config):
         """Pattern * should match any characters."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["security"]["blocked_plugins"] = ["test-*-plugin"]
         valid_org_config["defaults"]["enabled_plugins"] = [
@@ -672,7 +672,7 @@ class TestComputeEffectiveConfigGlobPatterns:
 
     def test_wildcard_question_matches_single_char(self, valid_org_config):
         """Pattern ? should match exactly one character."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["security"]["blocked_plugins"] = ["test-?-plugin"]
         valid_org_config["defaults"]["enabled_plugins"] = [
@@ -691,7 +691,7 @@ class TestComputeEffectiveConfigGlobPatterns:
 
     def test_domain_wildcard_pattern(self, valid_org_config):
         """Domain patterns like *.domain.com should work."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["security"]["blocked_mcp_servers"] = ["*.evil.com"]
         valid_org_config["defaults"]["allowed_mcp_servers"] = None
@@ -712,7 +712,7 @@ class TestComputeEffectiveConfigGlobPatterns:
 
     def test_exact_match_pattern(self, valid_org_config):
         """Exact patterns (no wildcards) should match exactly."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["security"]["blocked_plugins"] = ["exact-plugin"]
         valid_org_config["defaults"]["enabled_plugins"] = [
@@ -735,7 +735,7 @@ class TestComputeEffectiveConfigDecisionTracking:
 
     def test_decisions_track_plugin_sources(self, valid_org_config, project_config):
         """Decisions should track where each plugin came from."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
         valid_org_config["profiles"]["urban-planning"]["delegation"]["allow_project_overrides"] = (
@@ -757,7 +757,7 @@ class TestComputeEffectiveConfigDecisionTracking:
 
     def test_blocked_items_tracked_with_pattern(self, valid_org_config):
         """Blocked items should show which pattern blocked them."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["security"]["blocked_plugins"] = ["gis-*"]
 
@@ -775,7 +775,7 @@ class TestComputeEffectiveConfigDecisionTracking:
 
     def test_denied_additions_tracked_with_reason(self, valid_org_config, project_config):
         """Denied additions should explain why they were denied."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Disable delegation at org level
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = False
@@ -1042,7 +1042,7 @@ class TestProjectConfigIntegration:
 
     def test_compute_effective_config_loads_project_from_path(self, valid_org_config, tmp_path):
         """compute_effective_config should load project config from workspace path."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # Enable delegation
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
@@ -1072,7 +1072,7 @@ session:
 
     def test_compute_effective_config_no_project_file_is_ok(self, valid_org_config, tmp_path):
         """compute_effective_config should work when no .scc.yaml exists."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         # No .scc.yaml file created
 
@@ -1089,7 +1089,7 @@ session:
         self, valid_org_config, project_config
     ):
         """Passing project_config dict directly should still work (backward compat)."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
         valid_org_config["profiles"]["urban-planning"]["delegation"]["allow_project_overrides"] = (
@@ -1109,7 +1109,7 @@ session:
         self, valid_org_config, project_config, tmp_path
     ):
         """When both workspace_path and project_config provided, workspace_path wins."""
-        from scc_cli.profiles import compute_effective_config
+        from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
         valid_org_config["profiles"]["urban-planning"]["delegation"]["allow_project_overrides"] = (
@@ -1146,8 +1146,8 @@ class TestClaudeAdapterWithEffectiveConfig:
 
     def test_build_settings_from_effective_config_plugins(self, valid_org_config):
         """build_settings_from_effective_config should include effective plugins."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
         from scc_cli.claude_adapter import build_settings_from_effective_config
-        from scc_cli.profiles import compute_effective_config
 
         # Compute effective config
         effective = compute_effective_config(
@@ -1171,8 +1171,8 @@ class TestClaudeAdapterWithEffectiveConfig:
 
     def test_build_settings_from_effective_config_mcp_servers(self, valid_org_config):
         """build_settings_from_effective_config should include MCP servers."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
         from scc_cli.claude_adapter import build_settings_from_effective_config
-        from scc_cli.profiles import compute_effective_config
 
         effective = compute_effective_config(
             org_config=valid_org_config,
@@ -1192,8 +1192,8 @@ class TestClaudeAdapterWithEffectiveConfig:
 
     def test_build_settings_blocked_plugins_not_included(self, valid_org_config):
         """Blocked plugins should not appear in Claude settings."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
         from scc_cli.claude_adapter import build_settings_from_effective_config
-        from scc_cli.profiles import compute_effective_config
 
         # Block gis-tools
         valid_org_config["security"]["blocked_plugins"].append("gis-tools")

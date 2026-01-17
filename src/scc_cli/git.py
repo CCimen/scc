@@ -1,15 +1,13 @@
 """
 Git operations - backward-compatible facade.
 
-This module is a pure re-export facade after Phase 4 refactoring:
-- Data functions: services/git/ (core.py, branch.py, worktree.py, hooks.py)
-- Rendering functions: ui/git_render.py
-- Interactive UI functions: ui/git_interactive.py
+This module re-exports the pure git service API from services/git for backward
+compatibility (e.g. `from scc_cli.git import WorktreeInfo`).
 
-All symbols are re-exported for backward compatibility - existing imports
-like `from scc_cli.git import WorktreeInfo` continue to work.
+UI helpers now live in `scc_cli.ui.git_interactive` and `scc_cli.ui.git_render`
+and should be imported directly.
 
-NO Rich imports in this module - that's a key acceptance criterion.
+No Rich imports are allowed in this module.
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -63,22 +61,3 @@ from .services.git.worktree import (  # noqa: F401
 
 # Keep _get_worktrees_data as alias for backward compatibility
 from .services.git.worktree import get_worktrees_data as _get_worktrees_data  # noqa: F401
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Re-exports from ui/ for backward compatibility
-# ═══════════════════════════════════════════════════════════════════════════════
-# Interactive UI functions (extracted in Phase 4B)
-from .ui.git_interactive import (  # noqa: F401
-    check_branch_safety,
-    cleanup_worktree,
-    clone_repo,
-    create_worktree,
-    install_dependencies,
-    install_hooks,
-    list_worktrees,
-)
-
-# Pure rendering functions
-from .ui.git_render import format_git_status as _format_git_status  # noqa: F401
-from .ui.git_render import render_worktrees  # noqa: F401
-from .ui.git_render import render_worktrees_table as _render_worktrees_table  # noqa: F401

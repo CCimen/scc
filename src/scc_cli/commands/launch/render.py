@@ -14,8 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ... import git
-from ...cli_common import MAX_DISPLAY_PATH_LENGTH, PATH_TRUNCATE_LENGTH, console
-from ...output_mode import print_human
+from ...cli_common import MAX_DISPLAY_PATH_LENGTH, PATH_TRUNCATE_LENGTH, console, err_console
 from ...theme import Indicators
 from ...ui.chrome import print_with_layout
 
@@ -30,8 +29,6 @@ def warn_if_non_worktree(workspace_path: Path | None, *, json_mode: bool = False
         workspace_path: Path to the workspace directory, or None.
         json_mode: If True, suppress the warning.
     """
-    import sys
-
     if json_mode or workspace_path is None:
         return
 
@@ -41,12 +38,11 @@ def warn_if_non_worktree(workspace_path: Path | None, *, json_mode: bool = False
     if git.is_worktree(workspace_path):
         return
 
-    print_human(
+    print_with_layout(
+        err_console,
         "[yellow]Tip:[/yellow] You're working in the main repo. "
         "For isolation, try: scc worktree create . <feature> or "
         "scc start --worktree <feature>",
-        file=sys.stderr,
-        highlight=False,
     )
 
 
@@ -84,10 +80,10 @@ def build_dry_run_data(
     blocked_items: list[str] = []
 
     if org_config and team:
-        from ... import profiles
+        from ...application.compute_effective_config import compute_effective_config
 
         workspace_for_project = None if project_config is not None else workspace_path
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config,
             team,
             project_config=project_config,

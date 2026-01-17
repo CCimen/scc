@@ -20,6 +20,7 @@ from ...kinds import Kind
 from ...output_mode import is_json_mode
 from ...panels import create_success_panel, create_warning_panel
 from ...theme import Indicators, Spinners
+from ...ui import cleanup_worktree, create_worktree, list_worktrees, render_worktrees
 from ...ui.gate import InteractivityContext
 from ...ui.picker import TeamSwitchRequested, pick_worktree
 from ._helpers import build_worktree_list_data
@@ -98,7 +99,7 @@ def worktree_create_cmd(
             )
             raise typer.Exit(1)
 
-    worktree_path = git.create_worktree(workspace_path, name, base_branch)
+    worktree_path = create_worktree(workspace_path, name, base_branch)
 
     console.print(
         create_success_panel(
@@ -165,7 +166,7 @@ def worktree_list_cmd(
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    worktree_list = git.list_worktrees(workspace_path, verbose=verbose)
+    worktree_list = list_worktrees(workspace_path, verbose=verbose)
 
     # Convert WorktreeInfo dataclasses to dicts for JSON serialization
     worktree_dicts = [asdict(wt) for wt in worktree_list]
@@ -199,8 +200,8 @@ def worktree_list_cmd(
             console.print("[dim]Use 'scc team switch' to change teams[/dim]")
         return None
 
-    # Use the beautiful worktree rendering from git.py
-    git.render_worktrees(worktree_list, console)
+    # Use the worktree rendering from the UI layer
+    render_worktrees(worktree_list, console)
 
     return data
 
@@ -241,7 +242,7 @@ def worktree_switch_cmd(
 
     # No target: interactive picker
     if target is None:
-        worktree_list = git.list_worktrees(workspace_path)
+        worktree_list = list_worktrees(workspace_path)
         if not worktree_list:
             err_console.print(
                 create_warning_panel(
@@ -318,7 +319,7 @@ def worktree_switch_cmd(
                         f"[cyan]No worktree for '{target}'. Create one?[/cyan]",
                         default=False,  # Explicit > implicit
                     ):
-                        worktree_path = git.create_worktree(
+                        worktree_path = create_worktree(
                             workspace_path,
                             name=target,
                             base_branch=target,
@@ -424,7 +425,7 @@ def worktree_select_cmd(
     if not git.is_git_repo(workspace_path):
         raise NotAGitRepoError(path=str(workspace_path))
 
-    worktree_list = git.list_worktrees(workspace_path)
+    worktree_list = list_worktrees(workspace_path)
 
     # Build combined list if including branches
     from ...git import WorktreeInfo
@@ -481,7 +482,7 @@ def worktree_select_cmd(
                 console=console,
                 spinner=Spinners.SETUP,
             ):
-                worktree_path = git.create_worktree(
+                worktree_path = create_worktree(
                     workspace_path,
                     selected.branch,
                     base_branch=selected.branch,
@@ -543,7 +544,7 @@ def worktree_enter_cmd(
 
     if target is None:
         # No target: interactive picker
-        worktree_list = git.list_worktrees(workspace_path)
+        worktree_list = list_worktrees(workspace_path)
         if not worktree_list:
             err_console.print(
                 create_warning_panel(
@@ -585,7 +586,7 @@ def worktree_enter_cmd(
     elif target == "^":
         # Main branch worktree
         main_branch = git.get_default_branch(workspace_path)
-        worktree_list = git.list_worktrees(workspace_path)
+        worktree_list = list_worktrees(workspace_path)
         for wt in worktree_list:
             if wt.branch == main_branch or wt.branch in {"main", "master"}:
                 worktree_path = Path(wt.path)
@@ -683,7 +684,7 @@ def worktree_remove_cmd(
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
     # cleanup_worktree handles all output including success panels
-    git.cleanup_worktree(workspace_path, name, force, console, skip_confirm=yes, dry_run=dry_run)
+    cleanup_worktree(workspace_path, name, force, console, skip_confirm=yes, dry_run=dry_run)
 
 
 @handle_errors

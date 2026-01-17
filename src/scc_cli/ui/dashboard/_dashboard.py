@@ -22,6 +22,20 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from scc_cli.application.dashboard import (
+    TAB_ORDER,
+    ContainerItem,
+    DashboardTab,
+    PlaceholderItem,
+    PlaceholderKind,
+    SessionItem,
+    StatusAction,
+    StatusItem,
+    WorktreeItem,
+    placeholder_start_reason,
+    placeholder_tip,
+)
+
 # Import config for standalone mode detection
 from ... import config as scc_config
 from ...theme import Indicators
@@ -50,7 +64,7 @@ from ..keys import (
     WorktreeActionMenuRequested,
 )
 from ..list_screen import ListItem
-from .models import TAB_ORDER, DashboardState, DashboardTab
+from .models import DashboardState
 
 
 class Dashboard:
@@ -334,7 +348,9 @@ class Dashboard:
         table.add_row("Name", Text(item.label, style="bold"))
 
         container: ContainerInfo | None = None
-        if isinstance(item.value, ContainerInfo):
+        if isinstance(item.value, ContainerItem):
+            container = item.value.container
+        elif isinstance(item.value, ContainerInfo):
             container = item.value
         elif isinstance(item.value, str):
             # Legacy fallback when value is container ID
@@ -382,7 +398,13 @@ class Dashboard:
 
         Uses the raw session dict stored in item.value for field access.
         """
-        session = item.value
+        session_source = item.value
+        if isinstance(session_source, SessionItem):
+            session = session_source.session
+        elif isinstance(session_source, dict):
+            session = session_source
+        else:
+            return Text("Session details unavailable", style="dim italic")
 
         header = self._build_details_header("Session Details")
 
@@ -435,7 +457,8 @@ class Dashboard:
         table.add_column("value", overflow="fold")
 
         table.add_row("Name", Text(item.label, style="bold"))
-        table.add_row("Path", item.value)
+        worktree_path = item.value.path if isinstance(item.value, WorktreeItem) else item.value
+        table.add_row("Path", worktree_path)
 
         # Parse description into fields (branch  modified  +1 !2 ?3  (current))
         if item.description:
@@ -468,7 +491,7 @@ class Dashboard:
         # Commands section
         commands = Text()
         commands.append("\nCommands\n", style="dim")
-        commands.append(f"  scc start {item.value}\n", style="cyan")
+        commands.append(f"  scc start {worktree_path}\n", style="cyan")
 
         return Group(header, table, commands)
 
@@ -494,33 +517,9 @@ class Dashboard:
 
         return " · ".join(summaries) if summaries else None
 
-    def _get_placeholder_tip(self, value: str | dict[str, Any]) -> str:
-        """Get contextual help tip for placeholder items.
-
-        Returns actionable guidance for empty/error states.
-
-        Args:
-            value: Either a string placeholder key or a dict with "_placeholder" key.
-        """
-        tips: dict[str, str] = {
-            # Container placeholders (first-time user friendly)
-            "no_containers": "No containers running. Press n to start or run `scc start <path>`.",
-            # Session placeholders (first-time user friendly)
-            "no_sessions": "No sessions yet. Press n to create your first session.",
-            # Worktree placeholders - updated with actionable shortcuts
-            "no_worktrees": "No worktrees yet. Press c to create, w for recent, v for status.",
-            "no_git": "Not a git repository. Press i to init or c to clone.",
-            # Error placeholders (actionable doctor suggestion)
-            "error": "Unable to load data. Run `scc doctor` to diagnose.",
-            "config_error": "Configuration issue detected. Run `scc doctor` to fix it.",
-        }
-
-        # Extract placeholder key from dict if needed
-        placeholder_key = value
-        if isinstance(value, dict):
-            placeholder_key = value.get("_placeholder", "")
-
-        return tips.get(str(placeholder_key), "No details available for this item.")
+    def _get_placeholder_tip(self, item: PlaceholderItem) -> str:
+        """Get contextual help tip for placeholder items."""
+        return placeholder_tip(item.kind)
 
     def _compute_footer_hints(
         self, _standalone: bool, show_details: bool
@@ -531,33 +530,26 @@ class Dashboard:
 
         primary_action: str | None = None
         if self.state.active_tab == DashboardTab.STATUS:
-            if current:
-                if isinstance(current.value, dict):
-                    if current.value.get("_action") == "resume_last_session":
+            if current and isinstance(current.value, StatusItem):
+                match current.value.action:
+                    case StatusAction.RESUME_SESSION:
                         primary_action = "resume"
-                elif isinstance(current.value, str):
-                    if current.value == "start_session":
+                    case StatusAction.START_SESSION:
                         primary_action = "start"
-                    elif current.value == "team":
+                    case StatusAction.SWITCH_TEAM:
                         primary_action = "switch"
-                    elif current.value in {
-                        "containers",
-                        "sessions",
-                        "worktrees",
-                        "settings",
-                        "profile",
-                    }:
+                    case (
+                        StatusAction.OPEN_TAB
+                        | StatusAction.OPEN_PROFILE
+                        | StatusAction.OPEN_SETTINGS
+                    ):
                         primary_action = "open"
-                    elif current.value == "statusline_not_installed":
+                    case StatusAction.INSTALL_STATUSLINE:
                         primary_action = "install"
+                    case None:
+                        primary_action = None
         elif self.state.is_placeholder_selected():
-            is_startable = False
-            if current:
-                if isinstance(current.value, str):
-                    is_startable = current.value in {"no_containers", "no_sessions"}
-                elif isinstance(current.value, dict):
-                    is_startable = current.value.get("_startable", False)
-            if is_startable:
+            if current and isinstance(current.value, PlaceholderItem) and current.value.startable:
                 primary_action = "start"
         else:
             if self.state.active_tab == DashboardTab.SESSIONS:
@@ -582,8 +574,11 @@ class Dashboard:
 
         if self.state.active_tab == DashboardTab.WORKTREES and not show_details:
             is_git_repo = True
-            if current and isinstance(current.value, str):
-                is_git_repo = current.value not in {"no_git", "no_worktrees"}
+            if current and isinstance(current.value, PlaceholderItem):
+                is_git_repo = current.value.kind not in {
+                    PlaceholderKind.NO_GIT,
+                    PlaceholderKind.NO_WORKTREES,
+                }
             hints.append(FooterHint("c", "create" if is_git_repo else "clone"))
 
         hints.append(FooterHint("Tab", "tabs"))
@@ -687,7 +682,10 @@ class Dashboard:
                     self.state.status_message = "Details not available in Status tab"
                     return True
                 if self.state.is_placeholder_selected():
-                    self.state.status_message = self._get_placeholder_tip(current.value)
+                    if isinstance(current.value, PlaceholderItem):
+                        self.state.status_message = self._get_placeholder_tip(current.value)
+                    else:
+                        self.state.status_message = "No details available for this item"
                     return True
                 self.state.details_open = not self.state.details_open
                 return True
@@ -696,56 +694,40 @@ class Dashboard:
                 # On Status tab, Enter triggers different actions based on item
                 if self.state.active_tab == DashboardTab.STATUS:
                     current = self.state.list_state.current_item
-                    if current:
-                        if isinstance(current.value, dict):
-                            action = current.value.get("_action")
-                            if action == "resume_last_session":
-                                session = current.value.get("session")
-                                if isinstance(session, dict):
-                                    raise SessionResumeRequested(
-                                        session=session,
-                                        return_to=self.state.active_tab.name,
-                                    )
+                    if current and isinstance(current.value, StatusItem):
+                        status_action = current.value.action
+                        if status_action is StatusAction.RESUME_SESSION and current.value.session:
+                            raise SessionResumeRequested(
+                                session=current.value.session,
+                                return_to=self.state.active_tab.name,
+                            )
 
-                        # Start session row
-                        if current.value == "start_session":
+                        if status_action is StatusAction.START_SESSION:
                             raise StartRequested(
                                 return_to=self.state.active_tab.name,
                                 reason="dashboard_start",
                             )
 
-                        # Team row: same behavior as 't' key
-                        if current.value == "team":
+                        if status_action is StatusAction.SWITCH_TEAM:
                             if scc_config.is_standalone_mode():
                                 self.state.status_message = (
                                     "Teams require org mode. Run `scc setup` to configure."
                                 )
-                                return True  # Refresh to show message
+                                return True
                             raise TeamSwitchRequested()
 
-                        # Resource rows: drill down to corresponding tab
-                        tab_mapping: dict[str, DashboardTab] = {
-                            "containers": DashboardTab.CONTAINERS,
-                            "sessions": DashboardTab.SESSIONS,
-                            "worktrees": DashboardTab.WORKTREES,
-                        }
-                        target_tab = tab_mapping.get(current.value)
-                        if target_tab:
-                            # Clear filter on drill-down (avoids confusion)
+                        if status_action is StatusAction.OPEN_TAB and current.value.action_tab:
                             self.state.list_state.clear_filter()
-                            self.state = self.state.switch_tab(target_tab)
-                            return True  # Refresh to show new tab
+                            self.state = self.state.switch_tab(current.value.action_tab)
+                            return True
 
-                        # Statusline row: Enter triggers installation
-                        if current.value == "statusline_not_installed":
+                        if status_action is StatusAction.INSTALL_STATUSLINE:
                             raise StatuslineInstallRequested(return_to=self.state.active_tab.name)
 
-                        # Profile row: Enter opens profile menu
-                        if current.value == "profile":
+                        if status_action is StatusAction.OPEN_PROFILE:
                             raise ProfileMenuRequested(return_to=self.state.active_tab.name)
 
-                        # Settings row: Enter opens settings and maintenance screen
-                        if current.value == "settings":
+                        if status_action is StatusAction.OPEN_SETTINGS:
                             raise SettingsRequested(return_to=self.state.active_tab.name)
                 else:
                     # Resource tabs handling (Containers, Worktrees, Sessions)
@@ -754,85 +736,55 @@ class Dashboard:
                         return None
 
                     if self.state.is_placeholder_selected():
-                        # Placeholder or empty state: handle appropriately
-                        # Check if this is a startable placeholder
-                        # (containers/sessions empty → user can start a new session)
-                        is_startable = False
-                        reason = ""
-
-                        # String placeholders (containers, worktrees)
-                        if isinstance(current.value, str):
-                            startable_strings = {"no_containers", "no_sessions"}
-                            if current.value in startable_strings:
-                                is_startable = True
-                                reason = current.value
-
-                        # Dict placeholders (sessions tab uses dicts)
-                        elif isinstance(current.value, dict):
-                            if current.value.get("_startable"):
-                                is_startable = True
-                                reason = current.value.get("_placeholder", "unknown")
-
-                        if is_startable:
-                            # Uses .name (stable identifier) not .value (display string)
-                            raise StartRequested(
-                                return_to=self.state.active_tab.name,
-                                reason=reason,
-                            )
-                        # Non-startable placeholders show a tip
-                        self.state.status_message = self._get_placeholder_tip(current.value)
+                        if isinstance(current.value, PlaceholderItem):
+                            if current.value.startable:
+                                raise StartRequested(
+                                    return_to=self.state.active_tab.name,
+                                    reason=placeholder_start_reason(current.value),
+                                )
+                            self.state.status_message = self._get_placeholder_tip(current.value)
+                            return True
+                        self.state.status_message = "No details available for this item"
                         return True
 
-                    # Primary actions per resource tab
-                    if (
-                        self.state.active_tab == DashboardTab.SESSIONS
-                        and isinstance(current.value, dict)
-                        and not current.value.get("_placeholder")
+                    if self.state.active_tab == DashboardTab.SESSIONS and isinstance(
+                        current.value, SessionItem
                     ):
                         raise SessionResumeRequested(
-                            session=current.value,
+                            session=current.value.session,
                             return_to=self.state.active_tab.name,
                         )
 
                     if self.state.active_tab == DashboardTab.WORKTREES and isinstance(
-                        current.value, str
+                        current.value, WorktreeItem
                     ):
                         raise StartRequested(
                             return_to=self.state.active_tab.name,
-                            reason=f"worktree:{current.value}",
+                            reason=f"worktree:{current.value.path}",
                         )
 
-                    if self.state.active_tab == DashboardTab.CONTAINERS:
-                        from ...docker.core import ContainerInfo
+                    if self.state.active_tab == DashboardTab.CONTAINERS and isinstance(
+                        current.value, ContainerItem
+                    ):
+                        raise ContainerActionMenuRequested(
+                            container_id=current.value.container.id,
+                            container_name=current.value.container.name,
+                            return_to=self.state.active_tab.name,
+                        )
 
-                        container: ContainerInfo | None = None
-                        if isinstance(current.value, ContainerInfo):
-                            container = current.value
-                        elif isinstance(current.value, str):
-                            container = ContainerInfo(
-                                id=current.value,
-                                name=current.label,
-                                status="",
-                            )
-                        if container:
-                            raise ContainerActionMenuRequested(
-                                container_id=container.id,
-                                container_name=container.name,
-                                return_to=self.state.active_tab.name,
-                            )
-
-                    if self.state.active_tab == DashboardTab.SESSIONS:
-                        if isinstance(current.value, dict):
-                            raise SessionActionMenuRequested(
-                                session=current.value,
-                                return_to=self.state.active_tab.name,
-                            )
+                    if self.state.active_tab == DashboardTab.SESSIONS and isinstance(
+                        current.value, SessionItem
+                    ):
+                        raise SessionActionMenuRequested(
+                            session=current.value.session,
+                            return_to=self.state.active_tab.name,
+                        )
 
                     if self.state.active_tab == DashboardTab.WORKTREES and isinstance(
-                        current.value, str
+                        current.value, WorktreeItem
                     ):
                         raise WorktreeActionMenuRequested(
-                            worktree_path=current.value,
+                            worktree_path=current.value.path,
                             return_to=self.state.active_tab.name,
                         )
 
@@ -845,38 +797,28 @@ class Dashboard:
                     self.state.status_message = "No item selected"
                     return True
 
-                if self.state.active_tab == DashboardTab.CONTAINERS:
-                    from ...docker.core import ContainerInfo
-
-                    action_container: ContainerInfo | None = None
-                    if isinstance(current.value, ContainerInfo):
-                        action_container = current.value
-                    elif isinstance(current.value, str):
-                        action_container = ContainerInfo(
-                            id=current.value,
-                            name=current.label,
-                            status="",
-                        )
-                    if action_container:
-                        raise ContainerActionMenuRequested(
-                            container_id=action_container.id,
-                            container_name=action_container.name,
-                            return_to=self.state.active_tab.name,
-                        )
+                if self.state.active_tab == DashboardTab.CONTAINERS and isinstance(
+                    current.value, ContainerItem
+                ):
+                    raise ContainerActionMenuRequested(
+                        container_id=current.value.container.id,
+                        container_name=current.value.container.name,
+                        return_to=self.state.active_tab.name,
+                    )
 
                 if self.state.active_tab == DashboardTab.SESSIONS and isinstance(
-                    current.value, dict
+                    current.value, SessionItem
                 ):
                     raise SessionActionMenuRequested(
-                        session=current.value,
+                        session=current.value.session,
                         return_to=self.state.active_tab.name,
                     )
 
                 if self.state.active_tab == DashboardTab.WORKTREES and isinstance(
-                    current.value, str
+                    current.value, WorktreeItem
                 ):
                     raise WorktreeActionMenuRequested(
-                        worktree_path=current.value,
+                        worktree_path=current.value.path,
                         return_to=self.state.active_tab.name,
                     )
 
@@ -933,24 +875,22 @@ class Dashboard:
                     if self.state.active_tab == DashboardTab.STATUS:
                         if not self.state.list_state.filter_query:
                             raise SandboxImportRequested(return_to=self.state.active_tab.name)
-                    # Worktrees tab: initialize git repo (only when not in a git repo)
                     elif self.state.active_tab == DashboardTab.WORKTREES:
                         current = self.state.list_state.current_item
-                        # Only show when not in git repo (placeholder is no_git or no_worktrees)
+                        # Only show when placeholder indicates no git repo
                         is_non_git = (
                             current
-                            and isinstance(current.value, str)
-                            and current.value
+                            and isinstance(current.value, PlaceholderItem)
+                            and current.value.kind
                             in {
-                                "no_git",
-                                "no_worktrees",
+                                PlaceholderKind.NO_GIT,
+                                PlaceholderKind.NO_WORKTREES,
                             }
                         )
                         if is_non_git:
                             raise GitInitRequested(return_to=self.state.active_tab.name)
-                        else:
-                            self.state.status_message = "Already in a git repository"
-                            return True
+                        self.state.status_message = "Already in a git repository"
+                        return True
                 elif action.custom_key == "c":
                     # User pressed 'c' - create worktree (or clone if not git)
                     # Only active on Worktrees tab
@@ -958,8 +898,11 @@ class Dashboard:
                         current = self.state.list_state.current_item
                         # Check if we're in a git repo
                         is_git_repo = True
-                        if current and isinstance(current.value, str):
-                            is_git_repo = current.value not in {"no_git", "no_worktrees"}
+                        if current and isinstance(current.value, PlaceholderItem):
+                            is_git_repo = current.value.kind not in {
+                                PlaceholderKind.NO_GIT,
+                                PlaceholderKind.NO_WORKTREES,
+                            }
                         raise CreateWorktreeRequested(
                             return_to=self.state.active_tab.name,
                             is_git_repo=is_git_repo,
@@ -984,7 +927,9 @@ class Dashboard:
                         from ...docker.core import ContainerInfo
 
                         key_container: ContainerInfo | None = None
-                        if isinstance(current.value, ContainerInfo):
+                        if isinstance(current.value, ContainerItem):
+                            key_container = current.value.container
+                        elif isinstance(current.value, ContainerInfo):
                             key_container = current.value
                         elif isinstance(current.value, str):
                             # Legacy fallback when value is container ID

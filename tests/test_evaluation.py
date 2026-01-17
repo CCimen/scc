@@ -746,8 +746,8 @@ class TestEvaluateFunction:
 
     def test_evaluate_empty_config(self):
         """Empty EffectiveConfig produces empty EvaluationResult."""
+        from scc_cli.application.compute_effective_config import EffectiveConfig
         from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import EffectiveConfig
 
         config = EffectiveConfig()
         result = evaluate(config)
@@ -759,9 +759,9 @@ class TestEvaluateFunction:
 
     def test_evaluate_blocked_plugin_has_security_reason(self):
         """Blocked plugins get BlockReason.SECURITY annotation."""
+        from scc_cli.application.compute_effective_config import BlockedItem as ProfileBlockedItem
+        from scc_cli.application.compute_effective_config import EffectiveConfig
         from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import BlockedItem as ProfileBlockedItem
-        from scc_cli.profiles import EffectiveConfig
 
         config = EffectiveConfig(
             blocked_items=[
@@ -785,9 +785,9 @@ class TestEvaluateFunction:
 
     def test_evaluate_blocked_mcp_server_has_security_reason(self):
         """Blocked MCP servers get BlockReason.SECURITY annotation."""
+        from scc_cli.application.compute_effective_config import BlockedItem as ProfileBlockedItem
+        from scc_cli.application.compute_effective_config import EffectiveConfig
         from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import BlockedItem as ProfileBlockedItem
-        from scc_cli.profiles import EffectiveConfig
 
         config = EffectiveConfig(
             blocked_items=[
@@ -810,8 +810,8 @@ class TestEvaluateFunction:
 
     def test_evaluate_denied_plugin_has_delegation_reason(self):
         """Denied plugins get BlockReason.DELEGATION annotation."""
+        from scc_cli.application.compute_effective_config import DelegationDenied, EffectiveConfig
         from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import DelegationDenied, EffectiveConfig
 
         config = EffectiveConfig(
             denied_additions=[
@@ -835,8 +835,8 @@ class TestEvaluateFunction:
 
     def test_evaluate_denied_mcp_server_has_delegation_reason(self):
         """Denied MCP servers get BlockReason.DELEGATION annotation."""
+        from scc_cli.application.compute_effective_config import DelegationDenied, EffectiveConfig
         from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import DelegationDenied, EffectiveConfig
 
         config = EffectiveConfig(
             denied_additions=[
@@ -859,14 +859,14 @@ class TestEvaluateFunction:
 
     def test_evaluate_mixed_blocked_and_denied(self):
         """Config with both blocked and denied items converts correctly."""
-        from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import (
+        from scc_cli.application.compute_effective_config import (
             BlockedItem as ProfileBlockedItem,
         )
-        from scc_cli.profiles import (
+        from scc_cli.application.compute_effective_config import (
             DelegationDenied,
             EffectiveConfig,
         )
+        from scc_cli.evaluation import evaluate
 
         config = EffectiveConfig(
             blocked_items=[
@@ -914,14 +914,14 @@ class TestEvaluateFunction:
 
     def test_evaluate_preserves_target_types(self):
         """Target types are correctly preserved during conversion."""
-        from scc_cli.evaluation import evaluate
-        from scc_cli.profiles import (
+        from scc_cli.application.compute_effective_config import (
             BlockedItem as ProfileBlockedItem,
         )
-        from scc_cli.profiles import (
+        from scc_cli.application.compute_effective_config import (
             DelegationDenied,
             EffectiveConfig,
         )
+        from scc_cli.evaluation import evaluate
 
         config = EffectiveConfig(
             blocked_items=[

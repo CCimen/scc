@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from scc_cli.commands.launch import app as launch_app
+from scc_cli.commands.launch import flow as launch_flow
 from scc_cli.core import personal_profiles
 from scc_cli.marketplace.managed import ManagedState, save_managed_state
 
@@ -27,7 +27,7 @@ def test_apply_personal_profile_applies(tmp_path: Path) -> None:
         {},
     )
 
-    profile_id, applied = launch_app._apply_personal_profile(
+    profile_id, applied = launch_flow._apply_personal_profile(
         tmp_path, json_mode=True, non_interactive=True
     )
 

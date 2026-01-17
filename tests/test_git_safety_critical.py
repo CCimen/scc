@@ -27,6 +27,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli import git
+from scc_cli.ui import cleanup_worktree
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures for Real Git Operations
@@ -129,7 +130,7 @@ class TestCleanupWorktreeRmtreeFallback:
         with patch(
             "scc_cli.ui.git_interactive.confirm_with_layout", return_value=False
         ):  # Don't delete branch
-            result = git.cleanup_worktree(
+            result = cleanup_worktree(
                 repo,
                 worktree_setup["worktree_name"],
                 force=True,
@@ -160,7 +161,7 @@ class TestCleanupWorktreeRmtreeFallback:
         (worktree_path / ".git").write_text("corrupted")
 
         with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
-            git.cleanup_worktree(
+            cleanup_worktree(
                 repo,
                 worktree_setup["worktree_name"],
                 force=True,
@@ -190,7 +191,7 @@ class TestCleanupWorktreeRmtreeFallback:
 
         # Force cleanup (skips confirmation)
         with patch("scc_cli.ui.git_interactive.confirm_with_layout", return_value=False):
-            result = git.cleanup_worktree(
+            result = cleanup_worktree(
                 worktree_setup["repo"],
                 worktree_setup["worktree_name"],
                 force=True,
@@ -206,7 +207,7 @@ class TestCleanupWorktreeRmtreeFallback:
         """Attempting to clean up non-existent worktree should fail gracefully."""
         console = MagicMock()
 
-        result = git.cleanup_worktree(
+        result = cleanup_worktree(
             real_git_repo,
             "nonexistent-worktree",
             force=False,

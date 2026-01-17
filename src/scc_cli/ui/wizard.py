@@ -330,11 +330,11 @@ def pick_workspace_source(
 
     # Check current directory for project markers and git status
     # Import here to avoid circular dependencies
-    from scc_cli import git
+    from scc_cli.services import git as git_service
 
     cwd = Path.cwd()
     cwd_name = cwd.name or str(cwd)
-    is_git = git.is_git_repo(cwd)
+    is_git = git_service.is_git_repo(cwd)
 
     # Three-tier logic with git awareness:
     # 1. Suspicious directory (home, /, tmp) → don't show
@@ -569,12 +569,12 @@ def pick_team_repo(
             if expanded.exists():
                 return str(expanded)
 
-        # Need to clone - import git module here to avoid circular imports
-        from .. import git
+        # Need to clone - import here to avoid circular imports
+        from .git_interactive import clone_repo
 
         repo_url = result.get("url", "")
         if repo_url:
-            cloned_path = git.clone_repo(repo_url, workspace_base)
+            cloned_path = clone_repo(repo_url, workspace_base)
             if cloned_path:
                 return cloned_path
 
