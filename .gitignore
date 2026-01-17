@@ -59,3 +59,6 @@ specs/
 # Local development directories
 plugindocs/
 safetypluginclone/.claude/.state/
+
+# Local refactor checklist
+refactor-plan.md
