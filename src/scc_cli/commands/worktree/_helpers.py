@@ -21,7 +21,7 @@ def build_worktree_list_data(
     """Build worktree list data for JSON output.
 
     Args:
-        worktrees: List of worktree dictionaries from git.list_worktrees()
+        worktrees: List of worktree dictionaries from ui.list_worktrees()
         workspace: Path to the workspace
 
     Returns:

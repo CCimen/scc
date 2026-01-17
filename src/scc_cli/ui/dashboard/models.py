@@ -1,55 +1,26 @@
 """Data models for the dashboard module.
 
-This module contains the core data structures used by the dashboard:
-- DashboardTab: Enum for available tabs
+This module contains the UI data structures used by the dashboard:
 - TabData: Content for a single tab
 - DashboardState: State management for the dashboard
 
-These models are intentionally simple dataclasses with no external dependencies
-beyond the UI layer, enabling clean separation and testability.
+Dashboard tab identities and view models live in the application layer, keeping
+UI models focused on rendering and navigation.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum, auto
-from typing import Any
+
+from scc_cli.application.dashboard import (
+    TAB_ORDER,
+    DashboardItem,
+    DashboardTab,
+    PlaceholderItem,
+)
 
 from ..list_screen import ListItem, ListState
-
-
-class DashboardTab(Enum):
-    """Available dashboard tabs.
-
-    Each tab represents a major resource category in SCC.
-    Tabs are displayed in definition order (Status first, Worktrees last).
-    """
-
-    STATUS = auto()
-    CONTAINERS = auto()
-    SESSIONS = auto()
-    WORKTREES = auto()
-
-    @property
-    def display_name(self) -> str:
-        """Human-readable name for display in chrome."""
-        names = {
-            DashboardTab.STATUS: "Status",
-            DashboardTab.CONTAINERS: "Containers",
-            DashboardTab.SESSIONS: "Sessions",
-            DashboardTab.WORKTREES: "Worktrees",
-        }
-        return names[self]
-
-
-# Ordered list for tab cycling
-TAB_ORDER: tuple[DashboardTab, ...] = (
-    DashboardTab.STATUS,
-    DashboardTab.CONTAINERS,
-    DashboardTab.SESSIONS,
-    DashboardTab.WORKTREES,
-)
 
 
 @dataclass
@@ -59,17 +30,14 @@ class TabData:
     Attributes:
         tab: The tab identifier.
         title: Display title for the tab content area.
-        items: List items to display in this tab. Value type varies by tab:
-            - Containers: ContainerInfo (preferred) or str (container ID)
-            - Worktrees: str (worktree name)
-            - Sessions: dict[str, Any] (full session data for details pane)
+        items: List items to display in this tab.
         count_active: Number of active items (e.g., running containers).
         count_total: Total number of items.
     """
 
     tab: DashboardTab
     title: str
-    items: Sequence[ListItem[Any]]
+    items: Sequence[ListItem[DashboardItem]]
     count_active: int
     count_total: int
 
@@ -100,7 +68,7 @@ class DashboardState:
 
     active_tab: DashboardTab
     tabs: dict[DashboardTab, TabData]
-    list_state: ListState[str]
+    list_state: ListState[DashboardItem]
     status_message: str | None = None
     details_open: bool = False
     help_visible: bool = False
@@ -115,12 +83,7 @@ class DashboardState:
     def is_placeholder_selected(self) -> bool:
         """Check if the current selection is a placeholder row.
 
-        Placeholder rows represent empty states or errors (e.g., "No containers",
-        "Error loading sessions") and shouldn't show details.
-
-        Placeholders can be identified by:
-        - String value matching known placeholder names (containers, worktrees)
-        - Dict value with "_placeholder" key (sessions)
+        Placeholder rows represent empty states or errors and shouldn't show details.
 
         Returns:
             True if current item is a placeholder, False otherwise.
@@ -129,25 +92,7 @@ class DashboardState:
         if not current:
             return True  # No item = treat as placeholder
 
-        # Known placeholder string values from tab data loaders
-        placeholder_values = {
-            "no_containers",
-            "no_sessions",
-            "no_worktrees",
-            "no_git",
-            "error",
-            "config_error",
-        }
-
-        # Check string placeholders (must be string type first - dicts are unhashable)
-        if isinstance(current.value, str) and current.value in placeholder_values:
-            return True
-
-        # Check dict placeholders (sessions tab uses dicts)
-        if isinstance(current.value, dict) and "_placeholder" in current.value:
-            return True
-
-        return False
+        return isinstance(current.value, PlaceholderItem)
 
     def switch_tab(self, tab: DashboardTab) -> DashboardState:
         """Create new state with different active tab.

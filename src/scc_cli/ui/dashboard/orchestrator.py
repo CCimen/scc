@@ -19,6 +19,8 @@ from ...console import get_err_console
 if TYPE_CHECKING:
     from rich.console import Console
 
+from scc_cli.application import dashboard as app_dashboard
+
 from ...confirm import Confirm
 from ..chrome import print_with_layout
 from ..keys import (
@@ -43,8 +45,8 @@ from ..keys import (
 )
 from ..list_screen import ListState
 from ._dashboard import Dashboard
-from .loaders import _load_all_tab_data
-from .models import DashboardState, DashboardTab
+from .loaders import _to_tab_data
+from .models import DashboardState
 
 
 def run_dashboard() -> None:
@@ -70,219 +72,263 @@ def run_dashboard() -> None:
         _show_onboarding_banner()
         scc_config.mark_onboarding_seen()
 
-    # Track which tab to restore after flow (uses .name for stability)
-    restore_tab: str | None = None
-    # Toast message to show on next dashboard iteration (e.g., "Start cancelled")
-    toast_message: str | None = None
-    # Track verbose worktree status display (persists across reloads)
-    verbose_worktrees: bool = False
+    flow_state = app_dashboard.DashboardFlowState()
 
     while True:
-        # Load real data for all tabs (pass verbose flag for worktrees)
-        tabs = _load_all_tab_data(verbose_worktrees=verbose_worktrees)
-
-        # Determine initial tab (restore previous or default to STATUS)
-        initial_tab = DashboardTab.STATUS
-        if restore_tab:
-            # Find tab by name (stable identifier)
-            for tab in DashboardTab:
-                if tab.name == restore_tab:
-                    initial_tab = tab
-                    break
-            restore_tab = None  # Clear after use
-
-        state = DashboardState(
-            active_tab=initial_tab,
-            tabs=tabs,
-            list_state=ListState(items=tabs[initial_tab].items),
-            status_message=toast_message,  # Show any pending toast
-            verbose_worktrees=verbose_worktrees,  # Preserve verbose state
+        view, flow_state = app_dashboard.build_dashboard_view(
+            flow_state,
+            app_dashboard.load_all_tab_data,
         )
-        toast_message = None  # Clear after use
+        tabs = {tab: _to_tab_data(tab_data) for tab, tab_data in view.tabs.items()}
+        state = DashboardState(
+            active_tab=view.active_tab,
+            tabs=tabs,
+            list_state=ListState(items=tabs[view.active_tab].items),
+            status_message=view.status_message,
+            verbose_worktrees=view.verbose_worktrees,
+        )
 
         dashboard = Dashboard(state)
         try:
             dashboard.run()
-            break  # Normal exit (q or Esc)
+            break
         except TeamSwitchRequested:
-            # User pressed 't' - show team picker then reload dashboard
-            _handle_team_switch()
-            # Loop continues to reload dashboard with new team
-
-        except StartRequested as start_req:
-            # User pressed Enter on startable placeholder
-            # Execute start flow OUTSIDE Rich Live (critical: avoids nested Live)
-            restore_tab = start_req.return_to
-            result = _handle_start_flow(start_req.reason)
-
-            if result is None:
-                # User pressed q: quit app entirely
+            flow_state, should_exit = _apply_event(flow_state, app_dashboard.TeamSwitchEvent())
+            if should_exit:
                 break
 
-            if result is False:
-                # User pressed Esc: go back to dashboard, show toast
-                toast_message = "Start cancelled"
-            # Loop continues to reload dashboard with fresh data
+        except StartRequested as start_req:
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.StartFlowEvent(
+                    return_to=_resolve_tab(start_req.return_to),
+                    reason=start_req.reason,
+                ),
+            )
+            if should_exit:
+                break
 
         except RefreshRequested as refresh_req:
-            # User pressed 'r' - just reload data
-            restore_tab = refresh_req.return_to
-            # Loop continues with fresh data (no additional action needed)
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.RefreshEvent(return_to=_resolve_tab(refresh_req.return_to)),
+            )
+            if should_exit:
+                break
 
         except SessionResumeRequested as resume_req:
-            # User pressed Enter on a session item → resume it
-            restore_tab = resume_req.return_to
-            success = _handle_session_resume(resume_req.session)
-
-            if not success:
-                # Resume failed (e.g., missing workspace) - show toast
-                toast_message = "Session resume failed"
-            else:
-                # Successfully launched - exit dashboard
-                # (container is running, user is now in Claude)
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.SessionResumeEvent(
+                    return_to=_resolve_tab(resume_req.return_to),
+                    session=resume_req.session,
+                ),
+            )
+            if should_exit:
                 break
 
         except StatuslineInstallRequested as statusline_req:
-            # User pressed 'y' on statusline row - install statusline
-            restore_tab = statusline_req.return_to
-            success = _handle_statusline_install()
-
-            if success:
-                toast_message = "Statusline installed successfully"
-            else:
-                toast_message = "Statusline installation failed"
-            # Loop continues to reload dashboard with fresh data
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.StatuslineInstallEvent(
+                    return_to=_resolve_tab(statusline_req.return_to)
+                ),
+            )
+            if should_exit:
+                break
 
         except RecentWorkspacesRequested as recent_req:
-            # User pressed 'w' - show recent workspaces picker
-            restore_tab = recent_req.return_to
-            selected_workspace = _handle_recent_workspaces()
-
-            if selected_workspace is None:
-                # User cancelled or quit
-                toast_message = "Cancelled"
-            elif selected_workspace:
-                # User selected a workspace - start session in it
-                # For now, just show message; full integration comes later
-                toast_message = f"Selected: {selected_workspace}"
-            # Loop continues to reload dashboard
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.RecentWorkspacesEvent(return_to=_resolve_tab(recent_req.return_to)),
+            )
+            if should_exit:
+                break
 
         except GitInitRequested as init_req:
-            # User pressed 'i' - initialize git repo
-            restore_tab = init_req.return_to
-            success = _handle_git_init()
-
-            if success:
-                toast_message = "Git repository initialized"
-            else:
-                toast_message = "Git init cancelled or failed"
-            # Loop continues to reload dashboard
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.GitInitEvent(return_to=_resolve_tab(init_req.return_to)),
+            )
+            if should_exit:
+                break
 
         except CreateWorktreeRequested as create_req:
-            # User pressed 'c' - create worktree or clone
-            restore_tab = create_req.return_to
-
-            if create_req.is_git_repo:
-                success = _handle_create_worktree()
-                if success:
-                    toast_message = "Worktree created"
-                else:
-                    toast_message = "Worktree creation cancelled"
-            else:
-                success = _handle_clone()
-                if success:
-                    toast_message = "Repository cloned"
-                else:
-                    toast_message = "Clone cancelled"
-            # Loop continues to reload dashboard
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.CreateWorktreeEvent(
+                    return_to=_resolve_tab(create_req.return_to),
+                    is_git_repo=create_req.is_git_repo,
+                ),
+            )
+            if should_exit:
+                break
 
         except VerboseToggleRequested as verbose_req:
-            # User pressed 'v' - toggle verbose worktree status
-            restore_tab = verbose_req.return_to
-            verbose_worktrees = verbose_req.verbose
-            toast_message = "Status on" if verbose_worktrees else "Status off"
-            # Loop continues with new verbose setting
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.VerboseToggleEvent(
+                    return_to=_resolve_tab(verbose_req.return_to),
+                    verbose=verbose_req.verbose,
+                ),
+            )
+            if should_exit:
+                break
 
         except SettingsRequested as settings_req:
-            # User pressed 's' - open settings and maintenance screen
-            restore_tab = settings_req.return_to
-            settings_result = _handle_settings()
-
-            if settings_result:
-                toast_message = settings_result  # Success message from settings action
-            # Loop continues to reload dashboard
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.SettingsEvent(return_to=_resolve_tab(settings_req.return_to)),
+            )
+            if should_exit:
+                break
 
         except ContainerStopRequested as container_req:
-            restore_tab = container_req.return_to
-            success, message = _handle_container_stop(
-                container_req.container_id,
-                container_req.container_name,
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.ContainerStopEvent(
+                    return_to=_resolve_tab(container_req.return_to),
+                    container_id=container_req.container_id,
+                    container_name=container_req.container_name,
+                ),
             )
-            toast_message = (
-                message if message else ("Container stopped" if success else "Stop failed")
-            )
+            if should_exit:
+                break
 
         except ContainerResumeRequested as container_req:
-            restore_tab = container_req.return_to
-            success, message = _handle_container_resume(
-                container_req.container_id,
-                container_req.container_name,
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.ContainerResumeEvent(
+                    return_to=_resolve_tab(container_req.return_to),
+                    container_id=container_req.container_id,
+                    container_name=container_req.container_name,
+                ),
             )
-            toast_message = (
-                message if message else ("Container resumed" if success else "Resume failed")
-            )
+            if should_exit:
+                break
 
         except ContainerRemoveRequested as container_req:
-            restore_tab = container_req.return_to
-            success, message = _handle_container_remove(
-                container_req.container_id,
-                container_req.container_name,
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.ContainerRemoveEvent(
+                    return_to=_resolve_tab(container_req.return_to),
+                    container_id=container_req.container_id,
+                    container_name=container_req.container_name,
+                ),
             )
-            toast_message = (
-                message if message else ("Container removed" if success else "Remove failed")
-            )
+            if should_exit:
+                break
 
         except ProfileMenuRequested as profile_req:
-            # User pressed 'p' - show profile quick menu
-            restore_tab = profile_req.return_to
-            profile_result = _handle_profile_menu()
-
-            if profile_result:
-                toast_message = profile_result  # Success message from profile action
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.ProfileMenuEvent(return_to=_resolve_tab(profile_req.return_to)),
+            )
+            if should_exit:
+                break
 
         except SandboxImportRequested as import_req:
-            # User pressed 'i' - import sandbox plugins
-            restore_tab = import_req.return_to
-            import_result = _handle_sandbox_import()
-
-            if import_result:
-                toast_message = import_result  # Success message from import
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.SandboxImportEvent(return_to=_resolve_tab(import_req.return_to)),
+            )
+            if should_exit:
+                break
 
         except ContainerActionMenuRequested as action_req:
-            # User triggered container action menu (Enter or Space on container)
-            restore_tab = action_req.return_to
-            action_result = _handle_container_action_menu(
-                action_req.container_id, action_req.container_name
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.ContainerActionMenuEvent(
+                    return_to=_resolve_tab(action_req.return_to),
+                    container_id=action_req.container_id,
+                    container_name=action_req.container_name,
+                ),
             )
-
-            if action_result:
-                toast_message = action_result
+            if should_exit:
+                break
 
         except SessionActionMenuRequested as action_req:
-            # User triggered session action menu (Enter or Space on session)
-            restore_tab = action_req.return_to
-            action_result = _handle_session_action_menu(action_req.session)
-
-            if action_result:
-                toast_message = action_result
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.SessionActionMenuEvent(
+                    return_to=_resolve_tab(action_req.return_to),
+                    session=action_req.session,
+                ),
+            )
+            if should_exit:
+                break
 
         except WorktreeActionMenuRequested as action_req:
-            # User triggered worktree action menu (Enter or Space on worktree)
-            restore_tab = action_req.return_to
-            action_result = _handle_worktree_action_menu(action_req.worktree_path)
+            flow_state, should_exit = _apply_event(
+                flow_state,
+                app_dashboard.WorktreeActionMenuEvent(
+                    return_to=_resolve_tab(action_req.return_to),
+                    worktree_path=action_req.worktree_path,
+                ),
+            )
+            if should_exit:
+                break
 
-            if action_result:
-                toast_message = action_result
+
+def _resolve_tab(tab_name: str | None) -> app_dashboard.DashboardTab:
+    if not tab_name:
+        return app_dashboard.DashboardTab.STATUS
+    try:
+        return app_dashboard.DashboardTab[tab_name]
+    except KeyError:
+        return app_dashboard.DashboardTab.STATUS
+
+
+def _apply_event(
+    state: app_dashboard.DashboardFlowState,
+    event: app_dashboard.DashboardEvent,
+) -> tuple[app_dashboard.DashboardFlowState, bool]:
+    step = app_dashboard.handle_dashboard_event(state, event)
+    if isinstance(step, app_dashboard.DashboardFlowOutcome):
+        return step.state, step.exit_dashboard
+    result = _run_effect(step.effect)
+    outcome = app_dashboard.apply_dashboard_effect_result(step.state, step.effect, result)
+    return outcome.state, outcome.exit_dashboard
+
+
+def _run_effect(effect: app_dashboard.DashboardEffect) -> object:
+    if isinstance(effect, app_dashboard.TeamSwitchEvent):
+        _handle_team_switch()
+        return None
+    if isinstance(effect, app_dashboard.StartFlowEvent):
+        return _handle_start_flow(effect.reason)
+    if isinstance(effect, app_dashboard.SessionResumeEvent):
+        return _handle_session_resume(effect.session)
+    if isinstance(effect, app_dashboard.StatuslineInstallEvent):
+        return _handle_statusline_install()
+    if isinstance(effect, app_dashboard.RecentWorkspacesEvent):
+        return _handle_recent_workspaces()
+    if isinstance(effect, app_dashboard.GitInitEvent):
+        return _handle_git_init()
+    if isinstance(effect, app_dashboard.CreateWorktreeEvent):
+        if effect.is_git_repo:
+            return _handle_create_worktree()
+        return _handle_clone()
+    if isinstance(effect, app_dashboard.SettingsEvent):
+        return _handle_settings()
+    if isinstance(effect, app_dashboard.ContainerStopEvent):
+        return _handle_container_stop(effect.container_id, effect.container_name)
+    if isinstance(effect, app_dashboard.ContainerResumeEvent):
+        return _handle_container_resume(effect.container_id, effect.container_name)
+    if isinstance(effect, app_dashboard.ContainerRemoveEvent):
+        return _handle_container_remove(effect.container_id, effect.container_name)
+    if isinstance(effect, app_dashboard.ProfileMenuEvent):
+        return _handle_profile_menu()
+    if isinstance(effect, app_dashboard.SandboxImportEvent):
+        return _handle_sandbox_import()
+    if isinstance(effect, app_dashboard.ContainerActionMenuEvent):
+        return _handle_container_action_menu(effect.container_id, effect.container_name)
+    if isinstance(effect, app_dashboard.SessionActionMenuEvent):
+        return _handle_session_action_menu(effect.session)
+    if isinstance(effect, app_dashboard.WorktreeActionMenuEvent):
+        return _handle_worktree_action_menu(effect.worktree_path)
+    msg = f"Unsupported dashboard effect: {effect}"
+    raise ValueError(msg)
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
@@ -372,27 +418,8 @@ def _handle_team_switch() -> None:
         )
 
 
-def _handle_start_flow(reason: str) -> bool | None:
-    """Handle start flow request from dashboard.
-
-    Runs the interactive start wizard and launches a sandbox if user completes it.
-    Executes OUTSIDE Rich Live context (the dashboard has already exited
-    via the exception unwind before this is called).
-
-    Three-state return contract:
-    - True: Sandbox launched successfully
-    - False: User pressed Esc (back to dashboard)
-    - None: User pressed q (quit app entirely)
-
-    Args:
-        reason: Why the start flow was triggered. Can be:
-            - "no_containers", "no_sessions": Empty state triggers (show wizard)
-            - "worktree:/path/to/worktree": Start session in specific worktree
-
-    Returns:
-        True if wizard completed successfully, False if user wants to go back,
-        None if user wants to quit entirely.
-    """
+def _handle_start_flow(reason: str) -> app_dashboard.StartFlowResult:
+    """Handle start flow request from dashboard."""
     from ...commands.launch import run_start_wizard_flow
 
     console = get_err_console()
@@ -415,22 +442,12 @@ def _handle_start_flow(reason: str) -> bool | None:
 
     # Run the wizard with allow_back=True for dashboard context
     # Returns: True (success), False (Esc/back), None (q/quit)
-    return run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
+    result = run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
+    return app_dashboard.StartFlowResult.from_legacy(result)
 
 
-def _handle_worktree_start(worktree_path: str) -> bool | None:
-    """Handle starting a session in a specific worktree.
-
-    Launches a new session directly in the selected worktree, bypassing
-    the wizard workspace selection since the user already selected a worktree.
-
-    Args:
-        worktree_path: Absolute path to the worktree directory.
-
-    Returns:
-        True if session started successfully, False if cancelled,
-        None if user wants to quit entirely.
-    """
+def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
+    """Handle starting a session in a specific worktree."""
     from pathlib import Path
 
     from rich.status import Status
@@ -453,7 +470,7 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
     # Validate workspace exists
     if not workspace_path.exists():
         console.print(f"[red]Worktree no longer exists: {worktree_path}[/red]")
-        return False
+        return app_dashboard.StartFlowResult.from_legacy(False)
 
     console.print(f"[cyan]Starting session in:[/cyan] {workspace_name}")
     console.print()
@@ -467,7 +484,7 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
         resolved_path = _validate_and_resolve_workspace(str(workspace_path))
         if resolved_path is None:
             console.print("[red]Workspace validation failed[/red]")
-            return False
+            return app_dashboard.StartFlowResult.from_legacy(False)
         workspace_path = resolved_path
 
         # Get current team from config
@@ -500,14 +517,14 @@ def _handle_worktree_start(worktree_path: str) -> bool | None:
             fresh=False,
             plugin_settings=plugin_settings,
         )
-        return True
+        return app_dashboard.StartFlowResult.from_legacy(True)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled[/yellow]")
-        return False
+        return app_dashboard.StartFlowResult.from_legacy(False)
     except Exception as e:
         console.print(f"[red]Error starting session: {e}[/red]")
-        return False
+        return app_dashboard.StartFlowResult.from_legacy(False)
 
 
 def _handle_session_resume(session: dict[str, Any]) -> bool:
@@ -589,11 +606,11 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
 
         # Show resume info
         workspace_name = workspace_path.name
-        console.print(f"[cyan]Resuming session:[/cyan] {workspace_name}")
+        print_with_layout(console, f"[cyan]Resuming session:[/cyan] {workspace_name}")
         if team:
-            console.print(f"[dim]Team: {team}[/dim]")
+            print_with_layout(console, f"[dim]Team: {team}[/dim]")
         if current_branch:
-            console.print(f"[dim]Branch: {current_branch}[/dim]")
+            print_with_layout(console, f"[dim]Branch: {current_branch}[/dim]")
         console.print()
 
         # Launch sandbox with resume flag
@@ -1028,9 +1045,11 @@ def _handle_worktree_action_menu(worktree_path: str) -> str | None:
     if selected == "start":
         # Reuse worktree start flow directly
         result = _handle_worktree_start(worktree_path)
-        if result is None:
+        if result.decision is app_dashboard.StartFlowDecision.QUIT:
             return "Cancelled"
-        return "Started session" if result else "Start cancelled"
+        if result.decision is app_dashboard.StartFlowDecision.LAUNCHED:
+            return "Started session"
+        return "Start cancelled"
 
     if selected == "open_shell":
         console.print(f"[cyan]cd {worktree_path}[/cyan]")

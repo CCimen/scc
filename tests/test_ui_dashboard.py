@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
+from scc_cli.application import dashboard as app_dashboard
 from scc_cli.ui.dashboard import (
     Dashboard,
     DashboardState,
@@ -69,9 +70,15 @@ class TestDashboardTab:
 class TestTabData:
     """Test TabData dataclass."""
 
-    def _make_items(self, labels: list[str]) -> list[ListItem[str]]:
+    def _make_items(self, labels: list[str]) -> list[ListItem[app_dashboard.DashboardItem]]:
         """Helper to create list items."""
-        return [ListItem(value=label, label=label) for label in labels]
+        return [
+            ListItem(
+                value=app_dashboard.StatusItem(label=label, description=""),
+                label=label,
+            )
+            for label in labels
+        ]
 
     def test_tab_data_creation(self) -> None:
         """TabData can be created with required fields."""
@@ -111,7 +118,14 @@ class TestDashboardState:
     def _make_tab_data(self, tab: DashboardTab, count: int = 2) -> TabData:
         """Helper to create tab data."""
         items = [
-            ListItem(value=f"{tab.name}_{i}", label=f"{tab.name} Item {i}") for i in range(count)
+            ListItem(
+                value=app_dashboard.StatusItem(
+                    label=f"{tab.name} Item {i}",
+                    description="",
+                ),
+                label=f"{tab.name} Item {i}",
+            )
+            for i in range(count)
         ]
         return TabData(
             tab=tab,
@@ -210,7 +224,12 @@ class TestDashboardTabCycling:
         """Helper to create state with all tabs."""
         tabs = {}
         for tab in DashboardTab:
-            items = [ListItem(value=tab.name, label=tab.name)]
+            items = [
+                ListItem(
+                    value=app_dashboard.StatusItem(label=tab.name, description=""),
+                    label=tab.name,
+                )
+            ]
             tabs[tab] = TabData(
                 tab=tab,
                 title=tab.display_name,
@@ -275,7 +294,12 @@ class TestDashboardChromeConfig:
         """Helper to create a dashboard instance."""
         tabs = {}
         for tab in DashboardTab:
-            items = [ListItem(value=tab.name, label=tab.name)]
+            items = [
+                ListItem(
+                    value=app_dashboard.StatusItem(label=tab.name, description=""),
+                    label=tab.name,
+                )
+            ]
             tabs[tab] = TabData(
                 tab=tab,
                 title=tab.display_name,
@@ -346,8 +370,20 @@ class TestDashboardRendering:
         tabs = {}
         for tab in DashboardTab:
             items = [
-                ListItem(value=f"{tab.name}_1", label=f"{tab.display_name} Item 1"),
-                ListItem(value=f"{tab.name}_2", label=f"{tab.display_name} Item 2"),
+                ListItem(
+                    value=app_dashboard.StatusItem(
+                        label=f"{tab.display_name} Item 1",
+                        description="",
+                    ),
+                    label=f"{tab.display_name} Item 1",
+                ),
+                ListItem(
+                    value=app_dashboard.StatusItem(
+                        label=f"{tab.display_name} Item 2",
+                        description="",
+                    ),
+                    label=f"{tab.display_name} Item 2",
+                ),
             ]
             tabs[tab] = TabData(
                 tab=tab,
@@ -425,7 +461,15 @@ class TestLoadStatusTabData:
 
                     data = _load_status_tab_data()
 
-                    team_item = next((item for item in data.items if item.value == "team"), None)
+                    team_item = next(
+                        (
+                            item
+                            for item in data.items
+                            if isinstance(item.value, app_dashboard.StatusItem)
+                            and item.value.action is app_dashboard.StatusAction.SWITCH_TEAM
+                        ),
+                        None,
+                    )
                     assert team_item is not None
                     # Team name is in the label using colon syntax
                     assert "production-team" in team_item.label
@@ -441,7 +485,15 @@ class TestLoadStatusTabData:
 
                     data = _load_status_tab_data()
 
-                    team_item = next((item for item in data.items if item.value == "team"), None)
+                    team_item = next(
+                        (
+                            item
+                            for item in data.items
+                            if isinstance(item.value, app_dashboard.StatusItem)
+                            and item.value.action is app_dashboard.StatusAction.SWITCH_TEAM
+                        ),
+                        None,
+                    )
                     assert team_item is not None
                     # Uses colon syntax: "Team: none"
                     assert "none" in team_item.label
@@ -463,7 +515,14 @@ class TestLoadStatusTabData:
                     data = _load_status_tab_data()
 
                     containers_item = next(
-                        (item for item in data.items if item.value == "containers"), None
+                        (
+                            item
+                            for item in data.items
+                            if isinstance(item.value, app_dashboard.StatusItem)
+                            and item.value.action is app_dashboard.StatusAction.OPEN_TAB
+                            and item.value.action_tab == DashboardTab.CONTAINERS
+                        ),
+                        None,
                     )
                     assert containers_item is not None
                     # Container count in label using colon syntax: "Containers: 1/2 running"
@@ -476,7 +535,15 @@ class TestLoadStatusTabData:
 
             data = _load_status_tab_data()
 
-            error_item = next((item for item in data.items if item.value == "config_error"), None)
+            error_item = next(
+                (
+                    item
+                    for item in data.items
+                    if isinstance(item.value, app_dashboard.StatusItem)
+                    and "Config: error" in item.label
+                ),
+                None,
+            )
             assert error_item is not None
             # Config error in label using colon syntax: "Config: error"
             assert "error" in error_item.label
@@ -509,8 +576,9 @@ class TestLoadContainersTabData:
             data = _load_containers_tab_data()
 
             assert len(data.items) == 1
-            # Value is now a ContainerInfo object for full metadata access
-            assert data.items[0].value.id == "abc123"
+            container_item = data.items[0].value
+            assert isinstance(container_item, app_dashboard.ContainerItem)
+            assert container_item.container.id == "abc123"
             assert data.items[0].label == "scc-myproject"
             # Description shows: workspace name · status indicator · time
             assert "myproject" in data.items[0].description
@@ -548,6 +616,9 @@ class TestLoadContainersTabData:
             data = _load_containers_tab_data()
 
             assert len(data.items) == 1
+            placeholder = data.items[0].value
+            assert isinstance(placeholder, app_dashboard.PlaceholderItem)
+            assert placeholder.kind is app_dashboard.PlaceholderKind.NO_CONTAINERS
             assert "No containers" in data.items[0].label
 
     def test_handles_docker_error_gracefully(self) -> None:
@@ -558,7 +629,9 @@ class TestLoadContainersTabData:
             data = _load_containers_tab_data()
 
             assert len(data.items) == 1
-            assert data.items[0].value == "error"
+            placeholder = data.items[0].value
+            assert isinstance(placeholder, app_dashboard.PlaceholderItem)
+            assert placeholder.kind is app_dashboard.PlaceholderKind.ERROR
             assert "Unable to query Docker" in data.items[0].description
 
 
@@ -602,6 +675,9 @@ class TestLoadSessionsTabData:
             data = _load_sessions_tab_data()
 
             assert len(data.items) == 1
+            placeholder = data.items[0].value
+            assert isinstance(placeholder, app_dashboard.PlaceholderItem)
+            assert placeholder.kind is app_dashboard.PlaceholderKind.NO_SESSIONS
             assert "No sessions" in data.items[0].label
 
     def test_handles_sessions_error_gracefully(self) -> None:
@@ -612,7 +688,9 @@ class TestLoadSessionsTabData:
             data = _load_sessions_tab_data()
 
             assert len(data.items) == 1
-            assert data.items[0].value == "error"
+            placeholder = data.items[0].value
+            assert isinstance(placeholder, app_dashboard.PlaceholderItem)
+            assert placeholder.kind is app_dashboard.PlaceholderKind.ERROR
 
 
 class TestLoadWorktreesTabData:
@@ -620,7 +698,7 @@ class TestLoadWorktreesTabData:
 
     def test_returns_tab_data_with_worktrees_tab(self) -> None:
         """Returns TabData for WORKTREES tab."""
-        with patch("scc_cli.git.list_worktrees") as mock_git:
+        with patch("scc_cli.services.git.worktree.get_worktrees_data") as mock_git:
             mock_git.return_value = []
 
             data = _load_worktrees_tab_data()
@@ -630,7 +708,7 @@ class TestLoadWorktreesTabData:
 
     def test_lists_worktrees_with_branch_info(self) -> None:
         """Lists worktrees with branch and status."""
-        with patch("scc_cli.git.list_worktrees") as mock_git:
+        with patch("scc_cli.services.git.worktree.get_worktrees_data") as mock_git:
             worktree = MagicMock()
             worktree.path = "/home/user/project-main"
             worktree.branch = "main"
@@ -647,7 +725,7 @@ class TestLoadWorktreesTabData:
 
     def test_shows_modified_indicator(self) -> None:
         """Shows modified indicator for worktrees with changes."""
-        with patch("scc_cli.git.list_worktrees") as mock_git:
+        with patch("scc_cli.services.git.worktree.get_worktrees_data") as mock_git:
             worktree = MagicMock()
             worktree.path = "/home/user/feature"
             worktree.branch = "feature/test"
@@ -661,22 +739,28 @@ class TestLoadWorktreesTabData:
 
     def test_shows_no_worktrees_message_when_not_git_repo(self) -> None:
         """Shows message when not in a git repository."""
-        with patch("scc_cli.git.list_worktrees") as mock_git:
+        with patch("scc_cli.services.git.worktree.get_worktrees_data") as mock_git:
             mock_git.return_value = []
 
             data = _load_worktrees_tab_data()
 
             assert len(data.items) == 1
+            placeholder = data.items[0].value
+            assert isinstance(placeholder, app_dashboard.PlaceholderItem)
+            assert placeholder.kind is app_dashboard.PlaceholderKind.NO_WORKTREES
             assert "No worktrees" in data.items[0].label
 
     def test_handles_git_error_gracefully(self) -> None:
         """Shows error message when git query fails."""
-        with patch("scc_cli.git.list_worktrees") as mock_git:
+        with patch("scc_cli.services.git.worktree.get_worktrees_data") as mock_git:
             mock_git.side_effect = Exception("Git error")
 
             data = _load_worktrees_tab_data()
 
             assert len(data.items) == 1
+            placeholder = data.items[0].value
+            assert isinstance(placeholder, app_dashboard.PlaceholderItem)
+            assert placeholder.kind is app_dashboard.PlaceholderKind.NO_GIT
             assert "Not available" in data.items[0].label
 
 
@@ -685,42 +769,41 @@ class TestLoadAllTabData:
 
     def test_returns_dict_with_all_tabs(self) -> None:
         """Returns data for all dashboard tabs."""
-        with patch("scc_cli.ui.dashboard._load_status_tab_data") as mock_status:
-            with patch("scc_cli.ui.dashboard._load_containers_tab_data") as mock_containers:
-                with patch("scc_cli.ui.dashboard._load_sessions_tab_data") as mock_sessions:
-                    with patch("scc_cli.ui.dashboard._load_worktrees_tab_data") as mock_worktrees:
-                        mock_status.return_value = TabData(
-                            tab=DashboardTab.STATUS,
-                            title="Status",
-                            items=[],
-                            count_active=0,
-                            count_total=0,
-                        )
-                        mock_containers.return_value = TabData(
-                            tab=DashboardTab.CONTAINERS,
-                            title="Containers",
-                            items=[],
-                            count_active=0,
-                            count_total=0,
-                        )
-                        mock_sessions.return_value = TabData(
-                            tab=DashboardTab.SESSIONS,
-                            title="Sessions",
-                            items=[],
-                            count_active=0,
-                            count_total=0,
-                        )
-                        mock_worktrees.return_value = TabData(
-                            tab=DashboardTab.WORKTREES,
-                            title="Worktrees",
-                            items=[],
-                            count_active=0,
-                            count_total=0,
-                        )
+        with patch("scc_cli.application.dashboard.load_all_tab_data") as mock_all:
+            mock_all.return_value = {
+                DashboardTab.STATUS: app_dashboard.DashboardTabData(
+                    tab=DashboardTab.STATUS,
+                    title="Status",
+                    items=[],
+                    count_active=0,
+                    count_total=0,
+                ),
+                DashboardTab.CONTAINERS: app_dashboard.DashboardTabData(
+                    tab=DashboardTab.CONTAINERS,
+                    title="Containers",
+                    items=[],
+                    count_active=0,
+                    count_total=0,
+                ),
+                DashboardTab.SESSIONS: app_dashboard.DashboardTabData(
+                    tab=DashboardTab.SESSIONS,
+                    title="Sessions",
+                    items=[],
+                    count_active=0,
+                    count_total=0,
+                ),
+                DashboardTab.WORKTREES: app_dashboard.DashboardTabData(
+                    tab=DashboardTab.WORKTREES,
+                    title="Worktrees",
+                    items=[],
+                    count_active=0,
+                    count_total=0,
+                ),
+            }
 
-                        data = _load_all_tab_data()
+            data = _load_all_tab_data()
 
-                        assert DashboardTab.STATUS in data
-                        assert DashboardTab.CONTAINERS in data
-                        assert DashboardTab.SESSIONS in data
-                        assert DashboardTab.WORKTREES in data
+            assert DashboardTab.STATUS in data
+            assert DashboardTab.CONTAINERS in data
+            assert DashboardTab.SESSIONS in data
+            assert DashboardTab.WORKTREES in data

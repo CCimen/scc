@@ -18,6 +18,7 @@ import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
+from tests.fakes import build_fake_adapters
 
 runner = CliRunner()
 
@@ -197,7 +198,7 @@ class TestStartWorkflow:
 
     def test_start_requires_setup_first(self, full_config_environment, git_workspace):
         """Start should prompt for setup if not configured."""
-        with patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=True):
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=True):
             result = runner.invoke(app, ["start", str(git_workspace)])
 
         # Should indicate setup is needed
@@ -205,30 +206,24 @@ class TestStartWorkflow:
 
     def test_start_with_workspace_launches_docker(self, full_config_environment, git_workspace):
         """Start with workspace should launch Docker sandbox."""
+        fake_adapters = build_fake_adapters()
+
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_user_config",
+                "scc_cli.commands.launch.flow.config.load_user_config",
                 return_value={"standalone": True},
             ),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=fake_adapters,
             ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ) as mock_get_container,
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             runner.invoke(app, ["start", str(git_workspace)])
 
-        # Docker should be called
-        mock_get_container.assert_called_once()
+        # Sandbox runtime should be invoked
+        assert fake_adapters.sandbox_runtime.list_running()
 
     def test_start_with_team_resolves_profile(
         self, full_config_environment, git_workspace, sample_org_config
@@ -247,25 +242,17 @@ class TestStartWorkflow:
             )
         )
 
+        fake_adapters = build_fake_adapters()
+
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config") as mock_load_config,
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config", return_value=sample_org_config),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_current_branch", return_value="feature-x"
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=fake_adapters,
             ),
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
@@ -281,20 +268,20 @@ class TestStartWorkflow:
         """Cancelling at protected branch prompt should exit with EXIT_CANCELLED."""
         from scc_cli.core.exit_codes import EXIT_CANCELLED
 
+        fake_adapters = build_fake_adapters()
+
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_user_config",
+                "scc_cli.commands.launch.flow.config.load_user_config",
                 return_value={"standalone": True},
             ),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            # Simulate user cancelling at protected branch prompt
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety", return_value=False),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=fake_adapters,
             ),
+            # Simulate user cancelling at protected branch prompt
+            patch("scc_cli.commands.launch.workspace.check_branch_safety", return_value=False),
         ):
             result = runner.invoke(app, ["start", str(git_workspace)])
 
@@ -383,7 +370,7 @@ class TestWorktreeWorkflow:
         """Worktree command should create git worktree and branch."""
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.worktree_commands.create_worktree") as mock_create,
             patch(
                 "scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=False
             ),  # Don't start claude
@@ -406,7 +393,7 @@ class TestWorktreeWorkflow:
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.git.create_worktree",
+                "scc_cli.commands.worktree.worktree_commands.create_worktree",
                 return_value=worktree_path,
             ),
             patch(
@@ -453,23 +440,17 @@ class TestOfflineWorkflow:
             )
         )
 
+        fake_adapters = build_fake_adapters()
+
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config") as mock_load_config,
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config") as mock_load_config,
             patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=fake_adapters,
             ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             mock_load_config.return_value = {
                 "organization_source": {"url": "https://gitlab.test.org/config.json"},
@@ -497,26 +478,20 @@ class TestStandaloneWorkflow:
 
     def test_start_standalone_skips_org_config(self, full_config_environment, git_workspace):
         """--standalone should skip org config entirely."""
+        fake_adapters = build_fake_adapters()
+
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_user_config",
+                "scc_cli.commands.launch.flow.config.load_user_config",
                 return_value={"standalone": True},
             ),
             patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=fake_adapters,
             ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             runner.invoke(app, ["start", str(git_workspace), "--standalone"])
 
@@ -537,25 +512,19 @@ class TestDepsWorkflow:
         # Create package.json to trigger npm detection
         (git_workspace / "package.json").write_text("{}")
 
+        fake_adapters = build_fake_adapters()
+
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch(
-                "scc_cli.commands.launch.app.config.load_user_config",
+                "scc_cli.commands.launch.flow.config.load_user_config",
                 return_value={"standalone": True},
             ),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(git_workspace, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=fake_adapters,
             ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
             patch("scc_cli.commands.launch.workspace.deps.auto_install_dependencies") as mock_deps,
         ):
             mock_deps.return_value = True

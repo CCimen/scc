@@ -16,7 +16,8 @@ from unittest.mock import patch
 import click
 import pytest
 
-from scc_cli.git import WorktreeInfo, render_worktrees
+from scc_cli.git import WorktreeInfo
+from scc_cli.ui import render_worktrees
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for Worktree CLI Structure
@@ -62,14 +63,14 @@ class TestWorktreeAppStructure:
 class TestWorktreeCreate:
     """Test scc worktree create command."""
 
-    def test_create_calls_git_create_worktree(self, tmp_path: Path) -> None:
-        """create should call git.create_worktree with correct args."""
+    def test_create_calls_ui_create_worktree(self, tmp_path: Path) -> None:
+        """create should call ui.create_worktree with correct args."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch("scc_cli.commands.worktree.worktree_commands.git.has_commits", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.worktree_commands.create_worktree") as mock_create,
             patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=False),
         ):
             mock_create.return_value = tmp_path / "worktrees" / "feature"
@@ -89,13 +90,13 @@ class TestWorktreeCreate:
             assert call_args[0][1] == "feature"
 
     def test_create_with_base_branch(self, tmp_path: Path) -> None:
-        """create with --base should pass branch to git.create_worktree."""
+        """create with --base should pass branch to ui.create_worktree."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch("scc_cli.commands.worktree.worktree_commands.git.has_commits", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.worktree_commands.create_worktree") as mock_create,
             patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=False),
         ):
             mock_create.return_value = tmp_path / "worktrees" / "feature"
@@ -143,13 +144,13 @@ class TestWorktreeCreate:
 class TestWorktreeList:
     """Test scc worktree list command."""
 
-    def test_list_calls_git_list_worktrees(self, tmp_path: Path) -> None:
-        """list should call git.list_worktrees."""
+    def test_list_calls_ui_list_worktrees(self, tmp_path: Path) -> None:
+        """list should call ui.list_worktrees."""
         from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.list_worktrees") as mock_list,
-            patch("scc_cli.commands.worktree.worktree_commands.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.worktree_commands.render_worktrees"),
         ):
             mock_list.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="clean")
@@ -170,8 +171,8 @@ class TestWorktreeList:
         from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.list_worktrees") as mock_list,
-            patch("scc_cli.commands.worktree.worktree_commands.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.worktree_commands.render_worktrees"),
         ):
             mock_list.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="clean")
@@ -200,8 +201,8 @@ class TestWorktreeList:
         ]
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.list_worktrees") as mock_list,
-            patch("scc_cli.commands.worktree.worktree_commands.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.worktree_commands.render_worktrees"),
         ):
             mock_list.return_value = worktrees
             try:
@@ -223,8 +224,8 @@ class TestWorktreeList:
         from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.list_worktrees") as mock_list,
-            patch("scc_cli.commands.worktree.worktree_commands.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.worktree_commands.render_worktrees"),
         ):
             mock_list.return_value = []
             try:
@@ -262,13 +263,11 @@ class TestWorktreeList:
 class TestWorktreeRemove:
     """Test scc worktree remove command."""
 
-    def test_remove_calls_git_cleanup_worktree(self, tmp_path: Path) -> None:
-        """remove should call git.cleanup_worktree with correct args."""
+    def test_remove_calls_ui_cleanup_worktree(self, tmp_path: Path) -> None:
+        """remove should call ui.cleanup_worktree with correct args."""
         from scc_cli.commands.worktree import worktree_remove_cmd
 
-        with patch(
-            "scc_cli.commands.worktree.worktree_commands.git.cleanup_worktree"
-        ) as mock_cleanup:
+        with patch("scc_cli.commands.worktree.worktree_commands.cleanup_worktree") as mock_cleanup:
             mock_cleanup.return_value = True
             try:
                 worktree_remove_cmd(
@@ -287,9 +286,7 @@ class TestWorktreeRemove:
         """remove with --force should pass force=True to cleanup."""
         from scc_cli.commands.worktree import worktree_remove_cmd
 
-        with patch(
-            "scc_cli.commands.worktree.worktree_commands.git.cleanup_worktree"
-        ) as mock_cleanup:
+        with patch("scc_cli.commands.worktree.worktree_commands.cleanup_worktree") as mock_cleanup:
             mock_cleanup.return_value = True
             try:
                 worktree_remove_cmd(
@@ -559,9 +556,7 @@ class TestWorktreeSelectStdoutPurity:
 
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
-            patch(
-                "scc_cli.commands.worktree.worktree_commands.git.list_worktrees", return_value=[]
-            ),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees", return_value=[]),
             patch(
                 "scc_cli.commands.worktree.worktree_commands.git.list_branches_without_worktrees",
                 return_value=[],
@@ -601,7 +596,7 @@ class TestWorktreeListJsonContract:
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.git.list_worktrees",
+                "scc_cli.commands.worktree.worktree_commands.list_worktrees",
                 return_value=worktrees,
             ),
         ):
@@ -627,7 +622,7 @@ class TestWorktreeListJsonContract:
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.git.list_worktrees",
+                "scc_cli.commands.worktree.worktree_commands.list_worktrees",
                 return_value=worktrees,
             ),
         ):
@@ -662,9 +657,7 @@ class TestWorktreeSelectCommand:
 
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
-            patch(
-                "scc_cli.commands.worktree.worktree_commands.git.list_worktrees", return_value=[]
-            ),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees", return_value=[]),
         ):
             with pytest.raises(click.exceptions.Exit) as exc_info:
                 worktree_select_cmd(workspace=str(tmp_path), branches=False)
@@ -827,13 +820,13 @@ class TestWorktreeListVerbose:
     This prevents the flag from becoming a no-op during refactoring.
     """
 
-    def test_list_passes_verbose_to_git(self, tmp_path: Path) -> None:
-        """list --verbose should pass verbose=True to git.list_worktrees."""
+    def test_list_passes_verbose_to_ui(self, tmp_path: Path) -> None:
+        """list --verbose should pass verbose=True to ui.list_worktrees."""
         from scc_cli.commands.worktree import worktree_list_cmd
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.list_worktrees") as mock_list,
-            patch("scc_cli.commands.worktree.worktree_commands.git.render_worktrees"),
+            patch("scc_cli.commands.worktree.worktree_commands.list_worktrees") as mock_list,
+            patch("scc_cli.commands.worktree.worktree_commands.render_worktrees"),
         ):
             mock_list.return_value = [
                 WorktreeInfo(path=str(tmp_path), branch="main", status="clean")
@@ -858,7 +851,7 @@ class TestWorktreeListVerbose:
         This is the critical contract test that ensures -v flag actually
         fetches git status instead of becoming a silent no-op.
         """
-        from scc_cli.git import list_worktrees
+        from scc_cli.ui import list_worktrees
 
         # Create a mock worktree with a path
         mock_worktree_path = str(tmp_path)
@@ -890,7 +883,7 @@ class TestWorktreeListVerbose:
 
         This verifies the performance benefit of the non-verbose path.
         """
-        from scc_cli.git import list_worktrees
+        from scc_cli.ui import list_worktrees
 
         with (
             patch("scc_cli.ui.git_interactive.get_worktrees_data") as mock_get_data,
@@ -1139,7 +1132,7 @@ class TestWorktreeEnterCommand:
                 return_value="main",
             ),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.git.list_worktrees",
+                "scc_cli.commands.worktree.worktree_commands.list_worktrees",
                 return_value=[main_worktree],
             ),
             patch("subprocess.run") as mock_run,
@@ -1165,7 +1158,7 @@ class TestWorktreeEnterCommand:
         with (
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.git.list_worktrees",
+                "scc_cli.commands.worktree.worktree_commands.list_worktrees",
                 return_value=[worktree],
             ),
             patch("scc_cli.commands.worktree.worktree_commands.pick_worktree") as mock_picker,
@@ -1280,7 +1273,7 @@ class TestWorktreeCreateInteractiveInit:
             ),  # User accepts init
             patch("scc_cli.commands.worktree.worktree_commands.git.init_repo", return_value=True),
             patch("scc_cli.commands.worktree.worktree_commands.git.has_commits", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.git.create_worktree") as mock_create,
+            patch("scc_cli.commands.worktree.worktree_commands.create_worktree") as mock_create,
         ):
             mock_create.return_value = tmp_path / "feature-x"
             try:

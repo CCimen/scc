@@ -9,11 +9,14 @@ Test Categories:
 from __future__ import annotations
 
 from io import StringIO
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from rich.console import Console, RenderableType
 
+from scc_cli.application import dashboard as app_dashboard
+from scc_cli.docker.core import ContainerInfo
 from scc_cli.ui.dashboard import (
     Dashboard,
     DashboardState,
@@ -33,6 +36,72 @@ def _render_to_str(renderable: RenderableType) -> str:
     return console.file.getvalue()  # type: ignore[union-attr]
 
 
+def _status_item(
+    label: str,
+    description: str = "",
+    *,
+    action: app_dashboard.StatusAction | None = None,
+    action_tab: DashboardTab | None = None,
+    session: dict[str, Any] | None = None,
+) -> ListItem[app_dashboard.DashboardItem]:
+    item = app_dashboard.StatusItem(
+        label=label,
+        description=description,
+        action=action,
+        action_tab=action_tab,
+        session=session,
+    )
+    return ListItem(value=item, label=label, description=description)
+
+
+def _container_item(
+    container_id: str,
+    name: str,
+    description: str,
+    *,
+    status: str = "Up",
+) -> ListItem[app_dashboard.DashboardItem]:
+    container = ContainerInfo(id=container_id, name=name, status=status)
+    item = app_dashboard.ContainerItem(label=name, description=description, container=container)
+    return ListItem(value=item, label=name, description=description)
+
+
+def _session_item(
+    label: str,
+    description: str,
+    session: dict[str, object] | None = None,
+) -> ListItem[app_dashboard.DashboardItem]:
+    session_data = session or {"name": label}
+    item = app_dashboard.SessionItem(label=label, description=description, session=session_data)
+    return ListItem(value=item, label=label, description=description)
+
+
+def _worktree_item(
+    label: str,
+    description: str,
+    path: str | None = None,
+) -> ListItem[app_dashboard.DashboardItem]:
+    worktree_path = path or label
+    item = app_dashboard.WorktreeItem(label=label, description=description, path=worktree_path)
+    return ListItem(value=item, label=label, description=description)
+
+
+def _placeholder_item(
+    label: str,
+    description: str,
+    *,
+    kind: app_dashboard.PlaceholderKind,
+    startable: bool = False,
+) -> ListItem[app_dashboard.DashboardItem]:
+    item = app_dashboard.PlaceholderItem(
+        label=label,
+        description=description,
+        kind=kind,
+        startable=startable,
+    )
+    return ListItem(value=item, label=label, description=description)
+
+
 class TestDashboardTabNavigation:
     """Test dashboard tab switching behavior."""
 
@@ -44,7 +113,11 @@ class TestDashboardTabNavigation:
                 tab=DashboardTab.STATUS,
                 title="Status",
                 items=[
-                    ListItem(value="team", label="Team", description="platform"),
+                    _status_item(
+                        "Team",
+                        "platform",
+                        action=app_dashboard.StatusAction.SWITCH_TEAM,
+                    ),
                 ],
                 count_active=1,
                 count_total=1,
@@ -53,8 +126,8 @@ class TestDashboardTabNavigation:
                 tab=DashboardTab.CONTAINERS,
                 title="Containers",
                 items=[
-                    ListItem(value="c1", label="scc-main", description="Up 2h"),
-                    ListItem(value="c2", label="scc-dev", description="Exited"),
+                    _container_item("c1", "scc-main", "Up 2h", status="Up 2h"),
+                    _container_item("c2", "scc-dev", "Exited", status="Exited"),
                 ],
                 count_active=1,
                 count_total=2,
@@ -63,7 +136,11 @@ class TestDashboardTabNavigation:
                 tab=DashboardTab.SESSIONS,
                 title="Sessions",
                 items=[
-                    ListItem(value="s1", label="session-1", description="platform"),
+                    _session_item(
+                        "session-1",
+                        "platform",
+                        session={"name": "session-1", "team": "platform"},
+                    ),
                 ],
                 count_active=1,
                 count_total=1,
@@ -72,7 +149,7 @@ class TestDashboardTabNavigation:
                 tab=DashboardTab.WORKTREES,
                 title="Worktrees",
                 items=[
-                    ListItem(value="w1", label="main", description="main branch"),
+                    _worktree_item("main", "main branch", path="w1"),
                 ],
                 count_active=0,
                 count_total=1,
@@ -172,9 +249,9 @@ class TestDashboardNavigation:
                 tab=DashboardTab.STATUS,
                 title="Status",
                 items=[
-                    ListItem(value="item1", label="Item 1", description="First"),
-                    ListItem(value="item2", label="Item 2", description="Second"),
-                    ListItem(value="item3", label="Item 3", description="Third"),
+                    _status_item("Item 1", "First"),
+                    _status_item("Item 2", "Second"),
+                    _status_item("Item 3", "Third"),
                 ],
                 count_active=3,
                 count_total=3,
@@ -248,8 +325,8 @@ class TestDashboardFiltering:
                 tab=DashboardTab.STATUS,
                 title="Status",
                 items=[
-                    ListItem(value="team", label="Team", description="platform"),
-                    ListItem(value="config", label="Config", description="settings"),
+                    _status_item("Team", "platform"),
+                    _status_item("Config", "settings"),
                 ],
                 count_active=2,
                 count_total=2,
@@ -332,7 +409,7 @@ class TestCLIDashboardIntegration:
         # Remove cached modules to ensure fresh imports and prevent test pollution
         modules_to_reset = [
             "scc_cli.cli",
-            "scc_cli.commands.launch.app",
+            "scc_cli.commands.launch.flow",
             "scc_cli.services.workspace",
         ]
         for module in modules_to_reset:
@@ -416,7 +493,7 @@ class TestDashboardStandaloneMode:
             tab: TabData(
                 tab=tab,
                 title=tab.display_name,
-                items=[ListItem(value="test", label="Test", description="")],
+                items=[_status_item("Test", "")],
                 count_active=1,
                 count_total=1,
             )
@@ -474,7 +551,13 @@ class TestDashboardStandaloneMode:
         mock_tab_data[DashboardTab.STATUS] = TabData(
             tab=DashboardTab.STATUS,
             title="Status",
-            items=[ListItem(value="team", label="Team", description="No team")],
+            items=[
+                _status_item(
+                    "Team",
+                    "No team",
+                    action=app_dashboard.StatusAction.SWITCH_TEAM,
+                )
+            ],
             count_active=1,
             count_total=1,
         )
@@ -545,9 +628,23 @@ class TestStatusTabDrillDown:
                 tab=DashboardTab.STATUS,
                 title="Status",
                 items=[
-                    ListItem(value="team", label="Team", description="platform"),
-                    ListItem(value="containers", label="Containers", description="2/3"),
-                    ListItem(value="sessions", label="Sessions", description="5"),
+                    _status_item(
+                        "Team",
+                        "platform",
+                        action=app_dashboard.StatusAction.SWITCH_TEAM,
+                    ),
+                    _status_item(
+                        "Containers",
+                        "2/3",
+                        action=app_dashboard.StatusAction.OPEN_TAB,
+                        action_tab=DashboardTab.CONTAINERS,
+                    ),
+                    _status_item(
+                        "Sessions",
+                        "5",
+                        action=app_dashboard.StatusAction.OPEN_TAB,
+                        action_tab=DashboardTab.SESSIONS,
+                    ),
                 ],
                 count_active=3,
                 count_total=3,
@@ -555,7 +652,7 @@ class TestStatusTabDrillDown:
             DashboardTab.CONTAINERS: TabData(
                 tab=DashboardTab.CONTAINERS,
                 title="Containers",
-                items=[ListItem(value="c1", label="container-1", description="Up")],
+                items=[_container_item("c1", "container-1", "Up", status="Up")],
                 count_active=1,
                 count_total=1,
             ),
@@ -604,7 +701,9 @@ class TestTabDataLoading:
         with patch("scc_cli.config.load_user_config") as mock_config:
             with patch("scc_cli.sessions.list_recent") as mock_sessions:
                 with patch("scc_cli.docker.core.list_scc_containers") as mock_docker:
-                    with patch("scc_cli.git.list_worktrees") as mock_worktrees:
+                    with patch(
+                        "scc_cli.services.git.worktree.get_worktrees_data"
+                    ) as mock_worktrees:
                         mock_config.return_value = {}
                         mock_sessions.return_value = []
                         mock_docker.return_value = []
@@ -628,7 +727,13 @@ class TestDetailsPane:
             DashboardTab.STATUS: TabData(
                 tab=DashboardTab.STATUS,
                 title="Status",
-                items=[ListItem(value="team", label="Team", description="platform")],
+                items=[
+                    _status_item(
+                        "Team",
+                        "platform",
+                        action=app_dashboard.StatusAction.SWITCH_TEAM,
+                    )
+                ],
                 count_active=1,
                 count_total=1,
             ),
@@ -636,8 +741,8 @@ class TestDetailsPane:
                 tab=DashboardTab.CONTAINERS,
                 title="Containers",
                 items=[
-                    ListItem(value="c1", label="scc-main", description="Up 2h"),
-                    ListItem(value="c2", label="scc-dev", description="Exited"),
+                    _container_item("c1", "scc-main", "Up 2h", status="Up 2h"),
+                    _container_item("c2", "scc-dev", "Exited", status="Exited"),
                 ],
                 count_active=1,
                 count_total=2,
@@ -645,14 +750,20 @@ class TestDetailsPane:
             DashboardTab.SESSIONS: TabData(
                 tab=DashboardTab.SESSIONS,
                 title="Sessions",
-                items=[ListItem(value="s1", label="session-1", description="platform")],
+                items=[
+                    _session_item(
+                        "session-1",
+                        "platform",
+                        session={"name": "session-1", "team": "platform"},
+                    )
+                ],
                 count_active=1,
                 count_total=1,
             ),
             DashboardTab.WORKTREES: TabData(
                 tab=DashboardTab.WORKTREES,
                 title="Worktrees",
-                items=[ListItem(value="w1", label="main", description="main branch")],
+                items=[_worktree_item("main", "main branch", path="w1")],
                 count_active=0,
                 count_total=1,
             ),
@@ -665,7 +776,13 @@ class TestDetailsPane:
             DashboardTab.STATUS: TabData(
                 tab=DashboardTab.STATUS,
                 title="Status",
-                items=[ListItem(value="team", label="Team", description="platform")],
+                items=[
+                    _status_item(
+                        "Team",
+                        "platform",
+                        action=app_dashboard.StatusAction.SWITCH_TEAM,
+                    )
+                ],
                 count_active=1,
                 count_total=1,
             ),
@@ -673,10 +790,11 @@ class TestDetailsPane:
                 tab=DashboardTab.CONTAINERS,
                 title="Containers",
                 items=[
-                    ListItem(
-                        value="no_containers",
-                        label="No containers",
-                        description="Run 'scc start' to create one",
+                    _placeholder_item(
+                        "No containers",
+                        "Run 'scc start' to create one",
+                        kind=app_dashboard.PlaceholderKind.NO_CONTAINERS,
+                        startable=True,
                     )
                 ],
                 count_active=0,
@@ -686,7 +804,11 @@ class TestDetailsPane:
                 tab=DashboardTab.SESSIONS,
                 title="Sessions",
                 items=[
-                    ListItem(value="error", label="Error", description="Unable to load sessions")
+                    _placeholder_item(
+                        "Error",
+                        "Unable to load sessions",
+                        kind=app_dashboard.PlaceholderKind.ERROR,
+                    )
                 ],
                 count_active=0,
                 count_total=0,
@@ -695,10 +817,10 @@ class TestDetailsPane:
                 tab=DashboardTab.WORKTREES,
                 title="Worktrees",
                 items=[
-                    ListItem(
-                        value="no_git",
-                        label="Not available",
-                        description="Not in a git repository",
+                    _placeholder_item(
+                        "Not available",
+                        "Not in a git repository",
+                        kind=app_dashboard.PlaceholderKind.NO_GIT,
                     )
                 ],
                 count_active=0,
@@ -733,15 +855,15 @@ class TestDetailsPane:
         """Enter on Sessions tab raises SessionResumeRequested (primary action is resume)."""
         from scc_cli.ui.keys import SessionResumeRequested
 
-        # Update Sessions tab to have a dict value (required for session resume)
+        # Update Sessions tab to include a resumable session item
         resource_tab_data[DashboardTab.SESSIONS] = TabData(
             tab=DashboardTab.SESSIONS,
             title="Sessions",
             items=[
-                ListItem(
-                    value={"id": "s1", "name": "session-1"},
-                    label="session-1",
-                    description="platform",
+                _session_item(
+                    "session-1",
+                    "platform",
+                    session={"id": "s1", "name": "session-1"},
                 )
             ],
             count_active=1,
@@ -817,7 +939,13 @@ class TestDetailsPane:
     def test_enter_on_non_startable_placeholder_shows_tip(self) -> None:
         """Enter on non-startable placeholder (no_worktrees, no_git) shows tip message."""
         # Create a worktree tab with no_worktrees placeholder
-        worktree_items = [ListItem(value="no_worktrees", label="No worktrees")]
+        worktree_items = [
+            _placeholder_item(
+                "No worktrees",
+                "",
+                kind=app_dashboard.PlaceholderKind.NO_WORKTREES,
+            )
+        ]
         tab_data = {
             DashboardTab.STATUS: TabData(
                 tab=DashboardTab.STATUS, title="Status", items=[], count_active=0, count_total=0
@@ -865,15 +993,22 @@ class TestDetailsPane:
         self, placeholder_tab_data: dict[DashboardTab, TabData]
     ) -> None:
         """is_placeholder_selected() returns True for all known placeholder values."""
-        placeholder_values = ["no_containers", "no_sessions", "no_worktrees", "no_git", "error"]
+        placeholder_kinds = [
+            app_dashboard.PlaceholderKind.NO_CONTAINERS,
+            app_dashboard.PlaceholderKind.NO_SESSIONS,
+            app_dashboard.PlaceholderKind.NO_WORKTREES,
+            app_dashboard.PlaceholderKind.NO_GIT,
+            app_dashboard.PlaceholderKind.ERROR,
+        ]
 
-        for placeholder in placeholder_values:
+        for kind in placeholder_kinds:
+            item = _placeholder_item("Test", "", kind=kind)
             state = DashboardState(
                 active_tab=DashboardTab.CONTAINERS,
                 tabs=placeholder_tab_data,
-                list_state=ListState(items=[ListItem(value=placeholder, label="Test")]),
+                list_state=ListState(items=[item]),
             )
-            assert state.is_placeholder_selected() is True, f"Failed for {placeholder}"
+            assert state.is_placeholder_selected() is True, f"Failed for {kind}"
 
     def test_is_placeholder_selected_false_for_real_items(
         self, resource_tab_data: dict[DashboardTab, TabData]
@@ -983,8 +1118,13 @@ class TestDetailsPane:
     ) -> None:
         """Startable placeholder shows 'Enter start' in footer hints."""
         # Create container data with startable placeholder
-        placeholder_items: list[ListItem[str]] = [
-            ListItem(value="no_containers", label="No containers", description="Start one"),
+        placeholder_items = [
+            _placeholder_item(
+                "No containers",
+                "Start one",
+                kind=app_dashboard.PlaceholderKind.NO_CONTAINERS,
+                startable=True,
+            )
         ]
         tab_data = dict(resource_tab_data)
         tab_data[DashboardTab.CONTAINERS] = TabData(
@@ -1039,9 +1179,9 @@ class TestDetailsPane:
         """Filter changes affect selection which updates details (regression test)."""
         # Add more items to Containers for meaningful filtering
         containers_items = [
-            ListItem(value="c1", label="scc-main", description="Up 2h"),
-            ListItem(value="c2", label="scc-dev", description="Exited"),
-            ListItem(value="c3", label="other-container", description="Up 1h"),
+            _container_item("c1", "scc-main", "Up 2h", status="Up 2h"),
+            _container_item("c2", "scc-dev", "Exited", status="Exited"),
+            _container_item("c3", "other-container", "Up 1h", status="Up 1h"),
         ]
         resource_tab_data[DashboardTab.CONTAINERS] = TabData(
             tab=DashboardTab.CONTAINERS,

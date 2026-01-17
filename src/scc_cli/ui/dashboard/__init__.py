@@ -22,6 +22,8 @@ Example:
     >>> run_dashboard()  # Interactive dashboard
 """
 
+from scc_cli.application.dashboard import TAB_ORDER, DashboardTab
+
 from .loaders import (
     _load_all_tab_data,
     _load_containers_tab_data,
@@ -29,7 +31,7 @@ from .loaders import (
     _load_status_tab_data,
     _load_worktrees_tab_data,
 )
-from .models import TAB_ORDER, DashboardState, DashboardTab, TabData
+from .models import DashboardState, TabData
 from .orchestrator import _prepare_for_nested_ui, run_dashboard
 
 # Lazy import for Dashboard to avoid circular imports

@@ -159,6 +159,68 @@ class TestFutureLayerBoundaries:
         assert result.returncode == 1, f"core/ imports commands/:\n{result.stdout}"
 
 
+class TestApplicationLayerBoundaries:
+    """Application layer must not depend on UI or commands."""
+
+    def test_application_does_not_import_ui_or_commands(self) -> None:
+        """application/ must not import from ui/ or commands/."""
+        application_path = SRC / "application"
+        if not application_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.ui|import scc_cli\.ui|from scc_cli\.commands|import scc_cli\.commands)",
+                str(application_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, (
+            f"application/ imports ui/ or commands/ modules:\n{result.stdout}"
+        )
+
+
+class TestAdapterBoundaries:
+    """Adapter layer must not depend on UI and only bootstrap composes adapters."""
+
+    def test_adapters_do_not_import_ui(self) -> None:
+        """adapters/ must not import from ui/."""
+        adapters_path = SRC / "adapters"
+        if not adapters_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.ui|import scc_cli\.ui|from \.\.ui)",
+                str(adapters_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"adapters/ imports ui/:\n{result.stdout}"
+
+    def test_only_bootstrap_imports_adapters(self) -> None:
+        """Only bootstrap.py should import adapters for composition."""
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.adapters|import scc_cli\.adapters|from \.\.adapters)",
+                str(SRC),
+                "--exclude-dir=adapters",
+                "--exclude=bootstrap.py",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"Non-bootstrap modules import adapters:\n{result.stdout}"
+
+
 class TestGitModuleBoundary:
     """git.py facade must have no Rich imports after Phase 4 refactoring.
 
@@ -492,3 +554,83 @@ class TestNoTestFileDuplicates:
             f"Characterization tests are temporary refactoring safety nets.\n"
             f"Convert to proper tests and delete when refactoring is complete."
         )
+
+
+class TestPortsBoundary:
+    """ports/ must not depend on UI or command layers."""
+
+    def test_ports_no_ui_imports(self) -> None:
+        """ports/ must not import from ui/."""
+        ports_path = SRC / "ports"
+        if not ports_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.ui|from \.\.ui|import scc_cli\.ui)",
+                str(ports_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"ports/ imports ui/:\n{result.stdout}"
+
+    def test_ports_no_commands_imports(self) -> None:
+        """ports/ must not import from commands/."""
+        ports_path = SRC / "ports"
+        if not ports_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.commands|from \.\.commands|import scc_cli\.commands)",
+                str(ports_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"ports/ imports commands/:\n{result.stdout}"
+
+
+class TestAdaptersBoundary:
+    """adapters/ must not depend on UI or command layers."""
+
+    def test_adapters_no_ui_imports(self) -> None:
+        """adapters/ must not import from ui/."""
+        adapters_path = SRC / "adapters"
+        if not adapters_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.ui|from \.\.ui|import scc_cli\.ui)",
+                str(adapters_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"adapters/ imports ui/:\n{result.stdout}"
+
+    def test_adapters_no_commands_imports(self) -> None:
+        """adapters/ must not import from commands/."""
+        adapters_path = SRC / "adapters"
+        if not adapters_path.exists():
+            return
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rE",
+                r"(from scc_cli\.commands|from \.\.commands|import scc_cli\.commands)",
+                str(adapters_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, f"adapters/ imports commands/:\n{result.stdout}"

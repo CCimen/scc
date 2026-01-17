@@ -300,7 +300,7 @@ class TestPickWorkspaceSourceCurrentDir:
         # But it's also not suspicious (not home, /, tmp, etc.)
         # So the option SHOULD appear with a warning
         with patch("scc_cli.ui.wizard.Path.cwd", return_value=tmp_path):
-            with patch("scc_cli.git.is_git_repo", return_value=False):
+            with patch("scc_cli.services.git.is_git_repo", return_value=False):
                 with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
                     mock_picker.return_value = None
                     pick_workspace_source()

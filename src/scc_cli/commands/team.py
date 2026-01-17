@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .. import config, teams
+from ..bootstrap import get_default_adapters
 from ..cli_common import console, handle_errors, render_responsive_table
 from ..json_command import json_command
 from ..kinds import Kind
@@ -209,7 +210,12 @@ def team_list(
         org_url = org_source.get("url")
         org_auth = org_source.get("auth")
         if org_url:
-            fetched_config, _etag, status_code = fetch_org_config(org_url, org_auth)
+            adapters = get_default_adapters()
+            fetched_config, _etag, status_code = fetch_org_config(
+                org_url,
+                org_auth,
+                fetcher=adapters.remote_fetcher,
+            )
             if fetched_config and status_code == 200:
                 org_config = fetched_config
                 # Save to cache

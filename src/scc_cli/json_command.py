@@ -27,44 +27,14 @@ from typing import Any, TypeVar
 
 import typer
 
-from .core.errors import ConfigError, PolicyViolationError, PrerequisiteError, SCCError
-from .core.exit_codes import (
-    EXIT_CANCELLED,
-    EXIT_CONFIG,
-    EXIT_ERROR,
-    EXIT_GOVERNANCE,
-    EXIT_PREREQ,
-    EXIT_SUCCESS,
-    EXIT_VALIDATION,
-)
+from .core.error_mapping import to_exit_code, to_json_payload
+from .core.exit_codes import EXIT_CANCELLED, EXIT_SUCCESS
 from .json_output import build_envelope
 from .kinds import Kind
 from .output_mode import _pretty_mode, json_command_mode, json_output_mode, print_json
 
 # Type variable for decorated functions
 F = TypeVar("F", bound=Callable[..., Any])
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Exception to Exit Code Mapping
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def _get_exit_code_for_exception(exc: Exception) -> int:
-    """Map exception types to exit codes."""
-    if isinstance(exc, PolicyViolationError):
-        return EXIT_GOVERNANCE
-    if isinstance(exc, PrerequisiteError):
-        return EXIT_PREREQ
-    if isinstance(exc, ConfigError):
-        return EXIT_CONFIG
-    if isinstance(exc, SCCError):
-        # Check exit_code attribute if available
-        return getattr(exc, "exit_code", EXIT_ERROR)
-    # Check for validation-like errors by name
-    if "Validation" in type(exc).__name__:
-        return EXIT_VALIDATION
-    return EXIT_ERROR
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -135,25 +105,25 @@ def json_command(kind: Kind) -> Callable[[F], F]:
                         raise
 
                     except KeyboardInterrupt:
+                        payload = to_json_payload(Exception("Cancelled"))
                         envelope = build_envelope(
                             kind,
                             data={},
                             ok=False,
-                            errors=["Cancelled"],
+                            errors=payload["errors"],
                         )
                         print_json(envelope)
                         raise typer.Exit(EXIT_CANCELLED)
 
                     except Exception as e:
-                        # Map exception to exit code
-                        exit_code = _get_exit_code_for_exception(e)
+                        exit_code = to_exit_code(e)
+                        payload = to_json_payload(e)
 
-                        # Build and print error envelope
                         envelope = build_envelope(
                             kind,
                             data={},
                             ok=False,
-                            errors=[str(e)],
+                            errors=payload["errors"],
                         )
                         print_json(envelope)
                         raise typer.Exit(exit_code)

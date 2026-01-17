@@ -3,19 +3,18 @@ Launch package - commands for starting Claude Code in Docker sandboxes.
 
 This package contains the decomposed launch functionality:
 - render.py: Pure output/display functions (no business logic)
-- app.py: Main command logic and orchestration
-- (more modules to be added as extraction continues)
+- flow.py: Start command logic and interactive flows
+- app.py: Thin CLI wrapper for Typer registration
 
 Public API re-exports for backward compatibility.
 """
 
-from .app import (
+from .app import launch_app, start
+from .flow import (
     _configure_team_settings,
     _sync_marketplace_settings,
     interactive_start,
-    launch_app,
     run_start_wizard_flow,
-    start,
 )
 from .render import (
     build_dry_run_data,

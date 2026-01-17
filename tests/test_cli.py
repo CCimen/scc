@@ -24,6 +24,7 @@ from scc_cli.core.errors import (
     SandboxNotAvailableError,
 )
 from scc_cli.core.exit_codes import EXIT_USAGE
+from tests.fakes import build_fake_adapters
 
 runner = CliRunner()
 
@@ -130,21 +131,13 @@ class TestStartCommand:
         (tmp_path / "package.json").write_text("{}")
 
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(tmp_path, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=build_fake_adapters(),
             ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
             patch("scc_cli.commands.launch.workspace.deps.auto_install_dependencies") as mock_deps,
         ):
             mock_deps.return_value = True
@@ -155,22 +148,14 @@ class TestStartCommand:
     def test_start_with_offline_uses_cache_only(self, tmp_path):
         """Should use cached config only when --offline flag set."""
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+            patch(
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=build_fake_adapters(),
+            ),
             patch("scc_cli.remote.load_org_config") as mock_remote,
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(tmp_path, False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             mock_remote.return_value = {
                 "schema_version": "1.0.0",
@@ -185,21 +170,13 @@ class TestStartCommand:
     def test_start_with_standalone_skips_org_config(self, tmp_path):
         """Should skip org config when --standalone flag set."""
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available"),
-            patch("scc_cli.commands.launch.workspace.git.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.git.get_current_branch", return_value="main"),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(tmp_path, False),
+                "scc_cli.commands.launch.flow.get_default_adapters",
+                return_value=build_fake_adapters(),
             ),
-            patch("scc_cli.commands.launch.sandbox.docker.prepare_sandbox_volume_for_credentials"),
-            patch(
-                "scc_cli.commands.launch.sandbox.docker.get_or_create_container",
-                return_value=(["docker"], False),
-            ),
-            patch("scc_cli.commands.launch.sandbox.docker.run"),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
             patch("scc_cli.remote.load_org_config") as mock_remote,
         ):
             runner.invoke(app, ["start", str(tmp_path), "--standalone"])
@@ -224,7 +201,7 @@ class TestWorktreeCommand:
             patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch("scc_cli.commands.worktree.worktree_commands.git.has_commits", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.git.create_worktree",
+                "scc_cli.commands.worktree.worktree_commands.create_worktree",
                 return_value=worktree_path,
             ),
             patch(
@@ -308,8 +285,8 @@ class TestStartCommandErrors:
     def test_start_requires_setup_first(self, tmp_path):
         """Should prompt for setup when not configured."""
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=True),
-            patch("scc_cli.commands.launch.app.setup.maybe_run_setup", return_value=False),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=True),
+            patch("scc_cli.commands.launch.flow.setup.maybe_run_setup", return_value=False),
         ):
             result = runner.invoke(app, ["start", str(tmp_path)])
 
@@ -318,16 +295,15 @@ class TestStartCommandErrors:
 
     def test_start_shows_docker_not_found_error(self, tmp_path):
         """Should show helpful message when Docker not installed."""
+        fake_adapters = build_fake_adapters()
+        fake_adapters.sandbox_runtime.ensure_available = MagicMock(
+            side_effect=DockerNotFoundError()
+        )
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(tmp_path, False),
-            ),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+            patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
         ):
-            mock_docker.side_effect = DockerNotFoundError()
             result = runner.invoke(app, ["start", str(tmp_path)])
 
         # Should show error message about Docker
@@ -335,16 +311,15 @@ class TestStartCommandErrors:
 
     def test_start_shows_docker_version_error(self, tmp_path):
         """Should show helpful message when Docker version too old."""
+        fake_adapters = build_fake_adapters()
+        fake_adapters.sandbox_runtime.ensure_available = MagicMock(
+            side_effect=DockerVersionError(current_version="4.0.0")
+        )
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(tmp_path, False),
-            ),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+            patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
         ):
-            mock_docker.side_effect = DockerVersionError(current_version="4.0.0")
             result = runner.invoke(app, ["start", str(tmp_path)])
 
         # Should indicate version issue
@@ -352,16 +327,15 @@ class TestStartCommandErrors:
 
     def test_start_shows_sandbox_not_available_error(self, tmp_path):
         """Should show helpful message when sandbox not available."""
+        fake_adapters = build_fake_adapters()
+        fake_adapters.sandbox_runtime.ensure_available = MagicMock(
+            side_effect=SandboxNotAvailableError()
+        )
         with (
-            patch("scc_cli.commands.launch.app.setup.is_setup_needed", return_value=False),
-            patch("scc_cli.commands.launch.app.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.app.docker.check_docker_available") as mock_docker,
-            patch(
-                "scc_cli.commands.launch.workspace.git.get_workspace_mount_path",
-                return_value=(tmp_path, False),
-            ),
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+            patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
         ):
-            mock_docker.side_effect = SandboxNotAvailableError()
             result = runner.invoke(app, ["start", str(tmp_path)])
 
         # Should indicate sandbox not available

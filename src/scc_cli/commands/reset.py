@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Literal, cast
 
 import typer
 from rich.console import Console
@@ -28,26 +28,25 @@ from ..core.exit_codes import (
     EXIT_SUCCESS,
     EXIT_USAGE,
 )
-from ..core.maintenance import (
+from ..maintenance import (
     MaintenanceLock,
     MaintenanceLockError,
     MaintenancePreview,
+    MaintenanceTask,
+    MaintenanceTaskContext,
     ResetResult,
     RiskTier,
-    cleanup_expired_exceptions,
-    clear_cache,
-    clear_contexts,
-    delete_all_sessions,
-    factory_reset,
     get_paths,
+    get_task,
+    list_tasks,
     preview_operation,
-    prune_containers,
-    prune_sessions,
-    reset_config,
-    reset_exceptions,
+    run_task,
 )
+from ..services.git import detect_workspace_root
 
 console = Console()
+
+ExceptionScope = Literal["all", "user", "repo"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -71,6 +70,51 @@ def _max_risk(tiers: list[RiskTier]) -> RiskTier:
     if not tiers:
         return RiskTier.SAFE
     return max(tiers, key=lambda t: t.value)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Context Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _normalize_exception_scope(scope: str | None) -> ExceptionScope:
+    """Normalize exception scope input."""
+    if scope in ("all", "user", "repo"):
+        return cast(ExceptionScope, scope)
+    return "all"
+
+
+def _resolve_repo_root() -> Path:
+    """Resolve repo root for repo-scoped exception tasks."""
+    root, _ = detect_workspace_root(Path.cwd())
+    return root or Path.cwd()
+
+
+def _build_context(
+    *,
+    dry_run: bool = False,
+    create_backup: bool = True,
+    continue_on_error: bool = False,
+    exception_scope: ExceptionScope = "all",
+    repo_root: Path | None = None,
+) -> MaintenanceTaskContext:
+    """Build a task context for maintenance operations."""
+    return MaintenanceTaskContext(
+        dry_run=dry_run,
+        create_backup=create_backup,
+        continue_on_error=continue_on_error,
+        exception_scope=exception_scope,
+        repo_root=repo_root,
+    )
+
+
+def _preview_task(task: MaintenanceTask, context: MaintenanceTaskContext) -> MaintenancePreview:
+    """Generate a preview for a maintenance task."""
+    return preview_operation(
+        task.id,
+        scope=context.exception_scope,
+        repo_root=context.repo_root,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -210,27 +254,14 @@ def _run_interactive_mode() -> None:
     """Run interactive maintenance picker."""
     console.print("\n[bold cyan]SCC Maintenance[/bold cyan]\n")
 
-    # Define available actions
-    actions = [
-        ("clear_cache", "Clear cache", RiskTier.SAFE),
-        ("cleanup_expired_exceptions", "Cleanup expired exceptions", RiskTier.SAFE),
-        ("clear_contexts", "Clear contexts", RiskTier.CHANGES_STATE),
-        ("prune_containers", "Prune containers", RiskTier.CHANGES_STATE),
-        ("prune_sessions", "Prune sessions (30d, keep 20)", RiskTier.CHANGES_STATE),
-        ("reset_exceptions", "Reset all exceptions", RiskTier.DESTRUCTIVE),
-        ("delete_all_sessions", "Delete all sessions", RiskTier.DESTRUCTIVE),
-        ("reset_config", "Reset configuration", RiskTier.DESTRUCTIVE),
-        ("factory_reset", "Factory reset (everything)", RiskTier.FACTORY_RESET),
-    ]
+    tasks = list_tasks()
 
-    # Display numbered list
-    for i, (action_id, name, tier) in enumerate(actions, 1):
-        console.print(f"  {i}. {name} {_risk_badge(tier)}")
+    for i, task in enumerate(tasks, 1):
+        console.print(f"  {i}. {task.label} {_risk_badge(task.risk_tier)}")
 
     console.print("\n  0. Cancel")
     console.print()
 
-    # Get selection
     choice = Prompt.ask("Select action", default="0")
     try:
         idx = int(choice)
@@ -242,54 +273,36 @@ def _run_interactive_mode() -> None:
         console.print("[dim]Cancelled.[/dim]")
         raise typer.Exit(EXIT_CANCELLED)
 
-    if idx < 1 or idx > len(actions):
+    if idx < 1 or idx > len(tasks):
         console.print("[red]Invalid selection.[/red]")
         raise typer.Exit(EXIT_CANCELLED)
 
-    action_id, action_name, tier = actions[idx - 1]
+    task = tasks[idx - 1]
+    action_id = task.id
+    action_name = task.label
+    tier = task.risk_tier
+    context = _build_context(repo_root=_resolve_repo_root())
 
-    # Get confirmation based on risk tier
     if tier == RiskTier.SAFE:
-        pass  # No confirmation needed
+        pass
     elif tier == RiskTier.CHANGES_STATE:
         if not _confirm_tier_1(action_name, yes=False, non_interactive=False):
             raise typer.Exit(EXIT_CANCELLED)
     elif tier == RiskTier.DESTRUCTIVE:
-        preview = preview_operation(action_id)
+        preview = _preview_task(task, context)
         if not _confirm_tier_2(action_name, preview, yes=False, non_interactive=False):
             raise typer.Exit(EXIT_CANCELLED)
     elif tier == RiskTier.FACTORY_RESET:
         if not _confirm_factory_reset(yes=False, force=False, non_interactive=False):
             raise typer.Exit(EXIT_CANCELLED)
 
-    # Execute the action
     try:
         with MaintenanceLock():
-            if action_id == "clear_cache":
-                result = clear_cache()
-            elif action_id == "cleanup_expired_exceptions":
-                result = cleanup_expired_exceptions()
-            elif action_id == "clear_contexts":
-                result = clear_contexts()
-            elif action_id == "prune_containers":
-                result = prune_containers()
-            elif action_id == "prune_sessions":
-                result = prune_sessions()
-            elif action_id == "reset_exceptions":
-                result = reset_exceptions()
-            elif action_id == "delete_all_sessions":
-                result = delete_all_sessions()
-            elif action_id == "reset_config":
-                result = reset_config()
-            elif action_id == "factory_reset":
-                results = factory_reset()
-                for r in results:
-                    _print_result(r)
+            result = run_task(action_id, context)
+            if isinstance(result, list):
+                for item in result:
+                    _print_result(item)
                 return
-            else:
-                console.print(f"[red]Unknown action: {action_id}[/red]")
-                raise typer.Exit(EXIT_USAGE)
-
             _print_result(result)
 
     except MaintenanceLockError as e:
@@ -464,11 +477,14 @@ def reset_cmd(
 
         try:
             with MaintenanceLock():
-                factory_results = factory_reset(
+                context = _build_context(
                     dry_run=dry_run,
                     create_backup=not no_backup,
                     continue_on_error=continue_on_error,
                 )
+                factory_results = run_task("factory_reset", context)
+                if not isinstance(factory_results, list):
+                    factory_results = [factory_results]
 
                 if json_output:
                     _print_json_results(factory_results)
@@ -490,57 +506,68 @@ def reset_cmd(
         return
 
     # Build list of operations to perform
-    operations: list[tuple[str, Callable[..., ResetResult], RiskTier, dict]] = []
+    operations: list[MaintenanceTask] = []
+
+    def _require_task(action_id: str) -> MaintenanceTask:
+        task = get_task(action_id)
+        if task is None:
+            console.print(f"[red]Unknown action: {action_id}[/red]")
+            raise typer.Exit(EXIT_USAGE)
+        return task
 
     if cache:
-        operations.append(("clear_cache", clear_cache, RiskTier.SAFE, {}))
+        operations.append(_require_task("clear_cache"))
 
     if exceptions_expired:
-        operations.append(
-            ("cleanup_expired_exceptions", cleanup_expired_exceptions, RiskTier.SAFE, {})
-        )
+        operations.append(_require_task("cleanup_expired_exceptions"))
 
     if contexts:
-        operations.append(("clear_contexts", clear_contexts, RiskTier.CHANGES_STATE, {}))
+        operations.append(_require_task("clear_contexts"))
 
     if containers:
-        operations.append(("prune_containers", prune_containers, RiskTier.CHANGES_STATE, {}))
+        operations.append(_require_task("prune_containers"))
 
     if sessions:
-        operations.append(("prune_sessions", prune_sessions, RiskTier.CHANGES_STATE, {}))
+        operations.append(_require_task("prune_sessions"))
 
     if exceptions:
-        scope = exceptions_scope or "all"
-        operations.append(
-            ("reset_exceptions", reset_exceptions, RiskTier.DESTRUCTIVE, {"scope": scope})
-        )
+        operations.append(_require_task("reset_exceptions"))
 
     if sessions_all:
-        operations.append(("delete_all_sessions", delete_all_sessions, RiskTier.DESTRUCTIVE, {}))
+        operations.append(_require_task("delete_all_sessions"))
 
     if config_flag:
-        operations.append(("reset_config", reset_config, RiskTier.DESTRUCTIVE, {}))
+        operations.append(_require_task("reset_config"))
+
+    exception_scope = _normalize_exception_scope(exceptions_scope)
+    repo_root = _resolve_repo_root() if exceptions and exception_scope in ("all", "repo") else None
+    context = _build_context(
+        dry_run=dry_run,
+        create_backup=not no_backup,
+        continue_on_error=continue_on_error,
+        exception_scope=exception_scope,
+        repo_root=repo_root,
+    )
 
     # Handle --plan mode
     if plan:
         console.print("\n[bold cyan]Reset Preview[/bold cyan]\n")
-        for action_id, _, tier, kwargs in operations:
-            preview = preview_operation(action_id, **kwargs)
+        for task in operations:
+            preview = _preview_task(task, context)
             _print_preview(preview)
         return
 
     # Get confirmation based on max risk tier
-    max_tier = _max_risk([tier for _, _, tier, _ in operations])
+    max_tier = _max_risk([task.risk_tier for task in operations])
 
     if max_tier == RiskTier.CHANGES_STATE and not yes:
-        action_names = ", ".join(aid for aid, _, _, _ in operations)
+        action_names = ", ".join(task.id for task in operations)
         if not _confirm_tier_1(action_names, yes, non_interactive):
             raise typer.Exit(EXIT_CANCELLED)
     elif max_tier == RiskTier.DESTRUCTIVE and not yes:
-        # Show previews for destructive operations
-        for action_id, _, tier, kwargs in operations:
-            if tier == RiskTier.DESTRUCTIVE:
-                preview = preview_operation(action_id, **kwargs)
+        for task in operations:
+            if task.risk_tier == RiskTier.DESTRUCTIVE:
+                preview = _preview_task(task, context)
                 _print_preview(preview)
 
         if not Confirm.ask("\n[bold]Proceed with destructive operations?[/bold]"):
@@ -551,29 +578,31 @@ def reset_cmd(
 
     try:
         with MaintenanceLock():
-            for action_id, func, tier, kwargs in operations:
-                # Add common kwargs
-                kwargs["dry_run"] = dry_run
-                if tier == RiskTier.DESTRUCTIVE:
-                    kwargs["create_backup"] = not no_backup
-
+            for task in operations:
                 try:
-                    result = func(**kwargs)
-                    results.append(result)
+                    task_result = run_task(task.id, context)
+                    if isinstance(task_result, list):
+                        results.extend(task_result)
+                        if not json_output:
+                            for item in task_result:
+                                _print_result(item)
+                        success = all(item.success for item in task_result)
+                    else:
+                        results.append(task_result)
+                        if not json_output:
+                            _print_result(task_result)
+                        success = task_result.success
 
-                    if not json_output:
-                        _print_result(result)
-
-                    if not result.success and not continue_on_error:
+                    if not success and not continue_on_error:
                         break
 
-                except Exception as e:
+                except Exception as exc:
                     result = ResetResult(
                         success=False,
-                        action_id=action_id,
-                        risk_tier=tier,
-                        error=str(e),
-                        message=f"Failed: {e}",
+                        action_id=task.id,
+                        risk_tier=task.risk_tier,
+                        error=str(exc),
+                        message=f"Failed: {exc}",
                     )
                     results.append(result)
 

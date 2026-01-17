@@ -27,7 +27,7 @@ from scc_cli.auth import resolve_auth as _resolve_auth_impl
 from scc_cli.profiles import get_marketplace_url
 
 if TYPE_CHECKING:
-    from scc_cli.profiles import EffectiveConfig, MCPServer
+    from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

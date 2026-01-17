@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from scc_cli.marketplace.constants import MANAGED_STATE_FILE
+from scc_cli.ports.filesystem import Filesystem
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Render Settings
@@ -128,33 +129,50 @@ def render_settings(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _load_settings(project_dir: Path) -> dict[str, Any]:
+def _load_settings(project_dir: Path, filesystem: Filesystem | None = None) -> dict[str, Any]:
     """Load existing settings.local.json if it exists."""
     settings_path = project_dir / ".claude" / "settings.local.json"
-    if settings_path.exists():
-        try:
-            result: dict[str, Any] = json.loads(settings_path.read_text())
-            return result
-        except json.JSONDecodeError:
-            return {}
-    return {}
+    if filesystem is None:
+        if settings_path.exists():
+            try:
+                return cast(dict[str, Any], json.loads(settings_path.read_text()))
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    if not filesystem.exists(settings_path):
+        return {}
+
+    try:
+        return cast(dict[str, Any], json.loads(filesystem.read_text(settings_path)))
+    except json.JSONDecodeError:
+        return {}
 
 
-def _load_managed_state(project_dir: Path) -> dict[str, Any]:
+def _load_managed_state(project_dir: Path, filesystem: Filesystem | None = None) -> dict[str, Any]:
     """Load the SCC managed state tracking file."""
     managed_path = project_dir / ".claude" / MANAGED_STATE_FILE
-    if managed_path.exists():
-        try:
-            result: dict[str, Any] = json.loads(managed_path.read_text())
-            return result
-        except json.JSONDecodeError:
-            return {}
-    return {}
+    if filesystem is None:
+        if managed_path.exists():
+            try:
+                return cast(dict[str, Any], json.loads(managed_path.read_text()))
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    if not filesystem.exists(managed_path):
+        return {}
+
+    try:
+        return cast(dict[str, Any], json.loads(filesystem.read_text(managed_path)))
+    except json.JSONDecodeError:
+        return {}
 
 
 def merge_settings(
     project_dir: Path,
     new_settings: dict[str, Any],
+    filesystem: Filesystem | None = None,
 ) -> dict[str, Any]:
     """Non-destructively merge new settings with existing user settings.
 
@@ -177,8 +195,8 @@ def merge_settings(
     Returns:
         Merged settings dict ready to write to settings.local.json
     """
-    existing = _load_settings(project_dir)
-    managed = _load_managed_state(project_dir)
+    existing = _load_settings(project_dir, filesystem)
+    managed = _load_managed_state(project_dir, filesystem)
 
     # Get what was previously managed by SCC
     managed_plugins = set(managed.get("managed_plugins", []))

@@ -6,12 +6,16 @@ top-level packages.
 
 Target architecture:
     src/scc_cli/
+        application/ - use-case orchestration
         core/       - domain models, validation, pure transforms
-        services/   - use-case orchestration
+        services/   - legacy orchestration (moving into application/)
+        ports/      - protocol definitions
+        adapters/   - concrete IO implementations
         commands/   - CLI wiring
         ui/         - presentation
         __init__.py, __main__.py - entry points
         cli.py or main.py - CLI app setup
+        bootstrap.py - composition root wiring
 
 Current state includes legacy modules that will be refactored into the target
 structure. These are tracked in ALLOWED_LEGACY and should shrink over time.
@@ -28,11 +32,15 @@ ALLOWED_CORE = {
     "__init__.py",
     "__main__.py",
     "__pycache__",
+    "bootstrap.py",
     "cli.py",
     "main.py",
     # Target packages
+    "application",
     "core",
     "services",
+    "ports",
+    "adapters",
     "commands",
     "ui",
 }
@@ -46,6 +54,7 @@ ALLOWED_LEGACY = {
     "docker",
     "doctor",
     "evaluation",
+    "maintenance",  # temporary top-level package pending core/ move
     "marketplace",
     "models",
     "schemas",
@@ -77,6 +86,7 @@ ALLOWED_LEGACY = {
     "setup.py",
     "source_resolver.py",
     "stats.py",
+    "support_bundle.py",  # legacy top-level support bundle helper
     "subprocess_utils.py",
     "teams.py",
     "theme.py",
@@ -135,6 +145,8 @@ class TestNoRootSprawl:
                     "Target architecture:",
                     "  core/     - domain models, validation, pure transforms",
                     "  services/ - use-case orchestration",
+                    "  ports/    - protocol definitions",
+                    "  adapters/ - concrete IO implementations",
                     "  commands/ - CLI wiring",
                     "  ui/       - presentation",
                 ]

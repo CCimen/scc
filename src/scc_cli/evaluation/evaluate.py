@@ -1,8 +1,8 @@
 """Bridge function to convert EffectiveConfig to EvaluationResult.
 
 Provide the evaluate() function that converts the governance layer models
-(profiles.py) to the exception system models (evaluation/models.py) with
-proper BlockReason annotations.
+(application compute_effective_config) to the exception system models
+(evaluation/models.py) with proper BlockReason annotations.
 
 This is a pure function with no IO - all input comes from the EffectiveConfig
 parameter and output is a new EvaluationResult.
@@ -20,17 +20,17 @@ from scc_cli.evaluation.models import (
 from scc_cli.models.exceptions import BlockReason
 
 if TYPE_CHECKING:
-    from scc_cli.profiles import EffectiveConfig
+    from scc_cli.application.compute_effective_config import EffectiveConfig
 
 
 def evaluate(config: EffectiveConfig) -> EvaluationResult:
     """Convert EffectiveConfig to EvaluationResult with BlockReason annotations.
 
-    This function bridges the governance layer (profiles.py models) to the
+    This function bridges the governance layer (application models) to the
     exception system (evaluation/models.py) by converting:
 
-    - profiles.BlockedItem -> evaluation.BlockedItem with BlockReason.SECURITY
-    - profiles.DelegationDenied -> evaluation.DeniedAddition with BlockReason.DELEGATION
+    - compute_effective_config.BlockedItem -> evaluation.BlockedItem with BlockReason.SECURITY
+    - compute_effective_config.DelegationDenied -> evaluation.DeniedAddition with BlockReason.DELEGATION
 
     Args:
         config: The EffectiveConfig from the profile merge process
