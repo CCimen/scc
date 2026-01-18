@@ -592,6 +592,10 @@ class TestDepsWorkflow:
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=adapters,
             ),
+            patch(
+                "scc_cli.commands.launch.workspace.get_default_adapters",
+                return_value=adapters,
+            ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             runner.invoke(app, ["start", str(git_workspace), "--install-deps"])

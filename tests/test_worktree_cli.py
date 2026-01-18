@@ -173,7 +173,7 @@ class TestWorktreeCreate:
         """create should exit with error for non-git directories in non-interactive mode."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.is_git_repo.return_value = False
 
         with patch("scc_cli.cli_helpers.is_interactive", return_value=False):
@@ -479,7 +479,7 @@ class TestWorktreeSwitchCommand:
         """switch ^ should print main branch worktree path."""
         from scc_cli.commands.worktree import worktree_switch_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.find_main_worktree.return_value = WorktreeInfo(
             path="/repo/main", branch="main", status="clean"
         )
@@ -495,7 +495,7 @@ class TestWorktreeSwitchCommand:
         """switch ^ without main worktree should exit with error."""
         from scc_cli.commands.worktree import worktree_switch_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.find_main_worktree.return_value = None
         dependencies.git_client.get_default_branch.return_value = "main"
 
@@ -509,7 +509,7 @@ class TestWorktreeSwitchCommand:
         """switch with exact match should print worktree path."""
         from scc_cli.commands.worktree import worktree_switch_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         feature_wt = WorktreeInfo(path="/repo/feature", branch="feature", status="clean")
         dependencies.git_client.find_worktree_by_query.return_value = (feature_wt, [feature_wt])
 
@@ -522,7 +522,7 @@ class TestWorktreeSwitchCommand:
         """switch with no match should exit with error."""
         from scc_cli.commands.worktree import worktree_switch_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.find_worktree_by_query.return_value = (None, [])
         dependencies.git_client.list_branches_without_worktrees.return_value = []
 
@@ -551,7 +551,7 @@ class TestWorktreeSwitchStdoutPurity:
         """On success, stdout should be exactly the path with one newline."""
         from scc_cli.commands.worktree import worktree_switch_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         feature_wt = WorktreeInfo(path="/repo/feature", branch="feature", status="clean")
         dependencies.git_client.find_worktree_by_query.return_value = (feature_wt, [feature_wt])
 
@@ -569,7 +569,7 @@ class TestWorktreeSwitchStdoutPurity:
         """On error (not found), stdout should be empty."""
         from scc_cli.commands.worktree import worktree_switch_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.find_worktree_by_query.return_value = (None, [])
         dependencies.git_client.list_branches_without_worktrees.return_value = []
 
@@ -607,7 +607,7 @@ class TestWorktreeSelectStdoutPurity:
         from scc_cli.commands.worktree import worktree_select_cmd
         from scc_cli.ui.gate import InteractivityContext, InteractivityMode
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.list_worktrees.return_value = []
         dependencies.git_client.list_branches_without_worktrees.return_value = []
 
@@ -709,7 +709,7 @@ class TestWorktreeSelectCommand:
         """select with no worktrees should exit with error."""
         from scc_cli.commands.worktree import worktree_select_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.list_worktrees.return_value = []
 
         with pytest.raises(click.exceptions.Exit) as exc_info:
@@ -1078,7 +1078,7 @@ class TestWorktreeEnterCommand:
         """Enter should open subshell in the worktree directory."""
         from scc_cli.commands.worktree import worktree_enter_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         worktree = WorktreeInfo(
             path=str(tmp_path / "feature-auth"),
             branch="scc/feature-auth",
@@ -1102,7 +1102,7 @@ class TestWorktreeEnterCommand:
         self, tmp_path: Path, worktree_command_dependencies
     ) -> None:
         """Enter should set $SCC_WORKTREE environment variable."""
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         worktree = WorktreeInfo(
             path=str(tmp_path / "feature-auth"),
             branch="scc/feature-auth",
@@ -1129,7 +1129,7 @@ class TestWorktreeEnterCommand:
         self, tmp_path: Path, capsys, worktree_command_dependencies
     ) -> None:
         """Enter should print info to stderr, keeping stdout clean."""
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         worktree = WorktreeInfo(
             path=str(tmp_path / "feature-auth"),
             branch="scc/feature-auth",
@@ -1173,7 +1173,7 @@ class TestWorktreeEnterCommand:
         self, tmp_path: Path, worktree_command_dependencies
     ) -> None:
         """Enter '^' should enter the main branch worktree."""
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         main_worktree = WorktreeInfo(
             path=str(tmp_path / "main"),
             branch="main",
@@ -1199,7 +1199,7 @@ class TestWorktreeEnterCommand:
         self, tmp_path: Path, worktree_command_dependencies
     ) -> None:
         """Enter with no target should show interactive picker."""
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         worktree = WorktreeInfo(
             path=str(tmp_path / "feature"),
             branch="feature",
@@ -1228,7 +1228,7 @@ class TestWorktreeEnterCommand:
         from scc_cli.commands.worktree import worktree_enter_cmd
         from scc_cli.core.exit_codes import EXIT_TOOL
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.is_git_repo.return_value = False
 
         with pytest.raises((click.exceptions.Exit, SystemExit)) as exc_info:
@@ -1264,7 +1264,7 @@ class TestWorktreeCreateInteractiveInit:
         """Non-git repo in non-interactive mode should raise NotAGitRepoError via handle_errors."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.is_git_repo.return_value = False
 
         with patch("scc_cli.cli_helpers.is_interactive", return_value=False):
@@ -1287,7 +1287,7 @@ class TestWorktreeCreateInteractiveInit:
         """Non-git repo in interactive mode should prompt for init."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.is_git_repo.return_value = False
 
         with (
@@ -1315,7 +1315,7 @@ class TestWorktreeCreateInteractiveInit:
         from scc_cli.application.worktree import WorktreeCreateResult
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.is_git_repo.side_effect = [False, True]
         dependencies.git_client.init_repo.return_value = True
         dependencies.git_client.has_commits.return_value = True
@@ -1350,7 +1350,7 @@ class TestWorktreeCreateInteractiveInit:
         """No commits in non-interactive mode should show actionable error."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.has_commits.return_value = False
 
         with patch("scc_cli.cli_helpers.is_interactive", return_value=False):
@@ -1373,7 +1373,7 @@ class TestWorktreeCreateInteractiveInit:
         """No commits in interactive mode should prompt for initial commit."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.has_commits.return_value = False
 
         with (
@@ -1401,7 +1401,7 @@ class TestWorktreeCreateInteractiveInit:
         """Git identity failure should show actionable message."""
         from scc_cli.commands.worktree import worktree_create_cmd
 
-        dependencies, _ = worktree_command_dependencies
+        dependencies = worktree_command_dependencies[0]
         dependencies.git_client.has_commits.return_value = False
 
         identity_error = (

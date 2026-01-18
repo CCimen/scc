@@ -605,28 +605,6 @@ def switch_worktree(
                     branch_name=request.target,
                 )
 
-            if request.target in branches:
-                if not request.interactive_allowed:
-                    return WorktreeWarningOutcome(
-                        WorktreeWarning(
-                            title="Branch Exists, No Worktree",
-                            message=f"Branch '{request.target}' exists but has no worktree.",
-                            suggestion=(
-                                "Use: scc worktree create <repo> "
-                                f"{request.target} --base {request.target}"
-                            ),
-                        )
-                    )
-                return WorktreeConfirmation(
-                    action=WorktreeConfirmAction.CREATE_WORKTREE,
-                    request=ConfirmRequest(
-                        request_id="worktree-create-branch",
-                        prompt=f"No worktree for '{request.target}'. Create one?",
-                    ),
-                    default_response=False,
-                    branch_name=request.target,
-                )
-
         return WorktreeWarningOutcome(
             WorktreeWarning(
                 title="Worktree Not Found",

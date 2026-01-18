@@ -1,0 +1,216 @@
+tasks:
+  # ============================================================================
+  # Phase 3 Cleanup — MUST FIX FIRST (Single consolidated task)
+  # These fixes are interdependent - do ALL before running validation.
+  # ============================================================================
+
+  - title: "Phase 3 Cleanup: Fix ALL lint/test issues - (1) Fix ruff import sorting in src/scc_cli/application/worktree/__init__.py and tests/test_worktree_use_cases.py, (2) Replace typing.Iterable/Sequence with collections.abc in src/scc_cli/application/worktree/use_cases.py, (3) Remove unused 'dependencies, _ = worktree_command_dependencies' in tests/test_worktree_cli.py, (4) Fix test_start_with_install_deps in tests/test_cli.py and tests/test_integration.py by patching _build_worktree_dependencies correctly. Run full validation (uv run ruff format && uv run ruff check && uv run mypy src/scc_cli && uv run pytest) and fix any failures until ALL pass."
+    completed: true
+
+  # ============================================================================
+  # Phase 4 — Launch Flow Split
+  # Outcome: launch flow is not a monolith; wizard is a state machine; output is model-driven; JSON mapping is centralized at edges.
+  # ============================================================================
+
+  - title: "Phase 4: Create application/launch/ package with SelectSession use case"
+    completed: false
+
+  - title: "Phase 4: Create application/launch/ package with StartSessionWizard state machine (explicit states)"
+    completed: false
+
+  - title: "Phase 4: Create application/launch/ package with PrepareLaunchPlan use case"
+    completed: false
+
+  - title: "Phase 4: Create application/launch/ package with ApplyPersonalProfile use case"
+    completed: false
+
+  - title: "Phase 4: Create application/launch/ package with FinalizeLaunch use case"
+    completed: false
+
+  - title: "Phase 4: Introduce LaunchOutput view model (structured info/warn/success events)"
+    completed: false
+
+  - title: "Phase 4: Convert wizard prompts to InteractionRequests; UI renders them"
+    completed: false
+
+  - title: "Phase 4: Keep JSON mapping in presentation/json/launch_json.py (edge-only)"
+    completed: false
+
+  - title: "Phase 4: Reduce commands/launch/flow.py to orchestration glue only - parse args"
+    completed: false
+
+  - title: "Phase 4: Reduce commands/launch/flow.py to orchestration glue only - call use cases"
+    completed: false
+
+  - title: "Phase 4: Reduce commands/launch/flow.py to orchestration glue only - map output (human/JSON)"
+    completed: false
+
+  - title: "Phase 4: Reduce commands/launch/flow.py to orchestration glue only - execute side effects through ports"
+    completed: false
+
+  - title: "Phase 4: Unit tests for wizard state transitions without Rich UI"
+    completed: false
+
+  - title: "Phase 4: Unit tests for session selection/resume logic"
+    completed: false
+
+  - title: "Phase 4: Unit tests for personal profile overlay decisions"
+    completed: false
+
+  - title: "Phase 4: Characterization tests for quick resume flows"
+    completed: false
+
+  - title: "Phase 4: Characterization tests for cross-team resume confirmation labels/hotkeys"
+    completed: false
+
+  - title: "Phase 4: Characterization tests for start --dry-run unchanged output"
+    completed: false
+
+  - title: "Phase 4: Characterization tests for JSON envelope unchanged"
+    completed: false
+
+  # ============================================================================
+  # Phase 5 — Support Bundle Use Case
+  # Outcome: support bundle generation is deterministic and testable; doctor is injected; archive writing is an adapter; commands only handle flags/output.
+  # ============================================================================
+
+  - title: "Phase 5: Create application/support_bundle.py use case"
+    completed: false
+
+  - title: "Phase 5: Introduce DoctorRunner port"
+    completed: false
+
+  - title: "Phase 5: Introduce ArchiveWriter port (zip writer adapter)"
+    completed: false
+
+  - title: "Phase 5: Reuse Filesystem and Clock ports in support bundle use case"
+    completed: false
+
+  - title: "Phase 5: Extract redaction logic into pure helpers - redact secrets"
+    completed: false
+
+  - title: "Phase 5: Extract redaction logic into pure helpers - redact paths"
+    completed: false
+
+  - title: "Phase 5: Update support command - call use case"
+    completed: false
+
+  - title: "Phase 5: Update support command - map JSON via presentation/json/support_json.py"
+    completed: false
+
+  - title: "Phase 5: Update support command - print human output only at edge"
+    completed: false
+
+  - title: "Phase 5: Unit tests for redaction rules"
+    completed: false
+
+  - title: "Phase 5: Unit tests for doctor failure handling"
+    completed: false
+
+  - title: "Phase 5: ZIP assertions via in-memory archive writer or temp dir + zipfile inspection"
+    completed: false
+
+  # ============================================================================
+  # Phase 6 — Typed Config Models
+  # Outcome: application layer no longer consumes raw dict[str, Any] config; schema drift risk decreases; merge/policy logic is safer and clearer.
+  # ============================================================================
+
+  - title: "Phase 6: Define minimal normalized typed config model - NormalizedOrgConfig"
+    completed: false
+
+  - title: "Phase 6: Define minimal normalized typed config model - NormalizedTeamConfig"
+    completed: false
+
+  - title: "Phase 6: Define minimal normalized typed config model - NormalizedProjectConfig (if needed)"
+    completed: false
+
+  - title: "Phase 6: Parse/validate once at config load edges (adapters/services), then pass normalized models inward"
+    completed: false
+
+  - title: "Phase 6: Replace dict access in profiles/effective config computation with typed models"
+    completed: false
+
+  - title: "Phase 6: Replace dict access in dashboard loading paths (if applicable) with typed models"
+    completed: false
+
+  - title: "Phase 6: Replace dict access in launch/worktree flows where config is consumed with typed models"
+    completed: false
+
+  - title: "Phase 6: Add tests for normalization/mapping + invariant preservation"
+    completed: false
+
+  # ============================================================================
+  # Phase 7 — Cleanup and Polish
+  # Outcome: consistency improvements, removal of remaining duplication, and long-term cleanliness guardrails.
+  # ============================================================================
+
+  - title: "Phase 7: Consolidate time formatting in ui/time_format.py and reuse it everywhere"
+    completed: false
+
+  - title: "Phase 7: Replace magic strings (__all__, etc.) with enums/constants"
+    completed: false
+
+  - title: "Phase 7: Add ConfigStore port for user/org config access (reduce direct config reads in commands)"
+    completed: false
+
+  - title: "Phase 7: Tighten optional dependency import discipline - external libs import only in adapters"
+    completed: false
+
+  - title: "Phase 7: Tighten optional dependency import discipline - no side effects at import time"
+    completed: false
+
+  - title: "Phase 7: Expand boundary/invariant tests if new layers are introduced"
+    completed: false
+
+  - title: "Phase 7: Add minimal internal docs updates - module boundaries"
+    completed: false
+
+  - title: "Phase 7: Add minimal internal docs updates - how to add a new agent backend"
+    completed: false
+
+  - title: "Phase 7: Add minimal internal docs updates - how to add a new runtime backend"
+    completed: false
+
+  - title: "Phase 7: Optional - add complexity budget guardrails (manual checklist or automated) to prevent reintroducing god files"
+    completed: false
+
+  # ============================================================================
+  # Final Verification — Definition of 10/10 Maintainability
+  # Mark these as you achieve them to confirm 10/10 maintainability.
+  # ============================================================================
+
+  - title: "Final: Verify commands are thin wrappers (no business logic)"
+    completed: false
+
+  - title: "Final: Verify application use cases are testable with fakes (no docker/git/network)"
+    completed: false
+
+  - title: "Final: Verify IO only in adapters or CLI/UI edges"
+    completed: false
+
+  - title: "Final: Verify workspace resolution is unified (one authoritative entry point)"
+    completed: false
+
+  - title: "Final: Verify sessions persistence is typed and port-based"
+    completed: false
+
+  - title: "Final: Verify worktree flows are use-case driven and deterministic"
+    completed: false
+
+  - title: "Final: Verify launch wizard is a state machine with explicit transitions"
+    completed: false
+
+  - title: "Final: Verify InteractionRequest schema is stable and tested for labels/hotkeys/BACK"
+    completed: false
+
+  - title: "Final: Verify JSON mapping is centralized in presentation/json and stays at edges"
+    completed: false
+
+  - title: "Final: Verify error strategy is consistent - use cases raise SCCError, edges map"
+    completed: false
+
+  - title: "Final: Verify architectural invariants + filesystem contracts are enforced by tests"
+    completed: false
+
+  - title: "Final: Optional - verify complexity budget prevents reintroducing mega-files"
+    completed: false

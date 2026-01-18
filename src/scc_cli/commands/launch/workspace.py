@@ -192,7 +192,8 @@ def prepare_workspace(
 
     # Install dependencies if requested
     if install_deps:
-        installer = get_default_adapters().dependency_installer
+        adapters = get_default_adapters()
+        installer = adapters.dependency_installer
         with Status(
             "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
         ):
