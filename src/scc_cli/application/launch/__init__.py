@@ -1,5 +1,12 @@
 """Launch-related application use cases."""
 
+from scc_cli.application.launch.apply_personal_profile import (
+    ApplyPersonalProfileConfirmation,
+    ApplyPersonalProfileDependencies,
+    ApplyPersonalProfileRequest,
+    ApplyPersonalProfileResult,
+    apply_personal_profile,
+)
 from scc_cli.application.launch.prepare_launch_plan import (
     PrepareLaunchPlanDependencies,
     PrepareLaunchPlanRequest,
@@ -31,6 +38,10 @@ from scc_cli.application.launch.start_wizard import (
 )
 
 __all__ = [
+    "ApplyPersonalProfileConfirmation",
+    "ApplyPersonalProfileDependencies",
+    "ApplyPersonalProfileRequest",
+    "ApplyPersonalProfileResult",
     "BackRequested",
     "CancelRequested",
     "PrepareLaunchPlanDependencies",
@@ -50,6 +61,7 @@ __all__ = [
     "WorkspaceSelected",
     "WorkspaceSourceChosen",
     "WorktreeSelected",
+    "apply_personal_profile",
     "apply_start_wizard_event",
     "initialize_start_wizard",
     "prepare_launch_plan",

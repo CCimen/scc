@@ -264,5 +264,6 @@ For more detailed information, read these files:
 - Added application/launch SelectSession use case with interaction request prompt model.
 - Added application/launch start wizard state machine with explicit states and tests.
 - Added PrepareLaunchPlan use case in `application/launch` as a thin wrapper over start session planning.
+- Added ApplyPersonalProfile use case with personal profile port and local adapter.
 - Validation: `uv run ruff format`, `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest`.
 
