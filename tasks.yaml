@@ -16,7 +16,7 @@ tasks:
     completed: true
 
   - title: "Phase 4: Create application/launch/ package with StartSessionWizard state machine (explicit states)"
-    completed: false
+    completed: true
 
   - title: "Phase 4: Create application/launch/ package with PrepareLaunchPlan use case"
     completed: false
