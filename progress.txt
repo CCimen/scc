@@ -266,4 +266,6 @@ For more detailed information, read these files:
 - Added PrepareLaunchPlan use case in `application/launch` as a thin wrapper over start session planning.
 - Added ApplyPersonalProfile use case with personal profile port and local adapter.
 - Validation: `uv run ruff format`, `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest`.
+- Added FinalizeLaunch use case to delegate sandbox startup in application/launch.
+- Validation: `uv run ruff format`, `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest`.
 

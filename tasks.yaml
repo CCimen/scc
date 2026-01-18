@@ -25,7 +25,7 @@ tasks:
     completed: true
 
   - title: "Phase 4: Create application/launch/ package with FinalizeLaunch use case"
-    completed: false
+    completed: true
 
   - title: "Phase 4: Introduce LaunchOutput view model (structured info/warn/success events)"
     completed: false

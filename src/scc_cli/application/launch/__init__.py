@@ -7,6 +7,12 @@ from scc_cli.application.launch.apply_personal_profile import (
     ApplyPersonalProfileResult,
     apply_personal_profile,
 )
+from scc_cli.application.launch.finalize_launch import (
+    FinalizeLaunchDependencies,
+    FinalizeLaunchPlan,
+    FinalizeLaunchResult,
+    finalize_launch,
+)
 from scc_cli.application.launch.prepare_launch_plan import (
     PrepareLaunchPlanDependencies,
     PrepareLaunchPlanRequest,
@@ -44,6 +50,9 @@ __all__ = [
     "ApplyPersonalProfileResult",
     "BackRequested",
     "CancelRequested",
+    "FinalizeLaunchDependencies",
+    "FinalizeLaunchPlan",
+    "FinalizeLaunchResult",
     "PrepareLaunchPlanDependencies",
     "PrepareLaunchPlanRequest",
     "PrepareLaunchPlanResult",
@@ -63,6 +72,7 @@ __all__ = [
     "WorktreeSelected",
     "apply_personal_profile",
     "apply_start_wizard_event",
+    "finalize_launch",
     "initialize_start_wizard",
     "prepare_launch_plan",
     "select_session",
