@@ -13,7 +13,7 @@ tasks:
   # ============================================================================
 
   - title: "Phase 4: Create application/launch/ package with SelectSession use case"
-    completed: false
+    completed: true
 
   - title: "Phase 4: Create application/launch/ package with StartSessionWizard state machine (explicit states)"
     completed: false

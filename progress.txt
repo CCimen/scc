@@ -261,5 +261,6 @@ For more detailed information, read these files:
 - Fixed worktree use case import ordering, removed redundant branch handling in worktree switch.
 - Swapped worktree CLI tests to index-only dependency access to avoid unused tuple unpacking.
 - Cleaned up dependency installer wiring in launch workspace preparation and confirmed start --install-deps tests.
+- Added application/launch SelectSession use case with interaction request prompt model.
 - Validation: `uv run ruff format`, `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest`.
 
