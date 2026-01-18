@@ -28,7 +28,7 @@ tasks:
     completed: true
 
   - title: "Phase 4: Introduce LaunchOutput view model (structured info/warn/success events)"
-    completed: false
+    completed: true
 
   - title: "Phase 4: Convert wizard prompts to InteractionRequests; UI renders them"
     completed: false

@@ -268,4 +268,5 @@ For more detailed information, read these files:
 - Validation: `uv run ruff format`, `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest`.
 - Added FinalizeLaunch use case to delegate sandbox startup in application/launch.
 - Validation: `uv run ruff format`, `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest`.
+- Added LaunchOutput view model types for info/warn/success events in application launch output models.
 

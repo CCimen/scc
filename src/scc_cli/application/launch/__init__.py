@@ -13,6 +13,14 @@ from scc_cli.application.launch.finalize_launch import (
     FinalizeLaunchResult,
     finalize_launch,
 )
+from scc_cli.application.launch.output_models import (
+    LaunchInfoEvent,
+    LaunchOutputEvent,
+    LaunchOutputKind,
+    LaunchOutputViewModel,
+    LaunchSuccessEvent,
+    LaunchWarningEvent,
+)
 from scc_cli.application.launch.prepare_launch_plan import (
     PrepareLaunchPlanDependencies,
     PrepareLaunchPlanRequest,
@@ -70,6 +78,12 @@ __all__ = [
     "WorkspaceSelected",
     "WorkspaceSourceChosen",
     "WorktreeSelected",
+    "LaunchInfoEvent",
+    "LaunchOutputEvent",
+    "LaunchOutputKind",
+    "LaunchOutputViewModel",
+    "LaunchSuccessEvent",
+    "LaunchWarningEvent",
     "apply_personal_profile",
     "apply_start_wizard_event",
     "finalize_launch",
