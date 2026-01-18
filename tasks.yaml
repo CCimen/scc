@@ -19,7 +19,7 @@ tasks:
     completed: true
 
   - title: "Phase 4: Create application/launch/ package with PrepareLaunchPlan use case"
-    completed: false
+    completed: true
 
   - title: "Phase 4: Create application/launch/ package with ApplyPersonalProfile use case"
     completed: false
