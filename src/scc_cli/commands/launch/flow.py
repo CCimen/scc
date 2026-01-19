@@ -1128,7 +1128,13 @@ def interactive_start(
             if answer.value is StartWizardAction.SWITCH_TEAM:
                 show_all_teams = False
                 state = apply_start_wizard_event(state, QuickResumeDismissed())
-                state = set_team_context(state, team_override)
+                # User explicitly requested team switch - go to TEAM_SELECTION
+                # regardless of team_selection_required config
+                state = StartWizardState(
+                    step=StartWizardStep.TEAM_SELECTION,
+                    context=StartWizardContext(team=None),  # Clear for fresh selection
+                    config=state.config,
+                )
                 continue
 
             if answer.value is StartWizardAction.NEW_SESSION:

@@ -613,21 +613,76 @@ def inject_settings(settings: dict[str, Any]) -> bool:
     )
 
 
-def reset_global_settings() -> bool:
+def reset_plugin_caches() -> bool:
     """
-    Reset global settings in Docker sandbox volume to empty state.
+    Reset Claude Code's plugin caches in Docker sandbox volume.
 
-    This prevents plugin mixing across teams by ensuring the volume doesn't
-    retain old plugin configurations. Workspace settings.local.json is the
-    single source of truth for plugins.
+    Claude Code maintains its own plugin caches (known_marketplaces.json,
+    installed_plugins.json) that can contain stale paths from previous sessions.
+    When switching between workspaces (e.g., main repo vs worktrees), these
+    stale paths cause "Plugin not found in marketplace" errors.
 
-    Called once per `scc start` flow, before container exec.
+    This function clears those caches to ensure Claude uses fresh paths from
+    the injected settings.json.
 
     Returns:
         True if reset successful, False otherwise
     """
-    # Write empty settings to the volume (overwrites any existing)
-    return inject_file_to_sandbox_volume("settings.json", "{}")
+    try:
+        # Clear and recreate plugin caches in a single atomic operation
+        # This matches the manual fix that was verified to work
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{SANDBOX_DATA_VOLUME}:/data",
+                "alpine",
+                "sh",
+                "-c",
+                (
+                    "rm -rf /data/plugins && "
+                    "mkdir -p /data/plugins && "
+                    "echo '{}' > /data/plugins/known_marketplaces.json && "
+                    'echo \'{"version":2,"plugins":{}}\' > /data/plugins/installed_plugins.json'
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+def reset_global_settings() -> bool:
+    """
+    Reset global settings and plugin caches in Docker sandbox volume.
+
+    This prevents plugin mixing across teams/workspaces by ensuring the volume
+    doesn't retain stale configurations. Clears:
+    - settings.json (main settings)
+    - plugins/known_marketplaces.json (cached marketplace paths)
+    - plugins/installed_plugins.json (cached plugin install info)
+
+    Called once per `scc start` flow, before container exec.
+
+    Returns:
+        True if all resets successful, False otherwise
+    """
+    success = True
+
+    # Clear main settings
+    if not inject_file_to_sandbox_volume("settings.json", "{}"):
+        success = False
+
+    # Clear plugin caches to prevent stale paths across workspaces
+    if not reset_plugin_caches():
+        success = False
+
+    return success
 
 
 def inject_plugin_settings_to_container(
