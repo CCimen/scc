@@ -22,6 +22,7 @@ from scc_cli.maintenance.repair_sessions import (
 )
 from scc_cli.maintenance.types import ResetResult, RiskTier
 from scc_cli.models.exceptions import AllowTargets, Exception, ExceptionFile
+from scc_cli.ports.session_models import SessionRecord
 from scc_cli.stores.exception_store import RepoStore, UserStore
 
 
@@ -119,26 +120,28 @@ def test_prune_containers_removes_stopped(monkeypatch) -> None:
 
 def test_prune_sessions_removes_old_entries(temp_config_dir: Path) -> None:
     now = datetime.now(timezone.utc)
-    sessions._save_sessions(
+    store = sessions.get_session_store()
+    store.save_sessions(
         [
-            {"workspace": "one", "last_used": (now - timedelta(days=1)).isoformat()},
-            {"workspace": "two", "last_used": (now - timedelta(days=60)).isoformat()},
-            {"workspace": "three", "last_used": (now - timedelta(days=45)).isoformat()},
+            SessionRecord(workspace="one", last_used=(now - timedelta(days=1)).isoformat()),
+            SessionRecord(workspace="two", last_used=(now - timedelta(days=60)).isoformat()),
+            SessionRecord(workspace="three", last_used=(now - timedelta(days=45)).isoformat()),
         ]
     )
 
     result = prune_sessions(older_than_days=30, keep_n=1, dry_run=False)
 
     assert result.removed_count == 2
-    remaining = sessions._load_sessions()
-    assert [session["workspace"] for session in remaining] == ["one"]
+    remaining = store.load_sessions()
+    assert [session.workspace for session in remaining] == ["one"]
 
 
 def test_delete_all_sessions_creates_backup(temp_config_dir: Path) -> None:
-    sessions._save_sessions(
+    store = sessions.get_session_store()
+    store.save_sessions(
         [
-            {"workspace": "one", "last_used": "2024-01-01T00:00:00+00:00"},
-            {"workspace": "two", "last_used": "2024-01-02T00:00:00+00:00"},
+            SessionRecord(workspace="one", last_used="2024-01-01T00:00:00+00:00"),
+            SessionRecord(workspace="two", last_used="2024-01-02T00:00:00+00:00"),
         ]
     )
 
@@ -147,7 +150,7 @@ def test_delete_all_sessions_creates_backup(temp_config_dir: Path) -> None:
     assert result.removed_count == 2
     assert result.backup_path is not None
     assert result.backup_path.exists()
-    assert sessions._load_sessions() == []
+    assert store.load_sessions() == []
 
 
 def test_reset_exceptions_resets_user_and_repo(temp_config_dir: Path, tmp_path: Path) -> None:

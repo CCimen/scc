@@ -24,6 +24,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from scc_cli.application.launch.start_wizard import TeamRepoOption
+from scc_cli.ports.session_models import SessionSummary
 from scc_cli.ui.wizard import (
     BACK,
     WorkspaceSource,
@@ -34,6 +36,17 @@ from scc_cli.ui.wizard import (
     pick_team_repo,
     pick_workspace_source,
 )
+
+
+def _session_summary(workspace: str, last_used: str) -> SessionSummary:
+    return SessionSummary(
+        name=Path(workspace).name or "session",
+        workspace=workspace,
+        team=None,
+        last_used=last_used,
+        container_name=None,
+        branch=None,
+    )
 
 
 class TestBackSentinel:
@@ -400,7 +413,7 @@ class TestPickRecentWorkspaceSubScreen:
 
     def test_escape_returns_back(self) -> None:
         """Esc on sub-screen returns BACK (go back to previous screen)."""
-        recent = [{"workspace": "/project", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/project", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             # With allow_back=True, underlying picker returns BACK for Esc
@@ -413,7 +426,7 @@ class TestPickRecentWorkspaceSubScreen:
 
     def test_quit_returns_none(self) -> None:
         """Q on sub-screen returns None (quit app entirely)."""
-        recent = [{"workspace": "/project", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/project", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             # With allow_back=True, underlying picker returns None for q
@@ -425,7 +438,7 @@ class TestPickRecentWorkspaceSubScreen:
 
     def test_back_menu_item_returns_back(self) -> None:
         """Selecting '← Back' menu item returns BACK."""
-        recent = [{"workspace": "/project", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/project", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             mock_picker.return_value = BACK  # User selected "← Back"
@@ -436,7 +449,7 @@ class TestPickRecentWorkspaceSubScreen:
 
     def test_selection_returns_workspace_path(self) -> None:
         """Valid selection returns workspace path string."""
-        recent = [{"workspace": "/project/myapp", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/project/myapp", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             mock_picker.return_value = "/project/myapp"
@@ -448,7 +461,7 @@ class TestPickRecentWorkspaceSubScreen:
 
     def test_includes_back_as_first_item(self) -> None:
         """Back item is first in the list."""
-        recent = [{"workspace": "/project", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/project", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             mock_picker.return_value = None
@@ -540,7 +553,12 @@ class TestPickTeamRepoSubScreen:
         repos = [{"name": "api", "url": "https://github.com/org/api", "local_path": "/tmp"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = repos[0]  # User selected repo dict
+            mock_picker.return_value = TeamRepoOption(
+                name="api",
+                description="",
+                url="https://github.com/org/api",
+                local_path="/tmp",
+            )
 
             result = pick_team_repo(repos)
 
@@ -709,7 +727,7 @@ class TestNavigationContract:
 
     def test_subscreen_escape_returns_back(self) -> None:
         """CRITICAL: Sub-screen Esc must return BACK (go back to previous)."""
-        recent = [{"workspace": "/tmp", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/tmp", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             # With allow_back=True, underlying picker returns BACK for Esc
@@ -722,7 +740,7 @@ class TestNavigationContract:
 
     def test_subscreen_quit_returns_none(self) -> None:
         """CRITICAL: Sub-screen q must return None (quit app entirely)."""
-        recent = [{"workspace": "/tmp", "last_used": "2025-01-01T00:00:00Z"}]
+        recent = [_session_summary("/tmp", "2025-01-01T00:00:00Z")]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
             # With allow_back=True, underlying picker returns None for q
@@ -750,7 +768,7 @@ class TestNavigationContract:
                     # Simulate Esc on sub-screen → BACK
                     mock_picker.return_value = BACK
                     result = pick_recent_workspace(
-                        [{"workspace": "/tmp", "last_used": "2025-01-01T00:00:00Z"}]
+                        [_session_summary("/tmp", "2025-01-01T00:00:00Z")]
                     )
                     if result is None:
                         return None  # User pressed q - quit app

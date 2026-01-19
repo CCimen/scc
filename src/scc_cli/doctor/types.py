@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from scc_cli.core.enums import SeverityLevel
+
 
 @dataclass
 class CheckResult:
@@ -20,7 +22,7 @@ class CheckResult:
     version: str | None = None
     fix_hint: str | None = None
     fix_url: str | None = None
-    severity: str = "error"  # "error", "warning", "info"
+    severity: str = SeverityLevel.ERROR
     code_frame: str | None = None  # Optional code frame for syntax errors
     fix_commands: list[str] | None = None  # Copy-pasteable fix commands
 
@@ -58,9 +60,9 @@ class DoctorResult:
     @property
     def error_count(self) -> int:
         """Return the count of failed critical checks."""
-        return sum(1 for c in self.checks if not c.passed and c.severity == "error")
+        return sum(1 for c in self.checks if not c.passed and c.severity == SeverityLevel.ERROR)
 
     @property
     def warning_count(self) -> int:
         """Return the count of warnings."""
-        return sum(1 for c in self.checks if not c.passed and c.severity == "warning")
+        return sum(1 for c in self.checks if not c.passed and c.severity == SeverityLevel.WARNING)

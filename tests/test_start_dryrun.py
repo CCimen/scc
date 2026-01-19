@@ -36,7 +36,7 @@ class TestDryRunBasicBehavior:
                 with patch(
                     "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
                 ):
-                    with patch("scc_cli.commands.launch.flow.start_session", mock_start_session):
+                    with patch("scc_cli.commands.launch.flow.finalize_launch", mock_start_session):
                         try:
                             start(
                                 workspace=str(tmp_path),

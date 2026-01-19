@@ -5,19 +5,21 @@ Generate support bundles with diagnostic information. Include secret
 and path redaction for safe sharing.
 """
 
+from datetime import datetime
 from pathlib import Path
 
 import typer
 
+from ..application.support_bundle import (
+    SupportBundleDependencies,
+    SupportBundleRequest,
+    build_support_bundle_manifest,
+    create_support_bundle,
+)
+from ..bootstrap import get_default_adapters
 from ..cli_common import console, handle_errors
-from ..json_output import build_envelope
-from ..kinds import Kind
 from ..output_mode import json_output_mode, print_json, set_pretty_mode
-from ..support_bundle import (
-    build_bundle_data,
-    create_bundle,
-    get_default_bundle_path,
-)  # noqa: F401
+from ..presentation.json.support_json import build_support_bundle_envelope
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Support App
@@ -29,6 +31,12 @@ support_app = typer.Typer(
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
+
+
+def _get_default_bundle_path() -> Path:
+    """Get default path for support bundle."""
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return Path.cwd() / f"scc-support-bundle-{timestamp}.zip"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -77,22 +85,33 @@ def support_bundle_cmd(
         set_pretty_mode(True)
 
     redact_paths_flag = not no_redact_paths
+    output_path = Path(output) if output else _get_default_bundle_path()
+
+    # Build dependencies from adapters
+    adapters = get_default_adapters()
+    dependencies = SupportBundleDependencies(
+        filesystem=adapters.filesystem,
+        clock=adapters.clock,
+        doctor_runner=adapters.doctor_runner,
+        archive_writer=adapters.archive_writer,
+    )
+
+    request = SupportBundleRequest(
+        output_path=output_path,
+        redact_paths=redact_paths_flag,
+        workspace_path=None,
+    )
 
     if json_output:
         with json_output_mode():
-            bundle_data = build_bundle_data(redact_paths_flag=redact_paths_flag)
-            envelope = build_envelope(Kind.SUPPORT_BUNDLE, data=bundle_data)
+            manifest = build_support_bundle_manifest(request, dependencies=dependencies)
+            envelope = build_support_bundle_envelope(manifest)
             print_json(envelope)
             raise typer.Exit(0)
 
     # Create the bundle zip file
-    output_path = Path(output) if output else get_default_bundle_path()
-
     console.print("[cyan]Generating support bundle...[/cyan]")
-    create_bundle(
-        output_path=output_path,
-        redact_paths_flag=redact_paths_flag,
-    )
+    create_support_bundle(request, dependencies=dependencies)
 
     console.print()
     console.print(f"[green]Support bundle created:[/green] {output_path}")

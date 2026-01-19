@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from scc_cli import config as config_module
+from scc_cli.core.enums import MCPServerType, RequestSource, TargetType
 
 if TYPE_CHECKING:
     pass
@@ -29,9 +30,9 @@ class BlockedItem:
     """Tracks an item blocked by security pattern."""
 
     item: str
-    blocked_by: str  # The pattern that matched
+    blocked_by: str
     source: str  # Always "org.security"
-    target_type: str = "plugin"  # "plugin" | "mcp_server"
+    target_type: str = TargetType.PLUGIN
 
 
 @dataclass
@@ -39,9 +40,9 @@ class DelegationDenied:
     """Tracks an addition denied due to delegation rules."""
 
     item: str
-    requested_by: str  # "team" | "project"
+    requested_by: str  # RequestSource.TEAM or RequestSource.PROJECT
     reason: str
-    target_type: str = "plugin"  # "plugin" | "mcp_server"
+    target_type: str = TargetType.PLUGIN
 
 
 @dataclass
@@ -55,7 +56,7 @@ class MCPServer:
     """
 
     name: str
-    type: str  # "sse" | "stdio" | "http"
+    type: str  # MCPServerType value
     url: str | None = None
     command: str | None = None
     args: list[str] | None = None
@@ -401,7 +402,7 @@ def compute_effective_config(
             result.denied_additions.append(
                 DelegationDenied(
                     item=plugin,
-                    requested_by="team",
+                    requested_by=RequestSource.TEAM,
                     reason=f"Team '{team_name}' not allowed to add plugins",
                 )
             )
@@ -411,7 +412,7 @@ def compute_effective_config(
             result.denied_additions.append(
                 DelegationDenied(
                     item=plugin,
-                    requested_by="team",
+                    requested_by=RequestSource.TEAM,
                     reason="Plugin not allowed by defaults.allowed_plugins",
                 )
             )
@@ -445,7 +446,7 @@ def compute_effective_config(
                     item=server_name or server_url,
                     blocked_by=blocked_by,
                     source="org.security",
-                    target_type="mcp_server",
+                    target_type=TargetType.MCP_SERVER,
                 )
             )
             continue
@@ -454,9 +455,9 @@ def compute_effective_config(
             result.denied_additions.append(
                 DelegationDenied(
                     item=server_name,
-                    requested_by="team",
+                    requested_by=RequestSource.TEAM,
                     reason=f"Team '{team_name}' not allowed to add MCP servers",
-                    target_type="mcp_server",
+                    target_type=TargetType.MCP_SERVER,
                 )
             )
             continue
@@ -465,14 +466,14 @@ def compute_effective_config(
             result.denied_additions.append(
                 DelegationDenied(
                     item=server_name or server_url,
-                    requested_by="team",
+                    requested_by=RequestSource.TEAM,
                     reason="MCP server not allowed by defaults.allowed_mcp_servers",
-                    target_type="mcp_server",
+                    target_type=TargetType.MCP_SERVER,
                 )
             )
             continue
 
-        if server_dict.get("type") == "stdio":
+        if server_dict.get("type") == MCPServerType.STDIO:
             stdio_result = validate_stdio_server(server_dict, org_config)
             if stdio_result.blocked:
                 result.blocked_items.append(
@@ -480,14 +481,14 @@ def compute_effective_config(
                         item=server_name,
                         blocked_by=stdio_result.reason,
                         source="org.security",
-                        target_type="mcp_server",
+                        target_type=TargetType.MCP_SERVER,
                     )
                 )
                 continue
 
         mcp_server = MCPServer(
             name=server_name,
-            type=server_dict.get("type", "sse"),
+            type=server_dict.get("type", MCPServerType.SSE),
             url=server_url or None,
             command=server_dict.get("command"),
             args=server_dict.get("args"),
@@ -530,7 +531,7 @@ def compute_effective_config(
                 result.denied_additions.append(
                     DelegationDenied(
                         item=plugin,
-                        requested_by="project",
+                        requested_by=RequestSource.PROJECT,
                         reason=delegation_reason,
                     )
                 )
@@ -540,7 +541,7 @@ def compute_effective_config(
                 result.denied_additions.append(
                     DelegationDenied(
                         item=plugin,
-                        requested_by="project",
+                        requested_by=RequestSource.PROJECT,
                         reason="Plugin not allowed by defaults.allowed_plugins",
                     )
                 )
@@ -572,7 +573,7 @@ def compute_effective_config(
                         item=server_name or server_url,
                         blocked_by=blocked_by,
                         source="org.security",
-                        target_type="mcp_server",
+                        target_type=TargetType.MCP_SERVER,
                     )
                 )
                 continue
@@ -581,9 +582,9 @@ def compute_effective_config(
                 result.denied_additions.append(
                     DelegationDenied(
                         item=server_name,
-                        requested_by="project",
+                        requested_by=RequestSource.PROJECT,
                         reason=delegation_reason,
-                        target_type="mcp_server",
+                        target_type=TargetType.MCP_SERVER,
                     )
                 )
                 continue
@@ -592,14 +593,14 @@ def compute_effective_config(
                 result.denied_additions.append(
                     DelegationDenied(
                         item=server_name or server_url,
-                        requested_by="project",
+                        requested_by=RequestSource.PROJECT,
                         reason="MCP server not allowed by defaults.allowed_mcp_servers",
-                        target_type="mcp_server",
+                        target_type=TargetType.MCP_SERVER,
                     )
                 )
                 continue
 
-            if server_dict.get("type") == "stdio":
+            if server_dict.get("type") == MCPServerType.STDIO:
                 stdio_result = validate_stdio_server(server_dict, org_config)
                 if stdio_result.blocked:
                     result.blocked_items.append(
@@ -607,14 +608,14 @@ def compute_effective_config(
                             item=server_name,
                             blocked_by=stdio_result.reason,
                             source="org.security",
-                            target_type="mcp_server",
+                            target_type=TargetType.MCP_SERVER,
                         )
                     )
                     continue
 
             mcp_server = MCPServer(
                 name=server_name,
-                type=server_dict.get("type", "sse"),
+                type=server_dict.get("type", MCPServerType.SSE),
                 url=server_url or None,
                 command=server_dict.get("command"),
                 args=server_dict.get("args"),

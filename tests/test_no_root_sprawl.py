@@ -42,6 +42,7 @@ ALLOWED_CORE = {
     "ports",
     "adapters",
     "commands",
+    "presentation",
     "ui",
 }
 

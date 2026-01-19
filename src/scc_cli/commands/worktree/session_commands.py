@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Any
 
 import typer
 from rich.prompt import Confirm
@@ -11,11 +12,26 @@ from rich.prompt import Confirm
 from ... import config, sessions
 from ...cli_common import console, handle_errors, render_responsive_table
 from ...core.exit_codes import EXIT_CANCELLED
+from ...json_command import json_command
+from ...kinds import Kind
 from ...maintenance import prune_sessions as maintenance_prune_sessions
+from ...output_mode import is_json_mode
 from ...panels import create_warning_panel
+from ...presentation.json.sessions_json import build_session_list_data
 from ...ui.picker import TeamSwitchRequested, pick_session
 
 
+def _format_last_used(last_used: str | None) -> str:
+    if not last_used:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(last_used)
+    except ValueError:
+        return last_used
+    return sessions.format_relative_time(dt)
+
+
+@json_command(Kind.SESSION_LIST)
 @handle_errors
 def sessions_cmd(
     limit: int = typer.Option(10, "-n", "--limit", help="Number of sessions to show"),
@@ -33,7 +49,9 @@ def sessions_cmd(
     select: bool = typer.Option(
         False, "--select", "-s", help="Interactive picker to select a session"
     ),
-) -> None:
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
+) -> dict[str, Any]:
     """List recent Claude Code sessions."""
     cfg = config.load_user_config()
     active_team = cfg.get("selected_profile")
@@ -51,14 +69,34 @@ def sessions_cmd(
         filter_team = active_team
     else:
         filter_team = "__all__"
-        console.print(
-            "[dim]No active team selected — showing all sessions. "
-            "Use 'scc team switch' or --team to filter.[/dim]"
-        )
+        if not is_json_mode():
+            console.print(
+                "[dim]No active team selected — showing all sessions. "
+                "Use 'scc team switch' or --team to filter.[/dim]"
+            )
 
-    recent = sessions.list_recent(limit)
-    if filter_team != "__all__":
-        recent = [s for s in recent if s.get("team") == filter_team]
+    include_all = filter_team == "__all__"
+    recent = sessions.list_recent(
+        limit=limit,
+        team=None if include_all else filter_team,
+        include_all=include_all,
+    )
+
+    session_dicts = [
+        {
+            "name": session.name,
+            "workspace": session.workspace,
+            "team": session.team,
+            "last_used": session.last_used,
+            "container_name": session.container_name,
+            "branch": session.branch,
+        }
+        for session in recent
+    ]
+    data = build_session_list_data(session_dicts, team=None if include_all else filter_team)
+
+    if is_json_mode():
+        return data
 
     # Interactive picker mode
     if select and recent:
@@ -69,11 +107,11 @@ def sessions_cmd(
                 subtitle=f"{len(recent)} recent sessions",
             )
             if selected:
-                console.print(f"[green]Selected session:[/green] {selected.get('name', '-')}")
-                console.print(f"[dim]Workspace: {selected.get('workspace', '-')}[/dim]")
+                console.print(f"[green]Selected session:[/green] {selected.name}")
+                console.print(f"[dim]Workspace: {selected.workspace}[/dim]")
         except TeamSwitchRequested:
             console.print("[dim]Use 'scc team switch' to change teams[/dim]")
-        return
+        return data
 
     if not recent:
         hint = "Start a session with: scc start <workspace>"
@@ -86,16 +124,23 @@ def sessions_cmd(
                 hint,
             )
         )
-        return
+        return data
 
     # Build rows for responsive table
     rows = []
-    for s in recent:
+    for session in recent:
         # Shorten workspace path if needed
-        ws = s.get("workspace", "-")
+        ws = session.workspace or "-"
         if len(ws) > 40:
             ws = "..." + ws[-37:]
-        rows.append([s.get("name", "-"), ws, s.get("last_used", "-"), s.get("team", "-")])
+        rows.append(
+            [
+                session.name,
+                ws,
+                _format_last_used(session.last_used),
+                session.team or "-",
+            ]
+        )
 
     title = "Recent Sessions"
     if filter_team not in ("__all__", None):
@@ -116,6 +161,8 @@ def sessions_cmd(
         ],
     )
 
+    return data
+
 
 @handle_errors
 def session_list_cmd(
@@ -129,6 +176,8 @@ def session_list_cmd(
     select: bool = typer.Option(
         False, "--select", "-s", help="Interactive picker to select a session"
     ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
     """List recent Claude Code sessions.
 
@@ -140,7 +189,14 @@ def session_list_cmd(
         scc session list --select
     """
     # Delegate to sessions_cmd to avoid duplication
-    sessions_cmd(limit=limit, team=team, all_teams=all_teams, select=select)
+    sessions_cmd(
+        limit=limit,
+        team=team,
+        all_teams=all_teams,
+        select=select,
+        json_output=json_output,
+        pretty=pretty,
+    )
 
 
 def _parse_duration(duration: str) -> int:

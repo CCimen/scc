@@ -68,6 +68,10 @@ def handle_errors(func: F) -> F:
     JSON Mode: This is the SINGLE LOCATION for JSON error envelope output.
     All errors in JSON mode are handled here to ensure consistency.
 
+    Error strategy:
+    - Use cases raise typed SCCError instances.
+    - CLI edges map errors via core.error_mapping + json_output helpers.
+
     Args:
         func: The CLI command function to wrap.
 

@@ -13,6 +13,7 @@ Public API is exported via __init__.py.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from rich import box
@@ -64,6 +65,7 @@ from ..keys import (
     WorktreeActionMenuRequested,
 )
 from ..list_screen import ListItem
+from ..time_format import format_relative_time_from_datetime
 from .models import DashboardState
 
 
@@ -394,15 +396,10 @@ class Dashboard:
         return Group(header, table, commands)
 
     def _render_session_details(self, item: ListItem[Any]) -> RenderableType:
-        """Render details for a session item using structured key/value table.
-
-        Uses the raw session dict stored in item.value for field access.
-        """
+        """Render details for a session item using structured key/value table."""
         session_source = item.value
         if isinstance(session_source, SessionItem):
             session = session_source.session
-        elif isinstance(session_source, dict):
-            session = session_source
         else:
             return Text("Session details unavailable", style="dim italic")
 
@@ -415,37 +412,36 @@ class Dashboard:
 
         table.add_row("Name", Text(item.label, style="bold"))
 
-        # Read fields directly from session dict (with None protection)
-        if session.get("team"):
-            table.add_row("Team", str(session["team"]))
-        if session.get("branch"):
-            table.add_row("Branch", str(session["branch"]))
-        if session.get("workspace"):
-            table.add_row("Workspace", str(session["workspace"]))
-        if session.get("last_used"):
-            table.add_row("Last Used", str(session["last_used"]))
+        if session.team:
+            table.add_row("Team", str(session.team))
+        if session.branch:
+            table.add_row("Branch", str(session.branch))
+        if session.workspace:
+            table.add_row("Workspace", str(session.workspace))
+        if session.last_used:
+            table.add_row("Last Used", self._format_session_last_used(session.last_used))
 
-        # Commands section with None protection and helpful tips
         commands = Text()
         commands.append("\nCommands\n", style="dim")
 
-        container_name = session.get("container_name")
-        session_id = session.get("id")
+        container_name = session.container_name
 
         if container_name:
-            # Container is available - show resume command
             commands.append(f"  scc resume {container_name}\n", style="cyan")
-        elif session_id:
-            # Session exists but container stopped - show restart tip
+        elif session.workspace:
             commands.append("  Container stopped. Start new session:\n", style="dim italic")
-            commands.append(
-                f"  scc start --workspace {session.get('workspace', '.')}\n", style="cyan"
-            )
+            commands.append(f"  scc start --workspace {session.workspace}\n", style="cyan")
         else:
-            # Minimal session info - generic tip
             commands.append("  Start session: scc start\n", style="cyan dim")
 
         return Group(header, table, commands)
+
+    def _format_session_last_used(self, iso_timestamp: str) -> str:
+        try:
+            dt = datetime.fromisoformat(iso_timestamp)
+        except ValueError:
+            return iso_timestamp
+        return format_relative_time_from_datetime(dt)
 
     def _render_worktree_details(self, item: ListItem[Any]) -> RenderableType:
         """Render details for a worktree item using structured key/value table."""

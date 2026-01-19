@@ -12,14 +12,18 @@ that exit the Rich Live context before handling nested UI components.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from datetime import datetime
+from typing import TYPE_CHECKING
 
+from ... import sessions
 from ...console import get_err_console
 
 if TYPE_CHECKING:
     from rich.console import Console
 
 from scc_cli.application import dashboard as app_dashboard
+from scc_cli.ports.session_models import SessionSummary
 
 from ...confirm import Confirm
 from ..chrome import print_with_layout
@@ -44,9 +48,18 @@ from ..keys import (
     WorktreeActionMenuRequested,
 )
 from ..list_screen import ListState
+from ..time_format import format_relative_time_from_datetime
 from ._dashboard import Dashboard
 from .loaders import _to_tab_data
 from .models import DashboardState
+
+
+def _format_last_used(iso_timestamp: str) -> str:
+    try:
+        dt = datetime.fromisoformat(iso_timestamp)
+    except ValueError:
+        return iso_timestamp
+    return format_relative_time_from_datetime(dt)
 
 
 def run_dashboard() -> None:
@@ -73,11 +86,24 @@ def run_dashboard() -> None:
         scc_config.mark_onboarding_seen()
 
     flow_state = app_dashboard.DashboardFlowState()
+    session_service = sessions.get_session_service()
+
+    def _load_tabs(
+        verbose_worktrees: bool = False,
+    ) -> Mapping[
+        app_dashboard.DashboardTab,
+        app_dashboard.DashboardTabData,
+    ]:
+        return app_dashboard.load_all_tab_data(
+            session_service=session_service,
+            format_last_used=_format_last_used,
+            verbose_worktrees=verbose_worktrees,
+        )
 
     while True:
         view, flow_state = app_dashboard.build_dashboard_view(
             flow_state,
-            app_dashboard.load_all_tab_data,
+            _load_tabs,
         )
         tabs = {tab: _to_tab_data(tab_data) for tab, tab_data in view.tabs.items()}
         state = DashboardState(
@@ -453,13 +479,20 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     from rich.status import Status
 
     from ... import config, docker
+    from ...application.start_session import (
+        StartSessionDependencies,
+        StartSessionRequest,
+        sync_marketplace_settings_for_start,
+    )
+    from ...bootstrap import get_default_adapters
     from ...commands.launch import (
-        _configure_team_settings,
         _launch_sandbox,
         _resolve_mount_and_branch,
-        _sync_marketplace_settings,
         _validate_and_resolve_workspace,
     )
+    from ...commands.launch.team_settings import _configure_team_settings
+    from ...marketplace.materialize import materialize_marketplace
+    from ...marketplace.resolve import resolve_effective_config
     from ...theme import Spinners
 
     console = get_err_console()
@@ -493,7 +526,36 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings
-        sync_result = _sync_marketplace_settings(workspace_path, team)
+        adapters = get_default_adapters()
+        start_dependencies = StartSessionDependencies(
+            filesystem=adapters.filesystem,
+            remote_fetcher=adapters.remote_fetcher,
+            clock=adapters.clock,
+            git_client=adapters.git_client,
+            agent_runner=adapters.agent_runner,
+            sandbox_runtime=adapters.sandbox_runtime,
+            resolve_effective_config=resolve_effective_config,
+            materialize_marketplace=materialize_marketplace,
+        )
+        start_request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=team,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=team is None,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=config.load_cached_org_config(),
+            org_config_url=None,
+        )
+        sync_result, _sync_error = sync_marketplace_settings_for_start(
+            start_request,
+            start_dependencies,
+        )
         plugin_settings = sync_result.rendered_settings if sync_result else None
 
         # Resolve mount path and branch
@@ -527,44 +589,49 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         return app_dashboard.StartFlowResult.from_legacy(False)
 
 
-def _handle_session_resume(session: dict[str, Any]) -> bool:
-    """Handle session resume request from dashboard.
-
-    Resumes an existing session by launching the Docker container with
-    the stored workspace, team, and branch configuration.
+def _handle_session_resume(session: SessionSummary) -> bool:
+    """Resume a Claude Code session from the dashboard.
 
     This function executes OUTSIDE Rich Live context (the dashboard has
     already exited via the exception unwind before this is called).
 
     Args:
-        session: Session dict containing workspace, team, branch, container_name, etc.
+        session: Session summary containing workspace, team, branch, container_name, etc.
 
     Returns:
         True if session was resumed successfully, False if resume failed
         (e.g., workspace no longer exists).
     """
+
     from pathlib import Path
 
     from rich.status import Status
 
     from ... import config, docker
+    from ...application.start_session import (
+        StartSessionDependencies,
+        StartSessionRequest,
+        sync_marketplace_settings_for_start,
+    )
+    from ...bootstrap import get_default_adapters
     from ...commands.launch import (
-        _configure_team_settings,
         _launch_sandbox,
         _resolve_mount_and_branch,
-        _sync_marketplace_settings,
         _validate_and_resolve_workspace,
     )
+    from ...commands.launch.team_settings import _configure_team_settings
+    from ...marketplace.materialize import materialize_marketplace
+    from ...marketplace.resolve import resolve_effective_config
     from ...theme import Spinners
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
 
     # Extract session info
-    workspace = session.get("workspace", "")
-    team = session.get("team")  # May be None for standalone
-    session_name = session.get("name")
-    branch = session.get("branch")
+    workspace = session.workspace
+    team = session.team  # May be None for standalone
+    session_name = session.name
+    branch = session.branch
 
     if not workspace:
         console.print("[red]Session has no workspace path[/red]")
@@ -594,7 +661,36 @@ def _handle_session_resume(session: dict[str, Any]) -> bool:
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings
-        sync_result = _sync_marketplace_settings(workspace_path, team)
+        adapters = get_default_adapters()
+        start_dependencies = StartSessionDependencies(
+            filesystem=adapters.filesystem,
+            remote_fetcher=adapters.remote_fetcher,
+            clock=adapters.clock,
+            git_client=adapters.git_client,
+            agent_runner=adapters.agent_runner,
+            sandbox_runtime=adapters.sandbox_runtime,
+            resolve_effective_config=resolve_effective_config,
+            materialize_marketplace=materialize_marketplace,
+        )
+        start_request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=team,
+            session_name=session_name,
+            resume=True,
+            fresh=False,
+            offline=False,
+            standalone=team is None,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=config.load_cached_org_config(),
+            org_config_url=None,
+        )
+        sync_result, _sync_error = sync_marketplace_settings_for_start(
+            start_request,
+            start_dependencies,
+        )
         plugin_settings = sync_result.rendered_settings if sync_result else None
 
         # Resolve mount path and branch
@@ -970,7 +1066,7 @@ def _handle_container_action_menu(container_id: str, container_name: str) -> str
     return None
 
 
-def _handle_session_action_menu(session: dict[str, Any]) -> str | None:
+def _handle_session_action_menu(session: SessionSummary) -> str | None:
     """Show a session actions menu and execute the selected action."""
     from ... import sessions as session_store
     from ..list_screen import ListItem, ListScreen
@@ -1003,8 +1099,8 @@ def _handle_session_action_menu(session: dict[str, Any]) -> str | None:
             return "Resume failed"
 
     if selected == "remove":
-        workspace = session.get("workspace")
-        branch = session.get("branch")
+        workspace = session.workspace
+        branch = session.branch
         if not workspace:
             return "Missing workspace"
         removed = session_store.remove_session(workspace, branch)

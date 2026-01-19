@@ -96,6 +96,24 @@ def _detect_scc_config_root(cwd: Path) -> Path | None:
     return None
 
 
+def _detect_git_marker_root(cwd: Path) -> Path | None:
+    """Find a .git marker by walking up from cwd.
+
+    Args:
+        cwd: Current working directory.
+
+    Returns:
+        Directory containing .git, or None if not found.
+    """
+    current = cwd.resolve()
+    while current != current.parent:
+        git_marker = current / ".git"
+        if git_marker.exists():
+            return current
+        current = current.parent
+    return None
+
+
 def _calculate_container_workdir(
     entry_dir: Path,
     mount_root: Path,
@@ -129,6 +147,7 @@ def resolve_launch_context(
     workspace_arg: str | None,
     *,
     allow_suspicious: bool = False,
+    include_git_dir_fallback: bool = False,
 ) -> ResolverResult | None:
     """Resolve workspace with complete context for launch.
 
@@ -139,7 +158,8 @@ def resolve_launch_context(
     Auto-detect policy (simple, explicit):
     1. git rev-parse --show-toplevel -> use git root
     2. .scc.yaml parent walk -> use config dir
-    3. Anything else -> None (requires wizard or explicit path)
+    3. Optional .git marker fallback (when enabled)
+    4. Anything else -> None (requires wizard or explicit path)
 
     Suspicious handling:
     - Auto-detected + suspicious -> is_suspicious=True (blocks auto-launch)
@@ -152,6 +172,7 @@ def resolve_launch_context(
         workspace_arg: Explicit workspace path from --workspace arg, or None.
         allow_suspicious: If True, allow explicit paths to suspicious locations.
             This is typically set via --force or after user confirmation.
+        include_git_dir_fallback: If True, use .git marker discovery when git is unavailable.
 
     Returns:
         ResolverResult with all paths canonicalized, or None if:
@@ -187,6 +208,14 @@ def resolve_launch_context(
             if scc_config_root is not None:
                 workspace_root = scc_config_root
                 reason = f".scc.yaml found at: {scc_config_root}"
+            elif include_git_dir_fallback:
+                git_marker_root = _detect_git_marker_root(cwd)
+                if git_marker_root is not None:
+                    workspace_root = git_marker_root
+                    reason = f".git marker found at: {git_marker_root}"
+                else:
+                    # No auto-detection possible
+                    return None
             else:
                 # No auto-detection possible
                 return None

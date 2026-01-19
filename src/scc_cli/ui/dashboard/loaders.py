@@ -4,15 +4,30 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from scc_cli import sessions
 from scc_cli.application import dashboard as app_dashboard
 
 from ..list_screen import ListItem
+from ..time_format import format_relative_time_from_datetime
 from .models import DashboardTab, TabData
+
+
+def _format_last_used(iso_timestamp: str) -> str:
+    try:
+        dt = datetime.fromisoformat(iso_timestamp)
+    except ValueError:
+        return iso_timestamp
+    return format_relative_time_from_datetime(dt)
 
 
 def _load_status_tab_data(refresh_at: datetime | None = None) -> TabData:
     """Load Status tab data showing quick actions and context."""
-    tab_data = app_dashboard.load_status_tab_data(refresh_at=refresh_at)
+    session_service = sessions.get_session_service()
+    tab_data = app_dashboard.load_status_tab_data(
+        refresh_at=refresh_at,
+        session_service=session_service,
+        format_last_used=_format_last_used,
+    )
     return _to_tab_data(tab_data)
 
 
@@ -23,7 +38,12 @@ def _load_containers_tab_data() -> TabData:
 
 def _load_sessions_tab_data() -> TabData:
     """Load Sessions tab data showing recent Claude sessions."""
-    return _to_tab_data(app_dashboard.load_sessions_tab_data())
+    session_service = sessions.get_session_service()
+    tab_data = app_dashboard.load_sessions_tab_data(
+        session_service=session_service,
+        format_last_used=_format_last_used,
+    )
+    return _to_tab_data(tab_data)
 
 
 def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
@@ -33,10 +53,13 @@ def _load_worktrees_tab_data(verbose: bool = False) -> TabData:
 
 def _load_all_tab_data(verbose_worktrees: bool = False) -> dict[DashboardTab, TabData]:
     """Load data for all dashboard tabs."""
-    return {
-        tab: _to_tab_data(tab_data)
-        for tab, tab_data in app_dashboard.load_all_tab_data(verbose_worktrees).items()
-    }
+    session_service = sessions.get_session_service()
+    all_tab_data = app_dashboard.load_all_tab_data(
+        session_service=session_service,
+        format_last_used=_format_last_used,
+        verbose_worktrees=verbose_worktrees,
+    )
+    return {tab: _to_tab_data(tab_data) for tab, tab_data in all_tab_data.items()}
 
 
 def _to_tab_data(tab_data: app_dashboard.DashboardTabData) -> TabData:

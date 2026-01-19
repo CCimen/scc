@@ -12,12 +12,14 @@ Tests are organized by workflow, not by module, to catch integration issues.
 import json
 import subprocess
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
+from scc_cli.ports.dependency_installer import DependencyInstallResult
+from scc_cli.ports.session_models import SessionSummary
 from tests.fakes import build_fake_adapters
 
 runner = CliRunner()
@@ -324,13 +326,27 @@ class TestSessionWorkflow:
         )
 
         # Also patch sessions module
-        with patch("scc_cli.sessions.config.SESSIONS_FILE", sessions_file):
+        with patch("scc_cli.config.SESSIONS_FILE", sessions_file):
             with patch(
                 "scc_cli.commands.worktree.session_commands.sessions.list_recent"
             ) as mock_list:
                 mock_list.return_value = [
-                    {"name": "session1", "workspace": "/tmp/proj1", "last_used": "1h ago"},
-                    {"name": "session2", "workspace": "/tmp/proj2", "last_used": "2h ago"},
+                    SessionSummary(
+                        name="session1",
+                        workspace="/tmp/proj1",
+                        team=None,
+                        last_used="1h ago",
+                        container_name=None,
+                        branch=None,
+                    ),
+                    SessionSummary(
+                        name="session2",
+                        workspace="/tmp/proj2",
+                        team=None,
+                        last_used="2h ago",
+                        container_name=None,
+                        branch=None,
+                    ),
                 ]
                 result = runner.invoke(app, ["sessions"])
 
@@ -366,17 +382,36 @@ class TestDoctorWorkflow:
 class TestWorktreeWorkflow:
     """Integration tests for worktree creation workflow."""
 
-    def test_worktree_creates_branch_and_worktree(self, full_config_environment, git_workspace):
+    def test_worktree_creates_branch_and_worktree(
+        self, full_config_environment, git_workspace, worktree_dependencies
+    ):
         """Worktree command should create git worktree and branch."""
+        from scc_cli.application.worktree import WorktreeCreateResult
+
+        dependencies, adapters = worktree_dependencies
+        dependencies.git_client.is_git_repo.return_value = True
+        dependencies.git_client.has_commits.return_value = True
+
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.create_worktree") as mock_create,
+            patch(
+                "scc_cli.commands.worktree.worktree_commands._build_worktree_dependencies",
+                return_value=(dependencies, adapters),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.worktree_use_cases.create_worktree"
+            ) as mock_create,
             patch(
                 "scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=False
             ),  # Don't start claude
         ):
             worktree_path = git_workspace.parent / "claude" / "feature-x"
-            mock_create.return_value = worktree_path
+            mock_create.return_value = WorktreeCreateResult(
+                worktree_path=worktree_path,
+                worktree_name="feature-x",
+                branch_name="scc/feature-x",
+                base_branch="main",
+                dependencies_installed=True,
+            )
 
             # CLI structure: scc worktree [group-workspace] create <workspace> <name>
             runner.invoke(
@@ -385,24 +420,40 @@ class TestWorktreeWorkflow:
 
         mock_create.assert_called_once()
 
-    def test_worktree_with_install_deps(self, full_config_environment, git_workspace):
+    def test_worktree_with_install_deps(
+        self, full_config_environment, git_workspace, worktree_dependencies
+    ):
         """Worktree with --install-deps should install after creation."""
+        from scc_cli.application.worktree import WorktreeCreateResult
+
         worktree_path = git_workspace.parent / "claude" / "feature-x"
         worktree_path.mkdir(parents=True)
+        dependencies, adapters = worktree_dependencies
+        dependencies.git_client.is_git_repo.return_value = True
+        dependencies.git_client.has_commits.return_value = True
+        dependencies.dependency_installer.install.return_value = DependencyInstallResult(
+            attempted=True,
+            success=True,
+            package_manager="uv",
+        )
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.create_worktree",
-                return_value=worktree_path,
+                "scc_cli.commands.worktree.worktree_commands._build_worktree_dependencies",
+                return_value=(dependencies, adapters),
             ),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.deps.auto_install_dependencies"
-            ) as mock_deps,
+                "scc_cli.commands.worktree.worktree_commands.worktree_use_cases.create_worktree",
+                return_value=WorktreeCreateResult(
+                    worktree_path=worktree_path,
+                    worktree_name="feature-x",
+                    branch_name="scc/feature-x",
+                    base_branch="main",
+                    dependencies_installed=True,
+                ),
+            ),
             patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=False),
         ):
-            mock_deps.return_value = True
-
             # CLI structure: scc worktree [group-workspace] create <workspace> <name>
             runner.invoke(
                 app,
@@ -417,7 +468,7 @@ class TestWorktreeWorkflow:
                 ],
             )
 
-        mock_deps.assert_called_once_with(worktree_path)
+        dependencies.dependency_installer.install.assert_called_once_with(worktree_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -509,10 +560,31 @@ class TestDepsWorkflow:
 
     def test_start_with_install_deps(self, full_config_environment, git_workspace):
         """--install-deps should trigger dependency installation."""
+        from scc_cli.bootstrap import DefaultAdapters
+
         # Create package.json to trigger npm detection
         (git_workspace / "package.json").write_text("{}")
 
-        fake_adapters = build_fake_adapters()
+        dependency_installer = MagicMock()
+        dependency_installer.install.return_value = DependencyInstallResult(
+            attempted=True,
+            success=True,
+            package_manager="npm",
+        )
+        base_adapters = build_fake_adapters()
+        adapters = DefaultAdapters(
+            filesystem=base_adapters.filesystem,
+            git_client=base_adapters.git_client,
+            dependency_installer=dependency_installer,
+            remote_fetcher=base_adapters.remote_fetcher,
+            clock=base_adapters.clock,
+            agent_runner=base_adapters.agent_runner,
+            sandbox_runtime=base_adapters.sandbox_runtime,
+            personal_profile_service=base_adapters.personal_profile_service,
+            doctor_runner=base_adapters.doctor_runner,
+            archive_writer=base_adapters.archive_writer,
+            config_store=base_adapters.config_store,
+        )
 
         with (
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
@@ -522,16 +594,17 @@ class TestDepsWorkflow:
             ),
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
-                return_value=fake_adapters,
+                return_value=adapters,
+            ),
+            patch(
+                "scc_cli.commands.launch.workspace.get_default_adapters",
+                return_value=adapters,
             ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.deps.auto_install_dependencies") as mock_deps,
         ):
-            mock_deps.return_value = True
-
             runner.invoke(app, ["start", str(git_workspace), "--install-deps"])
 
-        mock_deps.assert_called_once()
+        dependency_installer.install.assert_called_once()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -592,9 +665,9 @@ class TestDataFlowIntegration:
 
         # Patch the sessions config path
         sessions_file = full_config_environment["config_dir"] / "sessions.json"
-        with patch("scc_cli.sessions.config.SESSIONS_FILE", sessions_file):
-            # Record a session
-            sessions._save_sessions([])  # Initialize
+        with patch("scc_cli.config.SESSIONS_FILE", sessions_file):
+            store = sessions.get_session_store()
+            store.save_sessions([])
             sessions.record_session(
                 workspace="/tmp/test-proj",
                 team="platform",
@@ -602,12 +675,11 @@ class TestDataFlowIntegration:
                 branch="main",
             )
 
-            # Retrieve it
             most_recent = sessions.get_most_recent()
 
         assert most_recent is not None
-        assert most_recent["workspace"] == "/tmp/test-proj"
-        assert most_recent["team"] == "platform"
+        assert most_recent.workspace == "/tmp/test-proj"
+        assert most_recent.team == "platform"
 
     def test_config_validation_flows_correctly(self, sample_org_config):
         """Config validation should properly validate org config."""

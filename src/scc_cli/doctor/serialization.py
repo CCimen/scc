@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from scc_cli.core.enums import SeverityLevel
+
 from .types import DoctorResult
 
 
@@ -30,8 +32,8 @@ def build_doctor_json_data(result: DoctorResult) -> dict[str, Any]:
 
     total = len(result.checks)
     passed = sum(1 for c in result.checks if c.passed)
-    errors = sum(1 for c in result.checks if not c.passed and c.severity == "error")
-    warnings = sum(1 for c in result.checks if not c.passed and c.severity == "warning")
+    errors = sum(1 for c in result.checks if not c.passed and c.severity == SeverityLevel.ERROR)
+    warnings = sum(1 for c in result.checks if not c.passed and c.severity == SeverityLevel.WARNING)
 
     return {
         "checks": checks_data,

@@ -3,9 +3,13 @@
 import os
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from scc_cli.application.worktree import WorktreeDependencies
+from scc_cli.ports.dependency_installer import DependencyInstallResult
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Path Fixtures
@@ -192,3 +196,28 @@ def app():
     from scc_cli.cli import app
 
     return app
+
+
+@pytest.fixture
+def worktree_dependencies():
+    """Build mock worktree dependencies for CLI tests."""
+    git_client = MagicMock()
+    dependency_installer = MagicMock()
+    dependency_installer.install.return_value = DependencyInstallResult(
+        attempted=False,
+        success=False,
+    )
+    dependencies = WorktreeDependencies(
+        git_client=git_client,
+        dependency_installer=dependency_installer,
+    )
+    adapters = SimpleNamespace(
+        filesystem=MagicMock(),
+        remote_fetcher=MagicMock(),
+        clock=MagicMock(),
+        git_client=git_client,
+        agent_runner=MagicMock(),
+        sandbox_runtime=MagicMock(),
+        dependency_installer=dependency_installer,
+    )
+    return dependencies, adapters

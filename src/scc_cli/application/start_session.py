@@ -15,6 +15,7 @@ from scc_cli.application.sync_marketplace import (
     SyncResult,
     sync_marketplace_settings,
 )
+from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.errors import WorkspaceNotFoundError
 from scc_cli.core.workspace import ResolverResult
@@ -25,7 +26,6 @@ from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.models import AgentSettings, MountSpec, SandboxHandle, SandboxSpec
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
-from scc_cli.services.workspace import resolve_launch_context
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ def prepare_start_session(
     """
     resolver_result = _resolve_workspace_context(request)
     effective_config = _compute_effective_config(request)
-    sync_result, sync_error_message = _sync_marketplace_settings(request, dependencies)
+    sync_result, sync_error_message = sync_marketplace_settings_for_start(request, dependencies)
     agent_settings = _build_agent_settings(sync_result, dependencies.agent_runner)
     current_branch = _resolve_current_branch(request.workspace_path, dependencies.git_client)
     sandbox_spec = _build_sandbox_spec(
@@ -128,14 +128,16 @@ def start_session(
 
 
 def _resolve_workspace_context(request: StartSessionRequest) -> ResolverResult:
-    result = resolve_launch_context(
-        request.entry_dir,
-        request.workspace_arg,
-        allow_suspicious=request.allow_suspicious,
+    context = resolve_workspace(
+        ResolveWorkspaceRequest(
+            cwd=request.entry_dir,
+            workspace_arg=request.workspace_arg,
+            allow_suspicious=request.allow_suspicious,
+        )
     )
-    if result is None:
+    if context is None:
         raise WorkspaceNotFoundError(path=str(request.workspace_path))
-    return result
+    return context.resolver_result
 
 
 def _compute_effective_config(request: StartSessionRequest) -> EffectiveConfig | None:
@@ -148,10 +150,23 @@ def _compute_effective_config(request: StartSessionRequest) -> EffectiveConfig |
     )
 
 
-def _sync_marketplace_settings(
+def sync_marketplace_settings_for_start(
     request: StartSessionRequest,
     dependencies: StartSessionDependencies,
 ) -> tuple[SyncResult | None, str | None]:
+    """Sync marketplace settings for a start session.
+
+    Invariants:
+        - Skips syncing in dry-run, offline, or standalone modes.
+        - Uses the same sync path as start session preparation.
+
+    Args:
+        request: Start session request data.
+        dependencies: Dependencies used to perform the sync.
+
+    Returns:
+        Tuple of sync result and optional error message.
+    """
     if request.dry_run or request.offline or request.standalone:
         return None, None
     if request.org_config is None or request.team is None:

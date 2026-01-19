@@ -43,6 +43,7 @@ from rich.live import Live
 from rich.text import Text
 
 from ..contexts import normalize_path
+from ..ports.session_models import SessionSummary
 from ..theme import Indicators
 from .chrome import Chrome, ChromeConfig
 from .formatters import (
@@ -235,23 +236,23 @@ def pick_containers(
 
 
 def pick_session(
-    sessions: Sequence[dict[str, Any]],
+    sessions: Sequence[SessionSummary],
     *,
     title: str = "Select Session",
     subtitle: str | None = None,
-) -> dict[str, Any] | None:
+) -> SessionSummary | None:
     """Show interactive session picker.
 
     Display a list of sessions with team, branch, and last used info.
     User can navigate with arrow keys, filter by typing, and select with Enter.
 
     Args:
-        sessions: Sequence of session dicts.
+        sessions: Sequence of session summaries.
         title: Title shown in chrome header.
         subtitle: Optional subtitle for additional context.
 
     Returns:
-        Selected session dict, or None if cancelled.
+        Selected session summary, or None if cancelled.
     """
     if not sessions:
         return None

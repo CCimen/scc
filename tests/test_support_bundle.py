@@ -245,6 +245,63 @@ class TestBundleDataCollection:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Tests for Use Case with Fake Dependencies
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSupportBundleUseCase:
+    """Test support bundle use case with fake dependencies."""
+
+    def test_doctor_failure_produces_error_in_manifest(self, tmp_path: Path) -> None:
+        """Doctor failure should be captured as error in manifest."""
+        from datetime import datetime, timezone
+
+        from scc_cli.application.support_bundle import (
+            SupportBundleDependencies,
+            SupportBundleRequest,
+            build_support_bundle_manifest,
+        )
+
+        class FakeFilesystem:
+            def exists(self, path: Path) -> bool:
+                return False
+
+            def read_text(self, path: Path) -> str:
+                return "{}"
+
+        class FakeClock:
+            def now(self) -> datetime:
+                return datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        class FailingDoctorRunner:
+            def run(self, workspace: str | None = None):
+                raise RuntimeError("Doctor check failed")
+
+        class FakeArchiveWriter:
+            def write_manifest(self, output_path: str, manifest_json: str) -> None:
+                pass
+
+        dependencies = SupportBundleDependencies(
+            filesystem=FakeFilesystem(),  # type: ignore[arg-type]
+            clock=FakeClock(),  # type: ignore[arg-type]
+            doctor_runner=FailingDoctorRunner(),  # type: ignore[arg-type]
+            archive_writer=FakeArchiveWriter(),  # type: ignore[arg-type]
+        )
+
+        request = SupportBundleRequest(
+            output_path=tmp_path / "test.zip",
+            redact_paths=False,
+            workspace_path=None,
+        )
+
+        manifest = build_support_bundle_manifest(request, dependencies=dependencies)
+
+        assert "doctor" in manifest
+        assert "error" in manifest["doctor"]
+        assert "Doctor check failed" in manifest["doctor"]["error"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Tests for Bundle File Creation
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -309,7 +366,10 @@ class TestJsonManifestOutput:
         """--json flag should output manifest, not create zip."""
         from scc_cli.commands.support import support_bundle_cmd
 
-        with patch("scc_cli.commands.support.build_bundle_data", return_value={"test": "data"}):
+        with patch(
+            "scc_cli.commands.support.build_support_bundle_manifest",
+            return_value={"test": "data"},
+        ):
             try:
                 support_bundle_cmd(
                     output=None,
@@ -340,7 +400,10 @@ class TestCustomOutputPath:
 
         output_path = tmp_path / "custom-bundle.zip"
 
-        with patch("scc_cli.commands.support.build_bundle_data", return_value={"test": "data"}):
+        with patch(
+            "scc_cli.commands.support.build_support_bundle_manifest",
+            return_value={"test": "data"},
+        ):
             try:
                 support_bundle_cmd(
                     output=str(output_path),

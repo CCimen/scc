@@ -2,31 +2,131 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import typer
 from rich.status import Status
 
-from ... import config, deps, docker, git
+from ... import config
+from ...application import worktree as worktree_use_cases
+from ...application.start_session import (
+    StartSessionDependencies,
+    StartSessionRequest,
+    prepare_start_session,
+    start_session,
+)
+from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console, handle_errors
 from ...confirm import Confirm
 from ...core.constants import WORKTREE_BRANCH_PREFIX
 from ...core.errors import NotAGitRepoError, WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED
+from ...git import WorktreeInfo
 from ...json_command import json_command
 from ...kinds import Kind
+from ...marketplace.materialize import materialize_marketplace
+from ...marketplace.resolve import resolve_effective_config
 from ...output_mode import is_json_mode
 from ...panels import create_success_panel, create_warning_panel
 from ...theme import Indicators, Spinners
-from ...ui import cleanup_worktree, create_worktree, list_worktrees, render_worktrees
+from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
 from ...ui.picker import TeamSwitchRequested, pick_worktree
 from ._helpers import build_worktree_list_data
 
 if TYPE_CHECKING:
     pass
+
+
+def _build_worktree_dependencies() -> tuple[worktree_use_cases.WorktreeDependencies, Any]:
+    adapters = get_default_adapters()
+    dependencies = worktree_use_cases.WorktreeDependencies(
+        git_client=adapters.git_client,
+        dependency_installer=adapters.dependency_installer,
+    )
+    return dependencies, adapters
+
+
+def _to_worktree_info(summary: worktree_use_cases.WorktreeSummary) -> WorktreeInfo:
+    return WorktreeInfo(
+        path=str(summary.path),
+        branch=summary.branch,
+        status=summary.status,
+        is_current=summary.is_current,
+        has_changes=summary.has_changes,
+        staged_count=summary.staged_count,
+        modified_count=summary.modified_count,
+        untracked_count=summary.untracked_count,
+        status_timed_out=summary.status_timed_out,
+    )
+
+
+def _serialize_worktree_summary(summary: worktree_use_cases.WorktreeSummary) -> dict[str, Any]:
+    return {
+        "path": str(summary.path),
+        "branch": summary.branch,
+        "status": summary.status,
+        "is_current": summary.is_current,
+        "has_changes": summary.has_changes,
+        "staged_count": summary.staged_count,
+        "modified_count": summary.modified_count,
+        "untracked_count": summary.untracked_count,
+        "status_timed_out": summary.status_timed_out,
+    }
+
+
+def _prompt_for_worktree(
+    prompt: worktree_use_cases.WorktreeSelectionPrompt,
+) -> worktree_use_cases.WorktreeSelectionItem | None:
+    items = [option.value for option in prompt.request.options if option.value is not None]
+    worktree_infos: list[WorktreeInfo] = []
+    for item in items:
+        if item.worktree is None:
+            worktree_infos.append(WorktreeInfo(path="", branch=item.branch, status="branch"))
+            continue
+        worktree_infos.append(_to_worktree_info(item.worktree))
+
+    selected = pick_worktree(
+        worktree_infos,
+        title=prompt.request.title,
+        subtitle=prompt.request.subtitle,
+        initial_filter=prompt.initial_filter,
+    )
+    if selected is None:
+        return None
+
+    try:
+        index = worktree_infos.index(selected)
+    except ValueError:
+        return None
+    if index >= len(items):
+        return None
+    return items[index]
+
+
+def _render_worktree_ready(result: worktree_use_cases.WorktreeCreateResult) -> None:
+    console.print()
+    console.print(
+        create_success_panel(
+            "Worktree Ready",
+            {
+                "Path": str(result.worktree_path),
+                "Branch": result.branch_name,
+                "Base": result.base_branch,
+                "Next": f"cd {result.worktree_path}",
+            },
+        )
+    )
+
+
+def _raise_worktree_warning(outcome: worktree_use_cases.WorktreeWarningOutcome) -> None:
+    if outcome.warning.title == "Cancelled":
+        err_console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(outcome.exit_code)
+    hint = outcome.warning.suggestion or ""
+    err_console.print(create_warning_panel(outcome.warning.title, outcome.warning.message, hint))
+    raise typer.Exit(outcome.exit_code)
 
 
 @handle_errors
@@ -51,12 +151,15 @@ def worktree_create_cmd(
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
+    dependencies, adapters = _build_worktree_dependencies()
+    git_client = dependencies.git_client
+
     # Handle non-git repo: offer to initialize in interactive mode
-    if not git.is_git_repo(workspace_path):
+    if not git_client.is_git_repo(workspace_path):
         if is_interactive():
             err_console.print(f"[yellow]'{workspace_path}' is not a git repository.[/yellow]")
             if Confirm.ask("[cyan]Initialize git repository here?[/cyan]", default=True):
-                if git.init_repo(workspace_path):
+                if git_client.init_repo(workspace_path):
                     err_console.print("[green]+ Git repository initialized[/green]")
                 else:
                     err_console.print("[red]Failed to initialize git repository[/red]")
@@ -68,13 +171,13 @@ def worktree_create_cmd(
             raise NotAGitRepoError(path=str(workspace_path))
 
     # Handle repo with no commits: offer to create initial commit
-    if not git.has_commits(workspace_path):
+    if not git_client.has_commits(workspace_path):
         if is_interactive():
             err_console.print(
                 "[yellow]Repository has no commits. Worktrees require at least one commit.[/yellow]"
             )
             if Confirm.ask("[cyan]Create an empty initial commit?[/cyan]", default=True):
-                success, error_msg = git.create_empty_initial_commit(workspace_path)
+                success, error_msg = git_client.create_empty_initial_commit(workspace_path)
                 if success:
                     err_console.print("[green]+ Initial commit created[/green]")
                 else:
@@ -99,13 +202,23 @@ def worktree_create_cmd(
             )
             raise typer.Exit(1)
 
-    worktree_path = create_worktree(workspace_path, name, base_branch)
+    result = worktree_use_cases.create_worktree(
+        worktree_use_cases.WorktreeCreateRequest(
+            workspace_path=workspace_path,
+            name=name,
+            base_branch=base_branch,
+            install_dependencies=True,
+        ),
+        dependencies=dependencies,
+    )
+
+    _render_worktree_ready(result)
 
     console.print(
         create_success_panel(
             "Worktree Created",
             {
-                "Path": str(worktree_path),
+                "Path": str(result.worktree_path),
                 "Branch": f"{WORKTREE_BRANCH_PREFIX}{name}",
                 "Base": base_branch or "current branch",
             },
@@ -117,8 +230,8 @@ def worktree_create_cmd(
         with Status(
             "[cyan]Installing dependencies...[/cyan]", console=console, spinner=Spinners.SETUP
         ):
-            success = deps.auto_install_dependencies(worktree_path)
-        if success:
+            install_result = dependencies.dependency_installer.install(result.worktree_path)
+        if install_result.success:
             console.print(f"[green]{Indicators.get('PASS')} Dependencies installed[/green]")
         else:
             console.print("[yellow]! Could not detect package manager or install failed[/yellow]")
@@ -126,18 +239,33 @@ def worktree_create_cmd(
     if start_claude:
         console.print()
         if Confirm.ask("[cyan]Start Claude Code in this worktree?[/cyan]", default=True):
-            docker.check_docker_available()
-            # For worktrees, mount the common parent (contains .git/worktrees/)
-            # but set CWD to the worktree path
-            mount_path, _ = git.get_workspace_mount_path(worktree_path)
-            docker_cmd, _ = docker.get_or_create_container(
-                workspace=mount_path,
-                branch=f"{WORKTREE_BRANCH_PREFIX}{name}",
+            adapters.sandbox_runtime.ensure_available()
+            start_dependencies = StartSessionDependencies(
+                filesystem=adapters.filesystem,
+                remote_fetcher=adapters.remote_fetcher,
+                clock=adapters.clock,
+                git_client=adapters.git_client,
+                agent_runner=adapters.agent_runner,
+                sandbox_runtime=adapters.sandbox_runtime,
+                resolve_effective_config=resolve_effective_config,
+                materialize_marketplace=materialize_marketplace,
             )
-            # Load org config for safety-net policy injection
-            org_config = config.load_cached_org_config()
-            # Pass container_workdir explicitly for correct CWD in worktree
-            docker.run(docker_cmd, org_config=org_config, container_workdir=worktree_path)
+            start_request = StartSessionRequest(
+                workspace_path=result.worktree_path,
+                workspace_arg=str(result.worktree_path),
+                entry_dir=result.worktree_path,
+                team=None,
+                session_name=None,
+                resume=False,
+                fresh=False,
+                offline=False,
+                standalone=config.is_standalone_mode(),
+                dry_run=False,
+                allow_suspicious=False,
+                org_config=config.load_cached_org_config(),
+            )
+            start_plan = prepare_start_session(start_request, dependencies=start_dependencies)
+            start_session(start_plan, dependencies=start_dependencies)
 
 
 @json_command(Kind.WORKTREE_LIST)
@@ -166,16 +294,23 @@ def worktree_list_cmd(
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    worktree_list = list_worktrees(workspace_path, verbose=verbose)
+    dependencies, _ = _build_worktree_dependencies()
+    result = worktree_use_cases.list_worktrees(
+        worktree_use_cases.WorktreeListRequest(
+            workspace_path=workspace_path,
+            verbose=verbose,
+            current_dir=Path.cwd(),
+        ),
+        git_client=dependencies.git_client,
+    )
 
-    # Convert WorktreeInfo dataclasses to dicts for JSON serialization
-    worktree_dicts = [asdict(wt) for wt in worktree_list]
+    worktree_dicts = [_serialize_worktree_summary(summary) for summary in result.worktrees]
     data = build_worktree_list_data(worktree_dicts, str(workspace_path))
 
     if is_json_mode():
         return data
 
-    if not worktree_list:
+    if not result.worktrees:
         console.print(
             create_warning_panel(
                 "No Worktrees",
@@ -185,13 +320,15 @@ def worktree_list_cmd(
         )
         return None
 
+    worktree_infos = [_to_worktree_info(summary) for summary in result.worktrees]
+
     # Interactive mode: use worktree picker
     if interactive:
         try:
             selected = pick_worktree(
-                worktree_list,
+                worktree_infos,
                 title="Select Worktree",
-                subtitle=f"{len(worktree_list)} worktrees in {workspace_path.name}",
+                subtitle=f"{len(worktree_infos)} worktrees in {workspace_path.name}",
             )
             if selected:
                 # Print just the path for scripting: cd $(scc worktree list -i)
@@ -201,14 +338,14 @@ def worktree_list_cmd(
         return None
 
     # Use the worktree rendering from the UI layer
-    render_worktrees(worktree_list, console)
+    render_worktrees(worktree_infos, console)
 
     return data
 
 
 @handle_errors
 def worktree_switch_cmd(
-    target: str = typer.Argument(
+    target: str | None = typer.Argument(
         None,
         help="Target: worktree name, '-' (previous via $OLDPWD), '^' (main branch)",
     ),
@@ -237,162 +374,66 @@ def worktree_switch_cmd(
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    if not git.is_git_repo(workspace_path):
-        raise NotAGitRepoError(path=str(workspace_path))
-
-    # No target: interactive picker
-    if target is None:
-        worktree_list = list_worktrees(workspace_path)
-        if not worktree_list:
-            err_console.print(
-                create_warning_panel(
-                    "No Worktrees",
-                    "No worktrees found for this repository.",
-                    "Create one with: scc worktree create <repo> <name>",
-                ),
-            )
-            raise typer.Exit(1)
-
-        try:
-            selected = pick_worktree(
-                worktree_list,
-                title="Select Worktree",
-                subtitle=f"{len(worktree_list)} worktrees",
-            )
-            if selected:
-                print(selected.path)  # noqa: T201
-            else:
-                raise typer.Exit(EXIT_CANCELLED)
-        except TeamSwitchRequested:
-            err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
-            raise typer.Exit(1)
-        return
-
-    # Handle special shortcuts
-    if target == "-":
-        # Previous directory via shell's OLDPWD
-        oldpwd = os.environ.get("OLDPWD")
-        if not oldpwd:
-            err_console.print(
-                create_warning_panel(
-                    "No Previous Directory",
-                    "Shell $OLDPWD is not set.",
-                    "This typically means you haven't changed directories yet.",
-                ),
-            )
-            raise typer.Exit(1)
-        print(oldpwd)  # noqa: T201
-        return
-
-    if target == "^":
-        # Main/default branch worktree
-        main_wt = git.find_main_worktree(workspace_path)
-        if not main_wt:
-            default_branch = git.get_default_branch(workspace_path)
-            err_console.print(
-                create_warning_panel(
-                    "No Main Worktree",
-                    f"No worktree found for default branch '{default_branch}'.",
-                    "The main branch may not have a separate worktree.",
-                ),
-            )
-            raise typer.Exit(1)
-        print(main_wt.path)  # noqa: T201
-        return
-
-    # Fuzzy match worktree
-    exact_match, matches = git.find_worktree_by_query(workspace_path, target)
-
-    if exact_match:
-        print(exact_match.path)  # noqa: T201
-        return
-
-    if not matches:
-        # Skip branch check for special targets (handled earlier: -, ^, @)
-        if target not in ("^", "-", "@") and not target.startswith("@{"):
-            # Check if EXACT branch exists without worktree
-            branches = git.list_branches_without_worktrees(workspace_path)
-            if target in branches:  # Exact match only - no substring matching
-                ctx = InteractivityContext.create()
-                if ctx.allows_prompt():
-                    if Confirm.ask(
-                        f"[cyan]No worktree for '{target}'. Create one?[/cyan]",
-                        default=False,  # Explicit > implicit
-                    ):
-                        worktree_path = create_worktree(
-                            workspace_path,
-                            name=target,
-                            base_branch=target,
-                        )
-                        print(worktree_path)  # noqa: T201
-                        return
-                    else:
-                        # User declined - use EXIT_CANCELLED so shell wrappers don't cd
-                        err_console.print("[dim]Cancelled.[/dim]")
-                        raise typer.Exit(EXIT_CANCELLED)
-                else:
-                    # Non-interactive: hint at explicit command
-                    err_console.print(
-                        create_warning_panel(
-                            "Branch Exists, No Worktree",
-                            f"Branch '{target}' exists but has no worktree.",
-                            f"Use: scc worktree create <repo> {target} --base {target}",
-                        ),
-                    )
-                    raise typer.Exit(1)
-
-        # Original "not found" error with select --branches hint
-        err_console.print(
-            create_warning_panel(
-                "Worktree Not Found",
-                f"No worktree matches '{target}'.",
-                "Tip: Use 'scc worktree select --branches' to pick from remote branches.",
-            ),
-        )
-        raise typer.Exit(1)
-
-    # Multiple matches: show picker or list
+    dependencies, _ = _build_worktree_dependencies()
     ctx = InteractivityContext.create()
-    if ctx.allows_prompt():
-        try:
-            selected = pick_worktree(
-                matches,
-                title="Multiple Matches",
-                subtitle=f"'{target}' matches {len(matches)} worktrees",
-                initial_filter=target,
-            )
-            if selected:
-                print(selected.path)  # noqa: T201
-            else:
+    oldpwd = os.environ.get("OLDPWD")
+    selection: worktree_use_cases.WorktreeSelectionItem | None = None
+
+    request = worktree_use_cases.WorktreeSwitchRequest(
+        workspace_path=workspace_path,
+        target=target,
+        oldpwd=oldpwd,
+        interactive_allowed=ctx.allows_prompt(),
+        current_dir=Path.cwd(),
+    )
+
+    while True:
+        outcome = worktree_use_cases.switch_worktree(request, dependencies=dependencies)
+
+        if isinstance(outcome, worktree_use_cases.WorktreeSelectionPrompt):
+            try:
+                selection = _prompt_for_worktree(outcome)
+            except TeamSwitchRequested:
+                err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
                 raise typer.Exit(EXIT_CANCELLED)
-        except TeamSwitchRequested:
-            raise typer.Exit(EXIT_CANCELLED)
-    else:
-        # Non-interactive: print ranked matches with explicit selection commands
-        match_lines = []
-        for i, wt in enumerate(matches):
-            display_branch = git.get_display_branch(wt.branch)
-            dir_name = Path(wt.path).name
-            if i == 0:
-                # Highlight top match (would be auto-selected interactively)
-                match_lines.append(
-                    f"  1. [bold]{display_branch}[/] -> {dir_name}  [dim]<- best match[/]"
-                )
-            else:
-                match_lines.append(f"  {i + 1}. {display_branch} -> {dir_name}")
+            if selection is None:
+                raise typer.Exit(EXIT_CANCELLED)
+            request = worktree_use_cases.WorktreeSwitchRequest(
+                workspace_path=workspace_path,
+                target=target,
+                oldpwd=oldpwd,
+                interactive_allowed=ctx.allows_prompt(),
+                current_dir=Path.cwd(),
+                selection=selection,
+            )
+            continue
 
-        # Get the top match for the suggested command
-        top_match_dir = Path(matches[0].path).name
+        if isinstance(outcome, worktree_use_cases.WorktreeConfirmation):
+            confirmed = Confirm.ask(
+                f"[cyan]{outcome.request.prompt}[/cyan]",
+                default=outcome.default_response,
+            )
+            request = worktree_use_cases.WorktreeSwitchRequest(
+                workspace_path=workspace_path,
+                target=target,
+                oldpwd=oldpwd,
+                interactive_allowed=ctx.allows_prompt(),
+                current_dir=Path.cwd(),
+                confirm_create=confirmed,
+            )
+            continue
 
-        err_console.print(
-            create_warning_panel(
-                "Ambiguous Match",
-                f"'{target}' matches {len(matches)} worktrees (ranked by relevance):",
-                "\n".join(match_lines)
-                + f"\n\n[dim]Use explicit directory name: scc worktree switch {top_match_dir}[/]",
-            ),
-        )
-        raise typer.Exit(1)
+        if isinstance(outcome, worktree_use_cases.WorktreeCreateResult):
+            _render_worktree_ready(outcome)
+            print(outcome.worktree_path)  # noqa: T201
+            return
+
+        if isinstance(outcome, worktree_use_cases.WorktreeResolution):
+            print(outcome.worktree_path)  # noqa: T201
+            return
+
+        if isinstance(outcome, worktree_use_cases.WorktreeWarningOutcome):
+            _raise_worktree_warning(outcome)
 
 
 @handle_errors
@@ -422,89 +463,74 @@ def worktree_select_cmd(
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    if not git.is_git_repo(workspace_path):
-        raise NotAGitRepoError(path=str(workspace_path))
+    dependencies, _ = _build_worktree_dependencies()
+    selection: worktree_use_cases.WorktreeSelectionItem | None = None
 
-    worktree_list = list_worktrees(workspace_path)
+    request = worktree_use_cases.WorktreeSelectRequest(
+        workspace_path=workspace_path,
+        include_branches=branches,
+        current_dir=Path.cwd(),
+    )
 
-    # Build combined list if including branches
-    from ...git import WorktreeInfo
+    while True:
+        outcome = worktree_use_cases.select_worktree(request, dependencies=dependencies)
 
-    items: list[WorktreeInfo] = list(worktree_list)
-    branch_items: list[str] = []
-
-    if branches:
-        branch_items = git.list_branches_without_worktrees(workspace_path)
-        # Create placeholder WorktreeInfo for branches (with empty path)
-        for branch in branch_items:
-            items.append(
-                WorktreeInfo(
-                    path="",  # Empty path indicates this is a branch, not worktree
-                    branch=branch,
-                    status="branch",  # Mark as branch-only
-                )
+        if isinstance(outcome, worktree_use_cases.WorktreeSelectionPrompt):
+            try:
+                selection = _prompt_for_worktree(outcome)
+            except TeamSwitchRequested:
+                err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
+                raise typer.Exit(EXIT_CANCELLED)
+            if selection is None:
+                raise typer.Exit(EXIT_CANCELLED)
+            request = worktree_use_cases.WorktreeSelectRequest(
+                workspace_path=workspace_path,
+                include_branches=branches,
+                current_dir=Path.cwd(),
+                selection=selection,
             )
+            continue
 
-    if not items:
-        err_console.print(
-            create_warning_panel(
-                "No Worktrees or Branches",
-                "No worktrees found and no remote branches available.",
-                "Create a worktree with: scc worktree create <repo> <name>",
-            ),
-        )
-        raise typer.Exit(1)
-
-    try:
-        selected = pick_worktree(
-            items,
-            title="Select Worktree",
-            subtitle=f"{len(worktree_list)} worktrees"
-            + (f", {len(branch_items)} branches" if branch_items else ""),
-        )
-
-        if not selected:
-            raise typer.Exit(EXIT_CANCELLED)
-
-        # If selected item is a worktree (has path), print it
-        if selected.path:
-            print(selected.path)  # noqa: T201
-            return
-
-        # Selected a branch without worktree - offer to create
-        if Confirm.ask(
-            f"[cyan]Create worktree for branch '{selected.branch}'?[/cyan]",
-            default=True,
-            console=console,
-        ):
-            with Status(
-                "[cyan]Creating worktree...[/cyan]",
+        if isinstance(outcome, worktree_use_cases.WorktreeConfirmation):
+            if selection is None:
+                raise ValueError("Selection required to confirm worktree creation")
+            confirmed = Confirm.ask(
+                f"[cyan]{outcome.request.prompt}[/cyan]",
+                default=outcome.default_response,
                 console=console,
-                spinner=Spinners.SETUP,
-            ):
-                worktree_path = create_worktree(
-                    workspace_path,
-                    selected.branch,
-                    base_branch=selected.branch,
-                )
+            )
+            request = worktree_use_cases.WorktreeSelectRequest(
+                workspace_path=workspace_path,
+                include_branches=branches,
+                current_dir=Path.cwd(),
+                selection=selection,
+                confirm_create=confirmed,
+            )
+            continue
+
+        if isinstance(outcome, worktree_use_cases.WorktreeCreateResult):
+            _render_worktree_ready(outcome)
+            branch_label = selection.branch if selection is not None else outcome.worktree_name
             err_console.print(
                 create_success_panel(
                     "Worktree Created",
-                    {"Branch": selected.branch, "Path": str(worktree_path)},
+                    {"Branch": branch_label, "Path": str(outcome.worktree_path)},
                 )
             )
-            print(worktree_path)  # noqa: T201
-        else:
-            raise typer.Exit(EXIT_CANCELLED)
+            print(outcome.worktree_path)  # noqa: T201
+            return
 
-    except TeamSwitchRequested:
-        err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
-        raise typer.Exit(EXIT_CANCELLED)
+        if isinstance(outcome, worktree_use_cases.WorktreeResolution):
+            print(outcome.worktree_path)  # noqa: T201
+            return
+
+        if isinstance(outcome, worktree_use_cases.WorktreeWarningOutcome):
+            _raise_worktree_warning(outcome)
 
 
 @handle_errors
 def worktree_enter_cmd(
-    target: str = typer.Argument(
+    target: str | None = typer.Argument(
         None,
         help="Target: worktree name, '-' (previous), '^' (main branch)",
     ),
@@ -528,6 +554,7 @@ def worktree_enter_cmd(
       scc worktree enter ^             # Enter main branch worktree
     """
     import os
+    import platform
     import subprocess
 
     workspace_path = Path(workspace).expanduser().resolve()
@@ -535,126 +562,66 @@ def worktree_enter_cmd(
     if not workspace_path.exists():
         raise WorkspaceNotFoundError(path=str(workspace_path))
 
-    if not git.is_git_repo(workspace_path):
-        raise NotAGitRepoError(path=str(workspace_path))
+    dependencies, _ = _build_worktree_dependencies()
+    ctx = InteractivityContext.create()
+    selection: worktree_use_cases.WorktreeSelectionItem | None = None
 
-    # Resolve target to worktree path
-    worktree_path: Path | None = None
-    worktree_name: str = ""
+    request = worktree_use_cases.WorktreeEnterRequest(
+        workspace_path=workspace_path,
+        target=target,
+        oldpwd=os.environ.get("OLDPWD"),
+        interactive_allowed=ctx.allows_prompt(),
+        current_dir=Path.cwd(),
+        env=dict(os.environ),
+        platform_system=platform.system(),
+    )
 
-    if target is None:
-        # No target: interactive picker
-        worktree_list = list_worktrees(workspace_path)
-        if not worktree_list:
-            err_console.print(
-                create_warning_panel(
-                    "No Worktrees",
-                    "No worktrees found for this repository.",
-                    "Create one with: scc worktree create <repo> <name>",
-                ),
-            )
-            raise typer.Exit(1)
+    while True:
+        outcome = worktree_use_cases.enter_worktree_shell(request, dependencies=dependencies)
 
-        try:
-            selected = pick_worktree(
-                worktree_list,
-                title="Enter Worktree",
-                subtitle="Select a worktree to enter",
-            )
-            if selected:
-                worktree_path = Path(selected.path)
-                worktree_name = selected.branch or Path(selected.path).name
-            else:
+        if isinstance(outcome, worktree_use_cases.WorktreeSelectionPrompt):
+            try:
+                selection = _prompt_for_worktree(outcome)
+            except TeamSwitchRequested:
+                err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
+                raise typer.Exit(1)
+            if selection is None:
                 raise typer.Exit(EXIT_CANCELLED)
-        except TeamSwitchRequested:
-            err_console.print("[dim]Use 'scc team switch' to change teams[/dim]")
-            raise typer.Exit(1)
-    elif target == "-":
-        # Previous directory
-        oldpwd = os.environ.get("OLDPWD")
-        if not oldpwd:
-            err_console.print(
-                create_warning_panel(
-                    "No Previous Directory",
-                    "Shell $OLDPWD is not set.",
-                    "This typically means you haven't changed directories yet.",
-                ),
+            request = worktree_use_cases.WorktreeEnterRequest(
+                workspace_path=workspace_path,
+                target=target,
+                oldpwd=request.oldpwd,
+                interactive_allowed=ctx.allows_prompt(),
+                current_dir=Path.cwd(),
+                env=request.env,
+                platform_system=request.platform_system,
+                selection=selection,
             )
-            raise typer.Exit(1)
-        worktree_path = Path(oldpwd)
-        worktree_name = worktree_path.name
-    elif target == "^":
-        # Main branch worktree
-        main_branch = git.get_default_branch(workspace_path)
-        worktree_list = list_worktrees(workspace_path)
-        for wt in worktree_list:
-            if wt.branch == main_branch or wt.branch in {"main", "master"}:
-                worktree_path = Path(wt.path)
-                worktree_name = wt.branch or worktree_path.name
-                break
-        if not worktree_path:
-            err_console.print(
-                create_warning_panel(
-                    "Main Branch Not Found",
-                    f"No worktree found for main branch ({main_branch}).",
-                    "The main worktree may be in a different location.",
-                ),
-            )
-            raise typer.Exit(1)
-    else:
-        # Fuzzy match target
-        matched, _matches = git.find_worktree_by_query(workspace_path, target)
-        if matched:
-            worktree_path = Path(matched.path)
-            worktree_name = matched.branch or Path(matched.path).name
-        else:
-            err_console.print(
-                create_warning_panel(
-                    "Worktree Not Found",
-                    f"No worktree matching '{target}'.",
-                    "Run 'scc worktree list' to see available worktrees.",
-                ),
-            )
-            raise typer.Exit(1)
+            continue
 
-    # Verify worktree path exists
-    if not worktree_path or not worktree_path.exists():
-        err_console.print(
-            create_warning_panel(
-                "Worktree Missing",
-                f"Worktree path does not exist: {worktree_path}",
-                "The worktree may have been removed. Run 'scc worktree prune'.",
-            ),
-        )
-        raise typer.Exit(1)
+        if isinstance(outcome, worktree_use_cases.WorktreeWarningOutcome):
+            _raise_worktree_warning(outcome)
 
-    # Print entry message to stderr (stdout stays clean)
-    err_console.print(f"[cyan]Entering worktree:[/cyan] {worktree_path}")
-    err_console.print("[dim]Type 'exit' to return.[/dim]")
-    err_console.print()
+        if isinstance(outcome, worktree_use_cases.WorktreeShellResult):
+            worktree_path = outcome.worktree_path
+            err_console.print(f"[cyan]Entering worktree:[/cyan] {worktree_path}")
+            err_console.print("[dim]Type 'exit' to return.[/dim]")
+            err_console.print()
 
-    # Set up environment with SCC_WORKTREE variable
-    env = os.environ.copy()
-    env["SCC_WORKTREE"] = worktree_name
+            try:
+                subprocess.run(
+                    outcome.shell_command.argv,
+                    cwd=str(outcome.shell_command.workdir),
+                    env=outcome.shell_command.env,
+                )
+            except FileNotFoundError:
+                shell = outcome.shell_command.argv[0]
+                err_console.print(f"[red]Shell not found: {shell}[/red]")
+                raise typer.Exit(1)
 
-    # Get user's shell (default to /bin/bash on Unix, cmd.exe on Windows)
-    import platform
-
-    if platform.system() == "Windows":
-        shell = os.environ.get("COMSPEC", "cmd.exe")
-    else:
-        shell = os.environ.get("SHELL", "/bin/bash")
-
-    # Run subshell in worktree directory
-    try:
-        subprocess.run([shell], cwd=str(worktree_path), env=env)
-    except FileNotFoundError:
-        err_console.print(f"[red]Shell not found: {shell}[/red]")
-        raise typer.Exit(1)
-
-    # After subshell exits, print a message
-    err_console.print()
-    err_console.print("[dim]Exited worktree subshell[/dim]")
+            err_console.print()
+            err_console.print("[dim]Exited worktree subshell[/dim]")
+            return
 
 
 @handle_errors
@@ -701,7 +668,8 @@ def worktree_prune_cmd(
     """
     workspace_path = Path(workspace).expanduser().resolve()
 
-    if not git.is_git_repo(workspace_path):
+    dependencies, _ = _build_worktree_dependencies()
+    if not dependencies.git_client.is_git_repo(workspace_path):
         raise NotAGitRepoError(path=str(workspace_path))
 
     cmd = ["git", "-C", str(workspace_path), "worktree", "prune"]

@@ -8,11 +8,16 @@ These tests verify:
 """
 
 import json
+from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
+import click
 import pytest
 
 from scc_cli import sessions
+from scc_cli.application.sessions import SessionService
+from scc_cli.ports.session_models import SessionFilter, SessionRecord, SessionSummary
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -25,7 +30,7 @@ def sessions_file(tmp_path, monkeypatch):
 
     # Point to temp directory
     sessions_path = tmp_path / "sessions.json"
-    monkeypatch.setattr("scc_cli.sessions.config.SESSIONS_FILE", sessions_path)
+    monkeypatch.setattr("scc_cli.config.SESSIONS_FILE", sessions_path)
     return sessions_path
 
 
@@ -81,8 +86,8 @@ class TestGetMostRecent:
 
         assert result is not None
         # session2 has the most recent last_used
-        assert result["workspace"] == "/tmp/proj2"
-        assert result["name"] == "session2"
+        assert result.workspace == "/tmp/proj2"
+        assert result.name == "session2"
 
     def test_returns_none_when_no_sessions(self, sessions_file):
         """Should return None when no sessions exist."""
@@ -113,7 +118,7 @@ class TestGetMostRecent:
         result = sessions.get_most_recent()
 
         assert result is not None
-        assert result["workspace"] == "/tmp/only-one"
+        assert result.workspace == "/tmp/only-one"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -132,9 +137,9 @@ class TestListRecent:
 
         assert len(result) == 3
         # Most recent first (session2)
-        assert result[0]["workspace"] == "/tmp/proj2"
-        assert result[1]["workspace"] == "/tmp/proj1"
-        assert result[2]["workspace"] == "/tmp/proj3"
+        assert result[0].workspace == "/tmp/proj2"
+        assert result[1].workspace == "/tmp/proj1"
+        assert result[2].workspace == "/tmp/proj3"
 
     def test_respects_limit(self, sessions_file, sample_sessions):
         """Should limit number of returned sessions."""
@@ -152,13 +157,14 @@ class TestListRecent:
 
         assert result == []
 
-    def test_formats_relative_time(self, sessions_file):
-        """Should format last_used as relative time."""
+    def test_returns_raw_last_used(self, sessions_file):
+        """Should return raw last_used values from storage."""
         now = datetime.now()
+        last_used = (now - timedelta(minutes=5)).isoformat()
         recent_session = [
             {
                 "workspace": "/tmp/test",
-                "last_used": (now - timedelta(minutes=5)).isoformat(),
+                "last_used": last_used,
             }
         ]
         sessions_file.write_text(json.dumps({"sessions": recent_session}))
@@ -166,7 +172,7 @@ class TestListRecent:
         result = sessions.list_recent()
 
         assert len(result) == 1
-        assert "m ago" in result[0]["last_used"]
+        assert result[0].last_used == last_used
 
     def test_generates_name_from_workspace_if_missing(self, sessions_file):
         """Should generate name from workspace path if name is None."""
@@ -180,7 +186,7 @@ class TestListRecent:
 
         result = sessions.list_recent()
 
-        assert result[0]["name"] == "my-project"
+        assert result[0].name == "my-project"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -271,7 +277,7 @@ class TestFindSessionByWorkspace:
         result = sessions.find_session_by_workspace("/tmp/proj1")
 
         assert result is not None
-        assert result["workspace"] == "/tmp/proj1"
+        assert result.workspace == "/tmp/proj1"
 
     def test_returns_none_when_not_found(self, sessions_file, sample_sessions):
         """Should return None when workspace not found."""
@@ -288,7 +294,7 @@ class TestFindSessionByWorkspace:
         result = sessions.find_session_by_workspace("/tmp/proj2", branch="develop")
 
         assert result is not None
-        assert result["branch"] == "develop"
+        assert result.branch == "develop"
 
     def test_returns_none_when_branch_mismatch(self, sessions_file, sample_sessions):
         """Should return None when branch doesn't match."""
@@ -436,7 +442,7 @@ class TestLegacyMigration:
         result = sessions.get_most_recent()
 
         assert result is not None
-        assert result["team"] is None  # Migrated from "base"
+        assert result.team is None  # Migrated from "base"
 
     def test_preserves_valid_team_names(self, sessions_file):
         """Sessions with actual team names should not be modified."""
@@ -452,7 +458,7 @@ class TestLegacyMigration:
         result = sessions.get_most_recent()
 
         assert result is not None
-        assert result["team"] == "platform"
+        assert result.team == "platform"
 
     def test_preserves_none_team(self, sessions_file):
         """Sessions with team=None should remain None."""
@@ -468,7 +474,7 @@ class TestLegacyMigration:
         result = sessions.get_most_recent()
 
         assert result is not None
-        assert result["team"] is None
+        assert result.team is None
 
     def test_migration_does_not_persist_without_save(self, sessions_file):
         """Migration happens in memory; original file unchanged until save."""
@@ -524,9 +530,8 @@ class TestSchemaVersion:
         ]
         sessions_file.write_text(json.dumps({"sessions": legacy_session}))
 
-        # Load via SessionRecord.from_dict
-        raw = sessions._load_sessions()[0]
-        record = sessions.SessionRecord.from_dict(raw)
+        raw = json.loads(sessions_file.read_text())["sessions"][0]
+        record = SessionRecord.from_dict(raw)
 
         assert record.schema_version == 1
 
@@ -578,8 +583,7 @@ class TestStandaloneMode:
         result = sessions.find_session_by_workspace("/tmp/standalone")
 
         assert result is not None
-        # to_dict() excludes None values, so team key may not exist
-        assert result.get("team") is None
+        assert result.team is None
 
     def test_list_recent_includes_standalone_sessions(self, sessions_file):
         """list_recent should include standalone (team=None) sessions."""
@@ -595,4 +599,245 @@ class TestStandaloneMode:
         result = sessions.list_recent()
 
         assert len(result) == 1
-        assert result[0]["team"] is None
+        assert result[0].team is None
+
+
+class FakeSessionStore:
+    """In-memory SessionStore for use case tests."""
+
+    def __init__(self, sessions_list: list[SessionRecord] | None = None) -> None:
+        self._sessions = list(sessions_list or [])
+
+    def lock(self) -> AbstractContextManager[None]:
+        return nullcontext()
+
+    def load_sessions(self) -> list[SessionRecord]:
+        return list(self._sessions)
+
+    def save_sessions(self, sessions_list: list[SessionRecord]) -> None:
+        self._sessions = list(sessions_list)
+
+
+__all__ = ["FakeSessionStore"]
+
+
+class TestSessionService:
+    """Unit tests for SessionService use cases."""
+
+    def test_list_recent_filters_and_limits(self) -> None:
+        records = [
+            SessionRecord(
+                workspace="/tmp/proj1",
+                team="platform",
+                last_used="2024-01-01T00:00:00",
+            ),
+            SessionRecord(
+                workspace="/tmp/proj2",
+                team="platform",
+                last_used="2024-01-02T00:00:00",
+            ),
+            SessionRecord(
+                workspace="/tmp/proj3",
+                team="api",
+                last_used="2024-01-03T00:00:00",
+            ),
+        ]
+        service = SessionService(FakeSessionStore(records))
+
+        result = service.list_recent(SessionFilter(limit=1, team="platform"))
+
+        assert result.count == 1
+        assert result.sessions[0].workspace == "/tmp/proj2"
+
+    def test_list_recent_generates_name_from_workspace(self) -> None:
+        record = SessionRecord(
+            workspace="/tmp/my-project",
+            team=None,
+            last_used="2024-01-01T00:00:00",
+        )
+        service = SessionService(FakeSessionStore([record]))
+
+        result = service.list_recent(SessionFilter(limit=5, include_all=True))
+
+        assert result.sessions[0].name == "my-project"
+
+    def test_record_session_updates_existing(self) -> None:
+        existing = SessionRecord(
+            workspace="/tmp/proj",
+            team="old",
+            branch="main",
+            last_used="2024-01-02T00:00:00",
+            created_at="2024-01-01T00:00:00",
+            schema_version=1,
+        )
+        store = FakeSessionStore([existing])
+        service = SessionService(store)
+
+        record = service.record_session(
+            workspace="/tmp/proj",
+            team="new",
+            branch="main",
+        )
+
+        assert record.created_at == "2024-01-01T00:00:00"
+        assert len(store.load_sessions()) == 1
+        assert store.load_sessions()[0].team == "new"
+
+    def test_update_session_container_preserves_created_at(self) -> None:
+        existing = SessionRecord(
+            workspace="/tmp/proj",
+            team="platform",
+            branch="main",
+            container_name=None,
+            last_used="2024-01-02T00:00:00",
+            created_at="2024-01-01T00:00:00",
+        )
+        store = FakeSessionStore([existing])
+        service = SessionService(store)
+
+        service.update_session_container(
+            workspace="/tmp/proj",
+            container_name="scc-proj",
+            branch="main",
+        )
+
+        updated = store.load_sessions()[0]
+        assert updated.container_name == "scc-proj"
+        assert updated.created_at == "2024-01-01T00:00:00"
+
+    def test_prune_orphaned_sessions_removes_missing_paths(self, tmp_path) -> None:
+        existing = tmp_path / "repo"
+        existing.mkdir()
+        store = FakeSessionStore(
+            [
+                SessionRecord(
+                    workspace=str(existing),
+                    last_used="2024-01-01T00:00:00",
+                ),
+                SessionRecord(
+                    workspace="/missing/path",
+                    last_used="2024-01-01T00:00:00",
+                ),
+            ]
+        )
+        service = SessionService(store)
+
+        removed = service.prune_orphaned_sessions()
+
+        assert removed == 1
+        assert [record.workspace for record in store.load_sessions()] == [str(existing)]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for sessions command output
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSessionsCommandOutput:
+    """Characterization tests for scc sessions output."""
+
+    def test_sessions_cmd_renders_table_rows(self) -> None:
+        from scc_cli.commands.worktree.session_commands import sessions_cmd
+
+        workspace = "/workspace/" + "a" * 50
+        session = SessionSummary(
+            name="session-1",
+            workspace=workspace,
+            team="platform",
+            last_used="2025-01-01T12:00:00",
+            container_name="scc-session",
+            branch="main",
+        )
+
+        with (
+            patch(
+                "scc_cli.commands.worktree.session_commands.config.load_user_config",
+                return_value={"selected_profile": "platform"},
+            ),
+            patch(
+                "scc_cli.commands.worktree.session_commands.config.is_standalone_mode",
+                return_value=False,
+            ),
+            patch(
+                "scc_cli.commands.worktree.session_commands.sessions.list_recent",
+                return_value=[session],
+            ),
+            patch(
+                "scc_cli.commands.worktree.session_commands.sessions.format_relative_time",
+                return_value="2h ago",
+            ),
+            patch(
+                "scc_cli.commands.worktree.session_commands.render_responsive_table"
+            ) as mock_table,
+        ):
+            sessions_cmd(
+                limit=10,
+                team="platform",
+                all_teams=False,
+                select=False,
+                json_output=False,
+                pretty=False,
+            )
+
+        mock_table.assert_called_once()
+        call_kwargs = mock_table.call_args.kwargs
+        assert call_kwargs["title"] == "Recent Sessions (platform)"
+        assert call_kwargs["columns"] == [("Session", "cyan"), ("Workspace", "white")]
+        assert call_kwargs["wide_columns"] == [("Last Used", "yellow"), ("Team", "green")]
+        assert call_kwargs["rows"] == [["session-1", "..." + "a" * 37, "2h ago", "platform"]]
+
+    def test_sessions_cmd_json_output(self, capsys) -> None:
+        from scc_cli.commands.worktree.session_commands import sessions_cmd
+
+        sessions_list = [
+            SessionSummary(
+                name="session-1",
+                workspace="/workspace/one",
+                team="platform",
+                last_used="2025-01-01T12:00:00",
+                container_name="scc-one",
+                branch="main",
+            ),
+            SessionSummary(
+                name="session-2",
+                workspace="/workspace/two",
+                team="backend",
+                last_used="2025-01-02T09:00:00",
+                container_name=None,
+                branch=None,
+            ),
+        ]
+
+        with (
+            patch(
+                "scc_cli.commands.worktree.session_commands.config.load_user_config",
+                return_value={"selected_profile": "platform"},
+            ),
+            patch(
+                "scc_cli.commands.worktree.session_commands.config.is_standalone_mode",
+                return_value=False,
+            ),
+            patch(
+                "scc_cli.commands.worktree.session_commands.sessions.list_recent",
+                return_value=sessions_list,
+            ),
+        ):
+            with pytest.raises(click.exceptions.Exit):
+                sessions_cmd(
+                    limit=10,
+                    team=None,
+                    all_teams=True,
+                    select=False,
+                    json_output=True,
+                    pretty=False,
+                )
+
+        output = json.loads(capsys.readouterr().out)
+        assert output["kind"] == "SessionList"
+        assert output["data"]["count"] == 2
+        assert output["data"]["team"] is None
+        assert output["data"]["sessions"][0]["name"] == "session-1"
+        assert output["data"]["sessions"][0]["workspace"] == "/workspace/one"
+        assert output["data"]["sessions"][0]["last_used"] == "2025-01-01T12:00:00"
+        assert output["data"]["sessions"][0]["container_name"] == "scc-one"
+        assert output["data"]["sessions"][0]["branch"] == "main"

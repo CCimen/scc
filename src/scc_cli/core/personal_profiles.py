@@ -15,6 +15,7 @@ from typing import Any, cast
 from urllib.parse import urlparse
 
 from scc_cli import config as config_module
+from scc_cli.core.enums import DiffItemSection, DiffItemStatus
 from scc_cli.marketplace.managed import load_managed_state
 from scc_cli.subprocess_utils import run_command
 
@@ -677,8 +678,8 @@ class DiffItem:
     """A single diff item for the TUI overlay."""
 
     name: str
-    status: str  # "added" (+), "removed" (-), "modified" (~)
-    section: str  # "plugins", "mcp_servers", "marketplaces"
+    status: DiffItemStatus  # ADDED (+), REMOVED (-), MODIFIED (~)
+    section: DiffItemSection  # PLUGINS, MCP_SERVERS, MARKETPLACES
 
 
 @dataclass
@@ -724,12 +725,18 @@ def compute_structured_diff(
     # Plugins in profile but not workspace (would be added on apply)
     for plugin in sorted(prof_plugins.keys()):
         if plugin not in ws_plugins:
-            items.append(DiffItem(name=plugin, status="added", section="plugins"))
+            items.append(
+                DiffItem(name=plugin, status=DiffItemStatus.ADDED, section=DiffItemSection.PLUGINS)
+            )
 
     # Plugins in workspace but not profile (would be removed on apply)
     for plugin in sorted(ws_plugins.keys()):
         if plugin not in prof_plugins:
-            items.append(DiffItem(name=plugin, status="removed", section="plugins"))
+            items.append(
+                DiffItem(
+                    name=plugin, status=DiffItemStatus.REMOVED, section=DiffItemSection.PLUGINS
+                )
+            )
 
     # Compare marketplaces
     ws_markets = _normalize_marketplaces(workspace_settings.get("extraKnownMarketplaces"))
@@ -737,13 +744,25 @@ def compute_structured_diff(
 
     for name in sorted(prof_markets.keys()):
         if name not in ws_markets:
-            items.append(DiffItem(name=name, status="added", section="marketplaces"))
+            items.append(
+                DiffItem(
+                    name=name, status=DiffItemStatus.ADDED, section=DiffItemSection.MARKETPLACES
+                )
+            )
         elif prof_markets[name] != ws_markets[name]:
-            items.append(DiffItem(name=name, status="modified", section="marketplaces"))
+            items.append(
+                DiffItem(
+                    name=name, status=DiffItemStatus.MODIFIED, section=DiffItemSection.MARKETPLACES
+                )
+            )
 
     for name in sorted(ws_markets.keys()):
         if name not in prof_markets:
-            items.append(DiffItem(name=name, status="removed", section="marketplaces"))
+            items.append(
+                DiffItem(
+                    name=name, status=DiffItemStatus.REMOVED, section=DiffItemSection.MARKETPLACES
+                )
+            )
 
     # Compare MCP servers
     ws_servers = workspace_mcp.get("mcpServers", {})
@@ -751,13 +770,25 @@ def compute_structured_diff(
 
     for name in sorted(prof_servers.keys()):
         if name not in ws_servers:
-            items.append(DiffItem(name=name, status="added", section="mcp_servers"))
+            items.append(
+                DiffItem(
+                    name=name, status=DiffItemStatus.ADDED, section=DiffItemSection.MCP_SERVERS
+                )
+            )
         elif prof_servers[name] != ws_servers[name]:
-            items.append(DiffItem(name=name, status="modified", section="mcp_servers"))
+            items.append(
+                DiffItem(
+                    name=name, status=DiffItemStatus.MODIFIED, section=DiffItemSection.MCP_SERVERS
+                )
+            )
 
     for name in sorted(ws_servers.keys()):
         if name not in prof_servers:
-            items.append(DiffItem(name=name, status="removed", section="mcp_servers"))
+            items.append(
+                DiffItem(
+                    name=name, status=DiffItemStatus.REMOVED, section=DiffItemSection.MCP_SERVERS
+                )
+            )
 
     return StructuredDiff(items=items, total_count=len(items))
 

@@ -246,7 +246,7 @@ def build_command(
         - Agent `claude` is ALWAYS included, even in detached mode
         - Session flags passed via docker exec in detached mode (see run_sandbox)
     """
-    from ..core.constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT
+    from ..core.constants import SANDBOX_DATA_MOUNT
 
     cmd = ["docker", "sandbox", "run"]
 
@@ -258,17 +258,20 @@ def build_command(
     # Add read-only bind mount for safety net policy (kernel-enforced security)
     # This MUST be added before the agent name in the command
     #
-    # Design note: We mount the FILE directly (not a directory) because:
-    # - Containers are ephemeral (recreated each `scc start`)
-    # - Policy is written before container creation, so new containers get current policy
-    # - If we ever support container reuse or hot-reload, switch to directory mount
-    #   (file mounts pin to inode; atomic rename would be invisible to running container)
+    # Design note: We mount the DIRECTORY (not the file) because:
+    # - Docker Desktop's VirtioFS can have delays before newly created files are visible
+    # - Directory mounts are more reliable as the directory already exists
+    # - The file can appear "later" as VirtioFS propagation catches up
+    # - Avoids inode pinning issues with atomic file replacement
     if policy_host_path is not None:
-        container_policy_path = f"{SANDBOX_DATA_MOUNT}/{SAFETY_NET_POLICY_FILENAME}"
-        # -v host_path:container_path:ro  ← Kernel-enforced read-only
+        # Mount the parent directory containing the policy file
+        policy_dir = policy_host_path.parent
+        policy_filename = policy_host_path.name
+        container_policy_dir = f"{SANDBOX_DATA_MOUNT}/policy"
+        container_policy_path = f"{container_policy_dir}/{policy_filename}"
+        # -v host_dir:container_dir:ro  ← Kernel-enforced read-only
         # Even sudo inside container cannot bypass `:ro` - requires CAP_SYS_ADMIN
-        # Use os.fspath() to reliably convert Path to string
-        cmd.extend(["-v", f"{os.fspath(policy_host_path)}:{container_policy_path}:ro"])
+        cmd.extend(["-v", f"{os.fspath(policy_dir)}:{container_policy_dir}:ro"])
         # Set SCC_POLICY_PATH env var so plugin knows where to read policy
         cmd.extend(["-e", f"SCC_POLICY_PATH={container_policy_path}"])
 

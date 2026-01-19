@@ -116,13 +116,22 @@ def session_callback(
     select: bool = typer.Option(
         False, "--select", "-s", help="Interactive picker to select a session"
     ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
     """List recent sessions (default).
 
     This makes `scc session` behave like `scc session list` for convenience.
     """
     if ctx.invoked_subcommand is None:
-        session_list_cmd(limit=limit, team=team, all_teams=all_teams, select=select)
+        session_list_cmd(
+            limit=limit,
+            team=team,
+            all_teams=all_teams,
+            select=select,
+            json_output=json_output,
+            pretty=pretty,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

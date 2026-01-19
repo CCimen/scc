@@ -12,6 +12,7 @@ Functions:
     prompt_repo_url: Prompt for Git repository URL
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,8 +23,10 @@ from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
 
 from scc_cli.confirm import Confirm
+from scc_cli.ports.session_models import SessionSummary
 from scc_cli.theme import Borders, Colors
 from scc_cli.ui.chrome import get_layout_metrics, print_with_layout
+from scc_cli.ui.time_format import format_relative_time_from_datetime
 
 if TYPE_CHECKING:
     from scc_cli.core.errors import SCCError
@@ -85,15 +88,28 @@ def confirm_with_layout(console: Console, prompt: str, **kwargs: Any) -> bool:
     return Confirm.ask(f"{prefix}{prompt}", **kwargs)
 
 
-def select_session(console: Console, sessions_list: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _format_last_used(last_used: str | None) -> str:
+    if not last_used:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(last_used)
+    except ValueError:
+        return last_used
+    return format_relative_time_from_datetime(dt)
+
+
+def select_session(
+    console: Console,
+    sessions_list: list[SessionSummary],
+) -> SessionSummary | None:
     """Display an interactive session selection menu.
 
     Args:
         console: Rich console for output.
-        sessions_list: List of session dicts with 'name', 'workspace', 'last_used', etc.
+        sessions_list: List of session summaries with name, workspace, and timestamps.
 
     Returns:
-        Selected session dict or None if cancelled.
+        Selected session summary or None if cancelled.
     """
     if not sessions_list:
         console.print(f"[{Colors.WARNING}]No sessions available.[/{Colors.WARNING}]")
@@ -108,9 +124,9 @@ def select_session(console: Console, sessions_list: list[dict[str, Any]]) -> dic
     table.add_column("Last Used", style=Colors.SECONDARY)
 
     for i, session in enumerate(sessions_list, 1):
-        name = session.get("name", "-")
-        workspace = session.get("workspace", "-")
-        last_used = session.get("last_used", "-")
+        name = session.name or "-"
+        workspace = session.workspace or "-"
+        last_used = _format_last_used(session.last_used)
         table.add_row(f"[{i}]", name, workspace, last_used)
 
     table.add_row("[0]", "<- Cancel", "", "")
@@ -172,17 +188,21 @@ def select_team(console: Console, cfg: dict[str, Any]) -> str | None:
     return selected
 
 
-def prompt_custom_workspace(console: Console) -> str | None:
+def prompt_custom_workspace(console: Console, prompt: str | None = None) -> str | None:
     """Prompt the user to enter a custom workspace path.
 
     Args:
         console: Rich console for output.
+        prompt: Optional prompt text override.
 
     Returns:
         Resolved absolute path string, or None if cancelled or path invalid.
     """
     console.print()
-    path = prompt_with_layout(console, f"[{Colors.BRAND}]Enter workspace path[/{Colors.BRAND}]")
+    prompt_text = (
+        prompt or f"[{Colors.BRAND}]Enter workspace path (tab to autocomplete)[/{Colors.BRAND}]"
+    )
+    path = prompt_with_layout(console, prompt_text)
 
     if not path:
         return None
@@ -203,17 +223,16 @@ def prompt_custom_workspace(console: Console) -> str | None:
     return str(expanded)
 
 
-def prompt_repo_url(console: Console) -> str:
+def prompt_repo_url(console: Console, prompt: str | None = None) -> str:
     """Prompt the user to enter a Git repository URL.
 
     Args:
         console: Rich console for output.
+        prompt: Optional prompt text override.
 
     Returns:
         The entered URL string (may be empty if user pressed Enter).
     """
     console.print()
-    return prompt_with_layout(
-        console,
-        f"[{Colors.BRAND}]Repository URL (HTTPS or SSH)[/{Colors.BRAND}]",
-    )
+    prompt_text = prompt or f"[{Colors.BRAND}]Repository URL (HTTPS or SSH)[/{Colors.BRAND}]"
+    return prompt_with_layout(console, prompt_text)

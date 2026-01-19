@@ -24,6 +24,8 @@ from scc_cli.core.errors import (
     SandboxNotAvailableError,
 )
 from scc_cli.core.exit_codes import EXIT_USAGE
+from scc_cli.ports.dependency_installer import DependencyInstallResult
+from scc_cli.ports.session_models import SessionSummary
 from tests.fakes import build_fake_adapters
 
 runner = CliRunner()
@@ -127,23 +129,48 @@ class TestStartCommand:
 
     def test_start_with_install_deps_runs_dependency_install(self, tmp_path):
         """Should install dependencies when --install-deps flag set."""
+        from scc_cli.bootstrap import DefaultAdapters
+
         # Create a workspace with package.json
         (tmp_path / "package.json").write_text("{}")
+
+        dependency_installer = MagicMock()
+        dependency_installer.install.return_value = DependencyInstallResult(
+            attempted=True,
+            success=True,
+            package_manager="npm",
+        )
+        base_adapters = build_fake_adapters()
+        adapters = DefaultAdapters(
+            filesystem=base_adapters.filesystem,
+            git_client=base_adapters.git_client,
+            dependency_installer=dependency_installer,
+            remote_fetcher=base_adapters.remote_fetcher,
+            clock=base_adapters.clock,
+            agent_runner=base_adapters.agent_runner,
+            sandbox_runtime=base_adapters.sandbox_runtime,
+            personal_profile_service=base_adapters.personal_profile_service,
+            doctor_runner=base_adapters.doctor_runner,
+            archive_writer=base_adapters.archive_writer,
+            config_store=base_adapters.config_store,
+        )
 
         with (
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
-                return_value=build_fake_adapters(),
+                return_value=adapters,
+            ),
+            patch(
+                "scc_cli.commands.launch.workspace.get_default_adapters",
+                return_value=adapters,
             ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
-            patch("scc_cli.commands.launch.workspace.deps.auto_install_dependencies") as mock_deps,
         ):
-            mock_deps.return_value = True
             runner.invoke(app, ["start", str(tmp_path), "--install-deps"])
-        # Should have called auto_install_dependencies
-        mock_deps.assert_called_once()
+        # Should have called dependency installer
+        dependency_installer.install.assert_called_once()
 
     def test_start_with_offline_uses_cache_only(self, tmp_path):
         """Should use cached config only when --offline flag set."""
@@ -192,24 +219,40 @@ class TestStartCommand:
 class TestWorktreeCommand:
     """Tests for worktree command with new options."""
 
-    def test_worktree_with_install_deps_installs_after_create(self, tmp_path):
+    def test_worktree_with_install_deps_installs_after_create(
+        self, tmp_path, worktree_dependencies
+    ):
         """Should install dependencies after worktree creation."""
+        from scc_cli.application.worktree import WorktreeCreateResult
+
         worktree_path = tmp_path / "worktree"
         worktree_path.mkdir()
+        dependencies, adapters = worktree_dependencies
+        dependencies.git_client.is_git_repo.return_value = True
+        dependencies.git_client.has_commits.return_value = True
+        dependencies.dependency_installer.install.return_value = DependencyInstallResult(
+            attempted=True,
+            success=True,
+            package_manager="uv",
+        )
 
         with (
-            patch("scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.git.has_commits", return_value=True),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.create_worktree",
-                return_value=worktree_path,
+                "scc_cli.commands.worktree.worktree_commands._build_worktree_dependencies",
+                return_value=(dependencies, adapters),
             ),
             patch(
-                "scc_cli.commands.worktree.worktree_commands.deps.auto_install_dependencies"
-            ) as mock_deps,
+                "scc_cli.commands.worktree.worktree_commands.worktree_use_cases.create_worktree",
+                return_value=WorktreeCreateResult(
+                    worktree_path=worktree_path,
+                    worktree_name="feature-x",
+                    branch_name="scc/feature-x",
+                    base_branch="main",
+                    dependencies_installed=True,
+                ),
+            ),
             patch("rich.prompt.Confirm.ask", return_value=False),  # Don't start claude
         ):
-            mock_deps.return_value = True
             # CLI structure: scc worktree [group-workspace] create <workspace> <name>
             # The "." is needed as explicit group workspace so Typer knows "create" is the subcommand
             runner.invoke(
@@ -224,7 +267,8 @@ class TestWorktreeCommand:
                     "--no-start",
                 ],
             )
-        mock_deps.assert_called_once_with(worktree_path)
+
+        dependencies.dependency_installer.install.assert_called_once_with(worktree_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -238,12 +282,14 @@ class TestSessionsCommand:
     def test_sessions_shows_recent_sessions(self):
         """Should list recent sessions."""
         mock_sessions = [
-            {
-                "name": "session1",
-                "workspace": "/tmp/proj1",
-                "last_used": "2025-01-01",
-                "team": "dev",
-            },
+            SessionSummary(
+                name="session1",
+                workspace="/tmp/proj1",
+                team="dev",
+                last_used="2025-01-01",
+                container_name=None,
+                branch=None,
+            ),
         ]
         with patch(
             "scc_cli.commands.worktree.session_commands.sessions.list_recent",
@@ -257,8 +303,22 @@ class TestSessionsCommand:
     def test_sessions_interactive_picker_when_select_flag(self):
         """Should show interactive picker with --select flag."""
         mock_sessions = [
-            {"name": "session1", "workspace": "/tmp/proj1"},
-            {"name": "session2", "workspace": "/tmp/proj2"},
+            SessionSummary(
+                name="session1",
+                workspace="/tmp/proj1",
+                team=None,
+                last_used=None,
+                container_name=None,
+                branch=None,
+            ),
+            SessionSummary(
+                name="session2",
+                workspace="/tmp/proj2",
+                team=None,
+                last_used=None,
+                container_name=None,
+                branch=None,
+            ),
         ]
         with (
             patch(
@@ -555,10 +615,13 @@ class TestStopCommand:
 class TestWorktreeCommandErrors:
     """Tests for worktree command error handling."""
 
-    def test_worktree_not_git_repo_shows_error(self, tmp_path):
+    def test_worktree_not_git_repo_shows_error(self, tmp_path, worktree_dependencies):
         """Should show error when not in a git repo."""
+        dependencies, adapters = worktree_dependencies
+        dependencies.git_client.is_git_repo.return_value = False
         with patch(
-            "scc_cli.commands.worktree.worktree_commands.git.is_git_repo", return_value=False
+            "scc_cli.commands.worktree.worktree_commands._build_worktree_dependencies",
+            return_value=(dependencies, adapters),
         ):
             result = runner.invoke(app, ["worktree", "create", str(tmp_path), "feature-x"])
 
@@ -657,7 +720,14 @@ class TestSessionsCommandDetails:
     def test_sessions_with_limit(self):
         """Should respect limit option."""
         mock_sessions = [
-            {"name": f"session-{i}", "workspace": f"/path/{i}", "timestamp": "2024-01-01"}
+            SessionSummary(
+                name=f"session-{i}",
+                workspace=f"/path/{i}",
+                team=None,
+                last_used="2024-01-01",
+                container_name=None,
+                branch=None,
+            )
             for i in range(5)
         ]
         with patch(
@@ -667,4 +737,5 @@ class TestSessionsCommandDetails:
             result = runner.invoke(app, ["sessions", "-n", "5"])
 
         assert result.exit_code == 0
-        mock_list.assert_called_once_with(5)
+        mock_list.assert_called_once()
+        assert mock_list.call_args.kwargs["limit"] == 5

@@ -10,12 +10,7 @@ Public API re-exports for backward compatibility.
 """
 
 from .app import launch_app, start
-from .flow import (
-    _configure_team_settings,
-    _sync_marketplace_settings,
-    interactive_start,
-    run_start_wizard_flow,
-)
+from .flow import interactive_start, run_start_wizard_flow
 from .render import (
     build_dry_run_data,
     show_dry_run_panel,
@@ -23,6 +18,7 @@ from .render import (
     warn_if_non_worktree,
 )
 from .sandbox import extract_container_name, launch_sandbox
+from .team_settings import _configure_team_settings
 from .workspace import (
     prepare_workspace,
     resolve_mount_and_branch,
@@ -47,7 +43,6 @@ __all__ = [
     "run_start_wizard_flow",
     # Private helpers (exposed for orchestrator)
     "_configure_team_settings",
-    "_sync_marketplace_settings",
     # Sandbox functions
     "launch_sandbox",
     "extract_container_name",
