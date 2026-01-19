@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -221,6 +222,25 @@ def _cleanup_fallback_policy_files() -> None:
         pass  # Silently ignore - this is optional hygiene
 
 
+def _is_mount_race_error(stderr: str) -> bool:
+    """Check if Docker error is a mount race condition (retryable).
+
+    Docker Desktop's VirtioFS can have delays before newly created files
+    are visible. This function detects these specific errors.
+
+    Args:
+        stderr: The stderr output from the Docker command.
+
+    Returns:
+        True if the error indicates a mount race condition.
+    """
+    error_lower = stderr.lower()
+    return (
+        "bind source path does not exist" in error_lower
+        or "no such file or directory" in error_lower
+    )
+
+
 def run(
     cmd: list[str],
     ensure_credentials: bool = True,
@@ -350,26 +370,52 @@ def run_sandbox(
             _preinit_credential_volume()
 
             # STEP 3: Start container in DETACHED mode (no Claude running yet)
+            # Use retry-with-backoff for Docker Desktop VirtioFS race conditions
+            # (newly created files may not be immediately visible to Docker)
             detached_cmd = build_command(
                 workspace=workspace,
                 detached=True,
                 policy_host_path=policy_host_path,
             )
-            result = subprocess.run(
-                detached_cmd,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
 
-            if result.returncode != 0:
+            max_retries = 5
+            base_delay = 0.5  # Start with 500ms, exponential backoff
+            last_result: subprocess.CompletedProcess[str] | None = None
+
+            for attempt in range(max_retries):
+                result = subprocess.run(
+                    detached_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                last_result = result
+
+                if result.returncode == 0:
+                    break  # Success!
+
+                # Check if this is a retryable mount race error
+                if _is_mount_race_error(result.stderr) and attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt)  # 0.5s, 1s, 2s, 4s
+                    err_line(
+                        f"Docker mount race detected, retrying in {delay:.1f}s "
+                        f"({attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(delay)
+                else:
+                    # Non-retryable error or last attempt failed
+                    break
+
+            # After retry loop, check final result
+            if last_result is None or last_result.returncode != 0:
+                stderr = last_result.stderr if last_result else ""
                 raise SandboxLaunchError(
                     user_message="Failed to create Docker sandbox",
                     command=" ".join(detached_cmd),
-                    stderr=result.stderr,
+                    stderr=stderr,
                 )
 
-            container_id = result.stdout.strip()
+            container_id = last_result.stdout.strip()
             if not container_id:
                 raise SandboxLaunchError(
                     user_message="Docker sandbox returned empty container ID",

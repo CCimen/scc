@@ -17,11 +17,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from jsonschema import Draft7Validator
 
 from .core.constants import CLI_VERSION, CURRENT_SCHEMA_VERSION
+from .core.enums import SeverityLevel
 
 if TYPE_CHECKING:
     pass
@@ -39,12 +40,12 @@ class InvariantViolation:
     Attributes:
         rule: The invariant rule that was violated (e.g., "enabled_must_be_allowed").
         message: Human-readable description of the violation.
-        severity: "error" for hard failures, "warning" for advisory.
+        severity: SeverityLevel.ERROR for hard failures, SeverityLevel.WARNING for advisory.
     """
 
     rule: str
     message: str
-    severity: Literal["error", "warning"]
+    severity: SeverityLevel
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -324,7 +325,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                 InvariantViolation(
                     rule="invalid_plugin_reference",
                     message=f"{context} plugin '{ref}' is invalid: {exc}",
-                    severity="error",
+                    severity=SeverityLevel.ERROR,
                 )
             )
             return None
@@ -377,7 +378,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                         message=(
                             f"Team '{team_name}' plugin '{normalized}' is not allowed by defaults.allowed_plugins"
                         ),
-                        severity="error",
+                        severity=SeverityLevel.ERROR,
                     )
                 )
 
@@ -389,7 +390,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                             message=(
                                 f"Team '{team_name}' plugin '{normalized}' matches blocked pattern '{pattern}'"
                             ),
-                            severity="error",
+                            severity=SeverityLevel.ERROR,
                         )
                     )
                     break
@@ -407,7 +408,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                         message=(
                             f"Default plugin '{normalized}' matches blocked pattern '{pattern}'"
                         ),
-                        severity="error",
+                        severity=SeverityLevel.ERROR,
                     )
                 )
                 break
@@ -423,7 +424,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                     InvariantViolation(
                         rule="mcp_missing_identifier",
                         message=f"Team '{team_name}' MCP server entry is missing identifiers",
-                        severity="error",
+                        severity=SeverityLevel.ERROR,
                     )
                 )
                 continue
@@ -437,7 +438,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                         message=(
                             f"Team '{team_name}' MCP server '{candidates[0]}' is not allowed by {allowed_desc}"
                         ),
-                        severity="error",
+                        severity=SeverityLevel.ERROR,
                     )
                 )
 
@@ -449,7 +450,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                             message=(
                                 f"Team '{team_name}' MCP server '{candidates[0]}' matches blocked pattern '{pattern}'"
                             ),
-                            severity="error",
+                            severity=SeverityLevel.ERROR,
                         )
                     )
                     break

@@ -18,7 +18,7 @@ CANCEL_ACTION_ID = "cancel"
 CANCEL_ACTION_LABEL = "No"
 CANCEL_ACTION_HOTKEY = "n"
 
-T = TypeVar("T")
+T = TypeVar("T", covariant=True)
 
 
 @dataclass(frozen=True)

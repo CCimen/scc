@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING, Any, cast
 from rich.console import Console
 from rich.panel import Panel
 
+from scc_cli.core.enums import OrgConfigUpdateStatus
+
 if TYPE_CHECKING:
     pass
 
@@ -71,7 +73,7 @@ class UpdateInfo:
 class OrgConfigUpdateResult:
     """Result of org config update check."""
 
-    status: str  # 'updated', 'unchanged', 'offline', 'auth_failed', 'no_cache', 'standalone'
+    status: OrgConfigUpdateStatus
     message: str | None = None
     cached_age_hours: float | None = None
 
@@ -410,16 +412,16 @@ def check_org_config_update(
 
     # Standalone mode - no org config to update
     if user_config.get("standalone"):
-        return OrgConfigUpdateResult(status="standalone")
+        return OrgConfigUpdateResult(status=OrgConfigUpdateStatus.STANDALONE)
 
     # No organization source configured
     org_source = user_config.get("organization_source")
     if not org_source:
-        return OrgConfigUpdateResult(status="standalone")
+        return OrgConfigUpdateResult(status=OrgConfigUpdateStatus.STANDALONE)
 
     url = org_source.get("url")
     if not url:
-        return OrgConfigUpdateResult(status="standalone")
+        return OrgConfigUpdateResult(status=OrgConfigUpdateStatus.STANDALONE)
 
     auth_spec = org_source.get("auth")
     auth_header = org_source.get("auth_header")
@@ -427,7 +429,7 @@ def check_org_config_update(
     # Check throttle (unless forced)
     if not force and not _should_check_org_config():
         # Return early - too soon to check
-        return OrgConfigUpdateResult(status="throttled")
+        return OrgConfigUpdateResult(status=OrgConfigUpdateStatus.THROTTLED)
 
     # Try to load existing cache
     cached_config, meta = remote.load_from_cache()
@@ -461,10 +463,10 @@ def check_org_config_update(
         _mark_org_config_check_done()
         if cached_config:
             return OrgConfigUpdateResult(
-                status="offline",
+                status=OrgConfigUpdateStatus.OFFLINE,
                 cached_age_hours=cached_age_hours,
             )
-        return OrgConfigUpdateResult(status="no_cache")
+        return OrgConfigUpdateResult(status=OrgConfigUpdateStatus.NO_CACHE)
 
     # Mark check as done
     _mark_org_config_check_done()
@@ -472,7 +474,7 @@ def check_org_config_update(
     # 304 Not Modified - cache is current
     if status == 304:
         return OrgConfigUpdateResult(
-            status="unchanged",
+            status=OrgConfigUpdateStatus.UNCHANGED,
             cached_age_hours=cached_age_hours,
         )
 
@@ -482,7 +484,7 @@ def check_org_config_update(
         ttl_hours = config.get("defaults", {}).get("cache_ttl_hours", 24)
         remote.save_to_cache(config, url, new_etag, ttl_hours)
         return OrgConfigUpdateResult(
-            status="updated",
+            status=OrgConfigUpdateStatus.UPDATED,
             message="Organization config updated from remote",
         )
 
@@ -490,23 +492,23 @@ def check_org_config_update(
     if status in (401, 403):
         if cached_config:
             return OrgConfigUpdateResult(
-                status="auth_failed",
+                status=OrgConfigUpdateStatus.AUTH_FAILED,
                 message="Auth failed for org config, using cached version",
                 cached_age_hours=cached_age_hours,
             )
         return OrgConfigUpdateResult(
-            status="auth_failed",
+            status=OrgConfigUpdateStatus.AUTH_FAILED,
             message="Auth failed and no cached config available",
         )
 
     # Other errors - use cache if available
     if cached_config:
         return OrgConfigUpdateResult(
-            status="offline",
+            status=OrgConfigUpdateStatus.OFFLINE,
             cached_age_hours=cached_age_hours,
         )
 
-    return OrgConfigUpdateResult(status="no_cache")
+    return OrgConfigUpdateResult(status=OrgConfigUpdateStatus.NO_CACHE)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

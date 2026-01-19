@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from scc_cli.application.launch.start_wizard import TeamRepoOption
 from scc_cli.ports.session_models import SessionSummary
 from scc_cli.ui.wizard import (
     BACK,
@@ -552,7 +553,12 @@ class TestPickTeamRepoSubScreen:
         repos = [{"name": "api", "url": "https://github.com/org/api", "local_path": "/tmp"}]
 
         with patch("scc_cli.ui.wizard._run_single_select_picker") as mock_picker:
-            mock_picker.return_value = repos[0]  # User selected repo dict
+            mock_picker.return_value = TeamRepoOption(
+                name="api",
+                description="",
+                url="https://github.com/org/api",
+                local_path="/tmp",
+            )
 
             result = pick_team_repo(repos)
 

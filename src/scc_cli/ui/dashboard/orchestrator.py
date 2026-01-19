@@ -479,13 +479,20 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     from rich.status import Status
 
     from ... import config, docker
+    from ...application.start_session import (
+        StartSessionDependencies,
+        StartSessionRequest,
+        sync_marketplace_settings_for_start,
+    )
+    from ...bootstrap import get_default_adapters
     from ...commands.launch import (
-        _configure_team_settings,
         _launch_sandbox,
         _resolve_mount_and_branch,
-        _sync_marketplace_settings,
         _validate_and_resolve_workspace,
     )
+    from ...commands.launch.team_settings import _configure_team_settings
+    from ...marketplace.materialize import materialize_marketplace
+    from ...marketplace.resolve import resolve_effective_config
     from ...theme import Spinners
 
     console = get_err_console()
@@ -519,7 +526,36 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings
-        sync_result = _sync_marketplace_settings(workspace_path, team)
+        adapters = get_default_adapters()
+        start_dependencies = StartSessionDependencies(
+            filesystem=adapters.filesystem,
+            remote_fetcher=adapters.remote_fetcher,
+            clock=adapters.clock,
+            git_client=adapters.git_client,
+            agent_runner=adapters.agent_runner,
+            sandbox_runtime=adapters.sandbox_runtime,
+            resolve_effective_config=resolve_effective_config,
+            materialize_marketplace=materialize_marketplace,
+        )
+        start_request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=team,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=team is None,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=config.load_cached_org_config(),
+            org_config_url=None,
+        )
+        sync_result, _sync_error = sync_marketplace_settings_for_start(
+            start_request,
+            start_dependencies,
+        )
         plugin_settings = sync_result.rendered_settings if sync_result else None
 
         # Resolve mount path and branch
@@ -572,13 +608,20 @@ def _handle_session_resume(session: SessionSummary) -> bool:
     from rich.status import Status
 
     from ... import config, docker
+    from ...application.start_session import (
+        StartSessionDependencies,
+        StartSessionRequest,
+        sync_marketplace_settings_for_start,
+    )
+    from ...bootstrap import get_default_adapters
     from ...commands.launch import (
-        _configure_team_settings,
         _launch_sandbox,
         _resolve_mount_and_branch,
-        _sync_marketplace_settings,
         _validate_and_resolve_workspace,
     )
+    from ...commands.launch.team_settings import _configure_team_settings
+    from ...marketplace.materialize import materialize_marketplace
+    from ...marketplace.resolve import resolve_effective_config
     from ...theme import Spinners
 
     console = get_err_console()
@@ -618,7 +661,36 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         _configure_team_settings(team, cfg)
 
         # Sync marketplace settings
-        sync_result = _sync_marketplace_settings(workspace_path, team)
+        adapters = get_default_adapters()
+        start_dependencies = StartSessionDependencies(
+            filesystem=adapters.filesystem,
+            remote_fetcher=adapters.remote_fetcher,
+            clock=adapters.clock,
+            git_client=adapters.git_client,
+            agent_runner=adapters.agent_runner,
+            sandbox_runtime=adapters.sandbox_runtime,
+            resolve_effective_config=resolve_effective_config,
+            materialize_marketplace=materialize_marketplace,
+        )
+        start_request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=team,
+            session_name=session_name,
+            resume=True,
+            fresh=False,
+            offline=False,
+            standalone=team is None,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=config.load_cached_org_config(),
+            org_config_url=None,
+        )
+        sync_result, _sync_error = sync_marketplace_settings_for_start(
+            start_request,
+            start_dependencies,
+        )
         plugin_settings = sync_result.rendered_settings if sync_result else None
 
         # Resolve mount path and branch

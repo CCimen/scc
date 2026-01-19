@@ -188,17 +188,21 @@ def select_team(console: Console, cfg: dict[str, Any]) -> str | None:
     return selected
 
 
-def prompt_custom_workspace(console: Console) -> str | None:
+def prompt_custom_workspace(console: Console, prompt: str | None = None) -> str | None:
     """Prompt the user to enter a custom workspace path.
 
     Args:
         console: Rich console for output.
+        prompt: Optional prompt text override.
 
     Returns:
         Resolved absolute path string, or None if cancelled or path invalid.
     """
     console.print()
-    path = prompt_with_layout(console, f"[{Colors.BRAND}]Enter workspace path[/{Colors.BRAND}]")
+    prompt_text = (
+        prompt or f"[{Colors.BRAND}]Enter workspace path (tab to autocomplete)[/{Colors.BRAND}]"
+    )
+    path = prompt_with_layout(console, prompt_text)
 
     if not path:
         return None
@@ -219,17 +223,16 @@ def prompt_custom_workspace(console: Console) -> str | None:
     return str(expanded)
 
 
-def prompt_repo_url(console: Console) -> str:
+def prompt_repo_url(console: Console, prompt: str | None = None) -> str:
     """Prompt the user to enter a Git repository URL.
 
     Args:
         console: Rich console for output.
+        prompt: Optional prompt text override.
 
     Returns:
         The entered URL string (may be empty if user pressed Enter).
     """
     console.print()
-    return prompt_with_layout(
-        console,
-        f"[{Colors.BRAND}]Repository URL (HTTPS or SSH)[/{Colors.BRAND}]",
-    )
+    prompt_text = prompt or f"[{Colors.BRAND}]Repository URL (HTTPS or SSH)[/{Colors.BRAND}]"
+    return prompt_with_layout(console, prompt_text)

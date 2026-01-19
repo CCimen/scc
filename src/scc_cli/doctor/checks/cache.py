@@ -11,6 +11,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from scc_cli.core.enums import SeverityLevel
+
 from ..types import CheckResult
 from .json_helpers import get_json_error_hints, validate_json_file
 
@@ -32,7 +34,7 @@ def check_cache_readable() -> CheckResult:
             name="Org Cache",
             passed=True,
             message="No cache file (will fetch on first use)",
-            severity="info",
+            severity=SeverityLevel.INFO,
         )
 
     # Use the new validation helper for enhanced error display
@@ -58,7 +60,7 @@ def check_cache_readable() -> CheckResult:
                 passed=False,
                 message=f"Cannot read cache file: {e}",
                 fix_hint="Run 'scc setup' to refresh organization config",
-                severity="error",
+                severity=SeverityLevel.ERROR,
             )
 
     # Invalid JSON - build detailed error message
@@ -81,7 +83,7 @@ def check_cache_readable() -> CheckResult:
         passed=False,
         message=error_msg,
         fix_hint=fix_hint,
-        severity="error",
+        severity=SeverityLevel.ERROR,
         code_frame=result.code_frame,
     )
 
@@ -108,7 +110,7 @@ def check_cache_ttl_status() -> CheckResult | None:
             passed=False,
             message="Cache metadata is corrupted",
             fix_hint="Run 'scc setup' to refresh organization config",
-            severity="warning",
+            severity=SeverityLevel.WARNING,
         )
 
     org_meta = meta.get("org_config", {})
@@ -119,7 +121,7 @@ def check_cache_ttl_status() -> CheckResult | None:
             name="Cache TTL",
             passed=True,
             message="No expiration set in cache",
-            severity="info",
+            severity=SeverityLevel.INFO,
         )
 
     try:
@@ -143,7 +145,7 @@ def check_cache_ttl_status() -> CheckResult | None:
                 passed=False,
                 message=f"Cache expired {hours:.1f} hours ago",
                 fix_hint="Run 'scc setup' to refresh organization config",
-                severity="warning",
+                severity=SeverityLevel.WARNING,
             )
     except (ValueError, TypeError):
         return CheckResult(
@@ -151,7 +153,7 @@ def check_cache_ttl_status() -> CheckResult | None:
             passed=False,
             message="Invalid expiration date in cache metadata",
             fix_hint="Run 'scc setup' to refresh organization config",
-            severity="warning",
+            severity=SeverityLevel.WARNING,
         )
 
 
@@ -220,7 +222,7 @@ def check_exception_stores() -> CheckResult:
             passed=False,
             message="; ".join(issues),
             fix_hint="Run 'scc exceptions reset --user --yes' to reset corrupt stores",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     if warnings:
@@ -229,7 +231,7 @@ def check_exception_stores() -> CheckResult:
             passed=True,
             message="; ".join(warnings),
             fix_hint="Consider upgrading SCC or running 'scc exceptions cleanup'",
-            severity="warning",
+            severity=SeverityLevel.WARNING,
         )
 
     return CheckResult(
@@ -271,5 +273,5 @@ def check_proxy_environment() -> CheckResult:
         name="Proxy Environment",
         passed=True,
         message=message,
-        severity="info",
+        severity=SeverityLevel.INFO,
     )

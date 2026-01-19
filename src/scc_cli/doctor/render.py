@@ -18,6 +18,7 @@ from rich.table import Table
 from rich.text import Text
 
 from scc_cli import __version__
+from scc_cli.core.enums import SeverityLevel
 
 from .core import run_doctor
 from .types import DoctorResult
@@ -56,7 +57,7 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
         # Status icon with color
         if check.passed:
             status = Text("  ", style="bold green")
-        elif check.severity == "warning":
+        elif check.severity == SeverityLevel.WARNING:
             status = Text("  ", style="bold yellow")
         else:
             status = Text("  ", style="bold red")
@@ -180,7 +181,9 @@ def render_quick_status(console: Console, result: DoctorResult) -> None:
     if result.all_ok:
         console.print("[green]  All systems operational[/green]")
     else:
-        failed = [c.name for c in result.checks if not c.passed and c.severity == "error"]
+        failed = [
+            c.name for c in result.checks if not c.passed and c.severity == SeverityLevel.ERROR
+        ]
         console.print(f"[red]  Issues detected:[/red] {', '.join(failed)}")
 
 

@@ -113,8 +113,6 @@ def main_callback(
     if ctx.invoked_subcommand is None:
         from pathlib import Path
 
-        from rich.prompt import Prompt
-
         from . import config as scc_config
         from . import setup as scc_setup
         from .application.workspace import ResolveWorkspaceRequest, resolve_workspace
@@ -127,25 +125,14 @@ def main_callback(
         workspace_detected = context is not None and context.is_auto_eligible
 
         if is_interactive_allowed():
-            # If no org is configured and standalone isn't explicit, offer setup
+            # If no org is configured and standalone isn't explicit, run setup wizard
             user_cfg = scc_config.load_user_config()
             org_source = user_cfg.get("organization_source") or {}
             has_org = bool(org_source.get("url"))
             if not has_org and not user_cfg.get("standalone"):
-                choice = Prompt.ask(
-                    "[yellow]No organization configured.[/yellow] Choose setup mode",
-                    choices=["setup", "standalone", "quit"],
-                    default="setup",
-                )
-                if choice == "setup":
-                    if not scc_setup.run_setup_wizard(console):
-                        raise typer.Exit(0)
-                elif choice == "standalone":
-                    user_cfg["standalone"] = True
-                    scc_config.save_user_config(user_cfg)
-                else:
+                # Run the comprehensive setup wizard directly
+                if not scc_setup.run_setup_wizard(console):
                     raise typer.Exit(0)
-
                 # Setup complete - return to prompt
                 return
 

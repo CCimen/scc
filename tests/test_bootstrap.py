@@ -7,6 +7,7 @@ from scc_cli.adapters.docker_sandbox_runtime import DockerSandboxRuntime
 from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
+from scc_cli.adapters.personal_profile_service_local import LocalPersonalProfileService
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.system_clock import SystemClock
 from scc_cli.bootstrap import DefaultAdapters, get_default_adapters
@@ -23,3 +24,4 @@ def test_get_default_adapters_returns_expected_types() -> None:
     assert isinstance(adapters.clock, SystemClock)
     assert isinstance(adapters.agent_runner, ClaudeAgentRunner)
     assert isinstance(adapters.sandbox_runtime, DockerSandboxRuntime)
+    assert isinstance(adapters.personal_profile_service, LocalPersonalProfileService)

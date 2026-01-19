@@ -338,17 +338,19 @@ class TestBuildCommand:
     # ───────────────────────────────────────────────────────────────────────────
 
     def test_policy_mount_when_path_provided(self, tmp_path):
-        """When policy_host_path is provided, should include -v mount flag."""
+        """When policy_host_path is provided, should include -v mount for parent directory."""
         policy_file = tmp_path / "effective_policy.json"
         policy_file.write_text('{"action": "block"}')
 
         cmd = docker.build_command(policy_host_path=policy_file)
 
         assert "-v" in cmd
-        # Find the -v argument and verify it includes the host path
+        # Find the -v argument and verify it mounts the parent directory (not the file)
         v_idx = cmd.index("-v")
         mount_arg = cmd[v_idx + 1]
-        assert str(policy_file) in mount_arg
+        # Directory mounting is more reliable for Docker Desktop VirtioFS
+        assert str(tmp_path) in mount_arg
+        assert "/mnt/claude-data/policy:ro" in mount_arg
 
     def test_policy_env_var_when_path_provided(self, tmp_path):
         """When policy_host_path is provided, should set SCC_POLICY_PATH env var."""
@@ -361,8 +363,8 @@ class TestBuildCommand:
         e_idx = cmd.index("-e")
         env_arg = cmd[e_idx + 1]
         assert env_arg.startswith("SCC_POLICY_PATH=")
-        # Should point to container path, not host path
-        assert "/mnt/claude-data/effective_policy.json" in env_arg
+        # Should point to container path under the mounted policy directory
+        assert "/mnt/claude-data/policy/effective_policy.json" in env_arg
 
     def test_no_policy_mount_when_path_none(self):
         """When policy_host_path is None, should not include policy mount."""
@@ -399,8 +401,8 @@ class TestBuildCommand:
 
         v_idx = cmd.index("-v")
         mount_arg = cmd[v_idx + 1]
-        # Should contain the resolved path string
-        assert str(policy_file) in mount_arg
+        # Should contain the parent directory path (directory mounting)
+        assert str(tmp_path) in mount_arg
 
     def test_policy_mount_with_workspace(self, tmp_path):
         """Policy mount should work alongside workspace mount."""

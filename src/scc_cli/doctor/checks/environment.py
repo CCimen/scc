@@ -8,6 +8,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from scc_cli.core.enums import SeverityLevel
+
 from ..types import CheckResult
 
 
@@ -22,7 +24,7 @@ def check_git() -> CheckResult:
             message="Git is not installed or not in PATH",
             fix_hint="Install Git from https://git-scm.com/downloads",
             fix_url="https://git-scm.com/downloads",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     version = git_module.get_git_version()
@@ -47,7 +49,7 @@ def check_docker() -> CheckResult:
             message="Docker is not installed or not running",
             fix_hint="Install Docker Desktop from https://docker.com/products/docker-desktop",
             fix_url="https://docker.com/products/docker-desktop",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     return CheckResult(
@@ -70,7 +72,7 @@ def check_docker_desktop() -> CheckResult:
             message="Docker Desktop CLI not detected",
             fix_hint=("Install or update Docker Desktop 4.50+ and ensure its CLI is first in PATH"),
             fix_url="https://docker.com/products/docker-desktop",
-            severity="warning",
+            severity=SeverityLevel.WARNING,
         )
 
     current = docker_module._parse_version(desktop_version)
@@ -87,7 +89,7 @@ def check_docker_desktop() -> CheckResult:
             version=desktop_version,
             fix_hint="Update Docker Desktop to 4.50+",
             fix_url="https://docker.com/products/docker-desktop",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     return CheckResult(
@@ -112,7 +114,7 @@ def check_docker_sandbox() -> CheckResult:
                 "Run 'docker sandbox --help' and verify Docker Desktop is first in PATH"
             ),
             fix_url="https://docs.docker.com/desktop/features/sandbox/",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     return CheckResult(
@@ -142,7 +144,7 @@ def check_docker_running() -> CheckResult:
                 passed=False,
                 message="Docker daemon is not running",
                 fix_hint="Start Docker Desktop or run 'sudo systemctl start docker'",
-                severity="error",
+                severity=SeverityLevel.ERROR,
             )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return CheckResult(
@@ -150,7 +152,7 @@ def check_docker_running() -> CheckResult:
             passed=False,
             message="Could not connect to Docker daemon",
             fix_hint="Ensure Docker Desktop is running",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
 
@@ -166,7 +168,7 @@ def check_wsl2() -> tuple[CheckResult, bool]:
                 name="WSL2 Environment",
                 passed=True,
                 message="Running in WSL2 (recommended for Windows)",
-                severity="info",
+                severity=SeverityLevel.INFO,
             ),
             True,
         )
@@ -200,7 +202,7 @@ def check_workspace_path(workspace: Path | None = None) -> CheckResult:
             passed=False,
             message=f"Workspace is on Windows filesystem: {workspace}",
             fix_hint="Move project to ~/projects inside WSL for better performance",
-            severity="warning",
+            severity=SeverityLevel.WARNING,
         )
 
     return CheckResult(

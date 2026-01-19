@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scc_cli.core.enums import SeverityLevel
+
 from .checks import (
     check_config_directory,
     check_docker,
@@ -50,7 +52,9 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
     if workspace:
         path_check = check_workspace_path(workspace)
         result.checks.append(path_check)
-        result.windows_path_warning = not path_check.passed and path_check.severity == "warning"
+        result.windows_path_warning = (
+            not path_check.passed and path_check.severity == SeverityLevel.WARNING
+        )
 
     config_check = check_config_directory()
     result.checks.append(config_check)

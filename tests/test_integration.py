@@ -580,6 +580,10 @@ class TestDepsWorkflow:
             clock=base_adapters.clock,
             agent_runner=base_adapters.agent_runner,
             sandbox_runtime=base_adapters.sandbox_runtime,
+            personal_profile_service=base_adapters.personal_profile_service,
+            doctor_runner=base_adapters.doctor_runner,
+            archive_writer=base_adapters.archive_writer,
+            config_store=base_adapters.config_store,
         )
 
         with (

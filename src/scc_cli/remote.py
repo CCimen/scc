@@ -27,6 +27,7 @@ import requests
 from scc_cli.auth import is_remote_command_allowed
 from scc_cli.auth import resolve_auth as _resolve_auth_impl
 from scc_cli.bootstrap import get_default_adapters
+from scc_cli.core.enums import SeverityLevel
 from scc_cli.output_mode import print_human
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.utils.locks import file_lock, lock_path
@@ -382,7 +383,7 @@ def _validate_org_config(config: dict[str, Any]) -> None:
 
     # Step 2: Semantic validation (governance invariants)
     violations: list[InvariantViolation] = validate_config_invariants(config)
-    errors = [v for v in violations if v.severity == "error"]
+    errors = [v for v in violations if v.severity == SeverityLevel.ERROR]
     if errors:
         # Format violations for user-friendly message
         error_messages = [v.message for v in errors[:3]]  # Show first 3

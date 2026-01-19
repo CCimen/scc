@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
+from scc_cli.core.enums import SeverityLevel
+
 from ..types import CheckResult
 
 
@@ -75,7 +77,7 @@ def check_org_config_reachable() -> CheckResult | None:
             passed=False,
             message=f"Failed to fetch org config: {e}",
             fix_hint="Check network connection and URL",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     if status == 401:
@@ -84,7 +86,7 @@ def check_org_config_reachable() -> CheckResult | None:
             passed=False,
             message=f"Authentication required (401) for {url}",
             fix_hint="Configure auth with: scc setup",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     if status == 403:
@@ -93,7 +95,7 @@ def check_org_config_reachable() -> CheckResult | None:
             passed=False,
             message=f"Access denied (403) for {url}",
             fix_hint="Check your access permissions",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     if status != 200 or org_config is None:
@@ -102,7 +104,7 @@ def check_org_config_reachable() -> CheckResult | None:
             passed=False,
             message=f"Failed to fetch org config (status: {status})",
             fix_hint="Check URL and network connection",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     org_name = org_config.get("organization", {}).get("name", "Unknown")
@@ -150,7 +152,7 @@ def check_marketplace_auth_available() -> CheckResult | None:
             name="Marketplace Auth",
             passed=False,
             message=f"Marketplace '{marketplace_name}' not found in org config",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
     # Check auth requirement
@@ -186,14 +188,14 @@ def check_marketplace_auth_available() -> CheckResult | None:
                 passed=False,
                 message=f"{auth_spec} not set or invalid",
                 fix_hint=hint,
-                severity="error",
+                severity=SeverityLevel.ERROR,
             )
     except Exception as e:
         return CheckResult(
             name="Marketplace Auth",
             passed=False,
             message=f"Auth resolution failed: {e}",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )
 
 

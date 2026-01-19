@@ -9,14 +9,14 @@ Flag behavior:
 
 import re
 from dataclasses import replace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
 from scc_cli.core.exit_codes import EXIT_CANCELLED, EXIT_USAGE
-from scc_cli.ports.session_models import SessionSummary
+from scc_cli.ports.session_models import SessionListResult, SessionSummary
 from tests.fakes import build_fake_adapters
 
 runner = CliRunner()
@@ -86,9 +86,8 @@ class TestResumeFlag:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent",
-                return_value=[standalone_session],
-            ) as mock_list,
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -98,11 +97,16 @@ class TestResumeFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                [standalone_session]
+            )
+            mock_service_factory.return_value = mock_service
             # Use --standalone flag to bypass team filtering
             result = runner.invoke(app, ["start", "--resume", "--standalone"])
 
         # Should have called list_recent (new implementation filters by team)
-        mock_list.assert_called_once()
+        mock_service.list_recent.assert_called_once()
         # Should indicate resuming
         assert "Resuming" in result.output or result.exit_code == 0
 
@@ -115,9 +119,8 @@ class TestResumeFlag:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent",
-                return_value=[standalone_session],
-            ) as mock_list,
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -127,18 +130,28 @@ class TestResumeFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                [standalone_session]
+            )
+            mock_service_factory.return_value = mock_service
             # Use --standalone flag to bypass team filtering
             _result = runner.invoke(app, ["start", "-r", "--standalone"])
 
-        mock_list.assert_called_once()
+        mock_service.list_recent.assert_called_once()
 
     def test_resume_without_sessions_shows_error(self):
         """--resume with no sessions should show appropriate error."""
         with (
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.flow.sessions.list_recent", return_value=[]),
+            patch(
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions([])
+            mock_service_factory.return_value = mock_service
             # Use --standalone flag to bypass team filtering
             result = runner.invoke(app, ["start", "--resume", "--standalone"])
 
@@ -164,12 +177,9 @@ class TestSelectFlag:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent",
-                return_value=standalone_sessions,
-            ),
-            patch(
-                "scc_cli.commands.launch.flow.select_session", return_value=standalone_session
-            ) as mock_picker,
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
+            patch("scc_cli.commands.launch.flow.pick_session") as mock_picker,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -179,6 +189,12 @@ class TestSelectFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                standalone_sessions
+            )
+            mock_service_factory.return_value = mock_service
+            mock_picker.return_value = standalone_session
             # Use --standalone flag to bypass team filtering
             _result = runner.invoke(app, ["start", "--select", "--standalone"])
 
@@ -196,12 +212,9 @@ class TestSelectFlag:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent",
-                return_value=standalone_sessions,
-            ),
-            patch(
-                "scc_cli.commands.launch.flow.select_session", return_value=standalone_session
-            ) as mock_picker,
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
+            patch("scc_cli.commands.launch.flow.pick_session") as mock_picker,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -211,6 +224,12 @@ class TestSelectFlag:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                standalone_sessions
+            )
+            mock_service_factory.return_value = mock_service
+            mock_picker.return_value = standalone_session
             # Use --standalone flag to bypass team filtering
             _result = runner.invoke(app, ["start", "-s", "--standalone"])
 
@@ -222,8 +241,13 @@ class TestSelectFlag:
             patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-            patch("scc_cli.commands.launch.flow.sessions.list_recent", return_value=[]),
+            patch(
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions([])
+            mock_service_factory.return_value = mock_service
             # Use --standalone flag to bypass team filtering
             result = runner.invoke(app, ["start", "--select", "--standalone"])
 
@@ -240,13 +264,15 @@ class TestSelectFlag:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent",
-                return_value=standalone_sessions,
-            ),
-            patch(
-                "scc_cli.commands.launch.flow.select_session", return_value=None
-            ),  # User cancelled
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
+            patch("scc_cli.commands.launch.flow.pick_session", return_value=None),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                standalone_sessions
+            )
+            mock_service_factory.return_value = mock_service
             # Use --standalone flag to bypass team filtering
             result = runner.invoke(app, ["start", "--select", "--standalone"])
 
@@ -273,12 +299,8 @@ class TestFlagMutualExclusivity:
                 return_value={"standalone": True},
             ),
             patch(
-                "scc_cli.commands.launch.flow.sessions.get_most_recent", return_value=mock_session
-            ),
-            patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent", return_value=mock_sessions_list
-            ),
-            patch("scc_cli.commands.launch.flow.select_session", return_value=mock_session),
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -288,6 +310,11 @@ class TestFlagMutualExclusivity:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                mock_sessions_list
+            )
+            mock_service_factory.return_value = mock_service
             result = runner.invoke(app, ["start", "--resume", "--select"])
 
         # Either should error OR one should take precedence
@@ -415,10 +442,12 @@ class TestSmartWorkspaceDetection:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
-                "scc_cli.commands.launch.flow.sessions.list_recent",
-                return_value=standalone_sessions,
+                "scc_cli.commands.launch.flow.sessions.get_session_service"
+            ) as mock_service_factory,
+            patch(
+                "scc_cli.commands.launch.flow.pick_session",
+                return_value=standalone_session,
             ),
-            patch("scc_cli.commands.launch.flow.select_session", return_value=standalone_session),
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -428,6 +457,11 @@ class TestSmartWorkspaceDetection:
             patch("os.path.exists", return_value=True),
             patch("pathlib.Path.exists", return_value=True),
         ):
+            mock_service = MagicMock()
+            mock_service.list_recent.return_value = SessionListResult.from_sessions(
+                standalone_sessions
+            )
+            mock_service_factory.return_value = mock_service
             result = runner.invoke(app, ["start"])
 
         # Should show detection feedback (unless --json)

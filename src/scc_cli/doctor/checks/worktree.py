@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from scc_cli.core.enums import SeverityLevel
+
 from ..types import CheckResult
 
 
@@ -97,7 +99,7 @@ def check_worktree_health(cwd: Path | None = None) -> CheckResult | None:
         message=f"{total} worktree{'s' if total != 1 else ''}: {', '.join(issues)}",
         fix_hint="; ".join(fix_hints) if fix_hints else None,
         fix_commands=fix_commands if fix_commands else None,
-        severity="warning" if prunable_count > 0 else "info",
+        severity=SeverityLevel.WARNING if prunable_count > 0 else SeverityLevel.INFO,
     )
 
 
@@ -215,7 +217,7 @@ def check_git_version_for_worktrees() -> CheckResult | None:
                 name="Git Version (Worktrees)",
                 passed=True,  # Still pass, just warn
                 message=f"Git {version_str} works, but 2.20+ recommended for worktrees",
-                severity="info",
+                severity=SeverityLevel.INFO,
             )
 
         return CheckResult(
@@ -274,5 +276,5 @@ def check_worktree_branch_conflicts(cwd: Path | None = None) -> CheckResult | No
         passed=False,
         message=f"Branch checked out in multiple worktrees: {'; '.join(conflict_msgs)}",
         fix_hint="Each branch can only be checked out in one worktree at a time",
-        severity="error",
+        severity=SeverityLevel.ERROR,
     )

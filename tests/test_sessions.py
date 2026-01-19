@@ -618,6 +618,9 @@ class FakeSessionStore:
         self._sessions = list(sessions_list)
 
 
+__all__ = ["FakeSessionStore"]
+
+
 class TestSessionService:
     """Unit tests for SessionService use cases."""
 

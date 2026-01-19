@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TypeAlias
 
+from scc_cli.application.sync_marketplace import SyncResult
+
 
 class LaunchOutputKind(Enum):
     """Kinds of output events emitted by launch flows."""
@@ -65,9 +67,14 @@ class LaunchOutputViewModel:
 
     Invariants:
         - events remain ordered for deterministic rendering.
+        - sync results match the existing marketplace sync output.
 
     Args:
         events: Ordered output events describing launch progress.
+        sync_result: Marketplace sync result payload, if available.
+        sync_error_message: Sync error message, if any.
     """
 
     events: Sequence[LaunchOutputEvent]
+    sync_result: SyncResult | None = None
+    sync_error_message: str | None = None

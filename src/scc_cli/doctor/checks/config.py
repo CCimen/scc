@@ -5,6 +5,8 @@ Checks for user config validity and config directory accessibility.
 
 from __future__ import annotations
 
+from scc_cli.core.enums import SeverityLevel
+
 from ..types import CheckResult
 from .json_helpers import get_json_error_hints, validate_json_file
 
@@ -27,7 +29,7 @@ def check_user_config_valid() -> CheckResult:
             name="User Config",
             passed=True,
             message="No user config file (using defaults)",
-            severity="info",
+            severity=SeverityLevel.INFO,
         )
 
     result = validate_json_file(config_file)
@@ -84,7 +86,7 @@ def check_config_directory() -> CheckResult:
                 passed=False,
                 message=f"Cannot create config directory: {config_dir}",
                 fix_hint="Check permissions on parent directory",
-                severity="error",
+                severity=SeverityLevel.ERROR,
             )
 
     # Check if writable
@@ -103,5 +105,5 @@ def check_config_directory() -> CheckResult:
             passed=False,
             message=f"Config directory is not writable: {config_dir}",
             fix_hint=f"Check permissions: chmod 755 {config_dir}",
-            severity="error",
+            severity=SeverityLevel.ERROR,
         )

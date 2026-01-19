@@ -10,6 +10,7 @@ from scc_cli.application.launch.start_wizard import (
     StartWizardStep,
     TeamSelected,
     WorkspaceSelected,
+    WorkspaceSource,
     WorkspaceSourceChosen,
     WorktreeSelected,
     apply_start_wizard_event,
@@ -89,7 +90,7 @@ def test_workspace_source_moves_to_workspace_picker() -> None:
         allow_back=False,
     )
     state = initialize_start_wizard(config)
-    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source_label="recent"))
+    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source=WorkspaceSource.RECENT))
 
     assert state.step is StartWizardStep.WORKSPACE_PICKER
 
@@ -101,7 +102,7 @@ def test_workspace_selected_moves_to_worktree_decision() -> None:
         allow_back=False,
     )
     state = initialize_start_wizard(config)
-    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source_label="recent"))
+    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source=WorkspaceSource.RECENT))
     state = apply_start_wizard_event(state, WorkspaceSelected(workspace="/work"))
 
     assert state.step is StartWizardStep.WORKTREE_DECISION
@@ -115,7 +116,7 @@ def test_worktree_selected_moves_to_session_name() -> None:
         allow_back=False,
     )
     state = initialize_start_wizard(config)
-    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source_label="recent"))
+    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source=WorkspaceSource.RECENT))
     state = apply_start_wizard_event(state, WorkspaceSelected(workspace="/work"))
     state = apply_start_wizard_event(state, WorktreeSelected(worktree_name="feature"))
 
@@ -130,7 +131,7 @@ def test_session_name_completes_flow() -> None:
         allow_back=False,
     )
     state = initialize_start_wizard(config)
-    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source_label="recent"))
+    state = apply_start_wizard_event(state, WorkspaceSourceChosen(source=WorkspaceSource.RECENT))
     state = apply_start_wizard_event(state, WorkspaceSelected(workspace="/work"))
     state = apply_start_wizard_event(state, WorktreeSelected(worktree_name=None))
     state = apply_start_wizard_event(state, SessionNameEntered(session_name="name"))
