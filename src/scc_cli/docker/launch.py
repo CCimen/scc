@@ -247,6 +247,7 @@ def run(
     org_config: dict[str, Any] | None = None,
     container_workdir: Path | None = None,
     plugin_settings: dict[str, Any] | None = None,
+    env_vars: dict[str, str] | None = None,
 ) -> int:
     """
     Execute the Docker command with optional org configuration.
@@ -267,6 +268,7 @@ def run(
         plugin_settings: Plugin settings dict to inject into container HOME.
             Contains extraKnownMarketplaces and enabledPlugins. Injected to
             /home/agent/.claude/settings.json to prevent host leakage.
+        env_vars: Environment variables to set for the sandbox runtime.
 
     Raises:
         SandboxLaunchError: If Docker command fails to start
@@ -294,6 +296,7 @@ def run(
         org_config=org_config,
         container_workdir=container_workdir,
         plugin_settings=plugin_settings,
+        env_vars=env_vars,
     )
 
 
@@ -305,6 +308,7 @@ def run_sandbox(
     org_config: dict[str, Any] | None = None,
     container_workdir: Path | None = None,
     plugin_settings: dict[str, Any] | None = None,
+    env_vars: dict[str, str] | None = None,
 ) -> int:
     """
     Run Claude in a Docker sandbox with credential persistence.
@@ -335,6 +339,7 @@ def run_sandbox(
         plugin_settings: Plugin settings dict to inject into container HOME.
             Contains extraKnownMarketplaces and enabledPlugins. Injected to
             /home/agent/.claude/settings.json to prevent host leakage.
+        env_vars: Environment variables to set for the sandbox runtime.
 
     Returns:
         Exit code from Docker process
@@ -376,6 +381,7 @@ def run_sandbox(
                 workspace=workspace,
                 detached=True,
                 policy_host_path=policy_host_path,
+                env_vars=env_vars,
             )
 
             max_retries = 5
@@ -478,6 +484,7 @@ def run_sandbox(
                 resume=resume,
                 detached=False,
                 policy_host_path=policy_host_path,
+                env_vars=env_vars,
             )
 
             if os.name != "nt":
@@ -774,7 +781,7 @@ def get_or_create_container(
         profile: Team profile (unused - sandboxes don't support labels)
         force_new: Force new container (unused - sandboxes are always new)
         continue_session: Pass -c flag to Claude
-        env_vars: Environment variables (unused - sandboxes handle auth)
+        env_vars: Environment variables to set for the sandbox runtime
 
     Returns:
         Tuple of (command_to_run, is_resume)
@@ -784,5 +791,6 @@ def get_or_create_container(
     cmd = build_command(
         workspace=workspace,
         continue_session=continue_session,
+        env_vars=env_vars,
     )
     return cmd, False

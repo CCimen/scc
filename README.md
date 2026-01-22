@@ -48,7 +48,7 @@ When you run `scc` or `scc start`:
 - **Shows Quick Resume** if you have recent sessions for this workspace
 - **Prints brief context** (workspace root, entry directory, team) before launching
 - **Applies personal profile** (if saved) after team config, before workspace overrides
-- **Bypass mode enabled**: Permission prompts are skipped by default since the Docker sandbox already provides isolation. Press `Shift+Tab` inside Claude to toggle permissions back on if needed
+- **Bypass mode enabled**: Permission prompts are skipped by default since the Docker sandbox already provides isolation. This does not prevent access to files inside the mounted workspace. Press `Shift+Tab` inside Claude to toggle permissions back on if needed
 - **Safety guard**: Won't auto-launch from suspicious directories (home, `/tmp`). Explicit paths like `scc start ~/` prompt for confirmation
 
 **Keyboard shortcuts in dashboard:**
@@ -109,6 +109,13 @@ Your org admin and team lead handle the configuration. You just code.
 Organization security blocks cannot be overridden by teams or developers.
 
 *"Approves" = teams can only select from org-allowed marketplaces; blocks always apply. "Extends" = can add plugins/settings, cannot remove org defaults.*
+
+### Enforcement Scope (v1)
+
+- SCC enforces org-managed plugins and MCP servers at runtime.
+- MCP servers in repo `.mcp.json` or plugin bundles are outside SCC enforcement scope (block the plugin to restrict).
+- `network_policy` is partially enforced (proxy env injection + MCP suppression under isolated), not a full egress firewall.
+- `session.auto_resume` is advisory only in v1.
 
 ---
 

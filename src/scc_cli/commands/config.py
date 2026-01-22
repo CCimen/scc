@@ -1,8 +1,9 @@
 """Provide CLI commands for managing teams, configuration, and setup."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich import box
@@ -18,7 +19,9 @@ from ..application.compute_effective_config import (
 )
 from ..cli_common import console, handle_errors
 from ..core import personal_profiles
+from ..core.enums import NetworkPolicy
 from ..core.exit_codes import EXIT_USAGE
+from ..core.network_policy import collect_proxy_env, is_more_or_equal_restrictive
 from ..maintenance import get_paths, get_total_size
 from ..panels import create_error_panel, create_info_panel
 from ..source_resolver import ResolveError, resolve_source
@@ -35,6 +38,15 @@ config_app = typer.Typer(
     no_args_is_help=False,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
+
+
+@dataclass(frozen=True)
+class EnforcementStatusEntry:
+    """Describe runtime enforcement status for a config surface."""
+
+    surface: str
+    status: str
+    detail: str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -188,7 +200,17 @@ def config_cmd(
         return
 
     if action == "explain":
-        _config_explain(field_filter=field, workspace_path=workspace)
+        if json_output:
+            from ..output_mode import json_command_mode, json_output_mode
+
+            with json_output_mode(), json_command_mode():
+                _config_explain(
+                    field_filter=field,
+                    workspace_path=workspace,
+                    json_output=True,
+                )
+        else:
+            _config_explain(field_filter=field, workspace_path=workspace, json_output=False)
         return
 
     # Handle --show and --edit flags
@@ -263,7 +285,11 @@ def _config_get(key: str) -> None:
         console.print(str(obj))
 
 
-def _config_explain(field_filter: str | None = None, workspace_path: str | None = None) -> None:
+def _config_explain(
+    field_filter: str | None = None,
+    workspace_path: str | None = None,
+    json_output: bool = False,
+) -> None:
     """Explain the effective configuration with source attribution.
 
     Shows:
@@ -293,6 +319,34 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
         workspace_path=ws_path,
     )
 
+    enforcement_status = _build_enforcement_status_entries()
+    enforcement_payload = _serialize_enforcement_status_entries(enforcement_status)
+    warnings = _collect_advisory_warnings(
+        org_config=org_config,
+        team_name=team,
+        workspace_path=ws_path,
+        effective_network_policy=effective.network_policy,
+    )
+
+    if json_output:
+        from ..output_mode import print_json
+        from ..presentation.json.config_json import (
+            build_config_explain_data,
+            build_config_explain_envelope,
+        )
+
+        data = build_config_explain_data(
+            org_config=org_config,
+            team_name=team,
+            effective=effective,
+            enforcement_status=enforcement_payload,
+            warnings=warnings,
+            workspace_path=ws_path,
+        )
+        envelope = build_config_explain_envelope(data, warnings=warnings)
+        print_json(envelope)
+        return
+
     # Build output
     console.print(
         create_info_panel(
@@ -302,6 +356,8 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
         )
     )
     console.print()
+
+    _render_enforcement_status(enforcement_status, field_filter)
 
     # Show decisions (config values with source attribution)
     _render_config_decisions(effective, field_filter)
@@ -326,6 +382,138 @@ def _config_explain(field_filter: str | None = None, workspace_path: str | None 
                 f"(run `scc exceptions cleanup`)[/dim]"
             )
             console.print()
+
+    _render_advisory_warnings(warnings, field_filter)
+
+
+def _build_enforcement_status_entries() -> list[EnforcementStatusEntry]:
+    return [
+        EnforcementStatusEntry(
+            surface="Plugins",
+            status="Enforced",
+            detail="SCC-managed plugins are injected into runtime settings.",
+        ),
+        EnforcementStatusEntry(
+            surface="Marketplaces",
+            status="Enforced",
+            detail="Managed marketplaces are materialized and injected.",
+        ),
+        EnforcementStatusEntry(
+            surface="MCP servers (org/team/project)",
+            status="Enforced",
+            detail="SCC-managed MCP servers are injected after policy gates.",
+        ),
+        EnforcementStatusEntry(
+            surface="MCP servers (.mcp.json)",
+            status="Advisory",
+            detail="SCC does not modify repo MCP files in v1.",
+        ),
+        EnforcementStatusEntry(
+            surface="MCP servers (plugin-bundled)",
+            status="Out of scope",
+            detail="Plugins are the trust unit; block the plugin to restrict.",
+        ),
+        EnforcementStatusEntry(
+            surface="network_policy",
+            status="Partially enforced",
+            detail="Proxy env injection and MCP suppression, not full egress control.",
+        ),
+        EnforcementStatusEntry(
+            surface="safety_net policy",
+            status="Enforced when enabled",
+            detail="Policy is enforced by the scc-safety-net plugin.",
+        ),
+        EnforcementStatusEntry(
+            surface="session.auto_resume",
+            status="Advisory",
+            detail="Accepted in config but not enforced yet.",
+        ),
+    ]
+
+
+def _render_enforcement_status(
+    entries: list[EnforcementStatusEntry], field_filter: str | None
+) -> None:
+    if field_filter and field_filter not in {"enforcement", "enforcement_status"}:
+        return
+
+    console.print("[bold cyan]Enforcement Status[/bold cyan]")
+    for entry in entries:
+        console.print(f"  {entry.surface}: {entry.status}")
+        console.print(f"    [dim]{entry.detail}[/dim]")
+    console.print()
+
+
+def _serialize_enforcement_status_entries(
+    entries: list[EnforcementStatusEntry],
+) -> list[dict[str, str]]:
+    return [
+        {"surface": entry.surface, "status": entry.status, "detail": entry.detail}
+        for entry in entries
+    ]
+
+
+def _collect_advisory_warnings(
+    *,
+    org_config: dict[str, Any],
+    team_name: str,
+    workspace_path: Path,
+    effective_network_policy: str | None,
+) -> list[str]:
+    warnings: list[str] = []
+
+    defaults_session = org_config.get("defaults", {}).get("session", {})
+    team_session = org_config.get("profiles", {}).get(team_name, {}).get("session", {})
+    project_config = config.read_project_config(workspace_path) or {}
+    project_session = project_config.get("session", {})
+
+    auto_resume_sources: list[str] = []
+    if "auto_resume" in defaults_session:
+        auto_resume_sources.append("org.defaults")
+    if "auto_resume" in team_session:
+        auto_resume_sources.append(f"team.{team_name}")
+    if "auto_resume" in project_session:
+        auto_resume_sources.append("project")
+
+    if auto_resume_sources:
+        sources = ", ".join(auto_resume_sources)
+        warnings.append(
+            f"session.auto_resume is advisory only and not enforced (set by {sources})."
+        )
+
+    default_network_policy = org_config.get("defaults", {}).get("network_policy")
+    team_network_policy = org_config.get("profiles", {}).get(team_name, {}).get("network_policy")
+    if (
+        default_network_policy
+        and team_network_policy
+        and not is_more_or_equal_restrictive(team_network_policy, default_network_policy)
+    ):
+        warnings.append(
+            "team network_policy is less restrictive than org default and is ignored "
+            f"({team_network_policy} < {default_network_policy})."
+        )
+
+    if effective_network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+        proxy_env = collect_proxy_env()
+        if not proxy_env:
+            warnings.append(
+                "network_policy is corp-proxy-only but no proxy env vars are set "
+                "(HTTP_PROXY/HTTPS_PROXY/NO_PROXY)."
+            )
+
+    return warnings
+
+
+def _render_advisory_warnings(warnings: list[str], field_filter: str | None) -> None:
+    if not warnings:
+        return
+    if field_filter and field_filter not in {"warnings", "enforcement"}:
+        return
+
+    console.print("[bold yellow]Warnings[/bold yellow]")
+    for warning in warnings:
+        console.print(f"  [yellow]⚠[/yellow] {warning}")
+    console.print()
 
 
 def _render_config_decisions(effective: EffectiveConfig, field_filter: str | None) -> None:

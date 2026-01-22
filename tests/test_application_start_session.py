@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
 from scc_cli.application.start_session import (
     StartSessionDependencies,
     StartSessionPlan,
@@ -164,6 +165,57 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
     assert plan.sync_error_message == "sync failed"
     assert plan.agent_settings is None
     assert plan.sandbox_spec is not None
+
+
+def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    request = StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=str(workspace_path),
+        entry_dir=workspace_path,
+        team="alpha",
+        session_name="session-1",
+        resume=False,
+        fresh=False,
+        offline=False,
+        standalone=False,
+        dry_run=False,
+        allow_suspicious=False,
+        org_config={
+            "defaults": {},
+            "profiles": {"alpha": {}},
+        },
+    )
+    sync_result = SyncResult(
+        success=True,
+        rendered_settings={"enabledPlugins": {"tool@market": True}},
+    )
+    resolver_result = _build_resolver_result(workspace_path)
+    dependencies = _build_dependencies(FakeGitClient(branch="main"))
+    effective_config = EffectiveConfig(
+        mcp_servers=[MCPServer(name="gis-internal", type="sse", url="https://gis.example.com/mcp")]
+    )
+
+    with (
+        patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ),
+        patch(
+            "scc_cli.application.start_session.compute_effective_config",
+            return_value=effective_config,
+        ),
+        patch(
+            "scc_cli.application.start_session.sync_marketplace_settings",
+            return_value=sync_result,
+        ),
+    ):
+        plan = prepare_start_session(request, dependencies=dependencies)
+
+    assert plan.agent_settings is not None
+    assert "mcpServers" in plan.agent_settings.content
+    assert "gis-internal" in plan.agent_settings.content["mcpServers"]
 
 
 def test_start_session_runs_sandbox_runtime(tmp_path: Path) -> None:

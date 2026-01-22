@@ -444,6 +444,27 @@ def build_mcp_servers(effective_config: EffectiveConfig) -> dict[str, Any]:
     return mcp_servers
 
 
+def merge_mcp_servers(
+    settings: dict[str, Any] | None,
+    effective_config: EffectiveConfig | None,
+) -> dict[str, Any] | None:
+    """Merge MCP servers into an existing settings dict."""
+    if effective_config is None:
+        return settings
+
+    mcp_servers = build_mcp_servers(effective_config)
+    if not mcp_servers:
+        return settings
+
+    merged: dict[str, Any] = dict(settings) if settings else {}
+    existing = merged.get("mcpServers")
+    if isinstance(existing, dict):
+        merged["mcpServers"] = {**existing, **mcp_servers}
+    else:
+        merged["mcpServers"] = mcp_servers
+    return merged
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Credential Injection
 # ═══════════════════════════════════════════════════════════════════════════════

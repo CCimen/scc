@@ -255,7 +255,12 @@ def matches_pattern(plugin_ref: str, pattern: str) -> bool:
     # Use fnmatch for glob-style matching with case-insensitive comparison
     # Documentation requires Unicode-aware casefolding for security patterns
     # to prevent bypass attempts using case variations (e.g., "MALICIOUS-*" vs "malicious-*")
-    return fnmatch.fnmatch(plugin_ref.casefold(), pattern.casefold())
+    normalized_ref = plugin_ref.casefold()
+    normalized_pattern = pattern.casefold()
+    if "@" not in normalized_pattern and "@" in normalized_ref:
+        plugin_name = normalized_ref.split("@", 1)[0]
+        return fnmatch.fnmatch(plugin_name, normalized_pattern)
+    return fnmatch.fnmatch(normalized_ref, normalized_pattern)
 
 
 def matches_any_pattern(plugin_ref: str, patterns: list[str]) -> str | None:

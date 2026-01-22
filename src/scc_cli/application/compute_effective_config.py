@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from scc_cli import config as config_module
-from scc_cli.core.enums import MCPServerType, RequestSource, TargetType
+from scc_cli.core.enums import MCPServerType, NetworkPolicy, RequestSource, TargetType
+from scc_cli.core.network_policy import is_more_or_equal_restrictive
 
 if TYPE_CHECKING:
     pass
@@ -135,13 +136,36 @@ def matches_blocked(item: str, blocked_patterns: list[str]) -> str | None:
     return None
 
 
-def is_allowed(item: str, allowed_patterns: list[str] | None) -> bool:
-    """Check whether item is allowed by an optional allowlist."""
+def matches_plugin_pattern(plugin_ref: str, pattern: str) -> bool:
+    """Check plugin patterns, allowing bare names to match any marketplace."""
+    if not plugin_ref or not pattern:
+        return False
+    normalized_ref = plugin_ref.strip().casefold()
+    normalized_pattern = pattern.strip().casefold()
+    if "@" not in normalized_pattern and "@" in normalized_ref:
+        plugin_name = normalized_ref.split("@", 1)[0]
+        return fnmatch(plugin_name, normalized_pattern)
+    return fnmatch(normalized_ref, normalized_pattern)
+
+
+def matches_blocked_plugin(plugin_ref: str, blocked_patterns: list[str]) -> str | None:
+    """Return the matching pattern for a blocked plugin, if any."""
+    for pattern in blocked_patterns:
+        if matches_plugin_pattern(plugin_ref, pattern):
+            return pattern
+    return None
+
+
+def is_plugin_allowed(plugin_ref: str, allowed_patterns: list[str] | None) -> bool:
+    """Check whether plugin is allowed by an optional allowlist."""
     if allowed_patterns is None:
         return True
     if not allowed_patterns:
         return False
-    return matches_blocked(item, allowed_patterns) is not None
+    for pattern in allowed_patterns:
+        if matches_plugin_pattern(plugin_ref, pattern):
+            return True
+    return False
 
 
 def mcp_candidates(server: dict[str, Any]) -> list[str]:
@@ -172,6 +196,39 @@ def is_mcp_allowed(server: dict[str, Any], allowed_patterns: list[str] | None) -
         if matches_blocked(candidate, allowed_patterns):
             return True
     return False
+
+
+def match_blocked_mcp(server: dict[str, Any], blocked_patterns: list[str]) -> str | None:
+    """Return the matching pattern for a blocked MCP server, if any."""
+    for candidate in mcp_candidates(server):
+        matched = matches_blocked(candidate, blocked_patterns)
+        if matched:
+            return matched
+    return None
+
+
+def is_network_mcp(server: dict[str, Any]) -> bool:
+    """Return True for MCP transports that require network access."""
+    return server.get("type") in {MCPServerType.SSE, MCPServerType.HTTP}
+
+
+def record_network_policy_decision(
+    result: EffectiveConfig,
+    *,
+    policy: str,
+    reason: str,
+    source: str,
+) -> None:
+    """Record the active network_policy decision (replace any prior entries)."""
+    result.decisions = [d for d in result.decisions if d.field != "network_policy"]
+    result.decisions.append(
+        ConfigDecision(
+            field="network_policy",
+            value=policy,
+            reason=reason,
+            source=source,
+        )
+    )
 
 
 def validate_stdio_server(
@@ -340,14 +397,14 @@ def compute_effective_config(
     default_session = defaults.get("session", {})
 
     for plugin in default_plugins:
-        blocked_by = matches_blocked(plugin, blocked_plugins)
+        blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
         if blocked_by:
             result.blocked_items.append(
                 BlockedItem(item=plugin, blocked_by=blocked_by, source="org.security")
             )
             continue
 
-        if matches_blocked(plugin, disabled_plugins):
+        if matches_blocked_plugin(plugin, disabled_plugins):
             continue
 
         result.plugins.add(plugin)
@@ -360,15 +417,15 @@ def compute_effective_config(
             )
         )
 
+    network_policy_source: str | None = None
     if default_network_policy:
         result.network_policy = default_network_policy
-        result.decisions.append(
-            ConfigDecision(
-                field="network_policy",
-                value=default_network_policy,
-                reason="Organization default network policy",
-                source="org.defaults",
-            )
+        network_policy_source = "org.defaults"
+        record_network_policy_decision(
+            result,
+            policy=default_network_policy,
+            reason="Organization default network policy",
+            source="org.defaults",
         )
 
     if default_session.get("timeout_hours") is not None:
@@ -387,11 +444,32 @@ def compute_effective_config(
     profiles = org_config.get("profiles", {})
     team_config = profiles.get(team_name, {})
 
+    team_network_policy = team_config.get("network_policy")
+    if team_network_policy:
+        if result.network_policy is None:
+            result.network_policy = team_network_policy
+            network_policy_source = f"team.{team_name}"
+            record_network_policy_decision(
+                result,
+                policy=team_network_policy,
+                reason=f"Overridden by team profile '{team_name}'",
+                source=f"team.{team_name}",
+            )
+        elif is_more_or_equal_restrictive(team_network_policy, result.network_policy):
+            result.network_policy = team_network_policy
+            network_policy_source = f"team.{team_name}"
+            record_network_policy_decision(
+                result,
+                policy=team_network_policy,
+                reason=f"Overridden by team profile '{team_name}'",
+                source=f"team.{team_name}",
+            )
+
     team_plugins = team_config.get("additional_plugins", [])
     team_delegated_plugins = is_team_delegated_for_plugins(org_config, team_name)
 
     for plugin in team_plugins:
-        blocked_by = matches_blocked(plugin, blocked_plugins)
+        blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
         if blocked_by:
             result.blocked_items.append(
                 BlockedItem(item=plugin, blocked_by=blocked_by, source="org.security")
@@ -408,7 +486,7 @@ def compute_effective_config(
             )
             continue
 
-        if not is_allowed(plugin, allowed_plugins):
+        if not is_plugin_allowed(plugin, allowed_plugins):
             result.denied_additions.append(
                 DelegationDenied(
                     item=plugin,
@@ -435,10 +513,7 @@ def compute_effective_config(
         server_name = server_dict.get("name", "")
         server_url = server_dict.get("url", "")
 
-        blocked_by = matches_blocked(server_name, blocked_mcp_servers)
-        if not blocked_by and server_url:
-            domain = _extract_domain(server_url)
-            blocked_by = matches_blocked(domain, blocked_mcp_servers)
+        blocked_by = match_blocked_mcp(server_dict, blocked_mcp_servers)
 
         if blocked_by:
             result.blocked_items.append(
@@ -473,6 +548,17 @@ def compute_effective_config(
             )
             continue
 
+        if result.network_policy == NetworkPolicy.ISOLATED.value and is_network_mcp(server_dict):
+            result.blocked_items.append(
+                BlockedItem(
+                    item=server_name or server_url,
+                    blocked_by="network_policy=isolated",
+                    source=network_policy_source or "org.defaults",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
         if server_dict.get("type") == MCPServerType.STDIO:
             stdio_result = validate_stdio_server(server_dict, org_config)
             if stdio_result.blocked:
@@ -492,6 +578,8 @@ def compute_effective_config(
             url=server_url or None,
             command=server_dict.get("command"),
             args=server_dict.get("args"),
+            env=server_dict.get("env"),
+            headers=server_dict.get("headers"),
         )
         result.mcp_servers.append(mcp_server)
         result.decisions.append(
@@ -520,7 +608,7 @@ def compute_effective_config(
 
         project_plugins = project_config.get("additional_plugins", [])
         for plugin in project_plugins:
-            blocked_by = matches_blocked(plugin, blocked_plugins)
+            blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
             if blocked_by:
                 result.blocked_items.append(
                     BlockedItem(item=plugin, blocked_by=blocked_by, source="org.security")
@@ -537,7 +625,7 @@ def compute_effective_config(
                 )
                 continue
 
-            if not is_allowed(plugin, allowed_plugins):
+            if not is_plugin_allowed(plugin, allowed_plugins):
                 result.denied_additions.append(
                     DelegationDenied(
                         item=plugin,
@@ -562,10 +650,7 @@ def compute_effective_config(
             server_name = server_dict.get("name", "")
             server_url = server_dict.get("url", "")
 
-            blocked_by = matches_blocked(server_name, blocked_mcp_servers)
-            if not blocked_by and server_url:
-                domain = _extract_domain(server_url)
-                blocked_by = matches_blocked(domain, blocked_mcp_servers)
+            blocked_by = match_blocked_mcp(server_dict, blocked_mcp_servers)
 
             if blocked_by:
                 result.blocked_items.append(
@@ -600,6 +685,19 @@ def compute_effective_config(
                 )
                 continue
 
+            if result.network_policy == NetworkPolicy.ISOLATED.value and is_network_mcp(
+                server_dict
+            ):
+                result.blocked_items.append(
+                    BlockedItem(
+                        item=server_name or server_url,
+                        blocked_by="network_policy=isolated",
+                        source=network_policy_source or "org.defaults",
+                        target_type=TargetType.MCP_SERVER,
+                    )
+                )
+                continue
+
             if server_dict.get("type") == MCPServerType.STDIO:
                 stdio_result = validate_stdio_server(server_dict, org_config)
                 if stdio_result.blocked:
@@ -619,6 +717,8 @@ def compute_effective_config(
                 url=server_url or None,
                 command=server_dict.get("command"),
                 args=server_dict.get("args"),
+                env=server_dict.get("env"),
+                headers=server_dict.get("headers"),
             )
             result.mcp_servers.append(mcp_server)
             result.decisions.append(

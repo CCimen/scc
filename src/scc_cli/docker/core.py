@@ -224,6 +224,7 @@ def build_command(
     resume: bool = False,
     detached: bool = False,
     policy_host_path: Path | None = None,
+    env_vars: dict[str, str] | None = None,
 ) -> list[str]:
     """
     Build the docker sandbox run command.
@@ -238,6 +239,7 @@ def build_command(
         policy_host_path: Host path to safety net policy file to bind-mount read-only.
             If provided, mounts at /mnt/claude-data/effective_policy.json:ro
             and sets SCC_POLICY_PATH env var for the plugin.
+        env_vars: Environment variables to inject into the sandbox runtime.
 
     Returns:
         Command as list of strings
@@ -274,6 +276,11 @@ def build_command(
         cmd.extend(["-v", f"{os.fspath(policy_dir)}:{container_policy_dir}:ro"])
         # Set SCC_POLICY_PATH env var so plugin knows where to read policy
         cmd.extend(["-e", f"SCC_POLICY_PATH={container_policy_path}"])
+
+    if env_vars:
+        for key, value in sorted(env_vars.items()):
+            if value:
+                cmd.extend(["-e", f"{key}={value}"])
 
     # Add workspace mount
     if workspace:

@@ -8,6 +8,7 @@ These tests define the contract for:
 - Consistent grouping across related commands
 """
 
+import os
 import subprocess
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -158,9 +159,13 @@ class TestHelpOutput:
 
     def test_help_output_contains_group_headers(self) -> None:
         """scc --help should show group headers."""
+        env = os.environ.copy()
+        env.setdefault("UV_OFFLINE", "1")
+        env.setdefault("UV_NO_SYNC", "1")
         result = subprocess.run(
             ["uv", "run", "scc", "--help"],
             capture_output=True,
+            env=env,
             text=True,
             timeout=30,
         )
@@ -174,9 +179,13 @@ class TestHelpOutput:
 
     def test_help_output_organized_not_flat(self) -> None:
         """scc --help should not show a flat list of commands."""
+        env = os.environ.copy()
+        env.setdefault("UV_OFFLINE", "1")
+        env.setdefault("UV_NO_SYNC", "1")
         result = subprocess.run(
             ["uv", "run", "scc", "--help"],
             capture_output=True,
+            env=env,
             text=True,
             timeout=30,
         )

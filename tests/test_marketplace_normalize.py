@@ -211,6 +211,13 @@ class TestMatchesPattern:
         assert matches_pattern("tool@internal", "TOOL@INTERNAL") is True
         assert matches_pattern("MALICIOUS-tool@shared", "malicious-*") is True
 
+    def test_bare_pattern_matches_plugin_name(self) -> None:
+        """Bare patterns should match plugin names across marketplaces."""
+        from scc_cli.marketplace.normalize import matches_pattern
+
+        assert matches_pattern("tool-experimental@internal", "*-experimental") is True
+        assert matches_pattern("tool@internal", "tool") is True
+
     def test_special_characters(self) -> None:
         """Handles special characters in names."""
         from scc_cli.marketplace.normalize import matches_pattern

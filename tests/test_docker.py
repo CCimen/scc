@@ -20,9 +20,13 @@ class TestResetGlobalSettings:
 
     def test_reset_global_settings_success(self):
         """reset_global_settings should return True on success."""
-        with patch(
-            "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
-        ) as mock_inject:
+        with (
+            patch("scc_cli.docker.launch.reset_plugin_caches", return_value=True),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume",
+                return_value=True,
+            ) as mock_inject,
+        ):
             result = docker.reset_global_settings()
 
             assert result is True
@@ -30,7 +34,13 @@ class TestResetGlobalSettings:
 
     def test_reset_global_settings_failure(self):
         """reset_global_settings should return False on failure."""
-        with patch("scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=False):
+        with (
+            patch("scc_cli.docker.launch.reset_plugin_caches", return_value=True),
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume",
+                return_value=False,
+            ),
+        ):
             result = docker.reset_global_settings()
 
             assert result is False

@@ -92,7 +92,11 @@ def prepare_start_session(
     resolver_result = _resolve_workspace_context(request)
     effective_config = _compute_effective_config(request)
     sync_result, sync_error_message = sync_marketplace_settings_for_start(request, dependencies)
-    agent_settings = _build_agent_settings(sync_result, dependencies.agent_runner)
+    agent_settings = _build_agent_settings(
+        sync_result,
+        dependencies.agent_runner,
+        effective_config=effective_config,
+    )
     current_branch = _resolve_current_branch(request.workspace_path, dependencies.git_client)
     sandbox_spec = _build_sandbox_spec(
         request=request,
@@ -196,11 +200,23 @@ def sync_marketplace_settings_for_start(
 def _build_agent_settings(
     sync_result: SyncResult | None,
     agent_runner: AgentRunner,
+    *,
+    effective_config: EffectiveConfig | None,
 ) -> AgentSettings | None:
-    if not sync_result or not sync_result.rendered_settings:
+    settings: dict[str, Any] | None = None
+    if sync_result and sync_result.rendered_settings:
+        settings = dict(sync_result.rendered_settings)
+
+    if effective_config:
+        from scc_cli.claude_adapter import merge_mcp_servers
+
+        settings = merge_mcp_servers(settings, effective_config)
+
+    if not settings:
         return None
+
     settings_path = Path("/home/agent") / AGENT_CONFIG_DIR / "settings.json"
-    return agent_runner.build_settings(sync_result.rendered_settings, path=settings_path)
+    return agent_runner.build_settings(settings, path=settings_path)
 
 
 def _resolve_current_branch(workspace_path: Path, git_client: GitClient) -> str | None:
