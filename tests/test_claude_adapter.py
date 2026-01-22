@@ -13,6 +13,7 @@ from unittest import mock
 import pytest
 
 from scc_cli import claude_adapter
+from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
 from scc_cli.claude_adapter import AuthResult
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -621,6 +622,43 @@ class TestModuleIsolation:
 
         # docker.py just needs to know it's a dict to inject
         assert isinstance(settings, dict)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for merge_mcp_servers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestMergeMcpServers:
+    """Tests for merge_mcp_servers function."""
+
+    def test_merge_preserves_existing_servers(self):
+        """Should merge without dropping existing mcpServers or other settings."""
+        settings = {
+            "mcpServers": {
+                "existing": {
+                    "type": "http",
+                    "url": "https://existing.example.com/mcp",
+                }
+            },
+            "otherSetting": True,
+        }
+        effective_config = EffectiveConfig(
+            mcp_servers=[
+                MCPServer(
+                    name="new",
+                    type="http",
+                    url="https://new.example.com/mcp",
+                )
+            ]
+        )
+
+        merged = claude_adapter.merge_mcp_servers(settings, effective_config)
+
+        assert merged is not None
+        assert merged["otherSetting"] is True
+        assert "existing" in merged["mcpServers"]
+        assert "new" in merged["mcpServers"]
 
     def test_env_vars_are_simple_dict(self, gitlab_marketplace):
         """inject_credentials produces simple str->str dict."""

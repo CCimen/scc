@@ -14,9 +14,12 @@ class TestResetGlobalSettings:
 
     def test_reset_global_settings_writes_empty_json(self):
         """reset_global_settings should write empty JSON to settings.json."""
-        with patch(
-            "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
-        ) as mock_inject:
+        with (
+            patch(
+                "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
+            ) as mock_inject,
+            patch("scc_cli.docker.launch.reset_plugin_caches", return_value=True),
+        ):
             result = docker.reset_global_settings()
 
             assert result is True
@@ -73,6 +76,7 @@ class TestPluginIsolationScenario:
             patch(
                 "scc_cli.docker.launch.inject_file_to_sandbox_volume", return_value=True
             ) as mock_inject,
+            patch("scc_cli.docker.launch.reset_plugin_caches", return_value=True),
         ):
             result = docker.reset_global_settings()
 

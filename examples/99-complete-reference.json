@@ -1,36 +1,87 @@
 {
     "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
     "schema_version": "1.0.0",
-    "min_cli_version": "0.5.0",
+    "min_cli_version": "1.7.0",
     "organization": {
         "name": "Reference Organization",
         "id": "reference-org",
         "contact": "docs@example.com"
     },
+    "marketplaces": {
+        "official-plugins": {
+            "source": "github",
+            "owner": "CCimen",
+            "repo": "sandboxed-code-plugins",
+            "branch": "main",
+            "path": "/"
+        },
+        "internal-gitlab": {
+            "source": "git",
+            "url": "https://gitlab.company.com/scc/plugins.git",
+            "branch": "main",
+            "path": "/"
+        },
+        "remote-manifest": {
+            "source": "url",
+            "url": "https://plugins.company.com/manifest.json",
+            "headers": {
+                "Authorization": "Bearer ${PLUGIN_API_TOKEN}"
+            },
+            "materialization_mode": "self_contained"
+        },
+        "local-dev": {
+            "source": "directory",
+            "path": "./local-plugins"
+        }
+    },
     "security": {
         "blocked_plugins": [
             "pattern-*",
             "exact-plugin-name",
-            "*-suffix"
+            "*-suffix",
+            "*-experimental",
+            "*-deprecated"
         ],
         "blocked_mcp_servers": [
             "*.blocked.com",
-            "specific-server"
+            "specific-server",
+            "*.untrusted.org"
         ],
         "allow_stdio_mcp": true,
         "allowed_stdio_prefixes": [
             "/usr/local/bin",
             "/opt/approved-tools"
-        ]
+        ],
+        "safety_net": {
+            "action": "block",
+            "block_force_push": true,
+            "block_reset_hard": true,
+            "block_branch_force_delete": true,
+            "block_checkout_restore": true,
+            "block_clean": true,
+            "block_stash_destructive": true
+        }
     },
     "defaults": {
+        "enabled_plugins": [
+            "scc-safety-net@official-plugins"
+        ],
+        "disabled_plugins": [
+            "legacy-tool@official-plugins"
+        ],
         "allowed_plugins": [
             "core-*",
-            "org-approved-*"
+            "org-approved-*",
+            "*@official-plugins"
         ],
         "allowed_mcp_servers": [
-            "https://mcp.example.com/*"
+            "https://mcp.example.com/*",
+            "https://*.company.com/*"
         ],
+        "extra_marketplaces": [
+            "official-plugins"
+        ],
+        "cache_ttl_hours": 24,
         "network_policy": "unrestricted",
         "session": {
             "timeout_hours": 12,
@@ -41,12 +92,14 @@
         "teams": {
             "allow_additional_plugins": [
                 "team-*",
-                "community-*"
+                "community-*",
+                "*"
             ],
             "allow_additional_mcp_servers": [
                 "team-a",
                 "team-b",
-                "special-team"
+                "special-team",
+                "federated-team"
             ]
         },
         "projects": {
@@ -57,8 +110,8 @@
         "team-a": {
             "description": "Example team A with HTTP MCP servers (authenticated and public)",
             "additional_plugins": [
-                "team-plugin-1",
-                "team-plugin-2"
+                "team-plugin-1@official-plugins",
+                "team-plugin-2@official-plugins"
             ],
             "additional_mcp_servers": [
                 {
@@ -66,7 +119,7 @@
                     "type": "http",
                     "url": "https://mcp.context7.com/mcp",
                     "headers": {
-                        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+                        "X-API-Key": "${CONTEXT7_API_KEY}"
                     }
                 },
                 {
@@ -101,26 +154,51 @@
             }
         },
         "special-team": {
-            "description": "Team with stdio MCP server (requires allow_stdio_mcp: true)",
+            "description": "Team with stdio MCP server (requires allow_stdio_mcp: true in security)",
             "additional_mcp_servers": [
                 {
                     "name": "playwright",
                     "type": "stdio",
-                    "command": "npx",
+                    "command": "/usr/local/bin/npx",
                     "args": [
                         "@playwright/mcp@latest"
                     ],
                     "env": {
-                        "PLAYWRIGHT_BROWSERS_PATH": "${HOME}/.cache/ms-playwright"
+                        "PLAYWRIGHT_BROWSERS_PATH": "${HOME}/.cache/ms-playwright",
+                        "DEBUG": "pw:api"
                     }
                 }
             ],
             "network_policy": "isolated"
+        },
+        "federated-team": {
+            "description": "Federated team with external config source (team manages own config)",
+            "config_source": {
+                "source": "github",
+                "owner": "company",
+                "repo": "team-config",
+                "branch": "main",
+                "path": "scc/team-config.json",
+                "headers": {
+                    "Authorization": "Bearer ${GITHUB_TOKEN}"
+                }
+            },
+            "trust": {
+                "inherit_org_marketplaces": true,
+                "allow_additional_marketplaces": true,
+                "marketplace_source_patterns": [
+                    "https://github.com/company/*",
+                    "https://gitlab.company.com/*"
+                ]
+            },
+            "delegation": {
+                "allow_project_overrides": true
+            }
         }
     },
     "stats": {
         "enabled": true,
         "user_identity_mode": "hash",
-        "retention_days": 365
+        "retention_days": 90
     }
 }

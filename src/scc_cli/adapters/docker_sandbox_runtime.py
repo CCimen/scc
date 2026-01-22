@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from scc_cli import docker
+from scc_cli.core.enums import NetworkPolicy
+from scc_cli.core.network_policy import collect_proxy_env
 from scc_cli.ports.models import SandboxHandle, SandboxSpec, SandboxState, SandboxStatus
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
@@ -26,13 +28,18 @@ class DockerSandboxRuntime(SandboxRuntime):
 
     def run(self, spec: SandboxSpec) -> SandboxHandle:
         docker.prepare_sandbox_volume_for_credentials()
+        env_vars = dict(spec.env) if spec.env else {}
+        if spec.network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+            for key, value in collect_proxy_env().items():
+                env_vars.setdefault(key, value)
+        runtime_env = env_vars or None
         docker_cmd, _is_resume = docker.get_or_create_container(
             workspace=spec.workspace_mount.source,
             branch=None,
             profile=None,
             force_new=spec.force_new,
             continue_session=spec.continue_session,
-            env_vars=spec.env or None,
+            env_vars=runtime_env,
         )
         container_name = _extract_container_name(docker_cmd)
         plugin_settings = spec.agent_settings.content if spec.agent_settings else None
@@ -41,6 +48,7 @@ class DockerSandboxRuntime(SandboxRuntime):
             org_config=spec.org_config,
             container_workdir=spec.workdir,
             plugin_settings=plugin_settings,
+            env_vars=runtime_env,
         )
         return SandboxHandle(
             sandbox_id=container_name or "sandbox",

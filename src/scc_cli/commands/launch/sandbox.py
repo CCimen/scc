@@ -55,6 +55,22 @@ def launch_sandbox(
     # Load org config for safety-net policy injection
     # This is already cached by _configure_team_settings(), so it's a fast read
     org_config = config.load_cached_org_config()
+    env_vars = None
+
+    if org_config and team:
+        from ...application.compute_effective_config import compute_effective_config
+        from ...claude_adapter import merge_mcp_servers
+        from ...core.enums import NetworkPolicy
+        from ...core.network_policy import collect_proxy_env
+
+        effective_config = compute_effective_config(
+            org_config=org_config,
+            team_name=team,
+            workspace_path=workspace_path or mount_path,
+        )
+        plugin_settings = merge_mcp_servers(plugin_settings, effective_config)
+        if effective_config.network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+            env_vars = collect_proxy_env()
 
     # Prepare sandbox volume for credential persistence
     docker.prepare_sandbox_volume_for_credentials()
@@ -138,6 +154,7 @@ def launch_sandbox(
         org_config=org_config,
         container_workdir=workspace_path,
         plugin_settings=plugin_settings,
+        env_vars=env_vars,
     )
 
 

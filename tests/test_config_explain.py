@@ -11,6 +11,7 @@ This command helps users understand:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -208,6 +209,24 @@ class TestConfigExplainBasic:
         assert result.exit_code == 0
         assert "plugin-a" in result.output
         assert "plugin-b" in result.output
+
+    def test_explain_shows_enforcement_status(self, effective_config_basic, mock_org_config):
+        """Should show enforcement status section."""
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "Enforcement Status" in result.output
 
     def test_explain_shows_source_attribution(self, effective_config_basic, mock_org_config):
         """Should show where each setting came from."""
@@ -591,6 +610,114 @@ class TestConfigExplainHelp:
         assert "explain" in result.output.lower()
         # Should document the purpose
         assert "config" in result.output.lower()
+
+
+class TestConfigExplainWarnings:
+    """Tests for advisory warnings in config explain."""
+
+    def test_explain_warns_on_auto_resume(self, effective_config_basic):
+        """Should warn when session.auto_resume is set in config."""
+        org_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+            "defaults": {"session": {"auto_resume": True}},
+            "profiles": {"dev": {"description": "Dev team"}},
+        }
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "Warnings" in result.output
+        assert "auto_resume" in result.output
+
+    def test_explain_warns_on_team_network_policy(self, effective_config_basic):
+        """Should warn when team network_policy is less restrictive than org default."""
+        effective_config_basic.network_policy = "isolated"
+        org_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+            "defaults": {"network_policy": "isolated"},
+            "profiles": {"dev": {"description": "Dev team", "network_policy": "unrestricted"}},
+        }
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "network_policy" in result.output
+        assert "ignored" in result.output.lower()
+
+    def test_explain_warns_on_missing_proxy_env(self, effective_config_basic):
+        """Should warn when corp-proxy-only has no proxy env configured."""
+        effective_config_basic.network_policy = "corp-proxy-only"
+        org_config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+            "defaults": {"network_policy": "corp-proxy-only"},
+            "profiles": {"dev": {"description": "Dev team"}},
+        }
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "proxy" in result.output.lower()
+
+
+class TestConfigExplainJsonOutput:
+    """Tests for JSON output for config explain."""
+
+    def test_explain_json_includes_enforcement(self, effective_config_basic, mock_org_config):
+        """Should emit a JSON envelope with enforcement status."""
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective_config_basic,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["kind"] == "ConfigExplain"
+        assert "enforcement" in payload["data"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

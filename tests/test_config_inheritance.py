@@ -436,6 +436,59 @@ class TestComputeEffectiveConfigBasicMerge:
         assert result.network_policy is None or result.network_policy == ""
 
 
+class TestComputeEffectiveConfigNetworkPolicy:
+    """Tests for network_policy merging and enforcement."""
+
+    def test_team_network_policy_more_restrictive(self, valid_org_config):
+        """Team can tighten org network policy."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["defaults"]["network_policy"] = "unrestricted"
+        valid_org_config["profiles"]["urban-planning"]["network_policy"] = "isolated"
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+        )
+
+        assert result.network_policy == "isolated"
+
+    def test_team_network_policy_less_restrictive(self, valid_org_config):
+        """Team cannot loosen org network policy."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["defaults"]["network_policy"] = "isolated"
+        valid_org_config["profiles"]["urban-planning"]["network_policy"] = "unrestricted"
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+        )
+
+        assert result.network_policy == "isolated"
+
+    def test_isolated_blocks_network_mcp(self, valid_org_config):
+        """Isolated policy blocks HTTP/SSE MCP servers."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["defaults"]["network_policy"] = "isolated"
+        valid_org_config["profiles"]["urban-planning"]["additional_mcp_servers"] = [
+            {
+                "name": "http-mcp",
+                "type": "http",
+                "url": "https://api.sundsvall.se/mcp",
+            }
+        ]
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+        )
+
+        assert result.mcp_servers == []
+        assert any(item.item == "http-mcp" for item in result.blocked_items)
+
+
 class TestComputeEffectiveConfigDelegation:
     """Tests for delegation hierarchy enforcement.
 
@@ -627,6 +680,30 @@ class TestComputeEffectiveConfigSecurityBlocks:
         mcp_names = [s.name for s in result.mcp_servers]
         assert "gis-internal" not in mcp_names
 
+    def test_blocked_mcp_server_rejected_by_command(self, valid_org_config):
+        """Blocked MCP patterns should match stdio command paths."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["security"]["allow_stdio_mcp"] = True
+        valid_org_config["security"]["allowed_stdio_prefixes"] = ["/usr/local/bin"]
+        valid_org_config["security"]["blocked_mcp_servers"] = ["/usr/local/bin/blocked-tool"]
+        valid_org_config["profiles"]["urban-planning"]["additional_mcp_servers"] = [
+            {
+                "name": "blocked-stdio",
+                "type": "stdio",
+                "command": "/usr/local/bin/blocked-tool",
+            }
+        ]
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+            project_config=None,
+        )
+
+        mcp_names = [s.name for s in result.mcp_servers]
+        assert "blocked-stdio" not in mcp_names
+
     def test_security_blocks_cannot_be_overridden(self, valid_org_config):
         """Security blocks apply regardless of delegation settings."""
         from scc_cli.application.compute_effective_config import compute_effective_config
@@ -728,6 +805,23 @@ class TestComputeEffectiveConfigGlobPatterns:
         assert "exact-plugin" not in result.plugins
         assert "exact-plugin-extended" in result.plugins  # Not blocked
         assert "other-exact-plugin" in result.plugins  # Not blocked
+
+    def test_bare_pattern_blocks_any_marketplace(self, valid_org_config):
+        """Bare plugin patterns should match regardless of marketplace."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["security"]["blocked_plugins"] = ["*-experimental"]
+        valid_org_config["defaults"]["enabled_plugins"] = [
+            "tool-experimental@internal",
+            "safe-tool@internal",
+        ]
+
+        result = compute_effective_config(
+            org_config=valid_org_config, team_name=None, project_config=None
+        )
+
+        assert "tool-experimental@internal" not in result.plugins
+        assert "safe-tool@internal" in result.plugins
 
 
 class TestComputeEffectiveConfigDecisionTracking:

@@ -254,6 +254,14 @@ class TestBuildCommand:
         claude_idx = cmd.index("claude")
         assert w_idx < claude_idx
 
+    def test_env_vars_injected(self):
+        """Should include -e flags when env_vars are provided."""
+        cmd = docker.build_command(env_vars={"HTTP_PROXY": "http://proxy", "NO_PROXY": "localhost"})
+
+        assert "-e" in cmd
+        assert "HTTP_PROXY=http://proxy" in cmd
+        assert "NO_PROXY=localhost" in cmd
+
     def test_continue_session_flag(self):
         """Should include -c flag after claude when continue_session is True."""
         cmd = docker.build_command(continue_session=True)
