@@ -82,7 +82,7 @@ def launch_sandbox(
         profile=team,
         force_new=fresh,
         continue_session=should_continue_session,
-        env_vars=None,
+        env_vars=env_vars,
     )
 
     # Extract container name for session tracking

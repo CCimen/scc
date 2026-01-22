@@ -13,8 +13,14 @@ from rich.table import Table
 
 from .. import config as config_module
 from .. import docker as docker_module
+from ..application.personal_profile_policy import (
+    ProfilePolicySkip,
+    filter_personal_profile_mcp,
+    filter_personal_profile_settings,
+)
 from ..cli_common import console, handle_errors
 from ..confirm import Confirm
+from ..core.enums import TargetType
 from ..core.exit_codes import EXIT_USAGE
 from ..core.personal_profiles import (
     build_diff_text,
@@ -59,6 +65,14 @@ def _print_stack_summary(workspace: Path, profile_id: str | None) -> None:
     console.print(
         f"[dim]Active stack: team={team} | personal={personal} | workspace={workspace}[/dim]"
     )
+
+
+def _render_policy_skips(skips: list[ProfilePolicySkip]) -> None:
+    if not skips:
+        return
+    for skipped in skips:
+        label = "plugin" if skipped.target_type == TargetType.PLUGIN else "MCP server"
+        console.print(f"[yellow]Skipped {label} '{skipped.item}': {skipped.reason}[/yellow]")
 
 
 def _format_preview(items: list[str], limit: int = 5) -> str:
@@ -309,6 +323,24 @@ def apply_cmd(
     existing_settings = existing_settings or {}
     existing_mcp = existing_mcp or {}
 
+    org_config = config_module.load_cached_org_config()
+    profile_settings = profile.settings or {}
+    profile_mcp = profile.mcp or {}
+    policy_skips: list[ProfilePolicySkip] = []
+    if org_config:
+        profile_settings, skipped_plugins = filter_personal_profile_settings(
+            profile_settings,
+            org_config,
+        )
+        profile_mcp, skipped_mcps = filter_personal_profile_mcp(
+            profile_mcp,
+            org_config,
+        )
+        policy_skips.extend(skipped_plugins)
+        policy_skips.extend(skipped_mcps)
+
+    _render_policy_skips(policy_skips)
+
     missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
         existing_settings, docker_module.get_sandbox_settings()
     )
@@ -331,15 +363,15 @@ def apply_cmd(
                 diff_settings = build_diff_text(
                     f"settings.local.json ({profile.repo_id})",
                     existing_settings,
-                    merge_personal_settings(ws_path, existing_settings, profile.settings or {}),
+                    merge_personal_settings(ws_path, existing_settings, profile_settings),
                 )
                 if diff_settings:
                     console.print(diff_settings)
-                if profile.mcp:
+                if profile_mcp:
                     diff_mcp = build_diff_text(
                         f".mcp.json ({profile.repo_id})",
                         existing_mcp,
-                        merge_personal_mcp(existing_mcp, profile.mcp or {}),
+                        merge_personal_mcp(existing_mcp, profile_mcp),
                     )
                     if diff_mcp:
                         console.print(diff_mcp)
@@ -351,8 +383,8 @@ def apply_cmd(
             )
             raise typer.Exit(EXIT_USAGE)
 
-    merged_settings = merge_personal_settings(ws_path, existing_settings, profile.settings or {})
-    merged_mcp = merge_personal_mcp(existing_mcp, profile.mcp or {})
+    merged_settings = merge_personal_settings(ws_path, existing_settings, profile_settings)
+    merged_mcp = merge_personal_mcp(existing_mcp, profile_mcp)
 
     if merged_settings == existing_settings and merged_mcp == existing_mcp:
         _print_stack_summary(ws_path, profile.repo_id)
@@ -367,7 +399,7 @@ def apply_cmd(
             console.print(diff_settings)
             any_diff = True
 
-        if profile.mcp:
+        if profile_mcp:
             diff_mcp = build_diff_text(".mcp.json", existing_mcp, merged_mcp)
             if diff_mcp:
                 console.print(diff_mcp)
@@ -377,7 +409,7 @@ def apply_cmd(
         return
 
     write_workspace_settings(ws_path, merged_settings)
-    if profile.mcp:
+    if profile_mcp:
         write_workspace_mcp(ws_path, merged_mcp)
 
     save_applied_state(ws_path, profile.profile_id, compute_fingerprints(ws_path))

@@ -58,6 +58,9 @@ class Kind(str, Enum):
     # Start
     START_DRY_RUN = "StartDryRun"
 
+    # Profiles
+    PROFILE_APPLY = "ProfileApply"
+
     # Init
     INIT_RESULT = "InitResult"
 

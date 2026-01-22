@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from scc_cli.application.interaction_requests import ConfirmRequest
+from scc_cli.application.personal_profile_policy import (
+    ProfilePolicySkip,
+    filter_personal_profile_mcp,
+    filter_personal_profile_settings,
+)
 from scc_cli.ports.personal_profile_service import PersonalProfileService
 
 
@@ -35,11 +41,13 @@ class ApplyPersonalProfileRequest:
         workspace_path: Path to the workspace.
         interactive_allowed: Whether the UI may prompt for confirmation.
         confirm_apply: Optional confirmation response when prompted.
+        org_config: Optional org config for security enforcement.
     """
 
     workspace_path: Path
     interactive_allowed: bool
     confirm_apply: bool | None = None
+    org_config: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -74,11 +82,13 @@ class ApplyPersonalProfileResult:
         profile_id: Identifier for the profile, if one exists.
         applied: Whether the profile was applied.
         message: Optional message to render at the edge.
+        skipped_items: Items skipped due to org security policy.
     """
 
     profile_id: str | None
     applied: bool
     message: str | None = None
+    skipped_items: list[ProfilePolicySkip] = field(default_factory=list)
 
 
 ApplyPersonalProfileOutcome = ApplyPersonalProfileConfirmation | ApplyPersonalProfileResult
@@ -162,15 +172,30 @@ def apply_personal_profile(
     existing_settings = existing_settings or {}
     existing_mcp = existing_mcp or {}
 
+    profile_settings = profile.settings or {}
+    profile_mcp = profile.mcp or {}
+    policy_skips: list[ProfilePolicySkip] = []
+    if request.org_config:
+        profile_settings, skipped_plugins = filter_personal_profile_settings(
+            profile_settings,
+            request.org_config,
+        )
+        profile_mcp, skipped_mcps = filter_personal_profile_mcp(
+            profile_mcp,
+            request.org_config,
+        )
+        policy_skips.extend(skipped_plugins)
+        policy_skips.extend(skipped_mcps)
+
     merged_settings = dependencies.profile_service.merge_personal_settings(
         request.workspace_path,
         existing_settings,
-        profile.settings or {},
+        profile_settings,
     )
-    merged_mcp = dependencies.profile_service.merge_personal_mcp(existing_mcp, profile.mcp or {})
+    merged_mcp = dependencies.profile_service.merge_personal_mcp(existing_mcp, profile_mcp)
 
     dependencies.profile_service.write_workspace_settings(request.workspace_path, merged_settings)
-    if profile.mcp:
+    if profile_mcp:
         dependencies.profile_service.write_workspace_mcp(request.workspace_path, merged_mcp)
 
     dependencies.profile_service.save_applied_state(
@@ -183,4 +208,5 @@ def apply_personal_profile(
         profile_id=profile.profile_id,
         applied=True,
         message="[green]Applied personal profile.[/green]",
+        skipped_items=policy_skips,
     )

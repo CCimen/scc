@@ -70,6 +70,7 @@ from ...application.start_session import StartSessionDependencies, StartSessionR
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...contexts import WorkContext, load_recent_contexts, normalize_path, record_context
+from ...core.enums import TargetType
 from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
 from ...marketplace.materialize import materialize_marketplace
@@ -79,6 +80,7 @@ from ...panels import create_info_panel, create_warning_panel
 from ...ports.git_client import GitClient
 from ...ports.personal_profile_service import PersonalProfileService
 from ...presentation.json.launch_json import build_start_dry_run_envelope
+from ...presentation.json.profile_json import build_profile_apply_envelope
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
 from ...services.workspace import has_project_markers, is_suspicious_directory
 from ...theme import Colors, Spinners, get_brand_header
@@ -327,6 +329,7 @@ def _resolve_session_selection(
 def _apply_personal_profile(
     workspace_path: Path,
     *,
+    org_config: dict[str, Any] | None,
     json_mode: bool,
     non_interactive: bool,
     profile_service: PersonalProfileService,
@@ -340,6 +343,7 @@ def _apply_personal_profile(
         json_mode=json_mode,
         non_interactive=non_interactive,
         confirm_apply=None,
+        org_config=org_config,
     )
     dependencies = ApplyPersonalProfileDependencies(profile_service=profile_service)
 
@@ -357,6 +361,7 @@ def _apply_personal_profile(
                 json_mode=json_mode,
                 non_interactive=non_interactive,
                 confirm_apply=confirm,
+                org_config=org_config,
             )
             continue
 
@@ -373,6 +378,7 @@ def _build_personal_profile_request(
     json_mode: bool,
     non_interactive: bool,
     confirm_apply: bool | None,
+    org_config: dict[str, Any] | None,
 ) -> ApplyPersonalProfileRequest:
     return ApplyPersonalProfileRequest(
         workspace_path=workspace_path,
@@ -381,6 +387,7 @@ def _build_personal_profile_request(
             no_interactive_flag=non_interactive,
         ),
         confirm_apply=confirm_apply,
+        org_config=org_config,
     )
 
 
@@ -397,7 +404,13 @@ def _render_personal_profile_result(
     outcome: ApplyPersonalProfileResult, *, json_mode: bool
 ) -> None:
     if json_mode:
+        envelope = build_profile_apply_envelope(outcome)
+        print_json(envelope)
         return
+    if outcome.skipped_items:
+        for skipped in outcome.skipped_items:
+            label = "plugin" if skipped.target_type == TargetType.PLUGIN else "MCP server"
+            console.print(f"[yellow]Skipped {label} '{skipped.item}': {skipped.reason}[/yellow]")
     if outcome.message:
         console.print(outcome.message)
 
@@ -692,6 +705,7 @@ def start(
     if not dry_run and workspace_path is not None:
         personal_profile_id, personal_applied = _apply_personal_profile(
             workspace_path,
+            org_config=org_config,
             json_mode=(json_output or pretty),
             non_interactive=non_interactive,
             profile_service=adapters.personal_profile_service,
