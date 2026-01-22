@@ -13,6 +13,7 @@ from scc_cli.application.launch import (
     apply_personal_profile,
 )
 from scc_cli.core import personal_profiles
+from scc_cli.core.enums import TargetType
 from scc_cli.core.personal_profiles import PersonalProfile
 from scc_cli.marketplace.managed import ManagedState, save_managed_state
 
@@ -264,3 +265,105 @@ def test_personal_profile_invalid_json_mcp(tmp_path: Path) -> None:
     assert isinstance(outcome, ApplyPersonalProfileResult)
     assert outcome.applied is False
     assert "Invalid JSON" in (outcome.message or "")
+
+
+def test_personal_profile_blocks_org_blocked_plugins(tmp_path: Path) -> None:
+    personal_profiles.save_personal_profile(
+        tmp_path,
+        {"enabledPlugins": {"blocked@market": True, "allowed@market": True}},
+        {},
+    )
+    org_config = {"security": {"blocked_plugins": ["blocked@market"]}}
+
+    request = ApplyPersonalProfileRequest(
+        workspace_path=tmp_path,
+        interactive_allowed=False,
+        confirm_apply=None,
+        org_config=org_config,
+    )
+    outcome = apply_personal_profile(
+        request,
+        dependencies=ApplyPersonalProfileDependencies(
+            profile_service=LocalPersonalProfileService(),
+        ),
+    )
+
+    assert isinstance(outcome, ApplyPersonalProfileResult)
+    updated = personal_profiles.load_workspace_settings(tmp_path) or {}
+    plugins = updated.get("enabledPlugins", {})
+    assert "blocked@market" not in plugins
+    assert plugins.get("allowed@market") is True
+    assert any(
+        skipped.item == "blocked@market" and skipped.target_type == TargetType.PLUGIN
+        for skipped in outcome.skipped_items
+    )
+
+
+def test_personal_profile_blocks_org_blocked_mcp(tmp_path: Path) -> None:
+    personal_profiles.save_personal_profile(
+        tmp_path,
+        {},
+        {
+            "mcpServers": {
+                "blocked": {"type": "http", "url": "https://blocked.example.com"},
+                "allowed": {"type": "http", "url": "https://good.example.com"},
+            }
+        },
+    )
+    org_config = {"security": {"blocked_mcp_servers": ["blocked.example.com"]}}
+
+    request = ApplyPersonalProfileRequest(
+        workspace_path=tmp_path,
+        interactive_allowed=False,
+        confirm_apply=None,
+        org_config=org_config,
+    )
+    outcome = apply_personal_profile(
+        request,
+        dependencies=ApplyPersonalProfileDependencies(
+            profile_service=LocalPersonalProfileService(),
+        ),
+    )
+
+    assert isinstance(outcome, ApplyPersonalProfileResult)
+    updated_mcp = personal_profiles.load_workspace_mcp(tmp_path) or {}
+    servers = updated_mcp.get("mcpServers", {})
+    assert "blocked" not in servers
+    assert "allowed" in servers
+    assert any(
+        skipped.item == "blocked" and skipped.target_type == TargetType.MCP_SERVER
+        for skipped in outcome.skipped_items
+    )
+
+
+def test_personal_profile_blocks_stdio_mcp_when_disabled(tmp_path: Path) -> None:
+    personal_profiles.save_personal_profile(
+        tmp_path,
+        {},
+        {
+            "mcpServers": {
+                "stdio-server": {"type": "stdio", "command": "/usr/bin/stdio"},
+            }
+        },
+    )
+    org_config = {"security": {"allow_stdio_mcp": False}}
+
+    request = ApplyPersonalProfileRequest(
+        workspace_path=tmp_path,
+        interactive_allowed=False,
+        confirm_apply=None,
+        org_config=org_config,
+    )
+    outcome = apply_personal_profile(
+        request,
+        dependencies=ApplyPersonalProfileDependencies(
+            profile_service=LocalPersonalProfileService(),
+        ),
+    )
+
+    assert isinstance(outcome, ApplyPersonalProfileResult)
+    assert any(
+        skipped.item == "stdio-server" and skipped.target_type == TargetType.MCP_SERVER
+        for skipped in outcome.skipped_items
+    )
+    assert personal_profiles.load_workspace_mcp(tmp_path) is None

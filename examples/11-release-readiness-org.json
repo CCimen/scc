@@ -1,0 +1,227 @@
+{
+    "$schema": "../src/scc_cli/schemas/org-v1.schema.json",
+    "schema_version": "1.0.0",
+    "min_cli_version": "1.7.0",
+    "organization": {
+        "name": "Release Readiness Org",
+        "id": "release-readiness-org",
+        "contact": "platform@example.com"
+    },
+    "marketplaces": {
+        "official-plugins": {
+            "source": "github",
+            "owner": "CCimen",
+            "repo": "sandboxed-code-plugins",
+            "branch": "main",
+            "path": "/"
+        }
+    },
+    "security": {
+        "blocked_plugins": [
+            "*-experimental",
+            "*-deprecated",
+            "malicious-*",
+            "untrusted-*"
+        ],
+        "blocked_mcp_servers": [
+            "*.untrusted.com",
+            "evil-*",
+            "localhost:*"
+        ],
+        "allow_stdio_mcp": false,
+        "allowed_stdio_prefixes": [
+            "/usr/local/bin",
+            "/opt/approved-tools"
+        ],
+        "safety_net": {
+            "action": "block",
+            "block_force_push": true,
+            "block_reset_hard": true,
+            "block_branch_force_delete": true,
+            "block_checkout_restore": true,
+            "block_clean": true,
+            "block_stash_destructive": true
+        }
+    },
+    "defaults": {
+        "enabled_plugins": [
+            "scc-safety-net@official-plugins"
+        ],
+        "disabled_plugins": [
+            "legacy-tools@official-plugins"
+        ],
+        "allowed_plugins": [
+            "*@official-plugins"
+        ],
+        "allowed_mcp_servers": [
+            "https://mcp.context7.com/*",
+            "https://mcp.mermaid.ai/*",
+            "https://www.shadcn.io/*",
+            "https://mcp.internal.example.com/*",
+            "mcp.context7.com",
+            "mcp.mermaid.ai",
+            "www.shadcn.io",
+            "mcp.internal.example.com",
+            "/usr/local/bin/*"
+        ],
+        "extra_marketplaces": [
+            "official-plugins"
+        ],
+        "cache_ttl_hours": 24,
+        "network_policy": "corp-proxy-only",
+        "session": {
+            "timeout_hours": 12,
+            "auto_resume": true
+        }
+    },
+    "delegation": {
+        "teams": {
+            "allow_additional_plugins": [
+                "*"
+            ],
+            "allow_additional_mcp_servers": [
+                "*"
+            ]
+        },
+        "projects": {
+            "inherit_team_delegation": true
+        }
+    },
+    "profiles": {
+        "platform": {
+            "description": "Platform engineering tools and core MCP access",
+            "additional_plugins": [
+                "platform-tooling@official-plugins",
+                "infra-helper@official-plugins"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "context7",
+                    "type": "http",
+                    "url": "https://mcp.context7.com/mcp",
+                    "headers": {
+                        "X-API-Key": "${CONTEXT7_API_KEY}"
+                    }
+                }
+            ],
+            "network_policy": "corp-proxy-only",
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        },
+        "frontend": {
+            "description": "Frontend team with design and UI MCP servers",
+            "additional_plugins": [
+                "frontend-toolkit@official-plugins",
+                "ui-kit@official-plugins"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "shadcn",
+                    "type": "http",
+                    "url": "https://www.shadcn.io/api/mcp"
+                },
+                {
+                    "name": "mermaid-mcp",
+                    "type": "sse",
+                    "url": "https://mcp.mermaid.ai/sse"
+                }
+            ],
+            "network_policy": "unrestricted",
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "backend": {
+            "description": "Backend services team with internal API MCP",
+            "additional_plugins": [
+                "backend-tooling@official-plugins"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "internal-api",
+                    "type": "http",
+                    "url": "https://mcp.internal.example.com/backend",
+                    "headers": {
+                        "Authorization": "Bearer ${INTERNAL_API_TOKEN}"
+                    }
+                }
+            ],
+            "network_policy": "corp-proxy-only",
+            "session": {
+                "timeout_hours": 10,
+                "auto_resume": false
+            },
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "data": {
+            "description": "Data team with catalog MCP and longer sessions",
+            "additional_plugins": [
+                "data-tooling@official-plugins",
+                "notebook-helper@official-plugins"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "data-catalog",
+                    "type": "http",
+                    "url": "https://mcp.internal.example.com/data"
+                }
+            ],
+            "network_policy": "corp-proxy-only",
+            "session": {
+                "timeout_hours": 24,
+                "auto_resume": true
+            },
+            "delegation": {
+                "allow_project_overrides": true
+            }
+        },
+        "browser-automation": {
+            "description": "Browser automation team using Playwright MCP",
+            "additional_plugins": [
+                "browser-tools@official-plugins"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "playwright",
+                    "type": "stdio",
+                    "command": "/usr/local/bin/npx",
+                    "args": [
+                        "@playwright/mcp@latest"
+                    ],
+                    "env": {
+                        "PLAYWRIGHT_BROWSERS_PATH": "${HOME}/.cache/ms-playwright"
+                    }
+                }
+            ],
+            "network_policy": "isolated",
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        },
+        "security": {
+            "description": "Security team with scanning tools and isolated network policy",
+            "additional_plugins": [
+                "security-audit@official-plugins"
+            ],
+            "additional_mcp_servers": [
+                {
+                    "name": "sec-scan",
+                    "type": "http",
+                    "url": "https://mcp.internal.example.com/security"
+                }
+            ],
+            "network_policy": "isolated",
+            "delegation": {
+                "allow_project_overrides": false
+            }
+        }
+    },
+    "stats": {
+        "enabled": true,
+        "user_identity_mode": "hash",
+        "retention_days": 90
+    }
+}
