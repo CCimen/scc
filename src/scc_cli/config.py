@@ -477,6 +477,10 @@ def read_project_config(workspace_path: str | Path) -> dict[str, Any] | None:
     if config is None:
         return None
 
+    # Normalize legacy keys before validation
+    if "mcp_servers" in config and "additional_mcp_servers" not in config:
+        config["additional_mcp_servers"] = config.pop("mcp_servers")
+
     # Validate schema
     _validate_project_config_schema(config)
 
@@ -512,3 +516,6 @@ def _validate_project_config_schema(config: dict[str, Any]) -> None:
         if "timeout_hours" in session:
             if not isinstance(session["timeout_hours"], int):
                 raise ValueError("session.timeout_hours must be an integer")
+        if "auto_resume" in session:
+            if not isinstance(session["auto_resume"], bool):
+                raise ValueError("session.auto_resume must be a boolean")

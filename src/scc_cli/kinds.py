@@ -54,6 +54,7 @@ class Kind(str, Enum):
 
     # Config
     CONFIG_EXPLAIN = "ConfigExplain"
+    CONFIG_VALIDATE = "ConfigValidate"
 
     # Start
     START_DRY_RUN = "StartDryRun"

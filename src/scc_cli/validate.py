@@ -80,6 +80,7 @@ class VersionCompatibility:
 
 
 ORG_SCHEMA_FILENAME = "org-v1.schema.json"
+TEAM_SCHEMA_FILENAME = "team-config.v1.schema.json"
 
 
 def load_bundled_schema() -> dict[Any, Any]:
@@ -90,6 +91,16 @@ def load_bundled_schema() -> dict[Any, Any]:
         return cast(dict[Any, Any], json.loads(content))
     except FileNotFoundError:
         raise FileNotFoundError(f"Schema file '{ORG_SCHEMA_FILENAME}' not found")
+
+
+def load_bundled_team_schema() -> dict[Any, Any]:
+    """Load bundled team config schema from package resources."""
+    schema_file = files("scc_cli.schemas").joinpath(TEAM_SCHEMA_FILENAME)
+    try:
+        content = schema_file.read_text()
+        return cast(dict[Any, Any], json.loads(content))
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Schema file '{TEAM_SCHEMA_FILENAME}' not found")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -112,6 +123,26 @@ def validate_org_config(config: dict[str, Any]) -> list[str]:
     errors = []
     for error in validator.iter_errors(config):
         # Include config path for easy debugging
+        path = "/".join(str(p) for p in error.path) or "(root)"
+        errors.append(f"{path}: {error.message}")
+
+    return errors
+
+
+def validate_team_config(config: dict[str, Any]) -> list[str]:
+    """Validate team config against bundled schema.
+
+    Args:
+        config: Team config dict to validate
+
+    Returns:
+        List of error strings. Empty list means config is valid.
+    """
+    schema = load_bundled_team_schema()
+    validator = Draft7Validator(schema)
+
+    errors = []
+    for error in validator.iter_errors(config):
         path = "/".join(str(p) for p in error.path) or "(root)"
         errors.append(f"{path}: {error.message}")
 

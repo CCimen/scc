@@ -78,6 +78,7 @@ def build_dry_run_data(
     """
     plugins: list[dict[str, Any]] = []
     blocked_items: list[str] = []
+    network_policy: str | None = None
 
     if org_config and team:
         from ...application.compute_effective_config import compute_effective_config
@@ -89,6 +90,7 @@ def build_dry_run_data(
             project_config=project_config,
             workspace_path=workspace_for_project,
         )
+        network_policy = effective.network_policy
 
         for plugin in sorted(effective.plugins):
             plugins.append({"name": plugin, "source": "resolved"})
@@ -112,6 +114,7 @@ def build_dry_run_data(
         "team": team,
         "plugins": plugins,
         "blocked_items": blocked_items,
+        "network_policy": network_policy,
         "ready_to_start": len(blocked_items) == 0,
         "resolution_reason": resolution_reason,
     }
@@ -209,6 +212,11 @@ def show_dry_run_panel(data: dict[str, Any]) -> None:
 
     # Team
     grid.add_row("Team:", data.get("team") or "standalone")
+
+    # Network policy
+    network_policy = data.get("network_policy")
+    if network_policy:
+        grid.add_row("Network policy:", network_policy)
 
     # Plugins
     plugins = data.get("plugins", [])

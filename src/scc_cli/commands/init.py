@@ -73,30 +73,29 @@ def generate_template_content() -> str:
 # This file configures SCC (Sandboxed Claude CLI) for this project.
 # Place this file in your repository root.
 #
-# For full documentation, see: https://github.com/sundsvall/scc-cli#configuration
+# For full documentation, see: https://scc-cli.dev/reference/configuration/project-schema/
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Additional plugins to enable for this project
 # These plugins are loaded on top of your team profile's plugins.
 # Only plugins allowed by your organization can be added here.
+# Format: plugin-name@marketplace
 additional_plugins: []
-  # - "project-specific-linter"
-  # - "custom-formatter"
+  # - "project-specific-linter@internal"
+  # - "custom-formatter@claude-plugins-official"
 
 # Session configuration
 session:
   # Session timeout in hours (default: 8)
   timeout_hours: 8
+  # auto_resume is advisory only in v1 (not enforced)
+  # auto_resume: false
 
 # Optional: MCP servers specific to this project
-# mcp_servers: []
+# additional_mcp_servers:
 #   - name: "project-db"
-#     command: "npx"
-#     args: ["@project/mcp-server"]
-
-# Optional: Environment variables for the sandbox
-# env: {}
-#   PROJECT_NAME: "my-project"
+#     type: "sse"
+#     url: "https://db.example.com/mcp"
 """
 
 

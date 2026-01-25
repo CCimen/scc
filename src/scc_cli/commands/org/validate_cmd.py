@@ -14,13 +14,17 @@ from ...json_output import build_envelope
 from ...kinds import Kind
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_error_panel, create_success_panel, create_warning_panel
+from ...source_resolver import ResolveError, resolve_source
 from ...validate import validate_org_config
 from ._builders import build_validation_data, check_semantic_errors
 
 
 @handle_errors
 def org_validate_cmd(
-    source: str = typer.Argument(..., help="Path to config file to validate"),
+    source: str = typer.Argument(
+        ...,
+        help="Config source (file path, HTTPS URL, or shorthand like github:org/repo:path)",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
@@ -37,38 +41,124 @@ def org_validate_cmd(
         json_output = True
         set_pretty_mode(True)
 
-    # Load config file
-    config_path = Path(source).expanduser().resolve()
-    if not config_path.exists():
+    resolved = resolve_source(source)
+    if isinstance(resolved, ResolveError):
+        error_msg = resolved.message
+        if resolved.suggestion:
+            error_msg = f"{resolved.message}\n{resolved.suggestion}"
         if json_output:
             with json_output_mode():
                 data = build_validation_data(
                     source=source,
-                    schema_errors=[f"File not found: {source}"],
+                    schema_errors=[error_msg],
                     semantic_errors=[],
                 )
                 envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
                 print_json(envelope)
                 raise typer.Exit(EXIT_CONFIG)
-        console.print(create_error_panel("File Not Found", f"Cannot find config file: {source}"))
+        console.print(create_error_panel("Invalid Source", error_msg))
         raise typer.Exit(EXIT_CONFIG)
 
-    # Parse JSON
-    try:
-        config = json.loads(config_path.read_text())
-    except json.JSONDecodeError as e:
-        if json_output:
-            with json_output_mode():
-                data = build_validation_data(
-                    source=source,
-                    schema_errors=[f"Invalid JSON: {e}"],
-                    semantic_errors=[],
-                )
-                envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
-                print_json(envelope)
-                raise typer.Exit(EXIT_CONFIG)
-        console.print(create_error_panel("Invalid JSON", f"Failed to parse JSON: {e}"))
-        raise typer.Exit(EXIT_CONFIG)
+    # Load config from file or remote source
+    if resolved.is_file:
+        config_path = Path(resolved.resolved_url)
+        if not config_path.exists():
+            if json_output:
+                with json_output_mode():
+                    data = build_validation_data(
+                        source=source,
+                        schema_errors=[f"File not found: {source}"],
+                        semantic_errors=[],
+                    )
+                    envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
+                    print_json(envelope)
+                    raise typer.Exit(EXIT_CONFIG)
+            console.print(
+                create_error_panel("File Not Found", f"Cannot find config file: {source}")
+            )
+            raise typer.Exit(EXIT_CONFIG)
+
+        try:
+            config = json.loads(config_path.read_text())
+        except json.JSONDecodeError as e:
+            if json_output:
+                with json_output_mode():
+                    data = build_validation_data(
+                        source=source,
+                        schema_errors=[f"Invalid JSON: {e}"],
+                        semantic_errors=[],
+                    )
+                    envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
+                    print_json(envelope)
+                    raise typer.Exit(EXIT_CONFIG)
+            console.print(create_error_panel("Invalid JSON", f"Failed to parse JSON: {e}"))
+            raise typer.Exit(EXIT_CONFIG)
+    else:
+        import requests
+
+        try:
+            response = requests.get(resolved.resolved_url, timeout=30)
+        except requests.RequestException as e:
+            error_msg = f"Failed to fetch config: {e}"
+            if json_output:
+                with json_output_mode():
+                    data = build_validation_data(
+                        source=source,
+                        schema_errors=[error_msg],
+                        semantic_errors=[],
+                    )
+                    envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
+                    print_json(envelope)
+                    raise typer.Exit(EXIT_CONFIG)
+            console.print(create_error_panel("Network Error", error_msg))
+            raise typer.Exit(EXIT_CONFIG)
+
+        if response.status_code == 404:
+            error_msg = f"Config not found at {resolved.resolved_url}"
+            if json_output:
+                with json_output_mode():
+                    data = build_validation_data(
+                        source=source,
+                        schema_errors=[error_msg],
+                        semantic_errors=[],
+                    )
+                    envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
+                    print_json(envelope)
+                    raise typer.Exit(EXIT_CONFIG)
+            console.print(create_error_panel("Not Found", error_msg))
+            raise typer.Exit(EXIT_CONFIG)
+
+        if response.status_code != 200:
+            error_msg = f"HTTP {response.status_code} from {resolved.resolved_url}"
+            if json_output:
+                with json_output_mode():
+                    data = build_validation_data(
+                        source=source,
+                        schema_errors=[error_msg],
+                        semantic_errors=[],
+                    )
+                    envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
+                    print_json(envelope)
+                    raise typer.Exit(EXIT_CONFIG)
+            console.print(create_error_panel("HTTP Error", error_msg))
+            raise typer.Exit(EXIT_CONFIG)
+
+        try:
+            config = response.json()
+        except json.JSONDecodeError as e:
+            error_msg = f"Invalid JSON in response: {e}"
+            if json_output:
+                with json_output_mode():
+                    data = build_validation_data(
+                        source=source,
+                        schema_errors=[error_msg],
+                        semantic_errors=[],
+                    )
+                    envelope = build_envelope(Kind.ORG_VALIDATION, data=data, ok=False)
+                    print_json(envelope)
+                    raise typer.Exit(EXIT_CONFIG)
+            console.print(create_error_panel("Invalid JSON", error_msg))
+            raise typer.Exit(EXIT_CONFIG)
 
     # Validate against schema
     schema_errors = validate_org_config(config)

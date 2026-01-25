@@ -11,6 +11,8 @@ Provide structured team management:
 All commands support --json output with proper envelopes.
 """
 
+import json
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -20,6 +22,7 @@ from rich.table import Table
 from .. import config, teams
 from ..bootstrap import get_default_adapters
 from ..cli_common import console, handle_errors, render_responsive_table
+from ..core.constants import CURRENT_SCHEMA_VERSION
 from ..json_command import json_command
 from ..kinds import Kind
 from ..marketplace.compute import TeamNotFoundError
@@ -28,9 +31,10 @@ from ..marketplace.schema import OrganizationConfig, normalize_org_config_data
 from ..marketplace.team_fetch import TeamFetchResult, fetch_team_config
 from ..marketplace.trust import TrustViolationError
 from ..output_mode import is_json_mode, print_human
-from ..panels import create_warning_panel
+from ..panels import create_error_panel, create_success_panel, create_warning_panel
 from ..ui.gate import InteractivityContext
 from ..ui.picker import TeamSwitchRequested, pick_team
+from ..validate import validate_team_config
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Display Helpers
@@ -58,7 +62,84 @@ def _format_plugins_for_display(plugins: list[str], max_display: int = 2) -> str
         # Show first N and count of remaining
         names = [p.split("@")[0] for p in plugins[:max_display]]
         remaining = len(plugins) - max_display
-        return f"{', '.join(names)} +{remaining} more"
+    return f"{', '.join(names)} +{remaining} more"
+
+
+def _looks_like_path(value: str) -> bool:
+    """Best-effort detection for file-like inputs."""
+    return any(token in value for token in ("/", "\\", "~", ".json", ".jsonc", ".json5"))
+
+
+def _validate_team_config_file(source: str, verbose: bool) -> dict[str, Any]:
+    """Validate a team config file against the bundled schema."""
+    path = Path(source).expanduser()
+    if not path.exists():
+        if not is_json_mode():
+            console.print(
+                create_error_panel(
+                    "File Not Found",
+                    f"Cannot find team config file: {source}",
+                )
+            )
+        return {
+            "mode": "file",
+            "source": source,
+            "valid": False,
+            "error": f"File not found: {source}",
+        }
+
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        if not is_json_mode():
+            console.print(
+                create_error_panel(
+                    "Invalid JSON",
+                    f"Failed to parse JSON: {exc}",
+                )
+            )
+        return {
+            "mode": "file",
+            "source": str(path),
+            "valid": False,
+            "error": f"Invalid JSON: {exc}",
+        }
+
+    errors = validate_team_config(data)
+    is_valid = not errors
+
+    if not is_json_mode():
+        if is_valid:
+            console.print(
+                create_success_panel(
+                    "Validation Passed",
+                    {
+                        "Source": str(path),
+                        "Schema Version": CURRENT_SCHEMA_VERSION,
+                        "Status": "Valid",
+                    },
+                )
+            )
+        else:
+            console.print(
+                create_error_panel(
+                    "Validation Failed",
+                    "\n".join(f"• {e}" for e in errors),
+                )
+            )
+
+    response: dict[str, Any] = {
+        "mode": "file",
+        "source": str(path),
+        "valid": is_valid,
+    }
+    if "schema_version" in data:
+        response["schema_version"] = data.get("schema_version")
+    if errors:
+        response["errors"] = errors
+    if verbose and "errors" not in response:
+        response["errors"] = []
+    return response
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -661,7 +742,12 @@ def team_info(
 @json_command(Kind.TEAM_VALIDATE)
 @handle_errors
 def team_validate(
-    team_name: str = typer.Argument(..., help="Team name to validate"),
+    team_name: str | None = typer.Argument(
+        None, help="Team name to validate (defaults to current)"
+    ),
+    file: str | None = typer.Option(
+        None, "--file", "-f", help="Path to a team config file to validate"
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
@@ -674,9 +760,50 @@ def team_validate(
     - Marketplace trust grants (for federated teams)
     - Cache freshness status (for federated teams)
 
-    Use --verbose to see detailed validation information including
-    individual blocked/disabled plugins and their reasons.
+    Use --file to validate a local team config file against the schema.
+    Use --verbose to see detailed validation information.
     """
+    if file and team_name:
+        if not is_json_mode():
+            console.print(
+                create_warning_panel(
+                    "Conflicting Inputs",
+                    "Use either TEAM_NAME or --file, not both.",
+                    "Examples: scc team validate backend | scc team validate --file team.json",
+                )
+            )
+        return {
+            "mode": "team",
+            "team": team_name,
+            "valid": False,
+            "error": "Conflicting inputs: provide TEAM_NAME or --file, not both",
+        }
+
+    # File validation mode (explicit or detected)
+    if file or (team_name and _looks_like_path(team_name)):
+        source = file or team_name or ""
+        return _validate_team_config_file(source, verbose)
+
+    # Default to current team if omitted
+    if not team_name:
+        cfg = config.load_user_config()
+        team_name = cfg.get("selected_profile")
+        if not team_name:
+            if not is_json_mode():
+                console.print(
+                    create_warning_panel(
+                        "No Team Selected",
+                        "No team provided and no current team is selected.",
+                        "Run 'scc team list' or 'scc team switch <team>' to select one.",
+                    )
+                )
+            return {
+                "mode": "team",
+                "team": None,
+                "valid": False,
+                "error": "No team selected",
+            }
+
     org_config_data = config.load_cached_org_config()
     if not org_config_data:
         if not is_json_mode():
@@ -688,6 +815,7 @@ def team_validate(
                 )
             )
         return {
+            "mode": "team",
             "team": team_name,
             "valid": False,
             "error": "No organization configuration found",
@@ -706,6 +834,7 @@ def team_validate(
                 )
             )
         return {
+            "mode": "team",
             "team": team_name,
             "valid": False,
             "error": f"Invalid org config: {e}",
@@ -724,6 +853,7 @@ def team_validate(
                 )
             )
         return {
+            "mode": "team",
             "team": team_name,
             "valid": False,
             "error": f"Team not found: {team_name}",
@@ -739,6 +869,7 @@ def team_validate(
                 )
             )
         return {
+            "mode": "team",
             "team": team_name,
             "valid": False,
             "error": f"Trust violation: {e.violation}",
@@ -754,6 +885,7 @@ def team_validate(
                 )
             )
         return {
+            "mode": "team",
             "team": team_name,
             "valid": False,
             "error": str(e),
@@ -770,6 +902,7 @@ def team_validate(
 
     # Build JSON response
     response: dict[str, Any] = {
+        "mode": "team",
         "team": team_name,
         "valid": is_valid,
         "is_federated": effective.is_federated,

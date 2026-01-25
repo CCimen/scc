@@ -8,7 +8,7 @@
         "contact": "docs@example.com"
     },
     "marketplaces": {
-        "official-plugins": {
+        "sandboxed-code-official": {
             "source": "github",
             "owner": "CCimen",
             "repo": "sandboxed-code-plugins",
@@ -64,22 +64,22 @@
     },
     "defaults": {
         "enabled_plugins": [
-            "scc-safety-net@official-plugins"
+            "scc-safety-net@sandboxed-code-official"
         ],
         "disabled_plugins": [
-            "legacy-tool@official-plugins"
+            "legacy-tool@sandboxed-code-official"
         ],
         "allowed_plugins": [
             "core-*",
             "org-approved-*",
-            "*@official-plugins"
+            "*@sandboxed-code-official"
         ],
         "allowed_mcp_servers": [
             "https://mcp.example.com/*",
             "https://*.company.com/*"
         ],
         "extra_marketplaces": [
-            "official-plugins"
+            "sandboxed-code-official"
         ],
         "cache_ttl_hours": 24,
         "network_policy": "unrestricted",
@@ -110,8 +110,8 @@
         "team-a": {
             "description": "Example team A with HTTP MCP servers (authenticated and public)",
             "additional_plugins": [
-                "team-plugin-1@official-plugins",
-                "team-plugin-2@official-plugins"
+                "team-plugin-1@sandboxed-code-official",
+                "team-plugin-2@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {
