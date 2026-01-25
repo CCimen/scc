@@ -10,6 +10,7 @@ import os
 import subprocess
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -446,6 +447,11 @@ def run_sandbox(
                         "Warning: Failed to inject plugin settings. "
                         "SCC-managed plugins may not be available."
                     )
+                elif not seed_container_plugin_marketplaces(container_id, plugin_settings):
+                    err_line(
+                        "Warning: Failed to pre-seed plugin marketplaces after settings injection. "
+                        "Claude may show transient plugin lookup errors."
+                    )
 
             # STEP 6: Exec Claude interactively (replaces current process)
             # Claude binary is at /home/agent/.local/bin/claude
@@ -653,6 +659,78 @@ def reset_plugin_caches() -> bool:
                     "mkdir -p /data/plugins && "
                     "echo '{}' > /data/plugins/known_marketplaces.json && "
                     'echo \'{"version":2,"plugins":{}}\' > /data/plugins/installed_plugins.json'
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+def _build_known_marketplaces_cache(settings: dict[str, Any]) -> dict[str, Any]:
+    """Build known_marketplaces.json payload from injected settings."""
+    marketplaces = settings.get("extraKnownMarketplaces")
+    if not isinstance(marketplaces, dict):
+        return {}
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    cache: dict[str, Any] = {}
+
+    for name, entry in marketplaces.items():
+        if not isinstance(entry, dict):
+            continue
+        source = entry.get("source")
+        if not isinstance(source, dict):
+            continue
+
+        cache_entry: dict[str, Any] = {
+            "source": source,
+            "lastUpdated": now_iso,
+        }
+
+        if source.get("source") == "directory":
+            path = source.get("path")
+            if isinstance(path, str) and path:
+                cache_entry["installLocation"] = path
+
+        cache[str(name)] = cache_entry
+
+    return cache
+
+
+def seed_container_plugin_marketplaces(container_id: str, settings: dict[str, Any]) -> bool:
+    """
+    Pre-seed Claude Code's known marketplaces inside a running container.
+
+    Claude's startup sequence may scan enabled plugins before processing
+    extraKnownMarketplaces from settings. Writing known_marketplaces.json
+    ahead of time prevents transient "Plugin not found in marketplace" errors.
+
+    Returns:
+        True if seed successful or not needed, False otherwise
+    """
+    payload = _build_known_marketplaces_cache(settings)
+    if not payload:
+        return True
+
+    try:
+        payload_json = json.dumps(payload, indent=2)
+        escaped_payload = payload_json.replace("'", "'\"'\"'")
+
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "sh",
+                "-c",
+                (
+                    "mkdir -p /home/agent/.claude/plugins && "
+                    f"printf '%s' '{escaped_payload}' "
+                    "> /home/agent/.claude/plugins/known_marketplaces.json"
                 ),
             ],
             capture_output=True,
