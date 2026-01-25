@@ -440,6 +440,14 @@ def compute_effective_config(
         )
     if default_session.get("auto_resume") is not None:
         result.session_config.auto_resume = default_session["auto_resume"]
+        result.decisions.append(
+            ConfigDecision(
+                field="session.auto_resume",
+                value=default_session["auto_resume"],
+                reason="Organization default session auto-resume",
+                source="org.defaults",
+            )
+        )
 
     profiles = org_config.get("profiles", {})
     team_config = profiles.get(team_name, {})
@@ -602,6 +610,16 @@ def compute_effective_config(
                 source=f"team.{team_name}",
             )
         )
+    if team_session.get("auto_resume") is not None:
+        result.session_config.auto_resume = team_session["auto_resume"]
+        result.decisions.append(
+            ConfigDecision(
+                field="session.auto_resume",
+                value=team_session["auto_resume"],
+                reason=f"Overridden by team profile '{team_name}'",
+                source=f"team.{team_name}",
+            )
+        )
 
     if project_config:
         project_delegated, delegation_reason = is_project_delegated(org_config, team_name)
@@ -738,6 +756,17 @@ def compute_effective_config(
                     ConfigDecision(
                         field="session.timeout_hours",
                         value=project_session["timeout_hours"],
+                        reason="Overridden by project config",
+                        source="project",
+                    )
+                )
+        if project_session.get("auto_resume") is not None:
+            if project_delegated:
+                result.session_config.auto_resume = project_session["auto_resume"]
+                result.decisions.append(
+                    ConfigDecision(
+                        field="session.auto_resume",
+                        value=project_session["auto_resume"],
                         reason="Overridden by project config",
                         source="project",
                     )

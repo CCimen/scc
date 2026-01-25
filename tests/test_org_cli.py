@@ -154,6 +154,34 @@ class TestOrgValidate:
         assert output["status"]["ok"] is False
         assert len(output["status"]["errors"]) > 0
 
+    def test_validate_remote_config(self, capsys) -> None:
+        """validate should support HTTPS sources."""
+        from scc_cli.commands.org import org_validate_cmd
+
+        class DummyResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "schema_version": "1.0.0",
+                    "organization": {"name": "Test Org", "id": "test-org"},
+                }
+
+        with patch("requests.get", return_value=DummyResponse()):
+            try:
+                org_validate_cmd(
+                    source="https://example.com/org.json",
+                    json_output=True,
+                    pretty=False,
+                )
+            except click.exceptions.Exit:
+                pass
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert output["kind"] == "OrgValidation"
+        assert output["status"]["ok"] is True
+
     def test_validate_nonexistent_file(self) -> None:
         """validate should fail for nonexistent file."""
         from scc_cli.commands.org import org_validate_cmd

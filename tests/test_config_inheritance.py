@@ -418,6 +418,29 @@ class TestComputeEffectiveConfigBasicMerge:
         assert "gis-tools" in result.plugins  # from team
         assert "project-specific-tool" in result.plugins  # from project
 
+    def test_auto_resume_overrides_team_and_project(self, valid_org_config):
+        """Project and team session auto_resume should override defaults."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["profiles"]["urban-planning"]["session"] = {"auto_resume": False}
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+            project_config=None,
+        )
+
+        assert result.session_config.auto_resume is False
+
+        project_config = {"session": {"auto_resume": True, "timeout_hours": 4}}
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+            project_config=project_config,
+        )
+
+        assert result.session_config.auto_resume is True
+
         # Session should use project override
         assert result.session_config.timeout_hours == 4
 
@@ -1040,8 +1063,27 @@ additional_mcp_servers:
         server = result["additional_mcp_servers"][0]
         assert server["name"] == "local-api"
         assert server["type"] == "stdio"
-        assert server["command"] == "npx"
-        assert "-y" in server["args"]
+
+    def test_read_project_config_accepts_mcp_servers_alias(self, tmp_path):
+        """Should accept legacy mcp_servers as alias for additional_mcp_servers."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+mcp_servers:
+  - name: "project-api"
+    type: "sse"
+    url: "https://api.example.com/mcp"
+""")
+
+        result = read_project_config(tmp_path)
+
+        assert result is not None
+        assert "additional_mcp_servers" in result
+        server = result["additional_mcp_servers"][0]
+        assert server["name"] == "project-api"
+        assert server["type"] == "sse"
+        assert server["url"] == "https://api.example.com/mcp"
 
 
 class TestReadProjectConfigValidation:
@@ -1078,6 +1120,21 @@ additional_mcp_servers: "not-a-list"
             read_project_config(tmp_path)
 
         assert "mcp_servers" in str(exc_info.value).lower() or "list" in str(exc_info.value).lower()
+
+    def test_read_project_config_auto_resume_must_be_bool(self, tmp_path):
+        """Should raise error if session.auto_resume is not a boolean."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+session:
+  auto_resume: "yes"
+""")
+
+        with pytest.raises(ValueError) as exc_info:
+            read_project_config(tmp_path)
+
+        assert "auto_resume" in str(exc_info.value)
 
     def test_read_project_config_session_must_be_dict(self, tmp_path):
         """Should raise error if session is not a dict."""

@@ -280,6 +280,24 @@ class TestBuildDryRunData:
         plugin_names = [p["name"] for p in result["plugins"]]
         assert "github-copilot" in plugin_names
 
+    def test_build_dry_run_data_includes_network_policy(self, tmp_path):
+        """build_dry_run_data should include network policy when available."""
+        from scc_cli.commands.launch import build_dry_run_data
+
+        mock_org = {
+            "defaults": {"network_policy": "isolated"},
+            "profiles": {"platform": {"description": "Platform team"}},
+        }
+
+        result = build_dry_run_data(
+            workspace_path=tmp_path,
+            team="platform",
+            org_config=mock_org,
+            project_config=None,
+        )
+
+        assert result["network_policy"] == "isolated"
+
     def test_build_dry_run_data_ready_to_start(self, tmp_path):
         """build_dry_run_data should indicate ready state when no blockers."""
         from scc_cli.commands.launch import build_dry_run_data

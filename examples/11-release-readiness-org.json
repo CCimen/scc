@@ -8,7 +8,7 @@
         "contact": "platform@example.com"
     },
     "marketplaces": {
-        "official-plugins": {
+        "sandboxed-code-official": {
             "source": "github",
             "owner": "CCimen",
             "repo": "sandboxed-code-plugins",
@@ -45,13 +45,13 @@
     },
     "defaults": {
         "enabled_plugins": [
-            "scc-safety-net@official-plugins"
+            "scc-safety-net@sandboxed-code-official"
         ],
         "disabled_plugins": [
-            "legacy-tools@official-plugins"
+            "legacy-tools@sandboxed-code-official"
         ],
         "allowed_plugins": [
-            "*@official-plugins"
+            "*@sandboxed-code-official"
         ],
         "allowed_mcp_servers": [
             "https://mcp.context7.com/*",
@@ -65,7 +65,7 @@
             "/usr/local/bin/*"
         ],
         "extra_marketplaces": [
-            "official-plugins"
+            "sandboxed-code-official"
         ],
         "cache_ttl_hours": 24,
         "network_policy": "corp-proxy-only",
@@ -91,8 +91,8 @@
         "platform": {
             "description": "Platform engineering tools and core MCP access",
             "additional_plugins": [
-                "platform-tooling@official-plugins",
-                "infra-helper@official-plugins"
+                "platform-tooling@sandboxed-code-official",
+                "infra-helper@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {
@@ -112,8 +112,8 @@
         "frontend": {
             "description": "Frontend team with design and UI MCP servers",
             "additional_plugins": [
-                "frontend-toolkit@official-plugins",
-                "ui-kit@official-plugins"
+                "frontend-toolkit@sandboxed-code-official",
+                "ui-kit@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {
@@ -135,7 +135,7 @@
         "backend": {
             "description": "Backend services team with internal API MCP",
             "additional_plugins": [
-                "backend-tooling@official-plugins"
+                "backend-tooling@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {
@@ -159,8 +159,8 @@
         "data": {
             "description": "Data team with catalog MCP and longer sessions",
             "additional_plugins": [
-                "data-tooling@official-plugins",
-                "notebook-helper@official-plugins"
+                "data-tooling@sandboxed-code-official",
+                "notebook-helper@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {
@@ -181,7 +181,7 @@
         "browser-automation": {
             "description": "Browser automation team using Playwright MCP",
             "additional_plugins": [
-                "browser-tools@official-plugins"
+                "browser-tools@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {
@@ -204,7 +204,7 @@
         "security": {
             "description": "Security team with scanning tools and isolated network policy",
             "additional_plugins": [
-                "security-audit@official-plugins"
+                "security-audit@sandboxed-code-official"
             ],
             "additional_mcp_servers": [
                 {

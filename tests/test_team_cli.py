@@ -5,6 +5,7 @@ TDD approach: Tests define the expected behavior of the team command group.
 """
 
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -568,3 +569,73 @@ class TestJsonEnvelopeContract:
             assert "warnings" in data["status"]
             assert isinstance(data["status"]["errors"], list)
             assert isinstance(data["status"]["warnings"], list)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Team Validate Command Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTeamValidate:
+    """Tests for 'scc team validate' command."""
+
+    def test_team_validate_defaults_to_current_team(self, mock_config):
+        """team validate should use current team when none provided."""
+        dummy_effective = SimpleNamespace(
+            has_security_violations=False,
+            is_federated=False,
+            plugin_count=0,
+            blocked_plugins=[],
+            disabled_plugins=[],
+            not_allowed_plugins=[],
+            enabled_plugins=[],
+            extra_marketplaces=[],
+            used_cached_config=False,
+            cache_is_stale=False,
+            staleness_warning=None,
+            source_description=None,
+            config_commit_sha=None,
+            config_etag=None,
+        )
+
+        def fake_resolve(_org_config, team_name):
+            assert team_name == "platform"
+            return dummy_effective
+
+        with (
+            patch("scc_cli.commands.team.config.load_user_config", return_value=mock_config),
+            patch(
+                "scc_cli.commands.team.config.load_cached_org_config",
+                return_value={"profiles": {"platform": {}}},
+            ),
+            patch("scc_cli.commands.team.normalize_org_config_data", return_value={}),
+            patch("scc_cli.commands.team.OrganizationConfig.model_validate", return_value=object()),
+            patch("scc_cli.commands.team.resolve_effective_config", side_effect=fake_resolve),
+        ):
+            result = runner.invoke(app, ["team", "validate", "--json"])
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["data"]["team"] == "platform"
+            assert data["data"]["valid"] is True
+
+    def test_team_validate_file_flag(self, tmp_path):
+        """team validate --file should validate team config files."""
+        config_path = tmp_path / "team-config.json"
+        config_path.write_text(json.dumps({"schema_version": "1.0.0"}))
+
+        result = runner.invoke(app, ["team", "validate", "--file", str(config_path), "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"]["mode"] == "file"
+        assert data["data"]["valid"] is True
+
+    def test_team_validate_file_arg_detection(self, tmp_path):
+        """team validate should treat JSON paths as file inputs."""
+        config_path = tmp_path / "team-config.json"
+        config_path.write_text(json.dumps({"schema_version": "1.0.0"}))
+
+        result = runner.invoke(app, ["team", "validate", str(config_path), "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["data"]["mode"] == "file"
+        assert data["data"]["valid"] is True

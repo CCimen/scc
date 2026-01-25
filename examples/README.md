@@ -228,7 +228,13 @@ PY
 
 </details>
 
-If your SCC version supports it, you can validate a team by name after the org config is installed:
+If your SCC version supports it, you can validate a team config file directly:
+
+```
+scc team validate --file team-config.json
+```
+
+If the org config is installed, you can also validate by team name:
 
 ```
 scc team validate <TEAM_NAME>
@@ -236,7 +242,7 @@ scc team validate <TEAM_NAME>
 
 If you are unsure which commands your version supports, see:
 
-- [docs/CLI-REFERENCE.md](../docs/CLI-REFERENCE.md)
+- [CLI Reference](https://scc-cli.dev/reference/cli/overview/)
 
 ---
 
