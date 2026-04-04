@@ -111,3 +111,10 @@ class DecisionResult(str, Enum):
     ALLOWED = "allowed"
     BLOCKED = "blocked"
     DENIED = "denied"
+
+
+class CommandFamily(str, Enum):
+    """High-level command family for safety classification."""
+
+    DESTRUCTIVE_GIT = "destructive-git"
+    NETWORK_TOOL = "network-tool"
