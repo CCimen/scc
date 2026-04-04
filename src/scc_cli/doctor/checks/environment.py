@@ -9,8 +9,28 @@ import subprocess
 from pathlib import Path
 
 from scc_cli.core.enums import SeverityLevel
+from scc_cli.core.contracts import RuntimeInfo
 
 from ..types import CheckResult
+
+
+def _probe_runtime_info() -> RuntimeInfo | None:
+    """Return the current runtime probe result when available.
+
+    Doctor checks should report the effective runtime truthfully. When Docker
+    Desktop sandbox support is unavailable but the probe selected the OCI
+    backend, that is a healthy runtime path rather than an error.
+    """
+    try:
+        from scc_cli.bootstrap import get_default_adapters
+
+        adapters = get_default_adapters()
+        probe = adapters.runtime_probe
+        if probe is None:
+            return None
+        return probe.probe()
+    except Exception:
+        return None
 
 
 def check_git() -> CheckResult:
@@ -101,26 +121,41 @@ def check_docker_desktop() -> CheckResult:
 
 
 def check_docker_sandbox() -> CheckResult:
-    """Check if Docker sandbox feature is available."""
+    """Check whether SCC has a valid sandbox backend.
+
+    Docker Desktop sandbox support is one valid backend. If it is unavailable
+    but the runtime probe selected plain OCI, the check should still pass.
+    """
     from ... import docker as docker_module
 
-    if not docker_module.check_docker_sandbox():
+    if docker_module.check_docker_sandbox():
         return CheckResult(
-            name="Docker Sandbox",
-            passed=False,
-            message="Docker sandbox feature is not available",
-            fix_hint=(
-                f"Requires Docker Desktop {docker_module.MIN_DOCKER_VERSION}+ with sandbox enabled. "
-                "Run 'docker sandbox --help' and verify Docker Desktop is first in PATH"
-            ),
-            fix_url="https://docs.docker.com/desktop/features/sandbox/",
-            severity=SeverityLevel.ERROR,
+            name="Sandbox Backend",
+            passed=True,
+            message="Docker sandbox backend is available",
         )
 
+    runtime_info = _probe_runtime_info()
+    if runtime_info is not None and runtime_info.daemon_reachable:
+        if runtime_info.preferred_backend == "oci":
+            return CheckResult(
+                name="Sandbox Backend",
+                passed=True,
+                message="Docker sandbox unavailable; SCC will use the OCI backend instead",
+                version=runtime_info.version,
+                severity=SeverityLevel.INFO,
+            )
+
     return CheckResult(
-        name="Docker Sandbox",
-        passed=True,
-        message="Docker sandbox feature is available",
+        name="Sandbox Backend",
+        passed=False,
+        message="No usable sandbox backend is available",
+        fix_hint=(
+            f"Enable Docker sandbox with Docker Desktop {docker_module.MIN_DOCKER_VERSION}+ "
+            "or use a reachable OCI-capable Docker daemon"
+        ),
+        fix_url="https://docs.docker.com/desktop/features/sandbox/",
+        severity=SeverityLevel.ERROR,
     )
 
 

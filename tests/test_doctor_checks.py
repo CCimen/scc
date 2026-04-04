@@ -729,6 +729,90 @@ class TestCheckRuntimeBackend:
         assert "probe exploded" in result.message
 
 
+class TestCheckDockerSandbox:
+    """Tests for doctor-level sandbox backend reporting."""
+
+    @staticmethod
+    def _mock_adapters(runtime_info: object | None = None) -> object:
+        from unittest.mock import MagicMock
+
+        adapters = MagicMock()
+        if runtime_info is None:
+            adapters.runtime_probe = None
+        else:
+            adapters.runtime_probe.probe.return_value = runtime_info
+        return adapters
+
+    def test_returns_ok_when_docker_sandbox_is_available(self) -> None:
+        """Should pass when Docker Desktop sandbox support exists."""
+        with patch("scc_cli.docker.check_docker_sandbox", return_value=True):
+            result = doctor.check_docker_sandbox()
+
+        assert result.passed is True
+        assert result.name == "Sandbox Backend"
+        assert "Docker sandbox backend" in result.message
+
+    def test_returns_ok_when_oci_backend_is_selected(self) -> None:
+        """Should pass when OCI is the selected runtime backend."""
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Engine",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="28.5.2",
+            daemon_reachable=True,
+            sandbox_available=False,
+            preferred_backend="oci",
+        )
+
+        with (
+            patch("scc_cli.docker.check_docker_sandbox", return_value=False),
+            patch(
+                "scc_cli.bootstrap.get_default_adapters",
+                return_value=self._mock_adapters(mock_info),
+            ),
+        ):
+            result = doctor.check_docker_sandbox()
+
+        assert result.passed is True
+        assert result.severity == "info"
+        assert "OCI backend" in result.message
+
+    def test_returns_error_when_no_backend_is_available(self) -> None:
+        """Should fail when neither Docker sandbox nor OCI is usable."""
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=False,
+            supports_host_network=False,
+            version="28.5.2",
+            daemon_reachable=False,
+            sandbox_available=False,
+            preferred_backend=None,
+        )
+
+        with (
+            patch("scc_cli.docker.check_docker_sandbox", return_value=False),
+            patch(
+                "scc_cli.bootstrap.get_default_adapters",
+                return_value=self._mock_adapters(mock_info),
+            ),
+        ):
+            result = doctor.check_docker_sandbox()
+
+        assert result.passed is False
+        assert result.severity == "error"
+        assert "usable sandbox backend" in result.message
+
+
 class TestRunAllChecks:
     """Tests for run_all_checks() integration."""
 

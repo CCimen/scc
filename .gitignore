@@ -62,3 +62,13 @@ safetypluginclone/.claude/.state/
 
 # Local refactor checklist
 refactor-plan.md
+
+# GSD runtime/state noise (keep curated milestone/docs files committed)
+.gsd/STATE.md
+.gsd/activity/
+.gsd/completed-units.json
+.gsd/gsd.db
+.gsd/journal/
+.gsd/metrics.json
+.gsd/runtime/
+.gsd/worktrees/
