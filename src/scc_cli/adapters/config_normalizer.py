@@ -65,9 +65,10 @@ def _normalize_session_settings(raw: dict[str, Any] | None) -> SessionSettings:
     """Normalize session settings from raw dict."""
     if not raw:
         return SessionSettings()
+    auto_resume_raw = raw.get("auto_resume")
     return SessionSettings(
         timeout_hours=raw.get("timeout_hours"),
-        auto_resume=bool(raw.get("auto_resume", False)),
+        auto_resume=bool(auto_resume_raw) if auto_resume_raw is not None else None,
     )
 
 
@@ -100,6 +101,7 @@ def _normalize_team_config(name: str, raw: dict[str, Any]) -> NormalizedTeamConf
         marketplace=raw.get("marketplace"),
         additional_plugins=tuple(raw.get("additional_plugins", [])),
         additional_mcp_servers=mcp_servers,
+        network_policy=raw.get("network_policy"),
         session=_normalize_session_settings(raw.get("session")),
         delegation=delegation,
     )

@@ -11,6 +11,7 @@ from scc_cli.application.compute_effective_config import (
     validate_stdio_server,
 )
 from scc_cli.core.enums import MCPServerType, TargetType
+from scc_cli.ports.config_models import NormalizedOrgConfig
 
 
 @dataclass(frozen=True)
@@ -24,11 +25,13 @@ class ProfilePolicySkip:
 
 def filter_personal_profile_settings(
     personal_settings: dict[str, Any],
-    org_config: dict[str, Any],
+    org_config: dict[str, Any] | NormalizedOrgConfig,
 ) -> tuple[dict[str, Any], list[ProfilePolicySkip]]:
     """Filter personal profile settings against org security blocks."""
-    security = org_config.get("security", {})
-    blocked_plugins = security.get("blocked_plugins", [])
+    if isinstance(org_config, dict):
+        org_config = NormalizedOrgConfig.from_dict(org_config)
+
+    blocked_plugins = list(org_config.security.blocked_plugins)
     if not personal_settings or not blocked_plugins:
         return personal_settings, []
 
@@ -74,14 +77,16 @@ def filter_personal_profile_settings(
 
 def filter_personal_profile_mcp(
     personal_mcp: dict[str, Any],
-    org_config: dict[str, Any],
+    org_config: dict[str, Any] | NormalizedOrgConfig,
 ) -> tuple[dict[str, Any], list[ProfilePolicySkip]]:
     """Filter personal profile MCP servers against org security blocks."""
     if not personal_mcp:
         return personal_mcp, []
 
-    security = org_config.get("security", {})
-    blocked_mcp_servers = security.get("blocked_mcp_servers", [])
+    if isinstance(org_config, dict):
+        org_config = NormalizedOrgConfig.from_dict(org_config)
+
+    blocked_mcp_servers = list(org_config.security.blocked_mcp_servers)
     servers_raw = personal_mcp.get("mcpServers")
     if not isinstance(servers_raw, dict):
         return personal_mcp, []

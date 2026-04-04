@@ -42,7 +42,7 @@ class SessionSettings:
     """Session configuration settings."""
 
     timeout_hours: int | None = None
-    auto_resume: bool = False
+    auto_resume: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +78,7 @@ class NormalizedTeamConfig:
     marketplace: str | None = None
     additional_plugins: tuple[str, ...] = ()
     additional_mcp_servers: tuple[MCPServerConfig, ...] = ()
+    network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
     delegation: TeamDelegation = field(default_factory=TeamDelegation)
 

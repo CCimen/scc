@@ -85,7 +85,7 @@
   - Estimate: 1h
   - Files: src/scc_cli/ports/config_models.py, src/scc_cli/adapters/config_normalizer.py, tests/test_config_normalization.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_config_normalization.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T03: Convert compute_effective_config and helpers to NormalizedOrgConfig** — Convert the `compute_effective_config()` function and its 4 helper functions (`is_team_delegated_for_plugins`, `is_team_delegated_for_mcp`, `is_project_delegated`, `validate_stdio_server`) from accepting `org_config: dict[str, Any]` to `org_config: NormalizedOrgConfig`. This is the highest-ROI single conversion — it eliminates ~15 raw `.get()` dict navigations with typed field access across the most cross-cutting config function in the codebase.
+- [x] **T03: Converted compute_effective_config and 4 helpers from dict[str,Any] to NormalizedOrgConfig with backward-compatible union signatures, eliminating ~15 raw .get() navigations** — Convert the `compute_effective_config()` function and its 4 helper functions (`is_team_delegated_for_plugins`, `is_team_delegated_for_mcp`, `is_project_delegated`, `validate_stdio_server`) from accepting `org_config: dict[str, Any]` to `org_config: NormalizedOrgConfig`. This is the highest-ROI single conversion — it eliminates ~15 raw `.get()` dict navigations with typed field access across the most cross-cutting config function in the codebase.
 
 The 436-line characterization test file provides strong regression protection. Test fixtures that construct raw dicts should use `NormalizedOrgConfig.from_dict()` to minimize churn.
 
