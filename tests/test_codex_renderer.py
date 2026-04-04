@@ -31,9 +31,16 @@ from scc_cli.adapters.codex_renderer import (
     CODEX_CONFIG_DIR,
     CODEX_PLUGIN_DIR,
     CODEX_RULES_DIR,
+    INSTRUCTIONS_SUBDIR,
     SCC_MANAGED_DIR,
+    SCC_SECTION_END,
+    SCC_SECTION_START,
     SKILLS_DIR,
     RendererResult,
+    _classify_binding,
+    _render_mcp_binding,
+    _render_native_integration_binding,
+    _render_skill_binding,
     render_codex_artifacts,
 )
 from scc_cli.core.errors import MaterializationError, MergeConflictError
@@ -855,3 +862,766 @@ class TestRendererErrorHierarchy:
             conflict_detail="dup",
         )
         assert isinstance(err, RendererError)
+
+
+# ---------------------------------------------------------------------------
+# Internal helper: _render_skill_binding — direct coverage
+# ---------------------------------------------------------------------------
+
+
+class TestRenderSkillBindingDirect:
+    """Test _render_skill_binding directly to reach code paths unreachable
+    through the public API (the classifier routes bindings with no native_ref
+    to 'unknown', never calling _render_skill_binding)."""
+
+    def test_null_native_ref_returns_warning(self, workspace: Path) -> None:
+        """Lines 113-117: early return with warning when native_ref is None."""
+        binding = ProviderArtifactBinding(provider="codex", native_ref=None)
+        rendered, warnings = _render_skill_binding(binding, workspace, "b1")
+        assert rendered == []
+        assert len(warnings) == 1
+        assert "no native_ref" in warnings[0]
+        assert "b1" in warnings[0]
+
+    def test_empty_string_native_ref_returns_warning(self, workspace: Path) -> None:
+        """Empty string is also falsy — same early return."""
+        binding = ProviderArtifactBinding(provider="codex", native_ref="")
+        rendered, warnings = _render_skill_binding(binding, workspace, "b2")
+        assert rendered == []
+        assert len(warnings) == 1
+
+    def test_normal_ref_creates_file(self, workspace: Path) -> None:
+        """Sanity: valid ref through the helper produces a metadata file."""
+        binding = ProviderArtifactBinding(
+            provider="codex", native_ref="skills/test"
+        )
+        rendered, warnings = _render_skill_binding(binding, workspace, "b3")
+        assert len(rendered) == 1
+        assert rendered[0].name == "skill.json"
+        assert warnings == []
+
+    def test_path_sanitisation_dotdot(self, workspace: Path) -> None:
+        """Path traversal chars replaced in skill directory name."""
+        binding = ProviderArtifactBinding(
+            provider="codex", native_ref="../../etc/passwd"
+        )
+        rendered, warnings = _render_skill_binding(binding, workspace, "b4")
+        assert len(rendered) == 1
+        # '..' replaced with '_', '/' replaced with '_'
+        dir_name = rendered[0].parent.name
+        assert ".." not in dir_name
+        assert "/" not in dir_name
+
+    def test_path_sanitisation_backslash(self, workspace: Path) -> None:
+        """Backslash in native_ref is sanitised."""
+        binding = ProviderArtifactBinding(
+            provider="codex", native_ref="skills\\code-review"
+        )
+        rendered, warnings = _render_skill_binding(binding, workspace, "b5")
+        assert len(rendered) == 1
+        dir_name = rendered[0].parent.name
+        assert "\\" not in dir_name
+
+
+# ---------------------------------------------------------------------------
+# Internal helper: _render_mcp_binding — edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestRenderMCPBindingDirect:
+    """Test _render_mcp_binding directly for branch-closing coverage."""
+
+    def test_sse_with_url_no_headers(self, workspace: Path) -> None:
+        """SSE transport with url but zero header_* keys → no 'headers' key
+        in output.  Closes the partial branch at line 181→180."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="clean-mcp",
+            transport_type="sse",
+            native_config={"url": "http://localhost:9090"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b1")
+        assert warnings == []
+        server = config["clean-mcp"]
+        assert "headers" not in server
+        assert server["url"] == "http://localhost:9090"
+
+    def test_http_with_url_no_headers(self, workspace: Path) -> None:
+        """HTTP transport with url but zero header_* keys."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="http-mcp",
+            transport_type="http",
+            native_config={"url": "https://api.example.com"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b2")
+        assert warnings == []
+        assert "headers" not in config["http-mcp"]
+
+    def test_unknown_transport_type(self, workspace: Path) -> None:
+        """Transport type not sse/http/stdio → no command/url/args parsed.
+        Closes the partial branch at line 186→208."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="exotic-mcp",
+            transport_type="grpc",
+            native_config={"endpoint": "localhost:50051"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b3")
+        assert warnings == []
+        server = config["exotic-mcp"]
+        assert server["type"] == "grpc"
+        # No url/command/args parsing for unknown transport
+        assert "url" not in server
+        assert "command" not in server
+
+    def test_stdio_with_command_no_env_keys(self, workspace: Path) -> None:
+        """stdio transport with command but no env_* keys → no 'env' key.
+        Closes the partial branch at line 203→202."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="simple-stdio",
+            transport_type="stdio",
+            native_config={"command": "/usr/bin/server"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b4")
+        assert warnings == []
+        server = config["simple-stdio"]
+        assert server["command"] == "/usr/bin/server"
+        assert "env" not in server
+        assert "args" not in server
+
+    def test_stdio_with_non_string_args(self, workspace: Path) -> None:
+        """Non-string args value → goes through [str(args_raw)] branch."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="int-args-mcp",
+            transport_type="stdio",
+            native_config={"command": "/usr/bin/srv", "args": 42},  # type: ignore[dict-item]
+        )
+        config, warnings = _render_mcp_binding(binding, "b5")
+        server = config["int-args-mcp"]
+        assert server["args"] == ["42"]
+
+    def test_stdio_no_args_key(self, workspace: Path) -> None:
+        """No 'args' key in config → args_raw is None, no 'args' in output."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="no-args-mcp",
+            transport_type="stdio",
+            native_config={"command": "/bin/tool"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b6")
+        assert "args" not in config["no-args-mcp"]
+
+    def test_multiple_env_keys_collected(self, workspace: Path) -> None:
+        """Multiple env_* keys are all collected into env dict."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="multi-env",
+            transport_type="stdio",
+            native_config={
+                "command": "/bin/tool",
+                "env_FOO": "bar",
+                "env_BAZ": "qux",
+            },
+        )
+        config, warnings = _render_mcp_binding(binding, "b7")
+        server = config["multi-env"]
+        assert server["env"] == {"FOO": "bar", "BAZ": "qux"}
+
+    def test_sse_with_extra_non_header_keys_no_headers(self, workspace: Path) -> None:
+        """SSE with leftover config keys (not header_*) → loop body for
+        header collection executes but no keys match.
+        Closes partial branch 181→180."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="extra-mcp",
+            transport_type="sse",
+            native_config={"url": "http://localhost", "custom_key": "val"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b8")
+        server = config["extra-mcp"]
+        assert "headers" not in server
+        assert server["url"] == "http://localhost"
+
+    def test_stdio_with_extra_non_env_keys_no_env(self, workspace: Path) -> None:
+        """stdio with leftover config keys (not env_*) → loop body for
+        env collection executes but no keys match.
+        Closes partial branch 203→202."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="extra-stdio",
+            transport_type="stdio",
+            native_config={"command": "/bin/tool", "custom_key": "val"},
+        )
+        config, warnings = _render_mcp_binding(binding, "b9")
+        server = config["extra-stdio"]
+        assert "env" not in server
+        assert server["command"] == "/bin/tool"
+
+
+# ---------------------------------------------------------------------------
+# Internal helper: _classify_binding — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyBinding:
+    """Unit tests for _classify_binding to verify classification dispatch."""
+
+    def test_native_integration_keys_wins(self) -> None:
+        """Binding with integration keys in native_config → 'native'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="something",
+            transport_type="sse",
+            native_config={"plugin_bundle": "./plugin"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_transport_type_without_integration_keys(self) -> None:
+        """Binding with transport_type but no integration keys → 'mcp'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="server",
+            transport_type="stdio",
+            native_config={"command": "/bin/x"},
+        )
+        assert _classify_binding(binding) == "mcp"
+
+    def test_native_ref_only(self) -> None:
+        """Binding with native_ref only → 'skill'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_ref="skills/my-skill",
+        )
+        assert _classify_binding(binding) == "skill"
+
+    def test_empty_binding(self) -> None:
+        """Binding with nothing → 'unknown'."""
+        binding = ProviderArtifactBinding(provider="codex")
+        assert _classify_binding(binding) == "unknown"
+
+    def test_rules_key_classifies_as_native(self) -> None:
+        """The 'rules' key in native_config → 'native'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_config={"rules": "./rules/safety.rules"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_hooks_key_classifies_as_native(self) -> None:
+        """The 'hooks' key → 'native'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_config={"hooks": "./hooks.json"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_instructions_key_classifies_as_native(self) -> None:
+        """The 'instructions' key → 'native'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_config={"instructions": "./AGENTS.md"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_unknown_config_keys_with_transport_still_mcp(self) -> None:
+        """Non-integration config keys + transport_type → 'mcp', not 'native'."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            transport_type="sse",
+            native_config={"url": "http://localhost:8080", "custom": "val"},
+        )
+        assert _classify_binding(binding) == "mcp"
+
+    def test_integration_key_trumps_transport(self) -> None:
+        """Integration key present + transport_type set → 'native' wins."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            transport_type="sse",
+            native_config={"hooks": "./hooks.json", "url": "http://localhost"},
+        )
+        assert _classify_binding(binding) == "native"
+
+
+# ---------------------------------------------------------------------------
+# Asymmetry: Claude-only native_integration → skipped for Codex
+# ---------------------------------------------------------------------------
+
+
+class TestProviderAsymmetry:
+    """Plan item 7: bundle with Claude-only native_integration → skipped
+    for Codex with clear reason."""
+
+    def test_claude_only_binding_skipped_in_codex_plan(self, workspace: Path) -> None:
+        """A binding with provider='claude' in a Codex plan is skipped."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"plugin_bundle": "./claude/plugin"},
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+        assert len(result.warnings) == 1
+        assert "claude" in result.warnings[0]
+        assert "skipping" in result.warnings[0].lower()
+        assert result.rendered_paths == ()
+
+    def test_mixed_claude_and_codex_bindings(self, workspace: Path) -> None:
+        """Claude bindings are skipped; Codex bindings are rendered."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"plugin_bundle": "./claude/plugin"},
+                ),
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="skills/code-review",
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+        # Claude binding skipped with warning
+        assert any("claude" in w for w in result.warnings)
+        # Codex binding rendered
+        assert len(result.rendered_paths) == 1
+        assert "skill.json" in str(result.rendered_paths[0])
+
+    def test_arbitrary_provider_binding_skipped(self, workspace: Path) -> None:
+        """Any non-codex provider binding is skipped, not just 'claude'."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="gemini",
+                    native_ref="skills/gemini-skill",
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+        assert len(result.warnings) == 1
+        assert "gemini" in result.warnings[0]
+
+    def test_codex_plan_wrong_provider_skips_all(self, workspace: Path) -> None:
+        """Plan with provider='claude' → everything skipped, no rendering."""
+        plan = _plan(
+            provider="claude",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="skills/foo",
+                ),
+            ),
+            effective_artifacts=("foo-skill",),
+        )
+        result = render_codex_artifacts(plan, workspace)
+        assert "nothing rendered" in result.warnings[0]
+        assert result.skipped_artifacts == ("foo-skill",)
+        assert result.rendered_paths == ()
+
+
+# ---------------------------------------------------------------------------
+# AGENTS.md / instructions rendering (plan item 6)
+# ---------------------------------------------------------------------------
+
+
+class TestAGENTSMdRendering:
+    """Plan item 6: native_integration with Codex instructions binding
+    → AGENTS.md section (via .codex/.scc-managed/instructions/)."""
+
+    def test_instructions_creates_metadata_under_scc_managed(
+        self, workspace: Path
+    ) -> None:
+        """Instructions binding writes to .codex/.scc-managed/instructions/."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"instructions": "team-guidelines/AGENTS.md"},
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+
+        instr_path = workspace / SCC_MANAGED_DIR / INSTRUCTIONS_SUBDIR / "AGENTS.json"
+        assert instr_path.exists()
+        content = json.loads(instr_path.read_text())
+        assert content["source"] == "team-guidelines/AGENTS.md"
+        assert content["provider"] == "codex"
+        assert content["bundle_id"] == "test-bundle"
+        assert content["managed_by"] == "scc"
+        assert instr_path in result.rendered_paths
+
+    def test_instructions_filename_derived_from_stem(self, workspace: Path) -> None:
+        """The output filename stem matches the source path's stem."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"instructions": "docs/coding-standards.md"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        expected = workspace / SCC_MANAGED_DIR / INSTRUCTIONS_SUBDIR / "coding-standards.json"
+        assert expected.exists()
+
+    def test_multiple_instructions_bindings(self, workspace: Path) -> None:
+        """Two instruction bindings produce two metadata files."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"instructions": "docs/AGENTS.md"},
+                ),
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"instructions": "docs/STYLE.md"},
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+        instr_dir = workspace / SCC_MANAGED_DIR / INSTRUCTIONS_SUBDIR
+        files = sorted(f.name for f in instr_dir.iterdir())
+        assert "AGENTS.json" in files
+        assert "STYLE.json" in files
+        assert len(result.rendered_paths) == 2
+
+
+# ---------------------------------------------------------------------------
+# Merge strategy (plan item 8): SCC-managed sections marked; non-SCC preserved
+# ---------------------------------------------------------------------------
+
+
+class TestMergeStrategy:
+    """Plan item 8: SCC-managed sections are clearly marked and non-SCC
+    content is preserved during merge."""
+
+    def test_hooks_scc_managed_key_isolates_scc_content(
+        self, workspace: Path
+    ) -> None:
+        """SCC content goes under 'scc_managed' key, not at top level."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"hooks": "./hooks-src.json"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        hooks = json.loads(
+            (workspace / CODEX_CONFIG_DIR / "hooks.json").read_text()
+        )
+        # SCC content is inside 'scc_managed', not scattered at root
+        assert "scc_managed" in hooks
+        # Only 'scc_managed' key exists (nothing else at top level)
+        assert set(hooks.keys()) == {"scc_managed"}
+
+    def test_hooks_multi_bundle_merge(self, workspace: Path) -> None:
+        """Two bundles rendering hooks → both appear under scc_managed."""
+        plan1 = _plan(
+            bundle_id="bundle-a",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"hooks": "./hooks-a.json"},
+                ),
+            ),
+        )
+        plan2 = _plan(
+            bundle_id="bundle-b",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"hooks": "./hooks-b.json"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan1, workspace)
+        render_codex_artifacts(plan2, workspace)
+
+        hooks = json.loads(
+            (workspace / CODEX_CONFIG_DIR / "hooks.json").read_text()
+        )
+        assert "bundle-a" in hooks["scc_managed"]
+        assert "bundle-b" in hooks["scc_managed"]
+        assert hooks["scc_managed"]["bundle-a"]["source"] == "./hooks-a.json"
+        assert hooks["scc_managed"]["bundle-b"]["source"] == "./hooks-b.json"
+
+    def test_hooks_preserves_user_content_after_multi_bundle(
+        self, workspace: Path
+    ) -> None:
+        """User content persists through multiple SCC-managed writes."""
+        codex_dir = workspace / CODEX_CONFIG_DIR
+        codex_dir.mkdir(parents=True, exist_ok=True)
+        hooks_path = codex_dir / "hooks.json"
+        hooks_path.write_text(json.dumps({"my_hook": {"event": "save"}}) + "\n")
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"hooks": "./hooks-x.json"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        hooks = json.loads(hooks_path.read_text())
+        assert hooks["my_hook"]["event"] == "save"
+        assert "scc_managed" in hooks
+
+    def test_plugin_manifest_has_managed_by_scc(self, workspace: Path) -> None:
+        """Plugin manifest includes managed_by=scc for identification."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"plugin_bundle": "./my-plugin"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        plugin = json.loads(
+            (workspace / CODEX_PLUGIN_DIR / "plugin.json").read_text()
+        )
+        assert plugin["managed_by"] == "scc"
+
+    def test_rules_metadata_has_managed_by_scc(self, workspace: Path) -> None:
+        """Rules metadata includes managed_by=scc for identification."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"rules": "./rules/safety.rules"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        rules = json.loads(
+            (workspace / CODEX_RULES_DIR / "safety.rules.json").read_text()
+        )
+        assert rules["managed_by"] == "scc"
+
+    def test_instructions_metadata_has_managed_by_scc(self, workspace: Path) -> None:
+        """Instructions metadata includes managed_by=scc for identification."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"instructions": "./AGENTS.md"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        instr = json.loads(
+            (workspace / SCC_MANAGED_DIR / INSTRUCTIONS_SUBDIR / "AGENTS.json").read_text()
+        )
+        assert instr["managed_by"] == "scc"
+
+    def test_skill_metadata_has_managed_by_scc(self, workspace: Path) -> None:
+        """Skill metadata includes managed_by=scc for identification."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="skills/test",
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+
+        skill = json.loads(
+            (workspace / SKILLS_DIR / "skills_test" / "skill.json").read_text()
+        )
+        assert skill["managed_by"] == "scc"
+
+
+# ---------------------------------------------------------------------------
+# SCC section markers are exported (for callers doing AGENTS.md merge)
+# ---------------------------------------------------------------------------
+
+
+class TestSCCSectionMarkers:
+    """Verify that SCC section markers are available as module constants."""
+
+    def test_start_marker_exists(self) -> None:
+        assert "SCC-MANAGED START" in SCC_SECTION_START
+
+    def test_end_marker_exists(self) -> None:
+        assert "SCC-MANAGED END" in SCC_SECTION_END
+
+    def test_markers_are_comment_lines(self) -> None:
+        assert SCC_SECTION_START.startswith("#")
+        assert SCC_SECTION_END.startswith("#")
+
+
+# ---------------------------------------------------------------------------
+# _render_native_integration_binding — direct edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestRenderNativeIntegrationDirect:
+    """Direct tests for _render_native_integration_binding edge cases."""
+
+    def test_empty_native_config_renders_nothing(self, workspace: Path) -> None:
+        """Binding with empty native_config but classified as native via
+        some external override → renders nothing, no crash."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_config={},
+        )
+        rendered, warnings = _render_native_integration_binding(
+            binding, workspace, "empty-bundle"
+        )
+        assert rendered == []
+        assert warnings == []
+
+    def test_unknown_config_keys_ignored(self, workspace: Path) -> None:
+        """Config keys outside _INTEGRATION_KEYS are silently ignored."""
+        binding = ProviderArtifactBinding(
+            provider="codex",
+            native_config={"unknown_key": "some-value", "another": "val"},
+        )
+        rendered, warnings = _render_native_integration_binding(
+            binding, workspace, "unknown-bundle"
+        )
+        assert rendered == []
+        assert warnings == []
+
+    def test_hooks_bundle_id_scoping(self, workspace: Path) -> None:
+        """Each bundle gets its own key under scc_managed in hooks.json."""
+        binding1 = ProviderArtifactBinding(
+            provider="codex",
+            native_config={"hooks": "./a.json"},
+        )
+        binding2 = ProviderArtifactBinding(
+            provider="codex",
+            native_config={"hooks": "./b.json"},
+        )
+        _render_native_integration_binding(binding1, workspace, "alpha")
+        _render_native_integration_binding(binding2, workspace, "beta")
+
+        hooks = json.loads(
+            (workspace / CODEX_CONFIG_DIR / "hooks.json").read_text()
+        )
+        assert hooks["scc_managed"]["alpha"]["source"] == "./a.json"
+        assert hooks["scc_managed"]["beta"]["source"] == "./b.json"
+
+
+# ---------------------------------------------------------------------------
+# Idempotent byte-level comparison
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotentByteLevel:
+    """Stronger idempotency check: byte-level file content comparison."""
+
+    def test_skill_file_byte_identical_on_rerender(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="skills/review",
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+        first_bytes = (
+            workspace / SKILLS_DIR / "skills_review" / "skill.json"
+        ).read_bytes()
+
+        render_codex_artifacts(plan, workspace)
+        second_bytes = (
+            workspace / SKILLS_DIR / "skills_review" / "skill.json"
+        ).read_bytes()
+
+        assert first_bytes == second_bytes
+
+    def test_plugin_file_byte_identical_on_rerender(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"plugin_bundle": "./plugin-src"},
+                ),
+            ),
+        )
+        render_codex_artifacts(plan, workspace)
+        first_bytes = (workspace / CODEX_PLUGIN_DIR / "plugin.json").read_bytes()
+
+        render_codex_artifacts(plan, workspace)
+        second_bytes = (workspace / CODEX_PLUGIN_DIR / "plugin.json").read_bytes()
+
+        assert first_bytes == second_bytes
+
+    def test_mcp_fragment_identical_on_rerender(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="mcp-x",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:9090"},
+                ),
+            ),
+        )
+        r1 = render_codex_artifacts(plan, workspace)
+        r2 = render_codex_artifacts(plan, workspace)
+        assert json.dumps(r1.mcp_fragment, sort_keys=True) == json.dumps(
+            r2.mcp_fragment, sort_keys=True
+        )
+
+
+# ---------------------------------------------------------------------------
+# MCP audit file: bundle_id sanitisation
+# ---------------------------------------------------------------------------
+
+
+class TestMCPAuditBundleIdSanitisation:
+    """Audit file names sanitise slashes in bundle_id."""
+
+    def test_slash_in_bundle_id_sanitised(self, workspace: Path) -> None:
+        plan = _plan(
+            bundle_id="org/my-bundle",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="mcp-srv",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:8080"},
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+
+        audit_path = workspace / CODEX_CONFIG_DIR / ".scc-mcp-org_my-bundle.json"
+        assert audit_path.exists()
+        assert audit_path in result.rendered_paths
+
+    def test_backslash_in_bundle_id_sanitised(self, workspace: Path) -> None:
+        plan = _plan(
+            bundle_id="org\\my-bundle",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="mcp-srv",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:8080"},
+                ),
+            ),
+        )
+        result = render_codex_artifacts(plan, workspace)
+
+        audit_path = workspace / CODEX_CONFIG_DIR / ".scc-mcp-org_my-bundle.json"
+        assert audit_path.exists()
+        assert audit_path in result.rendered_paths

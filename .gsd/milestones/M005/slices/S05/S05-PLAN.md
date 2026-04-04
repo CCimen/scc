@@ -30,7 +30,7 @@
   - Estimate: 1h30m
   - Files: tests/test_claude_renderer.py
   - Verify: uv run pytest tests/test_claude_renderer.py -v && uv run pytest --cov=scc_cli.adapters.claude_renderer --cov-report=term-missing --cov-branch
-- [ ] **T03: Characterization tests for Codex renderer** — Write characterization tests for src/scc_cli/adapters/codex_renderer.py:
+- [x] **T03: Added 48 characterization tests for Codex renderer achieving 100% statement and branch coverage on codex_renderer.py** — Write characterization tests for src/scc_cli/adapters/codex_renderer.py:
 1. Skill rendering: skill artifact → .agents/skills/ placement
 2. MCP rendering: MCP server artifact → .codex/config.toml or .mcp.json entry
 3. Plugin bundle rendering: native_integration with Codex plugin binding → .codex-plugin/plugin.json
