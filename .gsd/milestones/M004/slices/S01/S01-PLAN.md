@@ -93,7 +93,7 @@ Lift the git safety analysis logic from the plugin into core, adapting it to ret
   - Estimate: 2h
   - Files: src/scc_cli/core/git_safety_rules.py, src/scc_cli/core/network_tool_rules.py, tests/test_git_safety_rules.py, tests/test_network_tool_rules.py
   - Verify: uv run mypy src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py && uv run ruff check src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py && uv run pytest tests/test_git_safety_rules.py tests/test_network_tool_rules.py -v
-- [ ] **T03: DefaultSafetyEngine, bootstrap wiring, FakeSafetyEngine, and boundary guardrails** — ## Description
+- [x] **T03: Implemented DefaultSafetyEngine orchestrating shell tokenization + git rules + network tool rules with fail-closed policy semantics, wired into bootstrap, with FakeSafetyEngine and boundary guardrail tests** — ## Description
 
 Implement the `DefaultSafetyEngine` that orchestrates shell tokenization + git rules + network tool rules into one evaluation call. Wire it into `DefaultAdapters` via bootstrap. Add `FakeSafetyEngine` for downstream tests. Add a boundary guardrail test to prevent plugin imports from leaking into core safety modules.
 

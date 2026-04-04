@@ -25,6 +25,7 @@ from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.session_store_json import JsonSessionStore
 from scc_cli.adapters.system_clock import SystemClock
 from scc_cli.adapters.zip_archive_writer import ZipArchiveWriter
+from scc_cli.core.safety_engine import DefaultSafetyEngine
 from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
 from scc_cli.ports.archive_writer import ArchiveWriter
@@ -38,6 +39,7 @@ from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.personal_profile_service import PersonalProfileService
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.runtime_probe import RuntimeProbe
+from scc_cli.ports.safety_engine import SafetyEngine
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 from scc_cli.ports.session_store import SessionStore
 
@@ -61,6 +63,7 @@ class DefaultAdapters:
     audit_event_sink: AuditEventSink | None = None
     codex_agent_provider: AgentProvider | None = None
     runtime_probe: RuntimeProbe | None = None
+    safety_engine: SafetyEngine | None = None
 
 
 @lru_cache(maxsize=1)
@@ -93,6 +96,7 @@ def get_default_adapters() -> DefaultAdapters:
         audit_event_sink=LocalAuditEventSink(),
         codex_agent_provider=CodexAgentProvider(),
         runtime_probe=probe,
+        safety_engine=DefaultSafetyEngine(),
     )
 
 

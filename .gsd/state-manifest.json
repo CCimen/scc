@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T11:40:36.563Z",
+  "exported_at": "2026-04-04T11:46:13.513Z",
   "milestones": [
     {
       "id": "M001",
@@ -2452,19 +2452,29 @@
       "milestone_id": "M004",
       "slice_id": "S01",
       "id": "T03",
-      "title": "DefaultSafetyEngine, bootstrap wiring, FakeSafetyEngine, and boundary guardrails",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Implemented DefaultSafetyEngine orchestrating shell tokenization + git rules + network tool rules with fail-closed policy semantics, wired into bootstrap, with FakeSafetyEngine and boundary guardrail tests",
+      "status": "complete",
+      "one_liner": "Implemented DefaultSafetyEngine orchestrating shell tokenization + git rules + network tool rules with fail-closed policy semantics, wired into bootstrap, with FakeSafetyEngine and boundary guardrail tests",
+      "narrative": "Created DefaultSafetyEngine implementing the SafetyEngine protocol. The engine tokenizes commands via extract_all_commands, routes git-prefixed tokens through analyze_git and all tokens through analyze_network_tool, then applies policy overrides (rule disabling via policy.rules, warn mode with WARNING prefix). Missing policy keys default to True (fail-closed). Wired into DefaultAdapters in bootstrap. Created FakeSafetyEngine with configurable verdict and call recording. Wrote 21 integration tests and 1 boundary guardrail test. Fixed pre-existing ruff import sorting issue from T02.",
+      "verification_result": "All verification gates pass: mypy (254 files, 0 issues), ruff check (all passed), pytest targeted (22 passed), pytest full suite (3630 passed, 23 skipped, 4 xfailed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T11:46:13.477Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed pre-existing ruff I001 import sorting issue in tests/test_git_safety_rules.py from T02.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/safety_engine.py",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/fake_safety_engine.py",
+        "tests/fakes/__init__.py",
+        "tests/test_safety_engine.py",
+        "tests/test_safety_engine_boundary.py"
+      ],
+      "key_decisions": [
+        "Used _MATCHED_RULE_TO_POLICY_KEY dict for matched_rule to policy key mapping, fail-closed on missing keys",
+        "safety_engine field is Optional on DefaultAdapters to avoid breaking existing consumers"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S01\nmilestone: M004\nkey_files:\n  - src/scc_cli/core/safety_engine.py\n  - src/scc_cli/bootstrap.py\n  - tests/fakes/fake_safety_engine.py\n  - tests/fakes/__init__.py\n  - tests/test_safety_engine.py\n  - tests/test_safety_engine_boundary.py\nkey_decisions:\n  - Used _MATCHED_RULE_TO_POLICY_KEY dict for matched_rule to policy key mapping, fail-closed on missing keys\n  - safety_engine field is Optional on DefaultAdapters to avoid breaking existing consumers\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T11:46:13.476Z\nblocker_discovered: false\n---\n\n# T03: Implemented DefaultSafetyEngine orchestrating shell tokenization + git rules + network tool rules with fail-closed policy semantics, wired into bootstrap, with FakeSafetyEngine and boundary guardrail tests\n\n**Implemented DefaultSafetyEngine orchestrating shell tokenization + git rules + network tool rules with fail-closed policy semantics, wired into bootstrap, with FakeSafetyEngine and boundary guardrail tests**\n\n## What Happened\n\nCreated DefaultSafetyEngine implementing the SafetyEngine protocol. The engine tokenizes commands via extract_all_commands, routes git-prefixed tokens through analyze_git and all tokens through analyze_network_tool, then applies policy overrides (rule disabling via policy.rules, warn mode with WARNING prefix). Missing policy keys default to True (fail-closed). Wired into DefaultAdapters in bootstrap. Created FakeSafetyEngine with configurable verdict and call recording. Wrote 21 integration tests and 1 boundary guardrail test. Fixed pre-existing ruff import sorting issue from T02.\n\n## Verification\n\nAll verification gates pass: mypy (254 files, 0 issues), ruff check (all passed), pytest targeted (22 passed), pytest full suite (3630 passed, 23 skipped, 4 xfailed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 6100ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 6100ms |\n| 3 | `uv run pytest tests/test_safety_engine.py tests/test_safety_engine_boundary.py -v` | 0 | ✅ pass | 700ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 39100ms |\n\n## Deviations\n\nFixed pre-existing ruff I001 import sorting issue in tests/test_git_safety_rules.py from T02.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/safety_engine.py`\n- `src/scc_cli/bootstrap.py`\n- `tests/fakes/fake_safety_engine.py`\n- `tests/fakes/__init__.py`\n- `tests/test_safety_engine.py`\n- `tests/test_safety_engine_boundary.py`\n",
       "description": "## Description\n\nImplement the `DefaultSafetyEngine` that orchestrates shell tokenization + git rules + network tool rules into one evaluation call. Wire it into `DefaultAdapters` via bootstrap. Add `FakeSafetyEngine` for downstream tests. Add a boundary guardrail test to prevent plugin imports from leaking into core safety modules.\n\n## Steps\n\n1. Create `src/scc_cli/core/safety_engine.py` with `DefaultSafetyEngine` class implementing the `SafetyEngine` protocol from `ports/safety_engine.py`. Implementation:\n   - `evaluate(self, command: str, policy: SafetyPolicy) -> SafetyVerdict` method\n   - If `command` is empty/whitespace, return `SafetyVerdict(allowed=True, reason=\"Empty command\")`\n   - If `policy.action == \"allow\"`, return `SafetyVerdict(allowed=True, reason=\"Policy action is allow\")`\n   - Use `extract_all_commands(command)` from `core.shell_tokenizer` to get all token lists\n   - For each token list, check if first token (path-stripped) is `git` → call `analyze_git(tokens)` from `core.git_safety_rules`\n   - For each token list, check against `analyze_network_tool(tokens)` from `core.network_tool_rules`\n   - If any rule returns a verdict with `allowed=False`, check policy rule enablement: extract the rule name from `matched_rule` (e.g. `git.force_push` maps to policy key `block_force_push`), check `policy.rules.get(rule_key, True)` — if disabled, skip. If enabled (or key not in policy.rules, defaulting True for fail-closed), return the block verdict.\n   - If `policy.action == \"warn\"`, prefix reason with `\"WARNING: \"` and set `allowed=True`\n   - If no rules matched, return `SafetyVerdict(allowed=True, reason=\"No safety rules matched\")`\n   - Add a helper function `_matched_rule_to_policy_key(matched_rule: str) -> str | None` that maps `git.force_push` → `block_force_push`, `git.reset_hard` → `block_reset_hard`, etc. Use the same mapping as the plugin's `SUBCOMMAND_TO_RULE` dict from `hook.py` but keyed by matched_rule instead of subcommand.\n\n2. Wire into bootstrap: Add `safety_engine` field to `DefaultAdapters` dataclass in `src/scc_cli/bootstrap.py`. Type: `SafetyEngine | None = None` (optional initially, like `audit_event_sink`). In `get_default_adapters()`, instantiate `DefaultSafetyEngine()` and pass it. Add imports for `SafetyEngine` from ports and `DefaultSafetyEngine` from core.\n\n3. Create `tests/fakes/fake_safety_engine.py` following the `FakeAgentProvider` pattern:\n   - `FakeSafetyEngine` with a configurable `verdict` field (default: allow-all)\n   - `evaluate()` returns the configured verdict or records calls for assertion\n   - Store calls in a `calls: list[tuple[str, SafetyPolicy]]` for downstream tests to inspect\n\n4. Update `tests/fakes/__init__.py`:\n   - Import and use `FakeSafetyEngine`\n   - Add `safety_engine=FakeSafetyEngine()` to `build_fake_adapters()`\n\n5. Create `tests/test_safety_engine.py` with engine integration tests:\n   - Test empty command returns allowed\n   - Test `policy.action == \"allow\"` bypasses all rules\n   - Test destructive git command (e.g. `git push --force`) with default block policy returns block verdict\n   - Test destructive git command with rule disabled in policy returns allowed\n   - Test warn mode returns allowed=True with WARNING prefix in reason\n   - Test network tool (e.g. `curl http://example.com`) returns block verdict\n   - Test bash -c nesting: `bash -c 'git push --force'` is detected\n   - Test shell operators: `echo foo && git push --force` is detected\n   - Test safe git command (e.g. `git push`) returns allowed\n   - Test non-git, non-network command returns allowed\n   - Test protocol conformance: `DefaultSafetyEngine` satisfies `SafetyEngine` protocol\n\n6. Add boundary guardrail to `tests/test_safety_engine_boundary.py`:\n   - AST-scan `src/scc_cli/core/safety_engine.py`, `src/scc_cli/core/shell_tokenizer.py`, `src/scc_cli/core/git_safety_rules.py`, `src/scc_cli/core/network_tool_rules.py`\n   - Assert no imports from `scc_safety_impl`, `sandboxed_code_plugins`, or any provider-specific module (`scc_cli.adapters.claude*`, `scc_cli.adapters.codex*`)\n   - Follow the existing pattern in `tests/test_architecture_invariants.py`\n\n7. Run full verification: `uv run mypy src/scc_cli`, `uv run ruff check`, `uv run pytest --rootdir \"$PWD\" -q`\n\n## Failure Modes\n\n| Dependency | On error | On timeout | On malformed response |\n|------------|----------|-----------|----------------------|\n| shell_tokenizer.tokenize | Returns empty list → command passes through (safe: no tokens = no match) | N/A (pure function) | N/A |\n| git_safety_rules.analyze_git | Returns None → command allowed (correct: no match) | N/A | N/A |\n| policy.rules dict | Missing keys default to True (fail-closed: rule enabled) | N/A | N/A |\n\n## Must-Haves\n\n- [ ] `DefaultSafetyEngine` implements `SafetyEngine` protocol with fail-closed semantics\n- [ ] Bootstrap wires `safety_engine` into `DefaultAdapters`\n- [ ] `FakeSafetyEngine` available in `tests/fakes/`\n- [ ] `build_fake_adapters()` includes `safety_engine`\n- [ ] Engine tests cover: block, allow, warn, disabled rule, nested commands, protocol conformance\n- [ ] Boundary guardrail prevents plugin/provider imports in core safety modules\n- [ ] `uv run mypy src/scc_cli`, `uv run ruff check`, `uv run pytest --rootdir \"$PWD\" -q` all pass\n\n## Verification\n\n- `uv run mypy src/scc_cli`\n- `uv run ruff check`\n- `uv run pytest tests/test_safety_engine.py tests/test_safety_engine_boundary.py -v`\n- `uv run pytest --rootdir \"$PWD\" -q` (full suite)",
       "estimate": "2h",
       "files": [
@@ -4431,6 +4441,50 @@
       "verdict": "✅ pass",
       "duration_ms": 800,
       "created_at": "2026-04-04T11:40:36.513Z"
+    },
+    {
+      "id": 73,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 6100,
+      "created_at": "2026-04-04T11:46:13.477Z"
+    },
+    {
+      "id": 74,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 6100,
+      "created_at": "2026-04-04T11:46:13.477Z"
+    },
+    {
+      "id": 75,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_safety_engine.py tests/test_safety_engine_boundary.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 700,
+      "created_at": "2026-04-04T11:46:13.477Z"
+    },
+    {
+      "id": 76,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 39100,
+      "created_at": "2026-04-04T11:46:13.477Z"
     }
   ]
 }

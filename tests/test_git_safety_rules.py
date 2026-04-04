@@ -21,7 +21,6 @@ from scc_cli.core.git_safety_rules import (
     normalize_git_tokens,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper function tests (unchanged types — bool / tuple)
 # ─────────────────────────────────────────────────────────────────────────────
