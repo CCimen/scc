@@ -31,7 +31,7 @@ This is a truthfulness pass — add only language that matches real implementati
   - Estimate: 1h30m
   - Files: README.md, src/scc_cli/schemas/org-v1.schema.json, tests/test_docs_truthfulness.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_docs_truthfulness.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T03: Re-enable file-size/complexity guardrails and remove transitional ruff ignores** — 1. Review tests/test_file_sizes.py and tests/test_function_sizes.py — remove all xfail markers, fix any remaining violations
+- [x] **T03: Removed xfail from function-size guardrail, extracted 4 oversized functions below 300-line limit, confirmed all ruff ignores are permanent** — 1. Review tests/test_file_sizes.py and tests/test_function_sizes.py — remove all xfail markers, fix any remaining violations
 2. Review pyproject.toml [tool.ruff.lint.per-file-ignores] — remove transitional ignores, document permanent ones
 3. Re-run guardrails to confirm they pass
 4. Update any modules still above 800 lines if any remain from S02 decomposition drift

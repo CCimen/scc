@@ -317,6 +317,66 @@ def _run_interactive_mode() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Factory Reset
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _execute_factory_reset(
+    *,
+    plan: bool,
+    yes: bool,
+    force: bool,
+    non_interactive: bool,
+    dry_run: bool,
+    no_backup: bool,
+    continue_on_error: bool,
+    json_output: bool,
+) -> None:
+    """Execute a factory reset (--all flag handler)."""
+    if plan:
+        console.print("\n[bold cyan]Factory Reset Preview[/bold cyan]\n")
+        paths = get_paths()
+        total_size = 0
+        for path in paths:
+            if path.exists:
+                console.print(f"  • {path.name}: {path.path} ({path.size_human})")
+                total_size += path.size_bytes
+        console.print(f"\n  Total: {total_size / 1024:.1f} KB")
+        console.print("\n  [dim]This would remove all SCC data.[/dim]")
+        return
+
+    if not _confirm_factory_reset(yes, force, non_interactive):
+        raise typer.Exit(EXIT_CANCELLED)
+
+    try:
+        with MaintenanceLock():
+            context = _build_context(
+                dry_run=dry_run,
+                create_backup=not no_backup,
+                continue_on_error=continue_on_error,
+            )
+            factory_results = run_task("factory_reset", context)
+            if not isinstance(factory_results, list):
+                factory_results = [factory_results]
+
+            if json_output:
+                _print_json_results(factory_results)
+            else:
+                console.print()
+                for result in factory_results:
+                    _print_result(result)
+                console.print()
+                total_bytes = sum(r.bytes_freed for r in factory_results)
+                console.print(f"[bold]Total freed: {total_bytes / 1024:.1f} KB[/bold]")
+
+            if not all(r.success for r in factory_results):
+                raise typer.Exit(1)
+
+    except MaintenanceLockError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
 # Main Command
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -465,50 +525,16 @@ def reset_cmd(
 
     # --all overrides individual flags
     if all_flag:
-        if plan:
-            # Show factory reset preview
-            console.print("\n[bold cyan]Factory Reset Preview[/bold cyan]\n")
-            paths = get_paths()
-            total_size = 0
-            for path in paths:
-                if path.exists:
-                    console.print(f"  • {path.name}: {path.path} ({path.size_human})")
-                    total_size += path.size_bytes
-            console.print(f"\n  Total: {total_size / 1024:.1f} KB")
-            console.print("\n  [dim]This would remove all SCC data.[/dim]")
-            return
-
-        if not _confirm_factory_reset(yes, force, non_interactive):
-            raise typer.Exit(EXIT_CANCELLED)
-
-        try:
-            with MaintenanceLock():
-                context = _build_context(
-                    dry_run=dry_run,
-                    create_backup=not no_backup,
-                    continue_on_error=continue_on_error,
-                )
-                factory_results = run_task("factory_reset", context)
-                if not isinstance(factory_results, list):
-                    factory_results = [factory_results]
-
-                if json_output:
-                    _print_json_results(factory_results)
-                else:
-                    console.print()
-                    for result in factory_results:
-                        _print_result(result)
-                    console.print()
-                    total_bytes = sum(r.bytes_freed for r in factory_results)
-                    console.print(f"[bold]Total freed: {total_bytes / 1024:.1f} KB[/bold]")
-
-                if not all(r.success for r in factory_results):
-                    raise typer.Exit(1)
-
-        except MaintenanceLockError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(1)
-
+        _execute_factory_reset(
+            plan=plan,
+            yes=yes,
+            force=force,
+            non_interactive=non_interactive,
+            dry_run=dry_run,
+            no_backup=no_backup,
+            continue_on_error=continue_on_error,
+            json_output=json_output,
+        )
         return
 
     # Build list of operations to perform

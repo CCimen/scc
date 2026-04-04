@@ -81,6 +81,254 @@ from .render import show_launch_panel
 from .team_settings import _configure_team_settings
 from .workspace import prepare_workspace, validate_and_resolve_workspace
 
+_PickerContinue = tuple[StartWizardState, bool]
+_PickerExit = tuple[str | _BackSentinel | None, str | None, str | None, str | None]
+
+
+def _handle_workspace_source(
+    *,
+    state: StartWizardState,
+    cfg: dict[str, Any],
+    active_team_context: str,
+    standalone_mode: bool,
+    allow_back: bool,
+    effective_team: str | None,
+    team_override: str | None,
+    active_team_label: str,
+    current_branch: str | None,
+    show_all_teams: bool,
+) -> _PickerContinue | _PickerExit:
+    """Handle workspace source selection step."""
+    team_context_label = active_team_context
+    if state.context.team:
+        team_context_label = f"Team: {state.context.team}"
+
+    team_config = (
+        cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
+    )
+    team_repos = team_config.get("repositories", [])
+
+    cwd = Path.cwd()
+    cwd_context: CwdContext | None = None
+    if not is_suspicious_directory(cwd):
+        cwd_context = CwdContext(
+            path=str(cwd),
+            name=cwd.name or str(cwd),
+            is_git=git.is_git_repo(cwd),
+            has_project_markers=has_project_markers(cwd),
+        )
+
+    source_view = WorkspaceSourceViewModel(
+        title="Where is your project?",
+        subtitle="Pick a project source (press 't' to switch team)",
+        context_label=team_context_label,
+        standalone=standalone_mode,
+        allow_back=allow_back or (state.context.team is not None),
+        has_team_repos=bool(team_repos),
+        cwd_context=cwd_context,
+        options=[],
+    )
+    prompt = build_workspace_source_prompt(view_model=source_view)
+    answer = render_start_wizard_prompt(
+        prompt,
+        console=console,
+        team_repos=team_repos,
+        allow_back=allow_back or (state.context.team is not None),
+        standalone=standalone_mode,
+        context_label=team_context_label,
+        effective_team=state.context.team or effective_team,
+    )
+
+    if answer.kind is StartWizardAnswerKind.CANCELLED:
+        return (None, None, None, None)
+    if answer.value is StartWizardAction.SWITCH_TEAM:
+        new_state = reset_for_team_switch(state)
+        new_state = set_team_context(new_state, team_override)
+        return (new_state, show_all_teams)
+
+    if answer.kind is StartWizardAnswerKind.BACK:
+        if state.context.team is not None:
+            return (apply_start_wizard_event(state, BackRequested()), show_all_teams)
+        elif allow_back:
+            return (BACK, None, None, None)
+        else:
+            return (None, None, None, None)
+
+    source = cast(WorkspaceSource, answer.value)
+    if source is WorkspaceSource.CURRENT_DIR:
+        from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
+
+        context = resolve_workspace(
+            ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None)
+        )
+        if context is not None:
+            workspace = str(context.workspace_root)
+        else:
+            workspace = str(Path.cwd())
+        resume_ctx = WizardResumeContext(
+            standalone_mode=standalone_mode,
+            allow_back=allow_back,
+            effective_team=effective_team,
+            team_override=team_override,
+            active_team_label=active_team_label,
+            active_team_context=active_team_context,
+            current_branch=current_branch,
+        )
+        resume_state, show_all_teams = resolve_workspace_resume(
+            state,
+            workspace,
+            workspace_source=WorkspaceSource.CURRENT_DIR,
+            render_context=resume_ctx,
+            show_all_teams=show_all_teams,
+        )
+        if resume_state is None:
+            return (state, show_all_teams)
+        if isinstance(resume_state, tuple):
+            return resume_state
+        return (resume_state, show_all_teams)
+
+    return (apply_start_wizard_event(state, WorkspaceSourceChosen(source=source)), show_all_teams)
+
+
+def _handle_workspace_picker(
+    *,
+    state: StartWizardState,
+    cfg: dict[str, Any],
+    active_team_context: str,
+    standalone_mode: bool,
+    workspace_base: str,
+    allow_back: bool,
+    effective_team: str | None,
+    team_override: str | None,
+    active_team_label: str,
+    current_branch: str | None,
+    show_all_teams: bool,
+) -> _PickerContinue | _PickerExit:
+    """Handle workspace picker step.
+
+    Returns either:
+    - (_PickerContinue) (new_state, show_all_teams) — loop continues
+    - (_PickerExit) a terminal 4-tuple — caller returns it directly
+    """
+    team_context_label = active_team_context
+    if state.context.team:
+        team_context_label = f"Team: {state.context.team}"
+
+    team_config = (
+        cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
+    )
+    team_repos = team_config.get("repositories", [])
+    workspace_source = state.context.workspace_source
+
+    resume_ctx = WizardResumeContext(
+        standalone_mode=standalone_mode,
+        allow_back=allow_back,
+        effective_team=effective_team,
+        team_override=team_override,
+        active_team_label=active_team_label,
+        active_team_context=active_team_context,
+        current_branch=current_branch,
+    )
+
+    if workspace_source is WorkspaceSource.RECENT:
+        recent = sessions.list_recent(limit=10, include_all=True)
+        summaries = [
+            WorkspaceSummary(
+                label=_normalize_path(session.workspace),
+                description=session.last_used or "",
+                workspace=session.workspace,
+            )
+            for session in recent
+        ]
+        recent_view_model = WorkspacePickerViewModel(
+            title="Recent Workspaces",
+            subtitle=None,
+            context_label=team_context_label,
+            standalone=standalone_mode,
+            allow_back=True,
+            options=summaries,
+        )
+        prompt = build_workspace_picker_prompt(view_model=recent_view_model)
+        answer = render_start_wizard_prompt(
+            prompt,
+            console=console,
+            recent_sessions=recent,
+            allow_back=True,
+            standalone=standalone_mode,
+            context_label=team_context_label,
+        )
+        if answer.kind is StartWizardAnswerKind.CANCELLED:
+            return (None, None, None, None)
+        if answer.value is StartWizardAction.SWITCH_TEAM:
+            return (reset_for_team_switch(state), show_all_teams)
+        if answer.kind is StartWizardAnswerKind.BACK:
+            return (apply_start_wizard_event(state, BackRequested()), show_all_teams)
+        workspace = cast(str, answer.value)
+
+    elif workspace_source is WorkspaceSource.TEAM_REPOS:
+        repo_view_model = TeamRepoPickerViewModel(
+            title="Team Repositories",
+            subtitle=None,
+            context_label=team_context_label,
+            standalone=standalone_mode,
+            allow_back=True,
+            workspace_base=workspace_base,
+            options=[],
+        )
+        prompt = build_team_repo_prompt(view_model=repo_view_model)
+        answer = render_start_wizard_prompt(
+            prompt,
+            console=console,
+            team_repos=team_repos,
+            workspace_base=workspace_base,
+            allow_back=True,
+            standalone=standalone_mode,
+            context_label=team_context_label,
+        )
+        if answer.kind is StartWizardAnswerKind.CANCELLED:
+            return (None, None, None, None)
+        if answer.value is StartWizardAction.SWITCH_TEAM:
+            return (reset_for_team_switch(state), show_all_teams)
+        if answer.kind is StartWizardAnswerKind.BACK:
+            return (apply_start_wizard_event(state, BackRequested()), show_all_teams)
+        workspace = cast(str, answer.value)
+
+    elif workspace_source is WorkspaceSource.CUSTOM:
+        prompt = build_custom_workspace_prompt()
+        answer = render_start_wizard_prompt(prompt, console=console)
+        if answer.kind is StartWizardAnswerKind.BACK:
+            return (apply_start_wizard_event(state, BackRequested()), show_all_teams)
+        workspace = cast(str, answer.value)
+
+    elif workspace_source is WorkspaceSource.CLONE:
+        prompt = build_clone_repo_prompt()
+        answer = render_start_wizard_prompt(
+            prompt,
+            console=console,
+            workspace_base=workspace_base,
+        )
+        if answer.kind is StartWizardAnswerKind.BACK:
+            return (apply_start_wizard_event(state, BackRequested()), show_all_teams)
+        workspace = cast(str, answer.value)
+
+    else:
+        return (state, show_all_teams)
+
+    resume_state, show_all_teams = resolve_workspace_resume(
+        state,
+        workspace,
+        workspace_source=workspace_source or WorkspaceSource.CUSTOM,
+        render_context=resume_ctx,
+        show_all_teams=show_all_teams,
+    )
+    if resume_state is None:
+        # resolve_workspace_resume returned None → loop again with unchanged state
+        return (state, show_all_teams)
+    if isinstance(resume_state, tuple):
+        # Terminal exit from wizard — propagate the 4-tuple result
+        return resume_state
+    return (resume_state, show_all_teams)
+
 
 def interactive_start(
     cfg: dict[str, Any],
@@ -274,284 +522,42 @@ def interactive_start(
             continue
 
         if state.step is StartWizardStep.WORKSPACE_SOURCE:
-            team_context_label = active_team_context
-            if state.context.team:
-                team_context_label = f"Team: {state.context.team}"
-
-            team_config = (
-                cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
+            source_result = _handle_workspace_source(
+                state=state,
+                cfg=cfg,
+                active_team_context=active_team_context,
+                standalone_mode=standalone_mode,
+                allow_back=allow_back,
+                effective_team=effective_team,
+                team_override=team_override,
+                active_team_label=active_team_label,
+                current_branch=current_branch,
+                show_all_teams=show_all_teams,
             )
-            team_repos = team_config.get("repositories", [])
-
-            cwd = Path.cwd()
-            cwd_context: CwdContext | None = None
-            if not is_suspicious_directory(cwd):
-                cwd_context = CwdContext(
-                    path=str(cwd),
-                    name=cwd.name or str(cwd),
-                    is_git=git.is_git_repo(cwd),
-                    has_project_markers=has_project_markers(cwd),
-                )
-
-            source_view = WorkspaceSourceViewModel(
-                title="Where is your project?",
-                subtitle="Pick a project source (press 't' to switch team)",
-                context_label=team_context_label,
-                standalone=standalone_mode,
-                allow_back=allow_back or (state.context.team is not None),
-                has_team_repos=bool(team_repos),
-                cwd_context=cwd_context,
-                options=[],
-            )
-            prompt = build_workspace_source_prompt(view_model=source_view)
-            answer = render_start_wizard_prompt(
-                prompt,
-                console=console,
-                team_repos=team_repos,
-                allow_back=allow_back or (state.context.team is not None),
-                standalone=standalone_mode,
-                context_label=team_context_label,
-                effective_team=state.context.team or effective_team,
-            )
-
-            if answer.kind is StartWizardAnswerKind.CANCELLED:
-                return (None, None, None, None)
-            if answer.value is StartWizardAction.SWITCH_TEAM:
-                state = reset_for_team_switch(state)
-                state = set_team_context(state, team_override)
-                continue
-
-            if answer.kind is StartWizardAnswerKind.BACK:
-                if state.context.team is not None:
-                    state = apply_start_wizard_event(state, BackRequested())
-                elif allow_back:
-                    return (BACK, None, None, None)
-                else:
-                    return (None, None, None, None)
-                continue
-
-            source = cast(WorkspaceSource, answer.value)
-            if source is WorkspaceSource.CURRENT_DIR:
-                from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
-
-                context = resolve_workspace(
-                    ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None)
-                )
-                if context is not None:
-                    workspace = str(context.workspace_root)
-                else:
-                    workspace = str(Path.cwd())
-                resume_context = WizardResumeContext(
-                    standalone_mode=standalone_mode,
-                    allow_back=allow_back,
-                    effective_team=effective_team,
-                    team_override=team_override,
-                    active_team_label=active_team_label,
-                    active_team_context=active_team_context,
-                    current_branch=current_branch,
-                )
-                resume_state, show_all_teams = resolve_workspace_resume(
-                    state,
-                    workspace,
-                    workspace_source=WorkspaceSource.CURRENT_DIR,
-                    render_context=resume_context,
-                    show_all_teams=show_all_teams,
-                )
-                if resume_state is None:
-                    continue
-                if isinstance(resume_state, tuple):
-                    return resume_state
-                state = resume_state
-                continue
-
-            state = apply_start_wizard_event(state, WorkspaceSourceChosen(source=source))
+            if len(source_result) == 4:
+                return source_result
+            state, show_all_teams = source_result
             continue
 
         if state.step is StartWizardStep.WORKSPACE_PICKER:
-            team_context_label = active_team_context
-            if state.context.team:
-                team_context_label = f"Team: {state.context.team}"
-
-            team_config = (
-                cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
+            picker_result = _handle_workspace_picker(
+                state=state,
+                cfg=cfg,
+                active_team_context=active_team_context,
+                standalone_mode=standalone_mode,
+                workspace_base=workspace_base,
+                allow_back=allow_back,
+                effective_team=effective_team,
+                team_override=team_override,
+                active_team_label=active_team_label,
+                current_branch=current_branch,
+                show_all_teams=show_all_teams,
             )
-            team_repos = team_config.get("repositories", [])
-            workspace_source = state.context.workspace_source
-
-            if workspace_source is WorkspaceSource.RECENT:
-                recent = sessions.list_recent(limit=10, include_all=True)
-                summaries = [
-                    WorkspaceSummary(
-                        label=_normalize_path(session.workspace),
-                        description=session.last_used or "",
-                        workspace=session.workspace,
-                    )
-                    for session in recent
-                ]
-                recent_view_model = WorkspacePickerViewModel(
-                    title="Recent Workspaces",
-                    subtitle=None,
-                    context_label=team_context_label,
-                    standalone=standalone_mode,
-                    allow_back=True,
-                    options=summaries,
-                )
-                prompt = build_workspace_picker_prompt(view_model=recent_view_model)
-                answer = render_start_wizard_prompt(
-                    prompt,
-                    console=console,
-                    recent_sessions=recent,
-                    allow_back=True,
-                    standalone=standalone_mode,
-                    context_label=team_context_label,
-                )
-                if answer.kind is StartWizardAnswerKind.CANCELLED:
-                    return (None, None, None, None)
-                if answer.value is StartWizardAction.SWITCH_TEAM:
-                    state = reset_for_team_switch(state)
-                    continue
-                if answer.kind is StartWizardAnswerKind.BACK:
-                    state = apply_start_wizard_event(state, BackRequested())
-                    continue
-                workspace = cast(str, answer.value)
-                resume_context = WizardResumeContext(
-                    standalone_mode=standalone_mode,
-                    allow_back=allow_back,
-                    effective_team=effective_team,
-                    team_override=team_override,
-                    active_team_label=active_team_label,
-                    active_team_context=active_team_context,
-                    current_branch=current_branch,
-                )
-                resume_state, show_all_teams = resolve_workspace_resume(
-                    state,
-                    workspace,
-                    workspace_source=WorkspaceSource.RECENT,
-                    render_context=resume_context,
-                    show_all_teams=show_all_teams,
-                )
-                if resume_state is None:
-                    continue
-                if isinstance(resume_state, tuple):
-                    return resume_state
-                state = resume_state
-                continue
-
-            if workspace_source is WorkspaceSource.TEAM_REPOS:
-                repo_view_model = TeamRepoPickerViewModel(
-                    title="Team Repositories",
-                    subtitle=None,
-                    context_label=team_context_label,
-                    standalone=standalone_mode,
-                    allow_back=True,
-                    workspace_base=workspace_base,
-                    options=[],
-                )
-                prompt = build_team_repo_prompt(view_model=repo_view_model)
-                answer = render_start_wizard_prompt(
-                    prompt,
-                    console=console,
-                    team_repos=team_repos,
-                    workspace_base=workspace_base,
-                    allow_back=True,
-                    standalone=standalone_mode,
-                    context_label=team_context_label,
-                )
-                if answer.kind is StartWizardAnswerKind.CANCELLED:
-                    return (None, None, None, None)
-                if answer.value is StartWizardAction.SWITCH_TEAM:
-                    state = reset_for_team_switch(state)
-                    continue
-                if answer.kind is StartWizardAnswerKind.BACK:
-                    state = apply_start_wizard_event(state, BackRequested())
-                    continue
-                workspace = cast(str, answer.value)
-                resume_context = WizardResumeContext(
-                    standalone_mode=standalone_mode,
-                    allow_back=allow_back,
-                    effective_team=effective_team,
-                    team_override=team_override,
-                    active_team_label=active_team_label,
-                    active_team_context=active_team_context,
-                    current_branch=current_branch,
-                )
-                resume_state, show_all_teams = resolve_workspace_resume(
-                    state,
-                    workspace,
-                    workspace_source=WorkspaceSource.TEAM_REPOS,
-                    render_context=resume_context,
-                    show_all_teams=show_all_teams,
-                )
-                if resume_state is None:
-                    continue
-                if isinstance(resume_state, tuple):
-                    return resume_state
-                state = resume_state
-                continue
-
-            if workspace_source is WorkspaceSource.CUSTOM:
-                prompt = build_custom_workspace_prompt()
-                answer = render_start_wizard_prompt(prompt, console=console)
-                if answer.kind is StartWizardAnswerKind.BACK:
-                    state = apply_start_wizard_event(state, BackRequested())
-                    continue
-                workspace = cast(str, answer.value)
-                resume_context = WizardResumeContext(
-                    standalone_mode=standalone_mode,
-                    allow_back=allow_back,
-                    effective_team=effective_team,
-                    team_override=team_override,
-                    active_team_label=active_team_label,
-                    active_team_context=active_team_context,
-                    current_branch=current_branch,
-                )
-                resume_state, show_all_teams = resolve_workspace_resume(
-                    state,
-                    workspace,
-                    workspace_source=WorkspaceSource.CUSTOM,
-                    render_context=resume_context,
-                    show_all_teams=show_all_teams,
-                )
-                if resume_state is None:
-                    continue
-                if isinstance(resume_state, tuple):
-                    return resume_state
-                state = resume_state
-                continue
-
-            if workspace_source is WorkspaceSource.CLONE:
-                prompt = build_clone_repo_prompt()
-                answer = render_start_wizard_prompt(
-                    prompt,
-                    console=console,
-                    workspace_base=workspace_base,
-                )
-                if answer.kind is StartWizardAnswerKind.BACK:
-                    state = apply_start_wizard_event(state, BackRequested())
-                    continue
-                workspace = cast(str, answer.value)
-                resume_context = WizardResumeContext(
-                    standalone_mode=standalone_mode,
-                    allow_back=allow_back,
-                    effective_team=effective_team,
-                    team_override=team_override,
-                    active_team_label=active_team_label,
-                    active_team_context=active_team_context,
-                    current_branch=current_branch,
-                )
-                resume_state, show_all_teams = resolve_workspace_resume(
-                    state,
-                    workspace,
-                    workspace_source=WorkspaceSource.CLONE,
-                    render_context=resume_context,
-                    show_all_teams=show_all_teams,
-                )
-                if resume_state is None:
-                    continue
-                if isinstance(resume_state, tuple):
-                    return resume_state
-                state = resume_state
-                continue
+            # 4-tuple means exit; 2-tuple means continue looping
+            if len(picker_result) == 4:
+                return picker_result
+            state, show_all_teams = picker_result
+            continue
 
         if state.step is StartWizardStep.WORKTREE_DECISION:
             prompt = build_confirm_worktree_prompt()

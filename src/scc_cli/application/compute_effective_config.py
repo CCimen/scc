@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from scc_cli import config as config_module
 from scc_cli.core.enums import MCPServerType, NetworkPolicy, RequestSource, TargetType
 from scc_cli.core.network_policy import is_more_or_equal_restrictive
-from scc_cli.ports.config_models import NormalizedOrgConfig, SessionSettings
+from scc_cli.ports.config_models import NormalizedOrgConfig, NormalizedTeamConfig, SessionSettings
 
 if TYPE_CHECKING:
     pass
@@ -376,6 +376,284 @@ def is_project_delegated(
     return (True, "")
 
 
+def _merge_team_mcp_servers(
+    result: EffectiveConfig,
+    *,
+    team_config: NormalizedTeamConfig | None,
+    team_name: str | None,
+    org_config: NormalizedOrgConfig,
+    blocked_mcp_servers: list[str],
+    allowed_mcp_servers: list[str] | None,
+    network_policy_source: str | None,
+) -> None:
+    """Merge team MCP servers into the effective config."""
+    team_mcp_servers_raw: list[dict[str, Any]] = []
+    if team_config:
+        for mcp in team_config.additional_mcp_servers:
+            server_dict: dict[str, Any] = {"name": mcp.name, "type": mcp.type}
+            if mcp.url:
+                server_dict["url"] = mcp.url
+            if mcp.command:
+                server_dict["command"] = mcp.command
+            if mcp.args:
+                server_dict["args"] = mcp.args
+            if mcp.env:
+                server_dict["env"] = mcp.env
+            if mcp.headers:
+                server_dict["headers"] = mcp.headers
+            team_mcp_servers_raw.append(server_dict)
+
+    team_delegated_mcp = is_team_delegated_for_mcp(org_config, team_name)
+
+    for server_dict in team_mcp_servers_raw:
+        server_name = server_dict.get("name", "")
+        server_url = server_dict.get("url", "")
+
+        blocked_by = match_blocked_mcp(server_dict, blocked_mcp_servers)
+
+        if blocked_by:
+            result.blocked_items.append(
+                BlockedItem(
+                    item=server_name or server_url,
+                    blocked_by=blocked_by,
+                    source="org.security",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if not team_delegated_mcp:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=server_name,
+                    requested_by=RequestSource.TEAM,
+                    reason=f"Team '{team_name}' not allowed to add MCP servers",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if not is_mcp_allowed(server_dict, allowed_mcp_servers):
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=server_name or server_url,
+                    requested_by=RequestSource.TEAM,
+                    reason="MCP server not allowed by defaults.allowed_mcp_servers",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if result.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and is_network_mcp(
+            server_dict
+        ):
+            result.blocked_items.append(
+                BlockedItem(
+                    item=server_name or server_url,
+                    blocked_by="network_policy=locked-down-web",
+                    source=network_policy_source or "org.defaults",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if server_dict.get("type") == MCPServerType.STDIO:
+            stdio_result = validate_stdio_server(server_dict, org_config)
+            if stdio_result.blocked:
+                result.blocked_items.append(
+                    BlockedItem(
+                        item=server_name,
+                        blocked_by=stdio_result.reason,
+                        source="org.security",
+                        target_type=TargetType.MCP_SERVER,
+                    )
+                )
+                continue
+
+        mcp_server = MCPServer(
+            name=server_name,
+            type=server_dict.get("type", MCPServerType.SSE),
+            url=server_url or None,
+            command=server_dict.get("command"),
+            args=server_dict.get("args"),
+            env=server_dict.get("env"),
+            headers=server_dict.get("headers"),
+        )
+        result.mcp_servers.append(mcp_server)
+        result.decisions.append(
+            ConfigDecision(
+                field="mcp_servers",
+                value=server_name,
+                reason=f"Added by team profile '{team_name}'",
+                source=f"team.{team_name}",
+            )
+        )
+
+
+def _merge_project_config(
+    result: EffectiveConfig,
+    *,
+    project_config: dict[str, Any],
+    org_config: NormalizedOrgConfig,
+    team_name: str | None,
+    blocked_plugins: list[str],
+    blocked_mcp_servers: list[str],
+    allowed_plugins: list[str] | None,
+    allowed_mcp_servers: list[str] | None,
+    network_policy_source: str | None,
+) -> None:
+    """Merge project-level config into the effective config."""
+    project_delegated, delegation_reason = is_project_delegated(org_config, team_name)
+
+    project_plugins = project_config.get("additional_plugins", [])
+    for plugin in project_plugins:
+        blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
+        if blocked_by:
+            result.blocked_items.append(
+                BlockedItem(item=plugin, blocked_by=blocked_by, source="org.security")
+            )
+            continue
+
+        if not project_delegated:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=plugin,
+                    requested_by=RequestSource.PROJECT,
+                    reason=delegation_reason,
+                )
+            )
+            continue
+
+        if not is_plugin_allowed(plugin, allowed_plugins):
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=plugin,
+                    requested_by=RequestSource.PROJECT,
+                    reason="Plugin not allowed by defaults.allowed_plugins",
+                )
+            )
+            continue
+
+        result.plugins.add(plugin)
+        result.decisions.append(
+            ConfigDecision(
+                field="plugins",
+                value=plugin,
+                reason="Added by project config",
+                source="project",
+            )
+        )
+
+    project_mcp_servers = project_config.get("additional_mcp_servers", [])
+    for server_dict in project_mcp_servers:
+        server_name = server_dict.get("name", "")
+        server_url = server_dict.get("url", "")
+
+        blocked_by = match_blocked_mcp(server_dict, blocked_mcp_servers)
+
+        if blocked_by:
+            result.blocked_items.append(
+                BlockedItem(
+                    item=server_name or server_url,
+                    blocked_by=blocked_by,
+                    source="org.security",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if not project_delegated:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=server_name,
+                    requested_by=RequestSource.PROJECT,
+                    reason=delegation_reason,
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if not is_mcp_allowed(server_dict, allowed_mcp_servers):
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=server_name or server_url,
+                    requested_by=RequestSource.PROJECT,
+                    reason="MCP server not allowed by defaults.allowed_mcp_servers",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if result.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and is_network_mcp(
+            server_dict
+        ):
+            result.blocked_items.append(
+                BlockedItem(
+                    item=server_name or server_url,
+                    blocked_by="network_policy=locked-down-web",
+                    source=network_policy_source or "org.defaults",
+                    target_type=TargetType.MCP_SERVER,
+                )
+            )
+            continue
+
+        if server_dict.get("type") == MCPServerType.STDIO:
+            stdio_result = validate_stdio_server(server_dict, org_config)
+            if stdio_result.blocked:
+                result.blocked_items.append(
+                    BlockedItem(
+                        item=server_name,
+                        blocked_by=stdio_result.reason,
+                        source="org.security",
+                        target_type=TargetType.MCP_SERVER,
+                    )
+                )
+                continue
+
+        mcp_server = MCPServer(
+            name=server_name,
+            type=server_dict.get("type", MCPServerType.SSE),
+            url=server_url or None,
+            command=server_dict.get("command"),
+            args=server_dict.get("args"),
+            env=server_dict.get("env"),
+            headers=server_dict.get("headers"),
+        )
+        result.mcp_servers.append(mcp_server)
+        result.decisions.append(
+            ConfigDecision(
+                field="mcp_servers",
+                value=server_name,
+                reason="Added by project config",
+                source="project",
+            )
+        )
+
+    project_session = project_config.get("session", {})
+    if project_session.get("timeout_hours") is not None:
+        if project_delegated:
+            result.session_config.timeout_hours = project_session["timeout_hours"]
+            result.decisions.append(
+                ConfigDecision(
+                    field="session.timeout_hours",
+                    value=project_session["timeout_hours"],
+                    reason="Overridden by project config",
+                    source="project",
+                )
+            )
+    if project_session.get("auto_resume") is not None:
+        if project_delegated:
+            result.session_config.auto_resume = project_session["auto_resume"]
+            result.decisions.append(
+                ConfigDecision(
+                    field="session.auto_resume",
+                    value=project_session["auto_resume"],
+                    reason="Overridden by project config",
+                    source="project",
+                )
+            )
+
+
 def compute_effective_config(
     org_config: dict[str, Any] | NormalizedOrgConfig,
     team_name: str | None,
@@ -526,105 +804,15 @@ def compute_effective_config(
             )
         )
 
-    team_mcp_servers_raw: list[dict[str, Any]] = []
-    if team_config:
-        for mcp in team_config.additional_mcp_servers:
-            server_dict: dict[str, Any] = {"name": mcp.name, "type": mcp.type}
-            if mcp.url:
-                server_dict["url"] = mcp.url
-            if mcp.command:
-                server_dict["command"] = mcp.command
-            if mcp.args:
-                server_dict["args"] = mcp.args
-            if mcp.env:
-                server_dict["env"] = mcp.env
-            if mcp.headers:
-                server_dict["headers"] = mcp.headers
-            team_mcp_servers_raw.append(server_dict)
-
-    team_delegated_mcp = is_team_delegated_for_mcp(org_config, team_name)
-
-    for server_dict in team_mcp_servers_raw:
-        server_name = server_dict.get("name", "")
-        server_url = server_dict.get("url", "")
-
-        blocked_by = match_blocked_mcp(server_dict, blocked_mcp_servers)
-
-        if blocked_by:
-            result.blocked_items.append(
-                BlockedItem(
-                    item=server_name or server_url,
-                    blocked_by=blocked_by,
-                    source="org.security",
-                    target_type=TargetType.MCP_SERVER,
-                )
-            )
-            continue
-
-        if not team_delegated_mcp:
-            result.denied_additions.append(
-                DelegationDenied(
-                    item=server_name,
-                    requested_by=RequestSource.TEAM,
-                    reason=f"Team '{team_name}' not allowed to add MCP servers",
-                    target_type=TargetType.MCP_SERVER,
-                )
-            )
-            continue
-
-        if not is_mcp_allowed(server_dict, allowed_mcp_servers):
-            result.denied_additions.append(
-                DelegationDenied(
-                    item=server_name or server_url,
-                    requested_by=RequestSource.TEAM,
-                    reason="MCP server not allowed by defaults.allowed_mcp_servers",
-                    target_type=TargetType.MCP_SERVER,
-                )
-            )
-            continue
-
-        if result.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and is_network_mcp(server_dict):
-            result.blocked_items.append(
-                BlockedItem(
-                    item=server_name or server_url,
-                    blocked_by="network_policy=locked-down-web",
-                    source=network_policy_source or "org.defaults",
-                    target_type=TargetType.MCP_SERVER,
-                )
-            )
-            continue
-
-        if server_dict.get("type") == MCPServerType.STDIO:
-            stdio_result = validate_stdio_server(server_dict, org_config)
-            if stdio_result.blocked:
-                result.blocked_items.append(
-                    BlockedItem(
-                        item=server_name,
-                        blocked_by=stdio_result.reason,
-                        source="org.security",
-                        target_type=TargetType.MCP_SERVER,
-                    )
-                )
-                continue
-
-        mcp_server = MCPServer(
-            name=server_name,
-            type=server_dict.get("type", MCPServerType.SSE),
-            url=server_url or None,
-            command=server_dict.get("command"),
-            args=server_dict.get("args"),
-            env=server_dict.get("env"),
-            headers=server_dict.get("headers"),
-        )
-        result.mcp_servers.append(mcp_server)
-        result.decisions.append(
-            ConfigDecision(
-                field="mcp_servers",
-                value=server_name,
-                reason=f"Added by team profile '{team_name}'",
-                source=f"team.{team_name}",
-            )
-        )
+    _merge_team_mcp_servers(
+        result,
+        team_config=team_config,
+        team_name=team_name,
+        org_config=org_config,
+        blocked_mcp_servers=blocked_mcp_servers,
+        allowed_mcp_servers=allowed_mcp_servers,
+        network_policy_source=network_policy_source,
+    )
 
     team_session = team_config.session if team_config else SessionSettings()
     if team_session.timeout_hours is not None:
@@ -649,154 +837,16 @@ def compute_effective_config(
         )
 
     if project_config:
-        project_delegated, delegation_reason = is_project_delegated(org_config, team_name)
-
-        project_plugins = project_config.get("additional_plugins", [])
-        for plugin in project_plugins:
-            blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
-            if blocked_by:
-                result.blocked_items.append(
-                    BlockedItem(item=plugin, blocked_by=blocked_by, source="org.security")
-                )
-                continue
-
-            if not project_delegated:
-                result.denied_additions.append(
-                    DelegationDenied(
-                        item=plugin,
-                        requested_by=RequestSource.PROJECT,
-                        reason=delegation_reason,
-                    )
-                )
-                continue
-
-            if not is_plugin_allowed(plugin, allowed_plugins):
-                result.denied_additions.append(
-                    DelegationDenied(
-                        item=plugin,
-                        requested_by=RequestSource.PROJECT,
-                        reason="Plugin not allowed by defaults.allowed_plugins",
-                    )
-                )
-                continue
-
-            result.plugins.add(plugin)
-            result.decisions.append(
-                ConfigDecision(
-                    field="plugins",
-                    value=plugin,
-                    reason="Added by project config",
-                    source="project",
-                )
-            )
-
-        project_mcp_servers = project_config.get("additional_mcp_servers", [])
-        for server_dict in project_mcp_servers:
-            server_name = server_dict.get("name", "")
-            server_url = server_dict.get("url", "")
-
-            blocked_by = match_blocked_mcp(server_dict, blocked_mcp_servers)
-
-            if blocked_by:
-                result.blocked_items.append(
-                    BlockedItem(
-                        item=server_name or server_url,
-                        blocked_by=blocked_by,
-                        source="org.security",
-                        target_type=TargetType.MCP_SERVER,
-                    )
-                )
-                continue
-
-            if not project_delegated:
-                result.denied_additions.append(
-                    DelegationDenied(
-                        item=server_name,
-                        requested_by=RequestSource.PROJECT,
-                        reason=delegation_reason,
-                        target_type=TargetType.MCP_SERVER,
-                    )
-                )
-                continue
-
-            if not is_mcp_allowed(server_dict, allowed_mcp_servers):
-                result.denied_additions.append(
-                    DelegationDenied(
-                        item=server_name or server_url,
-                        requested_by=RequestSource.PROJECT,
-                        reason="MCP server not allowed by defaults.allowed_mcp_servers",
-                        target_type=TargetType.MCP_SERVER,
-                    )
-                )
-                continue
-
-            if result.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and is_network_mcp(
-                server_dict
-            ):
-                result.blocked_items.append(
-                    BlockedItem(
-                        item=server_name or server_url,
-                        blocked_by="network_policy=locked-down-web",
-                        source=network_policy_source or "org.defaults",
-                        target_type=TargetType.MCP_SERVER,
-                    )
-                )
-                continue
-
-            if server_dict.get("type") == MCPServerType.STDIO:
-                stdio_result = validate_stdio_server(server_dict, org_config)
-                if stdio_result.blocked:
-                    result.blocked_items.append(
-                        BlockedItem(
-                            item=server_name,
-                            blocked_by=stdio_result.reason,
-                            source="org.security",
-                            target_type=TargetType.MCP_SERVER,
-                        )
-                    )
-                    continue
-
-            mcp_server = MCPServer(
-                name=server_name,
-                type=server_dict.get("type", MCPServerType.SSE),
-                url=server_url or None,
-                command=server_dict.get("command"),
-                args=server_dict.get("args"),
-                env=server_dict.get("env"),
-                headers=server_dict.get("headers"),
-            )
-            result.mcp_servers.append(mcp_server)
-            result.decisions.append(
-                ConfigDecision(
-                    field="mcp_servers",
-                    value=server_name,
-                    reason="Added by project config",
-                    source="project",
-                )
-            )
-
-        project_session = project_config.get("session", {})
-        if project_session.get("timeout_hours") is not None:
-            if project_delegated:
-                result.session_config.timeout_hours = project_session["timeout_hours"]
-                result.decisions.append(
-                    ConfigDecision(
-                        field="session.timeout_hours",
-                        value=project_session["timeout_hours"],
-                        reason="Overridden by project config",
-                        source="project",
-                    )
-                )
-        if project_session.get("auto_resume") is not None:
-            if project_delegated:
-                result.session_config.auto_resume = project_session["auto_resume"]
-                result.decisions.append(
-                    ConfigDecision(
-                        field="session.auto_resume",
-                        value=project_session["auto_resume"],
-                        reason="Overridden by project config",
-                        source="project",
-                    )
-                )
+        _merge_project_config(
+            result,
+            project_config=project_config,
+            org_config=org_config,
+            team_name=team_name,
+            blocked_plugins=blocked_plugins,
+            blocked_mcp_servers=blocked_mcp_servers,
+            allowed_plugins=allowed_plugins,
+            allowed_mcp_servers=allowed_mcp_servers,
+            network_policy_source=network_policy_source,
+        )
 
     return result

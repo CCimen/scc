@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T20:49:31.608Z",
+  "exported_at": "2026-04-04T21:04:07.640Z",
   "milestones": [
     {
       "id": "M001",
@@ -4275,19 +4275,28 @@
       "milestone_id": "M005",
       "slice_id": "S06",
       "id": "T03",
-      "title": "Re-enable file-size/complexity guardrails and remove transitional ruff ignores",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Removed xfail from function-size guardrail, extracted 4 oversized functions below 300-line limit, confirmed all ruff ignores are permanent",
+      "status": "complete",
+      "one_liner": "Removed xfail from function-size guardrail, extracted 4 oversized functions below 300-line limit, confirmed all ruff ignores are permanent",
+      "narrative": "Four functions exceeded the 300-line function-size guardrail: interactive_start (524), compute_effective_config (424), org_update_cmd (309), and reset_cmd (308). Each was refactored by extracting cohesive helper functions: _handle_workspace_picker/_handle_workspace_source for the wizard, _merge_team_mcp_servers/_merge_project_config for config computation, _update_single_team/_update_all_teams for org update, and _execute_factory_reset for reset. The xfail marker was removed. All ruff per-file-ignores were confirmed permanent (T201 for CLI stdout, UP037 for defensive annotation).",
+      "verification_result": "uv run ruff check: all checks passed. uv run mypy src/scc_cli: 0 errors in 289 files. uv run pytest tests/test_file_sizes.py tests/test_function_sizes.py -v: both pass, no xfail. uv run pytest --rootdir \"$PWD\" -q: 4463 passed, 23 skipped, 2 xfailed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T21:04:07.574Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Used NormalizedTeamConfig instead of TeamProfile for _merge_team_mcp_servers type annotation (mypy caught the mismatch). Introduced _PickerContinue/_PickerExit type aliases for wizard step handler union returns.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_function_sizes.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/application/compute_effective_config.py",
+        "src/scc_cli/commands/reset.py",
+        "src/scc_cli/commands/org/update_cmd.py"
+      ],
+      "key_decisions": [
+        "Extracted wizard step handlers as standalone functions returning union types (_PickerContinue | _PickerExit)",
+        "All ruff per-file-ignores confirmed permanent — no transitional ignores to remove"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S06\nmilestone: M005\nkey_files:\n  - tests/test_function_sizes.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/application/compute_effective_config.py\n  - src/scc_cli/commands/reset.py\n  - src/scc_cli/commands/org/update_cmd.py\nkey_decisions:\n  - Extracted wizard step handlers as standalone functions returning union types (_PickerContinue | _PickerExit)\n  - All ruff per-file-ignores confirmed permanent — no transitional ignores to remove\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T21:04:07.573Z\nblocker_discovered: false\n---\n\n# T03: Removed xfail from function-size guardrail, extracted 4 oversized functions below 300-line limit, confirmed all ruff ignores are permanent\n\n**Removed xfail from function-size guardrail, extracted 4 oversized functions below 300-line limit, confirmed all ruff ignores are permanent**\n\n## What Happened\n\nFour functions exceeded the 300-line function-size guardrail: interactive_start (524), compute_effective_config (424), org_update_cmd (309), and reset_cmd (308). Each was refactored by extracting cohesive helper functions: _handle_workspace_picker/_handle_workspace_source for the wizard, _merge_team_mcp_servers/_merge_project_config for config computation, _update_single_team/_update_all_teams for org update, and _execute_factory_reset for reset. The xfail marker was removed. All ruff per-file-ignores were confirmed permanent (T201 for CLI stdout, UP037 for defensive annotation).\n\n## Verification\n\nuv run ruff check: all checks passed. uv run mypy src/scc_cli: 0 errors in 289 files. uv run pytest tests/test_file_sizes.py tests/test_function_sizes.py -v: both pass, no xfail. uv run pytest --rootdir \"$PWD\" -q: 4463 passed, 23 skipped, 2 xfailed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 10400ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5500ms |\n| 3 | `uv run pytest tests/test_file_sizes.py tests/test_function_sizes.py -v` | 0 | ✅ pass | 1800ms |\n| 4 | `uv run pytest --rootdir . -q` | 0 | ✅ pass | 74200ms |\n\n## Deviations\n\nUsed NormalizedTeamConfig instead of TeamProfile for _merge_team_mcp_servers type annotation (mypy caught the mismatch). Introduced _PickerContinue/_PickerExit type aliases for wizard step handler union returns.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_function_sizes.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/application/compute_effective_config.py`\n- `src/scc_cli/commands/reset.py`\n- `src/scc_cli/commands/org/update_cmd.py`\n",
       "description": "1. Review tests/test_file_sizes.py and tests/test_function_sizes.py — remove all xfail markers, fix any remaining violations\n2. Review pyproject.toml [tool.ruff.lint.per-file-ignores] — remove transitional ignores, document permanent ones\n3. Re-run guardrails to confirm they pass\n4. Update any modules still above 800 lines if any remain from S02 decomposition drift\n5. Verify no new modules exceed the guardrail thresholds",
       "estimate": "1h30m",
       "files": [
@@ -6999,6 +7008,50 @@
       "verdict": "✅ pass (4462 passed)",
       "duration_ms": 72000,
       "created_at": "2026-04-04T20:49:31.529Z"
+    },
+    {
+      "id": 217,
+      "task_id": "T03",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 10400,
+      "created_at": "2026-04-04T21:04:07.575Z"
+    },
+    {
+      "id": 218,
+      "task_id": "T03",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5500,
+      "created_at": "2026-04-04T21:04:07.575Z"
+    },
+    {
+      "id": 219,
+      "task_id": "T03",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_file_sizes.py tests/test_function_sizes.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1800,
+      "created_at": "2026-04-04T21:04:07.575Z"
+    },
+    {
+      "id": 220,
+      "task_id": "T03",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir . -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 74200,
+      "created_at": "2026-04-04T21:04:07.575Z"
     }
   ]
 }
