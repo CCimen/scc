@@ -12,6 +12,8 @@ Turn the completed v1 feature set into a highly maintainable, strongly typed, we
 - The repo still contains 368 `dict[str, Any]` references and 49 `cast()` calls, concentrated in config, launch, marketplace, and UI interaction flows.
 - There are 36 `except Exception:` sites, multiple unchecked `subprocess.run(...)` paths, and mutable module-level defaults such as `DEFAULT_SAFETY_NET_POLICY`.
 - Quality guardrails are not yet trustworthy because existing `xfail`s still mask file-size, function-size, and test-isolation failures.
+- The marketplace/profile/config pipeline is still centered on Claude plugin references, `.claude` settings, and `.claude-plugin/marketplace.json`; Codex-native plugin rendering, Codex rules/hooks rendering, and managed instruction-layer rendering are planned in the architecture but not yet modeled as first-class adapter renderers.
+- Claude and Codex native plugin surfaces are not symmetric: Claude plugins can carry richer native features, while Codex relies on separate rules/hooks/config/instruction layers alongside plugins. M005 should preserve that asymmetry while removing Claude-shaped assumptions from core.
 - Current coverage gaps remain severe in high-risk modules: `adapters/docker_sandbox_runtime.py` 22%, `docker/launch.py` 54%, `core/error_mapping.py` 74%, `ui/settings.py` 0%, `ui/dashboard/orchestrator.py` 6%, `commands/reset.py` 7%, `commands/profile.py` 9%, `docker/credentials.py` 8%.
 
 ## Success Criteria
@@ -21,6 +23,7 @@ Turn the completed v1 feature set into a highly maintainable, strongly typed, we
 - Internal control-plane, launch-planning, and policy-merging flows stop accepting or returning raw `dict[str, Any]`; raw dictionaries remain only at parsing, serialization, or presentation boundaries.
 - The generic interaction pipeline no longer depends on widespread `cast(answer.value, ...)` patterns in launch and wizard flows.
 - Direct runtime/backend imports from core, application, commands, and UI are removed or isolated behind explicit ports/adapters.
+- The control plane no longer treats Claude plugin references as the canonical workflow model; governed artifacts and bundles drive Claude plugins/hooks, Codex plugins/rules/hooks, and provider-native instruction layers from one org/team policy.
 - Silent error swallowing, mutable global defaults, and unchecked subprocess execution are eliminated from maintained production paths.
 - File-size and function-size guardrails pass without `xfail`, and transitional Ruff/mypy relaxations are removed or reduced to narrow documented exceptions.
 - Critical seams achieve meaningful high coverage: `docker_sandbox_runtime.py` at least 90%, `docker/launch.py` at least 80%, policy/planning/error/audit paths 95-100%, and overall coverage above 80%.
@@ -50,12 +53,12 @@ Turn the completed v1 feature set into a highly maintainable, strongly typed, we
 2. `T02` Split the dashboard/settings UI cluster: `ui/dashboard/orchestrator.py`, `ui/dashboard/_dashboard.py`, `ui/settings.py`, `ui/wizard.py`, `ui/git_interactive.py`, `ui/picker.py`, and `ui/keys.py`.
 3. `T03` Split the commands cluster: `commands/team.py`, `commands/config.py`, `commands/profile.py`, `commands/reset.py`, `commands/admin.py`, and worktree command surfaces.
 4. `T04` Split the application/control-plane cluster: `application/dashboard.py`, `application/worktree/use_cases.py`, `application/compute_effective_config.py`, `application/settings/use_cases.py`, and nearby orchestration helpers.
-5. `T05` Split the marketplace/profile/config cluster: `marketplace/materialize.py`, `marketplace/team_fetch.py`, `marketplace/resolve.py`, `application/sync_marketplace.py`, `core/personal_profiles.py`, and `setup.py`.
+5. `T05` Split the marketplace/profile/config cluster: `marketplace/materialize.py`, `marketplace/team_fetch.py`, `marketplace/resolve.py`, `application/sync_marketplace.py`, `core/personal_profiles.py`, and `setup.py`. Separate provider-neutral governed-artifact planning from Claude- and Codex-specific renderers so native plugin layouts stop leaking into the control plane.
 6. `T06` Repair architecture boundaries as part of the splits: remove direct runtime/backend imports from core/application/commands/UI, break import cycles, and move provider/runtime-specific logic behind explicit ports/adapters.
 
 ### S03 — Typed Config Model Adoption And Strict Typing Cleanup
-1. `T01` Adopt typed internal config models as the default control-plane shape for org, project, user, team, session, marketplace, and MCP data; raw dictionaries remain edge-only.
-2. `T02` Eliminate raw-dict launch/config aliases such as `UserConfig: TypeAlias = dict[str, Any]` from launch, config, setup, validation, and policy-merging paths.
+1. `T01` Adopt typed internal config models as the default control-plane shape for org, project, user, team, session, governed artifacts, bundles, provider bindings, marketplace, and MCP data; raw dictionaries remain edge-only.
+2. `T02` Eliminate raw-dict launch/config aliases such as `UserConfig: TypeAlias = dict[str, Any]` from launch, config, setup, validation, and policy-merging paths, and replace plugin-centric internal control-plane shapes with provider-neutral governed artifact plans.
 3. `T03` Make the interaction request/response flow generic end-to-end so launch and wizard code stop relying on repeated `cast(answer.value, ...)` recovery.
 4. `T04` Remove transitional mypy relaxations, redundant casts, and broad `Any` flow in touched modules while keeping any remaining exceptions explicit and documented.
 5. `T05` Centralize typed serialization boundaries so JSON envelopes and adapter persistence do not leak raw-dict shapes back into application logic.
@@ -76,7 +79,7 @@ Turn the completed v1 feature set into a highly maintainable, strongly typed, we
 ### S06 — Guardrails, Diagnostics, Docs, And Milestone Validation
 1. `T01` Remove quality `xfail`s from file-size, function-size, and isolation tests by fixing the underlying defects and making guardrails enforceable again.
 2. `T02` Remove transitional Ruff ignore categories and reduce mypy overrides to narrow intentional cases, ideally tests only.
-3. `T03` Run a final truthfulness pass on docs, JSON/human diagnostics, and operator-facing wording about provider, runtime, network, safety, and enforcement.
+3. `T03` Run a final truthfulness pass on docs, JSON/human diagnostics, and operator-facing wording about provider, runtime, network, safety, enforcement, and governed-artifact portability. Docs must distinguish shared skills/MCP from provider-native plugins/hooks/marketplaces and must not imply dual team configs are required.
 4. `T04` Validate the milestone against the success criteria with a before/after hotspot summary, an unresolved-risk register, and the full green verification gate.
 
 ## Parallelism

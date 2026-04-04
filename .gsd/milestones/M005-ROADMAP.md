@@ -12,6 +12,7 @@ M005 closes the v1 architecture arc by turning the feature-complete codebase int
 - Mandatory hotspot set decomposed, with all modules over 1100 lines eliminated and all modules over 800 lines either reduced or explicitly justified.
 - Boundary leaks repaired: no direct runtime/backend imports from core, application, commands, or UI.
 - Internal config/policy/launch flow uses typed models instead of raw `dict[str, Any]`.
+- Governed artifacts and bundles, not Claude-specific plugin refs, are the canonical workflow and integration model in the control plane.
 - Silent error swallowing, unchecked subprocess handling, mutable policy defaults, and quality `xfail`s are removed.
 - Critical seams reach the roadmap coverage targets and the full quality gate is green.
 

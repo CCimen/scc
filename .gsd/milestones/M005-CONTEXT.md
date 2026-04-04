@@ -29,6 +29,8 @@ Out of scope:
 - 58 Python files exceed 300 lines; 15 exceed 800; 3 exceed 1100.
 - `commands/launch/flow.py`, `ui/dashboard/orchestrator.py`, and `setup.py` are the largest hotspot modules.
 - The repo still contains heavy raw-dict and cast usage in launch/config/marketplace/UI flows.
+- The marketplace/config flow is still Claude-shaped in several modules even though the target architecture is one governed artifact model that can render to both Claude and Codex.
+- Claude and Codex should not be normalized into one plugin schema; the target is one governed bundle plan with asymmetric native renderers.
 - Critical coverage gaps remain in runtime, docker, error-mapping, and dashboard/settings surfaces.
 - Direct runtime/backend imports still leak into core, application, command, and UI layers.
 

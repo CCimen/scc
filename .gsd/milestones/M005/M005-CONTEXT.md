@@ -43,6 +43,7 @@ These are already decided and should not be reopened:
 - Hard enforcement belongs in SCC-controlled runtime layers.
 - Open Agent Skills are the only intended shared portability surface.
 - Provider-native hooks, rules, plugins, marketplaces, and config layouts remain adapter-owned.
+- Plugins are distribution/render units, not the canonical cross-provider policy object.
 - No backward-compatibility aliases for pre-M001 terminology belong in core.
 - M005 is the post-M004 quality-bar milestone, not an earlier substitute for M003 or M004.
 
@@ -135,6 +136,9 @@ Current repo evidence shows these concrete boundary problems:
 - `ui/dashboard/orchestrator.py`, `commands/admin.py`, `commands/profile.py`, and `commands/worktree/container_commands.py` call runtime/docker modules directly.
 - `docker/launch.py` imports `console`, which inverts runtime-to-presentation direction.
 - `docker.core` and `docker.launch` still form a direct import cycle.
+- `marketplace/materialize.py`, `marketplace/render.py`, and `application/sync_marketplace.py` are still anchored to Claude-native concepts such as `settings.local.json`, `.claude-plugin/marketplace.json`, and `claude-plugins-official`, even though the product goal is one governed artifact model that renders to both Claude and Codex.
+- There is not yet one explicit adapter-owned model for Codex plugins, Codex rules, Codex hooks, and provider-native instruction files, which risks future drift if new support is bolted onto the current Claude-shaped pipeline.
+- Claude and Codex plugin surfaces are intentionally asymmetric. M005 should not "solve" this by inventing a fake shared plugin format in core; it should make the provider-neutral bundle plan explicit and keep native projection logic inside adapters.
 
 ## Canonical References To Load First
 Read these before planning any M005 slice work:

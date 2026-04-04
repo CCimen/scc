@@ -11,6 +11,7 @@ from .checks import (
     check_docker_sandbox,
     check_git,
     check_runtime_backend,
+    check_safety_policy,
     check_user_config_valid,
     check_workspace_path,
     check_wsl2,
@@ -83,5 +84,8 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
 
     user_config_check = check_user_config_valid()
     result.checks.append(user_config_check)
+
+    safety_check = check_safety_policy()
+    result.checks.append(safety_check)
 
     return result

@@ -15,6 +15,10 @@ Reason:
 - SCC-owned runtime wrappers for the first safety command families
 - provider UX/audit adapters for Claude and Codex
 - fail-closed policy loading and truthful diagnostics
+- truthful safety diagnostics about provider capabilities, active team context, and which
+  provider-native safety surfaces are present vs merely planned
+- truthful differentiation between Codex rules/hooks surfaces and Codex plugin surfaces when
+  reporting current capability status
 - local helper extractions only where active safety work needs them
 
 ## Out Of Scope
@@ -22,3 +26,4 @@ Reason:
 - new network-policy surface area beyond the M003 runtime boundary
 - repo-wide strict typing or decomposition work reserved for M005
 - expansion to package managers, cloud CLIs, or other command families outside the first safety scope
+- full Codex plugin/materialization parity; M004 should surface truthful status, not invent it

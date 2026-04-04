@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T12:47:16.226Z",
+  "exported_at": "2026-04-04T13:08:22.292Z",
   "milestones": [
     {
       "id": "M001",
@@ -489,7 +489,7 @@
       "milestone_id": "M004",
       "id": "S03",
       "title": "Claude and Codex UX/audit adapters over the shared engine",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [
         "S01",
@@ -497,9 +497,9 @@
       ],
       "demo": "",
       "created_at": "2026-04-04T08:09:04.486Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T12:51:24.615Z",
+      "full_summary_md": "---\nid: S03\nparent: M004\nmilestone: M004\nprovides:\n  - SafetyCheckResult dataclass for downstream diagnostic and UI consumption\n  - SafetyAdapter protocol for provider-specific safety check abstraction\n  - ClaudeSafetyAdapter and CodexSafetyAdapter wired in bootstrap\n  - FakeSafetyAdapter for downstream test code\nrequires:\n  - slice: S01\n    provides: SafetyEngine protocol, DefaultSafetyEngine, SafetyVerdict, SafetyPolicy, FakeSafetyEngine\n  - slice: S02\n    provides: Runtime wrapper baseline establishing the 7-tool scope and defense-in-depth pattern\naffects:\n  - S04\n  - S05\nkey_files:\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/ports/safety_adapter.py\n  - src/scc_cli/adapters/claude_safety_adapter.py\n  - src/scc_cli/adapters/codex_safety_adapter.py\n  - src/scc_cli/bootstrap.py\n  - tests/fakes/fake_safety_adapter.py\n  - tests/fakes/__init__.py\n  - tests/test_claude_safety_adapter.py\n  - tests/test_codex_safety_adapter.py\n  - tests/test_safety_adapter_audit.py\nkey_decisions:\n  - SafetyCheckResult placed in contracts.py alongside SafetyVerdict to keep safety-domain types co-located\n  - Adapter metadata values are all stringified (dict[str, str]) for safe AuditEvent serialization\n  - Shared engine/sink local variables in get_default_adapters() to avoid duplicate instances across safety_engine and both adapter constructors\n  - FakeSafetyAdapter defaults to allowed/no-audit matching the FakeSafetyEngine allow-all convention\npatterns_established:\n  - SafetyAdapter protocol follows the same 4-touch-point wiring pattern as AgentProvider: adapter file → bootstrap import+field+instantiation → fakes factory → inline test constructions\n  - Provider safety adapters are pure UX/audit wrappers with zero verdict logic — engine is the single source of safety truth\n  - Blocked commands → WARNING audit severity, allowed commands → INFO audit severity as the standard adapter audit pattern\nobservability_surfaces:\n  - AuditEvent emission with provider-specific metadata (provider_id, command, verdict_allowed, matched_rule, command_family) on every safety check\ndrill_down_paths:\n  - .gsd/milestones/M004/slices/S03/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M004/slices/S03/tasks/T02-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T12:51:24.616Z\nblocker_discovered: false\n---\n\n# S03: Claude and Codex UX/audit adapters over the shared engine\n\n**Delivered provider-specific Claude and Codex safety adapters that wrap the shared SafetyEngine with UX-formatted user messages and structured AuditEvent emission, wired through bootstrap with 20 new tests (12 unit + 8 integration).**\n\n## What Happened\n\nS03 built the provider-specific UX and audit layer on top of the shared SafetyEngine delivered in S01. The slice introduced three new architectural elements:\n\n**1. SafetyCheckResult contract (contracts.py).** A frozen dataclass with `verdict: SafetyVerdict`, `user_message: str`, and `audit_emitted: bool`. Placed alongside SafetyVerdict to keep safety-domain types co-located. This is the return type for all adapter-level safety checks — downstream consumers (S04 diagnostics, future UI surfaces) work with this instead of raw verdicts.\n\n**2. SafetyAdapter protocol and two implementations.** The SafetyAdapter protocol in `ports/safety_adapter.py` defines `check_command(command, policy) -> SafetyCheckResult`. ClaudeSafetyAdapter and CodexSafetyAdapter each take a SafetyEngine and AuditEventSink at construction, delegate verdict logic entirely to engine.evaluate(), emit a structured AuditEvent with provider-specific metadata (all values stringified as `dict[str, str]` for safe serialization), and return a SafetyCheckResult with provider-prefixed user messages (`[Claude] Command blocked: ...` / `[Codex] Command allowed`).\n\nKey design: adapters contain zero verdict logic — they are pure UX/audit wrappers. The engine is the single source of safety truth. Blocked commands emit WARNING-severity audit events; allowed commands emit INFO. Metadata includes provider_id, command, verdict_allowed, matched_rule, and command_family.\n\n**3. Bootstrap wiring and test infrastructure.** DefaultAdapters gained `claude_safety_adapter` and `codex_safety_adapter` fields (both `SafetyAdapter | None = None` for backward compatibility). `get_default_adapters()` was refactored to share engine and sink local variables across safety_engine and both adapter constructors — no duplicate instances. FakeSafetyAdapter was added to `tests/fakes/` with configurable result and call recording, and wired into `build_fake_adapters()`.\n\n**Test coverage.** 12 unit tests (6 per adapter) cover engine delegation, audit event severity, user message formatting, and the audit_emitted flag. 8 integration tests exercise the full engine → adapter → audit event chain for both providers, including shared-engine verdict consistency, metadata string-type enforcement, and bootstrap field verification. All 20 tests pass alongside the full 3746 regression suite.\n\n## Verification\n\nAll four verification gates passed:\n1. `uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py tests/test_safety_adapter_audit.py -v` — 20/20 passed\n2. `uv run ruff check` — clean\n3. `uv run mypy src/scc_cli` — clean (257 source files, 0 issues)\n4. `uv run pytest --rootdir \"$PWD\" -q` — 3746 passed, 23 skipped, 4 xfailed (above 3726 baseline, +20 net new tests)\n\n## Requirements Advanced\n\n- R001 — Safety adapter layer decomposed into focused protocol + two small adapters (47 lines each) with dedicated test files; bootstrap wiring uses shared instances; zero verdict logic duplication between adapters.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nMinor: ruff import-sort auto-fix needed on bootstrap.py after inserting new adapter imports. No plan-level deviation.\n\n## Known Limitations\n\nNone. Both adapters are fully functional and tested. The `| None = None` defaults on DefaultAdapters fields mean existing construction sites that don't know about safety adapters continue to work without breakage.\n\n## Follow-ups\n\nS04 will wire fail-closed policy loading and expose audit surfaces/diagnostics that consume SafetyCheckResult from these adapters.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/contracts.py` — Added SafetyCheckResult frozen dataclass with verdict, user_message, audit_emitted fields\n- `src/scc_cli/ports/safety_adapter.py` — New file: SafetyAdapter protocol defining check_command(command, policy) -> SafetyCheckResult\n- `src/scc_cli/adapters/claude_safety_adapter.py` — New file: ClaudeSafetyAdapter wrapping SafetyEngine with Claude-specific UX formatting and audit emission\n- `src/scc_cli/adapters/codex_safety_adapter.py` — New file: CodexSafetyAdapter wrapping SafetyEngine with Codex-specific UX formatting and audit emission\n- `src/scc_cli/bootstrap.py` — Added claude_safety_adapter and codex_safety_adapter fields to DefaultAdapters; refactored get_default_adapters() to share engine/sink instances\n- `tests/fakes/fake_safety_adapter.py` — New file: FakeSafetyAdapter with configurable result and call recording for downstream tests\n- `tests/fakes/__init__.py` — Added FakeSafetyAdapter import and wired into build_fake_adapters()\n- `tests/test_claude_safety_adapter.py` — New file: 6 unit tests covering engine delegation, audit events, user messages, audit_emitted flag\n- `tests/test_codex_safety_adapter.py` — New file: 6 unit tests mirroring Claude adapter tests with Codex-specific assertions\n- `tests/test_safety_adapter_audit.py` — New file: 8 integration tests exercising full engine → adapter → audit event chain for both providers\n",
+      "full_uat_md": "# S03: Claude and Codex UX/audit adapters over the shared engine — UAT\n\n**Milestone:** M004\n**Written:** 2026-04-04T12:51:24.616Z\n\n## UAT: S03 — Claude and Codex UX/audit adapters over the shared engine\n\n### Preconditions\n- Working directory: `scc-sync-1.7.3`\n- Python environment active via `uv sync`\n- S01 (shared safety engine) and S02 (runtime wrappers) already delivered\n\n---\n\n### Test 1: SafetyCheckResult contract integrity\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.contracts import SafetyCheckResult; r = SafetyCheckResult(verdict=None, user_message='test', audit_emitted=True); print(r.audit_emitted)\"`\n2. Verify output is `True`\n3. Attempt mutation: `uv run python -c \"from scc_cli.core.contracts import SafetyCheckResult; r = SafetyCheckResult(verdict=None, user_message='test', audit_emitted=True); r.user_message = 'x'\"`\n4. Verify FrozenInstanceError is raised (dataclass is immutable)\n\n**Expected:** SafetyCheckResult is a frozen dataclass with three typed fields.\n\n---\n\n### Test 2: Claude adapter blocks dangerous command with correct UX format\n**Steps:**\n1. Run `uv run pytest tests/test_claude_safety_adapter.py::TestBlockedUserMessageFormat -v`\n2. Verify test passes — blocked commands produce `[Claude] Command blocked: <reason>` user message\n\n**Expected:** Claude adapter prefixes blocked messages with `[Claude]` and includes the engine's reason string.\n\n---\n\n### Test 3: Codex adapter blocks dangerous command with correct UX format\n**Steps:**\n1. Run `uv run pytest tests/test_codex_safety_adapter.py::TestBlockedUserMessageFormat -v`\n2. Verify test passes — blocked commands produce `[Codex] Command blocked: <reason>` user message\n\n**Expected:** Codex adapter prefixes blocked messages with `[Codex]` and includes the engine's reason string.\n\n---\n\n### Test 4: Audit events emitted with correct severity levels\n**Steps:**\n1. Run `uv run pytest tests/test_safety_adapter_audit.py::TestClaudeAdapterFullChainBlocked tests/test_safety_adapter_audit.py::TestClaudeAdapterFullChainAllowed -v`\n2. Verify blocked → WARNING severity, allowed → INFO severity\n\n**Expected:** Audit event severity correctly reflects the safety verdict for each check.\n\n---\n\n### Test 5: Both adapters produce identical verdicts for the same command\n**Steps:**\n1. Run `uv run pytest tests/test_safety_adapter_audit.py::TestBothAdaptersShareEngineVerdicts -v`\n2. Verify test passes — same command + same policy → same `verdict.allowed` and `matched_rule` from both adapters\n\n**Expected:** Adapters delegate to the same engine; verdict logic is not duplicated.\n\n---\n\n### Test 6: All audit metadata values are strings\n**Steps:**\n1. Run `uv run pytest tests/test_safety_adapter_audit.py::TestAuditMetadataKeysAreAllStrings -v`\n2. Verify every value in the emitted AuditEvent.metadata dict is of type `str`\n\n**Expected:** No non-string values in metadata — prevents serialization issues in LocalAuditEventSink.\n\n---\n\n### Test 7: Bootstrap wiring accepts safety adapter fields\n**Steps:**\n1. Run `uv run pytest tests/test_safety_adapter_audit.py::TestBootstrapWiringHasSafetyAdapterFields -v`\n2. Verify DefaultAdapters accepts `claude_safety_adapter` and `codex_safety_adapter` fields\n3. Verify both default to `None` when not explicitly provided\n\n**Expected:** DefaultAdapters is backward-compatible — existing construction sites don't break.\n\n---\n\n### Test 8: Full regression passes with no new failures\n**Steps:**\n1. Run `uv run pytest --rootdir \"$PWD\" -q`\n2. Verify total ≥ 3746 passed, 0 failures\n3. Verify `uv run ruff check` is clean\n4. Verify `uv run mypy src/scc_cli` reports 0 issues\n\n**Expected:** No regressions from S03 changes. Test count grew by +20 (from 3726 baseline).\n\n---\n\n### Edge Cases\n- **Missing policy key:** Adapters delegate to SafetyEngine which uses fail-closed semantics (`policy.rules.get(key, True)`) — the adapter never overrides this.\n- **None matched_rule:** When engine returns `matched_rule=None`, adapter stringifies to empty string `''` in metadata — no KeyError or None serialization.\n- **Adapter constructed without real engine/sink:** FakeSafetyAdapter exists for test code that doesn't need real engine evaluation.\n",
       "goal": "Claude and Codex safety adapters wrap the shared SafetyEngine with provider-specific UX formatting and AuditEvent emission, wired through bootstrap with full test coverage.",
       "success_criteria": "- `SafetyCheckResult` contract and `SafetyAdapter` protocol exist in `core/contracts.py` and `ports/safety_adapter.py`\n- `ClaudeSafetyAdapter` and `CodexSafetyAdapter` in `adapters/` delegate to `SafetyEngine.evaluate()` and emit `AuditEvent` through `AuditEventSink`\n- Both adapters wired into `DefaultAdapters` via bootstrap with `| None = None` defaults\n- `FakeSafetyAdapter` available in `tests/fakes/` for downstream tests\n- All new adapter tests pass: `uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py tests/test_safety_adapter_audit.py -v`\n- `uv run ruff check` clean, `uv run mypy src/scc_cli` clean\n- `uv run pytest --rootdir \"$PWD\" -q` full regression passes (baseline: 3726)",
       "proof_level": "This slice proves: contract + integration. Real runtime required: no. Human/UAT required: no.",
@@ -523,11 +523,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "",
-      "success_criteria": "",
-      "proof_level": "",
-      "integration_closure": "",
-      "observability_impact": "",
+      "goal": "Fail-closed typed policy loading from org config, doctor safety-policy check, safety audit reader over the canonical JSONL sink, `scc support safety-audit` CLI command, and safety section in the support bundle — all following established patterns.",
+      "success_criteria": "- `uv run pytest tests/test_safety_policy_loader.py tests/test_safety_doctor_check.py -v` — all pass\n- `uv run pytest tests/test_safety_audit.py -v` — all pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — clean\n- `uv run pytest --rootdir \"$PWD\" -q` — ≥3746 passed (current baseline)\n- `grep -r 'from scc_cli.docker' src/scc_cli/core/safety_policy_loader.py` returns zero matches (no core→docker dependency)",
+      "proof_level": "This slice proves: contract + integration. Real runtime required: no. Human/UAT required: no.",
+      "integration_closure": "Upstream surfaces consumed: `SafetyPolicy` from `core/contracts.py`, `CheckResult` from `doctor/types.py`, `read_launch_audit_diagnostics` pattern from `application/launch/audit_log.py`, `build_envelope` from `json_output.py`, `Kind` enum from `kinds.py`, `support_app` from `commands/support.py`, `build_support_bundle_manifest` from `application/support_bundle.py`, `get_default_adapters()` from `bootstrap.py`.\nNew wiring: `check_safety_policy()` registered in doctor checks; `safety-audit` subcommand under `support_app`; `safety` section in support bundle manifest.\nWhat remains before the milestone is truly usable end-to-end: S05 verification, docs truthfulness, and milestone closeout.",
+      "observability_impact": "Runtime signals: Doctor check emits a CheckResult with pass/warn/error for safety policy validity. Safety audit reader surfaces recent blocked/allowed counts and last blocked command from the canonical JSONL sink.\nInspection surfaces: `scc doctor` gains a safety-policy check; `scc support safety-audit` shows recent safety verdicts; `scc support bundle --json` includes a `safety` section with effective policy and recent events.\nFailure visibility: Doctor check reports malformed org config, invalid action values, or missing security.safety_net key with specific fix hints. Safety audit reader reports malformed JSONL lines and empty sink state.\nRedaction constraints: Safety audit reader reuses the same `_redact_string` path-home pattern from the launch audit reader. Support bundle `safety` section passes through `redact_paths()`.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -2762,6 +2762,115 @@
       "sequence": 0
     },
     {
+      "milestone_id": "M004",
+      "slice_id": "S04",
+      "id": "T01",
+      "title": "Added fail-closed typed SafetyPolicy loader in core, doctor safety-policy check, and 31 tests with import guardrail",
+      "status": "complete",
+      "one_liner": "Added fail-closed typed SafetyPolicy loader in core, doctor safety-policy check, and 31 tests with import guardrail",
+      "narrative": "Created core/safety_policy_loader.py with load_safety_policy() that extracts security.safety_net from raw org config dicts and returns a typed SafetyPolicy. Fail-closed: any parse error produces default SafetyPolicy(action=\"block\"). Created doctor/checks/safety.py with check_safety_policy() that probes org config and reports PASS/WARNING/ERROR. Registered the check in both checks/__init__.py and core.py. Wrote 24 loader tests (default fallbacks, valid passthrough, rules extraction, return-type invariants, tokenize-based import guardrail) and 7 doctor check tests (valid config, missing config, missing section, invalid action, exception).",
+      "verification_result": "All 31 targeted tests pass. ruff check clean. mypy clean (259 files). grep confirms no docker imports in safety_policy_loader.py. Full suite: 3777 passed, 23 skipped, 4 xfailed — no regressions.",
+      "duration": "",
+      "completed_at": "2026-04-04T13:08:22.251Z",
+      "blocker_discovered": false,
+      "deviations": "Used _load_raw_org_config() private indirection for testability instead of function-body import. Added extra tests beyond plan: non-dict fallbacks, missing-action fallback, source field, parametrized return-type invariant.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/safety_policy_loader.py",
+        "src/scc_cli/doctor/checks/safety.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "src/scc_cli/doctor/core.py",
+        "tests/test_safety_policy_loader.py",
+        "tests/test_safety_doctor_check.py"
+      ],
+      "key_decisions": [
+        "Used raw config.load_cached_org_config() for doctor check — NormalizedOrgConfig strips safety_net",
+        "Added _load_raw_org_config() indirection for clean mock patching",
+        "Duplicated validation logic from docker.launch to preserve core→docker boundary"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S04\nmilestone: M004\nkey_files:\n  - src/scc_cli/core/safety_policy_loader.py\n  - src/scc_cli/doctor/checks/safety.py\n  - src/scc_cli/doctor/checks/__init__.py\n  - src/scc_cli/doctor/core.py\n  - tests/test_safety_policy_loader.py\n  - tests/test_safety_doctor_check.py\nkey_decisions:\n  - Used raw config.load_cached_org_config() for doctor check — NormalizedOrgConfig strips safety_net\n  - Added _load_raw_org_config() indirection for clean mock patching\n  - Duplicated validation logic from docker.launch to preserve core→docker boundary\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T13:08:22.250Z\nblocker_discovered: false\n---\n\n# T01: Added fail-closed typed SafetyPolicy loader in core, doctor safety-policy check, and 31 tests with import guardrail\n\n**Added fail-closed typed SafetyPolicy loader in core, doctor safety-policy check, and 31 tests with import guardrail**\n\n## What Happened\n\nCreated core/safety_policy_loader.py with load_safety_policy() that extracts security.safety_net from raw org config dicts and returns a typed SafetyPolicy. Fail-closed: any parse error produces default SafetyPolicy(action=\"block\"). Created doctor/checks/safety.py with check_safety_policy() that probes org config and reports PASS/WARNING/ERROR. Registered the check in both checks/__init__.py and core.py. Wrote 24 loader tests (default fallbacks, valid passthrough, rules extraction, return-type invariants, tokenize-based import guardrail) and 7 doctor check tests (valid config, missing config, missing section, invalid action, exception).\n\n## Verification\n\nAll 31 targeted tests pass. ruff check clean. mypy clean (259 files). grep confirms no docker imports in safety_policy_loader.py. Full suite: 3777 passed, 23 skipped, 4 xfailed — no regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_safety_policy_loader.py tests/test_safety_doctor_check.py -v` | 0 | ✅ pass | 4500ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 4700ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4700ms |\n| 4 | `grep -r 'from scc_cli.docker' src/scc_cli/core/safety_policy_loader.py` | 1 | ✅ pass | 100ms |\n| 5 | `uv run pytest --tb=short -q` | 0 | ✅ pass | 46200ms |\n\n## Deviations\n\nUsed _load_raw_org_config() private indirection for testability instead of function-body import. Added extra tests beyond plan: non-dict fallbacks, missing-action fallback, source field, parametrized return-type invariant.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/safety_policy_loader.py`\n- `src/scc_cli/doctor/checks/safety.py`\n- `src/scc_cli/doctor/checks/__init__.py`\n- `src/scc_cli/doctor/core.py`\n- `tests/test_safety_policy_loader.py`\n- `tests/test_safety_doctor_check.py`\n",
+      "description": "Create `core/safety_policy_loader.py` with `load_safety_policy(org_config: dict[str, Any] | None) -> SafetyPolicy` that extracts safety policy from org config dicts and returns a typed `SafetyPolicy`. Fail-closed: any parse error → default `SafetyPolicy(action=\"block\")`. Create `doctor/checks/safety.py` with `check_safety_policy() -> CheckResult` that probes org config availability and policy validity through `bootstrap.get_default_adapters()`. Register the new check in `doctor/checks/__init__.py` and `doctor/core.py`. Write comprehensive tests and a guardrail preventing core→docker imports.\n\n## Steps\n\n1. Create `src/scc_cli/core/safety_policy_loader.py`:\n   - Define `VALID_SAFETY_NET_ACTIONS = frozenset({\"block\", \"warn\", \"allow\"})`\n   - Implement `load_safety_policy(org_config: dict[str, Any] | None) -> SafetyPolicy`\n   - Extract `security.safety_net` from org config dict\n   - Validate `action` field: if missing or not in valid set → `\"block\"` (fail-closed)\n   - Pass remaining keys as `rules` dict\n   - Return `SafetyPolicy(action=action, rules=rules, source=\"org.security.safety_net\")`\n   - On any exception or if org_config is None → return default `SafetyPolicy(action=\"block\")`\n   - Do NOT import from `scc_cli.docker.launch` — duplicate the ~10 lines of validation logic\n\n2. Create `src/scc_cli/doctor/checks/safety.py`:\n   - Implement `check_safety_policy() -> CheckResult`\n   - Try loading org config via `bootstrap.get_default_adapters()` → `adapters.config_store`\n   - If no org config: return WARNING CheckResult (\"No org config found, using default block policy\")\n   - If org config lacks `security.safety_net`: return WARNING (\"No safety_net section in org config\")\n   - If action is invalid: return ERROR with fix hint\n   - If valid: return PASS with the effective action\n   - Wrap the whole check in try/except → return ERROR on any unexpected failure\n\n3. Register the check in `doctor/checks/__init__.py`:\n   - Import `check_safety_policy` from `.safety`\n   - Add to `run_all_checks()` after the cache checks section\n   - Add to `__all__`\n\n4. Register the check in `doctor/core.py`:\n   - Import `check_safety_policy` from `.checks`\n   - Call it in `run_doctor()` and append to `result.checks`\n\n5. Create `tests/test_safety_policy_loader.py` with tests:\n   - `test_none_org_config_returns_default_block` — None → SafetyPolicy(action=\"block\")\n   - `test_empty_dict_returns_default_block` — {} → block\n   - `test_missing_security_key_returns_default_block`\n   - `test_missing_safety_net_key_returns_default_block`\n   - `test_valid_block_action_passthrough`\n   - `test_valid_warn_action_passthrough`\n   - `test_valid_allow_action_passthrough`\n   - `test_invalid_action_falls_back_to_block`\n   - `test_rules_extracted_from_policy`\n   - `test_non_dict_org_config_returns_default_block` — e.g. string or list input\n   - `test_no_import_from_docker_launch` — guardrail: tokenize `safety_policy_loader.py`, assert no NAME token `docker` in import statements\n\n6. Create `tests/test_safety_doctor_check.py` with tests:\n   - `test_check_passes_with_valid_org_config` — mock config_store to return org config with valid safety_net\n   - `test_check_warns_when_no_org_config` — mock config_store returning None\n   - `test_check_warns_when_no_safety_net_section`\n   - `test_check_errors_on_malformed_org_config` — mock config_store raising exception\n\n## Must-Haves\n\n- [ ] `load_safety_policy()` returns `SafetyPolicy` (never raw dict, never None)\n- [ ] Fail-closed: any parse failure → default block policy\n- [ ] No imports from `scc_cli.docker.launch` in `safety_policy_loader.py`\n- [ ] Doctor check goes through `bootstrap.get_default_adapters()` per KNOWLEDGE.md rule\n- [ ] All tests in `test_safety_policy_loader.py` and `test_safety_doctor_check.py` pass\n- [ ] `uv run ruff check` clean\n- [ ] `uv run mypy src/scc_cli` clean",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/safety_policy_loader.py",
+        "src/scc_cli/doctor/checks/safety.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "src/scc_cli/doctor/core.py",
+        "tests/test_safety_policy_loader.py",
+        "tests/test_safety_doctor_check.py"
+      ],
+      "verify": "uv run pytest tests/test_safety_policy_loader.py tests/test_safety_doctor_check.py -v && uv run ruff check && uv run mypy src/scc_cli && grep -r 'from scc_cli.docker' src/scc_cli/core/safety_policy_loader.py; test $? -eq 1",
+      "inputs": [
+        "`src/scc_cli/core/contracts.py` — SafetyPolicy dataclass definition",
+        "`src/scc_cli/doctor/types.py` — CheckResult dataclass definition",
+        "`src/scc_cli/doctor/checks/__init__.py` — existing check registration pattern",
+        "`src/scc_cli/doctor/core.py` — existing run_doctor() wiring pattern",
+        "`src/scc_cli/bootstrap.py` — get_default_adapters() for doctor check access",
+        "`src/scc_cli/docker/launch.py` — reference for validation logic to duplicate (do NOT import)"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/safety_policy_loader.py` — typed policy loader module",
+        "`src/scc_cli/doctor/checks/safety.py` — doctor safety-policy check",
+        "`src/scc_cli/doctor/checks/__init__.py` — updated with safety check registration",
+        "`src/scc_cli/doctor/core.py` — updated with safety check call",
+        "`tests/test_safety_policy_loader.py` — policy loader tests + import guardrail",
+        "`tests/test_safety_doctor_check.py` — doctor safety check tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M004",
+      "slice_id": "S04",
+      "id": "T02",
+      "title": "Safety audit reader, CLI command, support-bundle integration, and tests",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Create `application/safety_audit.py` with a bounded reader over the canonical JSONL sink filtered to `safety.check` events. Add `scc support safety-audit` CLI command under the existing `support_app` with human and `--json` modes. Add `SAFETY_AUDIT` kind to the enum. Create the JSON presenter. Add a `safety` section to the support bundle manifest with effective policy summary and recent safety events. Write comprehensive tests.\n\n## Steps\n\n1. Add `SAFETY_AUDIT = \"SafetyAudit\"` to `Kind` enum in `src/scc_cli/kinds.py`.\n\n2. Create `src/scc_cli/application/safety_audit.py`:\n   - Define `SafetyAuditEventRecord` frozen dataclass: `line_number: int`, `event_type: str`, `message: str`, `severity: str`, `occurred_at: str`, `command: str | None`, `verdict_allowed: str | None`, `matched_rule: str | None`, `provider_id: str | None`, `metadata: dict[str, Any]`\n   - Define `SafetyAuditDiagnostics` frozen dataclass: `sink_path: str`, `state: str`, `requested_limit: int`, `scanned_line_count: int`, `malformed_line_count: int`, `last_malformed_line: int | None`, `recent_events: tuple[SafetyAuditEventRecord, ...]`, `last_blocked: SafetyAuditEventRecord | None`, `blocked_count: int`, `allowed_count: int`, `error: str | None = None`\n   - Add `to_dict()` method on `SafetyAuditDiagnostics` using `dataclasses.asdict`\n   - Implement `read_safety_audit_diagnostics(*, audit_path: Path | None = None, limit: int = 10, redact_paths: bool = True) -> SafetyAuditDiagnostics`\n   - Reuse `_tail_lines` from `application/launch/audit_log.py` (import it) for bounded tail-read\n   - Filter parsed records to `event_type == \"safety.check\"` only\n   - Extract `command`, `verdict_allowed`, `matched_rule`, `provider_id` from record metadata\n   - Track `blocked_count` / `allowed_count` and `last_blocked`\n   - Reuse the `_redact_string` pattern for path redaction\n\n3. Create `src/scc_cli/presentation/json/safety_audit_json.py`:\n   - Implement `build_safety_audit_envelope(diagnostics: SafetyAuditDiagnostics) -> dict[str, object]`\n   - Use `build_envelope(Kind.SAFETY_AUDIT, data=diagnostics.to_dict())`\n\n4. Add `scc support safety-audit` command in `src/scc_cli/commands/support.py`:\n   - Follow the exact pattern of `support_launch_audit_cmd`\n   - Options: `--limit` (default 10), `--json`, `--pretty`\n   - Human mode: render sink state, blocked/allowed counts, last blocked command, recent events\n   - JSON mode: use `build_safety_audit_envelope`\n   - Import from `application.safety_audit` and `presentation.json.safety_audit_json`\n\n5. Add `safety` section to `build_support_bundle_manifest()` in `src/scc_cli/application/support_bundle.py`:\n   - Wrap in try/except (partial results pattern per KNOWLEDGE.md)\n   - Include effective policy summary via `load_safety_policy()` from `core/safety_policy_loader.py`\n   - Include recent safety audit events via `read_safety_audit_diagnostics(limit=5)`\n   - Structure: `{\"effective_policy\": {\"action\": ..., \"source\": ...}, \"recent_audit\": diagnostics.to_dict()}`\n\n6. Create `tests/test_safety_audit.py` with tests:\n   - `test_empty_sink_returns_empty_state` — no file exists → state \"unavailable\"\n   - `test_filters_to_safety_check_events` — mixed JSONL with launch and safety.check events → only safety.check returned\n   - `test_blocked_allowed_counts` — verify blocked_count and allowed_count\n   - `test_last_blocked_populated` — verify last_blocked is the most recent blocked event\n   - `test_bounded_scan` — verify limit parameter works\n   - `test_malformed_lines_skipped` — malformed JSON lines don't crash, increment malformed count\n   - `test_redact_paths` — home dir replaced with ~\n   - `test_support_bundle_has_safety_section` — mock dependencies, verify manifest[\"safety\"] key exists\n\n## Must-Haves\n\n- [ ] Safety audit reader filters to `event_type == \"safety.check\"` only\n- [ ] Reader uses bounded tail-read (reuses `_tail_lines`), not full-file scan\n- [ ] `scc support safety-audit` works in both human and `--json` modes\n- [ ] Support bundle manifest includes `safety` section with effective policy and recent audit\n- [ ] `SAFETY_AUDIT` kind registered in `kinds.py`\n- [ ] All tests in `test_safety_audit.py` pass\n- [ ] `uv run ruff check` clean\n- [ ] `uv run mypy src/scc_cli` clean\n- [ ] Full regression ≥3746 passed",
+      "estimate": "60m",
+      "files": [
+        "src/scc_cli/kinds.py",
+        "src/scc_cli/application/safety_audit.py",
+        "src/scc_cli/presentation/json/safety_audit_json.py",
+        "src/scc_cli/commands/support.py",
+        "src/scc_cli/application/support_bundle.py",
+        "tests/test_safety_audit.py"
+      ],
+      "verify": "uv run pytest tests/test_safety_audit.py -v && uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/core/safety_policy_loader.py` — load_safety_policy() from T01",
+        "`src/scc_cli/application/launch/audit_log.py` — _tail_lines reuse, LaunchAuditDiagnostics pattern",
+        "`src/scc_cli/commands/support.py` — existing support_app and launch-audit command pattern",
+        "`src/scc_cli/application/support_bundle.py` — existing build_support_bundle_manifest()",
+        "`src/scc_cli/kinds.py` — existing Kind enum",
+        "`src/scc_cli/json_output.py` — build_envelope()",
+        "`src/scc_cli/presentation/json/launch_audit_json.py` — JSON presenter pattern",
+        "`src/scc_cli/adapters/local_audit_event_sink.py` — JSONL format reference"
+      ],
+      "expected_output": [
+        "`src/scc_cli/kinds.py` — updated with SAFETY_AUDIT kind",
+        "`src/scc_cli/application/safety_audit.py` — safety audit reader module",
+        "`src/scc_cli/presentation/json/safety_audit_json.py` — JSON envelope builder",
+        "`src/scc_cli/commands/support.py` — updated with safety-audit command",
+        "`src/scc_cli/application/support_bundle.py` — updated with safety section",
+        "`tests/test_safety_audit.py` — safety audit reader and integration tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T01",
@@ -4925,6 +5034,61 @@
       "verdict": "✅ pass",
       "duration_ms": 43000,
       "created_at": "2026-04-04T12:47:16.192Z"
+    },
+    {
+      "id": 94,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_safety_policy_loader.py tests/test_safety_doctor_check.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4500,
+      "created_at": "2026-04-04T13:08:22.251Z"
+    },
+    {
+      "id": 95,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4700,
+      "created_at": "2026-04-04T13:08:22.251Z"
+    },
+    {
+      "id": 96,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4700,
+      "created_at": "2026-04-04T13:08:22.251Z"
+    },
+    {
+      "id": 97,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "grep -r 'from scc_cli.docker' src/scc_cli/core/safety_policy_loader.py",
+      "exit_code": 1,
+      "verdict": "✅ pass",
+      "duration_ms": 100,
+      "created_at": "2026-04-04T13:08:22.251Z"
+    },
+    {
+      "id": 98,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run pytest --tb=short -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 46200,
+      "created_at": "2026-04-04T13:08:22.251Z"
     }
   ]
 }

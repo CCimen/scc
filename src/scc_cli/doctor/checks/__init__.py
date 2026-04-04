@@ -57,6 +57,9 @@ from .organization import (
     load_cached_org_config,
 )
 
+# Safety policy check
+from .safety import check_safety_policy
+
 # Worktree checks
 from .worktree import (
     check_git_version_for_worktrees,
@@ -128,6 +131,9 @@ def run_all_checks() -> list[CheckResult]:
     # Exception stores check
     results.append(check_exception_stores())
 
+    # Safety policy check
+    results.append(check_safety_policy())
+
     return results
 
 
@@ -163,6 +169,8 @@ __all__ = [
     "check_cache_ttl_status",
     "check_exception_stores",
     "check_proxy_environment",
+    # Safety policy check
+    "check_safety_policy",
     # Orchestration
     "run_all_checks",
 ]
