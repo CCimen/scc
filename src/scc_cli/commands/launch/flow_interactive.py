@@ -56,6 +56,7 @@ from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.exit_codes import EXIT_CONFIG
 from ...panels import create_info_panel, create_warning_panel
+from ...ports.config_models import NormalizedOrgConfig
 from ...ports.git_client import GitClient
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
 from ...services.workspace import has_project_markers, is_suspicious_directory
@@ -72,7 +73,6 @@ from ...ui.wizard import (
 from .dependencies import prepare_live_start_plan
 from .flow_session import _record_session_and_context
 from .flow_types import (
-    UserConfig,
     WizardResumeContext,
     reset_for_team_switch,
     set_team_context,
@@ -83,7 +83,7 @@ from .workspace import prepare_workspace, validate_and_resolve_workspace
 
 
 def interactive_start(
-    cfg: UserConfig,
+    cfg: dict[str, Any],
     *,
     skip_quick_resume: bool = False,
     allow_back: bool = False,
@@ -658,9 +658,9 @@ def run_start_wizard_flow(
         _configure_team_settings(team, cfg)
 
         standalone_mode = config.is_standalone_mode() or team is None
-        org_config = None
+        raw_org_config = None
         if team and not standalone_mode:
-            org_config = config.load_cached_org_config()
+            raw_org_config = config.load_cached_org_config()
 
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
@@ -674,7 +674,8 @@ def run_start_wizard_flow(
             standalone=standalone_mode,
             dry_run=False,
             allow_suspicious=False,
-            org_config=org_config,
+            org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
+            raw_org_config=raw_org_config,
         )
         start_dependencies, start_plan = prepare_live_start_plan(
             start_request,

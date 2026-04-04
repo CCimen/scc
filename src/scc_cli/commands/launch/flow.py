@@ -23,6 +23,7 @@ from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_info_panel
+from ...ports.config_models import NormalizedOrgConfig
 from ...presentation.json.launch_json import build_start_dry_run_envelope
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
 from ...theme import Spinners
@@ -228,7 +229,8 @@ def start(
         standalone=standalone,
         dry_run=dry_run,
         allow_suspicious=allow_suspicious_workspace,
-        org_config=org_config,
+        org_config=NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None,
+        raw_org_config=org_config,
     )
     start_dependencies, start_plan = prepare_live_start_plan(
         start_request,

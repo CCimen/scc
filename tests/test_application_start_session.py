@@ -16,6 +16,7 @@ from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.contracts import AgentLaunchSpec
 from scc_cli.core.workspace import ResolverResult
+from scc_cli.ports.config_models import NormalizedOrgConfig
 from scc_cli.ports.models import MountSpec, SandboxSpec
 from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
@@ -94,7 +95,11 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config={
+        org_config=NormalizedOrgConfig.from_dict({
+            "defaults": {"network_policy": "restricted"},
+            "profiles": {"alpha": {}},
+        }),
+        raw_org_config={
             "defaults": {"network_policy": "restricted"},
             "profiles": {"alpha": {}},
         },
@@ -132,6 +137,10 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
 def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
+    _raw = {
+        "defaults": {},
+        "profiles": {"alpha": {}},
+    }
     request = StartSessionRequest(
         workspace_path=workspace_path,
         workspace_arg=str(workspace_path),
@@ -144,10 +153,8 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config={
-            "defaults": {},
-            "profiles": {"alpha": {}},
-        },
+        org_config=NormalizedOrgConfig.from_dict(_raw),
+        raw_org_config=_raw,
     )
     resolver_result = _build_resolver_result(workspace_path)
     dependencies = _build_dependencies(FakeGitClient())
@@ -173,6 +180,10 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
 def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
+    _raw = {
+        "defaults": {},
+        "profiles": {"alpha": {}},
+    }
     request = StartSessionRequest(
         workspace_path=workspace_path,
         workspace_arg=str(workspace_path),
@@ -185,10 +196,8 @@ def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config={
-            "defaults": {},
-            "profiles": {"alpha": {}},
-        },
+        org_config=NormalizedOrgConfig.from_dict(_raw),
+        raw_org_config=_raw,
     )
     sync_result = SyncResult(
         success=True,

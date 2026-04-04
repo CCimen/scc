@@ -63,9 +63,10 @@ def launch_sandbox(
         from ...application.compute_effective_config import compute_effective_config
         from ...core.enums import NetworkPolicy
         from ...core.network_policy import collect_proxy_env
+        from ...ports.config_models import NormalizedOrgConfig
 
         effective_config = compute_effective_config(
-            org_config=org_config,
+            org_config=NormalizedOrgConfig.from_dict(org_config),
             team_name=team,
             workspace_path=workspace_path or mount_path,
         )

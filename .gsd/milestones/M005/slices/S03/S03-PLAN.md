@@ -126,7 +126,7 @@ The 436-line characterization test file provides strong regression protection. T
   - Estimate: 2h
   - Files: src/scc_cli/application/compute_effective_config.py, src/scc_cli/application/personal_profile_policy.py, src/scc_cli/profiles.py, tests/test_compute_effective_config_characterization.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_compute_effective_config_characterization.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T04: Convert StartSessionRequest, launch pipeline callers, and eliminate UserConfig alias** — Push the typed NormalizedOrgConfig boundary outward through the launch pipeline. Convert `StartSessionRequest.org_config` from `dict[str, Any] | None` to `NormalizedOrgConfig | None`. Eliminate the `UserConfig: TypeAlias = dict[str, Any]` alias. Update all callers that construct StartSessionRequest or call compute_effective_config with raw dicts to normalize at the call boundary.
+- [x] **T04: Typed StartSessionRequest.org_config as NormalizedOrgConfig | None, eliminated UserConfig alias, and normalized all 8 independent compute_effective_config call sites at their outermost boundary** — Push the typed NormalizedOrgConfig boundary outward through the launch pipeline. Convert `StartSessionRequest.org_config` from `dict[str, Any] | None` to `NormalizedOrgConfig | None`. Eliminate the `UserConfig: TypeAlias = dict[str, Any]` alias. Update all callers that construct StartSessionRequest or call compute_effective_config with raw dicts to normalize at the call boundary.
 
 ## Steps
 

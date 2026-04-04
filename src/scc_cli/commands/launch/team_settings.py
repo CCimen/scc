@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import typer
 from rich.status import Status
 
@@ -11,10 +13,9 @@ from ...core.exit_codes import EXIT_CONFIG
 from ...panels import create_warning_panel
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
-from .flow_types import UserConfig
 
 
-def _configure_team_settings(team: str | None, cfg: UserConfig) -> None:
+def _configure_team_settings(team: str | None, cfg: dict[str, Any]) -> None:
     """Validate team profile exists.
 
     NOTE: Plugin settings are now sourced ONLY from workspace settings.local.json

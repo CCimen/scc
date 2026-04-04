@@ -23,6 +23,7 @@ from ...json_command import json_command
 from ...kinds import Kind
 from ...output_mode import is_json_mode
 from ...panels import create_success_panel, create_warning_panel
+from ...ports.config_models import NormalizedOrgConfig
 from ...theme import Indicators, Spinners
 from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
@@ -238,7 +239,7 @@ def worktree_create_cmd(
             user_config = config.load_user_config()
             standalone_mode = config.is_standalone_mode()
             team = None if standalone_mode else user_config.get("selected_profile")
-            org_config = None if standalone_mode else config.load_cached_org_config()
+            raw_org_config = None if standalone_mode else config.load_cached_org_config()
             start_request = StartSessionRequest(
                 workspace_path=result.worktree_path,
                 workspace_arg=str(result.worktree_path),
@@ -251,7 +252,8 @@ def worktree_create_cmd(
                 standalone=standalone_mode,
                 dry_run=False,
                 allow_suspicious=False,
-                org_config=org_config,
+                org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
+                raw_org_config=raw_org_config,
             )
             start_dependencies, start_plan = prepare_live_start_plan(
                 start_request,

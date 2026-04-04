@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T17:52:29.691Z",
+  "exported_at": "2026-04-04T18:16:06.319Z",
   "milestones": [
     {
       "id": "M001",
@@ -3634,19 +3634,38 @@
       "milestone_id": "M005",
       "slice_id": "S03",
       "id": "T04",
-      "title": "Convert StartSessionRequest, launch pipeline callers, and eliminate UserConfig alias",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Typed StartSessionRequest.org_config as NormalizedOrgConfig | None, eliminated UserConfig alias, and normalized all 8 independent compute_effective_config call sites at their outermost boundary",
+      "status": "complete",
+      "one_liner": "Typed StartSessionRequest.org_config as NormalizedOrgConfig | None, eliminated UserConfig alias, and normalized all 8 independent compute_effective_config call sites at their outermost boundary",
+      "narrative": "Pushed the typed NormalizedOrgConfig boundary outward through the launch pipeline. Changed StartSessionRequest.org_config from dict[str,Any]|None to NormalizedOrgConfig|None with a raw_org_config companion field for downstream consumers still needing raw dicts. Updated all 7 StartSessionRequest construction sites and 5 independent compute_effective_config callers to normalize at the outermost call boundary. Eliminated the UserConfig TypeAlias from flow_types.py, replacing it with inline dict[str,Any] in 3 consumer files. Fixed a subtle bug where truthiness-based normalization guards silently converted empty dicts to None, breaking 2 preflight tests.",
+      "verification_result": "All four verification commands pass: ruff check (0 errors), mypy (0 errors in 285 files), pytest governed artifact tests (20 passed), full suite (4117 passed, 0 failures).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T18:16:06.256Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Plan listed 11 files; touched 14 due to 3 additional callers found via mypy. Added raw_org_config dual-field instead of converting all downstream consumers. Used is-not-None guards instead of truthiness.",
+      "known_issues": "SandboxSpec.org_config and sync_marketplace_settings still use raw dict[str,Any] — these are candidates for future typed migration but require changes in docker-layer code.",
+      "key_files": [
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/flow_types.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/launch/flow_session.py",
+        "src/scc_cli/commands/launch/team_settings.py",
+        "src/scc_cli/commands/config.py",
+        "src/scc_cli/commands/config_validate.py",
+        "src/scc_cli/commands/launch/render.py",
+        "src/scc_cli/commands/launch/sandbox.py",
+        "src/scc_cli/commands/exceptions.py",
+        "src/scc_cli/commands/worktree/worktree_commands.py",
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "tests/test_application_start_session.py"
+      ],
+      "key_decisions": [
+        "Added raw_org_config field to StartSessionRequest for downstream consumers that still need raw dicts",
+        "Used is-not-None instead of truthiness for NormalizedOrgConfig.from_dict guard to preserve empty-dict semantics",
+        "Replaced UserConfig alias with inline dict[str, Any] rather than NormalizedUserConfig"
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S03\nmilestone: M005\nkey_files:\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/commands/launch/flow_types.py\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/flow_session.py\n  - src/scc_cli/commands/launch/team_settings.py\n  - src/scc_cli/commands/config.py\n  - src/scc_cli/commands/config_validate.py\n  - src/scc_cli/commands/launch/render.py\n  - src/scc_cli/commands/launch/sandbox.py\n  - src/scc_cli/commands/exceptions.py\n  - src/scc_cli/commands/worktree/worktree_commands.py\n  - src/scc_cli/ui/dashboard/orchestrator_handlers.py\n  - tests/test_application_start_session.py\nkey_decisions:\n  - Added raw_org_config field to StartSessionRequest for downstream consumers that still need raw dicts\n  - Used is-not-None instead of truthiness for NormalizedOrgConfig.from_dict guard to preserve empty-dict semantics\n  - Replaced UserConfig alias with inline dict[str, Any] rather than NormalizedUserConfig\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T18:16:06.255Z\nblocker_discovered: false\n---\n\n# T04: Typed StartSessionRequest.org_config as NormalizedOrgConfig | None, eliminated UserConfig alias, and normalized all 8 independent compute_effective_config call sites at their outermost boundary\n\n**Typed StartSessionRequest.org_config as NormalizedOrgConfig | None, eliminated UserConfig alias, and normalized all 8 independent compute_effective_config call sites at their outermost boundary**\n\n## What Happened\n\nPushed the typed NormalizedOrgConfig boundary outward through the launch pipeline. Changed StartSessionRequest.org_config from dict[str,Any]|None to NormalizedOrgConfig|None with a raw_org_config companion field for downstream consumers still needing raw dicts. Updated all 7 StartSessionRequest construction sites and 5 independent compute_effective_config callers to normalize at the outermost call boundary. Eliminated the UserConfig TypeAlias from flow_types.py, replacing it with inline dict[str,Any] in 3 consumer files. Fixed a subtle bug where truthiness-based normalization guards silently converted empty dicts to None, breaking 2 preflight tests.\n\n## Verification\n\nAll four verification commands pass: ruff check (0 errors), mypy (0 errors in 285 files), pytest governed artifact tests (20 passed), full suite (4117 passed, 0 failures).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 4000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4000ms |\n| 3 | `uv run pytest tests/test_governed_artifact_models.py -v` | 0 | ✅ pass | 1300ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 71000ms |\n\n## Deviations\n\nPlan listed 11 files; touched 14 due to 3 additional callers found via mypy. Added raw_org_config dual-field instead of converting all downstream consumers. Used is-not-None guards instead of truthiness.\n\n## Known Issues\n\nSandboxSpec.org_config and sync_marketplace_settings still use raw dict[str,Any] — these are candidates for future typed migration but require changes in docker-layer code.\n\n## Files Created/Modified\n\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/commands/launch/flow_types.py`\n- `src/scc_cli/commands/launch/flow.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/commands/launch/flow_session.py`\n- `src/scc_cli/commands/launch/team_settings.py`\n- `src/scc_cli/commands/config.py`\n- `src/scc_cli/commands/config_validate.py`\n- `src/scc_cli/commands/launch/render.py`\n- `src/scc_cli/commands/launch/sandbox.py`\n- `src/scc_cli/commands/exceptions.py`\n- `src/scc_cli/commands/worktree/worktree_commands.py`\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py`\n- `tests/test_application_start_session.py`\n",
       "description": "Push the typed NormalizedOrgConfig boundary outward through the launch pipeline. Convert `StartSessionRequest.org_config` from `dict[str, Any] | None` to `NormalizedOrgConfig | None`. Eliminate the `UserConfig: TypeAlias = dict[str, Any]` alias. Update all callers that construct StartSessionRequest or call compute_effective_config with raw dicts to normalize at the call boundary.\n\n## Steps\n\n1. Change `StartSessionRequest.org_config` type in `src/scc_cli/application/start_session.py` from `dict[str, Any] | None` to `NormalizedOrgConfig | None`. Update import.\n2. Update `_compute_effective_config(request)` in the same file — it currently passes `request.org_config` to `compute_effective_config()`. Since both are now typed, this should just work.\n3. Find all callers that construct `StartSessionRequest(org_config=raw_dict, ...)` and add `NormalizedOrgConfig.from_dict()` at the call site:\n   - `src/scc_cli/commands/launch/flow_interactive.py`\n   - `src/scc_cli/commands/launch/flow_session.py`\n   - `src/scc_cli/commands/launch/flow.py`\n   - Test files that construct StartSessionRequest\n4. Update callers of `compute_effective_config()` that still pass raw dicts:\n   - `src/scc_cli/commands/config.py` (line 313)\n   - `src/scc_cli/commands/config_validate.py` (line 84)\n   - `src/scc_cli/commands/launch/render.py` (line 87)\n   - `src/scc_cli/commands/launch/sandbox.py` (line 67)\n   - `src/scc_cli/commands/exceptions.py` (line 511)\n   Each of these gets `org_config` as a raw dict from somewhere upstream. Add `NormalizedOrgConfig.from_dict(org_config)` at the call boundary.\n5. Eliminate `UserConfig: TypeAlias = dict[str, Any]` from `src/scc_cli/commands/launch/flow_types.py`. Replace all `UserConfig` references (flow_session.py, flow_interactive.py, team_settings.py) with `dict[str, Any]` directly or, where the value is already a NormalizedUserConfig, use that type.\n6. Run full verification.\n\n**Key constraints:**\n- Push normalization to the outermost call site. Do NOT normalize mid-stack (double normalization risk from research pitfalls).\n- The `UserConfig` alias is used in 3 files. Check each usage to determine if the value is truly a raw dict (from JSON load) or already a normalized config.\n\n## Must-Haves\n\n- [ ] StartSessionRequest.org_config is NormalizedOrgConfig | None\n- [ ] UserConfig alias eliminated from flow_types.py\n- [ ] All compute_effective_config callers pass NormalizedOrgConfig\n- [ ] No double normalization — normalize at outermost call site only\n- [ ] All existing tests pass\n\n## Verification\n\n- `uv run ruff check`\n- `uv run mypy src/scc_cli`\n- `uv run pytest tests/test_application_start_session.py -v` (if it exists)\n- `uv run pytest --rootdir \"$PWD\" -q`",
       "estimate": "1h30m",
       "files": [
@@ -6174,6 +6193,50 @@
       "verdict": "✅ pass",
       "duration_ms": 1400,
       "created_at": "2026-04-04T17:52:29.613Z"
+    },
+    {
+      "id": 164,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T18:16:06.256Z"
+    },
+    {
+      "id": 165,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T18:16:06.256Z"
+    },
+    {
+      "id": 166,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_governed_artifact_models.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1300,
+      "created_at": "2026-04-04T18:16:06.256Z"
+    },
+    {
+      "id": 167,
+      "task_id": "T04",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 71000,
+      "created_at": "2026-04-04T18:16:06.256Z"
     }
   ]
 }

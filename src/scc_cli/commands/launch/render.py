@@ -82,10 +82,11 @@ def build_dry_run_data(
 
     if org_config and team:
         from ...application.compute_effective_config import compute_effective_config
+        from ...ports.config_models import NormalizedOrgConfig
 
         workspace_for_project = None if project_config is not None else workspace_path
         effective = compute_effective_config(
-            org_config,
+            NormalizedOrgConfig.from_dict(org_config),
             team,
             project_config=project_config,
             workspace_path=workspace_for_project,

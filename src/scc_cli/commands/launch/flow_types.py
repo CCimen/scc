@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 from ...application.launch import (
     StartWizardContext,
@@ -15,7 +15,6 @@ from ...application.launch import (
 from ...contexts import WorkContext
 from ...ui.keys import _BackSentinel
 
-UserConfig: TypeAlias = dict[str, Any]
 StartWizardResult: TypeAlias = tuple[
     str | _BackSentinel | None,
     str | None,

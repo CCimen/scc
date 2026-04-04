@@ -179,6 +179,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     from ...commands.launch.team_settings import _configure_team_settings
     from ...marketplace.materialize import materialize_marketplace
     from ...marketplace.resolve import resolve_effective_config
+    from ...ports.config_models import NormalizedOrgConfig
     from ...theme import Spinners
 
     console = get_err_console()
@@ -223,6 +224,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
             resolve_effective_config=resolve_effective_config,
             materialize_marketplace=materialize_marketplace,
         )
+        raw_org_config = config.load_cached_org_config()
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -235,7 +237,8 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
             standalone=team is None,
             dry_run=False,
             allow_suspicious=False,
-            org_config=config.load_cached_org_config(),
+            org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
+            raw_org_config=raw_org_config,
             org_config_url=None,
         )
         sync_result, _sync_error = sync_marketplace_settings_for_start(
@@ -308,6 +311,7 @@ def _handle_session_resume(session: SessionSummary) -> bool:
     from ...commands.launch.team_settings import _configure_team_settings
     from ...marketplace.materialize import materialize_marketplace
     from ...marketplace.resolve import resolve_effective_config
+    from ...ports.config_models import NormalizedOrgConfig
     from ...theme import Spinners
 
     console = get_err_console()
@@ -358,6 +362,7 @@ def _handle_session_resume(session: SessionSummary) -> bool:
             resolve_effective_config=resolve_effective_config,
             materialize_marketplace=materialize_marketplace,
         )
+        raw_org_config_2 = config.load_cached_org_config()
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -370,7 +375,8 @@ def _handle_session_resume(session: SessionSummary) -> bool:
             standalone=team is None,
             dry_run=False,
             allow_suspicious=False,
-            org_config=config.load_cached_org_config(),
+            org_config=NormalizedOrgConfig.from_dict(raw_org_config_2) if raw_org_config_2 is not None else None,
+            raw_org_config=raw_org_config_2,
             org_config_url=None,
         )
         sync_result, _sync_error = sync_marketplace_settings_for_start(

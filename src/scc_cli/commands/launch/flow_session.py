@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import typer
 
@@ -45,16 +45,13 @@ from ...ui.gate import is_interactive_allowed
 from ...ui.picker import pick_session
 from ...ui.prompts import confirm_with_layout
 
-if TYPE_CHECKING:
-    from .flow_types import UserConfig
-
 
 def _resolve_session_selection(
     workspace: str | None,
     team: str | None,
     resume: bool,
     select: bool,
-    cfg: UserConfig,
+    cfg: dict[str, Any],
     *,
     json_mode: bool = False,
     standalone_override: bool = False,

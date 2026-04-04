@@ -33,6 +33,7 @@ from ..cli_helpers import create_audit_record, require_reason_for_governance
 from ..evaluation import EvaluationResult, evaluate
 from ..models.exceptions import AllowTargets
 from ..models.exceptions import Exception as SccException
+from ..ports.config_models import NormalizedOrgConfig
 from ..stores.exception_store import RepoStore, UserStore
 from ..utils.fuzzy import find_similar
 from ..utils.ttl import calculate_expiration, format_expiration, format_relative
@@ -509,7 +510,7 @@ def get_current_denials() -> EvaluationResult:
 
     # Compute effective config for current workspace
     effective = compute_effective_config(
-        org_config=org_config,
+        org_config=NormalizedOrgConfig.from_dict(org_config),
         team_name=team,
         workspace_path=Path.cwd(),
     )

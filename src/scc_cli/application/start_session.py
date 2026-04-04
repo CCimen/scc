@@ -26,6 +26,7 @@ from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
 from scc_cli.ports.audit_event_sink import AuditEventSink
 from scc_cli.ports.clock import Clock
+from scc_cli.ports.config_models import NormalizedOrgConfig
 from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.models import AgentSettings, MountSpec, SandboxHandle, SandboxSpec
@@ -65,7 +66,8 @@ class StartSessionRequest:
     standalone: bool
     dry_run: bool
     allow_suspicious: bool
-    org_config: dict[str, Any] | None
+    org_config: NormalizedOrgConfig | None
+    raw_org_config: dict[str, Any] | None = None
     org_config_url: str | None = None
 
 
@@ -190,7 +192,7 @@ def sync_marketplace_settings_for_start(
     """
     if request.dry_run or request.offline or request.standalone:
         return None, None
-    if request.org_config is None or request.team is None:
+    if request.raw_org_config is None or request.team is None:
         return None, None
     sync_dependencies = SyncMarketplaceDependencies(
         filesystem=dependencies.filesystem,
@@ -202,7 +204,7 @@ def sync_marketplace_settings_for_start(
     try:
         result = sync_marketplace_settings(
             project_dir=request.workspace_path,
-            org_config_data=request.org_config,
+            org_config_data=request.raw_org_config,
             team_id=request.team,
             org_config_url=request.org_config_url,
             write_to_workspace=False,
@@ -290,7 +292,7 @@ def _build_sandbox_spec(
         continue_session=request.resume,
         force_new=request.fresh,
         agent_settings=agent_settings,
-        org_config=request.org_config,
+        org_config=request.raw_org_config,
     )
 
 

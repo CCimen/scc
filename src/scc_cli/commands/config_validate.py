@@ -22,6 +22,7 @@ from ..application.compute_effective_config import (
 from ..cli_common import console
 from ..core.enums import RequestSource
 from ..panels import create_error_panel, create_success_panel
+from ..ports.config_models import NormalizedOrgConfig
 
 
 def _config_validate(
@@ -82,7 +83,7 @@ def _config_validate(
             warnings.append("session.auto_resume is advisory only and not enforced.")
 
         effective = compute_effective_config(
-            org_config=org_config,
+            org_config=NormalizedOrgConfig.from_dict(org_config),
             team_name=team,
             project_config=project_config,
         )
