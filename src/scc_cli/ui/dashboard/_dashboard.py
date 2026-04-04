@@ -337,6 +337,7 @@ class Dashboard:
 
     def _render_container_details(self, item: ListItem[Any]) -> RenderableType:
         """Render details for a container item using structured key/value table."""
+        from ...application.dashboard_models import ContainerSummary
         from ...docker.core import ContainerInfo
         from ..formatters import _shorten_docker_status
 
@@ -349,7 +350,7 @@ class Dashboard:
 
         table.add_row("Name", Text(item.label, style="bold"))
 
-        container: ContainerInfo | None = None
+        container: ContainerInfo | ContainerSummary | None = None
         if isinstance(item.value, ContainerItem):
             container = item.value.container
         elif isinstance(item.value, ContainerInfo):
@@ -920,9 +921,10 @@ class Dashboard:
                             self.state.status_message = "No container selected"
                             return True
 
+                        from ...application.dashboard_models import ContainerSummary
                         from ...docker.core import ContainerInfo
 
-                        key_container: ContainerInfo | None = None
+                        key_container: ContainerInfo | ContainerSummary | None = None
                         if isinstance(current.value, ContainerItem):
                             key_container = current.value.container
                         elif isinstance(current.value, ContainerInfo):

@@ -15,8 +15,8 @@ import pytest
 from rich.console import Console, RenderableType
 
 from scc_cli.application import dashboard as app_dashboard
+from scc_cli.application.dashboard import ContainerSummary
 from scc_cli.application.workspace import WorkspaceContext
-from scc_cli.docker.core import ContainerInfo
 from scc_cli.ports.session_models import SessionListResult, SessionSummary
 from scc_cli.ui.dashboard import (
     Dashboard,
@@ -68,7 +68,7 @@ def _container_item(
     *,
     status: str = "Up",
 ) -> ListItem[app_dashboard.DashboardItem]:
-    container = ContainerInfo(id=container_id, name=name, status=status)
+    container = ContainerSummary(id=container_id, name=name, status=status)
     item = app_dashboard.ContainerItem(label=name, description=description, container=container)
     return ListItem(value=item, label=name, description=description)
 
