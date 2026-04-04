@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T11:34:36.265Z",
+  "exported_at": "2026-04-04T11:40:36.563Z",
   "milestones": [
     {
       "id": "M001",
@@ -2401,19 +2401,28 @@
       "milestone_id": "M004",
       "slice_id": "S01",
       "id": "T02",
-      "title": "Lift git safety rules and create network tool rules with typed SafetyVerdict returns",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Lifted all git safety analyzers from plugin into core with typed SafetyVerdict returns, and created network tool rules module detecting 6 tools",
+      "status": "complete",
+      "one_liner": "Lifted all git safety analyzers from plugin into core with typed SafetyVerdict returns, and created network tool rules module detecting 6 tools",
+      "narrative": "Created git_safety_rules.py by copying the 494-line plugin module and adapting all analyze_* functions to return SafetyVerdict | None instead of str | None. Introduced a _block() helper and _RULE_NAMES dict to centralize verdict construction. Created network_tool_rules.py as a new V1 module detecting 6 network tools (curl, wget, ssh, scp, sftp, rsync) with typed verdicts. Adapted plugin test suite into 105 git safety tests and wrote 22 new network tool tests. All 171 tests pass, mypy and ruff clean.",
+      "verification_result": "Ran mypy on both source files (0 issues), ruff check (all passed), pytest on both test files (127 tests passed), and full slice verification across all 5 source files and 3 test files (171 tests passed in 0.95s).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T11:40:36.513Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Changed analyzers dict type from dict[str, object] to dict[str, Callable[[list[str]], SafetyVerdict | None]] to satisfy mypy without type: ignore comments.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/git_safety_rules.py",
+        "src/scc_cli/core/network_tool_rules.py",
+        "tests/test_git_safety_rules.py",
+        "tests/test_network_tool_rules.py"
+      ],
+      "key_decisions": [
+        "Used _block() helper + _RULE_NAMES dict to centralize verdict construction and keep analyzers identical to plugin logic",
+        "Used PurePosixPath for network tool path stripping to avoid filesystem access",
+        "Typed analyzers dict with Callable to satisfy mypy without type: ignore"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M004\nkey_files:\n  - src/scc_cli/core/git_safety_rules.py\n  - src/scc_cli/core/network_tool_rules.py\n  - tests/test_git_safety_rules.py\n  - tests/test_network_tool_rules.py\nkey_decisions:\n  - Used _block() helper + _RULE_NAMES dict to centralize verdict construction and keep analyzers identical to plugin logic\n  - Used PurePosixPath for network tool path stripping to avoid filesystem access\n  - Typed analyzers dict with Callable to satisfy mypy without type: ignore\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T11:40:36.512Z\nblocker_discovered: false\n---\n\n# T02: Lifted all git safety analyzers from plugin into core with typed SafetyVerdict returns, and created network tool rules module detecting 6 tools\n\n**Lifted all git safety analyzers from plugin into core with typed SafetyVerdict returns, and created network tool rules module detecting 6 tools**\n\n## What Happened\n\nCreated git_safety_rules.py by copying the 494-line plugin module and adapting all analyze_* functions to return SafetyVerdict | None instead of str | None. Introduced a _block() helper and _RULE_NAMES dict to centralize verdict construction. Created network_tool_rules.py as a new V1 module detecting 6 network tools (curl, wget, ssh, scp, sftp, rsync) with typed verdicts. Adapted plugin test suite into 105 git safety tests and wrote 22 new network tool tests. All 171 tests pass, mypy and ruff clean.\n\n## Verification\n\nRan mypy on both source files (0 issues), ruff check (all passed), pytest on both test files (127 tests passed), and full slice verification across all 5 source files and 3 test files (171 tests passed in 0.95s).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run mypy src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py` | 0 | ✅ pass | 15800ms |\n| 2 | `uv run ruff check src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py` | 0 | ✅ pass | 12000ms |\n| 3 | `uv run pytest tests/test_git_safety_rules.py tests/test_network_tool_rules.py -v` | 0 | ✅ pass | 940ms |\n| 4 | `uv run mypy src/scc_cli/core/enums.py src/scc_cli/core/shell_tokenizer.py src/scc_cli/ports/safety_engine.py (slice)` | 0 | ✅ pass | 3000ms |\n| 5 | `uv run ruff check src/scc_cli/core/enums.py src/scc_cli/core/shell_tokenizer.py src/scc_cli/ports/safety_engine.py (slice)` | 0 | ✅ pass | 1000ms |\n| 6 | `uv run pytest tests/test_shell_tokenizer.py -v (slice)` | 0 | ✅ pass | 800ms |\n\n## Deviations\n\nChanged analyzers dict type from dict[str, object] to dict[str, Callable[[list[str]], SafetyVerdict | None]] to satisfy mypy without type: ignore comments.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/git_safety_rules.py`\n- `src/scc_cli/core/network_tool_rules.py`\n- `tests/test_git_safety_rules.py`\n- `tests/test_network_tool_rules.py`\n",
       "description": "## Description\n\nLift the git safety analysis logic from the plugin into core, adapting it to return typed `SafetyVerdict` objects instead of raw strings. Create a new network tool rules module for V1 network tool detection. Both modules use the shell tokenizer from T01 and produce `SafetyVerdict` objects.\n\n## Steps\n\n1. Create `src/scc_cli/core/git_safety_rules.py` by copying and adapting from `/Users/ccimen/dev/sccorj/sandboxed-code-plugins/scc-safety-net/scripts/scc_safety_impl/git_rules.py` (494 lines). Key changes:\n   - Add `from __future__ import annotations`\n   - Import `SafetyVerdict` from `scc_cli.core.contracts` and `CommandFamily` from `scc_cli.core.enums`\n   - Keep all existing pure functions: `normalize_git_tokens`, `has_force_flag`, `has_force_refspec`, `has_force_with_lease`, and all `analyze_*` functions\n   - Change the return type of each `analyze_*` function from `str | None` to `SafetyVerdict | None`\n   - Where the plugin returned a raw string like `BLOCK_MESSAGES[\"force_push\"]`, return `SafetyVerdict(allowed=False, reason=BLOCK_MESSAGES[\"force_push\"], matched_rule=\"git.force_push\", command_family=CommandFamily.DESTRUCTIVE_GIT)`\n   - The `matched_rule` should follow a `git.<rule_name>` pattern (e.g. `git.force_push`, `git.reset_hard`, `git.branch_force_delete`)\n   - Keep `BLOCK_MESSAGES` dict for the human-readable reason strings\n   - The main `analyze_git(tokens) -> SafetyVerdict | None` entry point stays, returns typed verdict\n\n2. Create `src/scc_cli/core/network_tool_rules.py` — new V1 network tool matching. Structure:\n   - `NETWORK_TOOLS = frozenset({\"curl\", \"wget\", \"ssh\", \"scp\", \"sftp\", \"rsync\"})` — tools that access external network\n   - `analyze_network_tool(tokens: list[str]) -> SafetyVerdict | None` — checks if the first token (after path stripping via `Path(tokens[0]).name`) is in `NETWORK_TOOLS`. If yes, return `SafetyVerdict(allowed=False, reason=\"BLOCKED: {tool} may access external network. ...\", matched_rule=\"network.{tool}\", command_family=CommandFamily.NETWORK_TOOL)`. If no, return `None`.\n   - This is defense-in-depth (D014, D015) — topology+proxy are the hard control. Network tool wrappers add denial UX and audit.\n\n3. Create `tests/test_git_safety_rules.py` by adapting from `/Users/ccimen/dev/sccorj/sandboxed-code-plugins/scc-safety-net/tests/test_git_rules.py` (459 lines). Key changes:\n   - Change imports from `scc_safety_impl.git_rules` to `scc_cli.core.git_safety_rules`\n   - Where tests assert `result is not None` and check string content, assert `result.allowed is False` and check `result.reason`, `result.matched_rule`, `result.command_family`\n   - Where tests assert `result is None`, keep as-is (None means allowed)\n   - Helper function tests (`has_force_flag`, `normalize_git_tokens`, etc.) stay unchanged since those return the same types\n\n4. Create `tests/test_network_tool_rules.py` with tests for:\n   - Each tool in `NETWORK_TOOLS` produces a block verdict\n   - Non-network commands (e.g. `git`, `ls`, `cat`) return `None`\n   - Path-qualified binaries (`/usr/bin/curl`) are detected\n   - Empty tokens return `None`\n   - Verdict fields are correct (`command_family`, `matched_rule`)\n\n5. Run mypy and ruff on all new files, run all new tests.\n\n## Negative Tests\n\n- **Malformed inputs**: empty token list, single empty string, tokens with only flags\n- **Boundary conditions**: bare `git` with no subcommand, unknown git subcommands pass through, network tool names as substrings (e.g. `curling` should NOT match)\n\n## Must-Haves\n\n- [ ] `git_safety_rules.py` with all analyzers returning `SafetyVerdict | None`\n- [ ] `network_tool_rules.py` detecting 6 network tools with typed verdicts\n- [ ] Adapted git rules tests passing (460+ lines of coverage)\n- [ ] Network tool rules tests covering all tools, negative cases, and path-qualified binaries\n- [ ] mypy and ruff clean\n\n## Verification\n\n- `uv run mypy src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py`\n- `uv run ruff check src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py`\n- `uv run pytest tests/test_git_safety_rules.py tests/test_network_tool_rules.py -v`",
       "estimate": "2h",
       "files": [
@@ -4356,6 +4365,72 @@
       "verdict": "✅ pass",
       "duration_ms": 800,
       "created_at": "2026-04-04T11:34:36.223Z"
+    },
+    {
+      "id": 67,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 15800,
+      "created_at": "2026-04-04T11:40:36.513Z"
+    },
+    {
+      "id": 68,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run ruff check src/scc_cli/core/git_safety_rules.py src/scc_cli/core/network_tool_rules.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 12000,
+      "created_at": "2026-04-04T11:40:36.513Z"
+    },
+    {
+      "id": 69,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_git_safety_rules.py tests/test_network_tool_rules.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 940,
+      "created_at": "2026-04-04T11:40:36.513Z"
+    },
+    {
+      "id": 70,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli/core/enums.py src/scc_cli/core/shell_tokenizer.py src/scc_cli/ports/safety_engine.py (slice)",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3000,
+      "created_at": "2026-04-04T11:40:36.513Z"
+    },
+    {
+      "id": 71,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run ruff check src/scc_cli/core/enums.py src/scc_cli/core/shell_tokenizer.py src/scc_cli/ports/safety_engine.py (slice)",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-04T11:40:36.513Z"
+    },
+    {
+      "id": 72,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_shell_tokenizer.py -v (slice)",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 800,
+      "created_at": "2026-04-04T11:40:36.513Z"
     }
   ]
 }

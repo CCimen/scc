@@ -36,7 +36,7 @@ Establish the foundation for the safety engine: add the `CommandFamily` enum, li
   - Estimate: 1h30m
   - Files: src/scc_cli/core/enums.py, src/scc_cli/core/shell_tokenizer.py, src/scc_cli/ports/safety_engine.py, tests/test_shell_tokenizer.py
   - Verify: uv run mypy src/scc_cli/core/enums.py src/scc_cli/core/shell_tokenizer.py src/scc_cli/ports/safety_engine.py && uv run ruff check src/scc_cli/core/enums.py src/scc_cli/core/shell_tokenizer.py src/scc_cli/ports/safety_engine.py && uv run pytest tests/test_shell_tokenizer.py -v
-- [ ] **T02: Lift git safety rules and create network tool rules with typed SafetyVerdict returns** — ## Description
+- [x] **T02: Lifted all git safety analyzers from plugin into core with typed SafetyVerdict returns, and created network tool rules module detecting 6 tools** — ## Description
 
 Lift the git safety analysis logic from the plugin into core, adapting it to return typed `SafetyVerdict` objects instead of raw strings. Create a new network tool rules module for V1 network tool detection. Both modules use the shell tokenizer from T01 and produce `SafetyVerdict` objects.
 
