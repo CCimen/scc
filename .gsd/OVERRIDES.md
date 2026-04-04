@@ -71,3 +71,45 @@ User-issued overrides that supersede plan document content.
 **Applied-at:** M004/S02/none
 
 ---
+
+## Override: 2026-04-04T14:25:00.000Z
+
+**Change:** When M005 planning begins, implement the governed-artifact and team-pack refactor using the provider-neutral bundle model already defined in the plan/spec/decision set.
+
+  Required reread before planning or implementation:
+  - `CONSTITUTION.md`
+  - `PLAN.md`
+  - `.gsd/DECISIONS.md`
+  - `.gsd/KNOWLEDGE.md`
+  - `specs/03-provider-boundary.md`
+  - `specs/06-governed-artifacts.md`
+  - `.gsd/milestones/M005/M005-ROADMAP.md`
+  - `.gsd/milestones/M005/M005-CONTEXT.md`
+
+  Implementation direction:
+  - One approved SCC team-pack source is canonical.
+  - Team config references approved bundle/team-pack IDs, not raw Claude or Codex marketplace URLs.
+  - Preserve the user-facing experience of one team package per team.
+  - Shared skills and shared MCP definitions stay provider-neutral where possible.
+  - Claude and Codex native surfaces are asymmetric.
+  - Codex plugin does not subsume Codex rules, hooks, `config.toml`, or `AGENTS.md`.
+  - Do not bolt Codex support onto the current Claude-shaped marketplace pipeline.
+  - Split provider-neutral planning from provider-native renderers.
+  - Render Claude-native outputs for Claude and Codex-native outputs for Codex from the same bundle plan.
+  - Do not require dual team configs.
+
+  Preferred execution order inside M005 for this work:
+  1. S02/T05 — split the marketplace/profile/config cluster so provider-neutral planning is separate from provider-native renderers.
+  2. S03/T01-T03 — land typed governed-artifact/team-pack models and typed config flow.
+  3. S04/T01-T05 — harden fetch/render/merge/install failure handling.
+  4. S06/T03-T04 — run the docs/diagnostics truthfulness pass and milestone validation after the renderer split is real.
+
+  M004 remains narrow:
+  - Finish M004/S04 and M004/S05 normally.
+  - Do not start M005 implementation early.
+  - In M004, only document current truth and verify truthful safety/provider messaging; do not implement the new team-pack pipeline there.
+
+**Scope:** open
+**Applied-at:** M004/S04/none
+
+---

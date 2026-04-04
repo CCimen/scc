@@ -1,4 +1,4 @@
-"""Guardrail: prevent stale network-mode vocabulary and documentation truthfulness regressions.
+"""Guardrail: prevent stale vocabulary and documentation truthfulness regressions.
 
 After M003-S05 vocabulary cleanup, all user-facing strings, README claims, and
 example configs must use the current NetworkPolicy vocabulary:
@@ -10,6 +10,12 @@ Old names (unrestricted, corp-proxy-only, corp-proxy, isolated) must not appear
 as network_policy values in source, docs, or examples.  Additionally, the README
 must not claim Docker Desktop is a hard requirement — it should list Docker
 generically (Engine, Desktop, OrbStack, Colima) per Constitution §3.
+
+After M004 safety engine delivery, the README must truthfully document:
+  - The ``scc support safety-audit`` command
+  - SCC's built-in safety engine as a core capability (not plugin-only)
+  - Runtime wrappers as defense-in-depth for destructive git + explicit network tools
+  - All expected core safety modules and provider adapter files must exist
 """
 
 from __future__ import annotations
@@ -237,3 +243,128 @@ def _extract_network_policy_values(
         for i, item in enumerate(obj):
             results.extend(_extract_network_policy_values(item, f"{path}[{i}]"))
     return results
+
+
+# ===========================================================================
+# M004 safety truthfulness guardrails
+# ===========================================================================
+
+CORE_SAFETY_DIR = SRC / "core"
+ADAPTERS_DIR = SRC / "adapters"
+
+
+# ---------------------------------------------------------------------------
+# Test f: README must mention the scc support safety-audit command
+# ---------------------------------------------------------------------------
+
+
+def test_readme_mentions_safety_audit_command() -> None:
+    """README must document the ``scc support safety-audit`` command.
+
+    S04 added this CLI surface for inspecting safety-check audit events.
+    The README command table or troubleshooting section must reference it.
+    """
+    readme_text = README.read_text(encoding="utf-8")
+    assert "safety-audit" in readme_text, (
+        "README.md does not mention 'safety-audit'. "
+        "The `scc support safety-audit` command (added in M004/S04) must be documented."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test g: README must describe core safety engine (not plugin-only)
+# ---------------------------------------------------------------------------
+
+
+def test_readme_describes_core_safety_engine() -> None:
+    """README must mention the SCC-owned safety engine as a core capability.
+
+    Per Constitution §9 (runtime-level safety beats provider luck) and M004,
+    the README should describe SCC's built-in safety engine — not attribute
+    command guardrails solely to the scc-safety-net plugin.
+    """
+    readme_text = README.read_text(encoding="utf-8").lower()
+    has_safety_engine = "safety engine" in readme_text
+    has_runtime_safety = "runtime safety" in readme_text
+    assert has_safety_engine or has_runtime_safety, (
+        "README.md does not mention 'safety engine' or 'runtime safety'. "
+        "M004 delivered an SCC-owned safety engine; the README must describe "
+        "it as a core capability per Constitution §9."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test h: README enforcement scope mentions runtime wrappers
+# ---------------------------------------------------------------------------
+
+
+def test_readme_enforcement_scope_mentions_runtime_wrappers() -> None:
+    """README enforcement scope must mention runtime wrappers and their tool coverage.
+
+    M004/S02 delivered runtime wrappers for 7 tools (git, curl, wget, ssh, scp,
+    sftp, rsync). The enforcement scope section must mention these wrappers and
+    note that they are defense-in-depth (topology + proxy remain the hard control).
+    """
+    readme_text = README.read_text(encoding="utf-8")
+    # Must mention wrappers
+    assert re.search(r"[Ww]rappers?\b.*intercept|[Ww]rappers?\b.*defense", readme_text), (
+        "README.md enforcement scope does not describe runtime wrappers as "
+        "defense-in-depth. M004/S02 wrappers must be documented."
+    )
+    # Must mention at least the core network tools covered
+    for tool in ("curl", "wget", "ssh"):
+        assert tool in readme_text, (
+            f"README.md does not mention '{tool}' in enforcement scope. "
+            f"M004 runtime wrappers cover this tool."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Test i: core safety module files must exist
+# ---------------------------------------------------------------------------
+
+
+def test_safety_engine_core_files_exist() -> None:
+    """All expected core safety modules from M004/S01 must exist on disk.
+
+    These modules form the shared safety engine:
+    - safety_engine.py (orchestrator)
+    - shell_tokenizer.py (command parsing)
+    - git_safety_rules.py (destructive git detection)
+    - network_tool_rules.py (explicit network tool detection)
+    - safety_policy_loader.py (fail-closed policy loading from S04)
+    """
+    expected = [
+        CORE_SAFETY_DIR / "safety_engine.py",
+        CORE_SAFETY_DIR / "shell_tokenizer.py",
+        CORE_SAFETY_DIR / "git_safety_rules.py",
+        CORE_SAFETY_DIR / "network_tool_rules.py",
+        CORE_SAFETY_DIR / "safety_policy_loader.py",
+    ]
+    missing = [str(p.relative_to(ROOT)) for p in expected if not p.exists()]
+    assert not missing, (
+        f"Core safety module files missing: {missing}. "
+        "These are required M004 deliverables."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test j: provider safety adapter files must exist
+# ---------------------------------------------------------------------------
+
+
+def test_safety_adapter_files_exist() -> None:
+    """Both provider safety adapters from M004/S03 must exist on disk.
+
+    ClaudeSafetyAdapter and CodexSafetyAdapter are the provider-specific
+    UX/audit wrappers over the shared engine.
+    """
+    expected = [
+        ADAPTERS_DIR / "claude_safety_adapter.py",
+        ADAPTERS_DIR / "codex_safety_adapter.py",
+    ]
+    missing = [str(p.relative_to(ROOT)) for p in expected if not p.exists()]
+    assert not missing, (
+        f"Safety adapter files missing: {missing}. "
+        "These are required M004/S03 deliverables."
+    )

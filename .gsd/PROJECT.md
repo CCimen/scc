@@ -55,22 +55,30 @@ Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topol
 - FakeSafetyAdapter for downstream test code
 - +20 net new tests (12 unit + 8 integration), 3746 total
 
-Remaining slices: S04 (fail-closed loading, audit surfaces, diagnostics), S05 (verification, docs, closeout).
+**S04 complete.** Delivered fail-closed typed SafetyPolicy loader, doctor safety-policy check, bounded safety audit reader over canonical JSONL sink, `scc support safety-audit` CLI command, and support bundle safety section. Key deliverables:
+- `core/safety_policy_loader.py` — fail-closed: any parse error → default block policy
+- `doctor/checks/safety.py` — PASS/WARNING/ERROR via bootstrap, uses raw org config (NormalizedOrgConfig strips safety_net)
+- `application/safety_audit.py` — bounded tail-read filtering to `safety.check` events, blocked/allowed counts, path redaction
+- `scc support safety-audit` CLI command (human + JSON modes)
+- Support bundle `safety` section with effective policy + recent audit, try/except partial results
+- +44 net new tests (24 loader + 7 doctor + 13 audit), 3790 total
+
+Remaining: S05 (verification, docs truthfulness, milestone closeout).
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
-4. **M004 — Cross-Agent Runtime Safety** (active — S01 ✅, S02 ✅, S03 ✅, S04–S05 remaining)
+4. **M004 — Cross-Agent Runtime Safety** (active — S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05 remaining)
 5. **M005 — Architecture Quality, Strictness, And Hardening**
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices, by M004/S01–S02 (safety logic decomposed into focused core modules; standalone evaluator maintains sync via automated guardrail test), and by M004/S03 (safety adapter layer decomposed into focused protocol + two small adapters with dedicated test files; bootstrap wiring uses shared instances; zero verdict logic duplication).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices, by M004/S01–S02 (safety logic decomposed into focused core modules; standalone evaluator maintains sync via automated guardrail test), by M004/S03 (safety adapter layer decomposed into focused protocol + two small adapters with dedicated test files; bootstrap wiring uses shared instances; zero verdict logic duplication), and by M004/S04 (safety policy loader as focused core module, doctor check through bootstrap boundary, audit reader reusing existing bounded-read infrastructure).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 257 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3746 passed, 23 skipped, 4 xfailed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 261 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3790 passed, 23 skipped, 4 xfailed)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -101,6 +109,10 @@ Remaining slices: S04 (fail-closed loading, audit surfaces, diagnostics), S05 (v
 - Provider safety adapters (ClaudeSafetyAdapter, CodexSafetyAdapter) are pure UX/audit wrappers with zero verdict logic — the engine is the single source of safety truth.
 - Blocked commands → WARNING audit severity, allowed commands → INFO audit severity as the standard adapter audit pattern.
 - SafetyCheckResult is the adapter-level return type for all safety checks; downstream consumers work with this instead of raw SafetyVerdict.
+- SafetyPolicy loader is fail-closed: `load_safety_policy()` returns typed `SafetyPolicy` (never None, never raw dict). Any parse failure → default block policy. Uses raw org config (not NormalizedOrgConfig which strips safety_net).
+- Safety audit reader uses bounded tail-read from canonical JSONL sink filtered by `event_type == "safety.check"`. Reuses `_tail_lines` from launch audit infrastructure. Path redaction replaces home directory with `~`.
+- `scc support safety-audit` follows the same `--limit`/`--json`/`--pretty` pattern as `scc support launch-audit` for CLI consistency.
+- Support bundle safety section includes effective policy summary and recent audit events, wrapped in try/except for partial-failure resilience.
 
 ## Immediate next focus
-- M004/S04: Fail-closed policy loading, audit surfaces, and operator diagnostics — depends on S02's runtime wrapper baseline and S03's safety adapters.
+- M004/S05: Verification, docs truthfulness, and milestone closeout — depends on S03's adapters and S04's diagnostic surfaces.

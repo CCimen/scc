@@ -82,7 +82,7 @@ When you run `scc` or `scc start`:
 
 - **Your team's approved plugins and MCP servers** — pre-configured and ready
 - **Organization security policies** — applied automatically, no action needed
-- **Command guardrails** — block destructive git commands like `push --force` (when scc-safety-net plugin is enabled)
+- **Command guardrails** — SCC's built-in safety engine blocks destructive git commands and intercepts explicit network tools (curl, wget, ssh, scp, sftp, rsync) inside containers. The scc-safety-net plugin provides additional coverage
 - **Isolated git worktrees** — your main branch stays clean while Claude experiments
 - **Personal profiles (optional)** — save your own plugin/MCP preferences per project
 
@@ -115,6 +115,7 @@ Organization security blocks cannot be overridden by teams or developers.
 - SCC enforces org-managed plugins and MCP servers at runtime.
 - MCP servers in repo `.mcp.json` or plugin bundles are outside SCC enforcement scope (block the plugin to restrict).
 - `network_policy` enforcement: `web-egress-enforced` uses topology-based isolation (internal Docker network + proxy sidecar) for HTTP/HTTPS egress control. `locked-down-web` applies `--network=none`. Enforcement is IPv4-only in v1; raw TCP/UDP beyond HTTP(S) is not filtered.
+- Runtime safety: SCC-owned wrappers intercept destructive git commands and explicit network tools (curl, wget, ssh, scp, sftp, rsync) inside the container. Wrappers are defense-in-depth — topology and proxy policy remain the hard network control. Safety policy is fail-closed: if policy cannot be loaded, all guarded commands are blocked.
 - `session.auto_resume` is advisory only in v1.
 
 ---
@@ -284,6 +285,7 @@ scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
 | `scc audit plugins` | Audit installed plugins |
 | `scc support bundle` | Generate support bundle for troubleshooting |
 | `scc support launch-audit` | Inspect recent launch diagnostics without opening raw JSONL |
+| `scc support safety-audit` | Inspect recent safety-check audit events |
 | `scc completion bash` | Generate shell completions (bash/zsh/fish) |
 
 Run `scc <command> --help` for options. See **[CLI Reference](https://scc-cli.dev/reference/cli/overview/)** for the complete command list (40+ commands).
@@ -379,7 +381,7 @@ Run `scc config paths` to see all locations with sizes and permissions.
 
 ## Troubleshooting
 
-Run `scc doctor` to diagnose issues. For recent launch failures or preflight blocks, run `scc support launch-audit` to inspect the bounded launch-audit summary instead of opening the raw JSONL sink.
+Run `scc doctor` to diagnose issues (includes safety-policy health check). For recent launch failures or preflight blocks, run `scc support launch-audit` to inspect the bounded launch-audit summary instead of opening the raw JSONL sink. For safety-related diagnostics, run `scc support safety-audit` to inspect recent safety-check events.
 
 | Problem | Solution |
 |---------|----------|
