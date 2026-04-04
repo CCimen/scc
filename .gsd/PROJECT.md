@@ -26,7 +26,7 @@ A security or platform team can approve SCC because its governance model, runtim
 - Reserve repo-wide decomposition, broad typed-config migration, guardrail restoration, xfail removal, and the larger coverage campaign for M005.
 
 ## Current milestone state
-**M003: Portable Runtime And Enforced Web Egress** is in progress. S01 and S02 are complete.
+**M003: Portable Runtime And Enforced Web Egress** is in progress. S01, S02, and S03 are complete.
 
 ## Next milestone order
 1. **M003 — Portable Runtime And Enforced Web Egress** (active)
@@ -38,7 +38,7 @@ A security or platform team can approve SCC because its governance model, runtim
 |-------|-------|--------|
 | S01 | Capability-based runtime model and detection cleanup | ✅ complete |
 | S02 | SCC-owned image contracts and plain OCI backend | ✅ complete |
-| S03 | Enforced web-egress topology and proxy ACLs | ⬜ pending (depends: S01, S02) |
+| S03 | Enforced web-egress topology and proxy ACLs | ✅ complete |
 | S04 | Policy integration, provider destination validation, and operator diagnostics | ⬜ pending (depends: S02, S03) |
 | S05 | Verification, docs truthfulness, and milestone closeout | ⬜ pending (depends: S03, S04) |
 
@@ -61,6 +61,16 @@ A security or platform team can approve SCC because its governance model, runtim
 - 34 OCI runtime tests, 23 image contract tests, 9 bootstrap/routing integration tests added.
 - scc.backend=oci label convention and scc-oci-{hash} container naming for OCI containers.
 
+## M003/S03 outcome summary
+- Three-layer enforced web-egress: pure policy logic (core/egress_policy.py), infrastructure adapter (adapters/egress_topology.py), runtime integration (adapters/oci_sandbox_runtime.py).
+- `build_egress_plan()` produces NetworkPolicyPlan with default deny rules for IP literals, loopback, private CIDRs, link-local, and metadata endpoints.
+- `compile_squid_acl()` compiles plans into valid Squid ACL config with deny-before-allow ordering.
+- NetworkTopologyManager creates internal-only Docker network, starts dual-homed Squid proxy sidecar, returns EgressTopologyInfo.
+- Squid proxy sidecar image defined in images/scc-egress-proxy/ (Dockerfile, squid.conf.template, entrypoint.sh).
+- OCI adapter orchestrates topology for web-egress-enforced (internal network + proxy env), uses --network=none for locked-down-web, unchanged for open.
+- Topology teardown wired into both stop() and remove() with idempotent cleanup.
+- 49 new tests across three test files plus guardrail preventing regression to default network.
+
 ## M002 outcome summary
 - `AgentProvider` and `AgentLaunchSpec` are now part of the real launch path rather than planned-only seams.
 - Claude-specific settings/auth behavior is adapter-owned behind `src/scc_cli/adapters/claude_settings.py` and `bootstrap.py` remains the only allowed higher-layer adapter boundary.
@@ -70,12 +80,12 @@ A security or platform team can approve SCC because its governance model, runtim
 - Support-bundle generation now has one application-owned implementation, and launch-wizard resume behavior sits behind typed helpers with hotspot guardrails.
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol) and M003/S02 (OCI adapter follows adapter-boundary conventions, typed image contracts, centralized error handling).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol), M003/S02 (OCI adapter follows adapter-boundary conventions), and M003/S03 (three-layer egress enforcement with 49 tests, local _run_docker to avoid cross-adapter coupling).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 246 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3353 passed, 23 skipped, 4 xfailed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 248 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3402 passed, 23 skipped, 4 xfailed)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -88,8 +98,10 @@ A security or platform team can approve SCC because its governance model, runtim
 - Bootstrap probes runtime at construction time and selects OciSandboxRuntime or DockerSandboxRuntime based on preferred_backend.
 - OciSandboxRuntime is imported only in bootstrap.py; application layer uses SandboxRuntime protocol.
 - Image routing is backend-aware: SCC_CLAUDE_IMAGE_REF for OCI, SANDBOX_IMAGE for Docker Desktop.
+- Enforced web-egress uses internal Docker network + dual-homed Squid proxy sidecar as the hard enforcement boundary (D014).
+- Egress policy logic is pure (core/egress_policy.py), infrastructure is adapter-owned (adapters/egress_topology.py), orchestration stays in OciSandboxRuntime.
 
 ## Immediate next focus
-- Reassess the M003 roadmap with S02 complete.
-- S03 (Enforced web-egress topology and proxy ACLs) is unblocked and should start next.
-- S03 will add network topology enforcement that works with both OCI and Desktop containers.
+- S04 (Policy integration, provider destination validation, and operator diagnostics) is unblocked and should start next.
+- S04 will wire org/team network policy into the egress enforcement layer and add operator diagnostic surfaces.
+- S05 (Verification, docs truthfulness, milestone closeout) follows S04.

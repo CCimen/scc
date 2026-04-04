@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T09:54:01.049Z",
+  "exported_at": "2026-04-04T10:15:32.838Z",
   "milestones": [
     {
       "id": "M001",
@@ -378,7 +378,7 @@
       "milestone_id": "M003",
       "id": "S03",
       "title": "Enforced web-egress topology and proxy ACLs",
-      "status": "pending",
+      "status": "complete",
       "risk": "high",
       "depends": [
         "S01",
@@ -386,9 +386,9 @@
       ],
       "demo": "",
       "created_at": "2026-04-04T08:09:04.486Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T09:58:31.535Z",
+      "full_summary_md": "---\nid: S03\nparent: M003\nmilestone: M003\nprovides:\n  - NetworkTopologyManager adapter for creating/tearing down enforced egress topology\n  - build_egress_plan() and compile_squid_acl() pure functions for ACL generation\n  - EgressTopologyInfo dataclass for topology metadata\n  - OCI adapter network enforcement for all three NetworkPolicy modes\n  - Squid proxy sidecar image definition (images/scc-egress-proxy/)\nrequires:\n  - slice: S01\n    provides: RuntimeProbe protocol and RuntimeInfo for runtime detection\n  - slice: S02\n    provides: OciSandboxRuntime adapter with _build_create_cmd and _run_docker patterns\naffects:\n  - S04\n  - S05\nkey_files:\n  - src/scc_cli/core/egress_policy.py\n  - src/scc_cli/adapters/egress_topology.py\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - images/scc-egress-proxy/Dockerfile\n  - images/scc-egress-proxy/squid.conf.template\n  - images/scc-egress-proxy/entrypoint.sh\n  - tests/test_egress_policy.py\n  - tests/test_egress_topology.py\n  - tests/test_oci_egress_integration.py\nkey_decisions:\n  - D014: Enforced web-egress uses internal Docker network + dual-homed Squid proxy sidecar as hard enforcement boundary\n  - Squid ACL uses numbered acl names (deny_1, allow_1) for deterministic output\n  - IP literals and CIDRs use dst directive; hostnames use dstdomain directive\n  - Local _run_docker helper in egress_topology.py avoids cross-adapter coupling with oci_sandbox_runtime.py\n  - Proxy env vars injected as -e flags in docker create for enforced mode\n  - Topology teardown in both stop() and remove() with None reset for safety\npatterns_established:\n  - Three-layer egress enforcement: pure policy (core/egress_policy.py) → infrastructure adapter (adapters/egress_topology.py) → runtime integration (adapters/oci_sandbox_runtime.py)\n  - Dual-homed proxy sidecar pattern: proxy on both internal and bridge networks, agent on internal only\n  - ACL injection via volume mount + entrypoint sed replacement between marker comments\n  - Idempotent teardown pattern that catches both CalledProcessError and SandboxLaunchError\n  - Guardrail test pattern: assert enforced mode never produces default network (prevents regression)\nobservability_surfaces:\n  - Docker label scc.egress-proxy=true on proxy containers (filter via docker ps --filter label=scc.egress-proxy)\n  - Docker network naming convention scc-egress-{session_id} (filter via docker network ls --filter name=scc-egress-)\n  - SandboxLaunchError includes failing command and stderr for topology setup failures\ndrill_down_paths:\n  - .gsd/milestones/M003/slices/S03/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M003/slices/S03/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M003/slices/S03/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T09:58:31.536Z\nblocker_discovered: false\n---\n\n# S03: Enforced web-egress topology and proxy ACLs\n\n**Built the enforced web-egress topology: pure egress policy and ACL compilation, Squid proxy sidecar image, Docker network topology manager, and full OCI adapter integration with 49 new tests across three layers.**\n\n## What Happened\n\nS03 delivers the hard enforcement boundary for web-egress network policy. The work was split into three layers — pure policy logic, infrastructure adapter, and runtime integration — each independently testable and composed at the OCI adapter level.\n\n**T01 — Pure egress policy and ACL compilation (19 tests)**\nCreated `src/scc_cli/core/egress_policy.py` with two public functions. `build_egress_plan()` converts a `NetworkPolicy` mode plus optional destination sets and egress rules into a `NetworkPolicyPlan`. For `WEB_EGRESS_ENFORCED`, it produces default deny rules covering IP literals, loopback (127.0.0.0/8), private CIDRs (10/8, 172.16/12, 192.168/16), link-local (169.254/16), and the cloud metadata endpoint (169.254.169.254), followed by any explicit allow rules. For `LOCKED_DOWN_WEB`, it returns a deny-all plan. For `OPEN`, no rules and `enforced_by_runtime=False`. `compile_squid_acl()` converts the plan into valid Squid ACL config with numbered acl names, deny-before-allow ordering, and a terminal `http_access deny all` (enforced) or `http_access allow all` (open) directive. CIDRs and IPs use the `dst` directive; hostnames use `dstdomain`. All 19 tests pass covering mode behavior, rule composition, edge cases, and ACL invariants.\n\n**T02 — Squid proxy sidecar image and NetworkTopologyManager (14 tests)**\nCreated the `images/scc-egress-proxy/` directory with a Dockerfile (Alpine 3.19 + Squid), `squid.conf.template` (with ACL injection markers, safe port defaults, stdout logging, no cache), and `entrypoint.sh` (injects volume-mounted ACL rules via sed replacement at startup). The `NetworkTopologyManager` adapter in `src/scc_cli/adapters/egress_topology.py` orchestrates four Docker commands in `setup()`: create an internal-only network, start the proxy container with ACL config volume-mounted, connect the proxy to the default bridge for dual-homing, and inspect the proxy for its internal IP. `teardown()` is fully idempotent, catching both CalledProcessError and SandboxLaunchError. A local `_run_docker` helper avoids coupling with `oci_sandbox_runtime.py` while following the same SandboxLaunchError wrapping pattern. The `EgressTopologyInfo` frozen dataclass carries network name, proxy container name, and proxy endpoint. 14 mocked subprocess tests cover happy path, teardown, and failure modes including partial-setup cleanup.\n\n**T03 — OCI adapter integration and guardrails (16 tests)**\nWired the topology into `OciSandboxRuntime.run()`. For `web-egress-enforced`, `run()` builds an egress plan, compiles Squid ACLs, creates topology via `NetworkTopologyManager`, and passes the internal network name plus proxy env vars (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) to `_build_create_cmd()`. Host proxy env is merged via `collect_proxy_env()` for parity with DockerSandboxRuntime. For `locked-down-web`, `_build_create_cmd()` adds `--network none`. For `open` or unset, behavior is unchanged (backward compatible). `_teardown_topology()` is called by both `stop()` and `remove()` with None-reset for safety. 16 new tests include a guardrail that prevents regression to the default bridge for enforced mode. Full suite passes: 3402 tests, 23 skipped, 4 xfailed.\n\nThe three-layer separation keeps security-critical ACL logic as pure functions (easy to audit), infrastructure management in a dedicated adapter (easy to mock), and orchestration in the existing runtime adapter (consistent with S02 patterns).\n\n## Verification\n\nAll verification gates passed:\n1. `uv run pytest tests/test_egress_policy.py tests/test_egress_topology.py tests/test_oci_sandbox_runtime.py tests/test_oci_egress_integration.py -q` → 83 passed\n2. `uv run ruff check` → all clean\n3. `uv run mypy src/scc_cli` → no issues in 248 source files\n4. `test -f images/scc-egress-proxy/Dockerfile && test -f images/scc-egress-proxy/squid.conf.template && test -f images/scc-egress-proxy/entrypoint.sh` → all exist\n5. `uv run pytest --rootdir \"$PWD\" -q` → 3402 passed, 23 skipped, 4 xfailed (full suite, no regressions)\n\n## Requirements Advanced\n\n- R001 — Egress enforcement split into three cohesive, independently testable layers (pure policy, infrastructure adapter, runtime integration) with 49 new tests. Each module has a single responsibility. The local _run_docker pattern avoids cross-adapter coupling.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nMinor additive deviations only: T01 produced 19 tests (plan asked 12+), T02 produced 14 tests (plan asked 8+), T03 produced 16 tests (plan asked for fewer). All were additive coverage improvements, no plan changes required.\n\n## Known Limitations\n\nThe Squid proxy sidecar image is defined but not yet built or published to any registry. S04 or operator workflow will need to build the image before enforced mode works end-to-end. The ACL compilation handles HTTP/HTTPS-focused egress only (per D008); raw TCP/UDP or non-HTTP protocols are not filtered by the proxy.\n\n## Follow-ups\n\nS04 needs to wire policy integration so that effective network policy from org/team config reaches the OCI adapter. The proxy image build step needs to be documented or automated (S05 docs scope). CONNECT method handling for HTTPS through the proxy is configured in squid.conf.template but not explicitly tested at the integration level.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/egress_policy.py` — New: pure functions build_egress_plan() and compile_squid_acl() for network policy plan creation and Squid ACL compilation\n- `src/scc_cli/adapters/egress_topology.py` — New: NetworkTopologyManager class and EgressTopologyInfo dataclass for Docker network topology orchestration\n- `src/scc_cli/adapters/oci_sandbox_runtime.py` — Modified: integrated egress topology into run(), _build_create_cmd(), stop(), and remove() for all three network policy modes\n- `images/scc-egress-proxy/Dockerfile` — New: Alpine 3.19 + Squid proxy sidecar image definition with healthcheck\n- `images/scc-egress-proxy/squid.conf.template` — New: Squid config template with ACL injection markers, safe port defaults, stdout logging\n- `images/scc-egress-proxy/entrypoint.sh` — New: entrypoint script that injects volume-mounted ACL rules via sed and runs squid in foreground\n- `tests/test_egress_policy.py` — New: 19 tests for egress plan builder and ACL compiler covering all modes and edge cases\n- `tests/test_egress_topology.py` — New: 14 mocked subprocess tests for NetworkTopologyManager setup, teardown, and failure modes\n- `tests/test_oci_sandbox_runtime.py` — Modified: added TestNetworkEnforcement class with 5 tests for _build_create_cmd network policy handling\n- `tests/test_oci_egress_integration.py` — New: 11 integration-level tests for OCI adapter egress topology wiring and guardrails\n",
+      "full_uat_md": "# S03: Enforced web-egress topology and proxy ACLs — UAT\n\n**Milestone:** M003\n**Written:** 2026-04-04T09:58:31.536Z\n\n## UAT: S03 — Enforced web-egress topology and proxy ACLs\n\n### Preconditions\n- Python 3.10+ with uv installed\n- Working directory: `scc-sync-1.7.3`\n- All dependencies installed via `uv sync`\n\n---\n\n### TC-01: Egress plan generation for web-egress-enforced mode\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.egress_policy import build_egress_plan; from scc_cli.core.enums import NetworkPolicy; plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED); print(f'enforced={plan.enforced_by_runtime}, rules={len(plan.egress_rules)}')\"` \n**Expected:** Output shows `enforced=True` and at least 6 default deny rules (loopback, 3 private CIDRs, link-local, metadata).\n\n### TC-02: Egress plan generation for locked-down-web mode\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.egress_policy import build_egress_plan; from scc_cli.core.enums import NetworkPolicy; plan = build_egress_plan(NetworkPolicy.LOCKED_DOWN_WEB); print(f'enforced={plan.enforced_by_runtime}, rules={len(plan.egress_rules)}, note={plan.note}')\"` \n**Expected:** Output shows `enforced=True`, `rules=0`, and a note mentioning `--network=none`.\n\n### TC-03: Egress plan generation for open mode\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.egress_policy import build_egress_plan; from scc_cli.core.enums import NetworkPolicy; plan = build_egress_plan(NetworkPolicy.OPEN); print(f'enforced={plan.enforced_by_runtime}, rules={len(plan.egress_rules)}')\"` \n**Expected:** Output shows `enforced=False` and `rules=0`.\n\n### TC-04: Squid ACL compilation produces valid deny-before-allow ordering\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl; from scc_cli.core.enums import NetworkPolicy; from scc_cli.core.contracts import EgressRule; plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=(EgressRule(target='api.example.com', action='allow'),)); acl = compile_squid_acl(plan); lines = acl.strip().split(chr(10)); print('deny_before_allow:', any('deny' in l for l in lines[:len(lines)//2])); print('ends_deny_all:', lines[-1])\"` \n**Expected:** `deny_before_allow: True` and last line is `http_access deny all`.\n\n### TC-05: Squid ACL for open mode produces allow all\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl; from scc_cli.core.enums import NetworkPolicy; plan = build_egress_plan(NetworkPolicy.OPEN); acl = compile_squid_acl(plan); print(acl.strip())\"` \n**Expected:** Output is `http_access allow all`.\n\n### TC-06: Proxy sidecar image files are well-formed\n**Steps:**\n1. Verify `images/scc-egress-proxy/Dockerfile` contains `FROM alpine:3.19`, `squid` install, `EXPOSE 3128`, and a `HEALTHCHECK`\n2. Verify `images/scc-egress-proxy/squid.conf.template` contains `# SCC_ACL_RULES_START` and `# SCC_ACL_RULES_END` markers\n3. Verify `images/scc-egress-proxy/entrypoint.sh` contains `exec squid` and references `/etc/squid/acl-rules.conf`\n**Expected:** All three files exist with the expected content markers.\n\n### TC-07: NetworkTopologyManager creates internal network and dual-homed proxy\n**Steps:**\n1. Run `uv run pytest tests/test_egress_topology.py::TestNetworkTopologyManagerSetup -v -q`\n**Expected:** All setup tests pass, confirming: internal network creation, proxy container start with correct labels and volume mount, bridge connection for dual-homing, and IP extraction from the correct internal network.\n\n### TC-08: NetworkTopologyManager teardown is idempotent\n**Steps:**\n1. Run `uv run pytest tests/test_egress_topology.py::TestNetworkTopologyManagerTeardown -v -q`\n**Expected:** Teardown tests pass, confirming: proxy removal and network removal even when resources are already gone.\n\n### TC-09: OCI adapter uses --network for enforced mode\n**Steps:**\n1. Run `uv run pytest tests/test_oci_sandbox_runtime.py::TestNetworkEnforcement -v -q`\n**Expected:** All 5 tests pass confirming: enforced mode adds explicit `--network` flag, locked-down adds `--network none`, open mode has no `--network` flag, proxy env vars injected for enforced mode.\n\n### TC-10: OCI adapter wires topology lifecycle\n**Steps:**\n1. Run `uv run pytest tests/test_oci_egress_integration.py -v -q`\n**Expected:** All 11 tests pass confirming: topology setup before docker create, network name passed to create, locked-down skips topology, remove() calls teardown, open mode unchanged, and the guardrail that enforced mode never produces a default network.\n\n### TC-11: Full test suite regression check\n**Steps:**\n1. Run `uv run pytest --rootdir \"$PWD\" -q`\n**Expected:** 3402+ passed, 23 skipped, 4 xfailed. No failures or unexpected test errors.\n\n### Edge Cases\n\n### TC-12: Empty destination sets and egress rules\n**Steps:**\n1. Run `uv run pytest tests/test_egress_policy.py -k \"empty\" -v -q`\n**Expected:** Tests confirm empty tuples produce valid plans without errors.\n\n### TC-13: Topology setup failure triggers cleanup\n**Steps:**\n1. Run `uv run pytest tests/test_egress_topology.py -k \"failure\" -v -q`\n**Expected:** Tests confirm that when proxy start fails, the network is still cleaned up.\n",
       "goal": "When `network_policy` is `web-egress-enforced`, the OCI adapter creates an internal-only Docker network, starts a Squid proxy sidecar as the sole bridge to external networks, compiles ACLs from `NetworkPolicyPlan` that deny IP literals/loopback/private/link-local/metadata endpoints by default, and attaches the agent container to the internal network with proxy env vars. When `locked-down-web`, the agent gets `--network=none`. When `open` or unset, behavior is unchanged.",
       "success_criteria": "- `build_egress_plan()` populates `NetworkPolicyPlan` from policy mode + destination sets + egress rules\n- `compile_squid_acl()` produces valid Squid ACL config with correct deny-before-allow ordering\n- Default deny rules cover IP literals, loopback (127.0.0.0/8), private CIDRs (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16), and metadata endpoints (169.254.169.254)\n- `NetworkTopologyManager` creates internal Docker network, starts proxy sidecar on dual networks, tears down idempotently\n- `OciSandboxRuntime._build_create_cmd()` emits `--network <internal>` + proxy env for `web-egress-enforced`\n- `OciSandboxRuntime._build_create_cmd()` emits `--network none` for `locked-down-web`\n- `OciSandboxRuntime._build_create_cmd()` emits no network flags for `open`/unset\n- Proxy sidecar Dockerfile and squid.conf.template exist in `images/scc-egress-proxy/`\n- All existing tests pass (`uv run pytest --rootdir \"$PWD\" -q`)\n- `uv run ruff check` clean\n- `uv run mypy src/scc_cli` clean",
       "proof_level": "This slice proves: contract + integration (mocked subprocess — no live Docker daemon required). Real runtime required: no. Human/UAT required: no.",
@@ -412,11 +412,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "",
-      "success_criteria": "",
-      "proof_level": "",
-      "integration_closure": "",
-      "observability_impact": "",
+      "goal": "Provider destination sets are resolved from a typed registry, threaded through SandboxSpec into the OCI adapter's egress plan, validated at preflight for enforced mode, and visible in doctor/support-bundle diagnostics.",
+      "success_criteria": "- `resolve_destination_sets()` maps `\"anthropic-core\"` and `\"openai-core\"` to typed `DestinationSet` objects with concrete hostnames\n- `SandboxSpec.destination_sets` carries resolved sets from application layer to runtime adapter\n- `OciSandboxRuntime.run()` passes destination-derived allow rules to `build_egress_plan()` so the Squid ACL includes provider-core hosts\n- `evaluate_launch_preflight()` raises when enforced-mode destination sets are unresolvable\n- `check_runtime_backend()` reports active backend type in doctor output\n- Support bundle manifest includes effective egress policy section\n- `uv run ruff check` clean, `uv run mypy src/scc_cli` clean, `uv run pytest --rootdir \"$PWD\" -q` green",
+      "proof_level": "integration — verifies that typed contracts flow from pure registry through application wiring to adapter invocation with mocked subprocess boundaries",
+      "integration_closure": "Upstream: consumes `DestinationSet`/`EgressRule`/`NetworkPolicyPlan` contracts from `core/contracts.py` (S01), `build_egress_plan()`/`compile_squid_acl()` from `core/egress_policy.py` (S03), `OciSandboxRuntime` adapter (S02), preflight seam (M002). New wiring: `destination_registry.py` → `start_session._build_sandbox_spec()` → `SandboxSpec.destination_sets` → `OciSandboxRuntime.run()` → `build_egress_plan(destination_sets=..., egress_rules=...)`. Remaining before end-to-end: S05 verifies full stack + docs truthfulness.",
+      "observability_impact": "- Doctor `check_runtime_backend()` reports which sandbox backend is active (docker-sandbox / oci / unavailable)\n- Support bundle `effective_egress` section shows resolved destination sets and effective network policy\n- `SandboxLaunchError` includes destination context when enforced-mode plan fails",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -2097,6 +2097,145 @@
       "sequence": 0
     },
     {
+      "milestone_id": "M003",
+      "slice_id": "S04",
+      "id": "T01",
+      "title": "Added provider destination registry with anthropic-core/openai-core sets, resolve/rule-generation helpers, and 17 unit tests",
+      "status": "complete",
+      "one_liner": "Added provider destination registry with anthropic-core/openai-core sets, resolve/rule-generation helpers, and 17 unit tests",
+      "narrative": "Created src/scc_cli/core/destination_registry.py — a pure module defining PROVIDER_DESTINATION_SETS with anthropic-core and openai-core DestinationSet entries. Exposed resolve_destination_sets(names) for name-to-object lookup (raises ValueError for unknowns) and destination_sets_to_allow_rules(sets) for converting sets to EgressRule allow tuples. Created tests/test_destination_registry.py with 17 tests across registry contents, resolution (happy path, ordering, empty, errors), and rule generation (single/multi host, combined sets, target matching, type checks, reason format).",
+      "verification_result": "All three verification commands pass: pytest (17/17 tests), mypy (no issues), ruff check (all passed after auto-fixing I001 import sort in test file).",
+      "duration": "",
+      "completed_at": "2026-04-04T10:15:32.814Z",
+      "blocker_discovered": false,
+      "deviations": "Ruff import-sort auto-fix applied to test file (I001) — cosmetic only.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/destination_registry.py",
+        "tests/test_destination_registry.py"
+      ],
+      "key_decisions": [
+        "Registry uses plain dict[str, DestinationSet] for trivial extensibility",
+        "destination_sets_to_allow_rules helper co-located in registry module"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S04\nmilestone: M003\nkey_files:\n  - src/scc_cli/core/destination_registry.py\n  - tests/test_destination_registry.py\nkey_decisions:\n  - Registry uses plain dict[str, DestinationSet] for trivial extensibility\n  - destination_sets_to_allow_rules helper co-located in registry module\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T10:15:32.813Z\nblocker_discovered: false\n---\n\n# T01: Added provider destination registry with anthropic-core/openai-core sets, resolve/rule-generation helpers, and 17 unit tests\n\n**Added provider destination registry with anthropic-core/openai-core sets, resolve/rule-generation helpers, and 17 unit tests**\n\n## What Happened\n\nCreated src/scc_cli/core/destination_registry.py — a pure module defining PROVIDER_DESTINATION_SETS with anthropic-core and openai-core DestinationSet entries. Exposed resolve_destination_sets(names) for name-to-object lookup (raises ValueError for unknowns) and destination_sets_to_allow_rules(sets) for converting sets to EgressRule allow tuples. Created tests/test_destination_registry.py with 17 tests across registry contents, resolution (happy path, ordering, empty, errors), and rule generation (single/multi host, combined sets, target matching, type checks, reason format).\n\n## Verification\n\nAll three verification commands pass: pytest (17/17 tests), mypy (no issues), ruff check (all passed after auto-fixing I001 import sort in test file).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py -q` | 0 | ✅ pass | 750ms |\n| 2 | `uv run mypy src/scc_cli/core/destination_registry.py` | 0 | ✅ pass | 3000ms |\n| 3 | `uv run ruff check src/scc_cli/core/destination_registry.py tests/test_destination_registry.py` | 0 | ✅ pass | 500ms |\n\n## Deviations\n\nRuff import-sort auto-fix applied to test file (I001) — cosmetic only.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/destination_registry.py`\n- `tests/test_destination_registry.py`\n",
+      "description": "Create `src/scc_cli/core/destination_registry.py` — a pure module mapping named destination set IDs (e.g. `\"anthropic-core\"`, `\"openai-core\"`) to typed `DestinationSet` objects with concrete provider hostnames. Expose `PROVIDER_DESTINATION_SETS` mapping and `resolve_destination_sets(names)` function. Also expose `destination_sets_to_allow_rules(sets)` helper that converts resolved `DestinationSet` tuples into allow-type `EgressRule` objects — this keeps rule generation reusable across backends.\n\nSteps:\n1. Create `src/scc_cli/core/destination_registry.py` with:\n   - `PROVIDER_DESTINATION_SETS: dict[str, DestinationSet]` mapping `\"anthropic-core\"` → `DestinationSet(name=\"anthropic-core\", destinations=(\"api.anthropic.com\",), required=True, description=\"Anthropic API core access\")`, and `\"openai-core\"` → similar for `api.openai.com`.\n   - `resolve_destination_sets(names: tuple[str, ...]) -> tuple[DestinationSet, ...]` that looks up each name in the mapping, returning found sets. Raises `ValueError` for unknown names.\n   - `destination_sets_to_allow_rules(sets: tuple[DestinationSet, ...]) -> tuple[EgressRule, ...]` that converts each destination in each set to an `EgressRule(target=host, allow=True, reason=f\"provider-core: {set.name}\")`.\n2. Create `tests/test_destination_registry.py` with tests covering:\n   - Known set resolution (anthropic-core, openai-core)\n   - Unknown set raises ValueError\n   - Empty input returns empty tuple\n   - Allow-rule generation produces correct EgressRule objects\n   - Rule targets match destination set hosts\n   - Multiple sets produce combined rules\n3. Verify: `uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py -q` passes, `uv run mypy src/scc_cli/core/destination_registry.py` clean.",
+      "estimate": "25m",
+      "files": [
+        "src/scc_cli/core/destination_registry.py",
+        "tests/test_destination_registry.py"
+      ],
+      "verify": "uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py -q && uv run mypy src/scc_cli/core/destination_registry.py",
+      "inputs": [
+        "`src/scc_cli/core/contracts.py` — DestinationSet and EgressRule dataclasses used by the registry"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/destination_registry.py` — pure module with PROVIDER_DESTINATION_SETS mapping, resolve_destination_sets(), and destination_sets_to_allow_rules()",
+        "`tests/test_destination_registry.py` — 8+ unit tests covering resolution, errors, and rule generation"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M003",
+      "slice_id": "S04",
+      "id": "T02",
+      "title": "Wire destination sets through SandboxSpec to OCI adapter and extend preflight validation",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Thread resolved destination sets from the application layer through SandboxSpec into the OCI adapter's `build_egress_plan()` call, and extend preflight to validate enforced-mode destination resolvability.\n\nSteps:\n1. Add `destination_sets: tuple[DestinationSet, ...] = ()` field to `SandboxSpec` in `src/scc_cli/ports/models.py`. Import `DestinationSet` from `scc_cli.core.contracts`. Since SandboxSpec is `@dataclass(frozen=True)` and the new field has a default, all existing construction sites are safe.\n2. Update `_build_sandbox_spec()` in `src/scc_cli/application/start_session.py`:\n   - Add `agent_provider: AgentProvider | None = None` parameter.\n   - If `agent_provider` is not None and `runtime_info.preferred_backend == \"oci\"`, call `agent_provider.capability_profile()` to get `required_destination_set`, then call `resolve_destination_sets((required_destination_set,))` from the registry.\n   - Pass resolved sets as `destination_sets=resolved_sets` to `SandboxSpec()`.\n   - Update the caller in `prepare_start_session()` to pass `agent_provider=dependencies.agent_provider`.\n3. Update `OciSandboxRuntime.run()` in `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - In the `WEB_EGRESS_ENFORCED` branch, call `destination_sets_to_allow_rules(spec.destination_sets)` to generate allow rules.\n   - Pass both `destination_sets=spec.destination_sets` and `egress_rules=allow_rules` to `build_egress_plan()`.\n   - Import `destination_sets_to_allow_rules` from `scc_cli.core.destination_registry`.\n4. Extend `evaluate_launch_preflight()` in `src/scc_cli/application/launch/preflight.py`:\n   - After the existing locked-down-web check, add an enforced-mode check: if `network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value` and `required_destination_sets` is non-empty, call `resolve_destination_sets()` wrapped in try/except ValueError → raise `LaunchPolicyBlockedError` with a clear message about unresolvable sets.\n5. Write/extend tests:\n   - Extend `tests/test_oci_egress_integration.py` with tests verifying that destination sets on SandboxSpec produce allow rules in the egress plan and ACL output.\n   - Extend `tests/test_launch_preflight.py` with tests for enforced-mode unresolvable destination sets.\n   - Run `tests/test_start_session_image_routing.py` to confirm no regression.\n6. Verify: `uv run pytest --rootdir \"$PWD\" tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_start_session_image_routing.py -q` passes, `uv run mypy src/scc_cli` clean.",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/launch/preflight.py",
+        "tests/test_oci_egress_integration.py",
+        "tests/test_launch_preflight.py",
+        "tests/test_start_session_image_routing.py"
+      ],
+      "verify": "uv run pytest --rootdir \"$PWD\" tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_start_session_image_routing.py tests/test_egress_policy.py -q && uv run mypy src/scc_cli",
+      "inputs": [
+        "`src/scc_cli/core/destination_registry.py` — resolve_destination_sets() and destination_sets_to_allow_rules() from T01",
+        "`src/scc_cli/core/contracts.py` — DestinationSet, EgressRule dataclasses",
+        "`src/scc_cli/ports/models.py` — SandboxSpec to extend",
+        "`src/scc_cli/application/start_session.py` — _build_sandbox_spec() to wire",
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — run() to integrate",
+        "`src/scc_cli/application/launch/preflight.py` — evaluate_launch_preflight() to extend"
+      ],
+      "expected_output": [
+        "`src/scc_cli/ports/models.py` — SandboxSpec with destination_sets field",
+        "`src/scc_cli/application/start_session.py` — _build_sandbox_spec() resolves provider destinations",
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — run() passes destination-derived allow rules to build_egress_plan()",
+        "`src/scc_cli/application/launch/preflight.py` — enforced-mode destination validation",
+        "`tests/test_oci_egress_integration.py` — new tests for destination-aware egress plan construction",
+        "`tests/test_launch_preflight.py` — new tests for enforced-mode unresolvable destinations"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M003",
+      "slice_id": "S04",
+      "id": "T03",
+      "title": "Add runtime backend doctor check and egress policy support bundle section",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Add operator-facing diagnostics: a doctor check for runtime backend type and a support bundle section for effective egress policy.\n\nSteps:\n1. Add `check_runtime_backend()` to `src/scc_cli/doctor/checks/environment.py`:\n   - Import `DockerRuntimeProbe` from the adapter layer via bootstrap re-export (or use a lightweight probe).\n   - Probe the runtime and report `preferred_backend` (docker-sandbox / oci / unavailable) plus `runtime_id` and version.\n   - Return `CheckResult` with name `\"Runtime Backend\"`, pass=True if daemon is reachable, message showing backend type.\n   - Handle probe failures gracefully (return warning, not error).\n2. Wire `check_runtime_backend()` into the check infrastructure:\n   - Add to `run_all_checks()` in `src/scc_cli/doctor/checks/__init__.py` and to `__all__`.\n   - Add to `run_doctor()` in `src/scc_cli/doctor/core.py`.\n   - Add to `src/scc_cli/doctor/__init__.py` exports.\n3. Add `effective_egress` section to `build_support_bundle_manifest()` in `src/scc_cli/application/support_bundle.py`:\n   - Include `runtime_backend` (from probe), `network_policy` (from user config if available), and `resolved_destination_sets` (list of set names the active provider requires).\n   - Wrap in try/except so probe failures don't crash bundle generation.\n4. Write tests:\n   - Add tests to `tests/test_doctor_checks.py` for `check_runtime_backend()` — mock the probe to test docker-sandbox, oci, and unavailable cases.\n   - Add test to `tests/test_support_bundle.py` for the new `effective_egress` section.\n5. Run full suite: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q`.",
+      "estimate": "35m",
+      "files": [
+        "src/scc_cli/doctor/checks/environment.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "src/scc_cli/doctor/__init__.py",
+        "src/scc_cli/doctor/core.py",
+        "src/scc_cli/application/support_bundle.py",
+        "tests/test_doctor_checks.py",
+        "tests/test_support_bundle.py"
+      ],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" tests/test_doctor_checks.py tests/test_support_bundle.py -q && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/doctor/checks/environment.py` — existing environment checks to extend",
+        "`src/scc_cli/doctor/core.py` — run_doctor() to wire new check",
+        "`src/scc_cli/doctor/checks/__init__.py` — run_all_checks() to wire new check",
+        "`src/scc_cli/application/support_bundle.py` — build_support_bundle_manifest() to extend",
+        "`src/scc_cli/core/destination_registry.py` — PROVIDER_DESTINATION_SETS for support bundle display (from T01)"
+      ],
+      "expected_output": [
+        "`src/scc_cli/doctor/checks/environment.py` — check_runtime_backend() function",
+        "`src/scc_cli/doctor/checks/__init__.py` — check_runtime_backend wired into run_all_checks and __all__",
+        "`src/scc_cli/doctor/__init__.py` — check_runtime_backend exported",
+        "`src/scc_cli/doctor/core.py` — check_runtime_backend called in run_doctor()",
+        "`src/scc_cli/application/support_bundle.py` — effective_egress section in manifest",
+        "`tests/test_doctor_checks.py` — 3+ new tests for check_runtime_backend",
+        "`tests/test_support_bundle.py` — 1+ new test for effective_egress section"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T01",
@@ -3675,6 +3814,39 @@
       "verdict": "✅ pass",
       "duration_ms": 54440,
       "created_at": "2026-04-04T09:54:01.011Z"
+    },
+    {
+      "id": 43,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 750,
+      "created_at": "2026-04-04T10:15:32.814Z"
+    },
+    {
+      "id": 44,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli/core/destination_registry.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3000,
+      "created_at": "2026-04-04T10:15:32.814Z"
+    },
+    {
+      "id": 45,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run ruff check src/scc_cli/core/destination_registry.py tests/test_destination_registry.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-04T10:15:32.814Z"
     }
   ]
 }
