@@ -953,8 +953,8 @@ class TestConfigExplainGoldenActiveExceptions:
                 "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
-            patch("scc_cli.commands.config.UserStore") as mock_user_store,
-            patch("scc_cli.commands.config.RepoStore") as mock_repo_store,
+            patch("scc_cli.commands.config_inspect.UserStore") as mock_user_store,
+            patch("scc_cli.commands.config_inspect.RepoStore") as mock_repo_store,
         ):
             mock_user_store.return_value.read.return_value = exc_file
             mock_repo_store.return_value.read.return_value = empty_file
@@ -1010,8 +1010,8 @@ class TestConfigExplainGoldenActiveExceptions:
                 "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
-            patch("scc_cli.commands.config.UserStore") as mock_user_store,
-            patch("scc_cli.commands.config.RepoStore") as mock_repo_store,
+            patch("scc_cli.commands.config_inspect.UserStore") as mock_user_store,
+            patch("scc_cli.commands.config_inspect.RepoStore") as mock_repo_store,
         ):
             mock_user_store.return_value.read.return_value = exc_file
             mock_repo_store.return_value.read.return_value = empty_file
@@ -1064,8 +1064,8 @@ class TestConfigExplainGoldenActiveExceptions:
                 "scc_cli.commands.config.compute_effective_config",
                 return_value=effective,
             ),
-            patch("scc_cli.commands.config.UserStore") as mock_user_store,
-            patch("scc_cli.commands.config.RepoStore") as mock_repo_store,
+            patch("scc_cli.commands.config_inspect.UserStore") as mock_user_store,
+            patch("scc_cli.commands.config_inspect.RepoStore") as mock_repo_store,
         ):
             mock_user_store.return_value.read.return_value = exc_file
             mock_repo_store.return_value.read.return_value = empty_file

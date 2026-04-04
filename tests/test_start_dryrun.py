@@ -117,7 +117,7 @@ class TestDryRunTeamConfig:
                     return_value=mock_org,
                 ):
                     with patch(
-                        "scc_cli.commands.launch.flow.teams.validate_team_profile",
+                        "scc_cli.commands.launch.team_settings.teams.validate_team_profile",
                         return_value={"valid": True},
                     ):
                         try:

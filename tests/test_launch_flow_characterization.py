@@ -213,7 +213,7 @@ class TestStartCLIErrorPaths:
     @patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={})
     @patch("scc_cli.commands.launch.flow.get_default_adapters")
     @patch("scc_cli.commands.launch.flow.sessions.get_session_service")
-    @patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=False)
+    @patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False)
     @patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=True)
     def test_non_interactive_no_workspace_dry_run_resolves_or_errors(
         self,
@@ -244,7 +244,7 @@ class TestStartCLIErrorPaths:
 class TestResolveSessionSelection:
     """Characterize _resolve_session_selection return structure."""
 
-    @patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=False)
+    @patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False)
     def test_dry_run_auto_detects_workspace(self, mock_gate: MagicMock) -> None:
         """--dry-run without workspace tries resolve_workspace auto-detection."""
         from scc_cli.commands.launch.flow import _resolve_session_selection
@@ -297,7 +297,7 @@ class TestResolveSessionSelection:
         assert cancelled is False
         assert was_auto is False
 
-    @patch("scc_cli.commands.launch.flow.select_session")
+    @patch("scc_cli.commands.launch.flow_session.select_session")
     def test_resume_no_active_team_returns_none(self, mock_select: MagicMock) -> None:
         """--resume with no team and no selected_profile → returns None workspace."""
         from scc_cli.commands.launch.flow import _resolve_session_selection

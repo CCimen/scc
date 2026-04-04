@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T15:41:11.031Z",
+  "exported_at": "2026-04-04T16:07:15.401Z",
   "milestones": [
     {
       "id": "M001",
@@ -3290,19 +3290,33 @@
       "milestone_id": "M005",
       "slice_id": "S02",
       "id": "T04",
-      "title": "Decompose commands/launch/flow.py, commands/team.py, and commands/config.py",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Decomposed three HARD-FAIL/MANDATORY-SPLIT command modules (1447, 1036, 1029 lines) into nine focused files all under 800 lines",
+      "status": "complete",
+      "one_liner": "Decomposed three HARD-FAIL/MANDATORY-SPLIT command modules (1447, 1036, 1029 lines) into nine focused files all under 800 lines",
+      "narrative": "Extracted three oversized command-layer modules into focused sub-modules: flow.py (1447→338) split into flow_interactive.py (718) and flow_session.py (405); team.py (1036→416) split into team_info.py (292) and team_validate.py (318); config.py (1029→628) split into config_validate.py (234) and config_inspect.py (167). Updated 10 test files to redirect mock patch targets to the new module locations.",
+      "verification_result": "All verification gates pass: ruff check clean, mypy clean (275 files), full pytest suite 4079 passed. All 73 targeted characterization + boundary tests pass (17 launch flow + 17 team + 8 config + 31 boundary).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T16:07:15.325Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Test patch updates were more extensive than planned — 10 test files needed fixing beyond the 3 characterization tests listed in the plan. Used plain-function + decorator registration pattern for team commands.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/launch/flow_session.py",
+        "src/scc_cli/commands/team.py",
+        "src/scc_cli/commands/team_info.py",
+        "src/scc_cli/commands/team_validate.py",
+        "src/scc_cli/commands/config.py",
+        "src/scc_cli/commands/config_validate.py",
+        "src/scc_cli/commands/config_inspect.py"
+      ],
+      "key_decisions": [
+        "Used deferred imports in flow_session.py to break circular dependency with flow_interactive.py",
+        "Registered extracted team commands as plain functions decorated by team.py to maintain Typer CLI structure",
+        "Updated test patch targets to follow functions to new module locations rather than adding backward-compat re-imports"
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S02\nmilestone: M005\nkey_files:\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/flow_session.py\n  - src/scc_cli/commands/team.py\n  - src/scc_cli/commands/team_info.py\n  - src/scc_cli/commands/team_validate.py\n  - src/scc_cli/commands/config.py\n  - src/scc_cli/commands/config_validate.py\n  - src/scc_cli/commands/config_inspect.py\nkey_decisions:\n  - Used deferred imports in flow_session.py to break circular dependency with flow_interactive.py\n  - Registered extracted team commands as plain functions decorated by team.py to maintain Typer CLI structure\n  - Updated test patch targets to follow functions to new module locations rather than adding backward-compat re-imports\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T16:07:15.324Z\nblocker_discovered: false\n---\n\n# T04: Decomposed three HARD-FAIL/MANDATORY-SPLIT command modules (1447, 1036, 1029 lines) into nine focused files all under 800 lines\n\n**Decomposed three HARD-FAIL/MANDATORY-SPLIT command modules (1447, 1036, 1029 lines) into nine focused files all under 800 lines**\n\n## What Happened\n\nExtracted three oversized command-layer modules into focused sub-modules: flow.py (1447→338) split into flow_interactive.py (718) and flow_session.py (405); team.py (1036→416) split into team_info.py (292) and team_validate.py (318); config.py (1029→628) split into config_validate.py (234) and config_inspect.py (167). Updated 10 test files to redirect mock patch targets to the new module locations.\n\n## Verification\n\nAll verification gates pass: ruff check clean, mypy clean (275 files), full pytest suite 4079 passed. All 73 targeted characterization + boundary tests pass (17 launch flow + 17 team + 8 config + 31 boundary).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 8000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 13000ms |\n| 3 | `uv run pytest -q` | 0 | ✅ pass | 66000ms |\n| 4 | `uv run pytest tests/test_launch_flow_characterization.py tests/test_team_commands_characterization.py tests/test_config_commands_characterization.py tests/test_import_boundaries.py -q` | 0 | ✅ pass | 2300ms |\n\n## Deviations\n\nTest patch updates were more extensive than planned — 10 test files needed fixing beyond the 3 characterization tests listed in the plan. Used plain-function + decorator registration pattern for team commands.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/flow.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/commands/launch/flow_session.py`\n- `src/scc_cli/commands/team.py`\n- `src/scc_cli/commands/team_info.py`\n- `src/scc_cli/commands/team_validate.py`\n- `src/scc_cli/commands/config.py`\n- `src/scc_cli/commands/config_validate.py`\n- `src/scc_cli/commands/config_inspect.py`\n",
       "description": "Extract three commands-layer modules into smaller focused files.\n\n## Steps\n\n1. **commands/launch/flow.py (1447 lines — HARD-FAIL):** Read fully. Extract `interactive_start` (534L) + `run_start_wizard_flow` (121L) into `src/scc_cli/commands/launch/flow_interactive.py`. Extract `_resolve_session_selection` (212L) + session helper functions into `src/scc_cli/commands/launch/flow_session.py`. Keep `start` (293L) and remaining orchestration in `flow.py`. Re-export public names. Update `src/scc_cli/commands/launch/__init__.py` which re-exports `interactive_start` and `run_start_wizard_flow` from `flow`.\n\n2. **commands/team.py (1036 lines):** Read fully. Extract `team_validate` (198L) + `_render_validation_result` (93L) into `src/scc_cli/commands/team_validate.py` (~290 lines). Extract `team_info` (149L) + `team_list` (107L) into `src/scc_cli/commands/team_info.py` (~260 lines). Keep `team_switch` + `team_callback` + small helpers in `team.py`. Re-export public names.\n\n3. **commands/config.py (1029 lines):** Read fully. Extract `_config_validate` (166L) + `_render_config_decisions` (99L) + `_render_blocked_items` + `_render_denied_additions` into `src/scc_cli/commands/config_validate.py` (~400 lines). Extract `_config_paths` (76L) + `_render_active_exceptions` (71L) into `src/scc_cli/commands/config_inspect.py` (~200 lines). Keep `config_cmd` + `setup_cmd` + `_config_explain` in `config.py`. Re-export if any public names moved.\n\n4. Update test imports in `tests/test_launch_flow_characterization.py`, `tests/test_team_commands_characterization.py`, `tests/test_config_commands_characterization.py`.\n\n5. Run verification: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_launch_flow_characterization.py tests/test_team_commands_characterization.py tests/test_config_commands_characterization.py tests/test_import_boundaries.py -q`\n\n## Must-Haves\n\n- [ ] `commands/launch/flow.py` under 800 lines (from 1447 HARD-FAIL)\n- [ ] `commands/team.py` under 800 lines\n- [ ] `commands/config.py` under 800 lines\n- [ ] All 17 launch flow characterization tests pass\n- [ ] All 17 team commands characterization tests pass\n- [ ] All 8 config commands characterization tests pass\n- [ ] Import boundary tests pass\n- [ ] `uv run ruff check && uv run mypy src/scc_cli` clean",
       "estimate": "1h",
       "files": [
@@ -5755,6 +5769,50 @@
       "verdict": "✅ pass (4079 tests)",
       "duration_ms": 65680,
       "created_at": "2026-04-04T15:41:10.979Z"
+    },
+    {
+      "id": 139,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 8000,
+      "created_at": "2026-04-04T16:07:15.325Z"
+    },
+    {
+      "id": 140,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 13000,
+      "created_at": "2026-04-04T16:07:15.325Z"
+    },
+    {
+      "id": 141,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 66000,
+      "created_at": "2026-04-04T16:07:15.325Z"
+    },
+    {
+      "id": 142,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_launch_flow_characterization.py tests/test_team_commands_characterization.py tests/test_config_commands_characterization.py tests/test_import_boundaries.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2300,
+      "created_at": "2026-04-04T16:07:15.325Z"
     }
   ]
 }

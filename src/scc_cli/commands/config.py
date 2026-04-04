@@ -1,32 +1,39 @@
-"""Provide CLI commands for managing teams, configuration, and setup."""
+"""Provide CLI commands for managing teams, configuration, and setup.
 
-import json
+Validation logic lives in config_validate.py; paths/exceptions in
+config_inspect.py. This module keeps config_cmd, setup_cmd, _config_explain,
+and small helpers.
+
+Re-exports public names for backward compatibility.
+"""
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from rich import box
-from rich.table import Table
 
 from .. import config, setup
 from ..application.compute_effective_config import (
-    BlockedItem,
     ConfigDecision,
-    DelegationDenied,
     EffectiveConfig,
     compute_effective_config,
 )
 from ..cli_common import console, handle_errors
 from ..core import personal_profiles
-from ..core.enums import NetworkPolicy, RequestSource
+from ..core.enums import NetworkPolicy
 from ..core.exit_codes import EXIT_USAGE
 from ..core.network_policy import collect_proxy_env, is_more_or_equal_restrictive
-from ..maintenance import get_paths, get_total_size
-from ..panels import create_error_panel, create_info_panel, create_success_panel
+from ..panels import create_error_panel, create_info_panel
 from ..source_resolver import ResolveError, resolve_source
-from ..stores.exception_store import RepoStore, UserStore
-from ..utils.ttl import format_relative
+
+# Re-export extracted symbols for backward compatibility
+from .config_inspect import _config_paths, _render_active_exceptions
+from .config_validate import (
+    _config_validate,
+    _render_blocked_items,
+    _render_denied_additions,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config App
@@ -81,25 +88,15 @@ def setup_cmd(
         help="Fail fast instead of prompting for missing setup inputs",
     ),
 ) -> None:
-    """Run initial setup wizard.
-
-    Examples:
-        scc setup                                    # Interactive wizard
-        scc setup --standalone                       # Standalone mode
-        scc setup --org github:acme/config --profile dev  # Non-interactive with shorthand
-        scc setup --org-url <url> --team dev         # Non-interactive (legacy)
-    """
+    """Run initial setup wizard."""
     if reset:
         setup.reset_setup(console)
         return
 
-    # Handle --profile/--team alias (prefer --profile)
     selected_profile = profile or team
 
-    # Handle --org/--org-url (prefer --org)
     resolved_url: str | None = None
     if org:
-        # Resolve shorthand to URL
         result = resolve_source(org)
         if isinstance(result, ResolveError):
             console.print(
@@ -124,7 +121,6 @@ def setup_cmd(
         )
         raise typer.Exit(EXIT_USAGE)
 
-    # Non-interactive mode if org source or standalone specified
     if resolved_url or standalone:
         success = setup.run_non_interactive_setup(
             console,
@@ -137,7 +133,6 @@ def setup_cmd(
             raise typer.Exit(1)
         return
 
-    # Run the setup wizard (--quick flag is a no-op for now, wizard handles all cases)
     setup.run_setup_wizard(console)
 
 
@@ -173,20 +168,7 @@ def config_cmd(
         typer.Option("--show-env", help="Show XDG environment variables (for paths action)."),
     ] = False,
 ) -> None:
-    """View or edit configuration.
-
-    Examples:
-        scc config --show                    # Show all config
-        scc config get selected_profile      # Get specific key
-        scc config set hooks.enabled true    # Set a value
-        scc config --edit                    # Open in editor
-        scc config explain                   # Explain effective config
-        scc config explain --field plugins   # Explain only plugins
-        scc config validate                  # Validate .scc.yaml
-        scc config paths                     # Show SCC file locations
-        scc config paths --json              # Show paths as JSON
-    """
-    # Handle action-based commands
+    """View or edit configuration."""
     if action == "paths":
         _config_paths(json_output=json_output, show_env=show_env)
         return
@@ -242,7 +224,6 @@ def config_cmd(
             )
         return
 
-    # Handle --show and --edit flags
     if show or action == "show":
         cfg = config.load_user_config()
         console.print(
@@ -269,7 +250,6 @@ def _config_set(key: str, value: str) -> None:
     """Set a configuration value by dotted key path."""
     cfg = config.load_user_config()
 
-    # Parse dotted key path (e.g., "hooks.enabled")
     keys = key.split(".")
     obj = cfg
     for k in keys[:-1]:
@@ -277,7 +257,6 @@ def _config_set(key: str, value: str) -> None:
             obj[k] = {}
         obj = obj[k]
 
-    # Parse value (handle booleans and numbers)
     parsed_value: bool | int | str
     if value.lower() == "true":
         parsed_value = True
@@ -297,7 +276,6 @@ def _config_get(key: str) -> None:
     """Get a configuration value by dotted key path."""
     cfg = config.load_user_config()
 
-    # Navigate dotted key path
     keys = key.split(".")
     obj = cfg
     for k in keys:
@@ -307,7 +285,6 @@ def _config_get(key: str) -> None:
             console.print(f"[yellow]Key '{key}' not found[/yellow]")
             return
 
-    # Display value
     if isinstance(obj, dict):
         console.print_json(data=obj)
     else:
@@ -320,29 +297,19 @@ def _config_explain(
     team_override: str | None = None,
     json_output: bool = False,
 ) -> None:
-    """Explain the effective configuration with source attribution.
-
-    Shows:
-    - Effective config values and where they came from
-    - Blocked items and the patterns that blocked them
-    - Denied additions and why they were denied
-    """
-    # Load org config
+    """Explain the effective configuration with source attribution."""
     org_config = config.load_cached_org_config()
     if not org_config:
         console.print("[red]No organization config found. Run 'scc setup' first.[/red]")
         raise typer.Exit(1)
 
-    # Get selected profile/team
     team = team_override or config.get_selected_profile()
     if not team:
         console.print("[red]No team selected. Run 'scc team switch <name>' first.[/red]")
         raise typer.Exit(1)
 
-    # Determine workspace path
     ws_path = Path(workspace_path) if workspace_path else Path.cwd()
 
-    # Compute effective config
     effective = compute_effective_config(
         org_config=org_config,
         team_name=team,
@@ -377,7 +344,6 @@ def _config_explain(
         print_json(envelope)
         return
 
-    # Build output
     console.print(
         create_info_panel(
             "Effective Configuration",
@@ -388,22 +354,15 @@ def _config_explain(
     console.print()
 
     _render_enforcement_status(enforcement_status, field_filter)
-
-    # Show decisions (config values with source attribution)
     _render_config_decisions(effective, field_filter)
-
-    # Show personal profile additions (if any)
     _render_personal_profile(ws_path, field_filter)
 
-    # Show blocked items
     if effective.blocked_items and (not field_filter or field_filter == "blocked"):
         _render_blocked_items(effective.blocked_items)
 
-    # Show denied additions
     if effective.denied_additions and (not field_filter or field_filter == "denied"):
         _render_denied_additions(effective.denied_additions)
 
-    # Show active exceptions
     if not field_filter or field_filter == "exceptions":
         expired_count = _render_active_exceptions()
         if expired_count > 0:
@@ -546,192 +505,21 @@ def _render_advisory_warnings(warnings: list[str], field_filter: str | None) -> 
     console.print()
 
 
-def _config_validate(
-    *,
-    workspace_path: str | None,
-    team_override: str | None,
-    json_output: bool,
-) -> None:
-    from ..core.exit_codes import EXIT_CONFIG, EXIT_GOVERNANCE, EXIT_SUCCESS
-    from ..json_output import build_envelope
-    from ..kinds import Kind
-    from ..output_mode import print_json
-
-    errors: list[str] = []
-    warnings: list[str] = []
-
-    org_config = config.load_cached_org_config()
-    if not org_config:
-        errors.append("No organization config found. Run 'scc setup' first.")
-
-    team = team_override or config.get_selected_profile()
-    if not team:
-        errors.append("No team selected. Run 'scc team switch <name>' first.")
-
-    ws_path = Path(workspace_path) if workspace_path else Path.cwd()
-    config_file = ws_path / config.PROJECT_CONFIG_FILE
-
-    project_config: dict[str, Any] | None = None
-    if not errors and team and org_config:
-        profiles = org_config.get("profiles", {})
-        if team not in profiles:
-            errors.append(f"Team '{team}' not found in org config.")
-
-    if not errors:
-        try:
-            project_config = config.read_project_config(ws_path)
-        except ValueError as exc:
-            errors.append(str(exc))
-
-    if not errors and project_config is None:
-        if not config_file.exists():
-            errors.append(f"No .scc.yaml found at {config_file}")
-        else:
-            errors.append(f"{config_file} is empty.")
-
-    blocked_items: list[dict[str, Any]] = []
-    denied_additions: list[dict[str, Any]] = []
-    unknown_keys: list[str] = []
-
-    if not errors and project_config and org_config:
-        allowed_keys = {"additional_plugins", "additional_mcp_servers", "session"}
-        unknown_keys = sorted([key for key in project_config if key not in allowed_keys])
-        if unknown_keys:
-            warnings.append("Unknown keys in .scc.yaml (ignored): " + ", ".join(unknown_keys))
-
-        project_session = project_config.get("session", {})
-        if "auto_resume" in project_session:
-            warnings.append("session.auto_resume is advisory only and not enforced.")
-
-        effective = compute_effective_config(
-            org_config=org_config,
-            team_name=team,
-            project_config=project_config,
-        )
-
-        project_plugins = set(project_config.get("additional_plugins", []))
-        project_mcp_tokens: set[str] = set()
-        for server in project_config.get("additional_mcp_servers", []):
-            name = server.get("name")
-            url = server.get("url")
-            if name:
-                project_mcp_tokens.add(name)
-            if url:
-                project_mcp_tokens.add(url)
-
-        for blocked in effective.blocked_items:
-            if blocked.item not in project_plugins and blocked.item not in project_mcp_tokens:
-                continue
-            blocked_items.append(
-                {
-                    "item": blocked.item,
-                    "blocked_by": blocked.blocked_by,
-                    "source": blocked.source,
-                    "target_type": blocked.target_type,
-                }
-            )
-            errors.append(f"{blocked.item} blocked by {blocked.blocked_by} ({blocked.source})")
-
-        for denied in effective.denied_additions:
-            if denied.requested_by != RequestSource.PROJECT:
-                continue
-            denied_additions.append(
-                {
-                    "item": denied.item,
-                    "requested_by": denied.requested_by,
-                    "reason": denied.reason,
-                    "target_type": denied.target_type,
-                }
-            )
-            errors.append(f"{denied.item} denied ({denied.reason})")
-
-    ok = not errors
-    exit_code = EXIT_SUCCESS if ok else EXIT_CONFIG
-    if denied_additions or blocked_items:
-        exit_code = EXIT_GOVERNANCE
-
-    if json_output:
-        data = {
-            "workspace_path": str(ws_path),
-            "team": team,
-            "project_config_path": str(config_file),
-            "project_config_found": project_config is not None,
-            "blocked_items": blocked_items,
-            "denied_additions": denied_additions,
-            "unknown_keys": unknown_keys,
-        }
-        envelope = build_envelope(
-            Kind.CONFIG_VALIDATE,
-            data=data,
-            ok=ok,
-            errors=errors,
-            warnings=warnings,
-        )
-        print_json(envelope)
-        raise typer.Exit(exit_code)
-
-    if ok:
-        team_label = team or "unknown"
-        console.print(
-            create_success_panel(
-                "Project Config Valid",
-                {
-                    "Workspace": str(ws_path),
-                    "Config": str(config_file),
-                    "Team": team_label,
-                },
-            )
-        )
-    else:
-        console.print(
-            create_error_panel(
-                "Project Config Invalid",
-                errors[0],
-                "Run 'scc config explain --field denied' for details.",
-            )
-        )
-
-    if blocked_items:
-        console.print("[bold red]Blocked Items[/bold red]")
-        for item in blocked_items:
-            console.print(
-                f"  [red]✗[/red] {item['item']} [dim](blocked by {item['blocked_by']})[/dim]"
-            )
-        console.print()
-
-    if denied_additions:
-        console.print("[bold yellow]Denied Additions[/bold yellow]")
-        for item in denied_additions:
-            console.print(f"  [yellow]⚠[/yellow] {item['item']}: {item['reason']}")
-        console.print()
-
-    if warnings:
-        console.print("[bold yellow]Warnings[/bold yellow]")
-        for warning in warnings:
-            console.print(f"  [yellow]⚠[/yellow] {warning}")
-        console.print()
-
-    raise typer.Exit(exit_code)
-
-
 def _render_config_decisions(effective: EffectiveConfig, field_filter: str | None) -> None:
     """Render config decisions grouped by field."""
-    # Group decisions by field
     by_field: dict[str, list[ConfigDecision]] = {}
     for decision in effective.decisions:
-        field = decision.field.split(".")[0]  # Get top-level field
+        field = decision.field.split(".")[0]
         if field_filter and field != field_filter:
             continue
         if field not in by_field:
             by_field[field] = []
         by_field[field].append(decision)
 
-    # Also show effective values even if no explicit decisions
     if not field_filter or field_filter == "plugins":
         console.print("[bold cyan]Plugins[/bold cyan]")
         if effective.plugins:
             for plugin in sorted(effective.plugins):
-                # Find decision for this plugin
                 plugin_decision = next(
                     (d for d in effective.decisions if d.field == "plugins" and d.value == plugin),
                     None,
@@ -742,7 +530,6 @@ def _render_config_decisions(effective: EffectiveConfig, field_filter: str | Non
                     )
                 else:
                     console.print(f"  [green]✓[/green] {plugin}")
-            # Plugin trust model note
             console.print()
             console.print(
                 "  [dim]Note: Plugins may bundle .mcp.json MCP servers. "
@@ -756,7 +543,6 @@ def _render_config_decisions(effective: EffectiveConfig, field_filter: str | Non
         console.print("[bold cyan]Session Config[/bold cyan]")
         timeout = effective.session_config.timeout_hours or 8
         auto_resume = effective.session_config.auto_resume
-        # Find decision for timeout
         timeout_decision = next(
             (d for d in effective.decisions if "timeout" in d.field.lower()),
             None,
@@ -794,7 +580,6 @@ def _render_config_decisions(effective: EffectiveConfig, field_filter: str | Non
         console.print("[bold cyan]MCP Servers[/bold cyan]")
         if effective.mcp_servers:
             for server in effective.mcp_servers:
-                # Find decision for this server
                 server_decision = next(
                     (
                         d
@@ -839,191 +624,5 @@ def _render_personal_profile(ws_path: Path, field_filter: str | None) -> None:
             console.print("  [green]+[/green] .mcp.json [dim](personal)[/dim]")
         else:
             console.print("  [dim]No personal MCP config saved[/dim]")
-
-    console.print()
-
-
-def _render_blocked_items(blocked_items: list[BlockedItem]) -> None:
-    """Render blocked items with patterns and fix-it commands."""
-    from scc_cli.utils.fixit import generate_policy_exception_command
-
-    console.print("[bold red]Blocked Items[/bold red]")
-    for item in blocked_items:
-        console.print(
-            f"  [red]✗[/red] [bold]{item.item}[/bold] [dim](blocked by pattern '{item.blocked_by}' from {item.source})[/dim]"
-        )
-        cmd = generate_policy_exception_command(item.item, item.target_type)
-        console.print("      [dim]To request exception (requires PR):[/dim]")
-        console.print(f"      [cyan]{cmd}[/cyan]")
-    console.print()
-
-
-def _render_denied_additions(denied_additions: list[DelegationDenied]) -> None:
-    """Render denied additions with reasons and fix-it commands."""
-    from scc_cli.utils.fixit import generate_unblock_command
-
-    console.print("[bold yellow]Denied Additions[/bold yellow]")
-    for denied in denied_additions:
-        console.print(
-            f"  [yellow]⚠[/yellow] [bold]{denied.item}[/bold] [dim](requested by {denied.requested_by}: {denied.reason})[/dim]"
-        )
-        cmd = generate_unblock_command(denied.item, denied.target_type)
-        console.print("      [dim]To unblock locally:[/dim]")
-        console.print(f"      [cyan]{cmd}[/cyan]")
-    console.print()
-
-
-def _render_active_exceptions() -> int:
-    """Render active exceptions from user and repo stores.
-
-    Returns the count of expired exceptions found (for user notification).
-    """
-    from datetime import datetime, timezone
-
-    from ..models.exceptions import Exception as SccException
-
-    # Load exceptions from both stores
-    user_store = UserStore()
-    repo_store = RepoStore(Path.cwd())
-
-    user_file = user_store.read()
-    repo_file = repo_store.read()
-
-    # Filter active exceptions
-    now = datetime.now(timezone.utc)
-    active: list[tuple[str, SccException]] = []  # (source, exception)
-    expired_count = 0
-
-    for exc in user_file.exceptions:
-        try:
-            expires = datetime.fromisoformat(exc.expires_at.replace("Z", "+00:00"))
-            if expires > now:
-                active.append(("user", exc))
-            else:
-                expired_count += 1
-        except (ValueError, AttributeError):
-            expired_count += 1
-
-    for exc in repo_file.exceptions:
-        try:
-            expires = datetime.fromisoformat(exc.expires_at.replace("Z", "+00:00"))
-            if expires > now:
-                active.append(("repo", exc))
-            else:
-                expired_count += 1
-        except (ValueError, AttributeError):
-            expired_count += 1
-
-    if not active:
-        return expired_count
-
-    console.print("[bold cyan]Active Exceptions[/bold cyan]")
-
-    for source, exc in active:
-        # Format the exception target
-        targets: list[str] = []
-        if exc.allow.plugins:
-            targets.extend(f"plugin:{p}" for p in exc.allow.plugins)
-        if exc.allow.mcp_servers:
-            targets.extend(f"mcp:{s}" for s in exc.allow.mcp_servers)
-
-        target_str = ", ".join(targets) if targets else "none"
-
-        # Calculate expires_in
-        try:
-            expires = datetime.fromisoformat(exc.expires_at.replace("Z", "+00:00"))
-            expires_in = format_relative(expires)
-        except (ValueError, AttributeError):
-            expires_in = "unknown"
-
-        scope_badge = "[dim][local][/dim]" if exc.scope == "local" else "[cyan][policy][/cyan]"
-        console.print(
-            f"  {scope_badge} {exc.id}  {target_str}  "
-            f"[dim]expires in {expires_in}[/dim]  [dim](source: {source})[/dim]"
-        )
-
-    console.print()
-    return expired_count
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Config Paths Command
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def _config_paths(json_output: bool = False, show_env: bool = False) -> None:
-    """Show SCC file locations with sizes and permissions.
-
-    Uses the maintenance module's get_paths() to get XDG-aware paths.
-    """
-    import os
-
-    paths = get_paths()
-    total_size = get_total_size()
-
-    if json_output:
-        output = {
-            "paths": [
-                {
-                    "name": p.name,
-                    "path": str(p.path),
-                    "exists": p.exists,
-                    "size_bytes": p.size_bytes,
-                    "permissions": p.permissions,
-                }
-                for p in paths
-            ],
-            "total_bytes": total_size,
-        }
-        if show_env:
-            output["environment"] = {
-                "XDG_CONFIG_HOME": os.environ.get("XDG_CONFIG_HOME", ""),
-                "XDG_CACHE_HOME": os.environ.get("XDG_CACHE_HOME", ""),
-            }
-        console.print(json.dumps(output, indent=2))
-        return
-
-    console.print("\n[bold cyan]SCC File Locations[/bold cyan]")
-    console.print("─" * 70)
-
-    table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
-    table.add_column("Name", style="cyan")
-    table.add_column("Path")
-    table.add_column("Size", justify="right")
-    table.add_column("Status")
-    table.add_column("Perm", justify="center")
-
-    for path_info in paths:
-        exists_badge = "[green]✓ exists[/green]" if path_info.exists else "[dim]missing[/dim]"
-        perm_badge = path_info.permissions if path_info.permissions != "--" else "[dim]--[/dim]"
-        size_str = path_info.size_human if path_info.exists else "-"
-
-        table.add_row(
-            path_info.name,
-            str(path_info.path),
-            size_str,
-            exists_badge,
-            perm_badge,
-        )
-
-    console.print(table)
-    console.print("─" * 70)
-
-    # Show total
-    total_kb = total_size / 1024
-    console.print(f"[bold]Total: {total_kb:.1f} KB[/bold]")
-
-    # Show XDG environment variables if requested
-    if show_env:
-        console.print()
-        console.print("[bold]Environment Variables:[/bold]")
-        xdg_config = os.environ.get("XDG_CONFIG_HOME", "")
-        xdg_cache = os.environ.get("XDG_CACHE_HOME", "")
-        console.print(
-            f"  XDG_CONFIG_HOME: {xdg_config if xdg_config else '[dim](not set, using ~/.config)[/dim]'}"
-        )
-        console.print(
-            f"  XDG_CACHE_HOME: {xdg_cache if xdg_cache else '[dim](not set, using ~/.cache)[/dim]'}"
-        )
 
     console.print()

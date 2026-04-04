@@ -82,7 +82,7 @@
   - Estimate: 45m
   - Files: src/scc_cli/docker/launch.py, src/scc_cli/docker/sandbox.py, src/scc_cli/docker/__init__.py, src/scc_cli/marketplace/materialize.py, src/scc_cli/marketplace/materialize_git.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_docker_launch_characterization.py tests/test_marketplace_materialize_characterization.py tests/test_import_boundaries.py -q
-- [ ] **T04: Decompose commands/launch/flow.py, commands/team.py, and commands/config.py** — Extract three commands-layer modules into smaller focused files.
+- [x] **T04: Decomposed three HARD-FAIL/MANDATORY-SPLIT command modules (1447, 1036, 1029 lines) into nine focused files all under 800 lines** — Extract three commands-layer modules into smaller focused files.
 
 ## Steps
 

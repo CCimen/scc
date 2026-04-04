@@ -20,10 +20,10 @@ def test_cross_team_resume_prompt_text_top_level() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=False),
-        patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=False),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",
@@ -51,10 +51,10 @@ def test_cross_team_resume_prompt_text_workspace_scope() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=False),
-        patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=False),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",

@@ -23,7 +23,12 @@ from scc_cli.ui.wizard import (
 )
 
 FLOW_PATH = (
-    Path(__file__).resolve().parents[1] / "src" / "scc_cli" / "commands" / "launch" / "flow.py"
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "scc_cli"
+    / "commands"
+    / "launch"
+    / "flow_interactive.py"
 )
 MAX_INTERACTIVE_START_LINES = 550
 

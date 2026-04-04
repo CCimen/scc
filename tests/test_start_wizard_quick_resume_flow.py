@@ -12,10 +12,10 @@ def test_quick_resume_new_session_moves_to_workspace_source() -> None:
     from scc_cli.ui.wizard import WorkspaceSource
 
     with (
-        patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=True),
-        patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=True),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",
@@ -35,10 +35,10 @@ def test_quick_resume_back_returns_cancelled() -> None:
     from scc_cli.commands.launch import interactive_start
 
     with (
-        patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=True),
-        patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=True),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",
@@ -62,10 +62,10 @@ def test_quick_resume_selects_context_returns_immediately() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=True),
-        patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
-        patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
+        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=True),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",
