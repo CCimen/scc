@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T19:52:02.876Z",
+  "exported_at": "2026-04-04T20:01:04.966Z",
   "milestones": [
     {
       "id": "M001",
@@ -4056,19 +4056,24 @@
       "milestone_id": "M005",
       "slice_id": "S05",
       "id": "T02",
-      "title": "Characterization tests for Claude renderer",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 40 characterization tests for Claude renderer achieving 100% statement and branch coverage on claude_renderer.py",
+      "status": "complete",
+      "one_liner": "Added 40 characterization tests for Claude renderer achieving 100% statement and branch coverage on claude_renderer.py",
+      "narrative": "Extended tests/test_claude_renderer.py from 34 to 74 tests, adding 11 new test classes covering all 9 task plan items. Added new coverage for: Codex-only binding skipping (plan item 6), binding classifier unit tests, _render_skill_binding null native_ref path, _merge_settings_fragment nested dict merging, MCP edge cases (non-string args, unknown transport), unknown binding handling, multiple MCP server accumulation, stronger idempotency with byte-level comparison, path sanitization, and non-prefix config key handling to close the last 2 partial branches.",
+      "verification_result": "74/74 tests pass. 100% statement coverage (160/160 stmts). 100% branch coverage (58/58 branches, 0 partial). ruff check clean. mypy clean (288 files). Full test suite: 4336 passed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T20:01:04.905Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_claude_renderer.py"
+      ],
+      "key_decisions": [
+        "Extended existing test file (34→74 tests) rather than creating separate file",
+        "Tested internal helpers directly to reach otherwise-unreachable paths through the public API"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S05\nmilestone: M005\nkey_files:\n  - tests/test_claude_renderer.py\nkey_decisions:\n  - Extended existing test file (34→74 tests) rather than creating separate file\n  - Tested internal helpers directly to reach otherwise-unreachable paths through the public API\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T20:01:04.904Z\nblocker_discovered: false\n---\n\n# T02: Added 40 characterization tests for Claude renderer achieving 100% statement and branch coverage on claude_renderer.py\n\n**Added 40 characterization tests for Claude renderer achieving 100% statement and branch coverage on claude_renderer.py**\n\n## What Happened\n\nExtended tests/test_claude_renderer.py from 34 to 74 tests, adding 11 new test classes covering all 9 task plan items. Added new coverage for: Codex-only binding skipping (plan item 6), binding classifier unit tests, _render_skill_binding null native_ref path, _merge_settings_fragment nested dict merging, MCP edge cases (non-string args, unknown transport), unknown binding handling, multiple MCP server accumulation, stronger idempotency with byte-level comparison, path sanitization, and non-prefix config key handling to close the last 2 partial branches.\n\n## Verification\n\n74/74 tests pass. 100% statement coverage (160/160 stmts). 100% branch coverage (58/58 branches, 0 partial). ruff check clean. mypy clean (288 files). Full test suite: 4336 passed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_claude_renderer.py -v` | 0 | ✅ pass | 1350ms |\n| 2 | `uv run pytest tests/test_claude_renderer.py --cov=scc_cli.adapters.claude_renderer --cov-report=term-missing --cov-branch` | 0 | ✅ pass | 1350ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 500ms |\n| 4 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 11000ms |\n| 5 | `uv run pytest` | 0 | ✅ pass | 71250ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_claude_renderer.py`\n",
       "description": "Write characterization tests for src/scc_cli/adapters/claude_renderer.py:\n1. Skill rendering: skill artifact → installed in Claude skill surface\n2. MCP rendering: MCP server artifact → Claude-native MCP configuration\n3. Marketplace rendering: native_integration with Claude marketplace binding → marketplace metadata\n4. Hook rendering: native_integration with Claude hook binding → hook configuration\n5. Mixed bundle: bundle with skills + MCP + native → all rendered correctly\n6. Skipped artifact: artifact with only Codex binding → skipped with reason\n7. Idempotency: same plan rendered twice → identical output\n8. Failure: materialization error → blocked with diagnostic\n9. Coverage target: >90% branch coverage on claude_renderer.py",
       "estimate": "1h30m",
       "files": [
@@ -6695,6 +6700,61 @@
       "verdict": "✅ pass",
       "duration_ms": 67290,
       "created_at": "2026-04-04T19:52:02.843Z"
+    },
+    {
+      "id": 193,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_claude_renderer.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1350,
+      "created_at": "2026-04-04T20:01:04.905Z"
+    },
+    {
+      "id": 194,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_claude_renderer.py --cov=scc_cli.adapters.claude_renderer --cov-report=term-missing --cov-branch",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1350,
+      "created_at": "2026-04-04T20:01:04.905Z"
+    },
+    {
+      "id": 195,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-04T20:01:04.905Z"
+    },
+    {
+      "id": 196,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 11000,
+      "created_at": "2026-04-04T20:01:04.905Z"
+    },
+    {
+      "id": 197,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run pytest",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 71250,
+      "created_at": "2026-04-04T20:01:04.905Z"
     }
   ]
 }

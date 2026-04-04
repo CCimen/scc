@@ -15,18 +15,28 @@ Covers:
 - Missing URL on MCP SSE → warning
 - Settings fragment audit file written for non-empty fragments
 - Deterministic/idempotent rendering (same plan → same output)
+- Skipped artifact: Codex-only binding in Claude plan → skipped with reason
+- Binding classifier: skill / mcp / native / unknown classification
+- Internal helpers: _render_skill_binding with null native_ref,
+  _merge_settings_fragment with nested dict merging
+- MCP edge cases: non-string args, no headers, no env, unknown transport
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from scc_cli.adapters.claude_renderer import (
     SCC_MANAGED_DIR,
     RendererResult,
+    _classify_binding,
+    _merge_settings_fragment,
+    _render_mcp_binding,
+    _render_skill_binding,
     render_claude_artifacts,
 )
 from scc_cli.core.errors import MaterializationError, MergeConflictError
@@ -728,3 +738,577 @@ class TestRendererErrorHierarchy:
             conflict_detail="dup",
         )
         assert isinstance(err, RendererError)
+
+
+# ---------------------------------------------------------------------------
+# Skipped artifact — Codex-only binding in Claude plan
+# ---------------------------------------------------------------------------
+
+
+class TestSkippedCodexOnlyBinding:
+    """Plan item 6: artifact with only Codex binding → skipped with reason."""
+
+    def test_codex_binding_in_claude_plan_skipped(self, workspace: Path) -> None:
+        """A binding targeting 'codex' inside a 'claude' plan is skipped."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="codex/rules.md",
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.warnings) == 1
+        assert "codex" in result.warnings[0]
+        assert "skipping" in result.warnings[0].lower()
+        assert result.rendered_paths == ()
+        assert result.settings_fragment == {}
+
+    def test_codex_binding_mixed_with_claude_bindings(self, workspace: Path) -> None:
+        """Claude bindings render; codex binding is skipped with warning."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="skills/code-review",
+                ),
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="codex-only-skill",
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+
+        # Claude skill rendered
+        skill_path = (
+            workspace / SCC_MANAGED_DIR / "skills" / "skills_code-review" / "skill.json"
+        )
+        assert skill_path.exists()
+
+        # Codex binding produced a warning
+        assert any("codex" in w for w in result.warnings)
+
+    def test_multiple_codex_bindings_all_skipped(self, workspace: Path) -> None:
+        """Every codex binding in a claude plan produces a skip warning."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(provider="codex", native_ref="a"),
+                ProviderArtifactBinding(provider="codex", native_ref="b"),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.warnings) == 2
+        assert all("codex" in w for w in result.warnings)
+
+    def test_plan_level_skipped_artifacts_preserved(self, workspace: Path) -> None:
+        """skipped tuple from the plan is carried through to the result."""
+        plan = _plan(
+            skipped=("codex-only-artifact",),
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="skills/ok",
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert "codex-only-artifact" in result.skipped_artifacts
+
+
+# ---------------------------------------------------------------------------
+# Binding classifier unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestBindingClassifier:
+    """Direct tests for _classify_binding to cover all 4 return paths."""
+
+    def test_native_config_with_hooks_classifies_as_native(self) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_config={"hooks": "./hooks.json"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_native_config_with_marketplace_classifies_as_native(self) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_config={"marketplace_bundle": "./market"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_native_config_with_plugin_classifies_as_native(self) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_config={"plugin_bundle": "./plugin"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_native_config_with_instructions_classifies_as_native(self) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_config={"instructions": "./CLAUDE.md"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_transport_type_classifies_as_mcp(self) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            transport_type="sse",
+        )
+        assert _classify_binding(binding) == "mcp"
+
+    def test_native_ref_only_classifies_as_skill(self) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="skills/code-review",
+        )
+        assert _classify_binding(binding) == "skill"
+
+    def test_empty_binding_classifies_as_unknown(self) -> None:
+        binding = ProviderArtifactBinding(provider="claude")
+        assert _classify_binding(binding) == "unknown"
+
+    def test_native_integration_keys_take_priority_over_transport(self) -> None:
+        """If both integration keys and transport_type are present, native wins."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            transport_type="sse",
+            native_config={"hooks": "./hooks.json"},
+        )
+        assert _classify_binding(binding) == "native"
+
+    def test_native_integration_keys_take_priority_over_native_ref(self) -> None:
+        """If both integration keys and native_ref are present, native wins."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="skills/foo",
+            native_config={"marketplace_bundle": "./market"},
+        )
+        assert _classify_binding(binding) == "native"
+
+
+# ---------------------------------------------------------------------------
+# _render_skill_binding — direct unit tests for internal helper
+# ---------------------------------------------------------------------------
+
+
+class TestRenderSkillBindingDirect:
+    """Cover the null-native_ref warning path (lines 96-100) directly."""
+
+    def test_null_native_ref_returns_warning(self, workspace: Path) -> None:
+        binding = ProviderArtifactBinding(provider="claude", native_ref=None)
+        rendered, warnings = _render_skill_binding(binding, workspace, "b1")
+        assert rendered == []
+        assert len(warnings) == 1
+        assert "no native_ref" in warnings[0]
+        assert "b1" in warnings[0]
+
+    def test_empty_string_native_ref_returns_warning(self, workspace: Path) -> None:
+        binding = ProviderArtifactBinding(provider="claude", native_ref="")
+        rendered, warnings = _render_skill_binding(binding, workspace, "b2")
+        assert rendered == []
+        assert len(warnings) == 1
+        assert "no native_ref" in warnings[0]
+
+    def test_valid_native_ref_writes_file(self, workspace: Path) -> None:
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="skills/test-skill",
+        )
+        rendered, warnings = _render_skill_binding(binding, workspace, "bundle-a")
+        assert warnings == []
+        assert len(rendered) == 1
+        assert rendered[0].exists()
+        content = json.loads(rendered[0].read_text())
+        assert content["native_ref"] == "skills/test-skill"
+        assert content["bundle_id"] == "bundle-a"
+
+
+# ---------------------------------------------------------------------------
+# _merge_settings_fragment — direct unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestMergeSettingsFragment:
+    """Cover the nested dict merging branch (line 300)."""
+
+    def test_merge_nested_dicts(self) -> None:
+        target: dict[str, Any] = {"mcpServers": {"a": {"type": "sse"}}}
+        source: dict[str, Any] = {"mcpServers": {"b": {"type": "stdio"}}}
+        _merge_settings_fragment(target, source)
+        assert target == {
+            "mcpServers": {
+                "a": {"type": "sse"},
+                "b": {"type": "stdio"},
+            }
+        }
+
+    def test_merge_overwrites_non_dict(self) -> None:
+        target: dict[str, Any] = {"key": "old"}
+        source: dict[str, Any] = {"key": "new"}
+        _merge_settings_fragment(target, source)
+        assert target["key"] == "new"
+
+    def test_merge_adds_new_keys(self) -> None:
+        target: dict[str, Any] = {"a": 1}
+        source: dict[str, Any] = {"b": 2}
+        _merge_settings_fragment(target, source)
+        assert target == {"a": 1, "b": 2}
+
+    def test_merge_target_dict_source_non_dict_overwrites(self) -> None:
+        """If target has a dict but source has a non-dict, source wins."""
+        target: dict[str, Any] = {"k": {"nested": True}}
+        source: dict[str, Any] = {"k": "flat"}
+        _merge_settings_fragment(target, source)
+        assert target["k"] == "flat"
+
+    def test_merge_target_non_dict_source_dict_overwrites(self) -> None:
+        """If target has a non-dict but source has a dict, source wins."""
+        target: dict[str, Any] = {"k": "flat"}
+        source: dict[str, Any] = {"k": {"nested": True}}
+        _merge_settings_fragment(target, source)
+        assert target["k"] == {"nested": True}
+
+    def test_merge_empty_source(self) -> None:
+        target: dict[str, Any] = {"a": 1}
+        _merge_settings_fragment(target, {})
+        assert target == {"a": 1}
+
+    def test_merge_multiple_fragments_accumulate(self) -> None:
+        """Two merges accumulate MCP servers correctly."""
+        target: dict[str, Any] = {}
+        _merge_settings_fragment(target, {"mcpServers": {"a": {"type": "sse"}}})
+        _merge_settings_fragment(target, {"mcpServers": {"b": {"type": "stdio"}}})
+        assert target == {
+            "mcpServers": {
+                "a": {"type": "sse"},
+                "b": {"type": "stdio"},
+            }
+        }
+
+
+# ---------------------------------------------------------------------------
+# MCP binding edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestMCPBindingEdgeCases:
+    """Cover partial branches in _render_mcp_binding."""
+
+    def test_stdio_with_non_string_args(self, workspace: Path) -> None:
+        """args that is not a string → wrapped in [str(args_raw)]."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="mcp-int-args",
+            transport_type="stdio",
+            native_config={"command": "/usr/bin/server", "args": "42"},
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        # String args are split
+        assert mcp_config["mcp-int-args"]["args"] == ["42"]
+
+    def test_stdio_with_no_args(self, workspace: Path) -> None:
+        """No args key → no args in output."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="no-args-mcp",
+            transport_type="stdio",
+            native_config={"command": "/usr/bin/server"},
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        assert "args" not in mcp_config["no-args-mcp"]
+
+    def test_stdio_with_no_env(self, workspace: Path) -> None:
+        """No env_* keys → no env in output."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="no-env-mcp",
+            transport_type="stdio",
+            native_config={"command": "/usr/bin/server"},
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        assert "env" not in mcp_config["no-env-mcp"]
+
+    def test_sse_with_no_headers(self, workspace: Path) -> None:
+        """SSE with url but no header_* keys → no headers in output."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="clean-sse",
+            transport_type="sse",
+            native_config={"url": "http://localhost:8080"},
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        assert "headers" not in mcp_config["clean-sse"]
+        assert warnings == []
+
+    def test_unknown_transport_type_still_produces_entry(self, workspace: Path) -> None:
+        """Transport type not in {sse, http, stdio} → entry with just 'type'."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="exotic-mcp",
+            transport_type="grpc",
+            native_config={},
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        assert mcp_config["exotic-mcp"] == {"type": "grpc"}
+        assert warnings == []
+
+    def test_http_transport_with_headers(self, workspace: Path) -> None:
+        """HTTP transport collects header_* keys same as SSE."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="http-mcp",
+            transport_type="http",
+            native_config={
+                "url": "https://api.example.com/mcp",
+                "header_Authorization": "Bearer tok",
+            },
+        )
+        mcp_config, _ = _render_mcp_binding(binding, "test-bundle")
+        assert mcp_config["http-mcp"]["headers"] == {"Authorization": "Bearer tok"}
+
+
+# ---------------------------------------------------------------------------
+# Unknown binding in render_claude_artifacts
+# ---------------------------------------------------------------------------
+
+
+class TestUnknownBinding:
+    """A binding with no native_ref, transport_type, or integration keys
+    is classified as 'unknown' and produces a warning."""
+
+    def test_unknown_binding_produces_warning(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"random_key": "value"},
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.warnings) == 1
+        assert "no native_ref" in result.warnings[0]
+        assert "skipping" in result.warnings[0].lower()
+
+    def test_unknown_binding_does_not_render(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"custom": "v"},
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert result.rendered_paths == ()
+        assert result.settings_fragment == {}
+
+
+# ---------------------------------------------------------------------------
+# Multiple bundles accumulating settings fragments
+# ---------------------------------------------------------------------------
+
+
+class TestMultipleMCPServersAccumulate:
+    """Multiple MCP bindings in a single plan accumulate into mcpServers."""
+
+    def test_two_mcp_servers_both_in_fragment(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="server-a",
+                    transport_type="sse",
+                    native_config={"url": "http://a:8080"},
+                ),
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="server-b",
+                    transport_type="stdio",
+                    native_config={"command": "/usr/bin/b"},
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        mcp = result.settings_fragment["mcpServers"]
+        assert "server-a" in mcp
+        assert "server-b" in mcp
+
+    def test_mcp_plus_marketplace_in_same_plan(self, workspace: Path) -> None:
+        """MCP server and marketplace binding merge into same settings fragment."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="srv",
+                    transport_type="sse",
+                    native_config={"url": "http://x:80"},
+                ),
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"marketplace_bundle": "./market/my-bundle"},
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert "mcpServers" in result.settings_fragment
+        assert "extraKnownMarketplaces" in result.settings_fragment
+
+
+# ---------------------------------------------------------------------------
+# Idempotency — stronger file content comparison
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotencyFileContent:
+    """Stronger idempotency: compare actual file bytes across two renders."""
+
+    def test_skill_file_bytes_identical_across_renders(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="skills/deterministic",
+                    native_config={"priority": "high"},
+                ),
+            ),
+        )
+        render_claude_artifacts(plan, workspace)
+        first_bytes = (
+            workspace
+            / SCC_MANAGED_DIR
+            / "skills"
+            / "skills_deterministic"
+            / "skill.json"
+        ).read_bytes()
+
+        render_claude_artifacts(plan, workspace)
+        second_bytes = (
+            workspace
+            / SCC_MANAGED_DIR
+            / "skills"
+            / "skills_deterministic"
+            / "skill.json"
+        ).read_bytes()
+
+        assert first_bytes == second_bytes
+
+    def test_audit_file_bytes_identical_across_renders(self, workspace: Path) -> None:
+        plan = _plan(
+            bundle_id="idem-bundle",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="srv",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:9090"},
+                ),
+            ),
+        )
+        render_claude_artifacts(plan, workspace)
+        first = (workspace / ".claude" / ".scc-settings-idem-bundle.json").read_bytes()
+        render_claude_artifacts(plan, workspace)
+        second = (workspace / ".claude" / ".scc-settings-idem-bundle.json").read_bytes()
+        assert first == second
+
+
+# ---------------------------------------------------------------------------
+# Skill path sanitization
+# ---------------------------------------------------------------------------
+
+
+class TestSkillPathSanitization:
+    """Verify special characters in native_ref are sanitized for filesystem."""
+
+    def test_backslash_replaced(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="skills\\review",
+                ),
+            ),
+        )
+        render_claude_artifacts(plan, workspace)
+        expected_dir = workspace / SCC_MANAGED_DIR / "skills" / "skills_review"
+        assert (expected_dir / "skill.json").exists()
+
+    def test_dotdot_replaced(self, workspace: Path) -> None:
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="skills/../escape",
+                ),
+            ),
+        )
+        render_claude_artifacts(plan, workspace)
+        expected_dir = workspace / SCC_MANAGED_DIR / "skills" / "skills___escape"
+        assert (expected_dir / "skill.json").exists()
+
+    def test_bundle_id_sanitized_in_audit_filename(self, workspace: Path) -> None:
+        """Bundle IDs with slashes are sanitized in audit file names."""
+        plan = _plan(
+            bundle_id="org/team/bundle",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="mcp-server",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:8080"},
+                ),
+            ),
+        )
+        render_claude_artifacts(plan, workspace)
+        expected = workspace / ".claude" / ".scc-settings-org_team_bundle.json"
+        assert expected.exists()
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: config keys that don't match header_/env_ prefixes
+# ---------------------------------------------------------------------------
+
+
+class TestMCPBindingNonPrefixKeys:
+    """Exercise the for-loop branches where config keys don't start with
+    header_ or env_, ensuring the loop skips non-matching keys."""
+
+    def test_sse_config_with_non_header_extra_keys(self, workspace: Path) -> None:
+        """SSE binding with extra non-header keys → keys ignored in output."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="extra-keys-sse",
+            transport_type="sse",
+            native_config={
+                "url": "http://localhost:8080",
+                "header_Authorization": "Bearer tok",
+                "custom_setting": "ignored",
+            },
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        server = mcp_config["extra-keys-sse"]
+        assert server["headers"] == {"Authorization": "Bearer tok"}
+        # custom_setting is not rendered into the server config
+        assert "custom_setting" not in server
+        assert warnings == []
+
+    def test_stdio_config_with_non_env_extra_keys(self, workspace: Path) -> None:
+        """Stdio binding with extra non-env keys → keys ignored in output."""
+        binding = ProviderArtifactBinding(
+            provider="claude",
+            native_ref="extra-keys-stdio",
+            transport_type="stdio",
+            native_config={
+                "command": "/usr/bin/server",
+                "env_API_KEY": "secret",
+                "custom_flag": "true",
+            },
+        )
+        mcp_config, warnings = _render_mcp_binding(binding, "test-bundle")
+        server = mcp_config["extra-keys-stdio"]
+        assert server["env"] == {"API_KEY": "secret"}
+        assert "custom_flag" not in server

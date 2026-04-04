@@ -17,7 +17,7 @@
   - Estimate: 1h30m
   - Files: tests/test_bundle_resolver.py, tests/test_bundle_resolver_contracts.py
   - Verify: uv run pytest tests/test_bundle_resolver_contracts.py -v && uv run pytest --cov=scc_cli.core.bundle_resolver --cov-report=term-missing --cov-branch
-- [ ] **T02: Characterization tests for Claude renderer** — Write characterization tests for src/scc_cli/adapters/claude_renderer.py:
+- [x] **T02: Added 40 characterization tests for Claude renderer achieving 100% statement and branch coverage on claude_renderer.py** — Write characterization tests for src/scc_cli/adapters/claude_renderer.py:
 1. Skill rendering: skill artifact → installed in Claude skill surface
 2. MCP rendering: MCP server artifact → Claude-native MCP configuration
 3. Marketplace rendering: native_integration with Claude marketplace binding → marketplace metadata
