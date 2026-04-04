@@ -42,20 +42,35 @@ Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topol
 - Doctor check for runtime backend, support-bundle effective egress section
 - 5 docs-truthfulness guardrail tests
 
+### M004 — Cross-Agent Runtime Safety (in progress)
+**S01 complete.** Delivered shared safety policy and verdict engine: shell tokenizer, git safety rules, network tool rules lifted from plugin into core with typed SafetyVerdict returns, orchestrated by DefaultSafetyEngine with fail-closed semantics, wired into bootstrap. +166 net new tests (3630 total).
+
+Key S01 deliverables:
+- CommandFamily enum (DESTRUCTIVE_GIT, NETWORK_TOOL)
+- Shell tokenizer in core (5 public functions, pure stdlib)
+- Git safety rules with typed SafetyVerdict returns (all plugin analyzers lifted)
+- Network tool rules detecting 6 tools (curl, wget, ssh, scp, sftp, rsync)
+- DefaultSafetyEngine with fail-closed policy semantics
+- SafetyEngine protocol port
+- FakeSafetyEngine for downstream tests
+- Boundary guardrail preventing plugin/provider imports in core safety modules
+
+Remaining slices: S02 (runtime wrapper baseline), S03 (Claude/Codex UX/audit adapters), S04 (fail-closed loading, audit surfaces, diagnostics), S05 (verification, docs, closeout).
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
-4. **M004 — Cross-Agent Runtime Safety** (next)
+4. **M004 — Cross-Agent Runtime Safety** (active — S01 ✅, S02–S05 remaining)
 5. **M005 — Architecture Quality, Strictness, And Hardening**
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices (RuntimeProbe protocol, OCI adapter following adapter-boundary conventions, three-layer egress enforcement, pure destination registry, docs-truthfulness guardrails).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices and by M004/S01 (safety logic decomposed into focused core modules).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 249 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3437 passed, 23 skipped, 4 xfailed — 3464 total)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 254 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3630 passed, 23 skipped, 4 xfailed)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -75,6 +90,11 @@ Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topol
 - Doctor checks access runtime probes via bootstrap.get_default_adapters(), never direct adapter imports.
 - Support-bundle sections use independent try/except per data source for partial-failure resilience.
 - Docs-truthfulness guardrail tests prevent stale network-mode vocabulary from reappearing in source, tests, or docs.
+- Safety engine is provider-neutral: DefaultSafetyEngine in core orchestrates shell tokenizer + git rules + network tool rules. SafetyEngine protocol in ports. Fail-closed semantics (missing policy keys → rule enabled). Boundary guardrail prevents plugin/provider imports in core safety modules.
+- M004 runtime wrapper scope is exactly 7 tools: git, curl, wget, ssh, scp, sftp, rsync (D017). No package managers, cloud CLIs, kubectl, terraform, or broad command families.
+- Runtime wrappers are defense-in-depth, early UX, and audit only — never the primary enforcement plane for network isolation. Topology + proxy policy (D014) are the hard control.
+- Provider-native integrations in M004 are adapter-owned and additive only; they relay but never override shared engine verdicts.
+- One active team context per session/workspace in safety diagnostics and surfaces — no implicit union of team access (extends D015).
 
 ## Immediate next focus
-- M003 is complete. M004 (Cross-Agent Runtime Safety) is the next milestone.
+- M004/S02: Runtime wrapper baseline in `scc-base` — depends on S01's safety engine and protocol.

@@ -49,3 +49,25 @@ User-issued overrides that supersede plan document content.
 **Applied-at:** M003/S04/T03
 
 ---
+
+## Override: 2026-04-04T11:54:39.634Z
+
+**Change:** For M004/S02-S05, keep the safety architecture narrow and truthful.
+
+  S02:
+  - Put the first SCC-owned runtime wrappers in scc-base.
+  - Scope is destructive git plus explicit network tools only: curl, wget, ssh, scp, sftp, remote rsync.
+  - Keep wrappers small, typed, and fail-closed.
+  - Do not expand to package managers, cloud CLIs, kubectl, terraform, or broad command families.
+
+  Cross-slice rules:
+  - In enforced web-egress modes, topology plus proxy policy remain the hard network control.
+  - Network-tool wrappers are defense-in-depth, early UX, and audit only.
+  - Do not imply wrappers are the primary enforcement plane for network isolation.
+  - Keep provider-native integrations adapter-owned and additive only.
+  - Keep one active team context per session/workspace in diagnostics and safety surfaces; no implicit union of team access.
+  - Keep M004 maintainability work local to touched files; do not pull M005-style broad cleanup forward.
+**Scope:** resolved
+**Applied-at:** M004/S02/none
+
+---
