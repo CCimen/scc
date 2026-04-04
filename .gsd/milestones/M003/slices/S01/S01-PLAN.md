@@ -44,7 +44,7 @@ Build the new typed runtime detection surface: a `RuntimeProbe` protocol, its Do
   - Estimate: 1.5h
   - Files: src/scc_cli/core/contracts.py, src/scc_cli/ports/runtime_probe.py, src/scc_cli/adapters/docker_runtime_probe.py, tests/fakes/fake_runtime_probe.py, tests/fakes/__init__.py, src/scc_cli/bootstrap.py, tests/test_runtime_probe.py
   - Verify: uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T02: Migrate DockerSandboxRuntime and dashboard orchestrator to use RuntimeProbe** — ## Description
+- [x] **T02: Replaced three docker.check_docker_available() calls with probe-backed ensure_available() in DockerSandboxRuntime, worktree start, and session resume paths** — ## Description
 
 Replace the three `docker.check_docker_available()` calls in launch-path code with probe-based detection. This is the consumer migration that makes RuntimeProbe the canonical detection surface for launch decisions.
 

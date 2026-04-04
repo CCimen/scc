@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from scc_cli import docker
 from scc_cli.core.enums import NetworkPolicy
+from scc_cli.core.errors import (
+    DockerDaemonNotRunningError,
+    DockerNotFoundError,
+    DockerVersionError,
+    SandboxNotAvailableError,
+)
 from scc_cli.core.network_policy import collect_proxy_env
+from scc_cli.docker.core import MIN_DOCKER_VERSION, _parse_version
 from scc_cli.ports.models import SandboxHandle, SandboxSpec, SandboxState, SandboxStatus
+from scc_cli.ports.runtime_probe import RuntimeProbe
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
 
@@ -23,8 +31,37 @@ def _extract_container_name(cmd: list[str]) -> str | None:
 class DockerSandboxRuntime(SandboxRuntime):
     """SandboxRuntime backed by Docker sandbox CLI."""
 
+    def __init__(self, probe: RuntimeProbe) -> None:
+        self._probe = probe
+
     def ensure_available(self) -> None:
-        docker.check_docker_available()
+        """Ensure the Docker runtime is available and ready for sandbox use.
+
+        Uses RuntimeProbe to detect capabilities, then raises the same
+        exception types as the old docker.check_docker_available() path.
+        """
+        info = self._probe.probe()
+
+        # Docker not installed: no CLI found, no version info
+        if not info.daemon_reachable and not info.cli_name:
+            raise DockerNotFoundError()
+        if not info.daemon_reachable and info.version is None:
+            raise DockerNotFoundError()
+
+        # Docker installed but daemon not running
+        if not info.daemon_reachable:
+            raise DockerDaemonNotRunningError()
+
+        # Desktop version too old
+        if info.desktop_version:
+            current = _parse_version(info.desktop_version)
+            required = _parse_version(MIN_DOCKER_VERSION)
+            if current < required:
+                raise DockerVersionError(current_version=info.desktop_version)
+
+        # Sandbox feature not available
+        if not info.sandbox_available:
+            raise SandboxNotAvailableError()
 
     def run(self, spec: SandboxSpec) -> SandboxHandle:
         docker.prepare_sandbox_volume_for_credentials()

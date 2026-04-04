@@ -66,6 +66,7 @@ class DefaultAdapters:
 def get_default_adapters() -> DefaultAdapters:
     """Return the default adapter wiring for SCC."""
 
+    probe = DockerRuntimeProbe()
     return DefaultAdapters(
         filesystem=LocalFilesystem(),
         git_client=LocalGitClient(),
@@ -74,14 +75,14 @@ def get_default_adapters() -> DefaultAdapters:
         clock=SystemClock(),
         agent_runner=ClaudeAgentRunner(),
         agent_provider=ClaudeAgentProvider(),
-        sandbox_runtime=DockerSandboxRuntime(),
+        sandbox_runtime=DockerSandboxRuntime(probe=probe),
         personal_profile_service=LocalPersonalProfileService(),
         doctor_runner=LocalDoctorRunner(),
         archive_writer=ZipArchiveWriter(),
         config_store=LocalConfigStore(),
         audit_event_sink=LocalAuditEventSink(),
         codex_agent_provider=CodexAgentProvider(),
-        runtime_probe=DockerRuntimeProbe(),
+        runtime_probe=probe,
     )
 
 

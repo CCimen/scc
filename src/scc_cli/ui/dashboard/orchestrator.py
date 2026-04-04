@@ -478,7 +478,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
 
     from rich.status import Status
 
-    from ... import config, docker
+    from ... import config
     from ...application.start_session import (
         StartSessionDependencies,
         StartSessionRequest,
@@ -509,9 +509,12 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     console.print()
 
     try:
-        # Docker availability check
+        # Obtain adapters early so the probe-backed runtime check can run
+        adapters = get_default_adapters()
+
+        # Docker availability check (via RuntimeProbe)
         with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
-            docker.check_docker_available()
+            adapters.sandbox_runtime.ensure_available()
 
         # Validate and resolve workspace
         resolved_path = _validate_and_resolve_workspace(str(workspace_path))
@@ -524,9 +527,6 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         cfg = config.load_user_config()
         team = cfg.get("selected_profile")
         _configure_team_settings(team, cfg)
-
-        # Sync marketplace settings
-        adapters = get_default_adapters()
         start_dependencies = StartSessionDependencies(
             filesystem=adapters.filesystem,
             remote_fetcher=adapters.remote_fetcher,
@@ -607,7 +607,7 @@ def _handle_session_resume(session: SessionSummary) -> bool:
 
     from rich.status import Status
 
-    from ... import config, docker
+    from ... import config
     from ...application.start_session import (
         StartSessionDependencies,
         StartSessionRequest,
@@ -645,9 +645,12 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         return False
 
     try:
-        # Docker availability check
+        # Obtain adapters early so the probe-backed runtime check can run
+        adapters = get_default_adapters()
+
+        # Docker availability check (via RuntimeProbe)
         with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
-            docker.check_docker_available()
+            adapters.sandbox_runtime.ensure_available()
 
         # Validate and resolve workspace (we know it exists from earlier check)
         resolved_path = _validate_and_resolve_workspace(str(workspace_path))
@@ -659,9 +662,6 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         # Configure team settings
         cfg = config.load_user_config()
         _configure_team_settings(team, cfg)
-
-        # Sync marketplace settings
-        adapters = get_default_adapters()
         start_dependencies = StartSessionDependencies(
             filesystem=adapters.filesystem,
             remote_fetcher=adapters.remote_fetcher,

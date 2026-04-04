@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T08:22:23.288Z",
+  "exported_at": "2026-04-04T08:37:00.615Z",
   "milestones": [
     {
       "id": "M001",
@@ -1651,19 +1651,26 @@
       "milestone_id": "M003",
       "slice_id": "S01",
       "id": "T02",
-      "title": "Migrate DockerSandboxRuntime and dashboard orchestrator to use RuntimeProbe",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Replaced three docker.check_docker_available() calls with probe-backed ensure_available() in DockerSandboxRuntime, worktree start, and session resume paths",
+      "status": "complete",
+      "one_liner": "Replaced three docker.check_docker_available() calls with probe-backed ensure_available() in DockerSandboxRuntime, worktree start, and session resume paths",
+      "narrative": "Added __init__(self, probe: RuntimeProbe) to DockerSandboxRuntime and rewrote ensure_available() to call self._probe.probe() and inspect the returned RuntimeInfo fields. The method raises the same four exception types (DockerNotFoundError, DockerDaemonNotRunningError, DockerVersionError, SandboxNotAvailableError) based on the same conditions as the old docker.check_docker_available() function. Updated bootstrap to share a single DockerRuntimeProbe instance between sandbox_runtime and runtime_probe. Migrated _handle_worktree_start and _handle_session_resume in the dashboard orchestrator to call adapters.sandbox_runtime.ensure_available() instead of docker.check_docker_available().",
+      "verification_result": "All five verification checks passed: targeted tests (5 passed), ruff check on modified files (clean), ruff check on full codebase (clean), mypy (no issues in 244 files), full test suite (3285 passed, 23 skipped, 4 xfailed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T08:37:00.576Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Used info.version is None instead of cli_name emptiness for DockerNotFoundError detection since the probe always populates cli_name as 'docker'.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/docker_sandbox_runtime.py",
+        "src/scc_cli/bootstrap.py",
+        "src/scc_cli/ui/dashboard/orchestrator.py"
+      ],
+      "key_decisions": [
+        "DockerSandboxRuntime.__init__ accepts RuntimeProbe; bootstrap shares single probe instance between sandbox_runtime and runtime_probe fields",
+        "ensure_available() mirrors exact exception-raising logic of docker.check_docker_available() using RuntimeInfo fields"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M003\nkey_files:\n  - src/scc_cli/adapters/docker_sandbox_runtime.py\n  - src/scc_cli/bootstrap.py\n  - src/scc_cli/ui/dashboard/orchestrator.py\nkey_decisions:\n  - DockerSandboxRuntime.__init__ accepts RuntimeProbe; bootstrap shares single probe instance between sandbox_runtime and runtime_probe fields\n  - ensure_available() mirrors exact exception-raising logic of docker.check_docker_available() using RuntimeInfo fields\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T08:37:00.575Z\nblocker_discovered: false\n---\n\n# T02: Replaced three docker.check_docker_available() calls with probe-backed ensure_available() in DockerSandboxRuntime, worktree start, and session resume paths\n\n**Replaced three docker.check_docker_available() calls with probe-backed ensure_available() in DockerSandboxRuntime, worktree start, and session resume paths**\n\n## What Happened\n\nAdded __init__(self, probe: RuntimeProbe) to DockerSandboxRuntime and rewrote ensure_available() to call self._probe.probe() and inspect the returned RuntimeInfo fields. The method raises the same four exception types (DockerNotFoundError, DockerDaemonNotRunningError, DockerVersionError, SandboxNotAvailableError) based on the same conditions as the old docker.check_docker_available() function. Updated bootstrap to share a single DockerRuntimeProbe instance between sandbox_runtime and runtime_probe. Migrated _handle_worktree_start and _handle_session_resume in the dashboard orchestrator to call adapters.sandbox_runtime.ensure_available() instead of docker.check_docker_available().\n\n## Verification\n\nAll five verification checks passed: targeted tests (5 passed), ruff check on modified files (clean), ruff check on full codebase (clean), mypy (no issues in 244 files), full test suite (3285 passed, 23 skipped, 4 xfailed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_runtime_probe.py tests/contracts/test_sandbox_runtime_contract.py -q` | 0 | ✅ pass | 3800ms |\n| 2 | `uv run ruff check src/scc_cli/adapters/docker_sandbox_runtime.py src/scc_cli/ui/dashboard/orchestrator.py src/scc_cli/bootstrap.py` | 0 | ✅ pass | 8500ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 59500ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 52600ms |\n| 5 | `uv run ruff check` | 0 | ✅ pass | 3000ms |\n\n## Deviations\n\nUsed info.version is None instead of cli_name emptiness for DockerNotFoundError detection since the probe always populates cli_name as 'docker'.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/docker_sandbox_runtime.py`\n- `src/scc_cli/bootstrap.py`\n- `src/scc_cli/ui/dashboard/orchestrator.py`\n",
       "description": "## Description\n\nReplace the three `docker.check_docker_available()` calls in launch-path code with probe-based detection. This is the consumer migration that makes RuntimeProbe the canonical detection surface for launch decisions.\n\n## Steps\n\n1. **Inject RuntimeProbe into DockerSandboxRuntime** — Add a `__init__` method to `DockerSandboxRuntime` that accepts a `RuntimeProbe` parameter and stores it as `self._probe`. Update `ensure_available()` to call `self._probe.probe()`, inspect the returned `RuntimeInfo`, and raise the same exception types as `docker.check_docker_available()` based on the info fields:\n   - If `not info.daemon_reachable` and `info.cli_name` is empty/version is None → `DockerNotFoundError()`\n   - If `not info.daemon_reachable` → `DockerDaemonNotRunningError()`\n   - If `info.desktop_version` is set and below `MIN_DOCKER_VERSION` → `DockerVersionError(current_version=info.desktop_version)`\n   - If `not info.sandbox_available` → `SandboxNotAvailableError()`\n   Import error types from `scc_cli.core.errors`.\n\n2. **Update bootstrap wiring** — In `get_default_adapters()`, construct `DockerRuntimeProbe()` first (or reuse the one being assigned to `runtime_probe`), then pass it to `DockerSandboxRuntime(probe)`. Ensure the same probe instance is used for both.\n\n3. **Migrate dashboard orchestrator worktree start (line ~514)** — In `_start_worktree_session` in `src/scc_cli/ui/dashboard/orchestrator.py`: move `adapters = get_default_adapters()` before the Docker check `Status` block. Replace `docker.check_docker_available()` with `adapters.sandbox_runtime.ensure_available()`. Remove the `docker` import from this function if it was only used for detection (check other uses of `docker` in the same function first — if `docker` is still used for other purposes, keep the import).\n\n4. **Migrate dashboard orchestrator resume (line ~650)** — In `_resume_session_dashboard`: same pattern — move adapters retrieval up, replace `docker.check_docker_available()` with `adapters.sandbox_runtime.ensure_available()`. Preserve the existing `try/except` error handling around the call.\n\n5. **Verify no behavior change** — The same exceptions are raised in the same scenarios. The error messages and exit codes are unchanged. The dashboard UX is identical.\n\n## Failure Modes\n\n| Dependency | On error | On timeout | On malformed response |\n|------------|----------|-----------|----------------------|\n| docker CLI subprocess (via probe) | Returns RuntimeInfo with degraded fields | Probe returns `daemon_reachable=False` | Version parsing returns (0,0,0), probe still returns valid RuntimeInfo |\n\n## Must-Haves\n\n- [ ] `DockerSandboxRuntime.__init__` accepts `RuntimeProbe` parameter.\n- [ ] `ensure_available()` uses probe, raises same exception types as before.\n- [ ] Dashboard orchestrator line ~514 uses `adapters.sandbox_runtime.ensure_available()`.\n- [ ] Dashboard orchestrator line ~650 uses `adapters.sandbox_runtime.ensure_available()`.\n- [ ] All existing tests in `test_docker_core.py` and `test_sandbox_runtime_contract.py` still pass.\n\n## Verification\n\n- `uv run pytest tests/test_docker_core.py tests/contracts/test_sandbox_runtime_contract.py -q` — existing tests pass.\n- `uv run pytest tests/test_runtime_probe.py -q` — probe tests still pass.\n- `uv run ruff check src/scc_cli/adapters/docker_sandbox_runtime.py src/scc_cli/ui/dashboard/orchestrator.py src/scc_cli/bootstrap.py` — clean.\n- `uv run mypy src/scc_cli` — no type errors.\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite green.",
       "estimate": "1h",
       "files": [
@@ -2852,6 +2859,61 @@
       "verdict": "✅ pass",
       "duration_ms": 10000,
       "created_at": "2026-04-04T08:22:23.258Z"
+    },
+    {
+      "id": 5,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_runtime_probe.py tests/contracts/test_sandbox_runtime_contract.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3800,
+      "created_at": "2026-04-04T08:37:00.576Z"
+    },
+    {
+      "id": 6,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run ruff check src/scc_cli/adapters/docker_sandbox_runtime.py src/scc_cli/ui/dashboard/orchestrator.py src/scc_cli/bootstrap.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 8500,
+      "created_at": "2026-04-04T08:37:00.576Z"
+    },
+    {
+      "id": 7,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 59500,
+      "created_at": "2026-04-04T08:37:00.576Z"
+    },
+    {
+      "id": 8,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 52600,
+      "created_at": "2026-04-04T08:37:00.576Z"
+    },
+    {
+      "id": 9,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3000,
+      "created_at": "2026-04-04T08:37:00.576Z"
     }
   ]
 }
