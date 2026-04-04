@@ -6,7 +6,7 @@ skill_discovery: suggest
 git:
   main_branch: gsd/scc-v1
   merge_strategy: squash
-  isolation: worktree
+  isolation: branch
   auto_push: false
   commit_docs: true
   manage_gitignore: false
@@ -26,4 +26,5 @@ auto_report: true
 ---
 
 Project-local preferences for SCC v1 architecture work.
+Use `gsd/scc-v1` as the milestone integration branch; do not merge milestone work to the literal `main` branch from this repo.
 Keep parallel disabled until Milestone 0 and Milestone 1 are stable.

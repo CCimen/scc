@@ -1,31 +1,29 @@
-# REQUIREMENTS.md
+# Requirements
 
-## Product requirements
-- SCC must remain a governed runtime for coding agents and must not become a new general-purpose coding agent.
-- V1 supports Claude Code and Codex as first-class providers.
-- SCC core must be provider-neutral and runtime-portable.
-- SCC must not require Docker Desktop.
-- SCC must ship a plain OCI runtime path first and keep Podman on the same contracts.
-- Network modes must be truthful and enforcement must live in runtime topology plus policy, not only in provider-native features.
-- Only org and delegated team policy may widen effective egress.
-- Project and user scopes may only narrow effective egress or emit request metadata.
-- V1 enforced egress is HTTP/HTTPS only.
-- Provider-core destinations are automatic and minimal for the selected provider only.
-- GitHub, npm, PyPI, and other dev destinations must remain explicit org/team policy choices.
-- The first cross-agent safety layer must govern destructive git plus explicit network tools.
-- Runtime-level safety must fail closed when policy cannot be loaded or validated.
-- Open Agent Skills are the only intended shared portability layer.
-- Plugins, hooks, rules, and marketplaces remain provider-native integrations.
+This file is the explicit capability and coverage contract for the project.
 
-## Engineering requirements
-- Use typed internal models for provider planning, runtime planning, network policy, and safety.
-- Keep raw dictionaries only at parsing and serialization boundaries.
-- Align error categories, exit codes, and human/JSON rendering early.
-- Preserve current working behavior with characterization tests before large refactors.
-- Re-enable size and complexity guardrails after the main launch/runtime seams are stabilized.
-- Keep diagnostics honest about provider, runtime, network, and safety status.
+## Validated
 
-## Quality bar
-- Every milestone exits green on `uv run ruff check`, `uv run mypy src/scc_cli`, and `uv run pytest`.
-- Security claims must be directly explainable to a skeptical enterprise reviewer.
-- The codebase should become more typed, more modular, and easier to reason about after each milestone, not harder.
+### R001 — SCC changes must improve maintainability by keeping touched areas cohesive, testable, and easier to change, especially when work crosses oversized or high-churn files.
+- Class: non-functional
+- Status: validated
+- Description: SCC changes must improve maintainability by keeping touched areas cohesive, testable, and easier to change, especially when work crosses oversized or high-churn files.
+- Why it matters: Maintainability directly drives testability, consistency, and the long-term cost and safety of future provider/runtime changes.
+- Source: user-feedback
+- Primary owning slice: architecture
+- Supporting slices: M002/S03, M002/S05
+- Validation: Proof from M002/S05: `uv run pytest --rootdir "$PWD" ./tests/test_launch_audit_support.py ./tests/test_support_bundle.py -q`, `uv run pytest --rootdir "$PWD" ./tests/test_application_settings.py ./tests/test_support_bundle.py ./tests/test_no_root_sprawl.py -q`, `uv run pytest --rootdir "$PWD" ./tests/test_launch_flow_hotspots.py ./tests/test_start_wizard_quick_resume_flow.py ./tests/test_start_wizard_workspace_quick_resume.py ./tests/test_start_cross_team_resume_prompt.py -q`, plus repo-wide `uv run ruff check`, `uv run mypy src/scc_cli`, and `uv run pytest --rootdir "$PWD" -q` all passed.
+- Notes: Validated by M002/S05: support-bundle generation now has one application-owned path, launch wizard resume subflows were extracted into typed helpers, and hotspot/root-sprawl guardrails now prevent regression. This requirement does not force repo-wide decomposition before M005; in M003 and M004, only local maintainability extractions that directly enable the active slice are in scope, with broader strictness and hardening reserved for M005.
+
+## Traceability
+
+| ID | Class | Status | Primary owner | Supporting | Proof |
+|---|---|---|---|---|---|
+| R001 | non-functional | validated | architecture | M002/S03, M002/S05 | Proof from M002/S05: `uv run pytest --rootdir "$PWD" ./tests/test_launch_audit_support.py ./tests/test_support_bundle.py -q`, `uv run pytest --rootdir "$PWD" ./tests/test_application_settings.py ./tests/test_support_bundle.py ./tests/test_no_root_sprawl.py -q`, `uv run pytest --rootdir "$PWD" ./tests/test_launch_flow_hotspots.py ./tests/test_start_wizard_quick_resume_flow.py ./tests/test_start_wizard_workspace_quick_resume.py ./tests/test_start_cross_team_resume_prompt.py -q`, plus repo-wide `uv run ruff check`, `uv run mypy src/scc_cli`, and `uv run pytest --rootdir "$PWD" -q` all passed. |
+
+## Coverage Summary
+
+- Active requirements: 0
+- Mapped to slices: 0
+- Validated: 1 (R001)
+- Unmapped active requirements: 0
