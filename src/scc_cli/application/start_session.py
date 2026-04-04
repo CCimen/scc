@@ -44,6 +44,18 @@ _PROVIDER_IMAGE_REF: dict[str, str] = {
     "codex": SCC_CODEX_IMAGE_REF,
 }
 
+# Provider → Docker named volume for credential/data persistence.
+_PROVIDER_DATA_VOLUME: dict[str, str] = {
+    "claude": "docker-claude-sandbox-data",
+    "codex": "docker-codex-sandbox-data",
+}
+
+# Provider → config directory name under /home/agent/.
+_PROVIDER_CONFIG_DIR: dict[str, str] = {
+    "claude": ".claude",
+    "codex": ".codex",
+}
+
 
 @dataclass(frozen=True)
 class StartSessionDependencies:
@@ -297,8 +309,8 @@ def _build_sandbox_spec(
     if request.dry_run:
         return None
 
-    # Route image: SCC-owned image for OCI backend, Docker Desktop template otherwise.
-    # Provider-aware: select image by provider_id when on OCI backend.
+    # Route image, data volume, and config dir by provider_id on OCI backend.
+    # Falls back to Claude defaults for unknown providers.
     if runtime_info is not None and runtime_info.preferred_backend == "oci":
         provider_id = (
             agent_provider.capability_profile().provider_id
@@ -306,8 +318,12 @@ def _build_sandbox_spec(
             else "claude"
         )
         image = _PROVIDER_IMAGE_REF.get(provider_id, SCC_CLAUDE_IMAGE_REF)
+        data_volume = _PROVIDER_DATA_VOLUME.get(provider_id, _PROVIDER_DATA_VOLUME["claude"])
+        config_dir = _PROVIDER_CONFIG_DIR.get(provider_id, _PROVIDER_CONFIG_DIR["claude"])
     else:
         image = SANDBOX_IMAGE
+        data_volume = ""
+        config_dir = ""
 
     # Resolve provider destination sets for OCI backend.
     from scc_cli.core.contracts import DestinationSet
@@ -338,6 +354,8 @@ def _build_sandbox_spec(
         agent_settings=agent_settings,
         org_config=request.raw_org_config,
         agent_argv=agent_argv or [],
+        data_volume=data_volume,
+        config_dir=config_dir,
     )
 
 

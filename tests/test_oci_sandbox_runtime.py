@@ -481,3 +481,95 @@ class TestContainerName:
 
     def test_different_paths_differ(self) -> None:
         assert _container_name(Path("/a")) != _container_name(Path("/b"))
+
+
+# ── S02/T03 — Provider-aware exec command and credential volume mounting ─────
+
+class TestProviderAwareExecCmd:
+    """Verify _build_exec_cmd uses spec.agent_argv when present."""
+
+    def test_build_exec_cmd_uses_agent_argv_when_present(self) -> None:
+        """With agent_argv=("codex",), exec cmd uses codex, not claude."""
+        spec = _minimal_spec(agent_argv=["codex"])
+        cmd = OciSandboxRuntime._build_exec_cmd(spec, "cid123")
+        assert "codex" in cmd
+        assert AGENT_NAME not in cmd
+        assert "--dangerously-skip-permissions" not in cmd
+
+    def test_build_exec_cmd_falls_back_to_agent_name(self) -> None:
+        """Empty agent_argv uses existing AGENT_NAME + --dangerously-skip-permissions."""
+        spec = _minimal_spec(agent_argv=[])
+        cmd = OciSandboxRuntime._build_exec_cmd(spec, "cid123")
+        assert AGENT_NAME in cmd
+        assert "--dangerously-skip-permissions" in cmd
+
+    def test_build_exec_cmd_default_agent_argv(self) -> None:
+        """Default SandboxSpec (no agent_argv given) falls back to AGENT_NAME."""
+        spec = _minimal_spec()
+        cmd = OciSandboxRuntime._build_exec_cmd(spec, "cid123")
+        assert AGENT_NAME in cmd
+        assert "--dangerously-skip-permissions" in cmd
+
+    def test_build_exec_cmd_continue_session_with_codex_argv(self) -> None:
+        """-c appended after codex argv when continue_session=True."""
+        spec = _minimal_spec(agent_argv=["codex"], continue_session=True)
+        cmd = OciSandboxRuntime._build_exec_cmd(spec, "cid123")
+        assert "codex" in cmd
+        assert "-c" in cmd
+        # -c should be after codex
+        codex_idx = cmd.index("codex")
+        c_idx = cmd.index("-c")
+        assert c_idx > codex_idx
+
+    def test_build_exec_cmd_continue_session_with_default_argv(self) -> None:
+        """-c appended after default AGENT_NAME argv when continue_session=True."""
+        spec = _minimal_spec(continue_session=True)
+        cmd = OciSandboxRuntime._build_exec_cmd(spec, "cid123")
+        assert AGENT_NAME in cmd
+        assert "--dangerously-skip-permissions" in cmd
+        assert "-c" in cmd
+
+
+class TestProviderAwareCreateCmd:
+    """Verify _build_create_cmd uses spec.data_volume and spec.config_dir."""
+
+    def test_build_create_cmd_uses_data_volume_when_present(self) -> None:
+        """With data_volume set, volume mount uses it instead of SANDBOX_DATA_VOLUME."""
+        spec = _minimal_spec(data_volume="docker-codex-sandbox-data")
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        mount_str = "docker-codex-sandbox-data:/home/agent/.claude"
+        assert mount_str in cmd
+        assert SANDBOX_DATA_VOLUME not in " ".join(cmd)
+
+    def test_build_create_cmd_uses_config_dir_when_present(self) -> None:
+        """With config_dir set, mount target uses it instead of .claude."""
+        spec = _minimal_spec(config_dir=".codex")
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        mount_found = any(
+            "/home/agent/.codex" in arg for arg in cmd
+        )
+        assert mount_found
+
+    def test_build_create_cmd_both_volume_and_config_dir(self) -> None:
+        """Both data_volume and config_dir produce the expected mount."""
+        spec = _minimal_spec(
+            data_volume="docker-codex-sandbox-data",
+            config_dir=".codex",
+        )
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        mount_str = "docker-codex-sandbox-data:/home/agent/.codex"
+        assert mount_str in cmd
+
+    def test_build_create_cmd_falls_back_to_defaults(self) -> None:
+        """Empty data_volume and config_dir falls back to SANDBOX_DATA_VOLUME and .claude."""
+        spec = _minimal_spec(data_volume="", config_dir="")
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        mount_str = f"{SANDBOX_DATA_VOLUME}:/home/agent/.claude"
+        assert mount_str in cmd
+
+    def test_build_create_cmd_default_spec_falls_back(self) -> None:
+        """Default SandboxSpec (no volume/dir given) uses original constants."""
+        spec = _minimal_spec()
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        mount_str = f"{SANDBOX_DATA_VOLUME}:/home/agent/.claude"
+        assert mount_str in cmd

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T23:43:20.142Z",
+  "exported_at": "2026-04-04T23:50:12.227Z",
   "milestones": [
     {
       "id": "M001",
@@ -5041,19 +5041,29 @@
       "milestone_id": "M006-d622bc",
       "slice_id": "S02",
       "id": "T03",
-      "title": "OCI runtime provider-aware exec command and credential volume mounting",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Made OCI runtime exec command and credential volume mount provider-aware with backward-compat fallbacks and 15 new tests",
+      "status": "complete",
+      "one_liner": "Made OCI runtime exec command and credential volume mount provider-aware with backward-compat fallbacks and 15 new tests",
+      "narrative": "Added data_volume and config_dir fields to SandboxSpec. Extended _build_sandbox_spec with _PROVIDER_DATA_VOLUME and _PROVIDER_CONFIG_DIR dicts mapping provider_id to volume names and config directories. Updated _build_exec_cmd to use spec.agent_argv when non-empty (avoiding Claude-specific --dangerously-skip-permissions for Codex), with fallback to AGENT_NAME. Updated _build_create_cmd to resolve volume_name and config_dirname from spec fields with empty-string fallback to existing constants. Added 15 new tests covering exec cmd, create cmd, and start_session population paths.",
+      "verification_result": "All 5 verification gates passed: 81 targeted tests pass, ruff check clean on 3 source files, mypy clean on 3 source files, full suite 4568 passed with 0 failures, and slice-level contract tests still pass (13 tests).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T23:50:12.185Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_oci_sandbox_runtime.py",
+        "tests/test_application_start_session.py"
+      ],
+      "key_decisions": [
+        "_build_exec_cmd branches on agent_argv presence to avoid appending Claude-specific --dangerously-skip-permissions to non-Claude providers",
+        "_build_create_cmd resolves volume_name and config_dirname from spec with empty-string fallback to existing constants",
+        "_PROVIDER_DATA_VOLUME and _PROVIDER_CONFIG_DIR dicts in start_session.py parallel _PROVIDER_IMAGE_REF pattern"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S02\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - src/scc_cli/ports/models.py\n  - src/scc_cli/application/start_session.py\n  - tests/test_oci_sandbox_runtime.py\n  - tests/test_application_start_session.py\nkey_decisions:\n  - _build_exec_cmd branches on agent_argv presence to avoid appending Claude-specific --dangerously-skip-permissions to non-Claude providers\n  - _build_create_cmd resolves volume_name and config_dirname from spec with empty-string fallback to existing constants\n  - _PROVIDER_DATA_VOLUME and _PROVIDER_CONFIG_DIR dicts in start_session.py parallel _PROVIDER_IMAGE_REF pattern\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T23:50:12.183Z\nblocker_discovered: false\n---\n\n# T03: Made OCI runtime exec command and credential volume mount provider-aware with backward-compat fallbacks and 15 new tests\n\n**Made OCI runtime exec command and credential volume mount provider-aware with backward-compat fallbacks and 15 new tests**\n\n## What Happened\n\nAdded data_volume and config_dir fields to SandboxSpec. Extended _build_sandbox_spec with _PROVIDER_DATA_VOLUME and _PROVIDER_CONFIG_DIR dicts mapping provider_id to volume names and config directories. Updated _build_exec_cmd to use spec.agent_argv when non-empty (avoiding Claude-specific --dangerously-skip-permissions for Codex), with fallback to AGENT_NAME. Updated _build_create_cmd to resolve volume_name and config_dirname from spec fields with empty-string fallback to existing constants. Added 15 new tests covering exec cmd, create cmd, and start_session population paths.\n\n## Verification\n\nAll 5 verification gates passed: 81 targeted tests pass, ruff check clean on 3 source files, mypy clean on 3 source files, full suite 4568 passed with 0 failures, and slice-level contract tests still pass (13 tests).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py -v` | 0 | ✅ pass | 7800ms |\n| 2 | `uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` | 0 | ✅ pass | 4300ms |\n| 3 | `uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` | 0 | ✅ pass | 4300ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 71300ms |\n| 5 | `uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v` | 0 | ✅ pass | 6900ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/oci_sandbox_runtime.py`\n- `src/scc_cli/ports/models.py`\n- `src/scc_cli/application/start_session.py`\n- `tests/test_oci_sandbox_runtime.py`\n- `tests/test_application_start_session.py`\n",
       "description": "---\nestimated_steps: 5\nestimated_files: 5\nskills_used: []\n---\n\n# T03: OCI runtime provider-aware exec command and credential volume mounting\n\n**Slice:** S02 — CodexAgentRunner, provider-aware image selection, and launch path wiring\n**Milestone:** M006-d622bc\n\n## Description\n\nThis is the highest-risk task in S02. The OCI sandbox runtime has 483 lines of tests and hardcodes `AGENT_NAME` (\"claude\") and `SANDBOX_DATA_VOLUME` (\"docker-claude-sandbox-data\") with a `.claude` mount path. This task makes `_build_exec_cmd` use `spec.agent_argv` when present and `_build_create_cmd` use `spec.data_volume` and `spec.config_dir` when present, with backward-compat fallbacks.\n\n## Steps\n\n1. Add `data_volume: str = \"\"` and `config_dir: str = \"\"` fields to `SandboxSpec` in `src/scc_cli/ports/models.py`. These are populated by `_build_sandbox_spec` in T02's changes — but T02 only added `agent_argv`. Extend `_build_sandbox_spec` in `src/scc_cli/application/start_session.py` to also populate `data_volume` and `config_dir` based on provider_id:\n   ```python\n   _PROVIDER_DATA_VOLUME: dict[str, str] = {\n       \"claude\": \"docker-claude-sandbox-data\",\n       \"codex\": \"docker-codex-sandbox-data\",\n   }\n   _PROVIDER_CONFIG_DIR: dict[str, str] = {\n       \"claude\": \".claude\",\n       \"codex\": \".codex\",\n   }\n   ```\n   Look up using `provider_id` from the capability profile. Fall back to existing constants for unknown providers.\n\n2. Update `_build_exec_cmd` in `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - When `spec.agent_argv` is non-empty, use `list(spec.agent_argv)` as the command instead of `[AGENT_NAME, \"--dangerously-skip-permissions\"]`\n   - When `spec.agent_argv` is empty (default), fall back to existing `[AGENT_NAME, \"--dangerously-skip-permissions\"]` for backward compat\n   - Append `-c` for continue_session regardless of path\n   - Note: `--dangerously-skip-permissions` is Claude-specific. Codex's argv will be just `(\"codex\",)` from CodexAgentProvider.prepare_launch. The exec command must not add Claude-specific flags when using provider argv.\n\n3. Update `_build_create_cmd` in `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - When `spec.data_volume` is non-empty, use it instead of `SANDBOX_DATA_VOLUME`\n   - When `spec.config_dir` is non-empty, mount at `{_AGENT_HOME}/{spec.config_dir}` instead of `{_AGENT_HOME}/.claude`\n   - When both are empty, fall back to existing `SANDBOX_DATA_VOLUME` and `.claude` path\n\n4. Add tests to `tests/test_oci_sandbox_runtime.py`:\n   - `test_build_exec_cmd_uses_agent_argv_when_present` — with `agent_argv=(\"codex\",)`, exec cmd uses `codex` not `claude --dangerously-skip-permissions`\n   - `test_build_exec_cmd_falls_back_to_agent_name` — empty agent_argv uses existing AGENT_NAME behavior\n   - `test_build_exec_cmd_continue_session_with_codex_argv` — `-c` appended after codex argv\n   - `test_build_create_cmd_uses_data_volume_when_present` — with data_volume=\"docker-codex-sandbox-data\", volume mount uses it\n   - `test_build_create_cmd_uses_config_dir_when_present` — with config_dir=\".codex\", mount target is `/home/agent/.codex`\n   - `test_build_create_cmd_falls_back_to_defaults` — empty data_volume/config_dir uses existing constants\n\n5. Add image selection tests for data_volume/config_dir in `tests/test_application_start_session.py`:\n   - `test_build_sandbox_spec_codex_data_volume` — codex provider gets codex data volume name\n   - `test_build_sandbox_spec_codex_config_dir` — codex provider gets .codex config dir\n\n## Negative Tests\n\n- **Boundary conditions**: empty agent_argv tuple → falls back to AGENT_NAME + --dangerously-skip-permissions (existing behavior preserved)\n- **Boundary conditions**: empty data_volume string → falls back to SANDBOX_DATA_VOLUME constant\n- **Boundary conditions**: empty config_dir string → falls back to .claude mount path\n- **Error paths**: continue_session flag works correctly with both provider argv and default argv\n\n## Must-Haves\n\n- [ ] _build_exec_cmd uses spec.agent_argv when non-empty, falls back to AGENT_NAME for empty\n- [ ] _build_create_cmd uses spec.data_volume and spec.config_dir when non-empty, falls back to constants\n- [ ] data_volume and config_dir fields on SandboxSpec\n- [ ] _build_sandbox_spec populates data_volume and config_dir by provider_id\n- [ ] All existing OCI runtime tests still pass (backward compat)\n- [ ] 6+ new tests cover codex exec/volume/config_dir paths plus fallbacks\n\n## Verification\n\n- `uv run pytest tests/test_oci_sandbox_runtime.py -v` — all existing + new tests pass\n- `uv run pytest tests/test_application_start_session.py -v` — volume/config_dir tests pass\n- `uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` — clean\n- `uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite, zero regressions\n\n## Observability Impact\n\n- Signals added/changed: SandboxSpec now carries data_volume and config_dir, visible in any diagnostic dump of the spec\n- How a future agent inspects this: inspect SandboxSpec fields in test fixtures or dry-run debug output\n- Failure state exposed: no new error types — existing SandboxLaunchError wrapping covers all subprocess failures\n\n## Inputs\n\n- `src/scc_cli/ports/models.py` — SandboxSpec with agent_argv from T02\n- `src/scc_cli/adapters/oci_sandbox_runtime.py` — _build_exec_cmd and _build_create_cmd to modify\n- `src/scc_cli/application/start_session.py` — _build_sandbox_spec from T02 to extend with volume/config_dir\n- `tests/test_oci_sandbox_runtime.py` — existing 483-line test file to extend\n- `tests/test_application_start_session.py` — existing test file to extend\n\n## Expected Output\n\n- `src/scc_cli/ports/models.py` — data_volume and config_dir fields added to SandboxSpec\n- `src/scc_cli/adapters/oci_sandbox_runtime.py` — provider-aware _build_exec_cmd and _build_create_cmd\n- `src/scc_cli/application/start_session.py` — data_volume and config_dir population in _build_sandbox_spec\n- `tests/test_oci_sandbox_runtime.py` — 6+ new tests for codex exec/volume/fallback\n- `tests/test_application_start_session.py` — volume/config_dir tests added",
       "estimate": "45m",
       "files": [
@@ -8224,6 +8234,61 @@
       "verdict": "✅ pass",
       "duration_ms": 69900,
       "created_at": "2026-04-04T23:43:20.091Z"
+    },
+    {
+      "id": 258,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7800,
+      "created_at": "2026-04-04T23:50:12.185Z"
+    },
+    {
+      "id": 259,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4300,
+      "created_at": "2026-04-04T23:50:12.185Z"
+    },
+    {
+      "id": 260,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4300,
+      "created_at": "2026-04-04T23:50:12.185Z"
+    },
+    {
+      "id": 261,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 71300,
+      "created_at": "2026-04-04T23:50:12.185Z"
+    },
+    {
+      "id": 262,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 6900,
+      "created_at": "2026-04-04T23:50:12.185Z"
     }
   ]
 }

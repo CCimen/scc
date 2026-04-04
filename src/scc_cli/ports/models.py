@@ -39,6 +39,8 @@ class SandboxSpec:
     agent_settings: AgentSettings | None = None
     org_config: dict[str, Any] | None = None
     agent_argv: list[str] = field(default_factory=list)
+    data_volume: str = ""
+    config_dir: str = ""
 
 
 @dataclass(frozen=True)

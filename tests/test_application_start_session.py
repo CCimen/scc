@@ -1108,3 +1108,164 @@ class TestAgentArgvPropagation:
 
         assert plan.sandbox_spec is not None
         assert plan.sandbox_spec.agent_argv == ["codex"]
+
+
+# ---------------------------------------------------------------------------
+# S02/T03 — Provider-aware data_volume and config_dir population
+# ---------------------------------------------------------------------------
+
+
+class TestProviderAwareDataVolumeAndConfigDir:
+    """_build_sandbox_spec populates data_volume and config_dir by provider_id."""
+
+    def test_codex_data_volume(self, tmp_path: Path) -> None:
+        """Codex provider on OCI backend gets codex data volume."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.data_volume == "docker-codex-sandbox-data"
+
+    def test_codex_config_dir(self, tmp_path: Path) -> None:
+        """Codex provider on OCI backend gets .codex config dir."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.config_dir == ".codex"
+
+    def test_claude_data_volume(self, tmp_path: Path) -> None:
+        """Claude provider on OCI backend gets claude data volume."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        claude_provider = ClaudeAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=claude_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.data_volume == "docker-claude-sandbox-data"
+        assert plan.sandbox_spec.config_dir == ".claude"
+
+    def test_non_oci_backend_empty_volume_and_config(self, tmp_path: Path) -> None:
+        """Non-OCI backend leaves data_volume and config_dir empty."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        docker_sandbox_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="Docker version 27.5.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="docker-sandbox",
+        )
+        dependencies = _build_dependencies_with_runtime(runtime_info=docker_sandbox_info)
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.data_volume == ""
+        assert plan.sandbox_spec.config_dir == ""

@@ -185,7 +185,7 @@ Wire the CodexAgentRunner (created in T01) into the provider dispatch table, thr
   - Estimate: 45m
   - Files: src/scc_cli/commands/launch/dependencies.py, src/scc_cli/application/start_session.py, src/scc_cli/ports/models.py, tests/test_provider_dispatch.py, tests/test_application_start_session.py
   - Verify: uv run pytest tests/test_provider_dispatch.py tests/test_application_start_session.py -v && uv run ruff check src/scc_cli/commands/launch/dependencies.py src/scc_cli/application/start_session.py src/scc_cli/ports/models.py && uv run mypy src/scc_cli/commands/launch/dependencies.py src/scc_cli/application/start_session.py src/scc_cli/ports/models.py && uv run pytest --rootdir "$PWD" -q
-- [ ] **T03: OCI runtime provider-aware exec command and credential volume mounting** — ---
+- [x] **T03: Made OCI runtime exec command and credential volume mount provider-aware with backward-compat fallbacks and 15 new tests** — ---
 estimated_steps: 5
 estimated_files: 5
 skills_used: []

@@ -257,6 +257,10 @@ class OciSandboxRuntime:
         proxy_env: dict[str, str] | None = None,
     ) -> list[str]:
         """Assemble the ``docker create`` argument list."""
+        # Resolve data volume and config dir, falling back to Claude defaults.
+        volume_name = spec.data_volume if spec.data_volume else SANDBOX_DATA_VOLUME
+        config_dirname = spec.config_dir if spec.config_dir else ".claude"
+
         cmd: list[str] = [
             "create",
             "--name",
@@ -266,7 +270,7 @@ class OciSandboxRuntime:
             f"{spec.workspace_mount.source}:{spec.workspace_mount.target}",
             # Credential volume mount
             "-v",
-            f"{SANDBOX_DATA_VOLUME}:{_AGENT_HOME}/.claude",
+            f"{volume_name}:{_AGENT_HOME}/{config_dirname}",
             # Working directory
             "-w",
             str(spec.workdir),
@@ -320,9 +324,12 @@ class OciSandboxRuntime:
             "-w",
             str(spec.workdir),
             container_id,
-            AGENT_NAME,
-            "--dangerously-skip-permissions",
         ]
+
+        if spec.agent_argv:
+            cmd.extend(list(spec.agent_argv))
+        else:
+            cmd.extend([AGENT_NAME, "--dangerously-skip-permissions"])
 
         if spec.continue_session:
             cmd.append("-c")
