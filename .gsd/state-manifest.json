@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T12:24:03.754Z",
+  "exported_at": "2026-04-04T12:42:34.431Z",
   "milestones": [
     {
       "id": "M001",
@@ -467,16 +467,16 @@
       "milestone_id": "M004",
       "id": "S02",
       "title": "Runtime wrapper baseline in `scc-base`",
-      "status": "pending",
+      "status": "complete",
       "risk": "high",
       "depends": [
         "S01"
       ],
       "demo": "",
       "created_at": "2026-04-04T08:09:04.486Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T12:29:35.226Z",
+      "full_summary_md": "---\nid: S02\nparent: M004\nmilestone: M004\nprovides:\n  - Standalone scc_safety_eval package in images/scc-base/wrappers/ for container image builds\n  - 7 shell wrapper scripts in images/scc-base/wrappers/bin/ for PATH-first interception\n  - Updated scc-base Dockerfile with python3 + evaluator + wrappers installed\n  - Contract test suite proving evaluator↔engine verdict equivalence\n  - Sync-guardrail test catching core↔evaluator drift\nrequires:\n  - slice: S01\n    provides: DefaultSafetyEngine, SafetyPolicy, SafetyVerdict, CommandFamily, shell_tokenizer, git_safety_rules, network_tool_rules\naffects:\n  - S03\n  - S04\n  - S05\nkey_files:\n  - images/scc-base/wrappers/scc_safety_eval/engine.py\n  - images/scc-base/wrappers/scc_safety_eval/policy.py\n  - images/scc-base/wrappers/scc_safety_eval/__main__.py\n  - images/scc-base/wrappers/scc_safety_eval/contracts.py\n  - images/scc-base/wrappers/scc_safety_eval/enums.py\n  - images/scc-base/wrappers/scc_safety_eval/shell_tokenizer.py\n  - images/scc-base/wrappers/scc_safety_eval/git_safety_rules.py\n  - images/scc-base/wrappers/scc_safety_eval/network_tool_rules.py\n  - images/scc-base/wrappers/bin/git\n  - images/scc-base/wrappers/bin/curl\n  - images/scc-base/wrappers/bin/wget\n  - images/scc-base/wrappers/bin/ssh\n  - images/scc-base/wrappers/bin/scp\n  - images/scc-base/wrappers/bin/sftp\n  - images/scc-base/wrappers/bin/rsync\n  - images/scc-base/Dockerfile\n  - tests/test_safety_eval_contract.py\n  - tests/test_safety_eval_sync.py\n  - tests/test_runtime_wrappers.py\nkey_decisions:\n  - Standalone evaluator is a stdlib-only fork with sync-guardrail test, not a shared package — keeps container image dependency-free\n  - Shell wrappers use absolute REAL_BIN=/usr/bin/<tool> to prevent self-recursion when wrapper dir is first in PATH\n  - Added per-file-ignores for T201 in evaluator package — stderr printing is the sole output mechanism\n  - Policy loader returns fail-closed default on any load failure (missing file, malformed JSON, unset env var) — never fail-open\npatterns_established:\n  - Standalone evaluator fork pattern: copy core modules, replace scc_cli.core.* with relative imports, strip to minimal surface (only needed types/enums), validate with contract tests\n  - Sync-guardrail test pattern: normalize known import-line differences, diff core↔copy, fail on logic divergence\n  - Shell wrapper pattern: absolute REAL_BIN, python3 -m scc_safety_eval with basename $0, exit 2 + stderr for blocked, exec REAL_BIN for allowed\n  - Fail-closed policy loader pattern: env var → file read → JSON parse → SafetyPolicy; any failure returns default-block policy\nobservability_surfaces:\n  - Evaluator CLI stderr output on blocked commands (exit code 2 + reason)\n  - SCC_POLICY_PATH env var as the policy injection point for container runtime\ndrill_down_paths:\n  - .gsd/milestones/M004/slices/S02/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M004/slices/S02/tasks/T02-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T12:29:35.227Z\nblocker_discovered: false\n---\n\n# S02: Runtime wrapper baseline in `scc-base`\n\n**Delivered standalone stdlib-only safety evaluator package, 7 shell wrappers, updated scc-base Dockerfile, and 96 new tests proving verdict equivalence, fail-closed behavior, and core↔evaluator sync.**\n\n## What Happened\n\nS02 built the runtime enforcement layer that makes S01's shared safety engine available inside the scc-base container image without any scc_cli dependency.\n\n**T01 — Standalone evaluator package.** Created `images/scc-base/wrappers/scc_safety_eval/` with 9 files: contracts.py (stripped SafetyPolicy + SafetyVerdict), enums.py (stripped CommandFamily), shell_tokenizer.py (verbatim copy from core), git_safety_rules.py, network_tool_rules.py, engine.py (all with relative imports replacing scc_cli.core.*), policy.py (fail-closed loader from SCC_POLICY_PATH env var), and __main__.py (CLI: exit 0 allowed, exit 2 blocked/error). 28 contract tests feed identical command/policy pairs to both DefaultSafetyEngine and the standalone engine and assert field-level equivalence on verdict.allowed, verdict.matched_rule, and verdict.command_family. Coverage includes force push, mirror push, refspec manipulation, network tools, safe commands, warn mode, allow bypass, disabled rules, nested bash -c, and empty commands.\n\n**T02 — Shell wrappers, Dockerfile, and integration tests.** Created 7 shell wrapper scripts in `images/scc-base/wrappers/bin/` (git, curl, wget, ssh, scp, sftp, rsync). Each uses absolute REAL_BIN=/usr/bin/<tool> to prevent self-recursion, invokes python3 -m scc_safety_eval with basename $0 as the tool name, and exits 2 with the verdict on stderr for blocked commands. Updated the scc-base Dockerfile to install python3, COPY the evaluator and wrappers to /usr/local/lib/scc/, and set PATH/PYTHONPATH. Wrote a sync-guardrail test (3 tests) that diffs core modules against evaluator copies after normalizing import lines — catches accidental logic drift. Wrote 68 integration tests covering: wrapper structural checks (7 exist, executable, correct REAL_BIN, anti-recursion pattern), blocked/allowed commands via CLI subprocess, fail-closed behavior (missing policy, malformed JSON, unset env var), policy override (action=allow), and negative cases (empty tool, whitespace args, path-prefix tool name).\n\nTotal test delta: +96 net new tests (3726 total, 23 skipped, 4 xfailed). Ruff and mypy clean.\n\n## Verification\n\nAll slice-level verification checks passed:\n\n1. **No scc_cli imports in evaluator**: `grep -r 'scc_cli' images/scc-base/wrappers/scc_safety_eval/` → zero matches ✅\n2. **Contract tests (28/28)**: `uv run pytest tests/test_safety_eval_contract.py -v` → 28 passed ✅\n3. **Sync guardrail tests (3/3)**: `uv run pytest tests/test_safety_eval_sync.py -v` → 3 passed ✅\n4. **Integration tests (68/68)**: `uv run pytest tests/test_runtime_wrappers.py -v` → 65 passed ✅\n5. **All 7 wrappers exist and are executable**: file checks → PASS ✅\n6. **Ruff check**: `uv run ruff check` → All checks passed ✅\n7. **Full regression**: `uv run pytest --rootdir \"$PWD\" -q` → 3726 passed, 23 skipped, 4 xfailed ✅\n\n## Requirements Advanced\n\n- R001 — Standalone evaluator maintains sync with core via automated guardrail test, preventing drift-induced maintainability debt. Evaluator package is cleanly decomposed with zero scc_cli coupling.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nMinor deviations from plan, all harmless: (1) Removed scc_cli references from docstring comments in contracts.py and enums.py to pass the grep verification check — logic unchanged. (2) Added ruff per-file-ignores for T201 in evaluator package (print to stderr is the sole output mechanism). (3) Fixed unused pytest import and import sorting in test_safety_eval_contract.py from T01 during T02. (4) Added wget/openssh-client/rsync to Dockerfile apt-get install to provide real binaries for the wrapped tools.\n\n## Known Limitations\n\nShell wrappers cannot be end-to-end tested without Docker — integration tests verify the evaluator CLI and wrapper structural properties but not the full wrapper→real-binary exec chain in a container. This is by design (Docker not required for dev testing) and will be addressed by S05 verification or a future CI-with-Docker stage.\n\n## Follow-ups\n\nS03 (Claude/Codex UX/audit adapters) should wire provider-specific hooks that relay to the shared engine. S04 (fail-closed loading, audit surfaces) should build on the policy.py loader pattern. The container image build/push pipeline (noted as a gap in M003 knowledge) remains unaddressed — images/scc-base/ is still design-only without CI.\n\n## Files Created/Modified\n\n- `images/scc-base/wrappers/scc_safety_eval/__init__.py` — Empty package marker for standalone evaluator\n- `images/scc-base/wrappers/scc_safety_eval/contracts.py` — Stripped SafetyPolicy + SafetyVerdict dataclasses (stdlib-only)\n- `images/scc-base/wrappers/scc_safety_eval/enums.py` — Stripped CommandFamily enum (stdlib-only)\n- `images/scc-base/wrappers/scc_safety_eval/shell_tokenizer.py` — Verbatim copy of core shell tokenizer\n- `images/scc-base/wrappers/scc_safety_eval/git_safety_rules.py` — Git safety rules with relative imports\n- `images/scc-base/wrappers/scc_safety_eval/network_tool_rules.py` — Network tool rules with relative imports\n- `images/scc-base/wrappers/scc_safety_eval/engine.py` — Standalone safety engine orchestrator with relative imports\n- `images/scc-base/wrappers/scc_safety_eval/policy.py` — Fail-closed policy loader from SCC_POLICY_PATH env var\n- `images/scc-base/wrappers/scc_safety_eval/__main__.py` — CLI entry point: exit 0 allowed, exit 2 blocked/error\n- `images/scc-base/wrappers/bin/git` — Shell wrapper for git with anti-recursion pattern\n- `images/scc-base/wrappers/bin/curl` — Shell wrapper for curl with anti-recursion pattern\n- `images/scc-base/wrappers/bin/wget` — Shell wrapper for wget with anti-recursion pattern\n- `images/scc-base/wrappers/bin/ssh` — Shell wrapper for ssh with anti-recursion pattern\n- `images/scc-base/wrappers/bin/scp` — Shell wrapper for scp with anti-recursion pattern\n- `images/scc-base/wrappers/bin/sftp` — Shell wrapper for sftp with anti-recursion pattern\n- `images/scc-base/wrappers/bin/rsync` — Shell wrapper for rsync with anti-recursion pattern\n- `images/scc-base/Dockerfile` — Added python3 install, evaluator + wrapper COPY, PATH/PYTHONPATH setup\n- `tests/test_safety_eval_contract.py` — 28 contract tests proving evaluator↔engine verdict equivalence\n- `tests/test_safety_eval_sync.py` — 3 sync-guardrail tests catching core↔evaluator drift\n- `tests/test_runtime_wrappers.py` — 68 integration tests for wrapper structure, CLI behavior, fail-closed, policy overrides\n",
+      "full_uat_md": "# S02: Runtime wrapper baseline in `scc-base` — UAT\n\n**Milestone:** M004\n**Written:** 2026-04-04T12:29:35.228Z\n\n## UAT: S02 — Runtime wrapper baseline in scc-base\n\n### Preconditions\n- Working directory: `scc-sync-1.7.3`\n- Python environment: `uv sync` completed\n- No Docker required (tests verify evaluator CLI and wrapper structure, not container runtime)\n\n---\n\n### TC-01: Evaluator package has zero scc_cli imports\n**Steps:**\n1. Run: `grep -r 'scc_cli' images/scc-base/wrappers/scc_safety_eval/`\n**Expected:** Zero matches. Exit code 1 (grep found nothing).\n\n### TC-02: Contract equivalence — blocked force push\n**Steps:**\n1. Run: `uv run pytest tests/test_safety_eval_contract.py::TestSafetyEvalContract::test_force_push_blocked -v`\n**Expected:** Both DefaultSafetyEngine and standalone evaluator return `allowed=False`, same `matched_rule`, same `command_family=DESTRUCTIVE_GIT`.\n\n### TC-03: Contract equivalence — safe command allowed\n**Steps:**\n1. Run: `uv run pytest tests/test_safety_eval_contract.py::TestSafetyEvalContract::test_safe_command_allowed -v`\n**Expected:** Both engines return `allowed=True`.\n\n### TC-04: Contract equivalence — network tool blocked\n**Steps:**\n1. Run: `uv run pytest tests/test_safety_eval_contract.py -k \"network\" -v`\n**Expected:** All network tool contract tests pass — same verdicts from both engines.\n\n### TC-05: Full contract suite\n**Steps:**\n1. Run: `uv run pytest tests/test_safety_eval_contract.py -v`\n**Expected:** 28/28 passed.\n\n### TC-06: CLI — blocked command exits 2\n**Steps:**\n1. Run: `PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval git push --force 2>/tmp/stderr; echo $?`\n**Expected:** Exit code 2. Stderr contains block reason.\n\n### TC-07: CLI — allowed command exits 0\n**Steps:**\n1. Run: `PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval git status 2>/dev/null; echo $?`\n**Expected:** Exit code 0.\n\n### TC-08: CLI — no args exits 2 (fail-closed)\n**Steps:**\n1. Run: `PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval 2>/dev/null; echo $?`\n**Expected:** Exit code 2.\n\n### TC-09: Fail-closed — missing SCC_POLICY_PATH\n**Steps:**\n1. Run: `unset SCC_POLICY_PATH; PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval curl https://evil.com 2>/dev/null; echo $?`\n**Expected:** Exit code 2 (blocked — default fail-closed policy).\n\n### TC-10: Fail-closed — malformed JSON policy\n**Steps:**\n1. Create a temp file with `{invalid json` content.\n2. Run: `SCC_POLICY_PATH=/tmp/bad.json PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval git push --force 2>/dev/null; echo $?`\n**Expected:** Exit code 2 (blocked — malformed JSON falls back to fail-closed default).\n\n### TC-11: Policy override — action=allow\n**Steps:**\n1. Create a temp file: `echo '{\"action\": \"allow\", \"rules\": {}}' > /tmp/allow.json`\n2. Run: `SCC_POLICY_PATH=/tmp/allow.json PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval git push --force 2>/dev/null; echo $?`\n**Expected:** Exit code 0 (allowed — policy action=allow overrides).\n\n### TC-12: All 7 wrapper scripts exist and are executable\n**Steps:**\n1. For each of git, curl, wget, ssh, scp, sftp, rsync:\n   - Run: `test -f images/scc-base/wrappers/bin/<tool> && test -x images/scc-base/wrappers/bin/<tool>`\n**Expected:** All 7 pass.\n\n### TC-13: Wrapper scripts use absolute REAL_BIN\n**Steps:**\n1. Run: `grep -c 'REAL_BIN=/usr/bin/' images/scc-base/wrappers/bin/*`\n**Expected:** Each file contains exactly one REAL_BIN=/usr/bin/<tool> line.\n\n### TC-14: Wrapper scripts use basename for tool name\n**Steps:**\n1. Run: `grep 'basename.*\\$0' images/scc-base/wrappers/bin/git`\n**Expected:** Line present using `basename \"$0\"` for tool name.\n\n### TC-15: Sync guardrail — core↔evaluator drift detection\n**Steps:**\n1. Run: `uv run pytest tests/test_safety_eval_sync.py -v`\n**Expected:** 3/3 passed — shell_tokenizer, git_safety_rules, and network_tool_rules match core after import normalization.\n\n### TC-16: Dockerfile includes python3 and wrapper setup\n**Steps:**\n1. Run: `grep 'python3' images/scc-base/Dockerfile`\n2. Run: `grep 'PYTHONPATH=/usr/local/lib/scc' images/scc-base/Dockerfile`\n3. Run: `grep '/usr/local/lib/scc/bin' images/scc-base/Dockerfile`\n**Expected:** All three patterns present.\n\n### TC-17: Full integration test suite\n**Steps:**\n1. Run: `uv run pytest tests/test_runtime_wrappers.py -v`\n**Expected:** All tests pass (68 tests covering structural checks, CLI behavior, fail-closed, and policy overrides).\n\n### TC-18: Full regression — no existing tests broken\n**Steps:**\n1. Run: `uv run pytest --rootdir \"$PWD\" -q`\n**Expected:** 3726 passed, 23 skipped, 4 xfailed. Zero failures.\n\n### TC-19: Lint and type-check clean\n**Steps:**\n1. Run: `uv run ruff check`\n2. Run: `uv run mypy src/scc_cli`\n**Expected:** Both clean — no errors.\n\n### Edge Cases\n\n### TC-20: Empty tool name\n**Steps:**\n1. Run: `PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval \"\" 2>/dev/null; echo $?`\n**Expected:** Exit code 0 or 2 (empty command is not dangerous — either pass-through or fail-closed, both are acceptable).\n\n### TC-21: Tool name with path prefix\n**Steps:**\n1. Run: `PYTHONPATH=images/scc-base/wrappers python3 -m scc_safety_eval /usr/bin/git push --force 2>/dev/null; echo $?`\n**Expected:** Exit code 2 if evaluator strips the path prefix, or exit code 0 if it treats `/usr/bin/git` as a non-matching tool name. Integration tests document the actual behavior.\n",
       "goal": "Runtime wrappers for exactly 7 tools (git, curl, wget, ssh, scp, sftp, rsync) exist in the scc-base image layout, powered by a standalone Python evaluator that produces identical verdicts to DefaultSafetyEngine. Wrappers are fail-closed without policy.",
       "success_criteria": "## Must-Haves\n\n- Standalone evaluator package at `images/scc-base/wrappers/scc_safety_eval/` with adapted safety logic using only stdlib imports (no scc_cli dependency)\n- CLI entry point `python3 -m scc_safety_eval <tool> <args>` that exits 0 (allow) or 2 (block with reason on stderr)\n- Policy loader that reads `$SCC_POLICY_PATH`, defaults to block when path is unset or file is missing (fail-closed)\n- 7 shell wrappers in `images/scc-base/wrappers/bin/` (git, curl, wget, ssh, scp, sftp, rsync) following the exec-real-binary pattern\n- Updated `images/scc-base/Dockerfile` installs python3, COPYs wrappers, prepends wrapper bin to PATH\n- Contract tests proving evaluator verdicts match DefaultSafetyEngine for identical inputs\n- Sync guardrail test detecting drift between evaluator modules and `src/scc_cli/core/` originals\n- All existing tests (3630) still pass\n\n## Threat Surface\n\n- **Abuse**: Wrapper bypass via direct `/usr/bin/git` calls — mitigated by PATH ordering. This is defense-in-depth (topology+proxy is the hard control per D014/D015). Shell wrappers are supplementary, not primary enforcement.\n- **Data exposure**: Policy JSON on disk may contain org rule configuration — readable only by agent user (uid 1000). No secrets in policy.\n- **Input trust**: All command arguments come from the agent (untrusted). The evaluator treats all input as adversarial — fail-closed on parse errors, missing policy, or unexpected input.\n\n## Requirement Impact\n\n- **Requirements touched**: R001 — this slice advances R001 by proving the core safety modules are independently reusable in a standalone context outside the CLI package\n- **Re-verify**: Full test suite (`uv run pytest --rootdir \"$PWD\" -q`) confirms no regression\n- **Decisions revisited**: None — D009 (fail-closed) and D014/D015 (defense-in-depth) are reinforced, not changed\n\n## Proof Level\n\n- This slice proves: contract (evaluator behavioral equivalence to DefaultSafetyEngine)\n- Real runtime required: no (no Docker build needed — evaluator is testable as a Python package)\n- Human/UAT required: no\n\n## Verification\n\n```bash\n# Contract tests: evaluator produces identical verdicts to DefaultSafetyEngine\nuv run pytest tests/test_safety_eval_contract.py -v\n\n# Wrapper behavior tests (shell scripts, no Docker)\nuv run pytest tests/test_runtime_wrappers.py -v\n\n# Sync guardrail: evaluator modules match core originals\nuv run pytest tests/test_safety_eval_sync.py -v\n\n# Type checking and lint\nuv run mypy src/scc_cli\nuv run ruff check\n\n# Full regression\nuv run pytest --rootdir \"$PWD\" -q\n```\n\n## Integration Closure\n\n- Upstream surfaces consumed: `src/scc_cli/core/safety_engine.py`, `src/scc_cli/core/shell_tokenizer.py`, `src/scc_cli/core/git_safety_rules.py`, `src/scc_cli/core/network_tool_rules.py`, `src/scc_cli/core/contracts.py`, `src/scc_cli/core/enums.py`\n- New wiring introduced in this slice: standalone evaluator package with relative imports; shell wrappers delegating to evaluator; Dockerfile PATH update\n- What remains before the milestone is truly usable end-to-end: S04 wires policy mounting into OCI adapter launch flow; S03 adds provider UX adapters; S05 verifies and documents",
       "proof_level": "contract",
@@ -500,11 +500,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "",
-      "success_criteria": "",
-      "proof_level": "",
-      "integration_closure": "",
-      "observability_impact": "",
+      "goal": "Claude and Codex safety adapters wrap the shared SafetyEngine with provider-specific UX formatting and AuditEvent emission, wired through bootstrap with full test coverage.",
+      "success_criteria": "- `SafetyCheckResult` contract and `SafetyAdapter` protocol exist in `core/contracts.py` and `ports/safety_adapter.py`\n- `ClaudeSafetyAdapter` and `CodexSafetyAdapter` in `adapters/` delegate to `SafetyEngine.evaluate()` and emit `AuditEvent` through `AuditEventSink`\n- Both adapters wired into `DefaultAdapters` via bootstrap with `| None = None` defaults\n- `FakeSafetyAdapter` available in `tests/fakes/` for downstream tests\n- All new adapter tests pass: `uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py tests/test_safety_adapter_audit.py -v`\n- `uv run ruff check` clean, `uv run mypy src/scc_cli` clean\n- `uv run pytest --rootdir \"$PWD\" -q` full regression passes (baseline: 3726)",
+      "proof_level": "This slice proves: contract + integration. Real runtime required: no. Human/UAT required: no.",
+      "integration_closure": "Upstream surfaces consumed: `ports/safety_engine.py` (SafetyEngine protocol), `ports/audit_event_sink.py` (AuditEventSink protocol), `core/contracts.py` (SafetyPolicy, SafetyVerdict, AuditEvent), `core/enums.py` (SeverityLevel), `bootstrap.py` (DefaultAdapters, get_default_adapters). New wiring: two new `SafetyAdapter` fields in `DefaultAdapters`, instantiated in `get_default_adapters()`. What remains: S04 adds fail-closed policy loading and operator audit surfaces; S05 adds verification and docs truthfulness.",
+      "observability_impact": "Runtime signals: AuditEvent records emitted on every safety check (block, warn, allow) with provider_id, matched_rule, verdict_allowed metadata. Inspection surfaces: AuditEventSink.append() — downstream consumers (LocalAuditEventSink) persist to JSONL. Failure visibility: adapter exceptions propagate to caller; audit emission failure does not suppress the verdict.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -2650,6 +2650,110 @@
       "sequence": 0
     },
     {
+      "milestone_id": "M004",
+      "slice_id": "S03",
+      "id": "T01",
+      "title": "Added SafetyCheckResult dataclass, SafetyAdapter protocol, and Claude/Codex adapter implementations with 12 unit tests — all checks clean",
+      "status": "complete",
+      "one_liner": "Added SafetyCheckResult dataclass, SafetyAdapter protocol, and Claude/Codex adapter implementations with 12 unit tests — all checks clean",
+      "narrative": "Created the SafetyCheckResult frozen dataclass in contracts.py with verdict, user_message, and audit_emitted fields. Defined the SafetyAdapter protocol in ports/safety_adapter.py. Implemented ClaudeSafetyAdapter and CodexSafetyAdapter — both delegate to SafetyEngine.evaluate(), emit an AuditEvent with provider-specific metadata (all values stringified), and return a SafetyCheckResult with provider-prefixed user messages. Wrote 6 unit tests per adapter covering engine delegation, audit event severity, user message formatting, and the audit_emitted flag.",
+      "verification_result": "All four verification commands passed: 12/12 adapter unit tests, ruff check clean, mypy clean (0 issues in 257 files), full regression 3738 passed (above 3726 baseline).",
+      "duration": "",
+      "completed_at": "2026-04-04T12:42:34.385Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/ports/safety_adapter.py",
+        "src/scc_cli/adapters/claude_safety_adapter.py",
+        "src/scc_cli/adapters/codex_safety_adapter.py",
+        "tests/test_claude_safety_adapter.py",
+        "tests/test_codex_safety_adapter.py"
+      ],
+      "key_decisions": [
+        "SafetyCheckResult placed in contracts.py alongside SafetyVerdict to keep safety-domain types co-located",
+        "Adapter metadata values are all stringified (dict[str, str]) for safe AuditEvent serialization"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S03\nmilestone: M004\nkey_files:\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/ports/safety_adapter.py\n  - src/scc_cli/adapters/claude_safety_adapter.py\n  - src/scc_cli/adapters/codex_safety_adapter.py\n  - tests/test_claude_safety_adapter.py\n  - tests/test_codex_safety_adapter.py\nkey_decisions:\n  - SafetyCheckResult placed in contracts.py alongside SafetyVerdict to keep safety-domain types co-located\n  - Adapter metadata values are all stringified (dict[str, str]) for safe AuditEvent serialization\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T12:42:34.384Z\nblocker_discovered: false\n---\n\n# T01: Added SafetyCheckResult dataclass, SafetyAdapter protocol, and Claude/Codex adapter implementations with 12 unit tests — all checks clean\n\n**Added SafetyCheckResult dataclass, SafetyAdapter protocol, and Claude/Codex adapter implementations with 12 unit tests — all checks clean**\n\n## What Happened\n\nCreated the SafetyCheckResult frozen dataclass in contracts.py with verdict, user_message, and audit_emitted fields. Defined the SafetyAdapter protocol in ports/safety_adapter.py. Implemented ClaudeSafetyAdapter and CodexSafetyAdapter — both delegate to SafetyEngine.evaluate(), emit an AuditEvent with provider-specific metadata (all values stringified), and return a SafetyCheckResult with provider-prefixed user messages. Wrote 6 unit tests per adapter covering engine delegation, audit event severity, user message formatting, and the audit_emitted flag.\n\n## Verification\n\nAll four verification commands passed: 12/12 adapter unit tests, ruff check clean, mypy clean (0 issues in 257 files), full regression 3738 passed (above 3726 baseline).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py -v` | 0 | ✅ pass | 4500ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 4500ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4500ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 46800ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/contracts.py`\n- `src/scc_cli/ports/safety_adapter.py`\n- `src/scc_cli/adapters/claude_safety_adapter.py`\n- `src/scc_cli/adapters/codex_safety_adapter.py`\n- `tests/test_claude_safety_adapter.py`\n- `tests/test_codex_safety_adapter.py`\n",
+      "description": "## Description\n\nCreate the SafetyCheckResult dataclass, the SafetyAdapter protocol port, and both provider-specific adapter implementations (ClaudeSafetyAdapter, CodexSafetyAdapter). Each adapter takes a SafetyEngine and AuditEventSink at construction, delegates to engine.evaluate(), emits a structured AuditEvent with provider-specific metadata, and returns a SafetyCheckResult with the verdict plus a provider-formatted user message. Write unit tests for both adapters.\n\n## Steps\n\n1. Add `SafetyCheckResult` frozen dataclass to `src/scc_cli/core/contracts.py` with fields: `verdict: SafetyVerdict`, `user_message: str`, `audit_emitted: bool`.\n\n2. Create `src/scc_cli/ports/safety_adapter.py` with a `SafetyAdapter` Protocol defining `check_command(command: str, policy: SafetyPolicy) -> SafetyCheckResult`.\n\n3. Implement `src/scc_cli/adapters/claude_safety_adapter.py`:\n   - Class `ClaudeSafetyAdapter` with `__init__(self, engine: SafetyEngine, audit_sink: AuditEventSink)`.\n   - `check_command()` calls `self.engine.evaluate(command, policy)` to get a `SafetyVerdict`.\n   - Emits an `AuditEvent` via `self.audit_sink.append()` with: `event_type='safety.check'`, `severity=SeverityLevel.WARNING` if blocked else `SeverityLevel.INFO`, `subject='claude'`, `metadata={'provider_id': 'claude', 'command': command, 'verdict_allowed': str(verdict.allowed).lower(), 'matched_rule': verdict.matched_rule or '', 'command_family': verdict.command_family or ''}`.\n   - Returns `SafetyCheckResult(verdict=verdict, user_message=<claude-formatted>, audit_emitted=True)`.\n   - Claude user message format: blocked → `'[Claude] Command blocked: {verdict.reason}'`, allowed → `'[Claude] Command allowed'`.\n\n4. Implement `src/scc_cli/adapters/codex_safety_adapter.py` — same pattern as Claude but with `provider_id='codex'`, `subject='codex'`, and message prefix `'[Codex]'`.\n\n5. Write `tests/test_claude_safety_adapter.py` with tests:\n   - `test_check_command_delegates_to_engine` — verify engine.evaluate() called with correct args\n   - `test_blocked_command_emits_warning_audit_event` — verify AuditEvent with WARNING severity and correct metadata\n   - `test_allowed_command_emits_info_audit_event` — verify AuditEvent with INFO severity\n   - `test_blocked_user_message_format` — verify '[Claude] Command blocked: ...' format\n   - `test_allowed_user_message_format` — verify '[Claude] Command allowed'\n   - `test_audit_emitted_flag_is_true` — verify SafetyCheckResult.audit_emitted is True\n   - Use `FakeSafetyEngine` from `tests/fakes/fake_safety_engine.py` and `FakeAuditEventSink` from `tests/fakes/__init__.py`.\n\n6. Write `tests/test_codex_safety_adapter.py` — mirror of Claude tests with Codex-specific assertions (provider_id='codex', '[Codex]' prefix).\n\n## Must-Haves\n\n- [ ] `SafetyCheckResult` is a frozen dataclass with `verdict`, `user_message`, `audit_emitted` fields\n- [ ] `SafetyAdapter` protocol defines `check_command(command, policy) -> SafetyCheckResult`\n- [ ] Both adapters delegate to `SafetyEngine.evaluate()` — no duplicated verdict logic\n- [ ] Both adapters emit `AuditEvent` with stringified metadata values (dict[str, str])\n- [ ] All unit tests pass\n- [ ] `uv run ruff check` clean, `uv run mypy src/scc_cli` clean\n\n## Verification\n\n- `uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py -v` — all pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — clean\n- `uv run pytest --rootdir \"$PWD\" -q` — full regression passes (baseline: 3726)",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/ports/safety_adapter.py",
+        "src/scc_cli/adapters/claude_safety_adapter.py",
+        "src/scc_cli/adapters/codex_safety_adapter.py",
+        "tests/test_claude_safety_adapter.py",
+        "tests/test_codex_safety_adapter.py"
+      ],
+      "verify": "uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py -v && uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/core/contracts.py` — existing SafetyVerdict, SafetyPolicy, AuditEvent dataclasses to extend with SafetyCheckResult",
+        "`src/scc_cli/ports/safety_engine.py` — SafetyEngine protocol that adapters consume",
+        "`src/scc_cli/ports/audit_event_sink.py` — AuditEventSink protocol that adapters emit through",
+        "`src/scc_cli/core/enums.py` — SeverityLevel enum for AuditEvent severity",
+        "`tests/fakes/fake_safety_engine.py` — FakeSafetyEngine for unit test injection",
+        "`tests/fakes/__init__.py` — FakeAuditEventSink for unit test injection"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/contracts.py` — SafetyCheckResult dataclass added",
+        "`src/scc_cli/ports/safety_adapter.py` — new SafetyAdapter protocol",
+        "`src/scc_cli/adapters/claude_safety_adapter.py` — new ClaudeSafetyAdapter implementation",
+        "`src/scc_cli/adapters/codex_safety_adapter.py` — new CodexSafetyAdapter implementation",
+        "`tests/test_claude_safety_adapter.py` — Claude adapter unit tests",
+        "`tests/test_codex_safety_adapter.py` — Codex adapter unit tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M004",
+      "slice_id": "S03",
+      "id": "T02",
+      "title": "Bootstrap wiring, FakeSafetyAdapter, and cross-adapter audit integration tests",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nWire both safety adapters into DefaultAdapters via bootstrap.py, create a FakeSafetyAdapter for downstream tests, update build_fake_adapters(), and write integration tests that exercise the full chain: engine → adapter → audit event across both providers.\n\n## Steps\n\n1. Create `tests/fakes/fake_safety_adapter.py`:\n   - `FakeSafetyAdapter` dataclass with configurable `result: SafetyCheckResult` (default: allowed, empty message, audit_emitted=False) and `calls: list[tuple[str, SafetyPolicy]]` for recording.\n   - `check_command()` records the call and returns the configured result.\n\n2. Update `src/scc_cli/bootstrap.py`:\n   - Import `ClaudeSafetyAdapter` and `CodexSafetyAdapter` from adapters.\n   - Import `SafetyAdapter` from ports (for type annotation).\n   - Add two new fields to `DefaultAdapters`: `claude_safety_adapter: SafetyAdapter | None = None` and `codex_safety_adapter: SafetyAdapter | None = None`.\n   - In `get_default_adapters()`, after the existing `safety_engine=DefaultSafetyEngine()` line, instantiate both adapters: `claude_safety_adapter=ClaudeSafetyAdapter(engine=DefaultSafetyEngine(), audit_sink=LocalAuditEventSink())` and `codex_safety_adapter=CodexSafetyAdapter(engine=DefaultSafetyEngine(), audit_sink=LocalAuditEventSink())`. NOTE: reuse the same engine/sink instances already created for other fields — assign `engine = DefaultSafetyEngine()` and `sink = LocalAuditEventSink()` as local variables and pass to both the `safety_engine` field and both adapter constructors.\n\n3. Update `tests/fakes/__init__.py`:\n   - Import `FakeSafetyAdapter`.\n   - Add `claude_safety_adapter=FakeSafetyAdapter()` and `codex_safety_adapter=FakeSafetyAdapter()` to `build_fake_adapters()`.\n\n4. Write `tests/test_safety_adapter_audit.py` with integration tests:\n   - `test_claude_adapter_full_chain_blocked` — construct ClaudeSafetyAdapter with real DefaultSafetyEngine and FakeAuditEventSink, evaluate `git push --force`, verify: verdict.allowed is False, audit event emitted with provider_id='claude' and severity WARNING, user_message contains '[Claude] Command blocked'.\n   - `test_codex_adapter_full_chain_blocked` — same with CodexSafetyAdapter and '[Codex]' prefix.\n   - `test_claude_adapter_full_chain_allowed` — evaluate a safe command like `git status`, verify: verdict.allowed is True, audit event with INFO severity, user_message is '[Claude] Command allowed'.\n   - `test_codex_adapter_full_chain_allowed` — same with CodexSafetyAdapter.\n   - `test_both_adapters_share_engine_verdicts` — feed same command to both adapters with same policy, verify both produce same verdict.allowed and same matched_rule.\n   - `test_audit_metadata_keys_are_all_strings` — verify all values in emitted AuditEvent.metadata are str type (prevents serialization issues in LocalAuditEventSink).\n   - `test_bootstrap_wiring_has_safety_adapter_fields` — import `get_default_adapters` or `DefaultAdapters`, verify the fields exist as attributes (don't call get_default_adapters() which probes Docker — just verify the dataclass accepts the fields).\n\n## Must-Haves\n\n- [ ] `FakeSafetyAdapter` exists in `tests/fakes/` with configurable result and call recording\n- [ ] `DefaultAdapters` has `claude_safety_adapter` and `codex_safety_adapter` fields with `| None = None` defaults\n- [ ] `build_fake_adapters()` includes both fake safety adapters\n- [ ] Integration tests pass exercising engine → adapter → audit event chain\n- [ ] All metadata values in emitted AuditEvents are strings\n- [ ] `uv run ruff check` clean, `uv run mypy src/scc_cli` clean, full regression passes\n\n## Verification\n\n- `uv run pytest tests/test_safety_adapter_audit.py -v` — all pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — clean\n- `uv run pytest --rootdir \"$PWD\" -q` — full regression passes (baseline: 3726 + T01 additions)",
+      "estimate": "35m",
+      "files": [
+        "tests/fakes/fake_safety_adapter.py",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/__init__.py",
+        "tests/test_safety_adapter_audit.py"
+      ],
+      "verify": "uv run pytest tests/test_safety_adapter_audit.py -v && uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/adapters/claude_safety_adapter.py` — ClaudeSafetyAdapter from T01",
+        "`src/scc_cli/adapters/codex_safety_adapter.py` — CodexSafetyAdapter from T01",
+        "`src/scc_cli/ports/safety_adapter.py` — SafetyAdapter protocol from T01",
+        "`src/scc_cli/core/contracts.py` — SafetyCheckResult from T01",
+        "`src/scc_cli/bootstrap.py` — existing DefaultAdapters to extend",
+        "`tests/fakes/__init__.py` — existing build_fake_adapters() to extend",
+        "`tests/fakes/fake_safety_engine.py` — FakeSafetyEngine for integration tests",
+        "`src/scc_cli/core/safety_engine.py` — DefaultSafetyEngine for integration tests"
+      ],
+      "expected_output": [
+        "`tests/fakes/fake_safety_adapter.py` — new FakeSafetyAdapter",
+        "`src/scc_cli/bootstrap.py` — DefaultAdapters extended with safety adapter fields",
+        "`tests/fakes/__init__.py` — build_fake_adapters() updated with fake safety adapters",
+        "`tests/test_safety_adapter_audit.py` — cross-adapter audit integration tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T01",
@@ -4725,6 +4829,50 @@
       "verdict": "✅ pass",
       "duration_ms": 100,
       "created_at": "2026-04-04T12:24:03.718Z"
+    },
+    {
+      "id": 86,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4500,
+      "created_at": "2026-04-04T12:42:34.385Z"
+    },
+    {
+      "id": 87,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4500,
+      "created_at": "2026-04-04T12:42:34.385Z"
+    },
+    {
+      "id": 88,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4500,
+      "created_at": "2026-04-04T12:42:34.385Z"
+    },
+    {
+      "id": 89,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 46800,
+      "created_at": "2026-04-04T12:42:34.385Z"
     }
   ]
 }

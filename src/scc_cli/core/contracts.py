@@ -130,6 +130,21 @@ class SafetyVerdict:
 
 
 @dataclass(frozen=True)
+class SafetyCheckResult:
+    """Result of a provider safety adapter check.
+
+    Attributes:
+        verdict: The underlying engine verdict.
+        user_message: Provider-formatted message for the user.
+        audit_emitted: Whether an audit event was emitted.
+    """
+
+    verdict: SafetyVerdict
+    user_message: str
+    audit_emitted: bool
+
+
+@dataclass(frozen=True)
 class AuditEvent:
     """Shared typed audit record for network, safety, and launch events.
 

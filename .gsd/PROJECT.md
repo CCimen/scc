@@ -45,32 +45,34 @@ Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topol
 ### M004 — Cross-Agent Runtime Safety (in progress)
 **S01 complete.** Delivered shared safety policy and verdict engine: shell tokenizer, git safety rules, network tool rules lifted from plugin into core with typed SafetyVerdict returns, orchestrated by DefaultSafetyEngine with fail-closed semantics, wired into bootstrap. +166 net new tests (3630 total).
 
-Key S01 deliverables:
-- CommandFamily enum (DESTRUCTIVE_GIT, NETWORK_TOOL)
-- Shell tokenizer in core (5 public functions, pure stdlib)
-- Git safety rules with typed SafetyVerdict returns (all plugin analyzers lifted)
-- Network tool rules detecting 6 tools (curl, wget, ssh, scp, sftp, rsync)
-- DefaultSafetyEngine with fail-closed policy semantics
-- SafetyEngine protocol port
-- FakeSafetyEngine for downstream tests
-- Boundary guardrail preventing plugin/provider imports in core safety modules
+**S02 complete.** Delivered runtime wrapper baseline in scc-base: standalone stdlib-only evaluator package (`scc_safety_eval`) producing identical verdicts to DefaultSafetyEngine, 7 shell wrappers (git, curl, wget, ssh, scp, sftp, rsync) with anti-recursion pattern, updated Dockerfile with python3 + evaluator install, sync-guardrail test catching core↔evaluator drift, and 99 new tests (28 contract + 3 sync + 68 integration). +96 net new tests (3726 total).
 
-Remaining slices: S02 (runtime wrapper baseline), S03 (Claude/Codex UX/audit adapters), S04 (fail-closed loading, audit surfaces, diagnostics), S05 (verification, docs, closeout).
+Key S02 deliverables:
+- Standalone scc_safety_eval package (9 files, stdlib-only, zero scc_cli imports)
+- Contract tests proving field-level verdict equivalence with DefaultSafetyEngine
+- Fail-closed policy loader (SCC_POLICY_PATH env var, default-block on missing/malformed)
+- CLI entry point (exit 0 allowed, exit 2 blocked/error)
+- 7 shell wrapper scripts with absolute REAL_BIN anti-recursion
+- scc-base Dockerfile updated (python3, evaluator, wrappers, PATH/PYTHONPATH)
+- Sync-guardrail test detecting core↔evaluator logic drift
+- Integration tests covering block/allow/fail-closed/policy-override scenarios
+
+Remaining slices: S03 (Claude/Codex UX/audit adapters), S04 (fail-closed loading, audit surfaces, diagnostics), S05 (verification, docs, closeout).
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
-4. **M004 — Cross-Agent Runtime Safety** (active — S01 ✅, S02–S05 remaining)
+4. **M004 — Cross-Agent Runtime Safety** (active — S01 ✅, S02 ✅, S03–S05 remaining)
 5. **M005 — Architecture Quality, Strictness, And Hardening**
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices and by M004/S01 (safety logic decomposed into focused core modules).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices and by M004/S01–S02 (safety logic decomposed into focused core modules; standalone evaluator maintains sync via automated guardrail test).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (Success: no issues found in 254 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3630 passed, 23 skipped, 4 xfailed)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3726 passed, 23 skipped, 4 xfailed)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -95,6 +97,8 @@ Remaining slices: S02 (runtime wrapper baseline), S03 (Claude/Codex UX/audit ada
 - Runtime wrappers are defense-in-depth, early UX, and audit only — never the primary enforcement plane for network isolation. Topology + proxy policy (D014) are the hard control.
 - Provider-native integrations in M004 are adapter-owned and additive only; they relay but never override shared engine verdicts.
 - One active team context per session/workspace in safety diagnostics and surfaces — no implicit union of team access (extends D015).
+- Standalone evaluator package (`scc_safety_eval`) in `images/scc-base/wrappers/` is a stdlib-only fork of core safety modules with identical verdict behavior. Sync-guardrail test in `tests/test_safety_eval_sync.py` catches drift. Contract tests in `tests/test_safety_eval_contract.py` prove equivalence.
+- Shell wrappers use absolute REAL_BIN paths to prevent self-recursion; PYTHONPATH points to `/usr/local/lib/scc` in Docker, adjusted by tests for local runs.
 
 ## Immediate next focus
-- M004/S02: Runtime wrapper baseline in `scc-base` — depends on S01's safety engine and protocol.
+- M004/S03: Claude and Codex UX/audit adapters over the shared engine — depends on S01's safety engine and S02's runtime wrapper baseline.
