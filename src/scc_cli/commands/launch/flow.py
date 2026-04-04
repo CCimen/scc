@@ -85,6 +85,11 @@ def start(
         "--allow-suspicious-workspace",
         help="Allow starting in suspicious directories (e.g., home, /tmp) in non-interactive mode",
     ),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        help="Agent provider override (claude or codex)",
+    ),
 ) -> None:
     """Start Claude Code in a Docker sandbox.
 
@@ -231,6 +236,7 @@ def start(
         allow_suspicious=allow_suspicious_workspace,
         org_config=NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None,
         raw_org_config=org_config,
+        provider_id=provider,
     )
     start_dependencies, start_plan = prepare_live_start_plan(
         start_request,

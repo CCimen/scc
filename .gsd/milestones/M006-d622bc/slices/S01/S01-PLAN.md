@@ -25,7 +25,7 @@ Constraints:
   - Estimate: 45m
   - Files: src/scc_cli/core/provider_resolution.py, src/scc_cli/core/errors.py, src/scc_cli/ports/config_models.py, src/scc_cli/config.py, tests/test_provider_resolution.py
   - Verify: uv run pytest tests/test_provider_resolution.py -v && uv run mypy src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py && uv run ruff check src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py
-- [ ] **T02: CLI commands (scc provider show/set), --provider flag on start, request model update** — Wire provider selection into the CLI surface:
+- [x] **T02: Added scc provider show/set commands, --provider flag on scc start, and provider_id field on StartSessionRequest** — Wire provider selection into the CLI surface:
 
 1. Create `src/scc_cli/commands/provider.py` with `provider_app = typer.Typer()`. Add `show()` command: loads user config via `get_selected_provider()`, prints provider name (default 'claude' if None). Add `set(provider: str)` command: validates against `KNOWN_PROVIDERS`, calls `set_selected_provider()`, prints confirmation. Follow the `profile_app` pattern in `src/scc_cli/commands/profile.py`.
 

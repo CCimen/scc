@@ -73,6 +73,7 @@ class StartSessionRequest:
     org_config: NormalizedOrgConfig | None
     raw_org_config: dict[str, Any] | None = None
     org_config_url: str | None = None
+    provider_id: str | None = None
 
 
 @dataclass(frozen=True)

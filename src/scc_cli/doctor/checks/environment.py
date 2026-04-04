@@ -8,8 +8,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from scc_cli.core.enums import SeverityLevel
 from scc_cli.core.contracts import RuntimeInfo
+from scc_cli.core.enums import SeverityLevel
 
 from ..types import CheckResult
 

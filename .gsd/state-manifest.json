@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T22:51:36.797Z",
+  "exported_at": "2026-04-04T23:01:26.860Z",
   "milestones": [
     {
       "id": "M001",
@@ -4816,19 +4816,28 @@
       "milestone_id": "M006-d622bc",
       "slice_id": "S01",
       "id": "T02",
-      "title": "CLI commands (scc provider show/set), --provider flag on start, request model update",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added scc provider show/set commands, --provider flag on scc start, and provider_id field on StartSessionRequest",
+      "status": "complete",
+      "one_liner": "Added scc provider show/set commands, --provider flag on scc start, and provider_id field on StartSessionRequest",
+      "narrative": "Created src/scc_cli/commands/provider.py with a provider_app Typer sub-app containing show and set commands. show prints the configured provider (defaults to 'claude'), set validates against KNOWN_PROVIDERS and persists. Registered provider_app in cli.py under the Configuration panel. Added provider_id: str | None = None to StartSessionRequest. Added --provider option to start() in flow.py and threaded it into the request. Wrote 9 tests covering default/configured show, valid/invalid set, help display, and request model field. Also fixed two pre-existing ruff I001 import-sorting violations blocking the verification gate.",
+      "verification_result": "All three verification gates pass: uv run ruff check (clean), uv run mypy src/scc_cli (291 files, no issues), uv run pytest (4518 passed, 23 skipped, 2 xfailed). Focused test run: uv run pytest tests/test_provider_commands.py -v (9/9 passed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T23:01:26.829Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed two pre-existing ruff I001 import-sorting violations in environment.py and test_provider_resolution.py. Test for no-args help checks output content rather than exit code since typer uses exit 2 for help display.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/provider.py",
+        "src/scc_cli/cli.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "tests/test_provider_commands.py"
+      ],
+      "key_decisions": [
+        "Used no_args_is_help=True on provider_app so bare 'scc provider' shows usage",
+        "provider_id on StartSessionRequest defaults to None; resolution happens downstream"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/commands/provider.py\n  - src/scc_cli/cli.py\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/commands/launch/flow.py\n  - tests/test_provider_commands.py\nkey_decisions:\n  - Used no_args_is_help=True on provider_app so bare 'scc provider' shows usage\n  - provider_id on StartSessionRequest defaults to None; resolution happens downstream\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T23:01:26.828Z\nblocker_discovered: false\n---\n\n# T02: Added scc provider show/set commands, --provider flag on scc start, and provider_id field on StartSessionRequest\n\n**Added scc provider show/set commands, --provider flag on scc start, and provider_id field on StartSessionRequest**\n\n## What Happened\n\nCreated src/scc_cli/commands/provider.py with a provider_app Typer sub-app containing show and set commands. show prints the configured provider (defaults to 'claude'), set validates against KNOWN_PROVIDERS and persists. Registered provider_app in cli.py under the Configuration panel. Added provider_id: str | None = None to StartSessionRequest. Added --provider option to start() in flow.py and threaded it into the request. Wrote 9 tests covering default/configured show, valid/invalid set, help display, and request model field. Also fixed two pre-existing ruff I001 import-sorting violations blocking the verification gate.\n\n## Verification\n\nAll three verification gates pass: uv run ruff check (clean), uv run mypy src/scc_cli (291 files, no issues), uv run pytest (4518 passed, 23 skipped, 2 xfailed). Focused test run: uv run pytest tests/test_provider_commands.py -v (9/9 passed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 3000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 80000ms |\n| 3 | `uv run pytest` | 0 | ✅ pass | 71000ms |\n| 4 | `uv run pytest tests/test_provider_commands.py -v` | 0 | ✅ pass | 2000ms |\n\n## Deviations\n\nFixed two pre-existing ruff I001 import-sorting violations in environment.py and test_provider_resolution.py. Test for no-args help checks output content rather than exit code since typer uses exit 2 for help display.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/provider.py`\n- `src/scc_cli/cli.py`\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/commands/launch/flow.py`\n- `tests/test_provider_commands.py`\n",
       "description": "Wire provider selection into the CLI surface:\n\n1. Create `src/scc_cli/commands/provider.py` with `provider_app = typer.Typer()`. Add `show()` command: loads user config via `get_selected_provider()`, prints provider name (default 'claude' if None). Add `set(provider: str)` command: validates against `KNOWN_PROVIDERS`, calls `set_selected_provider()`, prints confirmation. Follow the `profile_app` pattern in `src/scc_cli/commands/profile.py`.\n\n2. Register in `src/scc_cli/cli.py`: import `provider_app` from `.commands.provider`, add `app.add_typer(provider_app, name='provider', rich_help_panel=PANEL_CONFIG)` alongside the existing team/profile registrations.\n\n3. Add `provider_id: str | None = None` field to `StartSessionRequest` in `src/scc_cli/application/start_session.py`.\n\n4. Add `--provider` option to `start()` in `src/scc_cli/commands/launch/flow.py`: `provider: str | None = typer.Option(None, '--provider', help='Agent provider (claude or codex)')`. Thread it into `StartSessionRequest(provider_id=provider, ...)`.\n\n5. Write `tests/test_provider_commands.py` testing: `scc provider show` outputs 'claude' by default, `scc provider set codex` persists, `scc provider set invalid` errors. Use typer.testing.CliRunner or mock config helpers.\n\nConstraints:\n- `provider_app` must use `handle_errors` decorator if the profile_app uses it.\n- `StartSessionRequest.provider_id` must default to None (not 'claude') — resolution happens downstream.\n- The `--provider` flag on start must not resolve or validate the provider — just pass it through.",
       "estimate": "40m",
       "files": [
@@ -7855,6 +7864,50 @@
       "verdict": "✅ pass",
       "duration_ms": 70400,
       "created_at": "2026-04-04T22:51:36.764Z"
+    },
+    {
+      "id": 241,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3000,
+      "created_at": "2026-04-04T23:01:26.829Z"
+    },
+    {
+      "id": 242,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 80000,
+      "created_at": "2026-04-04T23:01:26.829Z"
+    },
+    {
+      "id": 243,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 71000,
+      "created_at": "2026-04-04T23:01:26.829Z"
+    },
+    {
+      "id": 244,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_provider_commands.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2000,
+      "created_at": "2026-04-04T23:01:26.829Z"
     }
   ]
 }
