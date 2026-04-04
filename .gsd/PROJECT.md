@@ -61,20 +61,30 @@ Delivered comprehensive architecture quality improvements across 7 slices:
 
 Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files >1100 lines.
 
+### M006 — Provider Selection UX and End-to-End Codex Launch (in progress)
+**S01 complete.** Provider selection flows from user intent to bootstrap dispatch:
+- Pure provider resolver with CLI > config > default precedence (`core/provider_resolution.py`)
+- `scc provider show/set` CLI commands
+- `--provider` flag on `scc start`
+- Dict-based adapter dispatch in `build_start_session_dependencies()` — request-scoped per D028
+- Team policy validation via `allowed_providers` field on `NormalizedTeamConfig`
+- 40 new tests (4529 total), mypy/ruff clean
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
+6. **M006 — Provider Selection UX and End-to-End Codex Launch** (S01 ✅, S02–S04 pending)
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all five milestones. M005 final state: zero files >1100 lines (from 3), one justified file in 800–1100 zone, all import boundaries enforced (31 tests), typed config models adopted, governed-artifact pipeline at 99-100% coverage, file/function size guardrails passing without xfail, 18 truthfulness tests, D023 portable artifact rendering implemented, 4486 total tests.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 289 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4486 passed, 23 skipped, 2 xfailed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 291 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4529 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
@@ -111,3 +121,4 @@ Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files 
 - File/function size guardrails pass without xfail — all functions under 300 lines, all files under 1100 lines.
 - Portable artifacts (skills, MCP servers) without provider bindings are renderable via PortableArtifact metadata in ArtifactRenderPlan (D023).
 - Only SKILL and MCP_SERVER kinds qualify as portable — NATIVE_INTEGRATION always requires provider-specific bindings.
+- Provider dispatch is request-scoped in `build_start_session_dependencies()`, not baked into the lru_cached DefaultAdapters singleton (D028). Shared infra stays cached; provider-specific adapters are selected per invocation.

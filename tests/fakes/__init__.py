@@ -53,6 +53,7 @@ def build_fake_adapters() -> DefaultAdapters:
         config_store=LocalConfigStore(),
         audit_event_sink=FakeAuditEventSink(),
         codex_agent_provider=FakeAgentProvider(),
+        codex_agent_runner=FakeAgentRunner(),
         runtime_probe=FakeRuntimeProbe(),
         safety_engine=FakeSafetyEngine(),
         claude_safety_adapter=FakeSafetyAdapter(),

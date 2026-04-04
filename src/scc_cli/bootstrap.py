@@ -12,6 +12,7 @@ from scc_cli.adapters.claude_settings import (
     merge_mcp_servers,  # noqa: F401 — re-exported public API
 )
 from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
 from scc_cli.adapters.codex_safety_adapter import CodexSafetyAdapter
 from scc_cli.adapters.docker_runtime_probe import DockerRuntimeProbe
 from scc_cli.adapters.docker_sandbox_runtime import DockerSandboxRuntime
@@ -67,6 +68,7 @@ class DefaultAdapters:
     codex_agent_provider: AgentProvider | None = None
     runtime_probe: RuntimeProbe | None = None
     safety_engine: SafetyEngine | None = None
+    codex_agent_runner: AgentRunner | None = None
     claude_safety_adapter: SafetyAdapter | None = None
     codex_safety_adapter: SafetyAdapter | None = None
 
@@ -97,6 +99,7 @@ def get_default_adapters() -> DefaultAdapters:
         clock=SystemClock(),
         agent_runner=ClaudeAgentRunner(),
         agent_provider=ClaudeAgentProvider(),
+        codex_agent_runner=CodexAgentRunner(),
         sandbox_runtime=sandbox_runtime,
         personal_profile_service=LocalPersonalProfileService(),
         doctor_runner=LocalDoctorRunner(),

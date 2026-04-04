@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T23:10:53.953Z",
+  "exported_at": "2026-04-04T23:32:24.450Z",
   "milestones": [
     {
       "id": "M001",
@@ -839,14 +839,14 @@
       "milestone_id": "M006-d622bc",
       "id": "S01",
       "title": "Provider selection config, CLI flag, and bootstrap dispatch",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [],
       "demo": "scc provider show prints the active provider. scc provider set codex persists it. scc start --provider codex overrides the default. Bootstrap dispatches the correct agent_provider, agent_runner, and safety_adapter based on the resolved provider.",
       "created_at": "2026-04-04T22:05:29.069Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T23:17:37.001Z",
+      "full_summary_md": "---\nid: S01\nparent: M006-d622bc\nmilestone: M006-d622bc\nprovides:\n  - resolve_active_provider() for downstream launch path consumers\n  - provider_id field on StartSessionRequest for S02/S03/S04\n  - _PROVIDER_DISPATCH table for S02 to add CodexAgentRunner mapping\n  - allowed_providers field on NormalizedTeamConfig for policy enforcement\n  - scc provider show/set commands for user configuration\nrequires:\n  []\naffects:\n  - S02\n  - S03\n  - S04\nkey_files:\n  - src/scc_cli/core/provider_resolution.py\n  - src/scc_cli/core/errors.py\n  - src/scc_cli/ports/config_models.py\n  - src/scc_cli/config.py\n  - src/scc_cli/commands/provider.py\n  - src/scc_cli/cli.py\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/commands/launch/dependencies.py\n  - src/scc_cli/commands/launch/flow.py\n  - tests/test_provider_resolution.py\n  - tests/test_provider_commands.py\n  - tests/test_provider_dispatch.py\nkey_decisions:\n  - D026: Provider selection flows CLI flag > config > default, with policy validation against team allowed_providers\n  - D028 constraint 2 enforced: provider dispatch is request-scoped in build_start_session_dependencies(), not baked into lru_cached DefaultAdapters\n  - Dict-based _PROVIDER_DISPATCH table for O(1) provider→adapter field mapping — avoids if/else chains as providers grow\npatterns_established:\n  - resolve_active_provider() is a pure function in core — no imports from adapters or bootstrap\n  - Provider config helpers follow the exact selected_profile pattern: get_selected_provider()/set_selected_provider()\n  - Provider CLI commands follow the profile_app pattern with handle_errors decorator\n  - _PROVIDER_DISPATCH dict maps provider_id to DefaultAdapters field names for O(1) lookup\n  - _resolve_provider() helper keeps start() under the 300-line guardrail while handling OptionInfo normalization\nobservability_surfaces:\n  - scc provider show prints the active provider\n  - ProviderNotAllowedError includes user_message with the blocked provider and suggested_action listing allowed providers\ndrill_down_paths:\n  - .gsd/milestones/M006-d622bc/slices/S01/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M006-d622bc/slices/S01/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M006-d622bc/slices/S01/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T23:17:37.002Z\nblocker_discovered: false\n---\n\n# S01: Provider selection config, CLI flag, and bootstrap dispatch\n\n**Provider selection flows from user intent (CLI flag, config, default) through policy validation to request-scoped adapter dispatch in the launch path.**\n\n## What Happened\n\nS01 established the complete provider selection pipeline across three tasks.\n\n**T01 — Pure provider resolver.** Created `core/provider_resolution.py` with `resolve_active_provider()` implementing CLI flag > config > default ('claude') precedence. Added `ProviderNotAllowedError` to `core/errors.py` extending `PolicyViolationError`, with auto-generated user_message and suggested_action. Extended `NormalizedTeamConfig` with `allowed_providers: tuple[str, ...]` field (empty = all allowed, matching the `blocked_plugins` pattern). Added `selected_provider` to user config defaults with `get_selected_provider()`/`set_selected_provider()` helpers following the exact `selected_profile` pattern. 20 tests.\n\n**T02 — CLI surface.** Created `commands/provider.py` with `scc provider show` and `scc provider set` commands following the `profile_app` pattern. Registered in `cli.py` under the Configuration panel. Added `provider_id: str | None = None` to `StartSessionRequest`. Added `--provider` option to `start()` in `flow.py`, threading it into the request. 9 tests. Fixed two pre-existing ruff I001 import-sorting violations.\n\n**T03 — Launch path wiring.** Updated `build_start_session_dependencies()` to accept `provider_id` and dispatch the correct `agent_provider` from `DefaultAdapters` using a `_PROVIDER_DISPATCH` dict-based lookup table. Wired `resolve_active_provider()` into `flow.py`'s `start()` before request building, extracting `allowed_providers` from team config. Extracted `_resolve_provider()` helper to keep `start()` under the 300-line function size guardrail. Added `isinstance(provider, str)` guard to normalize typer `OptionInfo` objects that appear when testing commands via direct function calls. 11 tests.\n\nAll work stays within D028 constraints: shared infra (probe, engine, sink) remains in the lru_cached `DefaultAdapters` singleton; provider-specific adapters are selected per invocation in `build_start_session_dependencies()`. Safety adapter dispatch is recorded in the dispatch table but not yet threaded into `StartSessionDependencies` — deferred to S04.\n\n## Verification\n\nAll verification gates pass:\n- `uv run pytest tests/test_provider_resolution.py tests/test_provider_commands.py tests/test_provider_dispatch.py -v`: 40/40 passed\n- `uv run ruff check`: clean (0 errors)\n- `uv run mypy src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py src/scc_cli/commands/provider.py src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/commands/launch/flow.py`: Success, no issues found in 8 source files\n- `uv run pytest --rootdir \"$PWD\" -q`: 4529 passed, 23 skipped, 2 xfailed — zero regressions\n- 100% coverage on new modules: provider_resolution.py, provider.py, dependencies.py\n\n## Requirements Advanced\n\nNone.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nT03 extracted `_resolve_provider()` helper from `start()` (not in plan) to satisfy the 300-line function size guardrail. T03 added `isinstance(provider, str)` guard to normalize typer OptionInfo defaults for direct-call test compatibility. Safety adapter dispatch recorded in dispatch table but not threaded into StartSessionDependencies — deferred to S04 per plan constraints.\n\n## Known Limitations\n\nSafety adapter dispatch is in the _PROVIDER_DISPATCH table but not yet consumed by StartSessionDependencies — S04 will complete that wiring. CodexAgentRunner does not exist yet — S02's scope. The `--provider` flag is not yet surfaced in dry-run JSON, support bundle, audit events, or session list output — D028 constraint 3, deferred to S04.\n\n## Follow-ups\n\nS02: Build CodexAgentRunner and provider-aware image selection. S03: Adapt all user-facing strings to the active provider. S04: Thread safety adapter dispatch, add provider_id to machine-readable outputs, coexistence testing.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/provider_resolution.py` — New module: resolve_active_provider() with CLI > config > default precedence, KNOWN_PROVIDERS constant\n- `src/scc_cli/core/errors.py` — Added ProviderNotAllowedError extending PolicyViolationError with auto-generated user_message/suggested_action\n- `src/scc_cli/ports/config_models.py` — Added allowed_providers: tuple[str, ...] = () to NormalizedTeamConfig\n- `src/scc_cli/config.py` — Added selected_provider to USER_CONFIG_DEFAULTS, get_selected_provider(), set_selected_provider()\n- `src/scc_cli/commands/provider.py` — New module: provider_app with show and set commands\n- `src/scc_cli/cli.py` — Registered provider_app under Configuration panel\n- `src/scc_cli/application/start_session.py` — Added provider_id: str | None = None to StartSessionRequest\n- `src/scc_cli/commands/launch/dependencies.py` — Added provider_id parameter to build_start_session_dependencies() with _PROVIDER_DISPATCH dict-based adapter dispatch\n- `src/scc_cli/commands/launch/flow.py` — Added --provider option to start(), extracted _resolve_provider() helper, wired resolve_active_provider() into launch path\n- `tests/test_provider_resolution.py` — 20 tests covering resolver, error, config helpers, and team config field\n- `tests/test_provider_commands.py` — 9 tests covering show/set commands, start request field, help display\n- `tests/test_provider_dispatch.py` — 11 tests covering dispatch table, policy validation, and provider resolution in flow\n",
+      "full_uat_md": "# S01: Provider selection config, CLI flag, and bootstrap dispatch — UAT\n\n**Milestone:** M006-d622bc\n**Written:** 2026-04-04T23:17:37.002Z\n\n## UAT: Provider selection config, CLI flag, and bootstrap dispatch\n\n### Preconditions\n- SCC installed and runnable (`uv run scc --help` works)\n- No prior provider config set (clean user config state)\n\n### Test 1: Default provider is Claude\n1. Run `scc provider show`\n2. **Expected:** Output contains `claude`\n\n### Test 2: Set provider to Codex\n1. Run `scc provider set codex`\n2. **Expected:** Confirmation message printed\n3. Run `scc provider show`\n4. **Expected:** Output contains `codex`\n\n### Test 3: Set provider back to Claude\n1. Run `scc provider set claude`\n2. **Expected:** Confirmation message printed\n3. Run `scc provider show`\n4. **Expected:** Output contains `claude`\n\n### Test 4: Invalid provider rejected\n1. Run `scc provider set gemini`\n2. **Expected:** Error message listing known providers (claude, codex)\n3. Run `scc provider show`\n4. **Expected:** Previous provider unchanged\n\n### Test 5: --provider flag on scc start\n1. Run `scc start --provider codex --dry-run` (or observe help)\n2. **Expected:** The `--provider` option is accepted without error. Provider resolution uses the flag value.\n\n### Test 6: CLI flag overrides config\n1. Set config to claude: `scc provider set claude`\n2. Start with `--provider codex`\n3. **Expected:** Codex provider is resolved (flag beats config)\n\n### Test 7: Policy violation\n1. Configure a team org config with `allowed_providers: [\"claude\"]`\n2. Run `scc start --provider codex`\n3. **Expected:** `ProviderNotAllowedError` with message explaining codex is not allowed and listing permitted providers\n\n### Test 8: Bare scc provider shows help\n1. Run `scc provider`\n2. **Expected:** Usage/help text displayed showing available subcommands (show, set)\n\n### Edge Cases\n- `scc provider set CLAUDE` (uppercase) → should be rejected (case-sensitive matching against KNOWN_PROVIDERS)\n- Empty allowed_providers in team config → all providers permitted (no restriction)\n- No team config at all → all providers permitted (graceful fallback)\n",
       "goal": "Provider selection flows from user intent (CLI flag, config, default) to bootstrap dispatch, with policy validation against org/team config.",
       "success_criteria": "- `resolve_active_provider()` resolves CLI flag > config > default with policy validation\n- `scc provider show` prints the active provider\n- `scc provider set codex` persists the selection\n- `scc start --provider codex` overrides the default\n- `build_start_session_dependencies()` dispatches the correct `agent_provider` and `safety_adapter` based on resolved provider\n- `ProviderNotAllowedError` raised when org/team policy blocks a provider\n- All existing tests pass — zero regressions",
       "proof_level": "This slice proves: contract + integration. Real runtime required: no. Human/UAT required: no.",
@@ -869,11 +869,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "Create the Codex runtime artifacts and refactor the launch path to be provider-aware: Dockerfile, image refs, CodexAgentRunner, start_session uses ProviderRuntimeSpec for image/config/volume, OCI runtime receives binary/volume/config from SandboxSpec instead of Claude constants, Claude-only flags gated.",
-      "success_criteria": "1. images/scc-agent-codex/Dockerfile exists, builds on scc-base, installs Codex CLI.\n2. SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF in image_contracts.py.\n3. CodexAgentRunner implements AgentRunner with codex argv, .codex settings path, describe()='Codex'.\n4. SandboxSpec gains agent_binary_name and data_volume_name fields (populated from ProviderRuntimeSpec by start_session).\n5. start_session._build_sandbox_spec uses ProviderRuntimeSpec for image, config_dir, data_volume — not hardcoded SCC_CLAUDE_IMAGE_REF.\n6. OCI _build_create_cmd uses spec.data_volume_name and spec config dir, not SANDBOX_DATA_VOLUME constant.\n7. OCI _build_exec_cmd uses spec.agent_binary_name, not AGENT_NAME constant.\n8. Claude-only flags (--dangerously-skip-permissions) gated behind provider check in exec command building.\n9. scc-base Dockerfile creates both .claude and .codex home dirs for the agent user.\n10. Docker credentials helper is provider-aware or gated to Claude adapter (no cross-provider credential leakage).\n11. Tests: CodexAgentRunner 4-test contract, provider-aware image routing (both values), OCI runtime binary/volume parameterization (both values), Dockerfile structural tests, Claude-only flag gating test.",
-      "proof_level": "Runner contract tests, start_session image routing tests, OCI runtime parameterization tests, Dockerfile structural validation, flag gating tests.",
-      "integration_closure": "The entire start → prepare → finalize → OCI exec path uses ProviderRuntimeSpec. Claude and Codex reach Docker exec with correct provider-specific image, binary, volume, config dir, and flags.",
-      "observability_impact": "StartSessionPlan carries provider_id. Launch audit events include provider. OCI container labeled. Provider image traceable in diagnostics.",
+      "goal": "scc start --provider codex builds a Codex-specific SandboxSpec with the right image, settings path, and agent command. The launch reaches Docker exec with codex argv.",
+      "success_criteria": "## Must-Haves\n\n- CodexAgentRunner implements AgentRunner protocol with codex-specific argv, settings path, and describe\n- SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF constants in image_contracts.py\n- images/scc-agent-codex/Dockerfile based on scc-base with Node.js 20 LTS + @openai/codex\n- codex_agent_runner field on DefaultAdapters, dispatched per-provider in dependencies.py\n- runtime_info threaded from runtime_probe through build_start_session_dependencies into StartSessionDependencies\n- _build_sandbox_spec selects image ref by provider_id, not hardcoded SCC_CLAUDE_IMAGE_REF\n- agent_argv field on SandboxSpec, populated from AgentLaunchSpec.argv\n- data_volume and config_dir fields on SandboxSpec for provider-aware credential mounting\n- OCI runtime _build_exec_cmd uses spec.agent_argv when present, falls back to AGENT_NAME for backward compat\n- OCI runtime _build_create_cmd uses spec.data_volume and spec.config_dir when present\n- Full test suite passes with zero regressions\n\n## Threat Surface\n\n- **Abuse**: N/A — no user input handling, no auth boundaries; this is internal adapter wiring\n- **Data exposure**: Credential volume names change per-provider but mount the same Docker volume mechanism; no new secret exposure\n- **Input trust**: provider_id comes from the already-validated resolve_active_provider() in S01\n\n## Requirement Impact\n\n- **Requirements touched**: R001 (maintainability) — new adapter follows established patterns\n- **Re-verify**: OCI sandbox launch path (all existing tests), provider dispatch\n- **Decisions revisited**: D027 (ProviderRuntimeSpec) — deferred; simple mapping sufficient for S02\n\n## Proof Level\n\n- This slice proves: integration — provider-specific adapter dispatch reaches sandbox spec and exec command\n- Real runtime required: no — all verification via unit/integration tests with mocked Docker\n- Human/UAT required: no\n\n## Verification\n\n- `uv run pytest tests/test_codex_agent_runner.py -v` — 4+ tests pass (canonical runner shape)\n- `uv run pytest tests/contracts/test_agent_runner_contract.py -v` — both runners pass contract\n- `uv run pytest tests/test_provider_dispatch.py -v` — runner dispatch tests pass\n- `uv run pytest tests/test_application_start_session.py -v` — provider-aware image selection tests pass\n- `uv run pytest tests/test_oci_sandbox_runtime.py -v` — all existing + new Codex exec/volume tests pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/ports/models.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/bootstrap.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite, zero regressions\n\n## Observability / Diagnostics\n\n- Runtime signals: provider_id on AgentLaunchSpec is already logged in _render_bundle_artifacts; SandboxSpec now carries agent_argv/data_volume for diagnostic inspection\n- Inspection surfaces: dry-run output will carry provider-aware image ref when runtime_info is threaded\n- Failure visibility: SandboxLaunchError already captures command/stderr/exit_code; no new error types needed\n- Redaction constraints: none — no secrets in new fields\n\n## Integration Closure\n\n- Upstream surfaces consumed: S01's resolve_active_provider(), _PROVIDER_DISPATCH table, provider_id on StartSessionRequest\n- New wiring introduced in this slice: codex_agent_runner dispatch, runtime_info threading, provider-aware image/exec/volume in sandbox spec\n- What remains before the milestone is truly usable end-to-end: S03 (branding strings), S04 (error hardening, coexistence testing, machine-readable output)",
+      "proof_level": "integration",
+      "integration_closure": "Upstream: S01 resolve_active_provider(), _PROVIDER_DISPATCH, provider_id on StartSessionRequest. New: codex_agent_runner dispatch, runtime_info threading, provider-aware image/exec/volume. Remaining: S03 branding, S04 error hardening and coexistence testing.",
+      "observability_impact": "SandboxSpec gains agent_argv/data_volume/config_dir for diagnostic inspection. No new error types. Existing SandboxLaunchError wrapping covers new adapter paths.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -4916,6 +4916,160 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S02",
+      "id": "T01",
+      "title": "Created CodexAgentRunner adapter with codex argv and .codex settings path, added Codex image constants, Dockerfile, and 13 passing tests including parametric contract coverage",
+      "status": "complete",
+      "one_liner": "Created CodexAgentRunner adapter with codex argv and .codex settings path, added Codex image constants, Dockerfile, and 13 passing tests including parametric contract coverage",
+      "narrative": "Created codex_agent_runner.py mirroring the Claude runner pattern with codex-specific settings path (/home/agent/.codex/config.toml), bare [\"codex\"] argv, and \"Codex\" describe string. Added SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF to image_contracts.py. Created images/scc-agent-codex/Dockerfile installing Node.js 20 + @openai/codex. Wired codex_agent_runner into DefaultAdapters (None default) and build_fake_adapters(). Extended contract tests with parametric TestAgentRunnerContract covering both runners across 4 contract properties.",
+      "verification_result": "All four verification gates passed: (1) 13 targeted tests pass, (2) ruff check clean, (3) mypy clean on 3 files, (4) full suite 4541 passed, 23 skipped, 2 xfailed, zero regressions.",
+      "duration": "",
+      "completed_at": "2026-04-04T23:32:24.411Z",
+      "blocker_discovered": false,
+      "deviations": "Import placement of CodexAgentRunner in bootstrap.py was initially out of alphabetical order; ruff I001 caught it and it was fixed before final verification.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/codex_agent_runner.py",
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-agent-codex/Dockerfile",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/__init__.py",
+        "tests/test_codex_agent_runner.py",
+        "tests/contracts/test_agent_runner_contract.py"
+      ],
+      "key_decisions": [
+        "Codex settings path is /home/agent/.codex/config.toml",
+        "Codex argv is bare [\"codex\"] with no permission-skip flags",
+        "Parametric contract tests cover all AgentRunner implementations"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S02\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/adapters/codex_agent_runner.py\n  - src/scc_cli/core/image_contracts.py\n  - images/scc-agent-codex/Dockerfile\n  - src/scc_cli/bootstrap.py\n  - tests/fakes/__init__.py\n  - tests/test_codex_agent_runner.py\n  - tests/contracts/test_agent_runner_contract.py\nkey_decisions:\n  - Codex settings path is /home/agent/.codex/config.toml\n  - Codex argv is bare [\"codex\"] with no permission-skip flags\n  - Parametric contract tests cover all AgentRunner implementations\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T23:32:24.410Z\nblocker_discovered: false\n---\n\n# T01: Created CodexAgentRunner adapter with codex argv and .codex settings path, added Codex image constants, Dockerfile, and 13 passing tests including parametric contract coverage\n\n**Created CodexAgentRunner adapter with codex argv and .codex settings path, added Codex image constants, Dockerfile, and 13 passing tests including parametric contract coverage**\n\n## What Happened\n\nCreated codex_agent_runner.py mirroring the Claude runner pattern with codex-specific settings path (/home/agent/.codex/config.toml), bare [\"codex\"] argv, and \"Codex\" describe string. Added SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF to image_contracts.py. Created images/scc-agent-codex/Dockerfile installing Node.js 20 + @openai/codex. Wired codex_agent_runner into DefaultAdapters (None default) and build_fake_adapters(). Extended contract tests with parametric TestAgentRunnerContract covering both runners across 4 contract properties.\n\n## Verification\n\nAll four verification gates passed: (1) 13 targeted tests pass, (2) ruff check clean, (3) mypy clean on 3 files, (4) full suite 4541 passed, 23 skipped, 2 xfailed, zero regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v` | 0 | ✅ pass | 1270ms |\n| 2 | `uv run ruff check src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py` | 0 | ✅ pass | 11500ms |\n| 3 | `uv run mypy src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py` | 0 | ✅ pass | 5900ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 73540ms |\n\n## Deviations\n\nImport placement of CodexAgentRunner in bootstrap.py was initially out of alphabetical order; ruff I001 caught it and it was fixed before final verification.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/codex_agent_runner.py`\n- `src/scc_cli/core/image_contracts.py`\n- `images/scc-agent-codex/Dockerfile`\n- `src/scc_cli/bootstrap.py`\n- `tests/fakes/__init__.py`\n- `tests/test_codex_agent_runner.py`\n- `tests/contracts/test_agent_runner_contract.py`\n",
+      "description": "---\nestimated_steps: 5\nestimated_files: 6\nskills_used: []\n---\n\n# T01: CodexAgentRunner adapter, Codex image contracts, and Dockerfile\n\n**Slice:** S02 — CodexAgentRunner, provider-aware image selection, and launch path wiring\n**Milestone:** M006-d622bc\n\n## Description\n\nCreate the CodexAgentRunner adapter, add Codex image constants, create the Codex Dockerfile, and register the runner in bootstrap and fakes. This is the foundation — downstream tasks depend on this runner and image ref existing.\n\n## Steps\n\n1. Create `src/scc_cli/adapters/codex_agent_runner.py` mirroring `claude_agent_runner.py`. Key differences:\n   - `DEFAULT_SETTINGS_PATH = Path(\"/home/agent/.codex/config.toml\")` (Codex uses `.codex/` config dir)\n   - `build_command` returns `argv=[\"codex\"]` (no `--dangerously-skip-permissions` — that's Claude-specific)\n   - `describe` returns `\"Codex\"`\n\n2. Add Codex image constants to `src/scc_cli/core/image_contracts.py`:\n   - `SCC_CODEX_IMAGE = ImageRef(repository=\"scc-agent-codex\", tag=\"latest\")`\n   - `SCC_CODEX_IMAGE_REF = \"scc-agent-codex:latest\"`\n\n3. Create `images/scc-agent-codex/Dockerfile` based on `images/scc-agent-claude/Dockerfile`. Install Node.js 20 LTS + `@openai/codex` via npm. Verify with `codex --version`. Same user/workdir pattern.\n\n4. Add `codex_agent_runner: AgentRunner | None = None` field to `DefaultAdapters` in `src/scc_cli/bootstrap.py` (use `| None = None` default per KNOWLEDGE.md pattern). Instantiate `CodexAgentRunner()` in `get_default_adapters()`. Import `CodexAgentRunner` at the top.\n\n5. Add `codex_agent_runner=FakeAgentRunner()` to `build_fake_adapters()` in `tests/fakes/__init__.py`. Also add `FakeAgentRunner()` to any inline `DefaultAdapters()` constructions in test files (grep for them).\n\n6. Create `tests/test_codex_agent_runner.py` with the canonical 4-test shape per KNOWLEDGE.md:\n   - `test_build_settings_returns_codex_path` — settings path is `/home/agent/.codex/config.toml`\n   - `test_build_command_returns_codex_argv` — argv starts with `\"codex\"`, no `--dangerously-skip-permissions`\n   - `test_describe_returns_codex` — returns `\"Codex\"`\n   - `test_env_is_clean_str_to_str` — env dict is empty (D003 contract guard)\n   Add Codex runner to `tests/contracts/test_agent_runner_contract.py` alongside Claude.\n\n## Must-Haves\n\n- [ ] CodexAgentRunner implements AgentRunner protocol with codex argv, .codex settings path, and \"Codex\" describe\n- [ ] SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF exist in image_contracts.py\n- [ ] images/scc-agent-codex/Dockerfile installs Node.js 20 + @openai/codex\n- [ ] codex_agent_runner field added to DefaultAdapters with None default\n- [ ] FakeAgentRunner() wired into build_fake_adapters() for codex_agent_runner\n- [ ] 4+ tests pass for CodexAgentRunner, contract test covers both runners\n\n## Verification\n\n- `uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v` — all pass\n- `uv run ruff check src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py` — clean\n- `uv run mypy src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite, zero regressions\n\n## Inputs\n\n- `src/scc_cli/adapters/claude_agent_runner.py` — template for the new runner\n- `src/scc_cli/core/image_contracts.py` — add Codex constants alongside Claude\n- `images/scc-agent-claude/Dockerfile` — template for Codex Dockerfile\n- `src/scc_cli/bootstrap.py` — add codex_agent_runner field and instantiation\n- `tests/fakes/__init__.py` — add codex_agent_runner to build_fake_adapters\n- `tests/contracts/test_agent_runner_contract.py` — extend with Codex runner\n\n## Expected Output\n\n- `src/scc_cli/adapters/codex_agent_runner.py` — new CodexAgentRunner adapter\n- `src/scc_cli/core/image_contracts.py` — SCC_CODEX_IMAGE + SCC_CODEX_IMAGE_REF added\n- `images/scc-agent-codex/Dockerfile` — new Codex container image definition\n- `src/scc_cli/bootstrap.py` — codex_agent_runner field and wiring\n- `tests/fakes/__init__.py` — codex_agent_runner in fake adapters\n- `tests/test_codex_agent_runner.py` — new 4-test file\n- `tests/contracts/test_agent_runner_contract.py` — Codex runner contract test added",
+      "estimate": "30m",
+      "files": [
+        "src/scc_cli/adapters/codex_agent_runner.py",
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-agent-codex/Dockerfile",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/__init__.py",
+        "tests/test_codex_agent_runner.py",
+        "tests/contracts/test_agent_runner_contract.py"
+      ],
+      "verify": "uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v && uv run ruff check src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py && uv run mypy src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "src/scc_cli/adapters/claude_agent_runner.py",
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-agent-claude/Dockerfile",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/__init__.py",
+        "tests/contracts/test_agent_runner_contract.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/adapters/codex_agent_runner.py",
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-agent-codex/Dockerfile",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/__init__.py",
+        "tests/test_codex_agent_runner.py",
+        "tests/contracts/test_agent_runner_contract.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S02",
+      "id": "T02",
+      "title": "Provider-aware runner dispatch, runtime_info threading, and image selection",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "---\nestimated_steps: 5\nestimated_files: 7\nskills_used: []\n---\n\n# T02: Provider-aware runner dispatch, runtime_info threading, and image selection\n\n**Slice:** S02 — CodexAgentRunner, provider-aware image selection, and launch path wiring\n**Milestone:** M006-d622bc\n\n## Description\n\nWire the CodexAgentRunner (created in T01) into the provider dispatch table, thread runtime_info from the probe into StartSessionDependencies, and make _build_sandbox_spec select the image ref by provider_id instead of hardcoding SCC_CLAUDE_IMAGE_REF. This is the critical wiring task that connects provider selection (S01) to provider-specific runtime behavior.\n\n## Steps\n\n1. Add `agent_runner` to `_PROVIDER_DISPATCH` in `src/scc_cli/commands/launch/dependencies.py`:\n   ```python\n   _PROVIDER_DISPATCH = {\n       \"claude\": {\n           \"agent_provider\": \"agent_provider\",\n           \"safety_adapter\": \"claude_safety_adapter\",\n           \"agent_runner\": \"agent_runner\",\n       },\n       \"codex\": {\n           \"agent_provider\": \"codex_agent_provider\",\n           \"safety_adapter\": \"codex_safety_adapter\",\n           \"agent_runner\": \"codex_agent_runner\",\n       },\n   }\n   ```\n   Update `build_start_session_dependencies` to dispatch `agent_runner` from the table (currently hardcodes `adapters.agent_runner`). Use the same `getattr` + require pattern as agent_provider. Thread `runtime_info` from `adapters.runtime_probe.probe()` if `adapters.runtime_probe` is not None — set it on `StartSessionDependencies`.\n\n2. Add a provider_id → image_ref mapping in `src/scc_cli/application/start_session.py`:\n   ```python\n   from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF\n\n   _PROVIDER_IMAGE_REF: dict[str, str] = {\n       \"claude\": SCC_CLAUDE_IMAGE_REF,\n       \"codex\": SCC_CODEX_IMAGE_REF,\n   }\n   ```\n   Update `_build_sandbox_spec` to look up `agent_provider.capability_profile().provider_id` in `_PROVIDER_IMAGE_REF` instead of hardcoding `SCC_CLAUDE_IMAGE_REF`. Fall back to `SCC_CLAUDE_IMAGE_REF` for unknown providers.\n\n3. Thread `AgentLaunchSpec.argv` into `SandboxSpec` — add the `agent_argv` field to SandboxSpec in `src/scc_cli/ports/models.py` (see T03 for the field, but the population happens here). In `_build_sandbox_spec`, if `agent_provider` is not None, get the launch spec and populate `agent_argv` from it. Actually — `AgentLaunchSpec` is already built by `_build_agent_launch_spec` separately. The cleanest approach: build the `AgentLaunchSpec` first, then pass its argv into `_build_sandbox_spec`. Refactor `prepare_start_session` to build agent_launch_spec before sandbox_spec, then pass `agent_launch_spec.argv` into `_build_sandbox_spec` as `agent_argv`.\n\n4. Add tests to `tests/test_provider_dispatch.py`:\n   - `test_codex_dispatch_uses_codex_agent_runner` — verifies codex provider gets codex_agent_runner\n   - `test_claude_dispatch_uses_claude_agent_runner` — verifies claude gets the default agent_runner\n   - `test_runtime_info_threaded_from_probe` — verifies runtime_info is populated when probe exists\n\n5. Add tests to `tests/test_application_start_session.py`:\n   - `test_build_sandbox_spec_codex_image_for_oci` — when provider=codex and backend=oci, image is SCC_CODEX_IMAGE_REF\n   - `test_build_sandbox_spec_claude_image_for_oci` — when provider=claude and backend=oci, image is SCC_CLAUDE_IMAGE_REF\n   - `test_build_sandbox_spec_agent_argv_from_launch_spec` — agent_argv populated from provider's argv\n\n## Negative Tests\n\n- **Malformed inputs**: unknown provider_id falls back to claude runner/image (not crash)\n- **Error paths**: missing codex_agent_runner on adapters (None) raises clear error via _require pattern\n- **Boundary conditions**: runtime_probe=None means runtime_info stays None — backward compat\n\n## Must-Haves\n\n- [ ] agent_runner dispatched per-provider from _PROVIDER_DISPATCH table\n- [ ] runtime_info threaded from runtime_probe.probe() into StartSessionDependencies\n- [ ] _build_sandbox_spec selects image by provider_id, not hardcoded Claude\n- [ ] agent_argv from AgentLaunchSpec flows into SandboxSpec\n- [ ] Unknown provider_id falls back safely to claude defaults\n- [ ] Tests cover runner dispatch, runtime_info threading, and image selection\n\n## Verification\n\n- `uv run pytest tests/test_provider_dispatch.py tests/test_application_start_session.py -v` — all pass\n- `uv run ruff check src/scc_cli/commands/launch/dependencies.py src/scc_cli/application/start_session.py src/scc_cli/ports/models.py` — clean\n- `uv run mypy src/scc_cli/commands/launch/dependencies.py src/scc_cli/application/start_session.py src/scc_cli/ports/models.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite, zero regressions\n\n## Observability Impact\n\n- Signals added/changed: runtime_info now flows into StartSessionDependencies, making OCI backend detection work in the live launch path\n- How a future agent inspects this: check dependencies.runtime_info in debug or dry-run; _PROVIDER_DISPATCH table is inspectable\n- Failure state exposed: missing runner raises InvalidLaunchPlanError with clear message\n\n## Inputs\n\n- `src/scc_cli/adapters/codex_agent_runner.py` — created in T01\n- `src/scc_cli/core/image_contracts.py` — SCC_CODEX_IMAGE_REF from T01\n- `src/scc_cli/bootstrap.py` — codex_agent_runner field from T01\n- `src/scc_cli/commands/launch/dependencies.py` — dispatch table to extend\n- `src/scc_cli/application/start_session.py` — _build_sandbox_spec to make provider-aware\n- `src/scc_cli/ports/models.py` — SandboxSpec to extend with agent_argv\n- `tests/test_provider_dispatch.py` — existing dispatch tests to extend\n\n## Expected Output\n\n- `src/scc_cli/commands/launch/dependencies.py` — agent_runner dispatch + runtime_info threading\n- `src/scc_cli/application/start_session.py` — provider-aware image selection + agent_argv propagation\n- `src/scc_cli/ports/models.py` — agent_argv field on SandboxSpec\n- `tests/test_provider_dispatch.py` — runner dispatch + runtime_info tests added\n- `tests/test_application_start_session.py` — provider-aware image + argv tests added",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/ports/models.py",
+        "tests/test_provider_dispatch.py",
+        "tests/test_application_start_session.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_dispatch.py tests/test_application_start_session.py -v && uv run ruff check src/scc_cli/commands/launch/dependencies.py src/scc_cli/application/start_session.py src/scc_cli/ports/models.py && uv run mypy src/scc_cli/commands/launch/dependencies.py src/scc_cli/application/start_session.py src/scc_cli/ports/models.py && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "src/scc_cli/adapters/codex_agent_runner.py",
+        "src/scc_cli/core/image_contracts.py",
+        "src/scc_cli/bootstrap.py",
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/ports/models.py",
+        "tests/test_provider_dispatch.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/ports/models.py",
+        "tests/test_provider_dispatch.py",
+        "tests/test_application_start_session.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S02",
+      "id": "T03",
+      "title": "OCI runtime provider-aware exec command and credential volume mounting",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "---\nestimated_steps: 5\nestimated_files: 5\nskills_used: []\n---\n\n# T03: OCI runtime provider-aware exec command and credential volume mounting\n\n**Slice:** S02 — CodexAgentRunner, provider-aware image selection, and launch path wiring\n**Milestone:** M006-d622bc\n\n## Description\n\nThis is the highest-risk task in S02. The OCI sandbox runtime has 483 lines of tests and hardcodes `AGENT_NAME` (\"claude\") and `SANDBOX_DATA_VOLUME` (\"docker-claude-sandbox-data\") with a `.claude` mount path. This task makes `_build_exec_cmd` use `spec.agent_argv` when present and `_build_create_cmd` use `spec.data_volume` and `spec.config_dir` when present, with backward-compat fallbacks.\n\n## Steps\n\n1. Add `data_volume: str = \"\"` and `config_dir: str = \"\"` fields to `SandboxSpec` in `src/scc_cli/ports/models.py`. These are populated by `_build_sandbox_spec` in T02's changes — but T02 only added `agent_argv`. Extend `_build_sandbox_spec` in `src/scc_cli/application/start_session.py` to also populate `data_volume` and `config_dir` based on provider_id:\n   ```python\n   _PROVIDER_DATA_VOLUME: dict[str, str] = {\n       \"claude\": \"docker-claude-sandbox-data\",\n       \"codex\": \"docker-codex-sandbox-data\",\n   }\n   _PROVIDER_CONFIG_DIR: dict[str, str] = {\n       \"claude\": \".claude\",\n       \"codex\": \".codex\",\n   }\n   ```\n   Look up using `provider_id` from the capability profile. Fall back to existing constants for unknown providers.\n\n2. Update `_build_exec_cmd` in `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - When `spec.agent_argv` is non-empty, use `list(spec.agent_argv)` as the command instead of `[AGENT_NAME, \"--dangerously-skip-permissions\"]`\n   - When `spec.agent_argv` is empty (default), fall back to existing `[AGENT_NAME, \"--dangerously-skip-permissions\"]` for backward compat\n   - Append `-c` for continue_session regardless of path\n   - Note: `--dangerously-skip-permissions` is Claude-specific. Codex's argv will be just `(\"codex\",)` from CodexAgentProvider.prepare_launch. The exec command must not add Claude-specific flags when using provider argv.\n\n3. Update `_build_create_cmd` in `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - When `spec.data_volume` is non-empty, use it instead of `SANDBOX_DATA_VOLUME`\n   - When `spec.config_dir` is non-empty, mount at `{_AGENT_HOME}/{spec.config_dir}` instead of `{_AGENT_HOME}/.claude`\n   - When both are empty, fall back to existing `SANDBOX_DATA_VOLUME` and `.claude` path\n\n4. Add tests to `tests/test_oci_sandbox_runtime.py`:\n   - `test_build_exec_cmd_uses_agent_argv_when_present` — with `agent_argv=(\"codex\",)`, exec cmd uses `codex` not `claude --dangerously-skip-permissions`\n   - `test_build_exec_cmd_falls_back_to_agent_name` — empty agent_argv uses existing AGENT_NAME behavior\n   - `test_build_exec_cmd_continue_session_with_codex_argv` — `-c` appended after codex argv\n   - `test_build_create_cmd_uses_data_volume_when_present` — with data_volume=\"docker-codex-sandbox-data\", volume mount uses it\n   - `test_build_create_cmd_uses_config_dir_when_present` — with config_dir=\".codex\", mount target is `/home/agent/.codex`\n   - `test_build_create_cmd_falls_back_to_defaults` — empty data_volume/config_dir uses existing constants\n\n5. Add image selection tests for data_volume/config_dir in `tests/test_application_start_session.py`:\n   - `test_build_sandbox_spec_codex_data_volume` — codex provider gets codex data volume name\n   - `test_build_sandbox_spec_codex_config_dir` — codex provider gets .codex config dir\n\n## Negative Tests\n\n- **Boundary conditions**: empty agent_argv tuple → falls back to AGENT_NAME + --dangerously-skip-permissions (existing behavior preserved)\n- **Boundary conditions**: empty data_volume string → falls back to SANDBOX_DATA_VOLUME constant\n- **Boundary conditions**: empty config_dir string → falls back to .claude mount path\n- **Error paths**: continue_session flag works correctly with both provider argv and default argv\n\n## Must-Haves\n\n- [ ] _build_exec_cmd uses spec.agent_argv when non-empty, falls back to AGENT_NAME for empty\n- [ ] _build_create_cmd uses spec.data_volume and spec.config_dir when non-empty, falls back to constants\n- [ ] data_volume and config_dir fields on SandboxSpec\n- [ ] _build_sandbox_spec populates data_volume and config_dir by provider_id\n- [ ] All existing OCI runtime tests still pass (backward compat)\n- [ ] 6+ new tests cover codex exec/volume/config_dir paths plus fallbacks\n\n## Verification\n\n- `uv run pytest tests/test_oci_sandbox_runtime.py -v` — all existing + new tests pass\n- `uv run pytest tests/test_application_start_session.py -v` — volume/config_dir tests pass\n- `uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` — clean\n- `uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite, zero regressions\n\n## Observability Impact\n\n- Signals added/changed: SandboxSpec now carries data_volume and config_dir, visible in any diagnostic dump of the spec\n- How a future agent inspects this: inspect SandboxSpec fields in test fixtures or dry-run debug output\n- Failure state exposed: no new error types — existing SandboxLaunchError wrapping covers all subprocess failures\n\n## Inputs\n\n- `src/scc_cli/ports/models.py` — SandboxSpec with agent_argv from T02\n- `src/scc_cli/adapters/oci_sandbox_runtime.py` — _build_exec_cmd and _build_create_cmd to modify\n- `src/scc_cli/application/start_session.py` — _build_sandbox_spec from T02 to extend with volume/config_dir\n- `tests/test_oci_sandbox_runtime.py` — existing 483-line test file to extend\n- `tests/test_application_start_session.py` — existing test file to extend\n\n## Expected Output\n\n- `src/scc_cli/ports/models.py` — data_volume and config_dir fields added to SandboxSpec\n- `src/scc_cli/adapters/oci_sandbox_runtime.py` — provider-aware _build_exec_cmd and _build_create_cmd\n- `src/scc_cli/application/start_session.py` — data_volume and config_dir population in _build_sandbox_spec\n- `tests/test_oci_sandbox_runtime.py` — 6+ new tests for codex exec/volume/fallback\n- `tests/test_application_start_session.py` — volume/config_dir tests added",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_oci_sandbox_runtime.py",
+        "tests/test_application_start_session.py"
+      ],
+      "verify": "uv run pytest tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py -v && uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_oci_sandbox_runtime.py",
+        "tests/test_application_start_session.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_oci_sandbox_runtime.py",
+        "tests/test_application_start_session.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -7960,6 +8114,50 @@
       "verdict": "✅ pass",
       "duration_ms": 70300,
       "created_at": "2026-04-04T23:10:53.930Z"
+    },
+    {
+      "id": 249,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1270,
+      "created_at": "2026-04-04T23:32:24.411Z"
+    },
+    {
+      "id": 250,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 11500,
+      "created_at": "2026-04-04T23:32:24.411Z"
+    },
+    {
+      "id": 251,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5900,
+      "created_at": "2026-04-04T23:32:24.411Z"
+    },
+    {
+      "id": 252,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 73540,
+      "created_at": "2026-04-04T23:32:24.411Z"
     }
   ]
 }

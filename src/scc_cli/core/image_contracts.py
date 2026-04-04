@@ -124,3 +124,7 @@ SCC_CLAUDE_IMAGE = ImageRef(repository="scc-agent-claude", tag="latest")
 
 # Plain string for use in SandboxSpec.image and docker commands
 SCC_CLAUDE_IMAGE_REF = "scc-agent-claude:latest"
+
+SCC_CODEX_IMAGE = ImageRef(repository="scc-agent-codex", tag="latest")
+
+SCC_CODEX_IMAGE_REF = "scc-agent-codex:latest"
