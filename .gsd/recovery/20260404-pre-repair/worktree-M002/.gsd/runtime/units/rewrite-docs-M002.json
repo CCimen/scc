@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "unitType": "rewrite-docs",
+  "unitId": "M002",
+  "startedAt": 1775252750644,
+  "updatedAt": 1775252750646,
+  "phase": "dispatched",
+  "wrapupWarningSent": false,
+  "continueHereFired": false,
+  "timeoutAt": null,
+  "lastProgressAt": 1775252750644,
+  "progressCount": 0,
+  "lastProgressKind": "dispatch",
+  "recoveryAttempts": 0
+}

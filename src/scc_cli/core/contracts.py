@@ -90,6 +90,10 @@ class RuntimeInfo:
     supports_internal_networks: bool
     supports_host_network: bool
     rootless: bool | None = None
+    version: str | None = None
+    desktop_version: str | None = None
+    daemon_reachable: bool = False
+    sandbox_available: bool = False
 
 
 @dataclass(frozen=True)

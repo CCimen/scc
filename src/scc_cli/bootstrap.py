@@ -11,6 +11,7 @@ from scc_cli.adapters.claude_settings import (
     merge_mcp_servers,  # noqa: F401 — re-exported public API
 )
 from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+from scc_cli.adapters.docker_runtime_probe import DockerRuntimeProbe
 from scc_cli.adapters.docker_sandbox_runtime import DockerSandboxRuntime
 from scc_cli.adapters.local_audit_event_sink import LocalAuditEventSink
 from scc_cli.adapters.local_config_store import LocalConfigStore
@@ -35,6 +36,7 @@ from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.personal_profile_service import PersonalProfileService
 from scc_cli.ports.remote_fetcher import RemoteFetcher
+from scc_cli.ports.runtime_probe import RuntimeProbe
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 from scc_cli.ports.session_store import SessionStore
 
@@ -57,6 +59,7 @@ class DefaultAdapters:
     config_store: ConfigStore
     audit_event_sink: AuditEventSink | None = None
     codex_agent_provider: AgentProvider | None = None
+    runtime_probe: RuntimeProbe | None = None
 
 
 @lru_cache(maxsize=1)
@@ -78,6 +81,7 @@ def get_default_adapters() -> DefaultAdapters:
         config_store=LocalConfigStore(),
         audit_event_sink=LocalAuditEventSink(),
         codex_agent_provider=CodexAgentProvider(),
+        runtime_probe=DockerRuntimeProbe(),
     )
 
 

@@ -17,6 +17,7 @@ from scc_cli.bootstrap import DefaultAdapters
 from scc_cli.core.contracts import AuditEvent
 from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
+from tests.fakes.fake_runtime_probe import FakeRuntimeProbe
 from tests.fakes.fake_sandbox_runtime import FakeSandboxRuntime
 
 
@@ -50,4 +51,5 @@ def build_fake_adapters() -> DefaultAdapters:
         config_store=LocalConfigStore(),
         audit_event_sink=FakeAuditEventSink(),
         codex_agent_provider=FakeAgentProvider(),
+        runtime_probe=FakeRuntimeProbe(),
     )
