@@ -4,7 +4,7 @@
 **Demo:** After this: Team config references bundle IDs; SCC resolves bundles to ArtifactRenderPlan; Claude adapter renders settings.local.json + marketplace from plan; Codex adapter renders plugin + rules + hooks from same plan; fetch/render failures are fail-closed with clear diagnostics
 
 ## Tasks
-- [ ] **T01: Bundle resolution: compute ArtifactRenderPlan from NormalizedOrgConfig** — Create src/scc_cli/core/bundle_resolver.py with a pure function resolve_render_plan(org_config: NormalizedOrgConfig, team_name: str, provider: str) -> ArtifactRenderPlan. This function:
+- [x] **T01: Created pure core bundle resolver (resolve_render_plan), extended config models with GovernedArtifactsCatalog/enabled_bundles, fixed D019 ID collision (→D021), tightened T05 to make bundle pipeline canonical (D022)** — Create src/scc_cli/core/bundle_resolver.py with a pure function resolve_render_plan(org_config: NormalizedOrgConfig, team_name: str, provider: str) -> ArtifactRenderPlan. This function:
 1. Reads the team profile's enabled_bundles list from org_config
 2. Resolves each bundle ID against the org's governed_artifacts catalog
 3. Filters artifacts by install_intent and provider compatibility

@@ -6,13 +6,13 @@ skills_used: []
 
 # T05: Wire renderers into launch pipeline via AgentProvider.render_artifacts
 
-Add an optional render_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult method to the AgentProvider protocol. Wire ClaudeAgentProvider to call claude_renderer and CodexAgentProvider to call codex_renderer. Update the launch flow (start_session or sync_marketplace_settings_for_start) to:
+Add a render_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult method to the AgentProvider protocol. Wire ClaudeAgentProvider to call claude_renderer and CodexAgentProvider to call codex_renderer. Update the launch flow (start_session or sync_marketplace_settings_for_start) to:
 1. Resolve render plan from org_config + team + provider
 2. Call provider.render_artifacts(plan, workspace)
 3. Handle renderer failures according to fail-closed semantics
 4. Log/audit rendered artifacts
 
-The existing marketplace pipeline continues to work as a fallback for Claude sessions that haven't migrated to bundle-based config. New bundle-based teams use the new pipeline. This is a backward-compatible addition, not a forced migration.
+The bundle/team-pack pipeline is the canonical artifact path. The old Claude-shaped marketplace pipeline is not preserved as a long-lived fallback in core. If a short-term migration shim is genuinely needed for Claude sessions during the transition, it must be explicitly adapter-local (inside claude_agent_provider.py only), clearly marked as transitional, and must not leak marketplace-shaped assumptions into core, ports, or the AgentProvider protocol.
 
 ## Inputs
 

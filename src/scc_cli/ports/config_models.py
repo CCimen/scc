@@ -13,6 +13,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from scc_cli.core.governed_artifacts import (
+    ArtifactBundle,
+    GovernedArtifact,
+    ProviderArtifactBinding,
+)
+
 
 @dataclass(frozen=True)
 class OrganizationSource:
@@ -81,6 +87,7 @@ class NormalizedTeamConfig:
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
     delegation: TeamDelegation = field(default_factory=TeamDelegation)
+    enabled_bundles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -173,6 +180,20 @@ class OrganizationInfo:
 
 
 @dataclass(frozen=True)
+class GovernedArtifactsCatalog:
+    """Org-level governed artifacts catalog.
+
+    Holds the approved artifact definitions, their provider bindings,
+    and the approved bundle definitions. This is the provider-neutral
+    source of truth that bundle resolution reads from.
+    """
+
+    artifacts: dict[str, GovernedArtifact] = field(default_factory=dict)
+    bindings: dict[str, tuple[ProviderArtifactBinding, ...]] = field(default_factory=dict)
+    bundles: dict[str, ArtifactBundle] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class NormalizedOrgConfig:
     """Normalized organization configuration.
 
@@ -187,6 +208,9 @@ class NormalizedOrgConfig:
     profiles: dict[str, NormalizedTeamConfig] = field(default_factory=dict)
     marketplaces: dict[str, MarketplaceConfig] = field(default_factory=dict)
     stats: StatsConfig = field(default_factory=StatsConfig)
+    governed_artifacts: GovernedArtifactsCatalog = field(
+        default_factory=GovernedArtifactsCatalog
+    )
     config_source: str | None = None
 
     @classmethod

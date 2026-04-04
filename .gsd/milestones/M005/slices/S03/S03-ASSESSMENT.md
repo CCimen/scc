@@ -34,4 +34,4 @@ S04-S06 as originally planned were generic quality cleanup (error handling, cove
 - T04: Final milestone validation
 
 ## Key Decision
-D019: Close S03 with T01-T04, drop T05, replan S04-S06 around governed-artifact/team-pack architecture.
+D021: Close S03 with T01-T04, drop T05, replan S04-S06 around governed-artifact/team-pack architecture.

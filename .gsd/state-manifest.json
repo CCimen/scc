@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T18:27:46.255Z",
+  "exported_at": "2026-04-04T18:49:22.146Z",
   "milestones": [
     {
       "id": "M001",
@@ -3759,19 +3759,29 @@
       "milestone_id": "M005",
       "slice_id": "S04",
       "id": "T01",
-      "title": "Bundle resolution: compute ArtifactRenderPlan from NormalizedOrgConfig",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created pure core bundle resolver (resolve_render_plan), extended config models with GovernedArtifactsCatalog/enabled_bundles, fixed D019 ID collision (→D021), tightened T05 to make bundle pipeline canonical (D022)",
+      "status": "complete",
+      "one_liner": "Created pure core bundle resolver (resolve_render_plan), extended config models with GovernedArtifactsCatalog/enabled_bundles, fixed D019 ID collision (→D021), tightened T05 to make bundle pipeline canonical (D022)",
+      "narrative": "Applied two user-directed alignment fixes (D022): reassigned S03 closeout/replan from D019 to D021 to fix collision with the asymmetric-surfaces architecture decision, and tightened S04/T05 so the bundle/team-pack pipeline is canonical (no long-lived Claude fallback in core). Then implemented the pure core bundle resolver: added GovernedArtifactsCatalog (artifacts + bindings + bundles) and enabled_bundles to config models, extended the normalizer to parse the spec-06 governed_artifacts section, and created core/bundle_resolver.py with resolve_render_plan() that reads a team's enabled bundles, resolves against the catalog, filters by install_intent and provider compatibility, and returns ArtifactRenderPlans with skip diagnostics. 23 new tests, all 4140 tests passing.",
+      "verification_result": "ruff check: 0 errors. mypy: 0 errors in 286 files. pytest tests/test_bundle_resolver.py -v: 23 passed (100% coverage on bundle_resolver.py). pytest full suite: 4140 passed, 23 skipped, 3 xfailed, 1 xpassed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T18:49:22.101Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Added pre-task D022 alignment fixes (D019→D021 ID reassignment, T05 fallback language tightening) per user directive before starting T01 implementation.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/bundle_resolver.py",
+        "src/scc_cli/ports/config_models.py",
+        "src/scc_cli/adapters/config_normalizer.py",
+        "tests/test_bundle_resolver.py",
+        ".gsd/DECISIONS.md"
+      ],
+      "key_decisions": [
+        "D022: Fixed D019 ID collision (replan→D021) and tightened T05 — bundle pipeline is canonical, not parallel with long-lived Claude fallback",
+        "GovernedArtifactsCatalog as typed bridge between raw config and resolution",
+        "Skills and MCP servers portable without binding; native_integrations require provider binding"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S04\nmilestone: M005\nkey_files:\n  - src/scc_cli/core/bundle_resolver.py\n  - src/scc_cli/ports/config_models.py\n  - src/scc_cli/adapters/config_normalizer.py\n  - tests/test_bundle_resolver.py\n  - .gsd/DECISIONS.md\nkey_decisions:\n  - D022: Fixed D019 ID collision (replan→D021) and tightened T05 — bundle pipeline is canonical, not parallel with long-lived Claude fallback\n  - GovernedArtifactsCatalog as typed bridge between raw config and resolution\n  - Skills and MCP servers portable without binding; native_integrations require provider binding\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T18:49:22.100Z\nblocker_discovered: false\n---\n\n# T01: Created pure core bundle resolver (resolve_render_plan), extended config models with GovernedArtifactsCatalog/enabled_bundles, fixed D019 ID collision (→D021), tightened T05 to make bundle pipeline canonical (D022)\n\n**Created pure core bundle resolver (resolve_render_plan), extended config models with GovernedArtifactsCatalog/enabled_bundles, fixed D019 ID collision (→D021), tightened T05 to make bundle pipeline canonical (D022)**\n\n## What Happened\n\nApplied two user-directed alignment fixes (D022): reassigned S03 closeout/replan from D019 to D021 to fix collision with the asymmetric-surfaces architecture decision, and tightened S04/T05 so the bundle/team-pack pipeline is canonical (no long-lived Claude fallback in core). Then implemented the pure core bundle resolver: added GovernedArtifactsCatalog (artifacts + bindings + bundles) and enabled_bundles to config models, extended the normalizer to parse the spec-06 governed_artifacts section, and created core/bundle_resolver.py with resolve_render_plan() that reads a team's enabled bundles, resolves against the catalog, filters by install_intent and provider compatibility, and returns ArtifactRenderPlans with skip diagnostics. 23 new tests, all 4140 tests passing.\n\n## Verification\n\nruff check: 0 errors. mypy: 0 errors in 286 files. pytest tests/test_bundle_resolver.py -v: 23 passed (100% coverage on bundle_resolver.py). pytest full suite: 4140 passed, 23 skipped, 3 xfailed, 1 xpassed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 12000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 16000ms |\n| 3 | `uv run pytest tests/test_bundle_resolver.py -v` | 0 | ✅ pass | 7000ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 69000ms |\n\n## Deviations\n\nAdded pre-task D022 alignment fixes (D019→D021 ID reassignment, T05 fallback language tightening) per user directive before starting T01 implementation.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/bundle_resolver.py`\n- `src/scc_cli/ports/config_models.py`\n- `src/scc_cli/adapters/config_normalizer.py`\n- `tests/test_bundle_resolver.py`\n- `.gsd/DECISIONS.md`\n",
       "description": "Create src/scc_cli/core/bundle_resolver.py with a pure function resolve_render_plan(org_config: NormalizedOrgConfig, team_name: str, provider: str) -> ArtifactRenderPlan. This function:\n1. Reads the team profile's enabled_bundles list from org_config\n2. Resolves each bundle ID against the org's governed_artifacts catalog\n3. Filters artifacts by install_intent and provider compatibility\n4. Produces bindings for artifacts that have ProviderArtifactBinding for the target provider\n5. Reports skipped artifacts (no binding for provider, disabled, unavailable)\n6. Returns a complete ArtifactRenderPlan\n\nAlso extend NormalizedOrgConfig and NormalizedTeamConfig to carry governed_artifacts and enabled_bundles fields.\n\nThis is a pure core function — no imports from marketplace/, adapters/, or commands/.",
       "estimate": "2h",
       "files": [
@@ -4462,7 +4472,7 @@
     },
     {
       "seq": 19,
-      "id": "D019",
+      "id": "D021",
       "when_context": "M005/S03/T05 — before execution",
       "scope": "roadmap",
       "decision": "How to handle S03 completion and S04-S06 replanning for governed-artifact/team-pack architecture",
@@ -4470,6 +4480,18 @@
       "rationale": "User override: S03-S06 must be replanned around the governed-artifact/team-pack architecture (D017-D020, specs/03, specs/06) before any further generic implementation. The T05 safety_policy_loader typing is acceptable cleanup but not architecturally significant — the slice already met its dict[str,Any] reduction target (382 < 390). The real remaining work is building the provider-neutral bundle planning pipeline and provider-native renderers, not more incremental typing conversions. S04-S06 as currently planned are generic quality cleanup that do not incorporate the team-pack architecture.",
       "revisable": "No — user directed",
       "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 20,
+      "id": "D022",
+      "when_context": "M005/S04 — before execution",
+      "scope": "roadmap",
+      "decision": "How to fix D019 ID collision and tighten S04/T05 fallback language before S04 execution",
+      "choice": "Reassign the S03 closeout/S04-S06 replan decision from D019 to D021 (next free ID) to eliminate the collision with D-019 (asymmetric plugin surfaces). Update all references in PROJECT.md, S03 summaries/assessment, OVERRIDES.md, and the DECISIONS table. Tighten S04/T05 so the bundle/team-pack pipeline is the canonical artifact path — the old Claude-shaped marketplace pipeline is not preserved as a long-lived fallback in core. Any short-term migration shim must be explicitly adapter-local, inside claude_agent_provider.py only, clearly marked transitional, and must not leak marketplace-shaped assumptions into core, ports, or the AgentProvider protocol.",
+      "rationale": "User directed two alignment fixes before S04 execution: (1) D019 was reused — the heading block D-019 is an architecture decision about asymmetric surfaces, while the DB row D019 was the replan roadmap decision; moving the replan to D021 resolves the collision. (2) T05's original language (\"existing marketplace pipeline continues to work as a fallback\") contradicted the team-pack architecture intent from D017-D020/specs/06; the bundle pipeline must be canonical, not a parallel path with a long-lived Claude-shaped fallback in core.",
+      "revisable": "No — user directed",
+      "made_by": "human",
       "superseded_by": null
     }
   ],
@@ -6310,6 +6332,50 @@
       "verdict": "✅ pass",
       "duration_ms": 71000,
       "created_at": "2026-04-04T18:16:06.256Z"
+    },
+    {
+      "id": 168,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 12000,
+      "created_at": "2026-04-04T18:49:22.101Z"
+    },
+    {
+      "id": 169,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 16000,
+      "created_at": "2026-04-04T18:49:22.101Z"
+    },
+    {
+      "id": 170,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_bundle_resolver.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7000,
+      "created_at": "2026-04-04T18:49:22.101Z"
+    },
+    {
+      "id": 171,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 69000,
+      "created_at": "2026-04-04T18:49:22.101Z"
     }
   ]
 }

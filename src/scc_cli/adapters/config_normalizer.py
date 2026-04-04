@@ -9,9 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from scc_cli.core.governed_artifacts import (
+    ArtifactBundle,
+    ArtifactInstallIntent,
+    ArtifactKind,
+    GovernedArtifact,
+    ProviderArtifactBinding,
+)
 from scc_cli.ports.config_models import (
     DefaultsConfig,
     DelegationConfig,
+    GovernedArtifactsCatalog,
     MarketplaceConfig,
     MCPServerConfig,
     NormalizedOrgConfig,
@@ -104,6 +112,7 @@ def _normalize_team_config(name: str, raw: dict[str, Any]) -> NormalizedTeamConf
         network_policy=raw.get("network_policy"),
         session=_normalize_session_settings(raw.get("session")),
         delegation=delegation,
+        enabled_bundles=tuple(raw.get("enabled_bundles", [])),
     )
 
 
@@ -192,6 +201,120 @@ def _normalize_marketplace(name: str, raw: dict[str, Any]) -> MarketplaceConfig:
     )
 
 
+def _parse_install_intent(raw_value: str | None) -> ArtifactInstallIntent:
+    """Parse install_intent string to enum, defaulting to AVAILABLE."""
+    if not raw_value:
+        return ArtifactInstallIntent.AVAILABLE
+    try:
+        return ArtifactInstallIntent(raw_value)
+    except ValueError:
+        return ArtifactInstallIntent.AVAILABLE
+
+
+def _parse_artifact_kind(raw_value: str | None) -> ArtifactKind:
+    """Parse artifact kind string to enum, defaulting to NATIVE_INTEGRATION."""
+    if not raw_value:
+        return ArtifactKind.NATIVE_INTEGRATION
+    try:
+        return ArtifactKind(raw_value)
+    except ValueError:
+        return ArtifactKind.NATIVE_INTEGRATION
+
+
+def _normalize_governed_artifact(name: str, raw: dict[str, Any]) -> GovernedArtifact:
+    """Normalize one governed artifact from raw config dict."""
+    source_raw = raw.get("source", {})
+    if not isinstance(source_raw, dict):
+        source_raw = {}
+
+    return GovernedArtifact(
+        kind=_parse_artifact_kind(raw.get("kind")),
+        name=name,
+        version=raw.get("version"),
+        publisher=raw.get("publisher"),
+        pinned=bool(raw.get("pinned", False)),
+        source_type=source_raw.get("type"),
+        source_url=source_raw.get("url"),
+        source_path=source_raw.get("path"),
+        source_ref=source_raw.get("ref"),
+        install_intent=_parse_install_intent(raw.get("install_intent")),
+    )
+
+
+def _normalize_provider_bindings(
+    raw_bindings: dict[str, Any] | None,
+) -> tuple[ProviderArtifactBinding, ...]:
+    """Normalize provider bindings from raw artifact config."""
+    if not raw_bindings or not isinstance(raw_bindings, dict):
+        return ()
+
+    result: list[ProviderArtifactBinding] = []
+    for provider_name, binding_raw in raw_bindings.items():
+        if not isinstance(binding_raw, dict):
+            continue
+        native_config = {
+            k: str(v) for k, v in binding_raw.items() if k not in ("transport_type",)
+        }
+        result.append(
+            ProviderArtifactBinding(
+                provider=provider_name,
+                native_ref=binding_raw.get("native_ref"),
+                native_config=native_config,
+                transport_type=binding_raw.get("transport_type"),
+            )
+        )
+    return tuple(result)
+
+
+def _normalize_artifact_bundle(name: str, raw: dict[str, Any]) -> ArtifactBundle:
+    """Normalize one artifact bundle from raw config dict."""
+    return ArtifactBundle(
+        name=name,
+        description=raw.get("description", ""),
+        artifacts=tuple(raw.get("members", [])),
+        install_intent=_parse_install_intent(raw.get("install_intent")),
+    )
+
+
+def _normalize_governed_artifacts_catalog(
+    raw: dict[str, Any] | None,
+) -> GovernedArtifactsCatalog:
+    """Normalize the full governed_artifacts section from org config."""
+    if not raw or not isinstance(raw, dict):
+        return GovernedArtifactsCatalog()
+
+    artifacts_raw = raw.get("artifacts", {})
+    if not isinstance(artifacts_raw, dict):
+        artifacts_raw = {}
+
+    artifacts: dict[str, GovernedArtifact] = {}
+    bindings: dict[str, tuple[ProviderArtifactBinding, ...]] = {}
+
+    for art_name, art_raw in artifacts_raw.items():
+        if not isinstance(art_raw, dict):
+            continue
+        artifacts[art_name] = _normalize_governed_artifact(art_name, art_raw)
+        art_bindings = _normalize_provider_bindings(art_raw.get("bindings"))
+        if art_bindings:
+            bindings[art_name] = art_bindings
+
+    bundles_raw = raw.get("bundles", {})
+    if not isinstance(bundles_raw, dict):
+        bundles_raw = {}
+
+    bundles: dict[str, ArtifactBundle] = {}
+    for bundle_name, bundle_raw in bundles_raw.items():
+        if not isinstance(bundle_raw, dict):
+            continue
+        bundles[bundle_name] = _normalize_artifact_bundle(bundle_name, bundle_raw)
+
+    return GovernedArtifactsCatalog(
+        artifacts=artifacts,
+        bindings=bindings,
+        bundles=bundles,
+    )
+
+
 def normalize_org_config(raw: dict[str, Any]) -> NormalizedOrgConfig:
     """Normalize a raw organization config dict to typed model.
 
@@ -222,6 +345,9 @@ def normalize_org_config(raw: dict[str, Any]) -> NormalizedOrgConfig:
         profiles=profiles,
         marketplaces=marketplaces,
         stats=_normalize_stats(raw.get("stats")),
+        governed_artifacts=_normalize_governed_artifacts_catalog(
+            raw.get("governed_artifacts")
+        ),
         config_source=str(config_source) if config_source is not None else None,
     )
 

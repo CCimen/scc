@@ -26,7 +26,7 @@ key_decisions:
   - Used tuple[str,...] for collection fields in governed-artifact types for full immutability
   - Union type (dict|NormalizedOrgConfig) with isinstance guard for backward compatibility during migration
   - Added raw_org_config field to StartSessionRequest for downstream consumers still needing raw dicts
-  - Deferred T05 safety_policy_loader typing per user override — remaining M005 must replan around team-pack architecture (D019)
+  - Deferred T05 safety_policy_loader typing per user override — remaining M005 must replan around team-pack architecture (D021)
 patterns_established:
   - NormalizedOrgConfig.from_dict() via importlib to avoid architectural boundary violation
   - Union type at function boundary with isinstance guard for incremental typed config migration
@@ -83,7 +83,7 @@ Governed-artifact types exist in core/governed_artifacts.py but are not yet cons
 
 ## Follow-ups
 
-S04-S06 must be replanned around governed-artifact/team-pack architecture per D019 and user override. S04 should build the provider-neutral artifact planning pipeline and provider-native renderers. S05 should cover the planning/renderer seams. S06 should validate diagnostics/docs truthfulness for the team-pack model.
+S04-S06 must be replanned around governed-artifact/team-pack architecture per D021 and user override. S04 should build the provider-neutral artifact planning pipeline and provider-native renderers. S05 should cover the planning/renderer seams. S06 should validate diagnostics/docs truthfulness for the team-pack model.
 
 ## Files Created/Modified
 

@@ -195,7 +195,7 @@ User-issued overrides that supersede plan document content.
   - S04 rewritten: provider-neutral artifact planning pipeline + provider-native renderers + failure hardening
   - S05 rewritten: coverage on governed-artifact/team-pack planning and renderer seams
   - S06 rewritten: diagnostics/docs truthfulness for team-pack model + guardrails + milestone validation
-  - Decision D019 recorded
+  - Decision D021 recorded
 **Scope:** resolved
 **Applied-at:** M005/S03/T05
 

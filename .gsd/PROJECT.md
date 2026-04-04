@@ -51,12 +51,12 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 - Zero HARD-FAIL files remaining in src/scc_cli/
 - Patterns established: re-export residual modules, Callable DI for boundary repair, late-bound module lookup for test-patch compat, deferred imports for circular deps
 
-**S03 complete.** Landed governed-artifact type hierarchy (T01), extended NormalizedOrgConfig with SafetyNetConfig/StatsConfig/from_dict (T02), converted compute_effective_config pipeline to NormalizedOrgConfig (T03), typed StartSessionRequest and normalized all call sites (T04). T05 deferred per user override (D019) — dict[str,Any] count already under target. Key deliverables:
+**S03 complete.** Landed governed-artifact type hierarchy (T01), extended NormalizedOrgConfig with SafetyNetConfig/StatsConfig/from_dict (T02), converted compute_effective_config pipeline to NormalizedOrgConfig (T03), typed StartSessionRequest and normalized all call sites (T04). T05 deferred per user override (D021) — dict[str,Any] count already under target. Key deliverables:
 - 6 frozen governed-artifact model types in core/governed_artifacts.py
 - NormalizedOrgConfig adoption across compute_effective_config/start_session/launch pipeline
 - 4117 tests passing, governed-artifact types defined but not yet consumed by marketplace/renderer pipeline
 
-**S04-S06 replanned (D019).** Per user override, remaining slices reorganized around governed-artifact/team-pack architecture:
+**S04-S06 replanned (D021).** Per user override, remaining slices reorganized around governed-artifact/team-pack architecture:
 - S04: Provider-neutral artifact planning pipeline (bundle resolution → ArtifactRenderPlan) and provider-native renderers (Claude, Codex) with fail-closed error handling
 - S05: Coverage on governed-artifact/team-pack planning and renderer seams
 - S06: Diagnostics/docs truthfulness for team-pack model, guardrail restoration, milestone validation
