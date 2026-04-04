@@ -7,10 +7,12 @@ from functools import lru_cache
 
 from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
 from scc_cli.adapters.claude_agent_runner import ClaudeAgentRunner
+from scc_cli.adapters.claude_safety_adapter import ClaudeSafetyAdapter
 from scc_cli.adapters.claude_settings import (
     merge_mcp_servers,  # noqa: F401 — re-exported public API
 )
 from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+from scc_cli.adapters.codex_safety_adapter import CodexSafetyAdapter
 from scc_cli.adapters.docker_runtime_probe import DockerRuntimeProbe
 from scc_cli.adapters.docker_sandbox_runtime import DockerSandboxRuntime
 from scc_cli.adapters.local_audit_event_sink import LocalAuditEventSink
@@ -39,6 +41,7 @@ from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.personal_profile_service import PersonalProfileService
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.runtime_probe import RuntimeProbe
+from scc_cli.ports.safety_adapter import SafetyAdapter
 from scc_cli.ports.safety_engine import SafetyEngine
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 from scc_cli.ports.session_store import SessionStore
@@ -64,6 +67,8 @@ class DefaultAdapters:
     codex_agent_provider: AgentProvider | None = None
     runtime_probe: RuntimeProbe | None = None
     safety_engine: SafetyEngine | None = None
+    claude_safety_adapter: SafetyAdapter | None = None
+    codex_safety_adapter: SafetyAdapter | None = None
 
 
 @lru_cache(maxsize=1)
@@ -80,6 +85,10 @@ def get_default_adapters() -> DefaultAdapters:
     else:
         sandbox_runtime = DockerSandboxRuntime(probe=probe)
 
+    # Shared engine and sink — reused by safety_engine field and both adapters.
+    engine = DefaultSafetyEngine()
+    sink = LocalAuditEventSink()
+
     return DefaultAdapters(
         filesystem=LocalFilesystem(),
         git_client=LocalGitClient(),
@@ -93,10 +102,12 @@ def get_default_adapters() -> DefaultAdapters:
         doctor_runner=LocalDoctorRunner(),
         archive_writer=ZipArchiveWriter(),
         config_store=LocalConfigStore(),
-        audit_event_sink=LocalAuditEventSink(),
+        audit_event_sink=sink,
         codex_agent_provider=CodexAgentProvider(),
         runtime_probe=probe,
-        safety_engine=DefaultSafetyEngine(),
+        safety_engine=engine,
+        claude_safety_adapter=ClaudeSafetyAdapter(engine=engine, audit_sink=sink),
+        codex_safety_adapter=CodexSafetyAdapter(engine=engine, audit_sink=sink),
     )
 
 

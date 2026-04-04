@@ -52,7 +52,7 @@ Create the SafetyCheckResult dataclass, the SafetyAdapter protocol port, and bot
   - Estimate: 45m
   - Files: src/scc_cli/core/contracts.py, src/scc_cli/ports/safety_adapter.py, src/scc_cli/adapters/claude_safety_adapter.py, src/scc_cli/adapters/codex_safety_adapter.py, tests/test_claude_safety_adapter.py, tests/test_codex_safety_adapter.py
   - Verify: uv run pytest tests/test_claude_safety_adapter.py tests/test_codex_safety_adapter.py -v && uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir "$PWD" -q
-- [ ] **T02: Bootstrap wiring, FakeSafetyAdapter, and cross-adapter audit integration tests** — ## Description
+- [x] **T02: Wired ClaudeSafetyAdapter and CodexSafetyAdapter into DefaultAdapters, created FakeSafetyAdapter, and added 8 integration tests covering engine → adapter → audit event chain** — ## Description
 
 Wire both safety adapters into DefaultAdapters via bootstrap.py, create a FakeSafetyAdapter for downstream tests, update build_fake_adapters(), and write integration tests that exercise the full chain: engine → adapter → audit event across both providers.
 

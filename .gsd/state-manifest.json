@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T12:42:34.431Z",
+  "exported_at": "2026-04-04T12:47:16.226Z",
   "milestones": [
     {
       "id": "M001",
@@ -2711,19 +2711,27 @@
       "milestone_id": "M004",
       "slice_id": "S03",
       "id": "T02",
-      "title": "Bootstrap wiring, FakeSafetyAdapter, and cross-adapter audit integration tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Wired ClaudeSafetyAdapter and CodexSafetyAdapter into DefaultAdapters, created FakeSafetyAdapter, and added 8 integration tests covering engine → adapter → audit event chain",
+      "status": "complete",
+      "one_liner": "Wired ClaudeSafetyAdapter and CodexSafetyAdapter into DefaultAdapters, created FakeSafetyAdapter, and added 8 integration tests covering engine → adapter → audit event chain",
+      "narrative": "Created FakeSafetyAdapter in tests/fakes/ with configurable result and call recording, matching the FakeSafetyEngine pattern. Extended DefaultAdapters with claude_safety_adapter and codex_safety_adapter fields (SafetyAdapter | None = None). Refactored get_default_adapters() to share engine and sink instances across safety_engine and both adapter constructors. Updated build_fake_adapters() with fake safety adapter wiring. Wrote 8 integration tests in test_safety_adapter_audit.py exercising the full engine → adapter → audit event chain for both providers, including shared-engine verdict consistency, metadata string type enforcement, and bootstrap field verification.",
+      "verification_result": "All 4 verification commands passed: pytest integration tests (8/8), ruff check clean, mypy clean (257 files), full regression 3746 passed (exceeds 3726 baseline).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T12:47:16.191Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Ruff import sort auto-fix needed on bootstrap.py after inserting new adapter imports — trivial, no plan impact.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/fakes/fake_safety_adapter.py",
+        "src/scc_cli/bootstrap.py",
+        "tests/fakes/__init__.py",
+        "tests/test_safety_adapter_audit.py"
+      ],
+      "key_decisions": [
+        "Shared engine/sink local variables in get_default_adapters() to avoid duplicate instances",
+        "FakeSafetyAdapter defaults to allowed/no-audit matching FakeSafetyEngine allow-all convention"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S03\nmilestone: M004\nkey_files:\n  - tests/fakes/fake_safety_adapter.py\n  - src/scc_cli/bootstrap.py\n  - tests/fakes/__init__.py\n  - tests/test_safety_adapter_audit.py\nkey_decisions:\n  - Shared engine/sink local variables in get_default_adapters() to avoid duplicate instances\n  - FakeSafetyAdapter defaults to allowed/no-audit matching FakeSafetyEngine allow-all convention\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T12:47:16.191Z\nblocker_discovered: false\n---\n\n# T02: Wired ClaudeSafetyAdapter and CodexSafetyAdapter into DefaultAdapters, created FakeSafetyAdapter, and added 8 integration tests covering engine → adapter → audit event chain\n\n**Wired ClaudeSafetyAdapter and CodexSafetyAdapter into DefaultAdapters, created FakeSafetyAdapter, and added 8 integration tests covering engine → adapter → audit event chain**\n\n## What Happened\n\nCreated FakeSafetyAdapter in tests/fakes/ with configurable result and call recording, matching the FakeSafetyEngine pattern. Extended DefaultAdapters with claude_safety_adapter and codex_safety_adapter fields (SafetyAdapter | None = None). Refactored get_default_adapters() to share engine and sink instances across safety_engine and both adapter constructors. Updated build_fake_adapters() with fake safety adapter wiring. Wrote 8 integration tests in test_safety_adapter_audit.py exercising the full engine → adapter → audit event chain for both providers, including shared-engine verdict consistency, metadata string type enforcement, and bootstrap field verification.\n\n## Verification\n\nAll 4 verification commands passed: pytest integration tests (8/8), ruff check clean, mypy clean (257 files), full regression 3746 passed (exceeds 3726 baseline).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_safety_adapter_audit.py -v` | 0 | ✅ pass | 4200ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 1000ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 47000ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 43000ms |\n\n## Deviations\n\nRuff import sort auto-fix needed on bootstrap.py after inserting new adapter imports — trivial, no plan impact.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/fakes/fake_safety_adapter.py`\n- `src/scc_cli/bootstrap.py`\n- `tests/fakes/__init__.py`\n- `tests/test_safety_adapter_audit.py`\n",
       "description": "## Description\n\nWire both safety adapters into DefaultAdapters via bootstrap.py, create a FakeSafetyAdapter for downstream tests, update build_fake_adapters(), and write integration tests that exercise the full chain: engine → adapter → audit event across both providers.\n\n## Steps\n\n1. Create `tests/fakes/fake_safety_adapter.py`:\n   - `FakeSafetyAdapter` dataclass with configurable `result: SafetyCheckResult` (default: allowed, empty message, audit_emitted=False) and `calls: list[tuple[str, SafetyPolicy]]` for recording.\n   - `check_command()` records the call and returns the configured result.\n\n2. Update `src/scc_cli/bootstrap.py`:\n   - Import `ClaudeSafetyAdapter` and `CodexSafetyAdapter` from adapters.\n   - Import `SafetyAdapter` from ports (for type annotation).\n   - Add two new fields to `DefaultAdapters`: `claude_safety_adapter: SafetyAdapter | None = None` and `codex_safety_adapter: SafetyAdapter | None = None`.\n   - In `get_default_adapters()`, after the existing `safety_engine=DefaultSafetyEngine()` line, instantiate both adapters: `claude_safety_adapter=ClaudeSafetyAdapter(engine=DefaultSafetyEngine(), audit_sink=LocalAuditEventSink())` and `codex_safety_adapter=CodexSafetyAdapter(engine=DefaultSafetyEngine(), audit_sink=LocalAuditEventSink())`. NOTE: reuse the same engine/sink instances already created for other fields — assign `engine = DefaultSafetyEngine()` and `sink = LocalAuditEventSink()` as local variables and pass to both the `safety_engine` field and both adapter constructors.\n\n3. Update `tests/fakes/__init__.py`:\n   - Import `FakeSafetyAdapter`.\n   - Add `claude_safety_adapter=FakeSafetyAdapter()` and `codex_safety_adapter=FakeSafetyAdapter()` to `build_fake_adapters()`.\n\n4. Write `tests/test_safety_adapter_audit.py` with integration tests:\n   - `test_claude_adapter_full_chain_blocked` — construct ClaudeSafetyAdapter with real DefaultSafetyEngine and FakeAuditEventSink, evaluate `git push --force`, verify: verdict.allowed is False, audit event emitted with provider_id='claude' and severity WARNING, user_message contains '[Claude] Command blocked'.\n   - `test_codex_adapter_full_chain_blocked` — same with CodexSafetyAdapter and '[Codex]' prefix.\n   - `test_claude_adapter_full_chain_allowed` — evaluate a safe command like `git status`, verify: verdict.allowed is True, audit event with INFO severity, user_message is '[Claude] Command allowed'.\n   - `test_codex_adapter_full_chain_allowed` — same with CodexSafetyAdapter.\n   - `test_both_adapters_share_engine_verdicts` — feed same command to both adapters with same policy, verify both produce same verdict.allowed and same matched_rule.\n   - `test_audit_metadata_keys_are_all_strings` — verify all values in emitted AuditEvent.metadata are str type (prevents serialization issues in LocalAuditEventSink).\n   - `test_bootstrap_wiring_has_safety_adapter_fields` — import `get_default_adapters` or `DefaultAdapters`, verify the fields exist as attributes (don't call get_default_adapters() which probes Docker — just verify the dataclass accepts the fields).\n\n## Must-Haves\n\n- [ ] `FakeSafetyAdapter` exists in `tests/fakes/` with configurable result and call recording\n- [ ] `DefaultAdapters` has `claude_safety_adapter` and `codex_safety_adapter` fields with `| None = None` defaults\n- [ ] `build_fake_adapters()` includes both fake safety adapters\n- [ ] Integration tests pass exercising engine → adapter → audit event chain\n- [ ] All metadata values in emitted AuditEvents are strings\n- [ ] `uv run ruff check` clean, `uv run mypy src/scc_cli` clean, full regression passes\n\n## Verification\n\n- `uv run pytest tests/test_safety_adapter_audit.py -v` — all pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — clean\n- `uv run pytest --rootdir \"$PWD\" -q` — full regression passes (baseline: 3726 + T01 additions)",
       "estimate": "35m",
       "files": [
@@ -4873,6 +4881,50 @@
       "verdict": "✅ pass",
       "duration_ms": 46800,
       "created_at": "2026-04-04T12:42:34.385Z"
+    },
+    {
+      "id": 90,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_safety_adapter_audit.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4200,
+      "created_at": "2026-04-04T12:47:16.192Z"
+    },
+    {
+      "id": 91,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-04T12:47:16.192Z"
+    },
+    {
+      "id": 92,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 47000,
+      "created_at": "2026-04-04T12:47:16.192Z"
+    },
+    {
+      "id": 93,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M004",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 43000,
+      "created_at": "2026-04-04T12:47:16.192Z"
     }
   ]
 }
