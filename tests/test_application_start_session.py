@@ -14,9 +14,18 @@ from scc_cli.application.start_session import (
 from scc_cli.application.sync_marketplace import SyncError, SyncResult
 from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
-from scc_cli.core.contracts import AgentLaunchSpec
+from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult
+from scc_cli.core.errors import MaterializationError
+from scc_cli.core.governed_artifacts import (
+    ArtifactBundle,
+    ArtifactInstallIntent,
+    ArtifactKind,
+    ArtifactRenderPlan,
+    GovernedArtifact,
+    ProviderArtifactBinding,
+)
 from scc_cli.core.workspace import ResolverResult
-from scc_cli.ports.config_models import NormalizedOrgConfig
+from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
 from scc_cli.ports.models import MountSpec, SandboxSpec
 from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
@@ -339,3 +348,460 @@ def test_start_session_dependencies_accept_agent_provider(tmp_path: Path) -> Non
     )
 
     assert deps.agent_provider is not None
+
+
+# ---------------------------------------------------------------------------
+# S04/T05 — Bundle pipeline wiring through AgentProvider.render_artifacts
+# ---------------------------------------------------------------------------
+
+
+def _build_org_config_with_bundles(
+    team_name: str = "alpha",
+    bundle_id: str = "security-pack",
+    *,
+    provider: str = "fake",
+) -> NormalizedOrgConfig:
+    """Build a NormalizedOrgConfig with governed artifacts and bundles."""
+    catalog = GovernedArtifactsCatalog(
+        artifacts={
+            "safety-net": GovernedArtifact(
+                kind=ArtifactKind.SKILL,
+                name="safety-net",
+                install_intent=ArtifactInstallIntent.REQUIRED,
+            ),
+        },
+        bindings={
+            "safety-net": (
+                ProviderArtifactBinding(
+                    provider=provider,
+                    native_ref="safety-net-skill",
+                ),
+            ),
+        },
+        bundles={
+            bundle_id: ArtifactBundle(
+                name=bundle_id,
+                description="Security bundle",
+                artifacts=("safety-net",),
+                install_intent=ArtifactInstallIntent.REQUIRED,
+            ),
+        },
+    )
+    from scc_cli.ports.config_models import NormalizedTeamConfig
+
+    return NormalizedOrgConfig(
+        organization=MagicMock(name="test-org"),
+        profiles={
+            team_name: NormalizedTeamConfig(
+                name=team_name,
+                enabled_bundles=(bundle_id,),
+            ),
+        },
+        governed_artifacts=catalog,
+    )
+
+
+def _build_bundle_request(
+    workspace_path: Path,
+    *,
+    team: str = "alpha",
+    org_config: NormalizedOrgConfig | None = None,
+    dry_run: bool = False,
+    offline: bool = False,
+    standalone: bool = False,
+) -> StartSessionRequest:
+    """Build a StartSessionRequest suitable for bundle pipeline tests."""
+    if org_config is None:
+        org_config = _build_org_config_with_bundles(team)
+    return StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=str(workspace_path),
+        entry_dir=workspace_path,
+        team=team,
+        session_name=None,
+        resume=False,
+        fresh=False,
+        offline=offline,
+        standalone=standalone,
+        dry_run=dry_run,
+        allow_suspicious=False,
+        org_config=org_config,
+        raw_org_config=None,  # Prevents marketplace sync (intentional)
+    )
+
+
+class TestBundlePipelineWiring:
+    """Tests for the bundle render pipeline wired through prepare_start_session."""
+
+    def test_bundle_pipeline_renders_artifacts_into_plan(self, tmp_path: Path) -> None:
+        """When org config has bundles, the plan carries render results."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_error is None
+        assert len(plan.bundle_render_results) == 1
+        result = plan.bundle_render_results[0]
+        assert isinstance(result, RenderArtifactsResult)
+
+    def test_bundle_pipeline_skipped_when_no_team(self, tmp_path: Path) -> None:
+        """When no team is set, the bundle pipeline is skipped."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, team=None)  # type: ignore[arg-type]
+        # Need a valid request without team
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_dry_run(self, tmp_path: Path) -> None:
+        """Dry-run mode skips bundle rendering."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, dry_run=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_offline(self, tmp_path: Path) -> None:
+        """Offline mode skips bundle rendering."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, offline=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_standalone(self, tmp_path: Path) -> None:
+        """Standalone mode skips bundle rendering."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, standalone=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_no_provider(self, tmp_path: Path) -> None:
+        """When no agent_provider is wired, the bundle pipeline is skipped."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=FakeAgentRunner(),
+            agent_provider=None,  # No provider
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_captures_resolution_error(self, tmp_path: Path) -> None:
+        """When bundle resolution fails (missing bundle), error is captured fail-closed."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        # Reference a bundle that doesn't exist in the catalog
+        org_config = _build_org_config_with_bundles(bundle_id="nonexistent")
+        # But the team references a different bundle
+        from scc_cli.ports.config_models import NormalizedTeamConfig
+
+        org_config = NormalizedOrgConfig(
+            organization=MagicMock(name="test-org"),
+            profiles={
+                "alpha": NormalizedTeamConfig(
+                    name="alpha",
+                    enabled_bundles=("missing-bundle",),
+                ),
+            },
+            governed_artifacts=GovernedArtifactsCatalog(
+                bundles={
+                    "existing": ArtifactBundle(
+                        name="existing",
+                        artifacts=(),
+                    ),
+                },
+            ),
+        )
+        request = _build_bundle_request(workspace_path, org_config=org_config)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Fail-closed: error is captured, not raised
+        assert plan.bundle_render_error is not None
+        assert "missing-bundle" in plan.bundle_render_error
+        assert plan.bundle_render_results == ()
+
+    def test_bundle_pipeline_captures_renderer_error(self, tmp_path: Path) -> None:
+        """When renderer raises MaterializationError, error is captured fail-closed."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        org_config = _build_org_config_with_bundles()
+        request = _build_bundle_request(workspace_path, org_config=org_config)
+        resolver_result = _build_resolver_result(workspace_path)
+
+        # Create a provider that raises on render_artifacts
+        provider = FakeAgentProvider()
+
+        def _exploding_render(
+            plan: ArtifactRenderPlan, workspace: Path
+        ) -> RenderArtifactsResult:
+            raise MaterializationError(
+                bundle_id="security-pack",
+                artifact_name="safety-net",
+                target_path="/tmp/boom",
+                reason="disk full",
+            )
+
+        provider.render_artifacts = _exploding_render  # type: ignore[assignment]
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=FakeAgentRunner(),
+            agent_provider=provider,
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_error is not None
+        assert "disk full" in plan.bundle_render_error
+        assert plan.bundle_render_results == ()
+
+    def test_bundle_pipeline_empty_bundles_no_error(self, tmp_path: Path) -> None:
+        """When team has no enabled bundles, pipeline succeeds with empty results."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        from scc_cli.ports.config_models import NormalizedTeamConfig
+
+        org_config = NormalizedOrgConfig(
+            organization=MagicMock(name="test-org"),
+            profiles={
+                "alpha": NormalizedTeamConfig(
+                    name="alpha",
+                    enabled_bundles=(),  # No bundles
+                ),
+            },
+        )
+        request = _build_bundle_request(workspace_path, org_config=org_config)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_fake_provider_records_render_calls(self, tmp_path: Path) -> None:
+        """FakeAgentProvider.render_artifacts records calls for test assertions."""
+        provider = FakeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test-bundle",
+            provider="fake",
+            bindings=(
+                ProviderArtifactBinding(provider="fake", native_ref="test-skill"),
+            ),
+            effective_artifacts=("test-artifact",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert len(provider.render_artifacts_calls) == 1
+        assert provider.render_artifacts_calls[0] == (plan, tmp_path)
+        assert isinstance(result, RenderArtifactsResult)
+
+
+class TestAgentProviderRenderArtifacts:
+    """Tests for the render_artifacts method on concrete provider adapters."""
+
+    def test_claude_provider_render_artifacts(self, tmp_path: Path) -> None:
+        """ClaudeAgentProvider.render_artifacts delegates to claude_renderer."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test-bundle",
+            provider="claude",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="safety-net-skill",
+                ),
+            ),
+            effective_artifacts=("safety-net",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        # Skill binding should produce a rendered path
+        assert len(result.rendered_paths) == 1
+        assert result.rendered_paths[0].name == "skill.json"
+
+    def test_codex_provider_render_artifacts(self, tmp_path: Path) -> None:
+        """CodexAgentProvider.render_artifacts delegates to codex_renderer."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        provider = CodexAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test-bundle",
+            provider="codex",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="safety-net-skill",
+                ),
+            ),
+            effective_artifacts=("safety-net",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        # Skill binding should produce a rendered path
+        assert len(result.rendered_paths) == 1
+        assert result.rendered_paths[0].name == "skill.json"
+
+    def test_claude_provider_returns_settings_fragment(self, tmp_path: Path) -> None:
+        """Claude renderer's settings_fragment is propagated through the provider."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="mcp-bundle",
+            provider="claude",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="gis-server",
+                    transport_type="sse",
+                    native_config={"url": "https://gis.example.com/mcp"},
+                ),
+            ),
+            effective_artifacts=("gis-mcp",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        assert "mcpServers" in result.settings_fragment
+        assert "gis-server" in result.settings_fragment["mcpServers"]
+
+    def test_codex_provider_maps_mcp_fragment_to_settings_fragment(self, tmp_path: Path) -> None:
+        """Codex renderer's mcp_fragment is mapped to settings_fragment in the unified result."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        provider = CodexAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="mcp-bundle",
+            provider="codex",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="gis-server",
+                    transport_type="sse",
+                    native_config={"url": "https://gis.example.com/mcp"},
+                ),
+            ),
+            effective_artifacts=("gis-mcp",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        # Codex mcp_fragment mapped to settings_fragment
+        assert "mcpServers" in result.settings_fragment
+        assert "gis-server" in result.settings_fragment["mcpServers"]
+
+    def test_claude_provider_wrong_provider_returns_warnings(self, tmp_path: Path) -> None:
+        """Claude renderer skips plans targeting a different provider."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test",
+            provider="codex",  # Wrong provider
+            effective_artifacts=("something",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert len(result.warnings) > 0
+        assert "codex" in result.warnings[0]

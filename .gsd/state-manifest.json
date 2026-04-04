@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T19:26:53.212Z",
+  "exported_at": "2026-04-04T19:37:27.091Z",
   "milestones": [
     {
       "id": "M001",
@@ -3959,19 +3959,33 @@
       "milestone_id": "M005",
       "slice_id": "S04",
       "id": "T05",
-      "title": "Wire renderers into launch pipeline via AgentProvider.render_artifacts",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Wire render_artifacts into AgentProvider protocol and launch pipeline with fail-closed bundle resolution, Claude/Codex adapter delegation, and 15 new tests",
+      "status": "complete",
+      "one_liner": "Wire render_artifacts into AgentProvider protocol and launch pipeline with fail-closed bundle resolution, Claude/Codex adapter delegation, and 15 new tests",
+      "narrative": "Added RenderArtifactsResult to core/contracts.py as the unified provider-neutral return type. Extended AgentProvider protocol with render_artifacts(plan, workspace) method. Wired ClaudeAgentProvider to delegate to claude_renderer and CodexAgentProvider to codex_renderer, wrapping adapter-specific results into the unified type. Integrated the bundle pipeline into prepare_start_session via _render_bundle_artifacts() which resolves plans with fail_closed=True and captures RendererError as diagnostic messages on StartSessionPlan. Extended StartSessionPlan with bundle_render_results and bundle_render_error fields. Wrote 15 new tests covering happy-path rendering, all skip gates (no team, dry-run, offline, standalone, no provider), resolution error capture, renderer error capture, empty bundles, call recording, Claude/Codex delegation, settings fragment propagation, and wrong-provider warnings.",
+      "verification_result": "All four verification commands pass: ruff check (0 errors), mypy (0 issues in 288 source files), pytest targeted (21 tests in test_application_start_session.py), and full pytest suite (4237 passed, 23 skipped, 3 xfailed, 1 xpassed). Coverage for modified files: claude_agent_provider.py 100%, codex_agent_provider.py 100%, agent_provider.py 100%, contracts.py 100%, start_session.py 92%.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T19:37:27.007Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/ports/agent_provider.py",
+        "src/scc_cli/adapters/claude_agent_provider.py",
+        "src/scc_cli/adapters/codex_agent_provider.py",
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/fakes/fake_agent_provider.py",
+        "tests/test_application_start_session.py"
+      ],
+      "key_decisions": [
+        "RenderArtifactsResult as unified provider-neutral return type in core/contracts.py",
+        "Codex mcp_fragment mapped to settings_fragment in unified result",
+        "Bundle pipeline gated on org_config + team + provider; skips in dry-run/offline/standalone",
+        "fail_closed=True for resolution in launch flow; errors captured on plan, not raised",
+        "StartSessionPlan extended with bundle_render_results and bundle_render_error fields"
+      ],
+      "full_summary_md": "---\nid: T05\nparent: S04\nmilestone: M005\nkey_files:\n  - src/scc_cli/ports/agent_provider.py\n  - src/scc_cli/adapters/claude_agent_provider.py\n  - src/scc_cli/adapters/codex_agent_provider.py\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/application/start_session.py\n  - tests/fakes/fake_agent_provider.py\n  - tests/test_application_start_session.py\nkey_decisions:\n  - RenderArtifactsResult as unified provider-neutral return type in core/contracts.py\n  - Codex mcp_fragment mapped to settings_fragment in unified result\n  - Bundle pipeline gated on org_config + team + provider; skips in dry-run/offline/standalone\n  - fail_closed=True for resolution in launch flow; errors captured on plan, not raised\n  - StartSessionPlan extended with bundle_render_results and bundle_render_error fields\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T19:37:27.006Z\nblocker_discovered: false\n---\n\n# T05: Wire render_artifacts into AgentProvider protocol and launch pipeline with fail-closed bundle resolution, Claude/Codex adapter delegation, and 15 new tests\n\n**Wire render_artifacts into AgentProvider protocol and launch pipeline with fail-closed bundle resolution, Claude/Codex adapter delegation, and 15 new tests**\n\n## What Happened\n\nAdded RenderArtifactsResult to core/contracts.py as the unified provider-neutral return type. Extended AgentProvider protocol with render_artifacts(plan, workspace) method. Wired ClaudeAgentProvider to delegate to claude_renderer and CodexAgentProvider to codex_renderer, wrapping adapter-specific results into the unified type. Integrated the bundle pipeline into prepare_start_session via _render_bundle_artifacts() which resolves plans with fail_closed=True and captures RendererError as diagnostic messages on StartSessionPlan. Extended StartSessionPlan with bundle_render_results and bundle_render_error fields. Wrote 15 new tests covering happy-path rendering, all skip gates (no team, dry-run, offline, standalone, no provider), resolution error capture, renderer error capture, empty bundles, call recording, Claude/Codex delegation, settings fragment propagation, and wrong-provider warnings.\n\n## Verification\n\nAll four verification commands pass: ruff check (0 errors), mypy (0 issues in 288 source files), pytest targeted (21 tests in test_application_start_session.py), and full pytest suite (4237 passed, 23 skipped, 3 xfailed, 1 xpassed). Coverage for modified files: claude_agent_provider.py 100%, codex_agent_provider.py 100%, agent_provider.py 100%, contracts.py 100%, start_session.py 92%.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 5000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4000ms |\n| 3 | `uv run pytest tests/test_application_start_session.py -v` | 0 | ✅ pass (21 tests) | 1300ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass (4237 tests) | 66000ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/ports/agent_provider.py`\n- `src/scc_cli/adapters/claude_agent_provider.py`\n- `src/scc_cli/adapters/codex_agent_provider.py`\n- `src/scc_cli/core/contracts.py`\n- `src/scc_cli/application/start_session.py`\n- `tests/fakes/fake_agent_provider.py`\n- `tests/test_application_start_session.py`\n",
       "description": "Add an optional render_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult method to the AgentProvider protocol. Wire ClaudeAgentProvider to call claude_renderer and CodexAgentProvider to call codex_renderer. Update the launch flow (start_session or sync_marketplace_settings_for_start) to:\n1. Resolve render plan from org_config + team + provider\n2. Call provider.render_artifacts(plan, workspace)\n3. Handle renderer failures according to fail-closed semantics\n4. Log/audit rendered artifacts\n\nThe existing marketplace pipeline continues to work as a fallback for Claude sessions that haven't migrated to bundle-based config. New bundle-based teams use the new pipeline. This is a backward-compatible addition, not a forced migration.",
       "estimate": "2h",
       "files": [
@@ -6576,6 +6590,50 @@
       "verdict": "✅ pass (4222 tests)",
       "duration_ms": 76000,
       "created_at": "2026-04-04T19:26:53.137Z"
+    },
+    {
+      "id": 184,
+      "task_id": "T05",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T19:37:27.007Z"
+    },
+    {
+      "id": 185,
+      "task_id": "T05",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T19:37:27.007Z"
+    },
+    {
+      "id": 186,
+      "task_id": "T05",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_application_start_session.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass (21 tests)",
+      "duration_ms": 1300,
+      "created_at": "2026-04-04T19:37:27.007Z"
+    },
+    {
+      "id": 187,
+      "task_id": "T05",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (4237 tests)",
+      "duration_ms": 66000,
+      "created_at": "2026-04-04T19:37:27.007Z"
     }
   ]
 }

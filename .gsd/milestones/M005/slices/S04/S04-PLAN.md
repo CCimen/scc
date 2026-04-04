@@ -60,7 +60,7 @@ Codex surfaces are intentionally asymmetric from Claude (D019). The renderer han
   - Estimate: 2h
   - Files: src/scc_cli/core/bundle_resolver.py, src/scc_cli/adapters/claude_renderer.py, src/scc_cli/adapters/codex_renderer.py, src/scc_cli/core/errors.py, tests/test_bundle_resolver.py, tests/test_claude_renderer.py, tests/test_codex_renderer.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_bundle_resolver.py tests/test_claude_renderer.py tests/test_codex_renderer.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T05: Wire renderers into launch pipeline via AgentProvider.render_artifacts** — Add an optional render_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult method to the AgentProvider protocol. Wire ClaudeAgentProvider to call claude_renderer and CodexAgentProvider to call codex_renderer. Update the launch flow (start_session or sync_marketplace_settings_for_start) to:
+- [x] **T05: Wire render_artifacts into AgentProvider protocol and launch pipeline with fail-closed bundle resolution, Claude/Codex adapter delegation, and 15 new tests** — Add an optional render_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult method to the AgentProvider protocol. Wire ClaudeAgentProvider to call claude_renderer and CodexAgentProvider to call codex_renderer. Update the launch flow (start_session or sync_marketplace_settings_for_start) to:
 1. Resolve render plan from org_config + team + provider
 2. Call provider.render_artifacts(plan, workspace)
 3. Handle renderer failures according to fail-closed semantics

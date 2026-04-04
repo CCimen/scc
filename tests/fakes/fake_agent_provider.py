@@ -6,11 +6,15 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile
+from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.governed_artifacts import ArtifactRenderPlan
 
 
 class FakeAgentProvider:
     """Simple AgentProvider stub for unit tests."""
+
+    def __init__(self) -> None:
+        self.render_artifacts_calls: list[tuple[ArtifactRenderPlan, Path]] = []
 
     def capability_profile(self) -> ProviderCapabilityProfile:
         return ProviderCapabilityProfile(
@@ -36,4 +40,17 @@ class FakeAgentProvider:
             workdir=workspace,
             artifact_paths=artifact_paths,
             required_destination_sets=("fake-core",),
+        )
+
+    def render_artifacts(
+        self,
+        plan: ArtifactRenderPlan,
+        workspace: Path,
+    ) -> RenderArtifactsResult:
+        self.render_artifacts_calls.append((plan, workspace))
+        return RenderArtifactsResult(
+            rendered_paths=(),
+            skipped_artifacts=plan.skipped,
+            warnings=(),
+            settings_fragment={},
         )

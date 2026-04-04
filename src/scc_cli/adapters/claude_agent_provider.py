@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile
+from scc_cli.adapters.claude_renderer import render_claude_artifacts
+from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.governed_artifacts import ArtifactRenderPlan
+
+logger = logging.getLogger(__name__)
 
 
 class ClaudeAgentProvider:
@@ -53,4 +58,41 @@ class ClaudeAgentProvider:
             workdir=workspace,
             artifact_paths=artifact_paths,
             required_destination_sets=("anthropic-core",),
+        )
+
+    def render_artifacts(
+        self,
+        plan: ArtifactRenderPlan,
+        workspace: Path,
+    ) -> RenderArtifactsResult:
+        """Render governed artifacts into Claude-native surfaces.
+
+        Delegates to :func:`claude_renderer.render_claude_artifacts` and wraps
+        the adapter-specific ``RendererResult`` into the provider-neutral
+        ``RenderArtifactsResult`` for the launch pipeline.
+
+        Args:
+            plan: ArtifactRenderPlan targeting provider ``'claude'``.
+            workspace: Root directory for the workspace (project root).
+
+        Returns:
+            RenderArtifactsResult with rendered paths, skipped artifacts,
+            warnings, and a settings fragment for the caller to merge.
+
+        Raises:
+            RendererError: If fail-closed rendering encounters a failure.
+        """
+        result = render_claude_artifacts(plan, workspace)
+        logger.info(
+            "Claude renderer: %d paths rendered, %d skipped, %d warnings for bundle '%s'",
+            len(result.rendered_paths),
+            len(result.skipped_artifacts),
+            len(result.warnings),
+            plan.bundle_id,
+        )
+        return RenderArtifactsResult(
+            rendered_paths=result.rendered_paths,
+            skipped_artifacts=result.skipped_artifacts,
+            warnings=result.warnings,
+            settings_fragment=result.settings_fragment,
         )

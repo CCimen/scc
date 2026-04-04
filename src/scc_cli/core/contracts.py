@@ -215,3 +215,26 @@ class AgentLaunchSpec:
     artifact_paths: tuple[Path, ...] = ()
     required_destination_sets: tuple[str, ...] = ()
     ux_addons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class RenderArtifactsResult:
+    """Unified result of rendering artifacts through a provider adapter.
+
+    Returned by ``AgentProvider.render_artifacts()``.  Each adapter wraps its
+    own renderer-specific result into this provider-neutral type so the launch
+    pipeline can handle outcomes without importing adapter internals.
+
+    Attributes:
+        rendered_paths: Files/directories written to the workspace.
+        skipped_artifacts: Artifact names that could not be rendered.
+        warnings: Non-fatal issues encountered during rendering.
+        settings_fragment: Dict fragment for the caller to merge into the
+            provider's settings surface (settings.local.json for Claude,
+            .mcp.json for Codex, etc.).  Empty dict when nothing to merge.
+    """
+
+    rendered_paths: tuple[Path, ...] = ()
+    skipped_artifacts: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    settings_fragment: dict[str, Any] = field(default_factory=dict)

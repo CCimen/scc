@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile
+from scc_cli.adapters.codex_renderer import render_codex_artifacts
+from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.governed_artifacts import ArtifactRenderPlan
+
+logger = logging.getLogger(__name__)
 
 
 class CodexAgentProvider:
@@ -53,4 +58,43 @@ class CodexAgentProvider:
             workdir=workspace,
             artifact_paths=artifact_paths,
             required_destination_sets=("openai-core",),
+        )
+
+    def render_artifacts(
+        self,
+        plan: ArtifactRenderPlan,
+        workspace: Path,
+    ) -> RenderArtifactsResult:
+        """Render governed artifacts into Codex-native surfaces.
+
+        Delegates to :func:`codex_renderer.render_codex_artifacts` and wraps
+        the adapter-specific ``RendererResult`` into the provider-neutral
+        ``RenderArtifactsResult`` for the launch pipeline.
+
+        Args:
+            plan: ArtifactRenderPlan targeting provider ``'codex'``.
+            workspace: Root directory for the workspace (project root).
+
+        Returns:
+            RenderArtifactsResult with rendered paths, skipped artifacts,
+            warnings, and a settings fragment (mcp_fragment from Codex
+            renderer mapped to settings_fragment in the unified result).
+
+        Raises:
+            RendererError: If fail-closed rendering encounters a failure.
+        """
+        result = render_codex_artifacts(plan, workspace)
+        logger.info(
+            "Codex renderer: %d paths rendered, %d skipped, %d warnings for bundle '%s'",
+            len(result.rendered_paths),
+            len(result.skipped_artifacts),
+            len(result.warnings),
+            plan.bundle_id,
+        )
+        return RenderArtifactsResult(
+            rendered_paths=result.rendered_paths,
+            skipped_artifacts=result.skipped_artifacts,
+            warnings=result.warnings,
+            # Codex renderer returns mcp_fragment; map to unified settings_fragment
+            settings_fragment=result.mcp_fragment,
         )

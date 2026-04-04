@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,10 +17,11 @@ from scc_cli.application.sync_marketplace import (
     sync_marketplace_settings,
 )
 from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
+from scc_cli.core.bundle_resolver import BundleResolutionResult, resolve_render_plan
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
-from scc_cli.core.contracts import AgentLaunchSpec, RuntimeInfo
+from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
 from scc_cli.core.destination_registry import resolve_destination_sets
-from scc_cli.core.errors import WorkspaceNotFoundError
+from scc_cli.core.errors import RendererError, WorkspaceNotFoundError
 from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.agent_provider import AgentProvider
@@ -32,6 +34,8 @@ from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.models import AgentSettings, MountSpec, SandboxHandle, SandboxSpec
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -88,6 +92,8 @@ class StartSessionPlan:
     agent_settings: AgentSettings | None
     sandbox_spec: SandboxSpec | None
     agent_launch_spec: AgentLaunchSpec | None = None
+    bundle_render_results: tuple[RenderArtifactsResult, ...] = ()
+    bundle_render_error: str | None = None
 
 
 def prepare_start_session(
@@ -98,7 +104,8 @@ def prepare_start_session(
     """Prepare launch data and settings for a session.
 
     This resolves workspace context, computes config, syncs marketplace settings,
-    and builds the sandbox specification.
+    resolves bundle render plans, renders provider-native artifacts, and builds
+    the sandbox specification.
     """
     resolver_result = _resolve_workspace_context(request)
     effective_config = _compute_effective_config(request)
@@ -108,6 +115,14 @@ def prepare_start_session(
         dependencies.agent_runner,
         effective_config=effective_config,
     )
+
+    # ── Bundle pipeline: resolve plans → render artifacts ─────────────────
+    bundle_render_results, bundle_render_error = _render_bundle_artifacts(
+        request=request,
+        workspace=request.workspace_path,
+        dependencies=dependencies,
+    )
+
     current_branch = _resolve_current_branch(request.workspace_path, dependencies.git_client)
     sandbox_spec = _build_sandbox_spec(
         request=request,
@@ -136,6 +151,8 @@ def prepare_start_session(
         agent_settings=agent_settings,
         sandbox_spec=sandbox_spec,
         agent_launch_spec=agent_launch_spec,
+        bundle_render_results=bundle_render_results,
+        bundle_render_error=bundle_render_error,
     )
 
 
@@ -294,6 +311,90 @@ def _build_sandbox_spec(
         agent_settings=agent_settings,
         org_config=request.raw_org_config,
     )
+
+
+def _render_bundle_artifacts(
+    *,
+    request: StartSessionRequest,
+    workspace: Path,
+    dependencies: StartSessionDependencies,
+) -> tuple[tuple[RenderArtifactsResult, ...], str | None]:
+    """Resolve bundle render plans and render provider-native artifacts.
+
+    Skips bundle resolution when preconditions aren't met (no org config,
+    no team, no provider, or dry-run/offline/standalone modes).
+
+    In fail-closed mode, RendererError propagates as a captured error message
+    on the StartSessionPlan so the presentation layer can display diagnostics.
+
+    Returns:
+        Tuple of (render_results, error_message).  On success error_message
+        is None.  On failure render_results is empty.
+    """
+    # Gate: skip bundle pipeline when prerequisites are absent
+    if request.dry_run or request.offline or request.standalone:
+        return (), None
+    if request.org_config is None or request.team is None:
+        return (), None
+    provider = dependencies.agent_provider
+    if provider is None:
+        return (), None
+
+    provider_id = provider.capability_profile().provider_id
+
+    # 1. Resolve render plans from org config + team + provider
+    try:
+        resolution: BundleResolutionResult = resolve_render_plan(
+            org_config=request.org_config,
+            team_name=request.team,
+            provider=provider_id,
+            fail_closed=True,
+        )
+    except (ValueError, RendererError) as exc:
+        logger.warning("Bundle resolution failed: %s", exc)
+        return (), str(exc)
+
+    if not resolution.plans:
+        if resolution.diagnostics:
+            diag_msgs = [d.reason for d in resolution.diagnostics]
+            logger.info("Bundle resolution produced no plans: %s", diag_msgs)
+        return (), None
+
+    # Log diagnostics from resolution
+    for diag in resolution.diagnostics:
+        logger.info("Bundle resolution diagnostic: %s — %s", diag.artifact_name, diag.reason)
+
+    # 2. Render each plan through the provider adapter
+    all_results: list[RenderArtifactsResult] = []
+    for plan in resolution.plans:
+        if not plan.effective_artifacts and not plan.bindings:
+            logger.info(
+                "Skipping empty render plan for bundle '%s' (no effective artifacts)",
+                plan.bundle_id,
+            )
+            continue
+        try:
+            result = provider.render_artifacts(plan, workspace)
+        except RendererError as exc:
+            # Fail-closed: capture and return the error
+            logger.error(
+                "Artifact rendering failed for bundle '%s': %s",
+                plan.bundle_id,
+                exc,
+            )
+            return (), str(exc)
+
+        all_results.append(result)
+
+        # 3. Log/audit rendered artifacts
+        for path in result.rendered_paths:
+            logger.info("Rendered artifact: %s", path)
+        for warning in result.warnings:
+            logger.warning("Renderer warning: %s", warning)
+        for skipped in result.skipped_artifacts:
+            logger.info("Skipped artifact: %s", skipped)
+
+    return tuple(all_results), None
 
 
 def _build_agent_launch_spec(
