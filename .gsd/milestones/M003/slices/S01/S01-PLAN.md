@@ -89,7 +89,7 @@ Replace the three `docker.check_docker_available()` calls in launch-path code wi
   - Estimate: 1h
   - Files: src/scc_cli/adapters/docker_sandbox_runtime.py, src/scc_cli/bootstrap.py, src/scc_cli/ui/dashboard/orchestrator.py
   - Verify: uv run pytest tests/test_docker_core.py tests/contracts/test_sandbox_runtime_contract.py tests/test_runtime_probe.py -q && uv run mypy src/scc_cli && uv run pytest --rootdir "$PWD" -q
-- [ ] **T03: Add guardrail test preventing stale detection calls and run full verification** — ## Description
+- [x] **T03: Added tokenizer-based guardrail test preventing stale docker.check_docker_available() calls outside the adapter layer, full suite green** — ## Description
 
 Add a guardrail test that scans `src/scc_cli/` for direct `docker.check_docker_available()` calls outside the adapter layer, preventing future regression. Then run the full lint/type/test suite to confirm S01 is green.
 

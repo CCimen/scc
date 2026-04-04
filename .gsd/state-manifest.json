@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T08:37:00.615Z",
+  "exported_at": "2026-04-04T08:41:59.947Z",
   "milestones": [
     {
       "id": "M001",
@@ -1702,19 +1702,23 @@
       "milestone_id": "M003",
       "slice_id": "S01",
       "id": "T03",
-      "title": "Add guardrail test preventing stale detection calls and run full verification",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added tokenizer-based guardrail test preventing stale docker.check_docker_available() calls outside the adapter layer, full suite green",
+      "status": "complete",
+      "one_liner": "Added tokenizer-based guardrail test preventing stale docker.check_docker_available() calls outside the adapter layer, full suite green",
+      "narrative": "Created tests/test_runtime_detection_hotspots.py with a tokenize-based scanner that detects code-level references to check_docker_available outside three allowed files (docker/core.py definition, docker/__init__.py re-export, adapters/docker_runtime_probe.py adapter). Used Python's tokenize module instead of regex to correctly distinguish NAME tokens from docstring/comment mentions. Ran full verification: ruff clean, mypy clean, 3286 tests pass.",
+      "verification_result": "All five verification commands pass: guardrail test (1 passed), slice-level probe+contract tests (15 passed), ruff check (clean), mypy (244 files, no issues), full pytest (3286 passed, 0 failed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T08:41:59.923Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Switched from regex-based detection to tokenize-based scanning after initial approach incorrectly flagged a docstring mention in docker_sandbox_runtime.py as a violation.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_runtime_detection_hotspots.py"
+      ],
+      "key_decisions": [
+        "Used Python tokenizer instead of regex for guardrail source scanning to correctly distinguish code references from string/comment mentions"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S01\nmilestone: M003\nkey_files:\n  - tests/test_runtime_detection_hotspots.py\nkey_decisions:\n  - Used Python tokenizer instead of regex for guardrail source scanning to correctly distinguish code references from string/comment mentions\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T08:41:59.922Z\nblocker_discovered: false\n---\n\n# T03: Added tokenizer-based guardrail test preventing stale docker.check_docker_available() calls outside the adapter layer, full suite green\n\n**Added tokenizer-based guardrail test preventing stale docker.check_docker_available() calls outside the adapter layer, full suite green**\n\n## What Happened\n\nCreated tests/test_runtime_detection_hotspots.py with a tokenize-based scanner that detects code-level references to check_docker_available outside three allowed files (docker/core.py definition, docker/__init__.py re-export, adapters/docker_runtime_probe.py adapter). Used Python's tokenize module instead of regex to correctly distinguish NAME tokens from docstring/comment mentions. Ran full verification: ruff clean, mypy clean, 3286 tests pass.\n\n## Verification\n\nAll five verification commands pass: guardrail test (1 passed), slice-level probe+contract tests (15 passed), ruff check (clean), mypy (244 files, no issues), full pytest (3286 passed, 0 failed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_runtime_detection_hotspots.py -q` | 0 | ✅ pass | 1000ms |\n| 2 | `uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q` | 0 | ✅ pass | 1100ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 65700ms |\n| 4 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 61500ms |\n| 5 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 52000ms |\n\n## Deviations\n\nSwitched from regex-based detection to tokenize-based scanning after initial approach incorrectly flagged a docstring mention in docker_sandbox_runtime.py as a violation.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_runtime_detection_hotspots.py`\n",
       "description": "## Description\n\nAdd a guardrail test that scans `src/scc_cli/` for direct `docker.check_docker_available()` calls outside the adapter layer, preventing future regression. Then run the full lint/type/test suite to confirm S01 is green.\n\n## Steps\n\n1. **Create `tests/test_runtime_detection_hotspots.py`** — Write a test that uses `pathlib` and text scanning to find `check_docker_available()` calls in `src/scc_cli/`. The test should:\n   - Scan all `.py` files under `src/scc_cli/` recursively.\n   - Find lines containing `check_docker_available` (as a function call or import).\n   - Exclude allowed locations: `src/scc_cli/docker/core.py` (definition), `src/scc_cli/docker/__init__.py` (re-export), `src/scc_cli/adapters/docker_runtime_probe.py` (the adapter that wraps it).\n   - Assert no other files contain the call. If violations are found, the error message should list the file and line number.\n   - Follow the pattern established by `tests/test_launch_flow_hotspots.py` and `tests/test_no_root_sprawl.py` if they exist.\n\n2. **Run full verification suite** — Execute all verification commands:\n   - `uv run ruff check` — no lint violations across entire repo.\n   - `uv run mypy src/scc_cli` — all code typed.\n   - `uv run pytest --rootdir \"$PWD\" -q` — full suite green including the new guardrail.\n\n3. **Verify the guardrail catches violations** — Temporarily add a `check_docker_available` reference in a test to confirm the guardrail would catch it, then remove it. (Or simply verify the test logic by reading it carefully.)\n\n## Must-Haves\n\n- [ ] `tests/test_runtime_detection_hotspots.py` exists and passes.\n- [ ] Guardrail correctly excludes `docker/core.py`, `docker/__init__.py`, and `adapters/docker_runtime_probe.py`.\n- [ ] `uv run ruff check` passes.\n- [ ] `uv run mypy src/scc_cli` passes.\n- [ ] `uv run pytest --rootdir \"$PWD\" -q` passes (full suite).\n\n## Verification\n\n- `uv run pytest tests/test_runtime_detection_hotspots.py -q` — guardrail passes.\n- `uv run ruff check` — clean.\n- `uv run mypy src/scc_cli` — clean.\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite green.",
       "estimate": "30m",
       "files": [
@@ -2914,6 +2918,61 @@
       "verdict": "✅ pass",
       "duration_ms": 3000,
       "created_at": "2026-04-04T08:37:00.576Z"
+    },
+    {
+      "id": 10,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_runtime_detection_hotspots.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-04T08:41:59.923Z"
+    },
+    {
+      "id": 11,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1100,
+      "created_at": "2026-04-04T08:41:59.923Z"
+    },
+    {
+      "id": 12,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 65700,
+      "created_at": "2026-04-04T08:41:59.923Z"
+    },
+    {
+      "id": 13,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 61500,
+      "created_at": "2026-04-04T08:41:59.923Z"
+    },
+    {
+      "id": 14,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 52000,
+      "created_at": "2026-04-04T08:41:59.923Z"
     }
   ]
 }
