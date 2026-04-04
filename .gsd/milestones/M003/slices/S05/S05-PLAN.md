@@ -44,7 +44,7 @@ Fixes all stale network-mode names across source code, test fixtures, and README
   - Estimate: 30m
   - Files: src/scc_cli/application/compute_effective_config.py, src/scc_cli/commands/config.py, tests/test_config_explain.py, README.md
   - Verify: uv run pytest --rootdir "$PWD" tests/test_config_explain.py -q && test $(grep -c 'network_policy=isolated' src/scc_cli/application/compute_effective_config.py) -eq 0 && test $(grep -c 'corp-proxy-only' src/scc_cli/commands/config.py) -eq 0 && test $(grep -c '"unrestricted"' README.md) -eq 0
-- [ ] **T02: Add guardrail tests preventing vocabulary and truthfulness regression** — ## Description
+- [x] **T02: Added 5 guardrail tests in test_docs_truthfulness.py preventing stale network-mode vocabulary and README truthfulness regression** — ## Description
 
 Creates `tests/test_docs_truthfulness.py` with guardrail tests that scan source, tests, and docs for stale network-mode vocabulary and Constitution violations. These tests prevent regression — if anyone reintroduces old names or Docker Desktop hard-dependency claims, the test suite will catch it.
 

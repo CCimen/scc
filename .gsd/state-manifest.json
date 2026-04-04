@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T11:02:21.891Z",
+  "exported_at": "2026-04-04T11:06:44.001Z",
   "milestones": [
     {
       "id": "M001",
@@ -2310,19 +2310,24 @@
       "milestone_id": "M003",
       "slice_id": "S05",
       "id": "T02",
-      "title": "Add guardrail tests preventing vocabulary and truthfulness regression",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 5 guardrail tests in test_docs_truthfulness.py preventing stale network-mode vocabulary and README truthfulness regression",
+      "status": "complete",
+      "one_liner": "Added 5 guardrail tests in test_docs_truthfulness.py preventing stale network-mode vocabulary and README truthfulness regression",
+      "narrative": "Created tests/test_docs_truthfulness.py with 5 test functions that scan source blocked_by strings, command warning messages, README claims, and example JSON files for stale network-mode vocabulary (unrestricted, corp-proxy-only, corp-proxy, isolated) and Docker Desktop hard-dependency violations. Tests import the canonical NetworkPolicy enum from scc_cli.core.enums for membership validation. All 5 tests pass against the T01-fixed codebase. Full exit gate passes: ruff clean, mypy clean, 3464 total tests.",
+      "verification_result": "All 5 new tests pass (uv run pytest tests/test_docs_truthfulness.py -v). Ruff check clean, mypy 0 issues in 249 files. Full suite: 3437 passed + 23 skipped + 4 xfailed = 3464 total (≥3464 threshold met). All 5 slice-level verification checks pass.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T11:06:43.966Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_docs_truthfulness.py"
+      ],
+      "key_decisions": [
+        "Used regex for string-literal and README scanning (sufficient for content matching), tokenize pattern reserved for code identifier scanning",
+        "Validated example JSON network_policy values against canonical NetworkPolicy enum to prevent drift"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S05\nmilestone: M003\nkey_files:\n  - tests/test_docs_truthfulness.py\nkey_decisions:\n  - Used regex for string-literal and README scanning (sufficient for content matching), tokenize pattern reserved for code identifier scanning\n  - Validated example JSON network_policy values against canonical NetworkPolicy enum to prevent drift\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T11:06:43.965Z\nblocker_discovered: false\n---\n\n# T02: Added 5 guardrail tests in test_docs_truthfulness.py preventing stale network-mode vocabulary and README truthfulness regression\n\n**Added 5 guardrail tests in test_docs_truthfulness.py preventing stale network-mode vocabulary and README truthfulness regression**\n\n## What Happened\n\nCreated tests/test_docs_truthfulness.py with 5 test functions that scan source blocked_by strings, command warning messages, README claims, and example JSON files for stale network-mode vocabulary (unrestricted, corp-proxy-only, corp-proxy, isolated) and Docker Desktop hard-dependency violations. Tests import the canonical NetworkPolicy enum from scc_cli.core.enums for membership validation. All 5 tests pass against the T01-fixed codebase. Full exit gate passes: ruff clean, mypy clean, 3464 total tests.\n\n## Verification\n\nAll 5 new tests pass (uv run pytest tests/test_docs_truthfulness.py -v). Ruff check clean, mypy 0 issues in 249 files. Full suite: 3437 passed + 23 skipped + 4 xfailed = 3464 total (≥3464 threshold met). All 5 slice-level verification checks pass.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest --rootdir \"$PWD\" tests/test_docs_truthfulness.py -v` | 0 | ✅ pass | 820ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 4000ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4000ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q (full suite, 3464 total)` | 0 | ✅ pass | 40310ms |\n| 5 | `Slice verification: all 5 checks pass (config_explain tests, no stale isolated/corp-proxy-only/unrestricted, no Docker Desktop hard req)` | 0 | ✅ pass | 2320ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_docs_truthfulness.py`\n",
       "description": "## Description\n\nCreates `tests/test_docs_truthfulness.py` with guardrail tests that scan source, tests, and docs for stale network-mode vocabulary and Constitution violations. These tests prevent regression — if anyone reintroduces old names or Docker Desktop hard-dependency claims, the test suite will catch it.\n\nFollow the established scanning pattern from `tests/test_runtime_detection_hotspots.py` (tokenize-based for code scanning). For string-literal and README scanning, regex is appropriate since we're matching content, not Python identifiers.\n\n## Steps\n\n1. Create `tests/test_docs_truthfulness.py` with these tests:\n\n   a. `test_no_stale_network_modes_in_blocked_by_strings` — Scan all `.py` files in `src/scc_cli/` for `blocked_by=` string arguments containing old network mode names (`unrestricted`, `corp-proxy-only`, `corp-proxy`, `isolated`). Use `ast` module or regex over file content to find string literals in `blocked_by=` kwargs. Must not match non-network uses of \"isolated\" (e.g. \"isolated feature development\").\n\n   b. `test_no_stale_network_modes_in_user_warnings` — Scan `src/scc_cli/commands/` for warning/error strings containing old network mode names. Use regex targeting string literals that also mention `network_policy` or `proxy` context.\n\n   c. `test_readme_no_docker_desktop_hard_requirement` — Read `README.md` and assert it does NOT contain a line matching `Requires.*Docker Desktop` without also mentioning alternatives (Engine, OrbStack, Colima).\n\n   d. `test_readme_no_stale_network_mode_names` — Scan `README.md` for old network mode names used as values: `\"unrestricted\"`, `\"corp-proxy-only\"`, `\"isolated\"` in network_policy context. The word \"isolated\" in prose (\"isolated feature\", \"isolated environment\") is fine — only match it as a network_policy value (e.g. in JSON, in backticks, or adjacent to network_policy).\n\n   e. `test_example_json_uses_valid_network_policy_values` — Scan all `examples/*.json` files, find `\"network_policy\"` values, and assert each is a valid member of the NetworkPolicy enum (`open`, `web-egress-enforced`, `locked-down-web`).\n\n2. Import `NetworkPolicy` from `scc_cli.core.network_policy` (or wherever it's defined) to validate enum membership in test (e).\n\n3. Run the new tests to confirm they pass against the T01-fixed codebase.\n\n4. Run the full test suite as the milestone exit gate: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q`. Confirm test count is ≥3464 (3459 baseline + ≥5 new).\n\n## Must-Haves\n\n- [ ] `tests/test_docs_truthfulness.py` exists with ≥5 test functions\n- [ ] Tests scan source for stale `blocked_by` strings\n- [ ] Tests scan commands for stale warning strings\n- [ ] Tests verify README has no Docker Desktop hard requirement\n- [ ] Tests verify README has no stale network mode names\n- [ ] Tests verify example JSON files use valid NetworkPolicy values\n- [ ] All new tests pass\n- [ ] Full exit gate passes: ruff + mypy + pytest\n- [ ] Test count ≥3464\n\n## Verification\n\n- `uv run pytest --rootdir \"$PWD\" tests/test_docs_truthfulness.py -v` — all ≥5 tests pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite passes, count ≥3464",
       "estimate": "45m",
       "files": [
@@ -4110,6 +4115,61 @@
       "verdict": "✅ pass",
       "duration_ms": 50,
       "created_at": "2026-04-04T11:02:21.839Z"
+    },
+    {
+      "id": 59,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" tests/test_docs_truthfulness.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 820,
+      "created_at": "2026-04-04T11:06:43.966Z"
+    },
+    {
+      "id": 60,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T11:06:43.966Z"
+    },
+    {
+      "id": 61,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T11:06:43.966Z"
+    },
+    {
+      "id": 62,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" -q (full suite, 3464 total)",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 40310,
+      "created_at": "2026-04-04T11:06:43.966Z"
+    },
+    {
+      "id": 63,
+      "task_id": "T02",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "Slice verification: all 5 checks pass (config_explain tests, no stale isolated/corp-proxy-only/unrestricted, no Docker Desktop hard req)",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2320,
+      "created_at": "2026-04-04T11:06:43.966Z"
     }
   ]
 }
