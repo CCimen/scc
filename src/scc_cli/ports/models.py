@@ -6,7 +6,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from scc_cli.core.contracts import DestinationSet
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,7 @@ class SandboxSpec:
     user: str | None = None
     group: str | None = None
     extra_mounts: list[MountSpec] = field(default_factory=list)
+    destination_sets: tuple[DestinationSet, ...] = ()
     continue_session: bool = False
     force_new: bool = False
     agent_settings: AgentSettings | None = None

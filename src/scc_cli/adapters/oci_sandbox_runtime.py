@@ -16,6 +16,7 @@ from pathlib import Path
 
 from scc_cli.adapters.egress_topology import NetworkTopologyManager
 from scc_cli.core.constants import AGENT_NAME, SANDBOX_DATA_VOLUME
+from scc_cli.core.destination_registry import destination_sets_to_allow_rules
 from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl
 from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.errors import (
@@ -136,7 +137,12 @@ class OciSandboxRuntime:
         proxy_env: dict[str, str] = {}
 
         if spec.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
-            plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED)
+            allow_rules = destination_sets_to_allow_rules(spec.destination_sets)
+            plan = build_egress_plan(
+                NetworkPolicy.WEB_EGRESS_ENFORCED,
+                destination_sets=spec.destination_sets,
+                egress_rules=allow_rules,
+            )
             acl_config = compile_squid_acl(plan)
             self._topology = NetworkTopologyManager(session_id=container_name)
             topo_info = self._topology.setup(acl_config)

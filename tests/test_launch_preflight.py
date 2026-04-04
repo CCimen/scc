@@ -236,3 +236,66 @@ def test_finalize_launch_requires_audit_sink_once_preflight_seam_is_in_use(tmp_p
 
     with pytest.raises(LaunchAuditUnavailableError):
         finalize_launch(plan, dependencies=dependencies)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Enforced-mode destination resolution validation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_evaluate_launch_preflight_blocks_unresolvable_enforced_destinations(
+    tmp_path: Path,
+) -> None:
+    """Enforced mode with an unknown destination set name should raise."""
+    plan = _build_plan(
+        tmp_path,
+        network_policy="web-egress-enforced",
+        required_destination_sets=("totally-unknown-set",),
+    )
+
+    with pytest.raises(LaunchPolicyBlockedError, match="resolution failed"):
+        evaluate_launch_preflight(plan)
+
+
+def test_evaluate_launch_preflight_allows_resolvable_enforced_destinations(
+    tmp_path: Path,
+) -> None:
+    """Enforced mode with known destination set names should pass preflight."""
+    plan = _build_plan(
+        tmp_path,
+        network_policy="web-egress-enforced",
+        required_destination_sets=("anthropic-core",),
+    )
+
+    decision = evaluate_launch_preflight(plan)
+    assert decision.provider_id == "claude"
+    assert decision.network_policy == "web-egress-enforced"
+    assert decision.required_destination_sets == ("anthropic-core",)
+
+
+def test_evaluate_launch_preflight_enforced_empty_destinations_passes(
+    tmp_path: Path,
+) -> None:
+    """Enforced mode with no required destination sets should pass preflight."""
+    plan = _build_plan(
+        tmp_path,
+        network_policy="web-egress-enforced",
+        required_destination_sets=(),
+    )
+
+    decision = evaluate_launch_preflight(plan)
+    assert decision.network_policy == "web-egress-enforced"
+
+
+def test_evaluate_launch_preflight_enforced_mixed_known_unknown_blocks(
+    tmp_path: Path,
+) -> None:
+    """Enforced mode with a mix of known and unknown sets should raise."""
+    plan = _build_plan(
+        tmp_path,
+        network_policy="web-egress-enforced",
+        required_destination_sets=("anthropic-core", "nonexistent-set"),
+    )
+
+    with pytest.raises(LaunchPolicyBlockedError, match="resolution failed"):
+        evaluate_launch_preflight(plan)

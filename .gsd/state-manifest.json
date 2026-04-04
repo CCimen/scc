@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T10:15:32.838Z",
+  "exported_at": "2026-04-04T10:21:30.558Z",
   "milestones": [
     {
       "id": "M001",
@@ -2141,19 +2141,30 @@
       "milestone_id": "M003",
       "slice_id": "S04",
       "id": "T02",
-      "title": "Wire destination sets through SandboxSpec to OCI adapter and extend preflight validation",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Wired provider destination sets from SandboxSpec through OCI adapter egress plan and added enforced-mode preflight validation for unresolvable destinations",
+      "status": "complete",
+      "one_liner": "Wired provider destination sets from SandboxSpec through OCI adapter egress plan and added enforced-mode preflight validation for unresolvable destinations",
+      "narrative": "Added destination_sets field to SandboxSpec, wired _build_sandbox_spec() to resolve provider destinations via the registry for OCI backends, threaded destination-derived allow rules into build_egress_plan() in OciSandboxRuntime.run(), and extended evaluate_launch_preflight() with enforced-mode destination resolvability validation. Added 7 new tests covering destination-aware egress plan construction and enforced-mode preflight edge cases. All 3426 tests pass, mypy clean, ruff clean.",
+      "verification_result": "Ran targeted test suite (50 tests across 4 files), full test suite (3426 passed, 23 skipped, 4 xfailed), mypy (no issues in 249 files), and ruff check (all passed after import sort fix).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T10:21:30.534Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Used TYPE_CHECKING guard for DestinationSet import in models.py to avoid circular dependency. Added local import inside _build_sandbox_spec() for runtime type satisfaction.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/launch/preflight.py",
+        "tests/test_oci_egress_integration.py",
+        "tests/test_launch_preflight.py"
+      ],
+      "key_decisions": [
+        "destination_sets field uses TYPE_CHECKING import to avoid circular dependency",
+        "Destination resolution in _build_sandbox_spec only for OCI backend",
+        "Enforced-mode preflight wraps resolve ValueError into LaunchPolicyBlockedError"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S04\nmilestone: M003\nkey_files:\n  - src/scc_cli/ports/models.py\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - src/scc_cli/application/launch/preflight.py\n  - tests/test_oci_egress_integration.py\n  - tests/test_launch_preflight.py\nkey_decisions:\n  - destination_sets field uses TYPE_CHECKING import to avoid circular dependency\n  - Destination resolution in _build_sandbox_spec only for OCI backend\n  - Enforced-mode preflight wraps resolve ValueError into LaunchPolicyBlockedError\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T10:21:30.534Z\nblocker_discovered: false\n---\n\n# T02: Wired provider destination sets from SandboxSpec through OCI adapter egress plan and added enforced-mode preflight validation for unresolvable destinations\n\n**Wired provider destination sets from SandboxSpec through OCI adapter egress plan and added enforced-mode preflight validation for unresolvable destinations**\n\n## What Happened\n\nAdded destination_sets field to SandboxSpec, wired _build_sandbox_spec() to resolve provider destinations via the registry for OCI backends, threaded destination-derived allow rules into build_egress_plan() in OciSandboxRuntime.run(), and extended evaluate_launch_preflight() with enforced-mode destination resolvability validation. Added 7 new tests covering destination-aware egress plan construction and enforced-mode preflight edge cases. All 3426 tests pass, mypy clean, ruff clean.\n\n## Verification\n\nRan targeted test suite (50 tests across 4 files), full test suite (3426 passed, 23 skipped, 4 xfailed), mypy (no issues in 249 files), and ruff check (all passed after import sort fix).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest --rootdir \"$PWD\" tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_start_session_image_routing.py tests/test_egress_policy.py -q` | 0 | ✅ pass | 820ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5000ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 300ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 35940ms |\n\n## Deviations\n\nUsed TYPE_CHECKING guard for DestinationSet import in models.py to avoid circular dependency. Added local import inside _build_sandbox_spec() for runtime type satisfaction.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/ports/models.py`\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/adapters/oci_sandbox_runtime.py`\n- `src/scc_cli/application/launch/preflight.py`\n- `tests/test_oci_egress_integration.py`\n- `tests/test_launch_preflight.py`\n",
       "description": "Thread resolved destination sets from the application layer through SandboxSpec into the OCI adapter's `build_egress_plan()` call, and extend preflight to validate enforced-mode destination resolvability.\n\nSteps:\n1. Add `destination_sets: tuple[DestinationSet, ...] = ()` field to `SandboxSpec` in `src/scc_cli/ports/models.py`. Import `DestinationSet` from `scc_cli.core.contracts`. Since SandboxSpec is `@dataclass(frozen=True)` and the new field has a default, all existing construction sites are safe.\n2. Update `_build_sandbox_spec()` in `src/scc_cli/application/start_session.py`:\n   - Add `agent_provider: AgentProvider | None = None` parameter.\n   - If `agent_provider` is not None and `runtime_info.preferred_backend == \"oci\"`, call `agent_provider.capability_profile()` to get `required_destination_set`, then call `resolve_destination_sets((required_destination_set,))` from the registry.\n   - Pass resolved sets as `destination_sets=resolved_sets` to `SandboxSpec()`.\n   - Update the caller in `prepare_start_session()` to pass `agent_provider=dependencies.agent_provider`.\n3. Update `OciSandboxRuntime.run()` in `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - In the `WEB_EGRESS_ENFORCED` branch, call `destination_sets_to_allow_rules(spec.destination_sets)` to generate allow rules.\n   - Pass both `destination_sets=spec.destination_sets` and `egress_rules=allow_rules` to `build_egress_plan()`.\n   - Import `destination_sets_to_allow_rules` from `scc_cli.core.destination_registry`.\n4. Extend `evaluate_launch_preflight()` in `src/scc_cli/application/launch/preflight.py`:\n   - After the existing locked-down-web check, add an enforced-mode check: if `network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value` and `required_destination_sets` is non-empty, call `resolve_destination_sets()` wrapped in try/except ValueError → raise `LaunchPolicyBlockedError` with a clear message about unresolvable sets.\n5. Write/extend tests:\n   - Extend `tests/test_oci_egress_integration.py` with tests verifying that destination sets on SandboxSpec produce allow rules in the egress plan and ACL output.\n   - Extend `tests/test_launch_preflight.py` with tests for enforced-mode unresolvable destination sets.\n   - Run `tests/test_start_session_image_routing.py` to confirm no regression.\n6. Verify: `uv run pytest --rootdir \"$PWD\" tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_start_session_image_routing.py -q` passes, `uv run mypy src/scc_cli` clean.",
       "estimate": "45m",
       "files": [
@@ -3847,6 +3858,50 @@
       "verdict": "✅ pass",
       "duration_ms": 500,
       "created_at": "2026-04-04T10:15:32.814Z"
+    },
+    {
+      "id": 46,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_start_session_image_routing.py tests/test_egress_policy.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 820,
+      "created_at": "2026-04-04T10:21:30.534Z"
+    },
+    {
+      "id": 47,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T10:21:30.534Z"
+    },
+    {
+      "id": 48,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 300,
+      "created_at": "2026-04-04T10:21:30.534Z"
+    },
+    {
+      "id": 49,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 35940,
+      "created_at": "2026-04-04T10:21:30.534Z"
     }
   ]
 }

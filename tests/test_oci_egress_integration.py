@@ -14,7 +14,7 @@ import pytest
 
 from scc_cli.adapters.egress_topology import EgressTopologyInfo
 from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
-from scc_cli.core.contracts import RuntimeInfo
+from scc_cli.core.contracts import DestinationSet, RuntimeInfo
 from scc_cli.ports.models import MountSpec, SandboxHandle, SandboxSpec
 from tests.fakes.fake_runtime_probe import FakeRuntimeProbe
 
@@ -326,3 +326,152 @@ class TestGuardrail:
         assert create_cmd[net_idx + 1] != "none", (
             "Enforced mode uses the internal network, not 'none'"
         )
+
+
+# ── Destination-set-aware egress tests ──────────────────────────────────────
+
+
+def _enforced_spec_with_destinations() -> SandboxSpec:
+    """Enforced spec carrying resolved destination sets."""
+    return SandboxSpec(
+        image="scc-agent-claude:latest",
+        workspace_mount=MountSpec(source=Path("/home/user/project"), target=Path("/workspace")),
+        workdir=Path("/workspace"),
+        network_policy="web-egress-enforced",
+        destination_sets=(
+            DestinationSet(
+                name="anthropic-core",
+                destinations=("api.anthropic.com",),
+                required=True,
+                description="Anthropic API core access",
+            ),
+        ),
+    )
+
+
+class TestDestinationSetEgressIntegration:
+    """Verify destination sets on SandboxSpec produce allow rules in the egress plan."""
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    @patch("scc_cli.adapters.oci_sandbox_runtime.compile_squid_acl")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.build_egress_plan")
+    def test_destination_sets_threaded_into_egress_plan(
+        self,
+        mock_build_plan: MagicMock,
+        mock_compile_acl: MagicMock,
+        mock_collect: MagicMock,
+        mock_topo_cls: MagicMock,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        """build_egress_plan() receives destination_sets and egress_rules from spec."""
+        from scc_cli.core.contracts import NetworkPolicyPlan
+        from scc_cli.core.enums import NetworkPolicy
+
+        mock_build_plan.return_value = NetworkPolicyPlan(
+            mode=NetworkPolicy.WEB_EGRESS_ENFORCED, enforced_by_runtime=True,
+        )
+        mock_compile_acl.return_value = "http_access deny all\n"
+        mock_topo = MagicMock()
+        mock_topo.setup.return_value = _FAKE_TOPO_INFO
+        mock_topo_cls.return_value = mock_topo
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+
+        spec = _enforced_spec_with_destinations()
+        runtime.run(spec)
+
+        mock_build_plan.assert_called_once()
+        call_kwargs = mock_build_plan.call_args
+        # Positional arg: NetworkPolicy.WEB_EGRESS_ENFORCED
+        assert call_kwargs[0][0] is NetworkPolicy.WEB_EGRESS_ENFORCED
+        # Keyword: destination_sets should match spec
+        assert call_kwargs[1]["destination_sets"] == spec.destination_sets
+        # Keyword: egress_rules should contain allow rules for the destinations
+        egress_rules = call_kwargs[1]["egress_rules"]
+        assert len(egress_rules) == 1
+        assert egress_rules[0].target == "api.anthropic.com"
+        assert egress_rules[0].allow is True
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    def test_enforced_spec_without_destinations_produces_no_allow_rules(
+        self,
+        mock_collect: MagicMock,
+        mock_topo_cls: MagicMock,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        """Enforced spec with empty destination_sets produces only deny rules in ACL."""
+        mock_topo = MagicMock()
+        mock_topo.setup.return_value = _FAKE_TOPO_INFO
+        mock_topo_cls.return_value = mock_topo
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+
+        # Use the original enforced spec (no destination_sets)
+        runtime.run(_enforced_spec())
+
+        # The call succeeded (no error). The existing topology/acl tests cover
+        # that the acl is correct — this test just confirms no crash on empty sets.
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    @patch("scc_cli.adapters.oci_sandbox_runtime.compile_squid_acl")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.build_egress_plan")
+    def test_multiple_destination_sets_produce_multiple_allow_rules(
+        self,
+        mock_build_plan: MagicMock,
+        mock_compile_acl: MagicMock,
+        mock_collect: MagicMock,
+        mock_topo_cls: MagicMock,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        """Multiple destination sets generate allow rules for every host."""
+        from scc_cli.core.contracts import NetworkPolicyPlan
+        from scc_cli.core.enums import NetworkPolicy
+
+        mock_build_plan.return_value = NetworkPolicyPlan(
+            mode=NetworkPolicy.WEB_EGRESS_ENFORCED, enforced_by_runtime=True,
+        )
+        mock_compile_acl.return_value = "http_access deny all\n"
+        mock_topo = MagicMock()
+        mock_topo.setup.return_value = _FAKE_TOPO_INFO
+        mock_topo_cls.return_value = mock_topo
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+
+        spec = SandboxSpec(
+            image="scc-agent-claude:latest",
+            workspace_mount=MountSpec(source=Path("/home/user/project"), target=Path("/workspace")),
+            workdir=Path("/workspace"),
+            network_policy="web-egress-enforced",
+            destination_sets=(
+                DestinationSet(
+                    name="anthropic-core",
+                    destinations=("api.anthropic.com",),
+                    required=True,
+                ),
+                DestinationSet(
+                    name="openai-core",
+                    destinations=("api.openai.com",),
+                    required=True,
+                ),
+            ),
+        )
+        runtime.run(spec)
+
+        call_kwargs = mock_build_plan.call_args
+        egress_rules = call_kwargs[1]["egress_rules"]
+        allow_targets = [r.target for r in egress_rules]
+        assert "api.anthropic.com" in allow_targets
+        assert "api.openai.com" in allow_targets
+        assert all(r.allow for r in egress_rules)

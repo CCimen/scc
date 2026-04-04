@@ -22,7 +22,7 @@ Steps:
   - Estimate: 25m
   - Files: src/scc_cli/core/destination_registry.py, tests/test_destination_registry.py
   - Verify: uv run pytest --rootdir "$PWD" tests/test_destination_registry.py -q && uv run mypy src/scc_cli/core/destination_registry.py
-- [ ] **T02: Wire destination sets through SandboxSpec to OCI adapter and extend preflight validation** — Thread resolved destination sets from the application layer through SandboxSpec into the OCI adapter's `build_egress_plan()` call, and extend preflight to validate enforced-mode destination resolvability.
+- [x] **T02: Wired provider destination sets from SandboxSpec through OCI adapter egress plan and added enforced-mode preflight validation for unresolvable destinations** — Thread resolved destination sets from the application layer through SandboxSpec into the OCI adapter's `build_egress_plan()` call, and extend preflight to validate enforced-mode destination resolvability.
 
 Steps:
 1. Add `destination_sets: tuple[DestinationSet, ...] = ()` field to `SandboxSpec` in `src/scc_cli/ports/models.py`. Import `DestinationSet` from `scc_cli.core.contracts`. Since SandboxSpec is `@dataclass(frozen=True)` and the new field has a default, all existing construction sites are safe.

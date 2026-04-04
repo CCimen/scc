@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from scc_cli.application.start_session import StartSessionPlan
 from scc_cli.core.contracts import AgentLaunchSpec, AuditEvent
+from scc_cli.core.destination_registry import resolve_destination_sets
 from scc_cli.core.enums import NetworkPolicy, SeverityLevel
 from scc_cli.core.errors import (
     InvalidLaunchPlanError,
@@ -41,6 +42,24 @@ def evaluate_launch_preflight(plan: StartSessionPlan) -> LaunchPreflightDecision
             network_policy=network_policy,
             required_destination_sets=required_destination_sets,
         )
+
+    # Enforced mode: verify all required destination sets are resolvable
+    if (
+        network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value
+        and len(required_destination_sets) > 0
+    ):
+        try:
+            resolve_destination_sets(required_destination_sets)
+        except ValueError as exc:
+            raise LaunchPolicyBlockedError(
+                provider_id=provider_id,
+                network_policy=network_policy,
+                required_destination_sets=required_destination_sets,
+                user_message=(
+                    f"Launch blocked: enforced egress mode requires resolvable "
+                    f"destination sets but resolution failed — {exc}"
+                ),
+            ) from exc
 
     return LaunchPreflightDecision(
         provider_id=provider_id,
