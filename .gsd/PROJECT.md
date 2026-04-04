@@ -45,37 +45,37 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 ### M005 — Architecture Quality, Strictness, And Hardening (active)
 **S01 complete.** Established quantitative maintainability baseline (272-line audit, 153-line defect catalog) and 315 characterization + boundary tests protecting all top split targets before S02 surgery.
 
-**S02 complete.** Decomposed all 15 HARD-FAIL/MANDATORY-SPLIT files below 800 lines, repaired 3 architecture boundary violations (application→docker, core→marketplace, docker→presentation), all 4079 tests passing. Key deliverables:
-- 15 oversized modules split into ~30 focused files across all layers
-- 3 boundary violations eliminated via DI, ContainerSummary boundary type, and logging replacement
-- Zero HARD-FAIL files remaining in src/scc_cli/
-- Patterns established: re-export residual modules, Callable DI for boundary repair, late-bound module lookup for test-patch compat, deferred imports for circular deps
+**S02 complete.** Decomposed all 15 HARD-FAIL/MANDATORY-SPLIT files below 800 lines, repaired 3 architecture boundary violations (application→docker, core→marketplace, docker→presentation), all 4079 tests passing.
 
-**S03 complete.** Landed governed-artifact type hierarchy (T01), extended NormalizedOrgConfig with SafetyNetConfig/StatsConfig/from_dict (T02), converted compute_effective_config pipeline to NormalizedOrgConfig (T03), typed StartSessionRequest and normalized all call sites (T04). T05 deferred per user override (D021) — dict[str,Any] count already under target. Key deliverables:
-- 6 frozen governed-artifact model types in core/governed_artifacts.py
-- NormalizedOrgConfig adoption across compute_effective_config/start_session/launch pipeline
-- 4117 tests passing, governed-artifact types defined but not yet consumed by marketplace/renderer pipeline
+**S03 complete.** Landed governed-artifact type hierarchy (T01), extended NormalizedOrgConfig with SafetyNetConfig/StatsConfig/from_dict (T02), converted compute_effective_config pipeline to NormalizedOrgConfig (T03), typed StartSessionRequest and normalized all call sites (T04). T05 deferred per D021.
 
-**S04-S06 replanned (D021).** Per user override, remaining slices reorganized around governed-artifact/team-pack architecture:
-- S04: Provider-neutral artifact planning pipeline (bundle resolution → ArtifactRenderPlan) and provider-native renderers (Claude, Codex) with fail-closed error handling
+**S04 complete.** Built the provider-neutral bundle resolution → ArtifactRenderPlan → provider-native renderer pipeline for Claude and Codex, with fail-closed error handling and launch pipeline integration, adding 126 new tests (4237 total). Key deliverables:
+- Pure core bundle resolver (`resolve_render_plan()`) computing ArtifactRenderPlan from NormalizedOrgConfig + team + provider
+- Claude-native renderer projecting ArtifactRenderPlan into skills, MCP config, hooks, marketplace, plugin, instruction surfaces
+- Codex-native renderer projecting into intentionally asymmetric surfaces (D019): .agents/skills/, .codex-plugin/, .codex/rules/, .codex/hooks.json, .codex/.scc-managed/instructions/
+- RendererError exception hierarchy with fail-closed semantics (exit_code=4)
+- RenderArtifactsResult unified return type, AgentProvider.render_artifacts() protocol method
+- Bundle pipeline wired into prepare_start_session launch flow with skip gates and error capture
+- Decisions D022-D025 recorded
+
+**S05-S06 remaining.**
 - S05: Coverage on governed-artifact/team-pack planning and renderer seams
-- S06: Diagnostics/docs truthfulness for team-pack model, guardrail restoration, milestone validation
+- S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
-5. **M005 — Architecture Quality, Strictness, And Hardening** (active — S01 ✅, S02 ✅, S03–S06 remaining — must replan before implementation)
+5. **M005 — Architecture Quality, Strictness, And Hardening** (active — S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05-S06 remaining)
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003, M004/S01–S04, M005/S01 (baseline + characterization tests), and M005/S02 (all 15 decompositions + 3 boundary repairs complete).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003, M004/S01–S04, M005/S01 (baseline + characterization tests), M005/S02 (all 15 decompositions + 3 boundary repairs), M005/S03 (governed-artifact types + typed config flow), and M005/S04 (bundle resolver + provider renderers with 100%/98%/99% coverage).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 284 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4079 passed, 23 skipped, 3 xfailed, 1 xpassed)
-- `uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q` ✅ (315 passed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 288 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4237 passed, 23 skipped, 3 xfailed, 1 xpassed)
 - Zero files in src/scc_cli/ exceed 800 lines
 
 ## Key architecture invariants
@@ -94,14 +94,16 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 - Import boundary guard (test_import_boundaries.py) mechanically enforces layer separation via AST scanning.
 - Characterization tests use mock adapters from tests/fakes/ to isolate pure application logic from infrastructure.
 - Decomposed modules use re-export residuals: original module re-exports all extracted symbols, preserving backward-compatible import paths.
+- Bundle resolver is pure core — zero imports from marketplace/ or adapters/.
+- Provider renderers are adapter-owned — they may import from marketplace/ for materialization helpers but planning input is always ArtifactRenderPlan.
+- Renderers return fragment dicts for caller-owned merge — they do not write shared config files (settings.local.json, .mcp.json) directly.
+- Provider-native surfaces are intentionally asymmetric between Claude and Codex (D019).
+- .scc-managed/ subdirectories avoid collisions with user-authored files.
+- Bundle pipeline in launch flow uses fail_closed=True for resolution; errors captured on StartSessionPlan, not raised.
 
 ## Immediate next focus
-- **Execute S04: Provider-neutral artifact planning pipeline and provider-native renderers.**
-  - T01: Bundle resolver — pure core function computing ArtifactRenderPlan from NormalizedOrgConfig
-  - T02: Claude renderer — adapter-owned projection into settings.local.json, marketplace, hooks
-  - T03: Codex renderer — adapter-owned projection into .codex-plugin/, rules, hooks, config.toml, AGENTS.md
-  - T04: Harden fetch/render/merge/install failure handling (fail-closed)
-  - T05: Wire renderers into launch pipeline via AgentProvider.render_artifacts
-  - Team config references bundle IDs, not raw marketplace URLs
-  - Claude and Codex native surfaces are intentionally asymmetric (D019)
-  - Provider-neutral planning has zero imports from marketplace/ or adapters/
+- **Execute S05: Coverage on governed-artifact/team-pack planning and renderer seams.**
+  - Contract tests verify bundle resolution, render plan computation, and both provider renderers
+  - Failure paths (missing bundles, invalid bindings, renderer errors) have explicit test coverage
+  - Verify the seam between core planning and adapter rendering is clean and typed
+- **Then S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model.**

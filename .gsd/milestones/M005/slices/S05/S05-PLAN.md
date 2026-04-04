@@ -4,7 +4,7 @@
 **Demo:** After this: Contract tests verify bundle resolution, render plan computation, and both provider renderers; failure paths (missing bundles, invalid bindings, renderer errors) have explicit test coverage
 
 ## Tasks
-- [ ] **T01: Contract tests for bundle resolution and render plan computation** — Write comprehensive contract tests for src/scc_cli/core/bundle_resolver.py:
+- [x] **T01: Added 59 contract tests covering all 9 bundle_resolver.py behavior contracts with 100% branch coverage** — Write comprehensive contract tests for src/scc_cli/core/bundle_resolver.py:
 1. Happy path: team with enabled bundles → complete ArtifactRenderPlan with correct bindings and effective_artifacts
 2. Multi-bundle: team enables multiple bundles → artifacts deduplicated and ordered
 3. Shared artifacts: skill + MCP appear in plan for both providers with no provider-specific bindings
