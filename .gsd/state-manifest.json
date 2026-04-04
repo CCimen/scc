@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T09:06:37.734Z",
+  "exported_at": "2026-04-04T09:12:32.073Z",
   "milestones": [
     {
       "id": "M001",
@@ -1844,19 +1844,26 @@
       "milestone_id": "M003",
       "slice_id": "S02",
       "id": "T03",
-      "title": "Implement OciSandboxRuntime adapter with subprocess-mocked tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Implemented OciSandboxRuntime adapter using docker create/start/exec with 34 subprocess-mocked tests covering all SandboxRuntime protocol methods",
+      "status": "complete",
+      "one_liner": "Implemented OciSandboxRuntime adapter using docker create/start/exec with 34 subprocess-mocked tests covering all SandboxRuntime protocol methods",
+      "narrative": "Created OciSandboxRuntime adapter in src/scc_cli/adapters/oci_sandbox_runtime.py implementing the full SandboxRuntime protocol using standard OCI commands. The adapter uses docker create with workspace mount, credential volume, env vars, and scc.backend=oci label; docker start; optional docker cp for agent settings; and os.execvp with docker exec -it to hand off to the agent. A _run_docker helper centralizes subprocess error handling with per-command timeouts and wraps errors into SandboxLaunchError. The status() method returns SandboxState.UNKNOWN on any failure instead of raising. Container names are deterministic via scc-oci-{sha256(workspace)[:12]}. Created 34 tests across 7 test classes covering ensure_available scenarios, run command construction, failure modes, list_running parsing, status mapping, lifecycle methods, and container naming.",
+      "verification_result": "Ran targeted pytest (34/34 passed), mypy on adapter (clean), ruff check (clean after auto-fix), mypy on full codebase (246 files clean), and full test suite (3344 passed, 23 skipped, 4 xfailed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T09:12:32.035Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Used sleep infinity as container entrypoint to keep container alive for docker exec. Settings injection uses _run_docker helper for consistent error handling.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "tests/test_oci_sandbox_runtime.py"
+      ],
+      "key_decisions": [
+        "Container entrypoint uses sleep infinity to keep container alive for docker exec",
+        "_run_docker helper centralizes subprocess error handling with configurable timeouts",
+        "Status mapping treats paused/restarting as RUNNING since container is alive"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S02\nmilestone: M003\nkey_files:\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - tests/test_oci_sandbox_runtime.py\nkey_decisions:\n  - Container entrypoint uses sleep infinity to keep container alive for docker exec\n  - _run_docker helper centralizes subprocess error handling with configurable timeouts\n  - Status mapping treats paused/restarting as RUNNING since container is alive\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T09:12:32.035Z\nblocker_discovered: false\n---\n\n# T03: Implemented OciSandboxRuntime adapter using docker create/start/exec with 34 subprocess-mocked tests covering all SandboxRuntime protocol methods\n\n**Implemented OciSandboxRuntime adapter using docker create/start/exec with 34 subprocess-mocked tests covering all SandboxRuntime protocol methods**\n\n## What Happened\n\nCreated OciSandboxRuntime adapter in src/scc_cli/adapters/oci_sandbox_runtime.py implementing the full SandboxRuntime protocol using standard OCI commands. The adapter uses docker create with workspace mount, credential volume, env vars, and scc.backend=oci label; docker start; optional docker cp for agent settings; and os.execvp with docker exec -it to hand off to the agent. A _run_docker helper centralizes subprocess error handling with per-command timeouts and wraps errors into SandboxLaunchError. The status() method returns SandboxState.UNKNOWN on any failure instead of raising. Container names are deterministic via scc-oci-{sha256(workspace)[:12]}. Created 34 tests across 7 test classes covering ensure_available scenarios, run command construction, failure modes, list_running parsing, status mapping, lifecycle methods, and container naming.\n\n## Verification\n\nRan targeted pytest (34/34 passed), mypy on adapter (clean), ruff check (clean after auto-fix), mypy on full codebase (246 files clean), and full test suite (3344 passed, 23 skipped, 4 xfailed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_oci_sandbox_runtime.py -q` | 0 | ✅ pass | 5200ms |\n| 2 | `uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py` | 0 | ✅ pass | 5200ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 4900ms |\n| 4 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4800ms |\n| 5 | `uv run pytest -q` | 0 | ✅ pass | 58100ms |\n\n## Deviations\n\nUsed sleep infinity as container entrypoint to keep container alive for docker exec. Settings injection uses _run_docker helper for consistent error handling.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/oci_sandbox_runtime.py`\n- `tests/test_oci_sandbox_runtime.py`\n",
       "description": "## Description\n\nBuild the `OciSandboxRuntime` adapter implementing `SandboxRuntime` using standard OCI commands (`docker create`/`docker start`/`docker exec`) instead of `docker sandbox run`. This is the core deliverable of S02 — it makes SCC work on Docker Engine, OrbStack, Colima, and any OCI-compatible runtime.\n\nCritical design differences from `DockerSandboxRuntime`:\n- Uses `docker create` + `docker start` + `docker exec` instead of `docker sandbox run`\n- Actually consumes `spec.image` (Desktop sandbox ignores it)\n- Uses volume mounts at container creation time for credential persistence instead of the sandbox symlink pattern\n- No dependency on Docker Desktop's sandbox feature\n\n## Steps\n\n1. Create `src/scc_cli/adapters/oci_sandbox_runtime.py` implementing `SandboxRuntime`:\n   a. `__init__(self, probe: RuntimeProbe)` — same pattern as `DockerSandboxRuntime`.\n   b. `ensure_available(self)` — call `self._probe.probe()`, check: if `version is None` and not `daemon_reachable` → raise `DockerNotFoundError`. If not `daemon_reachable` → raise `DockerDaemonNotRunningError`. If not `supports_oci` → raise a descriptive error. Do NOT check `sandbox_available` — this adapter doesn't need it.\n   c. `run(self, spec: SandboxSpec) -> SandboxHandle`:\n      - Build container name: `scc-oci-{hash}` based on workspace path.\n      - Build `docker create` command with: `--name`, `-v` for workspace mount (spec.workspace_mount.source:spec.workspace_mount.target), `-v` for credential volume (`SANDBOX_DATA_VOLUME:/home/agent/.claude`), `-w` for workdir, `-e` for each env var, `--label scc.backend=oci`, the image from `spec.image`, and entrypoint `/bin/bash`.\n      - If `spec.agent_settings` is not None, plan to inject it after creation.\n      - Run `docker create ...` via `subprocess.run`, capture container ID from stdout.\n      - Run `docker start <container_id>` to start the container.\n      - If agent_settings: write settings JSON to a temp file, `docker cp` it into the container at the settings path.\n      - Build `docker exec -it -w <workdir> <container_id> claude --dangerously-skip-permissions` with session flags (`-c` for continue, `--resume` for resume).\n      - Call `os.execvp(\"docker\", exec_cmd)` to hand off to the agent.\n      - Return `SandboxHandle(sandbox_id=container_id, name=container_name)`.\n   d. `resume(self, handle)` — `subprocess.run([\"docker\", \"start\", handle.sandbox_id])`.\n   e. `stop(self, handle)` — `subprocess.run([\"docker\", \"stop\", handle.sandbox_id])`.\n   f. `remove(self, handle)` — `subprocess.run([\"docker\", \"rm\", \"-f\", handle.sandbox_id])`.\n   g. `list_running(self) -> list[SandboxHandle]` — `docker ps --filter label=scc.backend=oci --format '{{.ID}}\\t{{.Names}}'`, parse output.\n   h. `status(self, handle)` — `docker inspect --format '{{.State.Status}}' <id>`, map to `SandboxState`.\n2. Create `tests/test_oci_sandbox_runtime.py`:\n   a. Test `ensure_available` with various `RuntimeInfo` scenarios (mock probe): OCI-capable engine passes, not installed raises `DockerNotFoundError`, daemon not running raises `DockerDaemonNotRunningError`.\n   b. Test `run` method: mock `subprocess.run` and `os.execvp`, verify the correct `docker create` command is built with proper `-v`, `-w`, `-e`, `--label` args. Verify `spec.image` is actually consumed.\n   c. Test that credential volume mount is present in the create command.\n   d. Test `list_running` parsing.\n   e. Test `status` mapping from Docker inspect output to SandboxState.\n3. Run `uv run pytest tests/test_oci_sandbox_runtime.py -q && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py`.\n\n## Failure Modes\n\n| Dependency | On error | On timeout | On malformed response |\n|------------|----------|-----------|----------------------|\n| `docker create` subprocess | Raise `SandboxLaunchError` with stderr | 60s timeout, raise `SandboxLaunchError` | Check returncode != 0, raise with stderr |\n| `docker start` subprocess | Raise `SandboxLaunchError` | 30s timeout | Check returncode |\n| `docker inspect` for status | Return `SandboxState.UNKNOWN` | 10s timeout, return UNKNOWN | Parse defensively, default UNKNOWN |\n| `os.execvp` for exec | Raise `SandboxLaunchError` | N/A (replaces process) | N/A |\n\n## Must-Haves\n\n- `OciSandboxRuntime` implements full `SandboxRuntime` protocol\n- Uses `docker create` + `docker start` + `docker exec`, NOT `docker sandbox run`\n- Actually consumes `spec.image` from `SandboxSpec`\n- Mounts credential volume via `-v SANDBOX_DATA_VOLUME:/home/agent/.claude`\n- Tests cover ensure_available scenarios, run command construction, and status parsing\n- No dependency on Docker Desktop sandbox feature",
       "estimate": "1h30m",
       "files": [
@@ -3286,6 +3293,61 @@
       "verdict": "✅ pass",
       "duration_ms": 52740,
       "created_at": "2026-04-04T09:06:37.696Z"
+    },
+    {
+      "id": 24,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_oci_sandbox_runtime.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5200,
+      "created_at": "2026-04-04T09:12:32.035Z"
+    },
+    {
+      "id": 25,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5200,
+      "created_at": "2026-04-04T09:12:32.035Z"
+    },
+    {
+      "id": 26,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4900,
+      "created_at": "2026-04-04T09:12:32.035Z"
+    },
+    {
+      "id": 27,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4800,
+      "created_at": "2026-04-04T09:12:32.035Z"
+    },
+    {
+      "id": 28,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 58100,
+      "created_at": "2026-04-04T09:12:32.035Z"
     }
   ]
 }

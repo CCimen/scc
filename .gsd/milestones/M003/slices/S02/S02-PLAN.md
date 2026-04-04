@@ -79,7 +79,7 @@ Create the typed image contract layer and Dockerfiles that define what SCC provi
   - Estimate: 40m
   - Files: src/scc_cli/core/image_contracts.py, images/scc-base/Dockerfile, images/scc-agent-claude/Dockerfile, tests/test_image_contracts.py
   - Verify: uv run pytest tests/test_image_contracts.py -q && uv run mypy src/scc_cli/core/image_contracts.py
-- [ ] **T03: Implement OciSandboxRuntime adapter with subprocess-mocked tests** — ## Description
+- [x] **T03: Implemented OciSandboxRuntime adapter using docker create/start/exec with 34 subprocess-mocked tests covering all SandboxRuntime protocol methods** — ## Description
 
 Build the `OciSandboxRuntime` adapter implementing `SandboxRuntime` using standard OCI commands (`docker create`/`docker start`/`docker exec`) instead of `docker sandbox run`. This is the core deliverable of S02 — it makes SCC work on Docker Engine, OrbStack, Colima, and any OCI-compatible runtime.
 
