@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T15:23:29.839Z",
+  "exported_at": "2026-04-04T15:41:11.031Z",
   "milestones": [
     {
       "id": "M001",
@@ -3235,19 +3235,30 @@
       "milestone_id": "M005",
       "slice_id": "S02",
       "id": "T03",
-      "title": "Decompose docker/launch.py and marketplace/materialize.py with boundary fix",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Extracted sandbox runtime functions from docker/launch.py (874→498 lines) and git/download operations from marketplace/materialize.py (866→612 lines), eliminating docker→presentation console.err_line boundary violation",
+      "status": "complete",
+      "one_liner": "Extracted sandbox runtime functions from docker/launch.py (874→498 lines) and git/download operations from marketplace/materialize.py (866→612 lines), eliminating docker→presentation console.err_line boundary violation",
+      "narrative": "Decomposed two oversized modules into focused extraction files. docker/launch.py → docker/sandbox.py: extracted run_sandbox (218L), inject_plugin_settings_to_container (67L), seed_container_plugin_marketplaces (41L), _build_known_marketplaces_cache (31L), and _is_mount_race_error (19L). Replaced 4 err_line calls with logging.warning() to fix the docker→presentation boundary violation. marketplace/materialize.py → marketplace/materialize_git.py: extracted run_git_clone (84L), download_and_extract (120L), _discover_plugins (35L), and CloneResult/DownloadResult/DiscoveryResult dataclasses. All moved names re-exported from residual modules for backward compatibility. Updated test patch targets in test_docker_launch_characterization.py and test_plugin_isolation.py.",
+      "verification_result": "All must-haves verified: docker/launch.py at 498 lines (<800), marketplace/materialize.py at 612 lines (<800), no console.err_line import in docker/, 27 docker launch characterization tests pass, 24 marketplace materialize tests pass, 31 import boundary tests pass, ruff check and mypy clean, full suite 4079 passed with 0 failures.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T15:41:10.979Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Updated tests/test_plugin_isolation.py patch targets (not mentioned in plan) — this test patched scc_cli.docker.launch.build_command and subprocess.run which needed updating. Kept reset_global_settings in launch.py and used deferred imports in sandbox.py for test-patch compatibility.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/docker/sandbox.py",
+        "src/scc_cli/docker/launch.py",
+        "src/scc_cli/marketplace/materialize_git.py",
+        "src/scc_cli/marketplace/materialize.py",
+        "tests/test_docker_launch_characterization.py",
+        "tests/test_plugin_isolation.py"
+      ],
+      "key_decisions": [
+        "Used deferred imports in sandbox.py run_sandbox for launch.py functions to preserve test-patch compatibility",
+        "Replaced err_line with logging.getLogger(__name__).warning() to eliminate docker→presentation boundary violation",
+        "Module-level imports for credentials.py functions in sandbox.py with updated test patch targets"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S02\nmilestone: M005\nkey_files:\n  - src/scc_cli/docker/sandbox.py\n  - src/scc_cli/docker/launch.py\n  - src/scc_cli/marketplace/materialize_git.py\n  - src/scc_cli/marketplace/materialize.py\n  - tests/test_docker_launch_characterization.py\n  - tests/test_plugin_isolation.py\nkey_decisions:\n  - Used deferred imports in sandbox.py run_sandbox for launch.py functions to preserve test-patch compatibility\n  - Replaced err_line with logging.getLogger(__name__).warning() to eliminate docker→presentation boundary violation\n  - Module-level imports for credentials.py functions in sandbox.py with updated test patch targets\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T15:41:10.978Z\nblocker_discovered: false\n---\n\n# T03: Extracted sandbox runtime functions from docker/launch.py (874→498 lines) and git/download operations from marketplace/materialize.py (866→612 lines), eliminating docker→presentation console.err_line boundary violation\n\n**Extracted sandbox runtime functions from docker/launch.py (874→498 lines) and git/download operations from marketplace/materialize.py (866→612 lines), eliminating docker→presentation console.err_line boundary violation**\n\n## What Happened\n\nDecomposed two oversized modules into focused extraction files. docker/launch.py → docker/sandbox.py: extracted run_sandbox (218L), inject_plugin_settings_to_container (67L), seed_container_plugin_marketplaces (41L), _build_known_marketplaces_cache (31L), and _is_mount_race_error (19L). Replaced 4 err_line calls with logging.warning() to fix the docker→presentation boundary violation. marketplace/materialize.py → marketplace/materialize_git.py: extracted run_git_clone (84L), download_and_extract (120L), _discover_plugins (35L), and CloneResult/DownloadResult/DiscoveryResult dataclasses. All moved names re-exported from residual modules for backward compatibility. Updated test patch targets in test_docker_launch_characterization.py and test_plugin_isolation.py.\n\n## Verification\n\nAll must-haves verified: docker/launch.py at 498 lines (<800), marketplace/materialize.py at 612 lines (<800), no console.err_line import in docker/, 27 docker launch characterization tests pass, 24 marketplace materialize tests pass, 31 import boundary tests pass, ruff check and mypy clean, full suite 4079 passed with 0 failures.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 7600ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 7600ms |\n| 3 | `uv run pytest tests/test_docker_launch_characterization.py tests/test_marketplace_materialize_characterization.py tests/test_import_boundaries.py -q` | 0 | ✅ pass (82 tests) | 1950ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass (4079 tests) | 65680ms |\n\n## Deviations\n\nUpdated tests/test_plugin_isolation.py patch targets (not mentioned in plan) — this test patched scc_cli.docker.launch.build_command and subprocess.run which needed updating. Kept reset_global_settings in launch.py and used deferred imports in sandbox.py for test-patch compatibility.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/docker/sandbox.py`\n- `src/scc_cli/docker/launch.py`\n- `src/scc_cli/marketplace/materialize_git.py`\n- `src/scc_cli/marketplace/materialize.py`\n- `tests/test_docker_launch_characterization.py`\n- `tests/test_plugin_isolation.py`\n",
       "description": "Extract docker/launch.py (874 lines) and marketplace/materialize.py (866 lines) into smaller focused files. Fix the docker→presentation boundary violation (console.err_line import).\n\n## Steps\n\n1. **docker/launch.py (874 lines):** Read fully. Extract `run_sandbox` (216L) + `inject_plugin_settings_to_container` (65L) + related helpers into `src/scc_cli/docker/sandbox.py`. NOTE: there is already a `src/scc_cli/commands/launch/sandbox.py` — the new file goes in `src/scc_cli/docker/sandbox.py` which is a different package. **Boundary fix:** The `from ..console import err_line` import is used for a single warning message. Replace it with `logging.warning()` or `logging.getLogger(__name__).warning()`. Re-export public names from `launch.py`. Update `src/scc_cli/docker/__init__.py` if it re-exports from `launch.py`.\n\n2. **marketplace/materialize.py (866 lines):** Read fully. Extract `download_and_extract` (113L) + `run_git_clone` (82L) + helper functions into `src/scc_cli/marketplace/materialize_git.py` (~250 lines). Keep high-level `materialize_*` dispatch functions in `materialize.py`. Re-export all public names.\n\n3. Update test imports in `tests/test_docker_launch_characterization.py` and `tests/test_marketplace_materialize_characterization.py` if they reference moved internals.\n\n4. Run verification: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_docker_launch_characterization.py tests/test_marketplace_materialize_characterization.py tests/test_import_boundaries.py -q`\n\n## Must-Haves\n\n- [ ] `docker/launch.py` under 800 lines\n- [ ] `marketplace/materialize.py` under 800 lines\n- [ ] No import of `console.err_line` in docker/launch.py or docker/sandbox.py\n- [ ] All 27 docker launch characterization tests pass\n- [ ] All 24 marketplace materialize characterization tests pass\n- [ ] Import boundary tests pass\n- [ ] `uv run ruff check && uv run mypy src/scc_cli` clean",
       "estimate": "45m",
       "files": [
@@ -5700,6 +5711,50 @@
       "verdict": "✅ pass",
       "duration_ms": 72300,
       "created_at": "2026-04-04T15:23:29.785Z"
+    },
+    {
+      "id": 135,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7600,
+      "created_at": "2026-04-04T15:41:10.979Z"
+    },
+    {
+      "id": 136,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7600,
+      "created_at": "2026-04-04T15:41:10.979Z"
+    },
+    {
+      "id": 137,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_docker_launch_characterization.py tests/test_marketplace_materialize_characterization.py tests/test_import_boundaries.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (82 tests)",
+      "duration_ms": 1950,
+      "created_at": "2026-04-04T15:41:10.979Z"
+    },
+    {
+      "id": 138,
+      "task_id": "T03",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (4079 tests)",
+      "duration_ms": 65680,
+      "created_at": "2026-04-04T15:41:10.979Z"
     }
   ]
 }

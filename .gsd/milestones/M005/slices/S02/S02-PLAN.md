@@ -58,7 +58,7 @@
   - Estimate: 1h
   - Files: src/scc_cli/application/worktree/use_cases.py, src/scc_cli/application/worktree/models.py, src/scc_cli/application/worktree/operations.py, src/scc_cli/application/worktree/__init__.py, src/scc_cli/core/personal_profiles.py, src/scc_cli/core/personal_profiles_merge.py, src/scc_cli/application/launch/start_wizard.py, src/scc_cli/application/launch/wizard_models.py, src/scc_cli/application/launch/__init__.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_worktree_use_cases_characterization.py tests/test_personal_profiles_characterization.py tests/test_import_boundaries.py -q
-- [ ] **T03: Decompose docker/launch.py and marketplace/materialize.py with boundary fix** — Extract docker/launch.py (874 lines) and marketplace/materialize.py (866 lines) into smaller focused files. Fix the docker→presentation boundary violation (console.err_line import).
+- [x] **T03: Extracted sandbox runtime functions from docker/launch.py (874→498 lines) and git/download operations from marketplace/materialize.py (866→612 lines), eliminating docker→presentation console.err_line boundary violation** — Extract docker/launch.py (874 lines) and marketplace/materialize.py (866 lines) into smaller focused files. Fix the docker→presentation boundary violation (console.err_line import).
 
 ## Steps
 
