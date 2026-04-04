@@ -39,7 +39,7 @@ The `rootless` field already exists on `RuntimeInfo` but is always `None`. `Dock
   - Estimate: 45m
   - Files: src/scc_cli/core/contracts.py, src/scc_cli/adapters/docker_runtime_probe.py, tests/test_runtime_probe.py, tests/fakes/fake_runtime_probe.py, tests/test_core_contracts.py
   - Verify: uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q && uv run mypy src/scc_cli/core/contracts.py src/scc_cli/adapters/docker_runtime_probe.py
-- [ ] **T02: Define ImageRef dataclass, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude** — ## Description
+- [x] **T02: Added frozen ImageRef dataclass with full_ref()/image_ref() roundtrip, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude** — ## Description
 
 Create the typed image contract layer and Dockerfiles that define what SCC provides in plain OCI mode. The OCI adapter (T03) and start_session image routing (T04) both consume these constants.
 

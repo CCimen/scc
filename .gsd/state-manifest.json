@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T09:01:32.084Z",
+  "exported_at": "2026-04-04T09:06:37.734Z",
   "milestones": [
     {
       "id": "M001",
@@ -1795,19 +1795,28 @@
       "milestone_id": "M003",
       "slice_id": "S02",
       "id": "T02",
-      "title": "Define ImageRef dataclass, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added frozen ImageRef dataclass with full_ref()/image_ref() roundtrip, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude",
+      "status": "complete",
+      "one_liner": "Added frozen ImageRef dataclass with full_ref()/image_ref() roundtrip, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude",
+      "narrative": "Created src/scc_cli/core/image_contracts.py with a frozen ImageRef dataclass holding repository, registry, tag, and digest fields. The full_ref() method serializes to canonical Docker reference format, and image_ref() parses raw reference strings back. Defined SCC_BASE_IMAGE, SCC_CLAUDE_IMAGE, and SCC_CLAUDE_IMAGE_REF constants. Created Dockerfiles for scc-base (Ubuntu 22.04 + agent user + CLI tools) and scc-agent-claude (Node.js 20 + Claude CLI). Wrote 23 unit tests covering serialization, parsing, immutability, and constants.",
+      "verification_result": "All verification passed: pytest 23/23 targeted tests, mypy clean on module and full codebase (245 files), ruff check clean, full suite 3310 passed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T09:06:37.696Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-base/Dockerfile",
+        "images/scc-agent-claude/Dockerfile",
+        "tests/test_image_contracts.py"
+      ],
+      "key_decisions": [
+        "ImageRef field order puts repository first (required) before optional registry",
+        "image_ref parser uses dot/colon/localhost heuristic for registry detection",
+        "Dockerfiles use ubuntu:22.04 base and NodeSource for Node.js 20 LTS"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S02\nmilestone: M003\nkey_files:\n  - src/scc_cli/core/image_contracts.py\n  - images/scc-base/Dockerfile\n  - images/scc-agent-claude/Dockerfile\n  - tests/test_image_contracts.py\nkey_decisions:\n  - ImageRef field order puts repository first (required) before optional registry\n  - image_ref parser uses dot/colon/localhost heuristic for registry detection\n  - Dockerfiles use ubuntu:22.04 base and NodeSource for Node.js 20 LTS\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T09:06:37.696Z\nblocker_discovered: false\n---\n\n# T02: Added frozen ImageRef dataclass with full_ref()/image_ref() roundtrip, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude\n\n**Added frozen ImageRef dataclass with full_ref()/image_ref() roundtrip, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude**\n\n## What Happened\n\nCreated src/scc_cli/core/image_contracts.py with a frozen ImageRef dataclass holding repository, registry, tag, and digest fields. The full_ref() method serializes to canonical Docker reference format, and image_ref() parses raw reference strings back. Defined SCC_BASE_IMAGE, SCC_CLAUDE_IMAGE, and SCC_CLAUDE_IMAGE_REF constants. Created Dockerfiles for scc-base (Ubuntu 22.04 + agent user + CLI tools) and scc-agent-claude (Node.js 20 + Claude CLI). Wrote 23 unit tests covering serialization, parsing, immutability, and constants.\n\n## Verification\n\nAll verification passed: pytest 23/23 targeted tests, mypy clean on module and full codebase (245 files), ruff check clean, full suite 3310 passed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_image_contracts.py -q` | 0 | ✅ pass | 1100ms |\n| 2 | `uv run mypy src/scc_cli/core/image_contracts.py` | 0 | ✅ pass | 4400ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 58000ms |\n| 4 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 58000ms |\n| 5 | `uv run pytest -q` | 0 | ✅ pass | 52740ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/image_contracts.py`\n- `images/scc-base/Dockerfile`\n- `images/scc-agent-claude/Dockerfile`\n- `tests/test_image_contracts.py`\n",
       "description": "## Description\n\nCreate the typed image contract layer and Dockerfiles that define what SCC provides in plain OCI mode. The OCI adapter (T03) and start_session image routing (T04) both consume these constants.\n\n## Steps\n\n1. Create `src/scc_cli/core/image_contracts.py` with:\n   a. A frozen `ImageRef` dataclass with fields: `registry: str = \"\"`, `repository: str`, `tag: str = \"latest\"`, `digest: str | None = None`.\n   b. A `full_ref()` method on `ImageRef` that returns the canonical `registry/repository:tag@digest` string (omitting empty components).\n   c. An `image_ref(ref_string: str) -> ImageRef` parse helper that splits a Docker image reference string into the ImageRef fields. Handle common formats: `repo:tag`, `registry/repo:tag`, `registry/repo@sha256:...`, bare `repo` (implies `latest`).\n   d. Constants: `SCC_BASE_IMAGE = ImageRef(repository=\"scc-base\", tag=\"latest\")` and `SCC_CLAUDE_IMAGE = ImageRef(repository=\"scc-agent-claude\", tag=\"latest\")`.\n   e. A string constant `SCC_CLAUDE_IMAGE_REF = \"scc-agent-claude:latest\"` for use in SandboxSpec.image (which takes a plain string).\n2. Create `images/scc-base/Dockerfile`:\n   - `FROM ubuntu:22.04`\n   - Install: git, curl, ca-certificates, jq\n   - Create agent user: `useradd -m -u 1000 -s /bin/bash agent`\n   - Create `/home/agent/.claude/` directory owned by agent\n   - Set `USER agent` and `WORKDIR /home/agent`\n3. Create `images/scc-agent-claude/Dockerfile`:\n   - `FROM scc-base:latest`\n   - Install Node.js 20 LTS (via NodeSource or nvm) as root, then switch to agent user\n   - Install Claude CLI globally: `npm install -g @anthropic-ai/claude-code`\n   - Verify: `claude --version` in a `RUN` step\n   - Set `ENTRYPOINT [\"/bin/bash\"]` (the OCI adapter will exec claude explicitly)\n4. Create `tests/test_image_contracts.py`:\n   a. Test `ImageRef.full_ref()` for various combinations (with/without registry, digest).\n   b. Test `image_ref()` parse helper for standard Docker reference formats.\n   c. Test constants: `SCC_BASE_IMAGE.repository == \"scc-base\"`, `SCC_CLAUDE_IMAGE.repository == \"scc-agent-claude\"`.\n5. Run `uv run pytest tests/test_image_contracts.py -q && uv run mypy src/scc_cli/core/image_contracts.py`.\n\n## Must-Haves\n\n- Frozen `ImageRef` dataclass with `full_ref()` method and `image_ref()` parser\n- `SCC_BASE_IMAGE`, `SCC_CLAUDE_IMAGE`, `SCC_CLAUDE_IMAGE_REF` constants\n- `images/scc-base/Dockerfile` with agent user (uid 1000), git, curl\n- `images/scc-agent-claude/Dockerfile` building on scc-base with Node.js + Claude CLI\n- Unit tests for ImageRef parsing and constants",
       "estimate": "40m",
       "files": [
@@ -3222,6 +3231,61 @@
       "verdict": "✅ pass",
       "duration_ms": 55100,
       "created_at": "2026-04-04T09:01:32.043Z"
+    },
+    {
+      "id": 19,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_image_contracts.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1100,
+      "created_at": "2026-04-04T09:06:37.696Z"
+    },
+    {
+      "id": 20,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli/core/image_contracts.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4400,
+      "created_at": "2026-04-04T09:06:37.696Z"
+    },
+    {
+      "id": 21,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 58000,
+      "created_at": "2026-04-04T09:06:37.696Z"
+    },
+    {
+      "id": 22,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 58000,
+      "created_at": "2026-04-04T09:06:37.696Z"
+    },
+    {
+      "id": 23,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 52740,
+      "created_at": "2026-04-04T09:06:37.696Z"
     }
   ]
 }
