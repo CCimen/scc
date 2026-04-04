@@ -42,7 +42,7 @@
   - Estimate: 45m
   - Files: src/scc_cli/core/governed_artifacts.py, src/scc_cli/core/contracts.py, tests/test_governed_artifact_models.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_governed_artifact_models.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T02: Extend NormalizedOrgConfig and normalizer for safety_net, stats, and from_dict helper** — The current NormalizedOrgConfig silently drops `security.safety_net`, `stats`, and `config_source` fields (documented in KNOWLEDGE.md as a known gap). This task extends the config model and normalizer to cover these fields, and adds a `NormalizedOrgConfig.from_dict()` convenience class method that wraps `normalize_org_config()`. The from_dict helper is critical for T03-T05 because ~50+ test files construct inline `org_config = {...}` dicts — the helper avoids massive test fixture rewrites.
+- [x] **T02: Added SafetyNetConfig, StatsConfig models and NormalizedOrgConfig.from_dict() helper, closing the known config normalization gap for security.safety_net, stats, and config_source fields** — The current NormalizedOrgConfig silently drops `security.safety_net`, `stats`, and `config_source` fields (documented in KNOWLEDGE.md as a known gap). This task extends the config model and normalizer to cover these fields, and adds a `NormalizedOrgConfig.from_dict()` convenience class method that wraps `normalize_org_config()`. The from_dict helper is critical for T03-T05 because ~50+ test files construct inline `org_config = {...}` dicts — the helper avoids massive test fixture rewrites.
 
 ## Steps
 

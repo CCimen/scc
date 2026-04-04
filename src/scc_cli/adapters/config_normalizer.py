@@ -21,8 +21,10 @@ from scc_cli.ports.config_models import (
     OrganizationInfo,
     OrganizationSource,
     ProjectsDelegation,
+    SafetyNetConfig,
     SecurityConfig,
     SessionSettings,
+    StatsConfig,
     TeamDelegation,
     TeamsDelegation,
 )
@@ -103,6 +105,26 @@ def _normalize_team_config(name: str, raw: dict[str, Any]) -> NormalizedTeamConf
     )
 
 
+def _normalize_safety_net(raw: dict[str, Any] | None) -> SafetyNetConfig:
+    """Normalize safety_net config within security section."""
+    if not raw or not isinstance(raw, dict):
+        return SafetyNetConfig()
+    return SafetyNetConfig(
+        action=str(raw.get("action", "block")),
+        rules=dict(raw.get("rules", {})) if isinstance(raw.get("rules"), dict) else {},
+    )
+
+
+def _normalize_stats(raw: dict[str, Any] | None) -> StatsConfig:
+    """Normalize stats/telemetry config."""
+    if not raw or not isinstance(raw, dict):
+        return StatsConfig()
+    return StatsConfig(
+        enabled=bool(raw.get("enabled", False)),
+        endpoint=raw.get("endpoint"),
+    )
+
+
 def _normalize_security(raw: dict[str, Any] | None) -> SecurityConfig:
     """Normalize security config."""
     if not raw:
@@ -112,6 +134,7 @@ def _normalize_security(raw: dict[str, Any] | None) -> SecurityConfig:
         blocked_mcp_servers=tuple(raw.get("blocked_mcp_servers", [])),
         allow_stdio_mcp=bool(raw.get("allow_stdio_mcp", False)),
         allowed_stdio_prefixes=tuple(raw.get("allowed_stdio_prefixes", [])),
+        safety_net=_normalize_safety_net(raw.get("safety_net")),
     )
 
 
@@ -187,6 +210,8 @@ def normalize_org_config(raw: dict[str, Any]) -> NormalizedOrgConfig:
         name: _normalize_marketplace(name, config) for name, config in marketplaces_raw.items()
     }
 
+    config_source = raw.get("config_source")
+
     return NormalizedOrgConfig(
         organization=org_info,
         security=_normalize_security(raw.get("security")),
@@ -194,6 +219,8 @@ def normalize_org_config(raw: dict[str, Any]) -> NormalizedOrgConfig:
         delegation=_normalize_delegation(raw.get("delegation")),
         profiles=profiles,
         marketplaces=marketplaces,
+        stats=_normalize_stats(raw.get("stats")),
+        config_source=str(config_source) if config_source is not None else None,
     )
 
 

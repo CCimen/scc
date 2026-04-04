@@ -11,6 +11,7 @@ The models are minimal - only fields that use cases need are included.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,27 @@ class NormalizedTeamConfig:
 
 
 @dataclass(frozen=True)
+class SafetyNetConfig:
+    """Safety-net policy configuration within org security.
+
+    Mirrors the shape of SafetyPolicy in contracts.py but lives
+    in the config model layer for normalization purposes.
+    D016: rules stays dict[str, Any] — matching SafetyPolicy.
+    """
+
+    action: str = "block"
+    rules: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class StatsConfig:
+    """Telemetry / stats configuration."""
+
+    enabled: bool = False
+    endpoint: str | None = None
+
+
+@dataclass(frozen=True)
 class SecurityConfig:
     """Organization security configuration."""
 
@@ -89,6 +111,7 @@ class SecurityConfig:
     blocked_mcp_servers: tuple[str, ...] = ()
     allow_stdio_mcp: bool = False
     allowed_stdio_prefixes: tuple[str, ...] = ()
+    safety_net: SafetyNetConfig = field(default_factory=SafetyNetConfig)
 
 
 @dataclass(frozen=True)
@@ -162,6 +185,23 @@ class NormalizedOrgConfig:
     delegation: DelegationConfig = field(default_factory=DelegationConfig)
     profiles: dict[str, NormalizedTeamConfig] = field(default_factory=dict)
     marketplaces: dict[str, MarketplaceConfig] = field(default_factory=dict)
+    stats: StatsConfig = field(default_factory=StatsConfig)
+    config_source: str | None = None
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> NormalizedOrgConfig:
+        """Create a NormalizedOrgConfig from a raw dict.
+
+        Convenience wrapper around normalize_org_config() for use in tests
+        and application code that starts from raw dicts.
+
+        Uses importlib to avoid a static ports→adapters import that would
+        violate the architectural import boundary enforced by tests.
+        """
+        import importlib
+
+        mod = importlib.import_module("scc_cli.adapters.config_normalizer")
+        return mod.normalize_org_config(raw)  # type: ignore[no-any-return]
 
     def get_profile(self, name: str) -> NormalizedTeamConfig | None:
         """Get a team profile by name."""
