@@ -309,6 +309,14 @@ def build_support_bundle_manifest(
     except Exception as exc:
         safety_section = {"error": f"Failed to load safety diagnostics: {exc}"}
 
+    # Governed-artifact diagnostics
+    try:
+        from scc_cli.doctor.checks.artifacts import build_artifact_diagnostics_summary
+
+        artifact_diagnostics: dict[str, Any] = build_artifact_diagnostics_summary()
+    except Exception as exc:
+        artifact_diagnostics = {"error": f"Failed to load artifact diagnostics: {exc}"}
+
     bundle_data: dict[str, Any] = {
         "generated_at": generated_at,
         "cli_version": __version__,
@@ -319,6 +327,7 @@ def build_support_bundle_manifest(
         "launch_audit": launch_audit,
         "effective_egress": effective_egress,
         "safety": safety_section,
+        "governed_artifacts": artifact_diagnostics,
     }
 
     if request.workspace_path:

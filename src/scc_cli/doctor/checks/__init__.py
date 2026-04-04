@@ -15,6 +15,14 @@ from __future__ import annotations
 
 from ..types import CheckResult
 
+# Governed-artifact checks
+from .artifacts import (
+    build_artifact_diagnostics_summary,
+    check_bundle_resolution,
+    check_catalog_health,
+    check_team_context,
+)
+
 # Cache & State checks
 from .cache import (
     check_cache_readable,
@@ -134,6 +142,19 @@ def run_all_checks() -> list[CheckResult]:
     # Safety policy check
     results.append(check_safety_policy())
 
+    # Governed-artifact checks
+    team_ctx = check_team_context()
+    if team_ctx is not None:
+        results.append(team_ctx)
+
+    catalog_check = check_catalog_health()
+    if catalog_check is not None:
+        results.append(catalog_check)
+
+    bundle_res = check_bundle_resolution()
+    if bundle_res is not None:
+        results.append(bundle_res)
+
     return results
 
 
@@ -171,6 +192,11 @@ __all__ = [
     "check_proxy_environment",
     # Safety policy check
     "check_safety_policy",
+    # Governed-artifact checks
+    "check_team_context",
+    "check_bundle_resolution",
+    "check_catalog_health",
+    "build_artifact_diagnostics_summary",
     # Orchestration
     "run_all_checks",
 ]

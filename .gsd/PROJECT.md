@@ -58,8 +58,13 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 - Bundle pipeline wired into prepare_start_session launch flow with skip gates and error capture
 - Decisions D022-D025 recorded
 
-**S05-S06 remaining.**
-- S05: Coverage on governed-artifact/team-pack planning and renderer seams
+**S05 complete.** Added 191 net-new tests (4428 total) covering the governed-artifact/team-pack planning and renderer seams with 100% branch coverage on all three core modules (bundle_resolver.py, claude_renderer.py, codex_renderer.py) plus 44 cross-provider pipeline integration tests. Key deliverables:
+- 59 contract tests covering all 9 bundle_resolver.py behavior contracts
+- 40 characterization tests extending Claude renderer to 74 total (100% stmt + branch)
+- 48 characterization tests extending Codex renderer to 86 total (100% stmt + branch)
+- 44 cross-provider pipeline integration tests (shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, boundary contracts)
+
+**S06 remaining.**
 - S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model
 
 ## Next milestone order
@@ -67,15 +72,15 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
-5. **M005 — Architecture Quality, Strictness, And Hardening** (active — S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05-S06 remaining)
+5. **M005 — Architecture Quality, Strictness, And Hardening** (active — S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05 ✅, S06 remaining)
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003, M004/S01–S04, M005/S01 (baseline + characterization tests), M005/S02 (all 15 decompositions + 3 boundary repairs), M005/S03 (governed-artifact types + typed config flow), and M005/S04 (bundle resolver + provider renderers with 100%/98%/99% coverage).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003, M004/S01–S04, M005/S01 (baseline + characterization tests), M005/S02 (all 15 decompositions + 3 boundary repairs), M005/S03 (governed-artifact types + typed config flow), M005/S04 (bundle resolver + provider renderers with 100%/98%/99% coverage), and M005/S05 (191 net-new contract + characterization + integration tests driving 100% branch coverage on all three pipeline modules).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (Success: no issues found in 288 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4237 passed, 23 skipped, 3 xfailed, 1 xpassed)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4428 passed, 23 skipped, 3 xfailed, 1 xpassed)
 - Zero files in src/scc_cli/ exceed 800 lines
 
 ## Key architecture invariants
@@ -102,8 +107,8 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 - Bundle pipeline in launch flow uses fail_closed=True for resolution; errors captured on StartSessionPlan, not raised.
 
 ## Immediate next focus
-- **Execute S05: Coverage on governed-artifact/team-pack planning and renderer seams.**
-  - Contract tests verify bundle resolution, render plan computation, and both provider renderers
-  - Failure paths (missing bundles, invalid bindings, renderer errors) have explicit test coverage
-  - Verify the seam between core planning and adapter rendering is clean and typed
-- **Then S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model.**
+- **Execute S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model.**
+  - Diagnostics show active team context, effective bundles, shared vs native, rendered/skipped/blocked
+  - Docs claims match implementation
+  - File-size/complexity guardrails pass without xfail
+  - Milestone validation passes

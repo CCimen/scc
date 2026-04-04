@@ -4,7 +4,7 @@
 **Demo:** After this: Diagnostics show active team context, effective bundles, shared vs native, rendered/skipped/blocked; docs claims match implementation; file-size/complexity guardrails pass without xfail; milestone validation passes
 
 ## Tasks
-- [ ] **T01: Add governed-artifact diagnostics to doctor checks and support bundle** — Extend doctor checks to report:
+- [x] **T01: Added three doctor checks (team context, bundle resolution, catalog health) and governed-artifact diagnostics to support bundle** — Extend doctor checks to report:
 1. Active team context and enabled bundles
 2. Selected provider and effective render plan
 3. Rendered vs skipped vs blocked artifacts with reasons
