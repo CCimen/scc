@@ -26,7 +26,7 @@ A security or platform team can approve SCC because its governance model, runtim
 - Reserve repo-wide decomposition, broad typed-config migration, guardrail restoration, xfail removal, and the larger coverage campaign for M005.
 
 ## Current milestone state
-**M003: Portable Runtime And Enforced Web Egress** is in progress. S01 (capability-based runtime model and detection cleanup) is complete.
+**M003: Portable Runtime And Enforced Web Egress** is in progress. S01 and S02 are complete.
 
 ## Next milestone order
 1. **M003 — Portable Runtime And Enforced Web Egress** (active)
@@ -37,7 +37,7 @@ A security or platform team can approve SCC because its governance model, runtim
 | Slice | Title | Status |
 |-------|-------|--------|
 | S01 | Capability-based runtime model and detection cleanup | ✅ complete |
-| S02 | SCC-owned image contracts and plain OCI backend | ⬜ pending (depends: S01) |
+| S02 | SCC-owned image contracts and plain OCI backend | ✅ complete |
 | S03 | Enforced web-egress topology and proxy ACLs | ⬜ pending (depends: S01, S02) |
 | S04 | Policy integration, provider destination validation, and operator diagnostics | ⬜ pending (depends: S02, S03) |
 | S05 | Verification, docs truthfulness, and milestone closeout | ⬜ pending (depends: S03, S04) |
@@ -51,6 +51,16 @@ A security or platform team can approve SCC because its governance model, runtim
 - Tokenizer-based guardrail test prevents future direct check_docker_available() calls outside the adapter layer.
 - Bootstrap shares one DockerRuntimeProbe instance between runtime_probe and sandbox_runtime fields.
 
+## M003/S02 outcome summary
+- OciSandboxRuntime adapter implements full SandboxRuntime protocol using docker create/start/exec (no Docker Desktop dependency).
+- Frozen ImageRef dataclass with full_ref()/image_ref() roundtrip and SCC image constants (SCC_BASE_IMAGE, SCC_CLAUDE_IMAGE, SCC_CLAUDE_IMAGE_REF).
+- Dockerfiles for scc-base (Ubuntu 22.04, git, curl, agent user) and scc-agent-claude (Node.js 20 LTS, Claude CLI).
+- RuntimeInfo.preferred_backend field drives bootstrap backend selection: "docker-sandbox" → DockerSandboxRuntime, "oci" → OciSandboxRuntime.
+- Rootless detection via docker info SecurityOptions parsing with graceful None fallback.
+- start_session.py routes image selection: SCC_CLAUDE_IMAGE_REF for OCI, SANDBOX_IMAGE for Desktop.
+- 34 OCI runtime tests, 23 image contract tests, 9 bootstrap/routing integration tests added.
+- scc.backend=oci label convention and scc-oci-{hash} container naming for OCI containers.
+
 ## M002 outcome summary
 - `AgentProvider` and `AgentLaunchSpec` are now part of the real launch path rather than planned-only seams.
 - Claude-specific settings/auth behavior is adapter-owned behind `src/scc_cli/adapters/claude_settings.py` and `bootstrap.py` remains the only allowed higher-layer adapter boundary.
@@ -60,12 +70,12 @@ A security or platform team can approve SCC because its governance model, runtim
 - Support-bundle generation now has one application-owned implementation, and launch-wizard resume behavior sits behind typed helpers with hotspot guardrails.
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol reduces detection sprawl).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol) and M003/S02 (OCI adapter follows adapter-boundary conventions, typed image contracts, centralized error handling).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 244 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3286 passed, 23 skipped, 4 xfailed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 246 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3353 passed, 23 skipped, 4 xfailed)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -75,8 +85,11 @@ A security or platform team can approve SCC because its governance model, runtim
 - Provider-core destination validation belongs before launch, not as a runtime surprise.
 - RuntimeProbe protocol is the canonical detection surface for runtime capabilities; no consumer outside the adapter layer should call docker.check_docker_available() directly.
 - DockerSandboxRuntime accepts a RuntimeProbe in __init__; ensure_available() inspects RuntimeInfo fields.
+- Bootstrap probes runtime at construction time and selects OciSandboxRuntime or DockerSandboxRuntime based on preferred_backend.
+- OciSandboxRuntime is imported only in bootstrap.py; application layer uses SandboxRuntime protocol.
+- Image routing is backend-aware: SCC_CLAUDE_IMAGE_REF for OCI, SANDBOX_IMAGE for Docker Desktop.
 
 ## Immediate next focus
-- Reassess the M003 roadmap with S01 complete.
-- S02 (SCC-owned image contracts and plain OCI backend) is unblocked and should start next.
-- S02 will extend RuntimeProbe/RuntimeInfo with rootless detection and OCI backend selection.
+- Reassess the M003 roadmap with S02 complete.
+- S03 (Enforced web-egress topology and proxy ACLs) is unblocked and should start next.
+- S03 will add network topology enforcement that works with both OCI and Desktop containers.
