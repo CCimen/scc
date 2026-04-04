@@ -517,7 +517,13 @@ class TestNoTestFileDuplicates:
     """
 
     # Allowlist: files with explicit justification and tracking issue
-    ALLOWED_FILES: set[str] = set()  # Add files here with issue links if needed
+    # M005/S01/T02: characterization tests for top-4 split targets (pre-S02 surgery safety net)
+    ALLOWED_FILES: set[str] = {
+        "test_launch_flow_characterization.py",
+        "test_dashboard_orchestrator_characterization.py",
+        "test_docker_launch_characterization.py",
+        "test_personal_profiles_characterization.py",
+    }
 
     def test_no_new_suffix_test_files(self) -> None:
         """Test files should not have _new suffix (implies duplicate exists)."""

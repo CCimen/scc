@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T13:50:58.360Z",
+  "exported_at": "2026-04-04T14:02:47.910Z",
   "milestones": [
     {
       "id": "M001",
@@ -3005,19 +3005,28 @@
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T02",
-      "title": "Add characterization tests for top-4 split targets before S02 surgery",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery",
+      "status": "complete",
+      "one_liner": "Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery",
+      "narrative": "Created four characterization test files for the modules identified as mandatory-split targets in T01's audit: launch flow (17 tests covering wizard state machine, session selection, CLI error paths), dashboard orchestrator (26 tests covering view building, event routing, effect result application, tab fallbacks, placeholder helpers), docker launch (19 tests covering safety-net policy chain, atomic file writing, run_sandbox failure branches, mount race detection, inject_file error handling), and personal profiles (25 tests covering CRUD operations, listing edge cases, MCP merge, applied-state tracking). Tests target application-layer pure logic rather than attempting TUI/Rich Live mocking. Allowlisted the files in the boundary guard test.",
+      "verification_result": "All 87 characterization tests pass. Full suite of 3882 tests passes with no regressions. mypy reports no issues across 261 source files. ruff check passes clean.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T14:02:47.859Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Tests target application-layer state machine rather than direct interactive_start() testing due to heavy TTY coupling. Added WorkspaceSelected step missing from plan's wizard sequence.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_launch_flow_characterization.py",
+        "tests/test_dashboard_orchestrator_characterization.py",
+        "tests/test_docker_launch_characterization.py",
+        "tests/test_personal_profiles_characterization.py",
+        "tests/test_import_boundaries.py"
+      ],
+      "key_decisions": [
+        "Characterization tests target pure application-layer logic (state machines, policy functions, CRUD) rather than mocking full TUI interactions",
+        "Test files allowlisted in boundary guard with M005/S01/T02 tracking comment"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M005\nkey_files:\n  - tests/test_launch_flow_characterization.py\n  - tests/test_dashboard_orchestrator_characterization.py\n  - tests/test_docker_launch_characterization.py\n  - tests/test_personal_profiles_characterization.py\n  - tests/test_import_boundaries.py\nkey_decisions:\n  - Characterization tests target pure application-layer logic (state machines, policy functions, CRUD) rather than mocking full TUI interactions\n  - Test files allowlisted in boundary guard with M005/S01/T02 tracking comment\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T14:02:47.858Z\nblocker_discovered: false\n---\n\n# T02: Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery\n\n**Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery**\n\n## What Happened\n\nCreated four characterization test files for the modules identified as mandatory-split targets in T01's audit: launch flow (17 tests covering wizard state machine, session selection, CLI error paths), dashboard orchestrator (26 tests covering view building, event routing, effect result application, tab fallbacks, placeholder helpers), docker launch (19 tests covering safety-net policy chain, atomic file writing, run_sandbox failure branches, mount race detection, inject_file error handling), and personal profiles (25 tests covering CRUD operations, listing edge cases, MCP merge, applied-state tracking). Tests target application-layer pure logic rather than attempting TUI/Rich Live mocking. Allowlisted the files in the boundary guard test.\n\n## Verification\n\nAll 87 characterization tests pass. Full suite of 3882 tests passes with no regressions. mypy reports no issues across 261 source files. ruff check passes clean.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_*_characterization.py -v` | 0 | ✅ pass | 1830ms |\n| 2 | `uv run pytest` | 0 | ✅ pass | 63900ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 70000ms |\n| 4 | `uv run ruff check` | 0 | ✅ pass | 500ms |\n\n## Deviations\n\nTests target application-layer state machine rather than direct interactive_start() testing due to heavy TTY coupling. Added WorkspaceSelected step missing from plan's wizard sequence.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_launch_flow_characterization.py`\n- `tests/test_dashboard_orchestrator_characterization.py`\n- `tests/test_docker_launch_characterization.py`\n- `tests/test_personal_profiles_characterization.py`\n- `tests/test_import_boundaries.py`\n",
       "description": "Write characterization tests that capture current behavior of the top-4 mandatory-split targets. These tests protect against accidental behavior changes when S02 decomposes these modules. The targets are:\n\n1. **`commands/launch/flow.py`** — `interactive_start` (534 lines) and `start` (293 lines). Current tests are AST-level guardrails only. Write behavioral tests that verify:\n   - `start()` returns early with appropriate error when no git repo is found\n   - `start()` handles team override parameter correctly\n   - `interactive_start()` delegates to resume helpers when resume context is provided\n   - Test file: `tests/test_launch_flow_characterization.py`\n\n2. **`ui/dashboard/orchestrator.py`** — `run_dashboard` (232 lines) and action handlers. Only 6% coverage. Write tests that verify:\n   - `run_dashboard` handles empty session list gracefully\n   - Dashboard action dispatch routes to correct handlers\n   - Team switch flow is invoked when team switch is requested\n   - Test file: `tests/test_dashboard_orchestrator_characterization.py`\n\n3. **`docker/launch.py`** — `run_sandbox` (216 lines). 54% coverage. Write tests that verify:\n   - Safety policy injection is applied to container config\n   - Container name generation follows expected format\n   - Failure branches (docker not available, image pull failure) produce correct errors\n   - Test file: `tests/test_docker_launch_characterization.py`\n\n4. **`core/personal_profiles.py`** — Only 7 tests for 839 lines. Write tests that verify:\n   - Profile CRUD operations (create, read, update, delete)\n   - Profile listing returns expected structure\n   - Marketplace-state interaction (load/save managed state)\n   - Edge cases: nonexistent profile, duplicate name, empty profile list\n   - Test file: `tests/test_personal_profiles_characterization.py`\n\n**Testing patterns to follow:**\n- Use existing `tests/conftest.py` fixtures (`temp_dir`, `temp_git_repo`, `build_fake_adapters`)\n- Use existing `tests/fakes/` for fake adapters where needed\n- Use `unittest.mock.patch` for heavy external dependencies (docker, git, subprocess, filesystem)\n- Use `from __future__ import annotations` in all new test files\n- Each test function should have a docstring explaining what behavior it captures\n- Mark any test that cannot be made fully deterministic with `pytest.mark.skip` and a note, rather than writing a flaky test\n\n**Constraints:**\n- Do NOT modify any production code.\n- All tests must pass when run individually AND as part of the full suite.\n- Tests must not make network calls, start containers, or access real filesystem paths outside temp dirs.\n- Target: at least 3-5 meaningful behavioral tests per module (12-20 total new tests).",
       "estimate": "2h",
       "files": [
@@ -5371,6 +5380,50 @@
       "verdict": "✅ pass",
       "duration_ms": 65000,
       "created_at": "2026-04-04T13:50:58.293Z"
+    },
+    {
+      "id": 115,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_*_characterization.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1830,
+      "created_at": "2026-04-04T14:02:47.859Z"
+    },
+    {
+      "id": 116,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run pytest",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 63900,
+      "created_at": "2026-04-04T14:02:47.859Z"
+    },
+    {
+      "id": 117,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 70000,
+      "created_at": "2026-04-04T14:02:47.859Z"
+    },
+    {
+      "id": 118,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-04T14:02:47.859Z"
     }
   ]
 }

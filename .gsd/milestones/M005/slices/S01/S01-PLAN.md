@@ -37,7 +37,7 @@ Constraints:
   - Estimate: 1h
   - Files: .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md
   - Verify: test -f .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -c '^|' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md | xargs test 20 -le
-- [ ] **T02: Add characterization tests for top-4 split targets before S02 surgery** — Write characterization tests that capture current behavior of the top-4 mandatory-split targets. These tests protect against accidental behavior changes when S02 decomposes these modules. The targets are:
+- [x] **T02: Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery** — Write characterization tests that capture current behavior of the top-4 mandatory-split targets. These tests protect against accidental behavior changes when S02 decomposes these modules. The targets are:
 
 1. **`commands/launch/flow.py`** — `interactive_start` (534 lines) and `start` (293 lines). Current tests are AST-level guardrails only. Write behavioral tests that verify:
    - `start()` returns early with appropriate error when no git repo is found
