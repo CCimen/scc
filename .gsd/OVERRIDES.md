@@ -45,7 +45,7 @@ User-issued overrides that supersede plan document content.
   - users switch context between teams such as Draken and Eneo; do not implicitly union team allowlists
   - diagnostics must show active team context, effective destination sets, runtime backend, network mode, and clear blocked reasons
   - topology plus proxy policy remain the hard control; wrappers are defense-in-depth, UX, and audit only
-**Scope:** active
+**Scope:** resolved
 **Applied-at:** M003/S04/T03
 
 ---

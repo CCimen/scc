@@ -29,7 +29,7 @@ SCC isolates AI execution in containers, enforces branch safety, and prevents de
 
 ## 30-Second Guide
 
-**Requires:** Python 3.10+, Docker Desktop 4.50+, Git 2.30+
+**Requires:** Python 3.10+, Docker (Engine, Desktop, OrbStack, or Colima), Git 2.30+
 
 ```bash
 uv tool install scc-cli  # Install (recommended)
@@ -114,7 +114,7 @@ Organization security blocks cannot be overridden by teams or developers.
 
 - SCC enforces org-managed plugins and MCP servers at runtime.
 - MCP servers in repo `.mcp.json` or plugin bundles are outside SCC enforcement scope (block the plugin to restrict).
-- `network_policy` is partially enforced (proxy env injection + MCP suppression under isolated), not a full egress firewall.
+- `network_policy` enforcement: `web-egress-enforced` uses topology-based isolation (internal Docker network + proxy sidecar) for HTTP/HTTPS egress control. `locked-down-web` applies `--network=none`. Enforcement is IPv4-only in v1; raw TCP/UDP beyond HTTP(S) is not filtered.
 - `session.auto_resume` is advisory only in v1.
 
 ---
@@ -141,7 +141,7 @@ Org admins create a single JSON config that controls security for all teams:
   },
   "defaults": {
     "allowed_plugins": ["*"],
-    "network_policy": "unrestricted"
+    "network_policy": "open"
   },
   "profiles": {
     "backend": { "additional_plugins": ["scc-safety-net@sandboxed-code-official"] },
@@ -383,7 +383,7 @@ Run `scc doctor` to diagnose issues. For recent launch failures or preflight blo
 
 | Problem | Solution |
 |---------|----------|
-| Docker not reachable | Start Docker Desktop |
+| Docker not reachable | Start Docker (Desktop, Engine, or compatible daemon) |
 | Organization config fetch failed | Check URL and token |
 | Plugin blocked | Check `scc config explain` for security blocks |
 

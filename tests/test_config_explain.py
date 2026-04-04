@@ -122,7 +122,7 @@ def effective_config_full():
     return EffectiveConfig(
         plugins={"plugin-a", "plugin-b", "plugin-c"},
         mcp_servers=[],
-        network_policy="corp-proxy",
+        network_policy="web-egress-enforced",
         session_config=SessionConfig(timeout_hours=4, auto_resume=True),
         decisions=[
             ConfigDecision(
@@ -145,7 +145,7 @@ def effective_config_full():
             ),
             ConfigDecision(
                 field="network_policy",
-                value="corp-proxy",
+                value="web-egress-enforced",
                 reason="Organization policy",
                 source="org.defaults",
             ),
@@ -669,7 +669,7 @@ class TestConfigExplainWarnings:
         assert "ignored" in result.output.lower()
 
     def test_explain_warns_on_missing_proxy_env(self, effective_config_basic):
-        """Should warn when corp-proxy-only has no proxy env configured."""
+        """Should warn when web-egress-enforced has no proxy env configured."""
         effective_config_basic.network_policy = "web-egress-enforced"
         org_config = {
             "schema_version": "1.0.0",

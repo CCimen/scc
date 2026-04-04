@@ -26,10 +26,10 @@ A security or platform team can approve SCC because its governance model, runtim
 - Reserve repo-wide decomposition, broad typed-config migration, guardrail restoration, xfail removal, and the larger coverage campaign for M005.
 
 ## Current milestone state
-**M003: Portable Runtime And Enforced Web Egress** is in progress. S01, S02, and S03 are complete.
+**M003: Portable Runtime And Enforced Web Egress** is in progress. S01, S02, S03, and S04 are complete. S05 (Verification, docs truthfulness, and milestone closeout) is the final remaining slice.
 
 ## Next milestone order
-1. **M003 — Portable Runtime And Enforced Web Egress** (active)
+1. **M003 — Portable Runtime And Enforced Web Egress** (active — S05 remaining)
 2. **M004 — Cross-Agent Runtime Safety**
 3. **M005 — Architecture Quality, Strictness, And Hardening**
 
@@ -39,7 +39,7 @@ A security or platform team can approve SCC because its governance model, runtim
 | S01 | Capability-based runtime model and detection cleanup | ✅ complete |
 | S02 | SCC-owned image contracts and plain OCI backend | ✅ complete |
 | S03 | Enforced web-egress topology and proxy ACLs | ✅ complete |
-| S04 | Policy integration, provider destination validation, and operator diagnostics | ⬜ pending (depends: S02, S03) |
+| S04 | Policy integration, provider destination validation, and operator diagnostics | ✅ complete |
 | S05 | Verification, docs truthfulness, and milestone closeout | ⬜ pending (depends: S03, S04) |
 
 ## M003/S01 outcome summary
@@ -71,6 +71,15 @@ A security or platform team can approve SCC because its governance model, runtim
 - Topology teardown wired into both stop() and remove() with idempotent cleanup.
 - 49 new tests across three test files plus guardrail preventing regression to default network.
 
+## M003/S04 outcome summary
+- Provider destination registry (`core/destination_registry.py`) maps named sets (anthropic-core, openai-core) to typed DestinationSet objects with resolve and rule-generation helpers.
+- SandboxSpec.destination_sets field carries resolved sets through the launch pipeline (frozen dataclass, default empty tuple).
+- `_build_sandbox_spec()` resolves provider destinations for OCI backends; OCI adapter converts to allow rules in egress plan.
+- Enforced-mode preflight validates destination resolvability before launch — unknown sets raise LaunchPolicyBlockedError.
+- `check_runtime_backend()` doctor check reports preferred_backend, display_name, and version via bootstrap probe.
+- `effective_egress` support-bundle section includes runtime_backend, network_policy, and resolved_destination_sets with independent try/except resilience.
+- 30 net new tests (3432 total suite).
+
 ## M002 outcome summary
 - `AgentProvider` and `AgentLaunchSpec` are now part of the real launch path rather than planned-only seams.
 - Claude-specific settings/auth behavior is adapter-owned behind `src/scc_cli/adapters/claude_settings.py` and `bootstrap.py` remains the only allowed higher-layer adapter boundary.
@@ -80,12 +89,12 @@ A security or platform team can approve SCC because its governance model, runtim
 - Support-bundle generation now has one application-owned implementation, and launch-wizard resume behavior sits behind typed helpers with hotspot guardrails.
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol), M003/S02 (OCI adapter follows adapter-boundary conventions), and M003/S03 (three-layer egress enforcement with 49 tests, local _run_docker to avoid cross-adapter coupling).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol), M003/S02 (OCI adapter follows adapter-boundary conventions), M003/S03 (three-layer egress enforcement with 49 tests, local _run_docker to avoid cross-adapter coupling), and M003/S04 (pure destination registry, import boundary compliance for doctor checks, resilient support-bundle diagnostics).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 248 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3402 passed, 23 skipped, 4 xfailed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 249 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3432 passed, 23 skipped, 4 xfailed)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -100,8 +109,11 @@ A security or platform team can approve SCC because its governance model, runtim
 - Image routing is backend-aware: SCC_CLAUDE_IMAGE_REF for OCI, SANDBOX_IMAGE for Docker Desktop.
 - Enforced web-egress uses internal Docker network + dual-homed Squid proxy sidecar as the hard enforcement boundary (D014).
 - Egress policy logic is pure (core/egress_policy.py), infrastructure is adapter-owned (adapters/egress_topology.py), orchestration stays in OciSandboxRuntime.
+- Enterprise egress model (D-007, D015): web-egress-enforced is the normal cloud-provider enterprise mode; locked-down-web is intentional no-web posture. Org owns baseline mode, hard deny overlays, named destination sets, and delegation. Teams widen within delegated bounds only. Project/user narrow only. One active team context per session — no implicit multi-team union. Topology + proxy policy are the hard control; wrappers are defense-in-depth, UX, and audit. Diagnostics must show active team context, effective destination sets, runtime backend, network mode, and blocked reasons.
+- Provider destination sets flow through: registry resolve → SandboxSpec.destination_sets → OCI adapter allow rules → egress plan. Enforced-mode preflight validates resolvability before launch.
+- Doctor checks access runtime probes via bootstrap.get_default_adapters(), never direct adapter imports.
+- Support-bundle sections use independent try/except per data source for partial-failure resilience.
 
 ## Immediate next focus
-- S04 (Policy integration, provider destination validation, and operator diagnostics) is unblocked and should start next.
-- S04 will wire org/team network policy into the egress enforcement layer and add operator diagnostic surfaces.
-- S05 (Verification, docs truthfulness, milestone closeout) follows S04.
+- S05 (Verification, docs truthfulness, and milestone closeout) is unblocked and should start next.
+- S05 should verify that diagnostic surfaces match D015 requirements, confirm docs truthfulness against actual enforcement, and close out M003.

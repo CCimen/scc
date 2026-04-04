@@ -560,7 +560,7 @@ def compute_effective_config(
             result.blocked_items.append(
                 BlockedItem(
                     item=server_name or server_url,
-                    blocked_by="network_policy=isolated",
+                    blocked_by="network_policy=locked-down-web",
                     source=network_policy_source or "org.defaults",
                     target_type=TargetType.MCP_SERVER,
                 )
@@ -709,7 +709,7 @@ def compute_effective_config(
                 result.blocked_items.append(
                     BlockedItem(
                         item=server_name or server_url,
-                        blocked_by="network_policy=isolated",
+                        blocked_by="network_policy=locked-down-web",
                         source=network_policy_source or "org.defaults",
                         target_type=TargetType.MCP_SERVER,
                     )

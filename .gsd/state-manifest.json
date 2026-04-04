@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T10:32:21.107Z",
+  "exported_at": "2026-04-04T11:02:21.891Z",
   "milestones": [
     {
       "id": "M001",
@@ -401,7 +401,7 @@
       "milestone_id": "M003",
       "id": "S04",
       "title": "Policy integration, provider destination validation, and operator diagnostics",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [
         "S02",
@@ -409,9 +409,9 @@
       ],
       "demo": "",
       "created_at": "2026-04-04T08:09:04.486Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T10:42:06.825Z",
+      "full_summary_md": "---\nid: S04\nparent: M003\nmilestone: M003\nprovides:\n  - Provider destination registry (PROVIDER_DESTINATION_SETS, resolve_destination_sets, destination_sets_to_allow_rules)\n  - SandboxSpec.destination_sets field for carrying resolved sets through the launch pipeline\n  - Enforced-mode preflight validation for unresolvable destination sets\n  - check_runtime_backend() doctor check\n  - effective_egress support-bundle section\nrequires:\n  - slice: S02\n    provides: OciSandboxRuntime adapter, SandboxSpec dataclass, ImageRef contracts, preferred_backend routing\n  - slice: S03\n    provides: build_egress_plan(), EgressRule, NetworkPolicyPlan, compile_squid_acl(), egress topology infrastructure\naffects:\n  - S05\nkey_files:\n  - src/scc_cli/core/destination_registry.py\n  - src/scc_cli/ports/models.py\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - src/scc_cli/application/launch/preflight.py\n  - src/scc_cli/doctor/checks/environment.py\n  - src/scc_cli/application/support_bundle.py\n  - tests/test_destination_registry.py\n  - tests/test_oci_egress_integration.py\n  - tests/test_launch_preflight.py\n  - tests/test_doctor_checks.py\n  - tests/test_support_bundle.py\nkey_decisions:\n  - Registry uses plain dict[str, DestinationSet] for trivial extensibility — no framework, just a typed mapping\n  - destination_sets_to_allow_rules helper co-located in registry module to keep rule generation reusable across backends\n  - TYPE_CHECKING guard for DestinationSet import in models.py avoids circular dependency while preserving type safety\n  - Destination resolution in _build_sandbox_spec only for OCI backend — Desktop sandbox has its own network isolation\n  - Enforced-mode preflight wraps resolve ValueError into LaunchPolicyBlockedError for clear user-facing error\n  - Runtime probe in doctor accessed via bootstrap.get_default_adapters() not direct adapter import, respecting import boundary enforcement\n  - Effective egress support-bundle section uses independent try/except per subsection so partial data survives failures\npatterns_established:\n  - Provider destination set → SandboxSpec → egress plan threading pattern: registry resolves names, spec carries typed sets, adapter converts to allow rules\n  - Preflight validation pattern for enforced-mode launches: resolve destination sets before launch, fail closed on unknown sets\n  - Doctor check pattern for runtime-dependent probes: access via bootstrap, return warning on failure, never crash\n  - Support-bundle resilience pattern: independent try/except per data source so partial diagnostics survive subsystem failures\nobservability_surfaces:\n  - scc doctor 'Runtime Backend' check — reports preferred_backend, display_name, version\n  - scc support bundle 'effective_egress' section — runtime_backend, network_policy, resolved_destination_sets\ndrill_down_paths:\n  - .gsd/milestones/M003/slices/S04/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M003/slices/S04/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M003/slices/S04/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T10:42:06.827Z\nblocker_discovered: false\n---\n\n# S04: Policy integration, provider destination validation, and operator diagnostics\n\n**Provider destination sets are resolved from a typed registry, threaded through SandboxSpec into the OCI adapter's egress plan, validated at preflight for enforced mode, and visible in doctor/support-bundle diagnostics.**\n\n## What Happened\n\nS04 delivered the end-to-end wiring from provider destination metadata through to operator-visible diagnostics, completing the policy integration layer for M003's enforced web egress.\n\n**T01 — Provider Destination Registry** created `src/scc_cli/core/destination_registry.py`, a pure module mapping named destination set IDs (`anthropic-core`, `openai-core`) to typed `DestinationSet` objects with concrete provider hostnames. It exposes `PROVIDER_DESTINATION_SETS`, `resolve_destination_sets(names)` (raises ValueError for unknowns), and `destination_sets_to_allow_rules(sets)` which converts resolved sets to `EgressRule` allow tuples. 17 unit tests cover registry contents, resolution (happy path, ordering, empty, errors), and rule generation (single/multi host, combined sets, target matching, type checks, reason format).\n\n**T02 — SandboxSpec threading and preflight validation** added a `destination_sets` field to the frozen `SandboxSpec` dataclass, wired `_build_sandbox_spec()` to resolve provider destinations via the registry for OCI backends, threaded destination-derived allow rules into `build_egress_plan()` in OciSandboxRuntime, and extended `evaluate_launch_preflight()` with enforced-mode destination resolvability validation. A `TYPE_CHECKING` guard avoids circular imports for DestinationSet in models.py. 7 new tests cover destination-aware egress plan construction and enforced-mode preflight edge cases.\n\n**T03 — Doctor check and support-bundle diagnostics** added `check_runtime_backend()` to the doctor checks module, probing the Docker runtime via `bootstrap.get_default_adapters().runtime_probe` (respecting the import boundary). It reports `preferred_backend`, `display_name`, and version, returning a pass/warning CheckResult. The `effective_egress` section in `build_support_bundle_manifest()` includes `runtime_backend` (from probe), `network_policy` (from user config), and `resolved_destination_sets` (from registry). Each subsection uses independent try/except so partial data survives probe failures. 6 new tests cover doctor check variants and support-bundle resilience.\n\nAll three tasks passed targeted tests, mypy, and ruff check. The full suite grew from 3402 to 3432 tests (30 net new), all passing.\n\n## Verification\n\nSlice-level verification ran all three gate checks:\n\n1. **Targeted tests** — `uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_doctor_checks.py tests/test_support_bundle.py -q` → 107 passed\n2. **Type check** — `uv run mypy src/scc_cli` → Success: no issues found in 249 source files\n3. **Lint** — `uv run ruff check` → All checks passed\n4. **Full regression** — `uv run pytest --rootdir \"$PWD\" -q` → 3432 passed, 23 skipped, 4 xfailed (30 net new tests from S04)\n\n## Requirements Advanced\n\n- R001 — Three new modules follow clean architecture patterns: pure destination registry in core, SandboxSpec threading respects frozen dataclass contracts, doctor checks respect import boundary guardrail, support-bundle uses application-owned path. 30 new tests maintain coverage discipline.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nT02 used a TYPE_CHECKING guard for DestinationSet import in models.py to avoid circular dependency — architecturally sound, minor deviation from plan which didn't anticipate the cycle. T03 used bootstrap.get_default_adapters() instead of direct adapter import for the runtime probe — cleaner than the plan's suggestion and respects the import boundary guardrail.\n\n## Known Limitations\n\nDestination registry is currently hardcoded with anthropic-core and openai-core. Future providers require a code change to extend the registry. This is intentional for V1 — a config-driven registry is deferred until the provider set grows.\n\n## Follow-ups\n\nS05 should verify that doctor and support-bundle outputs match the diagnostic surface requirements in D015 (active team context, effective destination sets, runtime backend, network mode, blocked reasons). S05 should also verify docs truthfulness against the actual enforcement model.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/destination_registry.py` — New module: provider destination set registry with resolve and rule-generation helpers\n- `src/scc_cli/ports/models.py` — Added destination_sets field to frozen SandboxSpec dataclass\n- `src/scc_cli/application/start_session.py` — Wired destination resolution into _build_sandbox_spec for OCI backends\n- `src/scc_cli/adapters/oci_sandbox_runtime.py` — Threaded destination-derived allow rules into build_egress_plan()\n- `src/scc_cli/application/launch/preflight.py` — Added enforced-mode preflight validation for unresolvable destination sets\n- `src/scc_cli/doctor/checks/environment.py` — Added check_runtime_backend() doctor check\n- `src/scc_cli/doctor/checks/__init__.py` — Wired check_runtime_backend into run_all_checks()\n- `src/scc_cli/doctor/__init__.py` — Added check_runtime_backend to package exports\n- `src/scc_cli/doctor/core.py` — Added check_runtime_backend to run_doctor()\n- `src/scc_cli/application/support_bundle.py` — Added effective_egress section to support bundle manifest\n- `tests/test_destination_registry.py` — 17 tests for destination registry resolution and rule generation\n- `tests/test_oci_egress_integration.py` — Extended with destination-aware egress plan tests\n- `tests/test_launch_preflight.py` — Extended with enforced-mode destination validation tests\n- `tests/test_doctor_checks.py` — 4 tests for check_runtime_backend doctor check\n- `tests/test_support_bundle.py` — 2 tests for effective_egress support bundle section\n",
+      "full_uat_md": "# S04: Policy integration, provider destination validation, and operator diagnostics — UAT\n\n**Milestone:** M003\n**Written:** 2026-04-04T10:42:06.827Z\n\n## UAT: S04 — Policy integration, provider destination validation, and operator diagnostics\n\n### Preconditions\n- Python 3.10+ with uv available\n- Working directory: scc-sync-1.7.3/\n- Docker daemon is not required (tests mock runtime probes)\n\n---\n\n### TC-01: Provider Destination Registry Resolution\n\n**Goal:** Verify the destination registry correctly resolves known provider sets and rejects unknown ones.\n\n1. Run `uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py -q`\n2. **Expected:** 17 tests pass\n3. Verify `anthropic-core` resolves to DestinationSet with `api.anthropic.com`\n4. Verify `openai-core` resolves to DestinationSet with `api.openai.com`\n5. Verify resolving an unknown name raises ValueError\n6. Verify empty input returns empty tuple\n\n### TC-02: Rule Generation From Destination Sets\n\n**Goal:** Verify destination sets correctly convert to EgressRule allow objects.\n\n1. Run `uv run pytest --rootdir \"$PWD\" tests/test_destination_registry.py -k \"rule\" -q`\n2. **Expected:** All rule-generation tests pass\n3. Verify generated rules have `allow=True` and reason containing `provider-core:`\n4. Verify multiple sets produce combined rules covering all destinations\n\n### TC-03: SandboxSpec Carries Destination Sets\n\n**Goal:** Verify destination_sets field is available on SandboxSpec and defaults safely.\n\n1. Construct a SandboxSpec without destination_sets → field defaults to `()`\n2. Construct a SandboxSpec with resolved DestinationSet tuples → field carries them through\n3. **Expected:** No existing SandboxSpec construction sites break (frozen dataclass with default)\n\n### TC-04: OCI Adapter Threads Destination Rules Into Egress Plan\n\n**Goal:** Verify the OCI adapter converts SandboxSpec destination sets into allow rules in the egress plan.\n\n1. Run `uv run pytest --rootdir \"$PWD\" tests/test_oci_egress_integration.py -k \"destination\" -q`\n2. **Expected:** Tests pass confirming that destination sets on SandboxSpec produce matching allow rules in the egress plan\n3. Verify allow rules contain provider hostnames from the destination set\n\n### TC-05: Enforced-Mode Preflight Blocks Unresolvable Destinations\n\n**Goal:** Verify preflight validation catches unresolvable destination sets before launch.\n\n1. Run `uv run pytest --rootdir \"$PWD\" tests/test_launch_preflight.py -k \"enforced\" -q`\n2. **Expected:** Tests pass\n3. Verify that preflight with `web-egress-enforced` policy and an unknown destination set raises LaunchPolicyBlockedError\n4. Verify that preflight with `web-egress-enforced` policy and valid destination sets passes\n\n### TC-06: Doctor Check Reports Runtime Backend\n\n**Goal:** Verify `scc doctor` runtime backend check works across all backend states.\n\n1. Run `uv run pytest --rootdir \"$PWD\" tests/test_doctor_checks.py -k \"runtime_backend\" -q`\n2. **Expected:** 4 tests pass covering docker-sandbox, oci, daemon-unavailable, and probe-exception scenarios\n3. Verify docker-sandbox case returns passed=True with \"docker-sandbox\" in message\n4. Verify oci case returns passed=True with \"oci\" in message\n5. Verify daemon-unavailable returns passed=False with warning severity\n6. Verify probe exception returns passed=False without crashing\n\n### TC-07: Support Bundle Includes Effective Egress Section\n\n**Goal:** Verify support bundle manifest includes the effective_egress section with runtime, policy, and destination data.\n\n1. Run `uv run pytest --rootdir \"$PWD\" tests/test_support_bundle.py -k \"effective_egress\" -q`\n2. **Expected:** 2 tests pass\n3. Verify the effective_egress section includes runtime_backend, network_policy, and resolved_destination_sets keys\n4. Verify that when the runtime probe fails, the section still includes partial data (network_policy and resolved_destination_sets) rather than crashing\n\n### TC-08: No Regression Across Full Suite\n\n**Goal:** Verify the 30 new tests integrate without breaking existing functionality.\n\n1. Run `uv run pytest --rootdir \"$PWD\" -q`\n2. **Expected:** 3432+ tests pass, 0 failures\n3. Run `uv run mypy src/scc_cli`\n4. **Expected:** Success: no issues found in 249 source files\n5. Run `uv run ruff check`\n6. **Expected:** All checks passed\n\n### Edge Cases\n\n- **Empty destination sets on SandboxSpec:** Egress plan should proceed normally without additional allow rules\n- **Multiple provider sets resolved together:** Combined rules should contain all hosts from all sets\n- **Probe failure during support bundle:** Section should degrade gracefully with partial data, never crash\n- **TYPE_CHECKING import for DestinationSet in models.py:** mypy should validate types correctly despite the guard\n",
       "goal": "Provider destination sets are resolved from a typed registry, threaded through SandboxSpec into the OCI adapter's egress plan, validated at preflight for enforced mode, and visible in doctor/support-bundle diagnostics.",
       "success_criteria": "- `resolve_destination_sets()` maps `\"anthropic-core\"` and `\"openai-core\"` to typed `DestinationSet` objects with concrete hostnames\n- `SandboxSpec.destination_sets` carries resolved sets from application layer to runtime adapter\n- `OciSandboxRuntime.run()` passes destination-derived allow rules to `build_egress_plan()` so the Squid ACL includes provider-core hosts\n- `evaluate_launch_preflight()` raises when enforced-mode destination sets are unresolvable\n- `check_runtime_backend()` reports active backend type in doctor output\n- Support bundle manifest includes effective egress policy section\n- `uv run ruff check` clean, `uv run mypy src/scc_cli` clean, `uv run pytest --rootdir \"$PWD\" -q` green",
       "proof_level": "integration — verifies that typed contracts flow from pure registry through application wiring to adapter invocation with mocked subprocess boundaries",
@@ -435,11 +435,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "",
-      "success_criteria": "",
-      "proof_level": "",
-      "integration_closure": "",
-      "observability_impact": "",
+      "goal": "All user-facing strings, README claims, and test fixtures use the current network mode vocabulary (open / web-egress-enforced / locked-down-web), README accurately describes Docker requirements and enforcement model per Constitution §3/§4, and guardrail tests prevent regression. Full exit gate passes.",
+      "success_criteria": "- No stale network-mode names (`unrestricted`, `corp-proxy-only`, `isolated`-as-network-mode) in source, tests, or README\n- README does not claim Docker Desktop as a hard requirement\n- README enforcement description matches topology-based reality from S03/S04\n- `tests/test_docs_truthfulness.py` exists with ≥5 tests scanning for stale vocabulary and Constitution violations\n- `uv run ruff check` passes\n- `uv run mypy src/scc_cli` passes\n- `uv run pytest --rootdir \"$PWD\" -q` passes with ≥3464 tests (3459 baseline + ≥5 new guardrail tests)",
+      "proof_level": "This slice proves: final-assembly (milestone closeout verification). Real runtime required: no. Human/UAT required: no.",
+      "integration_closure": "Upstream surfaces consumed: `src/scc_cli/application/compute_effective_config.py` (S01 vocabulary), `src/scc_cli/commands/config.py` (S01 vocabulary), `README.md` (pre-M003 docs). New wiring: none — only string fixes and new test file. What remains before the milestone is truly usable end-to-end: nothing after this slice — S05 is the final verification and truthfulness pass.",
+      "observability_impact": "None — this slice fixes strings and docs, adds guardrail tests. No runtime behavior changes.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -2258,6 +2258,92 @@
       "sequence": 0
     },
     {
+      "milestone_id": "M003",
+      "slice_id": "S05",
+      "id": "T01",
+      "title": "Updated all stale network-mode vocabulary (isolated→locked-down-web, corp-proxy-only→web-egress-enforced, unrestricted→open) in source, tests, and README; removed Docker Desktop hard-dependency claim",
+      "status": "complete",
+      "one_liner": "Updated all stale network-mode vocabulary (isolated→locked-down-web, corp-proxy-only→web-egress-enforced, unrestricted→open) in source, tests, and README; removed Docker Desktop hard-dependency claim",
+      "narrative": "Fixed six stale network-mode strings across four files. In compute_effective_config.py, updated two blocked_by diagnostic strings from 'isolated' to 'locked-down-web'. In config.py, updated warning message from 'corp-proxy-only' to 'web-egress-enforced'. In test_config_explain.py, updated fixture values and docstring from 'corp-proxy' to 'web-egress-enforced'. In README.md, generalized Docker requirement per Constitution §3, rewrote enforcement scope with topology-based description and IPv4-only disclosure, changed example JSON from 'unrestricted' to 'open', and updated troubleshooting table.",
+      "verification_result": "All five verification checks pass: 31/31 pytest tests pass with updated vocabulary, zero occurrences of stale 'network_policy=isolated' in compute_effective_config.py, zero occurrences of 'corp-proxy-only' in config.py, zero occurrences of '\"unrestricted\"' in README.md, and no Docker Desktop hard requirement in README.",
+      "duration": "",
+      "completed_at": "2026-04-04T11:02:21.839Z",
+      "blocker_discovered": false,
+      "deviations": "The edit tool initially reported success for README changes but did not persist them. Used absolute paths and sed as fallback to apply the README edits.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/application/compute_effective_config.py",
+        "src/scc_cli/commands/config.py",
+        "tests/test_config_explain.py",
+        "README.md"
+      ],
+      "key_decisions": [
+        "README Requires line lists Docker generically (Engine, Desktop, OrbStack, Colima) per Constitution §3"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S05\nmilestone: M003\nkey_files:\n  - src/scc_cli/application/compute_effective_config.py\n  - src/scc_cli/commands/config.py\n  - tests/test_config_explain.py\n  - README.md\nkey_decisions:\n  - README Requires line lists Docker generically (Engine, Desktop, OrbStack, Colima) per Constitution §3\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T11:02:21.839Z\nblocker_discovered: false\n---\n\n# T01: Updated all stale network-mode vocabulary (isolated→locked-down-web, corp-proxy-only→web-egress-enforced, unrestricted→open) in source, tests, and README; removed Docker Desktop hard-dependency claim\n\n**Updated all stale network-mode vocabulary (isolated→locked-down-web, corp-proxy-only→web-egress-enforced, unrestricted→open) in source, tests, and README; removed Docker Desktop hard-dependency claim**\n\n## What Happened\n\nFixed six stale network-mode strings across four files. In compute_effective_config.py, updated two blocked_by diagnostic strings from 'isolated' to 'locked-down-web'. In config.py, updated warning message from 'corp-proxy-only' to 'web-egress-enforced'. In test_config_explain.py, updated fixture values and docstring from 'corp-proxy' to 'web-egress-enforced'. In README.md, generalized Docker requirement per Constitution §3, rewrote enforcement scope with topology-based description and IPv4-only disclosure, changed example JSON from 'unrestricted' to 'open', and updated troubleshooting table.\n\n## Verification\n\nAll five verification checks pass: 31/31 pytest tests pass with updated vocabulary, zero occurrences of stale 'network_policy=isolated' in compute_effective_config.py, zero occurrences of 'corp-proxy-only' in config.py, zero occurrences of '\"unrestricted\"' in README.md, and no Docker Desktop hard requirement in README.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest --rootdir \"$PWD\" tests/test_config_explain.py -q` | 0 | ✅ pass | 2020ms |\n| 2 | `grep -c 'network_policy=isolated' src/scc_cli/application/compute_effective_config.py` | 0 | ✅ pass | 50ms |\n| 3 | `grep -c 'corp-proxy-only' src/scc_cli/commands/config.py` | 0 | ✅ pass | 50ms |\n| 4 | `grep -c '\"unrestricted\"' README.md` | 0 | ✅ pass | 50ms |\n| 5 | `! grep -q 'Requires.*Docker Desktop' README.md` | 0 | ✅ pass | 50ms |\n\n## Deviations\n\nThe edit tool initially reported success for README changes but did not persist them. Used absolute paths and sed as fallback to apply the README edits.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/application/compute_effective_config.py`\n- `src/scc_cli/commands/config.py`\n- `tests/test_config_explain.py`\n- `README.md`\n",
+      "description": "## Description\n\nFixes all stale network-mode names across source code, test fixtures, and README. After S01-S04 landed the new NetworkPolicy enum (open / web-egress-enforced / locked-down-web), several user-facing strings and the README still reference the old vocabulary (unrestricted, corp-proxy-only, isolated-as-network-mode). This task makes every user-facing surface truthful.\n\n## Steps\n\n1. In `src/scc_cli/application/compute_effective_config.py`, change `blocked_by=\"network_policy=isolated\"` to `blocked_by=\"network_policy=locked-down-web\"` on lines 563 and 712. The enum comparison on the preceding lines already uses `NetworkPolicy.LOCKED_DOWN_WEB.value` — only the user-facing blocked_by string is stale.\n\n2. In `src/scc_cli/commands/config.py`, change the warning string on line 530 from `\"network_policy is corp-proxy-only but no proxy env vars are set\"` to `\"network_policy is web-egress-enforced but no proxy env vars are set\"`. The condition on line 527 already checks `NetworkPolicy.WEB_EGRESS_ENFORCED.value`.\n\n3. In `tests/test_config_explain.py`, update the `effective_config_full` fixture: change `network_policy=\"corp-proxy\"` (line 125) to `network_policy=\"web-egress-enforced\"`, and change the ConfigDecision `value=\"corp-proxy\"` (line 148) to `value=\"web-egress-enforced\"`. Also fix the docstring on line 672 from \"corp-proxy-only\" to \"web-egress-enforced\".\n\n4. In `README.md` line 32, change `**Requires:** Python 3.10+, Docker Desktop 4.50+, Git 2.30+` to `**Requires:** Python 3.10+, Docker (Engine, Desktop, OrbStack, or Colima), Git 2.30+`. Constitution §3 prohibits Docker Desktop as a hard dependency.\n\n5. In `README.md` around line 117, replace the stale enforcement scope bullet `network_policy is partially enforced (proxy env injection + MCP suppression under isolated), not a full egress firewall.` with an accurate description: `network_policy enforcement: web-egress-enforced uses topology-based isolation (internal Docker network + proxy sidecar) for HTTP/HTTPS egress control. locked-down-web applies --network=none. Enforcement is IPv4-only in v1; raw TCP/UDP beyond HTTP(S) is not filtered.`\n\n6. In `README.md` around line 144, in the org config example JSON, change `\"network_policy\": \"unrestricted\"` to `\"network_policy\": \"open\"`.\n\n7. In `README.md` around line 386, in the troubleshooting table, change `Start Docker Desktop` to `Start Docker (Desktop, Engine, or compatible daemon)`.\n\n## Must-Haves\n\n- [ ] No `blocked_by` string in `compute_effective_config.py` contains `isolated` as a network mode name\n- [ ] Warning string in `config.py` says `web-egress-enforced`, not `corp-proxy-only`\n- [ ] Test fixtures in `test_config_explain.py` use `web-egress-enforced`, not `corp-proxy`\n- [ ] README does not claim `Docker Desktop` as a hard requirement\n- [ ] README org config example uses `open`, not `unrestricted`\n- [ ] README enforcement description mentions topology-based isolation and IPv4-only disclosure\n- [ ] `uv run pytest --rootdir \"$PWD\" tests/test_config_explain.py -q` passes (existing tests still pass with updated vocabulary)\n\n## Verification\n\n- `uv run pytest --rootdir \"$PWD\" tests/test_config_explain.py -q` — existing tests pass with updated vocabulary\n- `grep -c 'network_policy=isolated' src/scc_cli/application/compute_effective_config.py` returns 0\n- `grep -c 'corp-proxy-only' src/scc_cli/commands/config.py` returns 0\n- `grep -c '\"unrestricted\"' README.md` returns 0\n- `! grep -q 'Requires.*Docker Desktop' README.md || echo 'FAIL: Docker Desktop still a hard requirement'`",
+      "estimate": "30m",
+      "files": [
+        "src/scc_cli/application/compute_effective_config.py",
+        "src/scc_cli/commands/config.py",
+        "tests/test_config_explain.py",
+        "README.md"
+      ],
+      "verify": "uv run pytest --rootdir \"$PWD\" tests/test_config_explain.py -q && test $(grep -c 'network_policy=isolated' src/scc_cli/application/compute_effective_config.py) -eq 0 && test $(grep -c 'corp-proxy-only' src/scc_cli/commands/config.py) -eq 0 && test $(grep -c '\"unrestricted\"' README.md) -eq 0",
+      "inputs": [
+        "`src/scc_cli/application/compute_effective_config.py` — contains two `blocked_by=\"network_policy=isolated\"` strings at lines 563 and 712",
+        "`src/scc_cli/commands/config.py` — contains stale `corp-proxy-only` warning at line 530",
+        "`tests/test_config_explain.py` — fixtures use `corp-proxy` at lines 125, 148; docstring at 672",
+        "`README.md` — lines 32, 117, 144, 386 contain stale vocabulary and Docker Desktop hard dependency"
+      ],
+      "expected_output": [
+        "`src/scc_cli/application/compute_effective_config.py` — blocked_by strings updated to locked-down-web",
+        "`src/scc_cli/commands/config.py` — warning string updated to web-egress-enforced",
+        "`tests/test_config_explain.py` — fixtures and docstring updated to web-egress-enforced",
+        "`README.md` — Docker requirement, enforcement scope, example JSON, and troubleshooting updated"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M003",
+      "slice_id": "S05",
+      "id": "T02",
+      "title": "Add guardrail tests preventing vocabulary and truthfulness regression",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nCreates `tests/test_docs_truthfulness.py` with guardrail tests that scan source, tests, and docs for stale network-mode vocabulary and Constitution violations. These tests prevent regression — if anyone reintroduces old names or Docker Desktop hard-dependency claims, the test suite will catch it.\n\nFollow the established scanning pattern from `tests/test_runtime_detection_hotspots.py` (tokenize-based for code scanning). For string-literal and README scanning, regex is appropriate since we're matching content, not Python identifiers.\n\n## Steps\n\n1. Create `tests/test_docs_truthfulness.py` with these tests:\n\n   a. `test_no_stale_network_modes_in_blocked_by_strings` — Scan all `.py` files in `src/scc_cli/` for `blocked_by=` string arguments containing old network mode names (`unrestricted`, `corp-proxy-only`, `corp-proxy`, `isolated`). Use `ast` module or regex over file content to find string literals in `blocked_by=` kwargs. Must not match non-network uses of \"isolated\" (e.g. \"isolated feature development\").\n\n   b. `test_no_stale_network_modes_in_user_warnings` — Scan `src/scc_cli/commands/` for warning/error strings containing old network mode names. Use regex targeting string literals that also mention `network_policy` or `proxy` context.\n\n   c. `test_readme_no_docker_desktop_hard_requirement` — Read `README.md` and assert it does NOT contain a line matching `Requires.*Docker Desktop` without also mentioning alternatives (Engine, OrbStack, Colima).\n\n   d. `test_readme_no_stale_network_mode_names` — Scan `README.md` for old network mode names used as values: `\"unrestricted\"`, `\"corp-proxy-only\"`, `\"isolated\"` in network_policy context. The word \"isolated\" in prose (\"isolated feature\", \"isolated environment\") is fine — only match it as a network_policy value (e.g. in JSON, in backticks, or adjacent to network_policy).\n\n   e. `test_example_json_uses_valid_network_policy_values` — Scan all `examples/*.json` files, find `\"network_policy\"` values, and assert each is a valid member of the NetworkPolicy enum (`open`, `web-egress-enforced`, `locked-down-web`).\n\n2. Import `NetworkPolicy` from `scc_cli.core.network_policy` (or wherever it's defined) to validate enum membership in test (e).\n\n3. Run the new tests to confirm they pass against the T01-fixed codebase.\n\n4. Run the full test suite as the milestone exit gate: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q`. Confirm test count is ≥3464 (3459 baseline + ≥5 new).\n\n## Must-Haves\n\n- [ ] `tests/test_docs_truthfulness.py` exists with ≥5 test functions\n- [ ] Tests scan source for stale `blocked_by` strings\n- [ ] Tests scan commands for stale warning strings\n- [ ] Tests verify README has no Docker Desktop hard requirement\n- [ ] Tests verify README has no stale network mode names\n- [ ] Tests verify example JSON files use valid NetworkPolicy values\n- [ ] All new tests pass\n- [ ] Full exit gate passes: ruff + mypy + pytest\n- [ ] Test count ≥3464\n\n## Verification\n\n- `uv run pytest --rootdir \"$PWD\" tests/test_docs_truthfulness.py -v` — all ≥5 tests pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite passes, count ≥3464",
+      "estimate": "45m",
+      "files": [
+        "tests/test_docs_truthfulness.py"
+      ],
+      "verify": "uv run pytest --rootdir \"$PWD\" tests/test_docs_truthfulness.py -v && uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/application/compute_effective_config.py` — T01 output: blocked_by strings should now use locked-down-web",
+        "`src/scc_cli/commands/config.py` — T01 output: warning string should now use web-egress-enforced",
+        "`README.md` — T01 output: Docker requirement and enforcement scope should be updated",
+        "`examples/*.json` — existing example files with network_policy values (already correct)",
+        "`tests/test_runtime_detection_hotspots.py` — reference pattern for tokenize-based source scanning"
+      ],
+      "expected_output": [
+        "`tests/test_docs_truthfulness.py` — new guardrail test file with ≥5 tests preventing vocabulary and truthfulness regression"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T01",
@@ -3372,6 +3458,18 @@
       "revisable": "Yes",
       "made_by": "agent",
       "superseded_by": null
+    },
+    {
+      "seq": 15,
+      "id": "D015",
+      "when_context": "M003/S04/T03",
+      "scope": "governance",
+      "decision": "How the enterprise egress model is articulated and verified for the remainder of M003",
+      "choice": "Keep the enterprise egress model explicit throughout M003: web-egress-enforced is the normal cloud-provider enterprise mode; locked-down-web is an intentional no-web / no-cloud-launch posture unless a future local-model path exists. Org owns baseline mode, hard deny overlays, named destination sets, and delegation. Teams may widen only within delegated bounds. Project/user scopes may narrow only. Every workspace/session has exactly one active team context; users switch context between teams — do not implicitly union team allowlists. Diagnostics must show active team context, effective destination sets, runtime backend, network mode, and clear blocked reasons. Topology plus proxy policy remain the hard control; wrappers are defense-in-depth, UX, and audit only. Reinforces and extends D015.",
+      "rationale": "User override during M003/S04/T03 to ensure the governance model is unambiguous in all remaining planning documents, verification criteria, and documentation. D015 established the governance composition rules; this decision makes mode semantics (web-egress-enforced vs locked-down-web), diagnostic surface requirements, and the single-team-context invariant fully explicit so S05 verification and docs truthfulness work against a clear contract.",
+      "revisable": "Yes",
+      "made_by": "human",
+      "superseded_by": null
     }
   ],
   "verification_evidence": [
@@ -3957,6 +4055,61 @@
       "verdict": "✅ pass (3432 passed)",
       "duration_ms": 37180,
       "created_at": "2026-04-04T10:32:21.064Z"
+    },
+    {
+      "id": 54,
+      "task_id": "T01",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" tests/test_config_explain.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2020,
+      "created_at": "2026-04-04T11:02:21.839Z"
+    },
+    {
+      "id": 55,
+      "task_id": "T01",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "grep -c 'network_policy=isolated' src/scc_cli/application/compute_effective_config.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 50,
+      "created_at": "2026-04-04T11:02:21.839Z"
+    },
+    {
+      "id": 56,
+      "task_id": "T01",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "grep -c 'corp-proxy-only' src/scc_cli/commands/config.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 50,
+      "created_at": "2026-04-04T11:02:21.839Z"
+    },
+    {
+      "id": 57,
+      "task_id": "T01",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "grep -c '\"unrestricted\"' README.md",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 50,
+      "created_at": "2026-04-04T11:02:21.839Z"
+    },
+    {
+      "id": 58,
+      "task_id": "T01",
+      "slice_id": "S05",
+      "milestone_id": "M003",
+      "command": "! grep -q 'Requires.*Docker Desktop' README.md",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 50,
+      "created_at": "2026-04-04T11:02:21.839Z"
     }
   ]
 }

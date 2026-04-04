@@ -527,7 +527,7 @@ def _collect_advisory_warnings(
         proxy_env = collect_proxy_env()
         if not proxy_env:
             warnings.append(
-                "network_policy is corp-proxy-only but no proxy env vars are set "
+                "network_policy is web-egress-enforced but no proxy env vars are set "
                 "(HTTP_PROXY/HTTPS_PROXY/NO_PROXY)."
             )
 
