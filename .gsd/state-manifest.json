@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T09:47:39.973Z",
+  "exported_at": "2026-04-04T09:54:01.049Z",
   "milestones": [
     {
       "id": "M001",
@@ -2049,19 +2049,28 @@
       "milestone_id": "M003",
       "slice_id": "S03",
       "id": "T03",
-      "title": "Wire egress topology into OciSandboxRuntime and add network-enforcement guardrails",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Wire egress topology into OciSandboxRuntime with network-enforcement guardrails and 16 new tests",
+      "status": "complete",
+      "one_liner": "Wire egress topology into OciSandboxRuntime with network-enforcement guardrails and 16 new tests",
+      "narrative": "Integrated NetworkTopologyManager into OciSandboxRuntime.run() for web-egress-enforced mode with proxy env injection, --network none for locked-down-web, backward-compatible open mode, topology teardown in stop()/remove(), and 16 new tests including a regression guardrail. For enforced mode, run() builds an egress plan, compiles Squid ACLs, creates topology, and passes the internal network name and proxy env to _build_create_cmd(). Host proxy env is merged via collect_proxy_env(). _teardown_topology() helper is called by both stop() and remove().",
+      "verification_result": "All four verification gates pass: pytest on new tests (50 passed), ruff check (all clean), mypy (no issues in 248 files), full test suite (3402 passed, 23 skipped, 4 xfailed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T09:54:01.011Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Added 5th test to TestNetworkEnforcement for None/unset policy case. Added 4 extra topology teardown safety tests. Both additive.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "tests/test_oci_sandbox_runtime.py",
+        "tests/test_oci_egress_integration.py"
+      ],
+      "key_decisions": [
+        "Proxy env vars injected as -e flags in docker create",
+        "Topology teardown in both stop() and remove() with None reset",
+        "collect_proxy_env() merged into proxy_env for enforced mode parity",
+        "_build_create_cmd accepts network_name and proxy_env as keyword-only params"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S03\nmilestone: M003\nkey_files:\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - tests/test_oci_sandbox_runtime.py\n  - tests/test_oci_egress_integration.py\nkey_decisions:\n  - Proxy env vars injected as -e flags in docker create\n  - Topology teardown in both stop() and remove() with None reset\n  - collect_proxy_env() merged into proxy_env for enforced mode parity\n  - _build_create_cmd accepts network_name and proxy_env as keyword-only params\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T09:54:01.010Z\nblocker_discovered: false\n---\n\n# T03: Wire egress topology into OciSandboxRuntime with network-enforcement guardrails and 16 new tests\n\n**Wire egress topology into OciSandboxRuntime with network-enforcement guardrails and 16 new tests**\n\n## What Happened\n\nIntegrated NetworkTopologyManager into OciSandboxRuntime.run() for web-egress-enforced mode with proxy env injection, --network none for locked-down-web, backward-compatible open mode, topology teardown in stop()/remove(), and 16 new tests including a regression guardrail. For enforced mode, run() builds an egress plan, compiles Squid ACLs, creates topology, and passes the internal network name and proxy env to _build_create_cmd(). Host proxy env is merged via collect_proxy_env(). _teardown_topology() helper is called by both stop() and remove().\n\n## Verification\n\nAll four verification gates pass: pytest on new tests (50 passed), ruff check (all clean), mypy (no issues in 248 files), full test suite (3402 passed, 23 skipped, 4 xfailed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_oci_sandbox_runtime.py tests/test_oci_egress_integration.py -q` | 0 | ✅ pass | 1230ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 1000ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5000ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 54440ms |\n\n## Deviations\n\nAdded 5th test to TestNetworkEnforcement for None/unset policy case. Added 4 extra topology teardown safety tests. Both additive.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/oci_sandbox_runtime.py`\n- `tests/test_oci_sandbox_runtime.py`\n- `tests/test_oci_egress_integration.py`\n",
       "description": "## Description\n\nIntegrate the egress topology layer into `OciSandboxRuntime` so that `run()` enforces network policy through actual Docker network topology. Add proxy env forwarding to the OCI path. Add guardrail tests that `_build_create_cmd` always produces the correct `--network` flag for enforced modes. Run the full test suite to confirm nothing is broken.\n\n## Steps\n\n1. Modify `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - Import `NetworkTopologyManager` from `egress_topology`, `build_egress_plan` and `compile_squid_acl` from `core/egress_policy`, `NetworkPolicy` from `core/enums`, `collect_proxy_env` from `core/network_policy`.\n   - Add an `_topology: NetworkTopologyManager | None = None` instance attribute in `__init__`.\n   - Modify `_build_create_cmd()` to accept an optional `network_name: str | None = None` parameter:\n     - If `spec.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value`: add `--network none` to the create command.\n     - If `network_name is not None` (i.e., enforced mode with topology set up): add `--network {network_name}` to the create command.\n     - If `spec.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value` and topology provided proxy env: add `HTTP_PROXY` and `HTTPS_PROXY` env vars pointing at the proxy endpoint, and `NO_PROXY=\"\"` (force everything through proxy).\n     - If `spec.network_policy is None` or `NetworkPolicy.OPEN.value`: no network flags (current behavior).\n   - Modify `run()` to orchestrate topology:\n     - Before `docker create`: if `spec.network_policy == WEB_EGRESS_ENFORCED`, build the egress plan via `build_egress_plan()`, compile ACLs via `compile_squid_acl()`, create a `NetworkTopologyManager(session_id=container_name)`, call `setup(acl_config)` to get `EgressTopologyInfo`, store `self._topology = topology_manager`, pass `network_name=info.network_name` and proxy env to `_build_create_cmd()`.\n     - After `docker create` but before `docker start`: no additional wiring needed (container is already on the internal network from `--network` flag).\n     - If `spec.network_policy == LOCKED_DOWN_WEB`, pass `network_name` parameter not needed — just the `--network none` from `_build_create_cmd()`.\n     - Also forward host proxy env via `collect_proxy_env()` when `WEB_EGRESS_ENFORCED` (parity with DockerSandboxRuntime).\n   - Add a `_teardown_topology(self) -> None` helper that calls `self._topology.teardown()` if `self._topology` is not None. Call this in `remove()` and `stop()` methods.\n2. Update `tests/test_oci_sandbox_runtime.py`:\n   - Add new test class `TestNetworkEnforcement`:\n     - `test_enforced_mode_adds_network_flag` — when `spec.network_policy='web-egress-enforced'`, `_build_create_cmd` output contains `--network` with the internal network name.\n     - `test_locked_down_mode_adds_network_none` — when `spec.network_policy='locked-down-web'`, `_build_create_cmd` output contains `--network none`.\n     - `test_open_mode_no_network_flag` — when `spec.network_policy='open'` or None, `_build_create_cmd` output does NOT contain `--network`.\n     - `test_enforced_mode_injects_proxy_env` — proxy env vars (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) appear in the create command env.\n3. Create `tests/test_oci_egress_integration.py` with integration-level tests (still mocked subprocess):\n   - `test_run_enforced_sets_up_topology_before_create` — Mock `NetworkTopologyManager.setup`, verify it's called before `docker create`.\n   - `test_run_enforced_passes_network_to_create` — Verify `docker create` args contain `--network scc-egress-*`.\n   - `test_run_locked_down_skips_topology` — `NetworkTopologyManager` is NOT instantiated for `locked-down-web`.\n   - `test_remove_tears_down_topology` — When topology was set up, `remove()` calls `teardown()`.\n   - `test_run_open_mode_unchanged` — No topology setup, no network flags.\n4. Add a guardrail test in `tests/test_oci_egress_integration.py`:\n   - `test_enforced_mode_never_produces_default_network` — For `web-egress-enforced`, `_build_create_cmd` must NOT produce a command without an explicit `--network` flag (prevents regression to default bridge).\n5. Run full verification:\n   - `uv run ruff check` — all clean\n   - `uv run mypy src/scc_cli` — no issues\n   - `uv run pytest --rootdir \"$PWD\" -q` — full suite passes\n\n## Must-Haves\n\n- [ ] `_build_create_cmd()` respects all three network policy modes\n- [ ] `run()` sets up egress topology for `web-egress-enforced`\n- [ ] `run()` uses `--network none` for `locked-down-web`\n- [ ] `run()` does nothing for `open`/unset (backward compatible)\n- [ ] Proxy env vars injected for enforced mode\n- [ ] Topology teardown wired into `remove()` and `stop()`\n- [ ] Guardrail test prevents regression to default network for enforced mode\n- [ ] Full test suite passes\n\n## Verification\n\n- `uv run pytest tests/test_oci_sandbox_runtime.py tests/test_oci_egress_integration.py -q` — all tests pass\n- `uv run ruff check` — clean\n- `uv run mypy src/scc_cli` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite passes\n\n## Failure Modes\n\n| Dependency | On error | On timeout | On malformed response |\n|------------|----------|-----------|----------------------|\n| NetworkTopologyManager.setup() | SandboxLaunchError propagates to caller | SandboxLaunchError (timeout) | N/A |\n| NetworkTopologyManager.teardown() | Silently ignored (idempotent) | Silently ignored | N/A |\n| compile_squid_acl() | Invalid config → proxy fails at startup → agent can't reach network | N/A (pure function) | N/A |\n\n## Observability Impact\n\n- Signals added: OCI adapter now creates labeled Docker networks and proxy containers discoverable via standard docker commands\n- How a future agent inspects this: `docker network ls --filter name=scc-egress-` and `docker ps --filter label=scc.egress-proxy` reveal topology state\n- Failure state exposed: SandboxLaunchError from topology setup includes the specific Docker command that failed and its stderr",
       "estimate": "1h",
       "files": [
@@ -3622,6 +3631,50 @@
       "verdict": "✅ pass",
       "duration_ms": 10,
       "created_at": "2026-04-04T09:47:39.929Z"
+    },
+    {
+      "id": 39,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_oci_sandbox_runtime.py tests/test_oci_egress_integration.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1230,
+      "created_at": "2026-04-04T09:54:01.011Z"
+    },
+    {
+      "id": 40,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-04T09:54:01.011Z"
+    },
+    {
+      "id": 41,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T09:54:01.011Z"
+    },
+    {
+      "id": 42,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 54440,
+      "created_at": "2026-04-04T09:54:01.011Z"
     }
   ]
 }

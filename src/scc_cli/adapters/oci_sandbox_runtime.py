@@ -14,12 +14,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from scc_cli.adapters.egress_topology import NetworkTopologyManager
 from scc_cli.core.constants import AGENT_NAME, SANDBOX_DATA_VOLUME
+from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl
+from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.errors import (
     DockerDaemonNotRunningError,
     DockerNotFoundError,
     SandboxLaunchError,
 )
+from scc_cli.core.network_policy import collect_proxy_env
 from scc_cli.ports.models import (
     SandboxHandle,
     SandboxSpec,
@@ -94,6 +98,7 @@ class OciSandboxRuntime:
 
     def __init__(self, probe: RuntimeProbe) -> None:
         self._probe = probe
+        self._topology: NetworkTopologyManager | None = None
 
     # ── SandboxRuntime protocol ──────────────────────────────────────────
 
@@ -126,8 +131,28 @@ class OciSandboxRuntime:
         """
         container_name = _container_name(spec.workspace_mount.source)
 
+        # -- Set up egress topology for enforced mode ----------------------
+        network_name: str | None = None
+        proxy_env: dict[str, str] = {}
+
+        if spec.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
+            plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED)
+            acl_config = compile_squid_acl(plan)
+            self._topology = NetworkTopologyManager(session_id=container_name)
+            topo_info = self._topology.setup(acl_config)
+            network_name = topo_info.network_name
+            proxy_env = {
+                "HTTP_PROXY": topo_info.proxy_endpoint,
+                "HTTPS_PROXY": topo_info.proxy_endpoint,
+                "NO_PROXY": "",
+            }
+            # Also forward host proxy env for parity with DockerSandboxRuntime
+            proxy_env.update(collect_proxy_env())
+
         # -- Build docker create command ------------------------------------
-        create_cmd = self._build_create_cmd(spec, container_name)
+        create_cmd = self._build_create_cmd(
+            spec, container_name, network_name=network_name, proxy_env=proxy_env,
+        )
         result = _run_docker(create_cmd, timeout=_CREATE_TIMEOUT)
         container_id = result.stdout.strip()
 
@@ -153,10 +178,12 @@ class OciSandboxRuntime:
     def stop(self, handle: SandboxHandle) -> None:
         """Stop a running container."""
         _run_docker(["stop", handle.sandbox_id], timeout=_DEFAULT_TIMEOUT)
+        self._teardown_topology()
 
     def remove(self, handle: SandboxHandle) -> None:
         """Force-remove a container."""
         _run_docker(["rm", "-f", handle.sandbox_id], timeout=_DEFAULT_TIMEOUT)
+        self._teardown_topology()
 
     def list_running(self) -> list[SandboxHandle]:
         """List containers started by this backend."""
@@ -216,7 +243,13 @@ class OciSandboxRuntime:
     # ── Private helpers ──────────────────────────────────────────────────
 
     @staticmethod
-    def _build_create_cmd(spec: SandboxSpec, container_name: str) -> list[str]:
+    def _build_create_cmd(
+        spec: SandboxSpec,
+        container_name: str,
+        *,
+        network_name: str | None = None,
+        proxy_env: dict[str, str] | None = None,
+    ) -> list[str]:
         """Assemble the ``docker create`` argument list."""
         cmd: list[str] = [
             "create",
@@ -236,9 +269,20 @@ class OciSandboxRuntime:
             _OCI_LABEL,
         ]
 
+        # -- Network policy enforcement -----------------------------------
+        if spec.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value:
+            cmd.extend(["--network", "none"])
+        elif network_name is not None:
+            cmd.extend(["--network", network_name])
+
         # Environment variables
         for key, value in spec.env.items():
             cmd.extend(["-e", f"{key}={value}"])
+
+        # Proxy env vars for enforced egress mode
+        if proxy_env:
+            for key, value in proxy_env.items():
+                cmd.extend(["-e", f"{key}={value}"])
 
         # Extra mounts
         for mount in spec.extra_mounts:
@@ -254,6 +298,12 @@ class OciSandboxRuntime:
         cmd.extend(["/bin/bash", "-c", "sleep infinity"])
 
         return cmd
+
+    def _teardown_topology(self) -> None:
+        """Tear down egress topology if one was set up."""
+        if self._topology is not None:
+            self._topology.teardown()
+            self._topology = None
 
     @staticmethod
     def _build_exec_cmd(spec: SandboxSpec, container_id: str) -> list[str]:

@@ -135,7 +135,7 @@ Build the Docker network topology management layer: a Squid-based proxy sidecar 
   - Estimate: 1h
   - Files: images/scc-egress-proxy/Dockerfile, images/scc-egress-proxy/squid.conf.template, images/scc-egress-proxy/entrypoint.sh, src/scc_cli/adapters/egress_topology.py, tests/test_egress_topology.py
   - Verify: uv run pytest tests/test_egress_topology.py -q && uv run ruff check src/scc_cli/adapters/egress_topology.py tests/test_egress_topology.py && uv run mypy src/scc_cli/adapters/egress_topology.py && test -f images/scc-egress-proxy/Dockerfile && test -f images/scc-egress-proxy/squid.conf.template && test -f images/scc-egress-proxy/entrypoint.sh
-- [ ] **T03: Wire egress topology into OciSandboxRuntime and add network-enforcement guardrails** — ## Description
+- [x] **T03: Wire egress topology into OciSandboxRuntime with network-enforcement guardrails and 16 new tests** — ## Description
 
 Integrate the egress topology layer into `OciSandboxRuntime` so that `run()` enforces network policy through actual Docker network topology. Add proxy env forwarding to the OCI path. Add guardrail tests that `_build_create_cmd` always produces the correct `--network` flag for enforced modes. Run the full test suite to confirm nothing is broken.
 

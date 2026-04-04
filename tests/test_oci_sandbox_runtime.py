@@ -415,6 +415,59 @@ class TestLifecycle:
         mock_run_docker.assert_called_once_with(["rm", "-f", "cid"], timeout=15)
 
 
+# ── Network enforcement ──────────────────────────────────────────────────────
+
+class TestNetworkEnforcement:
+    """Verify _build_create_cmd produces correct --network flags for all modes."""
+
+    def test_enforced_mode_adds_network_flag(self) -> None:
+        """web-egress-enforced with a network name → --network <name> in command."""
+        spec = _minimal_spec(network_policy="web-egress-enforced")
+        cmd = OciSandboxRuntime._build_create_cmd(
+            spec, "scc-oci-test", network_name="scc-egress-scc-oci-test",
+        )
+        assert "--network" in cmd
+        idx = cmd.index("--network")
+        assert cmd[idx + 1] == "scc-egress-scc-oci-test"
+
+    def test_locked_down_mode_adds_network_none(self) -> None:
+        """locked-down-web → --network none."""
+        spec = _minimal_spec(network_policy="locked-down-web")
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        assert "--network" in cmd
+        idx = cmd.index("--network")
+        assert cmd[idx + 1] == "none"
+
+    def test_open_mode_no_network_flag(self) -> None:
+        """open → no --network flag."""
+        spec = _minimal_spec(network_policy="open")
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        assert "--network" not in cmd
+
+    def test_none_policy_no_network_flag(self) -> None:
+        """None (unset) → no --network flag."""
+        spec = _minimal_spec(network_policy=None)
+        cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
+        assert "--network" not in cmd
+
+    def test_enforced_mode_injects_proxy_env(self) -> None:
+        """Proxy env vars appear in the create command for enforced mode."""
+        spec = _minimal_spec(network_policy="web-egress-enforced")
+        proxy_env = {
+            "HTTP_PROXY": "http://172.18.0.2:3128",
+            "HTTPS_PROXY": "http://172.18.0.2:3128",
+            "NO_PROXY": "",
+        }
+        cmd = OciSandboxRuntime._build_create_cmd(
+            spec, "scc-oci-test",
+            network_name="scc-egress-scc-oci-test",
+            proxy_env=proxy_env,
+        )
+        assert "HTTP_PROXY=http://172.18.0.2:3128" in cmd
+        assert "HTTPS_PROXY=http://172.18.0.2:3128" in cmd
+        assert "NO_PROXY=" in cmd
+
+
 # ── Container naming ────────────────────────────────────────────────────────
 
 class TestContainerName:
