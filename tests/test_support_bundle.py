@@ -227,6 +227,73 @@ class TestSupportBundleManifest:
         )
 
 
+class TestEffectiveEgressSection:
+    """Tests for the effective_egress section in the support bundle manifest."""
+
+    def test_manifest_includes_effective_egress_section(self, tmp_path: Path) -> None:
+        """Should include effective_egress with runtime_backend, network_policy, sets."""
+        from unittest.mock import MagicMock
+
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="27.0.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="docker-sandbox",
+        )
+        mock_adapters = MagicMock()
+        mock_adapters.runtime_probe.probe.return_value = mock_info
+
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=False,
+            workspace_path=None,
+        )
+
+        with patch(
+            "scc_cli.bootstrap.get_default_adapters",
+            return_value=mock_adapters,
+        ):
+            manifest = build_support_bundle_manifest(
+                request, dependencies=_make_dependencies()
+            )
+
+        assert "effective_egress" in manifest
+        egress = manifest["effective_egress"]
+        assert egress["runtime_backend"] == "docker-sandbox"
+        assert "anthropic-core" in egress["resolved_destination_sets"]
+        assert "openai-core" in egress["resolved_destination_sets"]
+
+    def test_effective_egress_survives_probe_failure(self, tmp_path: Path) -> None:
+        """Should produce effective_egress even when probe raises."""
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=False,
+            workspace_path=None,
+        )
+
+        with patch(
+            "scc_cli.bootstrap.get_default_adapters",
+            side_effect=RuntimeError("no docker"),
+        ):
+            manifest = build_support_bundle_manifest(
+                request, dependencies=_make_dependencies()
+            )
+
+        assert "effective_egress" in manifest
+        egress = manifest["effective_egress"]
+        assert egress["runtime_backend"] == "unavailable"
+        # Destination sets should still resolve even if probe fails
+        assert isinstance(egress["resolved_destination_sets"], list)
+
+
 class TestSupportBundleArchive:
     def test_create_support_bundle_creates_zip_file(self, tmp_path: Path) -> None:
         output_path = tmp_path / "support-bundle.zip"

@@ -10,6 +10,7 @@ from .checks import (
     check_docker_running,
     check_docker_sandbox,
     check_git,
+    check_runtime_backend,
     check_user_config_valid,
     check_workspace_path,
     check_wsl2,
@@ -44,6 +45,9 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
         result.sandbox_ok = sandbox_check.passed
     else:
         result.sandbox_ok = False
+
+    runtime_check = check_runtime_backend()
+    result.checks.append(runtime_check)
 
     wsl2_check, is_wsl2 = check_wsl2()
     result.checks.append(wsl2_check)

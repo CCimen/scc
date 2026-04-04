@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T10:21:30.558Z",
+  "exported_at": "2026-04-04T10:32:21.107Z",
   "milestones": [
     {
       "id": "M001",
@@ -2201,19 +2201,30 @@
       "milestone_id": "M003",
       "slice_id": "S04",
       "id": "T03",
-      "title": "Add runtime backend doctor check and egress policy support bundle section",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added check_runtime_backend() doctor check and effective_egress support bundle section for runtime backend, network policy, and destination set diagnostics",
+      "status": "complete",
+      "one_liner": "Added check_runtime_backend() doctor check and effective_egress support bundle section for runtime backend, network policy, and destination set diagnostics",
+      "narrative": "Added check_runtime_backend() to the doctor checks module — probes the Docker runtime via bootstrap.get_default_adapters().runtime_probe, reports preferred_backend (docker-sandbox/oci/unavailable), display_name, and version. Returns CheckResult with passed=True when daemon is reachable, warning severity when unreachable or on probe failure. Wired into run_all_checks(), run_doctor(), and doctor package exports.\\n\\nAdded effective_egress section to build_support_bundle_manifest() — includes runtime_backend (from probe), network_policy (from user config), and resolved_destination_sets (sorted names from PROVIDER_DESTINATION_SETS). Each subsection uses independent try/except so probe failures don't block config or registry reads.\\n\\nWrote 4 tests for check_runtime_backend() covering docker-sandbox, oci, daemon-unavailable, and probe-exception cases. Wrote 2 tests for effective_egress covering successful probe and probe-failure resilience. Updated existing TestRunAllChecks to mock the new check. Adapted direct adapter import to bootstrap route to respect import boundary enforcement.",
+      "verification_result": "All verification commands pass: ruff check (0 issues), mypy src/scc_cli (0 issues in 249 files), pytest targeted (64 passed), pytest full suite (3432 passed, 0 failures).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T10:32:21.064Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Refactored from direct DockerRuntimeProbe adapter import to bootstrap.get_default_adapters().runtime_probe access to respect the import boundary test (test_only_bootstrap_imports_adapters). Architecturally cleaner than the plan's suggestion.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/doctor/checks/environment.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "src/scc_cli/doctor/__init__.py",
+        "src/scc_cli/doctor/core.py",
+        "src/scc_cli/application/support_bundle.py",
+        "tests/test_doctor_checks.py",
+        "tests/test_support_bundle.py"
+      ],
+      "key_decisions": [
+        "Runtime probe accessed via bootstrap.get_default_adapters() not direct adapter import, to respect import boundary enforcement",
+        "Effective egress section separates probe, config, and registry reads into independent try/except blocks so partial data survives failures"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S04\nmilestone: M003\nkey_files:\n  - src/scc_cli/doctor/checks/environment.py\n  - src/scc_cli/doctor/checks/__init__.py\n  - src/scc_cli/doctor/__init__.py\n  - src/scc_cli/doctor/core.py\n  - src/scc_cli/application/support_bundle.py\n  - tests/test_doctor_checks.py\n  - tests/test_support_bundle.py\nkey_decisions:\n  - Runtime probe accessed via bootstrap.get_default_adapters() not direct adapter import, to respect import boundary enforcement\n  - Effective egress section separates probe, config, and registry reads into independent try/except blocks so partial data survives failures\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T10:32:21.063Z\nblocker_discovered: false\n---\n\n# T03: Added check_runtime_backend() doctor check and effective_egress support bundle section for runtime backend, network policy, and destination set diagnostics\n\n**Added check_runtime_backend() doctor check and effective_egress support bundle section for runtime backend, network policy, and destination set diagnostics**\n\n## What Happened\n\nAdded check_runtime_backend() to the doctor checks module — probes the Docker runtime via bootstrap.get_default_adapters().runtime_probe, reports preferred_backend (docker-sandbox/oci/unavailable), display_name, and version. Returns CheckResult with passed=True when daemon is reachable, warning severity when unreachable or on probe failure. Wired into run_all_checks(), run_doctor(), and doctor package exports.\\n\\nAdded effective_egress section to build_support_bundle_manifest() — includes runtime_backend (from probe), network_policy (from user config), and resolved_destination_sets (sorted names from PROVIDER_DESTINATION_SETS). Each subsection uses independent try/except so probe failures don't block config or registry reads.\\n\\nWrote 4 tests for check_runtime_backend() covering docker-sandbox, oci, daemon-unavailable, and probe-exception cases. Wrote 2 tests for effective_egress covering successful probe and probe-failure resilience. Updated existing TestRunAllChecks to mock the new check. Adapted direct adapter import to bootstrap route to respect import boundary enforcement.\n\n## Verification\n\nAll verification commands pass: ruff check (0 issues), mypy src/scc_cli (0 issues in 249 files), pytest targeted (64 passed), pytest full suite (3432 passed, 0 failures).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 2000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 8000ms |\n| 3 | `uv run pytest --rootdir $PWD tests/test_doctor_checks.py tests/test_support_bundle.py -q` | 0 | ✅ pass (64 passed) | 2180ms |\n| 4 | `uv run pytest --rootdir $PWD -q` | 0 | ✅ pass (3432 passed) | 37180ms |\n\n## Deviations\n\nRefactored from direct DockerRuntimeProbe adapter import to bootstrap.get_default_adapters().runtime_probe access to respect the import boundary test (test_only_bootstrap_imports_adapters). Architecturally cleaner than the plan's suggestion.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/doctor/checks/environment.py`\n- `src/scc_cli/doctor/checks/__init__.py`\n- `src/scc_cli/doctor/__init__.py`\n- `src/scc_cli/doctor/core.py`\n- `src/scc_cli/application/support_bundle.py`\n- `tests/test_doctor_checks.py`\n- `tests/test_support_bundle.py`\n",
       "description": "Add operator-facing diagnostics: a doctor check for runtime backend type and a support bundle section for effective egress policy.\n\nSteps:\n1. Add `check_runtime_backend()` to `src/scc_cli/doctor/checks/environment.py`:\n   - Import `DockerRuntimeProbe` from the adapter layer via bootstrap re-export (or use a lightweight probe).\n   - Probe the runtime and report `preferred_backend` (docker-sandbox / oci / unavailable) plus `runtime_id` and version.\n   - Return `CheckResult` with name `\"Runtime Backend\"`, pass=True if daemon is reachable, message showing backend type.\n   - Handle probe failures gracefully (return warning, not error).\n2. Wire `check_runtime_backend()` into the check infrastructure:\n   - Add to `run_all_checks()` in `src/scc_cli/doctor/checks/__init__.py` and to `__all__`.\n   - Add to `run_doctor()` in `src/scc_cli/doctor/core.py`.\n   - Add to `src/scc_cli/doctor/__init__.py` exports.\n3. Add `effective_egress` section to `build_support_bundle_manifest()` in `src/scc_cli/application/support_bundle.py`:\n   - Include `runtime_backend` (from probe), `network_policy` (from user config if available), and `resolved_destination_sets` (list of set names the active provider requires).\n   - Wrap in try/except so probe failures don't crash bundle generation.\n4. Write tests:\n   - Add tests to `tests/test_doctor_checks.py` for `check_runtime_backend()` — mock the probe to test docker-sandbox, oci, and unavailable cases.\n   - Add test to `tests/test_support_bundle.py` for the new `effective_egress` section.\n5. Run full suite: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q`.",
       "estimate": "35m",
       "files": [
@@ -3902,6 +3913,50 @@
       "verdict": "✅ pass",
       "duration_ms": 35940,
       "created_at": "2026-04-04T10:21:30.534Z"
+    },
+    {
+      "id": 50,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2000,
+      "created_at": "2026-04-04T10:32:21.064Z"
+    },
+    {
+      "id": 51,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 8000,
+      "created_at": "2026-04-04T10:32:21.064Z"
+    },
+    {
+      "id": 52,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir $PWD tests/test_doctor_checks.py tests/test_support_bundle.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (64 passed)",
+      "duration_ms": 2180,
+      "created_at": "2026-04-04T10:32:21.064Z"
+    },
+    {
+      "id": 53,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir $PWD -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (3432 passed)",
+      "duration_ms": 37180,
+      "created_at": "2026-04-04T10:32:21.064Z"
     }
   ]
 }

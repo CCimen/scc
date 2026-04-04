@@ -616,6 +616,119 @@ class TestLoadCachedOrgConfig:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for check_runtime_backend
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCheckRuntimeBackend:
+    """Tests for check_runtime_backend() function."""
+
+    @staticmethod
+    def _mock_adapters(runtime_info: object | None = None) -> object:
+        """Create a mock adapters object with a runtime_probe attribute."""
+        from unittest.mock import MagicMock
+
+        adapters = MagicMock()
+        if runtime_info is None:
+            adapters.runtime_probe = None
+        else:
+            adapters.runtime_probe.probe.return_value = runtime_info
+        return adapters
+
+    def test_returns_ok_for_docker_sandbox_backend(self) -> None:
+        """Should return passed=True when daemon is reachable with docker-sandbox backend."""
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="27.0.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="docker-sandbox",
+        )
+        with patch(
+            "scc_cli.bootstrap.get_default_adapters",
+            return_value=self._mock_adapters(mock_info),
+        ):
+            result = doctor.check_runtime_backend()
+
+        assert result.passed is True
+        assert result.name == "Runtime Backend"
+        assert "docker-sandbox" in result.message
+        assert "Docker Desktop" in result.message
+        assert result.version == "27.0.1"
+
+    def test_returns_ok_for_oci_backend(self) -> None:
+        """Should return passed=True when daemon is reachable with oci backend."""
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Engine",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="24.0.6",
+            daemon_reachable=True,
+            sandbox_available=False,
+            preferred_backend="oci",
+        )
+        with patch(
+            "scc_cli.bootstrap.get_default_adapters",
+            return_value=self._mock_adapters(mock_info),
+        ):
+            result = doctor.check_runtime_backend()
+
+        assert result.passed is True
+        assert "oci" in result.message
+        assert "Docker Engine" in result.message
+        assert result.version == "24.0.6"
+
+    def test_returns_warning_when_daemon_unavailable(self) -> None:
+        """Should return passed=False with warning when daemon is unreachable."""
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker (daemon not running)",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=False,
+            supports_host_network=False,
+            daemon_reachable=False,
+            sandbox_available=False,
+            preferred_backend=None,
+        )
+        with patch(
+            "scc_cli.bootstrap.get_default_adapters",
+            return_value=self._mock_adapters(mock_info),
+        ):
+            result = doctor.check_runtime_backend()
+
+        assert result.passed is False
+        assert result.severity == "warning"
+        assert "not reachable" in result.message
+
+    def test_returns_warning_on_probe_exception(self) -> None:
+        """Should return passed=False with warning when get_default_adapters raises."""
+        with patch(
+            "scc_cli.bootstrap.get_default_adapters",
+            side_effect=RuntimeError("probe exploded"),
+        ):
+            result = doctor.check_runtime_backend()
+
+        assert result.passed is False
+        assert result.severity == "warning"
+        assert "probe exploded" in result.message
+
+
 class TestRunAllChecks:
     """Tests for run_all_checks() integration."""
 
@@ -634,6 +747,9 @@ class TestRunAllChecks:
         mock_org = doctor.CheckResult(name="Org Config", passed=True, message="reachable")
         mock_auth = doctor.CheckResult(name="Auth", passed=True, message="ok")
         mock_injection = doctor.CheckResult(name="Injection", passed=True, message="ok")
+        mock_runtime = doctor.CheckResult(
+            name="Runtime Backend", passed=True, message="docker-sandbox"
+        )
         mock_cache = doctor.CheckResult(name="Cache", passed=True, message="ok")
         mock_ttl = doctor.CheckResult(name="TTL", passed=True, message="ok")
 
@@ -643,6 +759,7 @@ class TestRunAllChecks:
             patch("scc_cli.doctor.check_docker_desktop", return_value=mock_docker),
             patch("scc_cli.doctor.check_docker_sandbox", return_value=mock_sandbox),
             patch("scc_cli.doctor.check_docker_running", return_value=mock_daemon),
+            patch("scc_cli.doctor.check_runtime_backend", return_value=mock_runtime),
             patch("scc_cli.doctor.check_wsl2", return_value=(mock_wsl2, False)),
             patch("scc_cli.doctor.check_config_directory", return_value=mock_config),
             patch("scc_cli.doctor.check_user_config_valid", return_value=mock_user_config),

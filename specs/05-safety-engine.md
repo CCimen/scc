@@ -14,3 +14,4 @@ Provide one cross-agent runtime safety baseline.
 - fail closed when policy cannot be loaded or validated
 - runtime wrappers are the hard cross-agent baseline
 - provider-native integrations improve UX and audit context only
+- in enforced web-egress modes, wrappers for explicit network tools are defense-in-depth and better denial/audit UX; topology plus egress policy remain the hard network control

@@ -45,7 +45,7 @@ Steps:
   - Estimate: 45m
   - Files: src/scc_cli/ports/models.py, src/scc_cli/application/start_session.py, src/scc_cli/adapters/oci_sandbox_runtime.py, src/scc_cli/application/launch/preflight.py, tests/test_oci_egress_integration.py, tests/test_launch_preflight.py, tests/test_start_session_image_routing.py
   - Verify: uv run pytest --rootdir "$PWD" tests/test_oci_egress_integration.py tests/test_launch_preflight.py tests/test_start_session_image_routing.py tests/test_egress_policy.py -q && uv run mypy src/scc_cli
-- [ ] **T03: Add runtime backend doctor check and egress policy support bundle section** — Add operator-facing diagnostics: a doctor check for runtime backend type and a support bundle section for effective egress policy.
+- [x] **T03: Added check_runtime_backend() doctor check and effective_egress support bundle section for runtime backend, network policy, and destination set diagnostics** — Add operator-facing diagnostics: a doctor check for runtime backend type and a support bundle section for effective egress policy.
 
 Steps:
 1. Add `check_runtime_backend()` to `src/scc_cli/doctor/checks/environment.py`:

@@ -184,6 +184,52 @@ def check_wsl2() -> tuple[CheckResult, bool]:
     )
 
 
+def check_runtime_backend() -> CheckResult:
+    """Check the container runtime backend type and reachability."""
+    try:
+        from scc_cli.bootstrap import get_default_adapters
+
+        adapters = get_default_adapters()
+        probe = adapters.runtime_probe
+        if probe is None:
+            return CheckResult(
+                name="Runtime Backend",
+                passed=False,
+                message="Runtime probe not available in current configuration",
+                severity=SeverityLevel.WARNING,
+            )
+        info = probe.probe()
+    except Exception as exc:
+        return CheckResult(
+            name="Runtime Backend",
+            passed=False,
+            message=f"Failed to probe runtime backend: {exc}",
+            severity=SeverityLevel.WARNING,
+        )
+
+    if not info.daemon_reachable:
+        backend_label = info.preferred_backend or "unavailable"
+        return CheckResult(
+            name="Runtime Backend",
+            passed=False,
+            message=f"Runtime backend: {backend_label} — daemon not reachable",
+            fix_hint="Start Docker Desktop or the Docker daemon",
+            severity=SeverityLevel.WARNING,
+        )
+
+    backend_label = info.preferred_backend or "unknown"
+    version_str = info.version or "unknown"
+    return CheckResult(
+        name="Runtime Backend",
+        passed=True,
+        message=(
+            f"Runtime backend: {backend_label} "
+            f"({info.display_name}, version {version_str})"
+        ),
+        version=version_str,
+    )
+
+
 def check_workspace_path(workspace: Path | None = None) -> CheckResult:
     """Check if workspace path is optimal (not on Windows mount in WSL2)."""
     from ... import platform as platform_module

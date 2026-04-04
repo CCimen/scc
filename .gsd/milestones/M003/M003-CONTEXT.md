@@ -14,6 +14,9 @@ Reason:
 - capability-based `RuntimeInfo`
 - SCC-owned image contracts and plain OCI backend
 - enforced web-egress topology and proxy ACLs
+- named destination sets and provider-core destination validation
+- org/team/project/user composition for effective egress, with widening limited to org + delegated teams
+- one active team context per workspace/session, with users switching context instead of inheriting implicit multi-team unions
 - truthful runtime and egress diagnostics
 - local helper extractions only where runtime/egress work directly needs them
 
@@ -22,3 +25,4 @@ Reason:
 - broad typed-config migration outside touched runtime/egress seams
 - new provider support
 - the shared safety-engine extraction reserved for M004
+- richer approval/request UX for blocked destinations

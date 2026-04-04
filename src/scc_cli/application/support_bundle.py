@@ -244,6 +244,42 @@ def build_support_bundle_manifest(
         if request.redact_paths:
             launch_audit = redact_paths(launch_audit)
 
+    # Effective egress diagnostics
+    runtime_backend = "unavailable"
+    try:
+        from scc_cli.bootstrap import get_default_adapters
+
+        adapters = get_default_adapters()
+        probe = adapters.runtime_probe
+        if probe is not None:
+            probe_info = probe.probe()
+            runtime_backend = probe_info.preferred_backend or "unavailable"
+    except Exception:
+        pass
+
+    network_policy: str | None = None
+    try:
+        if isinstance(user_config, dict):
+            network_policy = user_config.get("network_policy") or user_config.get(
+                "network", {}
+            ).get("policy")
+    except Exception:
+        pass
+
+    resolved_destination_sets: list[str] = []
+    try:
+        from scc_cli.core.destination_registry import PROVIDER_DESTINATION_SETS
+
+        resolved_destination_sets = sorted(PROVIDER_DESTINATION_SETS.keys())
+    except Exception:
+        pass
+
+    effective_egress: dict[str, Any] = {
+        "runtime_backend": runtime_backend,
+        "network_policy": network_policy,
+        "resolved_destination_sets": resolved_destination_sets,
+    }
+
     bundle_data: dict[str, Any] = {
         "generated_at": generated_at,
         "cli_version": __version__,
@@ -252,6 +288,7 @@ def build_support_bundle_manifest(
         "org_config": org_config,
         "doctor": doctor_data,
         "launch_audit": launch_audit,
+        "effective_egress": effective_egress,
     }
 
     if request.workspace_path:
