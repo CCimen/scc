@@ -643,12 +643,12 @@ class TestConfigExplainWarnings:
 
     def test_explain_warns_on_team_network_policy(self, effective_config_basic):
         """Should warn when team network_policy is less restrictive than org default."""
-        effective_config_basic.network_policy = "isolated"
+        effective_config_basic.network_policy = "locked-down-web"
         org_config = {
             "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
-            "defaults": {"network_policy": "isolated"},
-            "profiles": {"dev": {"description": "Dev team", "network_policy": "unrestricted"}},
+            "defaults": {"network_policy": "locked-down-web"},
+            "profiles": {"dev": {"description": "Dev team", "network_policy": "open"}},
         }
 
         with (
@@ -670,11 +670,11 @@ class TestConfigExplainWarnings:
 
     def test_explain_warns_on_missing_proxy_env(self, effective_config_basic):
         """Should warn when corp-proxy-only has no proxy env configured."""
-        effective_config_basic.network_policy = "corp-proxy-only"
+        effective_config_basic.network_policy = "web-egress-enforced"
         org_config = {
             "schema_version": "1.0.0",
             "organization": {"name": "Test Org", "id": "test-org"},
-            "defaults": {"network_policy": "corp-proxy-only"},
+            "defaults": {"network_policy": "web-egress-enforced"},
             "profiles": {"dev": {"description": "Dev team"}},
         }
 

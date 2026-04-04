@@ -23,7 +23,7 @@
             "core-*",
             "shared-*"
         ],
-        "network_policy": "unrestricted",
+        "network_policy": "open",
         "session": {
             "timeout_hours": 12,
             "auto_resume": true
@@ -100,7 +100,7 @@
                     "url": "https://mcp.mermaid.ai/mcp"
                 }
             ],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "delegation": {
                 "allow_project_overrides": true
             }

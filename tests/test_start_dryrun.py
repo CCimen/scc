@@ -285,7 +285,7 @@ class TestBuildDryRunData:
         from scc_cli.commands.launch import build_dry_run_data
 
         mock_org = {
-            "defaults": {"network_policy": "isolated"},
+            "defaults": {"network_policy": "locked-down-web"},
             "profiles": {"platform": {"description": "Platform team"}},
         }
 
@@ -296,7 +296,7 @@ class TestBuildDryRunData:
             project_config=None,
         )
 
-        assert result["network_policy"] == "isolated"
+        assert result["network_policy"] == "locked-down-web"
 
     def test_build_dry_run_data_ready_to_start(self, tmp_path):
         """build_dry_run_data should indicate ready state when no blockers."""

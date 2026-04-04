@@ -314,3 +314,86 @@ class PolicyViolationError(ConfigError):
                 f'{flag} {quoted_item} --ttl 8h --reason "..."'
             )
             self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"
+
+
+@dataclass
+class LaunchPreflightError(ConfigError):
+    """Launch was blocked before runtime startup."""
+
+    provider_id: str = ""
+    network_policy: str = ""
+    required_destination_sets: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass
+class InvalidLaunchPlanError(LaunchPreflightError):
+    """Prepared launch metadata is missing or malformed."""
+
+    reason: str = "Launch plan is invalid."
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Repair the provider launch wiring and try the command again."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = self.reason
+
+
+@dataclass
+class LaunchPolicyBlockedError(LaunchPreflightError):
+    """Launch cannot proceed under the current network policy."""
+
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default=(
+            "Choose a less restrictive network policy or use a provider whose "
+            "required destination sets are allowed."
+        )
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            required = ", ".join(self.required_destination_sets) or "none"
+            provider = self.provider_id or "unknown"
+            policy = self.network_policy or "unknown"
+            self.user_message = (
+                f"Launch blocked before startup: provider '{provider}' requires "
+                f"destination sets [{required}] but the current network policy is '{policy}'."
+            )
+
+
+@dataclass
+class LaunchAuditWriteError(ConfigError):
+    """Launch audit event could not be persisted."""
+
+    audit_destination: str = ""
+    event_type: str = ""
+    reason: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check that SCC's local audit path exists and is writable, then retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            destination = self.audit_destination or "the configured audit sink"
+            self.user_message = f"Failed to write launch audit event to {destination}."
+        if not self.debug_context:
+            details = []
+            if self.event_type:
+                details.append(f"event_type={self.event_type}")
+            if self.reason:
+                details.append(f"error={self.reason}")
+            if details:
+                self.debug_context = "\n".join(details)
+
+
+@dataclass
+class LaunchAuditUnavailableError(ConfigError):
+    """Launch auditing is required but the sink is not wired."""
+
+    user_message: str = field(default="Launch audit sink is not configured.")
+    suggested_action: str = field(
+        default="Use the SCC-wired launch dependency builder so preflight can audit before startup."
+    )

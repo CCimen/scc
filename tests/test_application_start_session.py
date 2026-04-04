@@ -14,8 +14,10 @@ from scc_cli.application.start_session import (
 from scc_cli.application.sync_marketplace import SyncError, SyncResult
 from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
+from scc_cli.core.contracts import AgentLaunchSpec
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.models import MountSpec, SandboxSpec
+from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
 from tests.fakes.fake_sandbox_runtime import FakeSandboxRuntime
 
@@ -70,6 +72,7 @@ def _build_dependencies(git_client: FakeGitClient) -> StartSessionDependencies:
         clock=MagicMock(),
         git_client=git_client,
         agent_runner=FakeAgentRunner(),
+        agent_provider=FakeAgentProvider(),
         sandbox_runtime=FakeSandboxRuntime(),
         resolve_effective_config=MagicMock(),
         materialize_marketplace=MagicMock(),
@@ -256,3 +259,74 @@ def test_start_session_runs_sandbox_runtime(tmp_path: Path) -> None:
     handle = start_session(plan, dependencies=dependencies)
 
     assert handle.sandbox_id == "sandbox-1"
+
+
+# ---------------------------------------------------------------------------
+# S01 seam boundary — characterize target shape for T02/T03
+#
+# These tests describe the intended state after T02/T03 rewire the launch path:
+# - StartSessionPlan should carry a typed AgentLaunchSpec from the provider.
+# - StartSessionDependencies should include an AgentProvider, not just AgentRunner.
+# The xfail tests will be promoted to passing in T02/T03.
+# ---------------------------------------------------------------------------
+
+
+def test_prepared_plan_carries_typed_agent_launch_spec(tmp_path: Path) -> None:
+    """After T02, StartSessionPlan should include an AgentLaunchSpec field.
+
+    The prepared plan carries a typed provider-owned spec so the runtime layer
+    can consume it without knowing about Claude-specific settings internals.
+    """
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    request = StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=str(workspace_path),
+        entry_dir=workspace_path,
+        team=None,
+        session_name=None,
+        resume=False,
+        fresh=False,
+        offline=True,
+        standalone=True,
+        dry_run=False,
+        allow_suspicious=False,
+        org_config=None,
+    )
+    resolver_result = _build_resolver_result(workspace_path)
+    dependencies = _build_dependencies(FakeGitClient())
+
+    with patch(
+        "scc_cli.application.start_session.resolve_workspace",
+        return_value=WorkspaceContext(resolver_result),
+    ):
+        plan = prepare_start_session(request, dependencies=dependencies)
+
+    spec = plan.agent_launch_spec
+    assert isinstance(spec, AgentLaunchSpec)
+    assert spec.provider_id != ""
+
+
+def test_start_session_dependencies_accept_agent_provider(tmp_path: Path) -> None:
+    """After T02, StartSessionDependencies should accept an AgentProvider.
+
+    This characterizes the wiring target: the dependency container must carry a
+    provider so prepare_start_session can call prepare_launch without falling back
+    to AgentRunner internals.
+    """
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+
+    deps = StartSessionDependencies(
+        filesystem=MagicMock(),
+        remote_fetcher=MagicMock(),
+        clock=MagicMock(),
+        git_client=FakeGitClient(),
+        agent_runner=FakeAgentRunner(),
+        agent_provider=FakeAgentProvider(),
+        sandbox_runtime=FakeSandboxRuntime(),
+        resolve_effective_config=MagicMock(),
+        materialize_marketplace=MagicMock(),
+    )
+
+    assert deps.agent_provider is not None

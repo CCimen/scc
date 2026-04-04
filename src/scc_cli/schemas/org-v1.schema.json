@@ -394,7 +394,7 @@
                 },
                 "network_policy": {
                     "type": "string",
-                    "enum": ["corp-proxy-only", "unrestricted", "isolated"],
+                    "enum": ["open", "web-egress-enforced", "locked-down-web"],
                     "description": "Network access policy"
                 },
                 "session": {
@@ -513,7 +513,7 @@
                     },
                     "network_policy": {
                         "type": "string",
-                        "enum": ["corp-proxy-only", "unrestricted", "isolated"],
+                        "enum": ["open", "web-egress-enforced", "locked-down-web"],
                         "description": "Override network policy for this team"
                     },
                     "session": {

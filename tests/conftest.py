@@ -10,6 +10,7 @@ import pytest
 
 from scc_cli.application.worktree import WorktreeDependencies
 from scc_cli.ports.dependency_installer import DependencyInstallResult
+from tests.fakes import build_fake_adapters
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Path Fixtures
@@ -211,13 +212,17 @@ def worktree_dependencies():
         git_client=git_client,
         dependency_installer=dependency_installer,
     )
+    base_adapters = build_fake_adapters()
     adapters = SimpleNamespace(
-        filesystem=MagicMock(),
-        remote_fetcher=MagicMock(),
-        clock=MagicMock(),
+        filesystem=base_adapters.filesystem,
+        remote_fetcher=base_adapters.remote_fetcher,
+        clock=base_adapters.clock,
         git_client=git_client,
-        agent_runner=MagicMock(),
-        sandbox_runtime=MagicMock(),
+        agent_runner=base_adapters.agent_runner,
+        agent_provider=base_adapters.agent_provider,
+        audit_event_sink=base_adapters.audit_event_sink,
+        sandbox_runtime=base_adapters.sandbox_runtime,
         dependency_installer=dependency_installer,
+        personal_profile_service=base_adapters.personal_profile_service,
     )
     return dependencies, adapters

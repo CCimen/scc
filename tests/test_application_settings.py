@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from scc_cli import config
 from scc_cli.application import settings as app_settings
@@ -86,3 +87,65 @@ def test_apply_settings_change_profile_sync_export_writes_repo_index(
     profile_files = [path for path in profiles_dir.glob("*.json") if path.name != "index.json"]
     assert index_path.exists()
     assert len(profile_files) == 1
+
+
+def test_apply_settings_change_support_bundle_requires_payload(tmp_path: Path) -> None:
+    request = app_settings.SettingsChangeRequest(
+        action_id="generate_support_bundle",
+        workspace=tmp_path,
+        payload=None,
+    )
+
+    result = app_settings.apply_settings_change(request)
+
+    assert result.status == app_settings.SettingsActionStatus.ERROR
+    assert result.error == "missing payload"
+
+
+def test_apply_settings_change_support_bundle_uses_application_bundle_use_case(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "support-bundle.zip"
+    request = app_settings.SettingsChangeRequest(
+        action_id="generate_support_bundle",
+        workspace=tmp_path,
+        payload=app_settings.SupportBundlePayload(
+            output_path=output_path,
+            redact_paths=False,
+        ),
+    )
+
+    with (
+        patch(
+            "scc_cli.application.settings.use_cases.build_default_support_bundle_dependencies",
+            return_value=object(),
+        ),
+        patch("scc_cli.application.settings.use_cases.create_support_bundle") as create_bundle,
+    ):
+        result = app_settings.apply_settings_change(request)
+
+    support_request = create_bundle.call_args.args[0]
+    assert support_request.output_path == output_path
+    assert support_request.redact_paths is False
+    assert support_request.workspace_path is None
+    assert result.status == app_settings.SettingsActionStatus.SUCCESS
+    assert result.detail == app_settings.SupportBundleInfo(output_path=output_path)
+
+
+def test_apply_settings_change_support_bundle_returns_error_when_creation_fails(
+    tmp_path: Path,
+) -> None:
+    request = app_settings.SettingsChangeRequest(
+        action_id="generate_support_bundle",
+        workspace=tmp_path,
+        payload=app_settings.SupportBundlePayload(output_path=tmp_path / "support-bundle.zip"),
+    )
+
+    with patch(
+        "scc_cli.application.settings.use_cases.create_support_bundle",
+        side_effect=RuntimeError("archive write failed"),
+    ):
+        result = app_settings.apply_settings_change(request)
+
+    assert result.status == app_settings.SettingsActionStatus.ERROR
+    assert result.error == "archive write failed"

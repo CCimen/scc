@@ -556,7 +556,7 @@ def compute_effective_config(
             )
             continue
 
-        if result.network_policy == NetworkPolicy.ISOLATED.value and is_network_mcp(server_dict):
+        if result.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and is_network_mcp(server_dict):
             result.blocked_items.append(
                 BlockedItem(
                     item=server_name or server_url,
@@ -703,7 +703,7 @@ def compute_effective_config(
                 )
                 continue
 
-            if result.network_policy == NetworkPolicy.ISOLATED.value and is_network_mcp(
+            if result.network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and is_network_mcp(
                 server_dict
             ):
                 result.blocked_items.append(

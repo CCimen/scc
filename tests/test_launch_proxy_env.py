@@ -9,7 +9,7 @@ def test_launch_sandbox_passes_proxy_env(tmp_path: Path, monkeypatch) -> None:
 
     workspace = tmp_path / "repo"
     workspace.mkdir()
-    org_config = {"defaults": {"network_policy": "corp-proxy-only"}}
+    org_config = {"defaults": {"network_policy": "web-egress-enforced"}}
 
     monkeypatch.setenv("HTTP_PROXY", "http://proxy.example.com:8080")
 

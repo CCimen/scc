@@ -24,7 +24,7 @@
             "code-quality@sundsvall-shared",
             "git-workflow@sundsvall-shared"
         ],
-        "network_policy": "unrestricted",
+        "network_policy": "open",
         "session": {
             "timeout_hours": 10,
             "auto_resume": true
@@ -51,7 +51,7 @@
                 "java-analyzer@sundsvall-shared",
                 "openapi-designer@sundsvall-shared"
             ],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "delegation": {
                 "allow_project_overrides": false
             }

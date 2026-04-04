@@ -476,7 +476,7 @@ class SettingsScreen:
 
     def _generate_support_bundle(self) -> str | None:
         """Generate a support bundle for troubleshooting."""
-        from scc_cli.support_bundle import get_default_bundle_path
+        from scc_cli.application.support_bundle import get_default_support_bundle_path
 
         self._console.print()
         self._console.print("[bold]Generate Support Bundle[/bold]")
@@ -487,7 +487,7 @@ class SettingsScreen:
         )
         self._console.print()
 
-        default_path = get_default_bundle_path()
+        default_path = get_default_support_bundle_path()
         path_str = Prompt.ask("Save bundle to", default=str(default_path))
 
         if not path_str:

@@ -29,7 +29,7 @@ class DockerSandboxRuntime(SandboxRuntime):
     def run(self, spec: SandboxSpec) -> SandboxHandle:
         docker.prepare_sandbox_volume_for_credentials()
         env_vars = dict(spec.env) if spec.env else {}
-        if spec.network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+        if spec.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
             for key, value in collect_proxy_env().items():
                 env_vars.setdefault(key, value)
         runtime_env = env_vars or None

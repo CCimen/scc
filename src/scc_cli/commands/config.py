@@ -523,7 +523,7 @@ def _collect_advisory_warnings(
             f"({team_network_policy} < {default_network_policy})."
         )
 
-    if effective_network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+    if effective_network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
         proxy_env = collect_proxy_env()
         if not proxy_env:
             warnings.append(

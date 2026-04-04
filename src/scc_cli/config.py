@@ -33,6 +33,11 @@ SESSIONS_FILE = CONFIG_DIR / "sessions.json"
 # Cache directory (regenerable, safe to delete)
 CACHE_DIR = Path.home() / ".cache" / "scc"
 
+# Durable local audit storage
+AUDIT_DIR = CONFIG_DIR / "audit"
+LAUNCH_AUDIT_FILE = AUDIT_DIR / "launch-events.jsonl"
+LAUNCH_AUDIT_LOCK_FILE = AUDIT_DIR / "launch-events.lock"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # User Config Defaults
@@ -76,6 +81,21 @@ def get_config_file() -> Path:
 def get_cache_dir() -> Path:
     """Get the cache directory path."""
     return CACHE_DIR
+
+
+def get_audit_dir() -> Path:
+    """Get the durable audit directory path."""
+    return AUDIT_DIR
+
+
+def get_launch_audit_file() -> Path:
+    """Get the append-only launch audit file path."""
+    return LAUNCH_AUDIT_FILE
+
+
+def get_launch_audit_lock_file() -> Path:
+    """Get the launch audit lock file path."""
+    return LAUNCH_AUDIT_LOCK_FILE
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

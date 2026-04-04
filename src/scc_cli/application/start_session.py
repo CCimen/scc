@@ -17,9 +17,12 @@ from scc_cli.application.sync_marketplace import (
 )
 from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
+from scc_cli.core.contracts import AgentLaunchSpec
 from scc_cli.core.errors import WorkspaceNotFoundError
 from scc_cli.core.workspace import ResolverResult
+from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
+from scc_cli.ports.audit_event_sink import AuditEventSink
 from scc_cli.ports.clock import Clock
 from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.git_client import GitClient
@@ -40,6 +43,8 @@ class StartSessionDependencies:
     sandbox_runtime: SandboxRuntime
     resolve_effective_config: EffectiveConfigResolver
     materialize_marketplace: MarketplaceMaterializer
+    agent_provider: AgentProvider | None = None
+    audit_event_sink: AuditEventSink | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,7 @@ class StartSessionPlan:
     sync_error_message: str | None
     agent_settings: AgentSettings | None
     sandbox_spec: SandboxSpec | None
+    agent_launch_spec: AgentLaunchSpec | None = None
 
 
 def prepare_start_session(
@@ -104,6 +110,11 @@ def prepare_start_session(
         effective_config=effective_config,
         agent_settings=agent_settings,
     )
+    agent_launch_spec = _build_agent_launch_spec(
+        request=request,
+        agent_settings=agent_settings,
+        dependencies=dependencies,
+    )
     return StartSessionPlan(
         resolver_result=resolver_result,
         workspace_path=request.workspace_path,
@@ -117,6 +128,7 @@ def prepare_start_session(
         sync_error_message=sync_error_message,
         agent_settings=agent_settings,
         sandbox_spec=sandbox_spec,
+        agent_launch_spec=agent_launch_spec,
     )
 
 
@@ -208,7 +220,7 @@ def _build_agent_settings(
         settings = dict(sync_result.rendered_settings)
 
     if effective_config:
-        from scc_cli.claude_adapter import merge_mcp_servers
+        from scc_cli.bootstrap import merge_mcp_servers
 
         settings = merge_mcp_servers(settings, effective_config)
 
@@ -249,4 +261,32 @@ def _build_sandbox_spec(
         force_new=request.fresh,
         agent_settings=agent_settings,
         org_config=request.org_config,
+    )
+
+
+def _build_agent_launch_spec(
+    *,
+    request: StartSessionRequest,
+    agent_settings: AgentSettings | None,
+    dependencies: StartSessionDependencies,
+) -> AgentLaunchSpec | None:
+    """Delegate launch spec construction to the provider adapter.
+
+    Returns None when no provider is wired (backward compat) or in dry-run mode.
+    The provider resolves its own argv, env, and artifact paths from the settings
+    artifact already built by the sync/build_agent_settings path.
+    """
+    if request.dry_run:
+        return None
+    provider = dependencies.agent_provider
+    if provider is None:
+        return None
+    settings_path = agent_settings.path if agent_settings is not None else None
+    config: dict[str, Any] = {}
+    if agent_settings is not None:
+        config = dict(agent_settings.content)
+    return provider.prepare_launch(
+        config=config,
+        workspace=request.workspace_path,
+        settings_path=settings_path,
     )

@@ -58,8 +58,9 @@ def launch_sandbox(
     env_vars = None
 
     if org_config and team:
+        from scc_cli.bootstrap import merge_mcp_servers
+
         from ...application.compute_effective_config import compute_effective_config
-        from ...claude_adapter import merge_mcp_servers
         from ...core.enums import NetworkPolicy
         from ...core.network_policy import collect_proxy_env
 
@@ -69,7 +70,7 @@ def launch_sandbox(
             workspace_path=workspace_path or mount_path,
         )
         plugin_settings = merge_mcp_servers(plugin_settings, effective_config)
-        if effective_config.network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+        if effective_config.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
             env_vars = collect_proxy_env()
 
     # Prepare sandbox volume for credential persistence

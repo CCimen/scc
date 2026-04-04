@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from scc_cli.adapters.local_config_store import LocalConfigStore
 from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_doctor_runner import LocalDoctorRunner
@@ -12,8 +14,23 @@ from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.system_clock import SystemClock
 from scc_cli.adapters.zip_archive_writer import ZipArchiveWriter
 from scc_cli.bootstrap import DefaultAdapters
+from scc_cli.core.contracts import AuditEvent
+from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
 from tests.fakes.fake_sandbox_runtime import FakeSandboxRuntime
+
+
+@dataclass
+class FakeAuditEventSink:
+    """In-memory audit sink for CLI and integration tests."""
+
+    events: list[AuditEvent] = field(default_factory=list)
+
+    def append(self, event: AuditEvent) -> None:
+        self.events.append(event)
+
+    def describe_destination(self) -> str:
+        return "memory://launch-events"
 
 
 def build_fake_adapters() -> DefaultAdapters:
@@ -25,9 +42,12 @@ def build_fake_adapters() -> DefaultAdapters:
         remote_fetcher=RequestsFetcher(),
         clock=SystemClock(),
         agent_runner=FakeAgentRunner(),
+        agent_provider=FakeAgentProvider(),
         sandbox_runtime=FakeSandboxRuntime(),
         personal_profile_service=LocalPersonalProfileService(),
         doctor_runner=LocalDoctorRunner(),
         archive_writer=ZipArchiveWriter(),
         config_store=LocalConfigStore(),
+        audit_event_sink=FakeAuditEventSink(),
+        codex_agent_provider=FakeAgentProvider(),
     )

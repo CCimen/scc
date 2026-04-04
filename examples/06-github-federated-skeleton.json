@@ -20,7 +20,7 @@
         "allowed_plugins": [
             "core-utils"
         ],
-        "network_policy": "unrestricted",
+        "network_policy": "open",
         "session": {
             "timeout_hours": 12,
             "auto_resume": true

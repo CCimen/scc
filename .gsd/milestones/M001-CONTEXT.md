@@ -6,7 +6,7 @@
 - No long-term backward compatibility in core after the one-time migration.
 - No Docker Desktop dependency in the architecture.
 - No provider-specific logic in core contracts.
-- No fake use of “isolated” language.
+- No fake use of overclaimed enforcement language.
 - No widening of effective egress outside org policy and delegated team policy.
 
 ## Primary objective

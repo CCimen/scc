@@ -10,12 +10,8 @@ from rich.status import Status
 
 from ... import config
 from ...application import worktree as worktree_use_cases
-from ...application.start_session import (
-    StartSessionDependencies,
-    StartSessionRequest,
-    prepare_start_session,
-    start_session,
-)
+from ...application.launch import finalize_launch
+from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console, handle_errors
 from ...confirm import Confirm
@@ -25,14 +21,13 @@ from ...core.exit_codes import EXIT_CANCELLED
 from ...git import WorktreeInfo
 from ...json_command import json_command
 from ...kinds import Kind
-from ...marketplace.materialize import materialize_marketplace
-from ...marketplace.resolve import resolve_effective_config
 from ...output_mode import is_json_mode
 from ...panels import create_success_panel, create_warning_panel
 from ...theme import Indicators, Spinners
 from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
 from ...ui.picker import TeamSwitchRequested, pick_worktree
+from ..launch.dependencies import prepare_live_start_plan
 from ._helpers import build_worktree_list_data
 
 if TYPE_CHECKING:
@@ -240,32 +235,30 @@ def worktree_create_cmd(
         console.print()
         if Confirm.ask("[cyan]Start Claude Code in this worktree?[/cyan]", default=True):
             adapters.sandbox_runtime.ensure_available()
-            start_dependencies = StartSessionDependencies(
-                filesystem=adapters.filesystem,
-                remote_fetcher=adapters.remote_fetcher,
-                clock=adapters.clock,
-                git_client=adapters.git_client,
-                agent_runner=adapters.agent_runner,
-                sandbox_runtime=adapters.sandbox_runtime,
-                resolve_effective_config=resolve_effective_config,
-                materialize_marketplace=materialize_marketplace,
-            )
+            user_config = config.load_user_config()
+            standalone_mode = config.is_standalone_mode()
+            team = None if standalone_mode else user_config.get("selected_profile")
+            org_config = None if standalone_mode else config.load_cached_org_config()
             start_request = StartSessionRequest(
                 workspace_path=result.worktree_path,
                 workspace_arg=str(result.worktree_path),
                 entry_dir=result.worktree_path,
-                team=None,
+                team=team,
                 session_name=None,
                 resume=False,
                 fresh=False,
                 offline=False,
-                standalone=config.is_standalone_mode(),
+                standalone=standalone_mode,
                 dry_run=False,
                 allow_suspicious=False,
-                org_config=config.load_cached_org_config(),
+                org_config=org_config,
             )
-            start_plan = prepare_start_session(start_request, dependencies=start_dependencies)
-            start_session(start_plan, dependencies=start_dependencies)
+            start_dependencies, start_plan = prepare_live_start_plan(
+                start_request,
+                adapters=adapters,
+                console=console,
+            )
+            finalize_launch(start_plan, dependencies=start_dependencies)
 
 
 @json_command(Kind.WORKTREE_LIST)

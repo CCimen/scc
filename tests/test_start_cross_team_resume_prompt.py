@@ -24,7 +24,7 @@ def test_cross_team_resume_prompt_text_top_level() -> None:
         patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
         patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
         patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
-        patch("scc_cli.commands.launch.flow.load_recent_contexts", return_value=[context]),
+        patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",
             return_value=(QuickResumeResult.SELECTED, context),
@@ -55,7 +55,7 @@ def test_cross_team_resume_prompt_text_workspace_scope() -> None:
         patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
         patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
         patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
-        patch("scc_cli.commands.launch.flow.load_recent_contexts", return_value=[context]),
+        patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),
         patch(
             "scc_cli.ui.wizard.pick_context_quick_resume",
             side_effect=[

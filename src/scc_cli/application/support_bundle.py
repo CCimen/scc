@@ -5,16 +5,20 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from scc_cli import __version__
+from scc_cli import __version__, config
+from scc_cli.application.launch.audit_log import read_launch_audit_diagnostics
 from scc_cli.core.errors import SCCError
 from scc_cli.doctor.serialization import build_doctor_json_data
 from scc_cli.ports.archive_writer import ArchiveWriter
 from scc_cli.ports.clock import Clock
 from scc_cli.ports.doctor_runner import DoctorRunner
 from scc_cli.ports.filesystem import Filesystem
+
+SUPPORT_BUNDLE_AUDIT_LIMIT = 5
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Redaction Patterns and Helpers
@@ -111,6 +115,16 @@ def redact_paths(data: dict[str, Any], *, redact: bool = True) -> dict[str, Any]
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def get_default_support_bundle_path(
+    *,
+    working_directory: Path | None = None,
+    current_time: datetime | None = None,
+) -> Path:
+    """Return the default output path for a support bundle archive."""
+    timestamp = (current_time or datetime.now()).strftime("%Y%m%d-%H%M%S")
+    return (working_directory or Path.cwd()) / f"scc-support-bundle-{timestamp}.zip"
+
+
 @dataclass(frozen=True)
 class SupportBundleDependencies:
     """Dependencies for the support bundle use case."""
@@ -119,6 +133,20 @@ class SupportBundleDependencies:
     clock: Clock
     doctor_runner: DoctorRunner
     archive_writer: ArchiveWriter
+    launch_audit_path: Path = config.LAUNCH_AUDIT_FILE
+
+
+def build_default_support_bundle_dependencies() -> SupportBundleDependencies:
+    """Build support-bundle dependencies from the composition root."""
+    from scc_cli.bootstrap import get_default_adapters
+
+    adapters = get_default_adapters()
+    return SupportBundleDependencies(
+        filesystem=adapters.filesystem,
+        clock=adapters.clock,
+        doctor_runner=adapters.doctor_runner,
+        archive_writer=adapters.archive_writer,
+    )
 
 
 @dataclass(frozen=True)
@@ -148,6 +176,19 @@ def _load_user_config(filesystem: Filesystem, path: Path) -> dict[str, Any]:
         return {"error": "Config is not a dictionary"}
     except (OSError, json.JSONDecodeError):
         return {"error": "Failed to load config"}
+
+
+def _build_launch_audit_manifest_section(
+    *,
+    audit_path: Path,
+    redact_paths_flag: bool,
+) -> dict[str, Any]:
+    diagnostics = read_launch_audit_diagnostics(
+        audit_path=audit_path,
+        limit=SUPPORT_BUNDLE_AUDIT_LIMIT,
+        redact_paths=redact_paths_flag,
+    )
+    return diagnostics.to_dict()
 
 
 def build_support_bundle_manifest(
@@ -183,6 +224,26 @@ def build_support_bundle_manifest(
     except Exception as exc:
         doctor_data = {"error": f"Failed to run doctor: {exc}"}
 
+    try:
+        launch_audit = _build_launch_audit_manifest_section(
+            audit_path=dependencies.launch_audit_path,
+            redact_paths_flag=request.redact_paths,
+        )
+    except Exception as exc:
+        launch_audit = {
+            "sink_path": str(dependencies.launch_audit_path),
+            "state": "unavailable",
+            "requested_limit": SUPPORT_BUNDLE_AUDIT_LIMIT,
+            "scanned_line_count": 0,
+            "malformed_line_count": 0,
+            "last_malformed_line": None,
+            "recent_events": [],
+            "last_failure": None,
+            "error": f"Failed to read launch audit: {exc}",
+        }
+        if request.redact_paths:
+            launch_audit = redact_paths(launch_audit)
+
     bundle_data: dict[str, Any] = {
         "generated_at": generated_at,
         "cli_version": __version__,
@@ -190,6 +251,7 @@ def build_support_bundle_manifest(
         "config": user_config,
         "org_config": org_config,
         "doctor": doctor_data,
+        "launch_audit": launch_audit,
     }
 
     if request.workspace_path:

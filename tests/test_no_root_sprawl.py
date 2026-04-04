@@ -64,7 +64,6 @@ ALLOWED_LEGACY = {
     "utils",
     # Legacy standalone modules (candidates for refactoring)
     "auth.py",
-    "claude_adapter.py",
     "cli_common.py",
     "cli_helpers.py",
     "config.py",
@@ -87,7 +86,6 @@ ALLOWED_LEGACY = {
     "setup.py",
     "source_resolver.py",
     "stats.py",
-    "support_bundle.py",  # legacy top-level support bundle helper
     "subprocess_utils.py",
     "teams.py",
     "theme.py",

@@ -15,6 +15,11 @@ from typing import Any, cast
 import typer
 from rich.status import Status
 
+from scc_cli.commands.launch.wizard_resume import (
+    handle_top_level_quick_resume,
+    resolve_workspace_resume,
+)
+
 from ... import config, git, sessions, setup, teams
 from ...application.launch import (
     ApplyPersonalProfileConfirmation,
@@ -24,7 +29,6 @@ from ...application.launch import (
     BackRequested,
     CwdContext,
     QuickResumeDismissed,
-    QuickResumeViewModel,
     SelectSessionDependencies,
     SelectSessionRequest,
     SelectSessionResult,
@@ -51,9 +55,7 @@ from ...application.launch import (
     apply_start_wizard_event,
     build_clone_repo_prompt,
     build_confirm_worktree_prompt,
-    build_cross_team_resume_prompt,
     build_custom_workspace_prompt,
-    build_quick_resume_prompt,
     build_session_name_prompt,
     build_team_repo_prompt,
     build_team_selection_prompt,
@@ -62,19 +64,16 @@ from ...application.launch import (
     build_worktree_name_prompt,
     finalize_launch,
     initialize_start_wizard,
-    prepare_launch_plan,
     select_session,
 )
 from ...application.sessions import SessionService
-from ...application.start_session import StartSessionDependencies, StartSessionRequest
+from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
-from ...contexts import WorkContext, load_recent_contexts, normalize_path, record_context
+from ...contexts import WorkContext, record_context
 from ...core.enums import TargetType
 from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
-from ...marketplace.materialize import materialize_marketplace
-from ...marketplace.resolve import resolve_effective_config
 from ...output_mode import json_output_mode, print_human, print_json, set_pretty_mode
 from ...panels import create_info_panel, create_warning_panel
 from ...ports.git_client import GitClient
@@ -92,16 +91,16 @@ from ...ui.prompts import confirm_with_layout
 from ...ui.wizard import (
     BACK,
     StartWizardAction,
-    StartWizardAnswer,
     StartWizardAnswerKind,
     _normalize_path,
     render_start_wizard_prompt,
 )
+from .dependencies import prepare_live_start_plan
 from .flow_types import (
     UserConfig,
+    WizardResumeContext,
     reset_for_team_switch,
     set_team_context,
-    set_workspace,
 )
 from .render import build_dry_run_data, show_dry_run_panel, show_launch_panel, warn_if_non_worktree
 from .team_settings import _configure_team_settings
@@ -654,16 +653,6 @@ def start(
     if worktree_name:
         was_auto_detected = False
 
-    start_dependencies = StartSessionDependencies(
-        filesystem=adapters.filesystem,
-        remote_fetcher=adapters.remote_fetcher,
-        clock=adapters.clock,
-        git_client=adapters.git_client,
-        agent_runner=adapters.agent_runner,
-        sandbox_runtime=adapters.sandbox_runtime,
-        resolve_effective_config=resolve_effective_config,
-        materialize_marketplace=materialize_marketplace,
-    )
     workspace_arg = None if was_auto_detected else str(workspace_path)
     start_request = StartSessionRequest(
         workspace_path=workspace_path,
@@ -679,22 +668,11 @@ def start(
         allow_suspicious=allow_suspicious_workspace,
         org_config=org_config,
     )
-    should_sync = (
-        not dry_run
-        and not offline
-        and not standalone
-        and team is not None
-        and org_config is not None
+    start_dependencies, start_plan = prepare_live_start_plan(
+        start_request,
+        adapters=adapters,
+        console=console,
     )
-    if should_sync:
-        with Status(
-            "[cyan]Syncing marketplace settings...[/cyan]",
-            console=console,
-            spinner=Spinners.NETWORK,
-        ):
-            start_plan = prepare_launch_plan(start_request, dependencies=start_dependencies)
-    else:
-        start_plan = prepare_launch_plan(start_request, dependencies=start_dependencies)
 
     output_view_model = build_sync_output_view_model(start_plan)
     render_launch_output(output_view_model, console=console, json_mode=(json_output or pretty))
@@ -910,169 +888,8 @@ def interactive_start(
             config=state.config,
         )
 
-    user_dismissed_quick_resume = False
     show_all_teams = False
     workspace_base = cfg.get("workspace_base", "~/projects")
-
-    def _prompt_workspace_quick_resume(
-        workspace: str, *, team: str | None
-    ) -> StartWizardAnswer | None:
-        if user_dismissed_quick_resume:
-            return None
-
-        normalized_workspace = normalize_path(workspace)
-        workspace_contexts: list[WorkContext] = []
-        team_filter = None if standalone_mode else team if team else "all"
-        for ctx in load_recent_contexts(limit=30, team_filter=team_filter):
-            if standalone_mode and ctx.team is not None:
-                continue
-            if ctx.worktree_path == normalized_workspace:
-                workspace_contexts.append(ctx)
-                continue
-            if ctx.repo_root == normalized_workspace:
-                workspace_contexts.append(ctx)
-                continue
-            try:
-                if normalized_workspace.is_relative_to(ctx.worktree_path):
-                    workspace_contexts.append(ctx)
-                    continue
-                if normalized_workspace.is_relative_to(ctx.repo_root):
-                    workspace_contexts.append(ctx)
-            except ValueError:
-                pass
-
-        if not workspace_contexts:
-            return None
-
-        console.print()
-        workspace_show_all_teams = False
-        while True:
-            displayed_contexts = workspace_contexts
-            if workspace_show_all_teams:
-                displayed_contexts = []
-                for ctx in load_recent_contexts(limit=30, team_filter="all"):
-                    if ctx.worktree_path == normalized_workspace:
-                        displayed_contexts.append(ctx)
-                        continue
-                    if ctx.repo_root == normalized_workspace:
-                        displayed_contexts.append(ctx)
-                        continue
-                    try:
-                        if normalized_workspace.is_relative_to(ctx.worktree_path):
-                            displayed_contexts.append(ctx)
-                            continue
-                        if normalized_workspace.is_relative_to(ctx.repo_root):
-                            displayed_contexts.append(ctx)
-                    except ValueError:
-                        pass
-
-            qr_subtitle = "Existing sessions found for this workspace"
-            if workspace_show_all_teams:
-                qr_subtitle = "All teams for this workspace — resuming uses that team's plugins"
-
-            quick_resume_view = QuickResumeViewModel(
-                title=f"Resume session in {Path(workspace).name}?",
-                subtitle=qr_subtitle,
-                context_label="All teams"
-                if workspace_show_all_teams
-                else f"Team: {team or active_team_label}",
-                standalone=standalone_mode,
-                effective_team=team or effective_team,
-                contexts=displayed_contexts,
-                current_branch=current_branch,
-            )
-            prompt = build_quick_resume_prompt(view_model=quick_resume_view)
-            answer = render_start_wizard_prompt(
-                prompt,
-                console=console,
-                allow_back=True,
-                standalone=standalone_mode,
-                context_label=quick_resume_view.context_label,
-                current_branch=current_branch,
-                effective_team=team or effective_team,
-            )
-
-            if answer.kind is StartWizardAnswerKind.CANCELLED:
-                return answer
-            if answer.kind is StartWizardAnswerKind.BACK:
-                return answer
-            if answer.value is StartWizardAction.SWITCH_TEAM:
-                # Signal to caller that team switch was requested
-                return answer
-
-            if answer.value is StartWizardAction.NEW_SESSION:
-                console.print()
-                return answer
-
-            if answer.value is StartWizardAction.TOGGLE_ALL_TEAMS:
-                if standalone_mode:
-                    console.print("[dim]All teams view is unavailable in standalone mode[/dim]")
-                    console.print()
-                    continue
-                workspace_show_all_teams = not workspace_show_all_teams
-                continue
-
-            selected_context = cast(WorkContext, answer.value)
-            current_team = team or effective_team
-            if current_team and selected_context.team and selected_context.team != current_team:
-                console.print()
-                prompt = build_cross_team_resume_prompt(selected_context.team)
-                confirm_answer = render_start_wizard_prompt(prompt, console=console)
-                if not bool(confirm_answer.value):
-                    continue
-            return answer
-
-    def _resolve_workspace_resume(
-        state: StartWizardState,
-        workspace: str,
-        *,
-        workspace_source: WorkspaceSource,
-    ) -> (
-        StartWizardState
-        | tuple[str | _BackSentinel | None, str | None, str | None, str | None]
-        | None
-    ):
-        nonlocal show_all_teams
-
-        resume_answer = _prompt_workspace_quick_resume(workspace, team=state.context.team)
-
-        if resume_answer is None:
-            return set_workspace(
-                state,
-                workspace,
-                workspace_source,
-                standalone_mode=standalone_mode,
-                team_override=team_override,
-                effective_team=effective_team,
-            )
-
-        if resume_answer.kind is StartWizardAnswerKind.CANCELLED:
-            return (None, None, None, None)
-        if resume_answer.kind is StartWizardAnswerKind.BACK:
-            return None
-
-        if resume_answer.value is StartWizardAction.SWITCH_TEAM:
-            show_all_teams = False
-            reset_state = reset_for_team_switch(state)
-            return set_team_context(reset_state, team_override)
-
-        if resume_answer.value is StartWizardAction.NEW_SESSION:
-            return set_workspace(
-                state,
-                workspace,
-                workspace_source,
-                standalone_mode=standalone_mode,
-                team_override=team_override,
-                effective_team=effective_team,
-            )
-
-        selected_context = cast(WorkContext, resume_answer.value)
-        return (
-            str(selected_context.worktree_path),
-            selected_context.team,
-            selected_context.last_session_id,
-            None,
-        )
 
     while state.step not in {
         StartWizardStep.COMPLETE,
@@ -1086,97 +903,24 @@ def interactive_start(
                 state = apply_start_wizard_event(state, QuickResumeDismissed())
                 continue
 
-            team_filter = "all" if show_all_teams else effective_team
-            recent_contexts = load_recent_contexts(limit=10, team_filter=team_filter)
-            qr_subtitle: str | None = None
-            if show_all_teams:
-                qr_context_label = "All teams"
-                qr_title = "Quick Resume — All Teams"
-                if recent_contexts:
-                    qr_subtitle = (
-                        "Showing all teams — resuming uses that team's plugins. "
-                        "Press 'a' to filter."
-                    )
-                else:
-                    qr_subtitle = "No sessions yet — start fresh"
-            else:
-                qr_context_label = active_team_context
-                qr_title = "Quick Resume"
-                if not recent_contexts:
-                    all_contexts = load_recent_contexts(limit=10, team_filter="all")
-                    team_label = effective_team or "standalone"
-                    if all_contexts:
-                        qr_subtitle = (
-                            f"No sessions yet for {team_label}. Press 'a' to show all teams."
-                        )
-                    else:
-                        qr_subtitle = "No sessions yet — start fresh"
-
-            quick_resume_view = QuickResumeViewModel(
-                title=qr_title,
-                subtitle=qr_subtitle,
-                context_label=qr_context_label,
-                standalone=standalone_mode,
-                effective_team=effective_team,
-                contexts=recent_contexts,
-                current_branch=current_branch,
-            )
-            prompt = build_quick_resume_prompt(view_model=quick_resume_view)
-            answer = render_start_wizard_prompt(
-                prompt,
-                console=console,
+            resume_context = WizardResumeContext(
+                standalone_mode=standalone_mode,
                 allow_back=allow_back,
-                standalone=standalone_mode,
-                context_label=qr_context_label,
-                current_branch=current_branch,
                 effective_team=effective_team,
+                team_override=team_override,
+                active_team_label=active_team_label,
+                active_team_context=active_team_context,
+                current_branch=current_branch,
             )
-
-            if answer.kind is StartWizardAnswerKind.CANCELLED:
-                return (None, None, None, None)
-            if answer.kind is StartWizardAnswerKind.BACK:
-                if allow_back:
-                    return (BACK, None, None, None)
-                return (None, None, None, None)
-
-            if answer.value is StartWizardAction.SWITCH_TEAM:
-                show_all_teams = False
-                state = apply_start_wizard_event(state, QuickResumeDismissed())
-                # User explicitly requested team switch - go to TEAM_SELECTION
-                # regardless of team_selection_required config
-                state = StartWizardState(
-                    step=StartWizardStep.TEAM_SELECTION,
-                    context=StartWizardContext(team=None),  # Clear for fresh selection
-                    config=state.config,
-                )
-                continue
-
-            if answer.value is StartWizardAction.NEW_SESSION:
-                console.print()
-                state = apply_start_wizard_event(state, QuickResumeDismissed())
-                continue
-
-            if answer.value is StartWizardAction.TOGGLE_ALL_TEAMS:
-                if standalone_mode:
-                    console.print("[dim]All teams view is unavailable in standalone mode[/dim]")
-                    console.print()
-                    continue
-                show_all_teams = not show_all_teams
-                continue
-
-            selected_context = cast(WorkContext, answer.value)
-            if effective_team and selected_context.team and selected_context.team != effective_team:
-                console.print()
-                prompt = build_cross_team_resume_prompt(selected_context.team)
-                confirm_answer = render_start_wizard_prompt(prompt, console=console)
-                if not bool(confirm_answer.value):
-                    continue
-            return (
-                str(selected_context.worktree_path),
-                selected_context.team,
-                selected_context.last_session_id,
-                None,
+            resolution, show_all_teams = handle_top_level_quick_resume(
+                state,
+                render_context=resume_context,
+                show_all_teams=show_all_teams,
             )
+            if isinstance(resolution, tuple):
+                return resolution
+            state = resolution
+            continue
 
         if state.step is StartWizardStep.TEAM_SELECTION:
             if standalone_mode:
@@ -1308,10 +1052,21 @@ def interactive_start(
                     workspace = str(context.workspace_root)
                 else:
                     workspace = str(Path.cwd())
-                resume_state = _resolve_workspace_resume(
+                resume_context = WizardResumeContext(
+                    standalone_mode=standalone_mode,
+                    allow_back=allow_back,
+                    effective_team=effective_team,
+                    team_override=team_override,
+                    active_team_label=active_team_label,
+                    active_team_context=active_team_context,
+                    current_branch=current_branch,
+                )
+                resume_state, show_all_teams = resolve_workspace_resume(
                     state,
                     workspace,
                     workspace_source=WorkspaceSource.CURRENT_DIR,
+                    render_context=resume_context,
+                    show_all_teams=show_all_teams,
                 )
                 if resume_state is None:
                     continue
@@ -1370,10 +1125,21 @@ def interactive_start(
                     state = apply_start_wizard_event(state, BackRequested())
                     continue
                 workspace = cast(str, answer.value)
-                resume_state = _resolve_workspace_resume(
+                resume_context = WizardResumeContext(
+                    standalone_mode=standalone_mode,
+                    allow_back=allow_back,
+                    effective_team=effective_team,
+                    team_override=team_override,
+                    active_team_label=active_team_label,
+                    active_team_context=active_team_context,
+                    current_branch=current_branch,
+                )
+                resume_state, show_all_teams = resolve_workspace_resume(
                     state,
                     workspace,
                     workspace_source=WorkspaceSource.RECENT,
+                    render_context=resume_context,
+                    show_all_teams=show_all_teams,
                 )
                 if resume_state is None:
                     continue
@@ -1411,10 +1177,21 @@ def interactive_start(
                     state = apply_start_wizard_event(state, BackRequested())
                     continue
                 workspace = cast(str, answer.value)
-                resume_state = _resolve_workspace_resume(
+                resume_context = WizardResumeContext(
+                    standalone_mode=standalone_mode,
+                    allow_back=allow_back,
+                    effective_team=effective_team,
+                    team_override=team_override,
+                    active_team_label=active_team_label,
+                    active_team_context=active_team_context,
+                    current_branch=current_branch,
+                )
+                resume_state, show_all_teams = resolve_workspace_resume(
                     state,
                     workspace,
                     workspace_source=WorkspaceSource.TEAM_REPOS,
+                    render_context=resume_context,
+                    show_all_teams=show_all_teams,
                 )
                 if resume_state is None:
                     continue
@@ -1430,10 +1207,21 @@ def interactive_start(
                     state = apply_start_wizard_event(state, BackRequested())
                     continue
                 workspace = cast(str, answer.value)
-                resume_state = _resolve_workspace_resume(
+                resume_context = WizardResumeContext(
+                    standalone_mode=standalone_mode,
+                    allow_back=allow_back,
+                    effective_team=effective_team,
+                    team_override=team_override,
+                    active_team_label=active_team_label,
+                    active_team_context=active_team_context,
+                    current_branch=current_branch,
+                )
+                resume_state, show_all_teams = resolve_workspace_resume(
                     state,
                     workspace,
                     workspace_source=WorkspaceSource.CUSTOM,
+                    render_context=resume_context,
+                    show_all_teams=show_all_teams,
                 )
                 if resume_state is None:
                     continue
@@ -1453,10 +1241,21 @@ def interactive_start(
                     state = apply_start_wizard_event(state, BackRequested())
                     continue
                 workspace = cast(str, answer.value)
-                resume_state = _resolve_workspace_resume(
+                resume_context = WizardResumeContext(
+                    standalone_mode=standalone_mode,
+                    allow_back=allow_back,
+                    effective_team=effective_team,
+                    team_override=team_override,
+                    active_team_label=active_team_label,
+                    active_team_context=active_team_context,
+                    current_branch=current_branch,
+                )
+                resume_state, show_all_teams = resolve_workspace_resume(
                     state,
                     workspace,
                     workspace_source=WorkspaceSource.CLONE,
+                    render_context=resume_context,
+                    show_all_teams=show_all_teams,
                 )
                 if resume_state is None:
                     continue
@@ -1593,16 +1392,6 @@ def run_start_wizard_flow(
         if team and not standalone_mode:
             org_config = config.load_cached_org_config()
 
-        start_dependencies = StartSessionDependencies(
-            filesystem=adapters.filesystem,
-            remote_fetcher=adapters.remote_fetcher,
-            clock=adapters.clock,
-            git_client=adapters.git_client,
-            agent_runner=adapters.agent_runner,
-            sandbox_runtime=adapters.sandbox_runtime,
-            resolve_effective_config=resolve_effective_config,
-            materialize_marketplace=materialize_marketplace,
-        )
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -1617,16 +1406,11 @@ def run_start_wizard_flow(
             allow_suspicious=False,
             org_config=org_config,
         )
-        should_sync = team is not None and org_config is not None and not standalone_mode
-        if should_sync:
-            with Status(
-                "[cyan]Syncing marketplace settings...[/cyan]",
-                console=console,
-                spinner=Spinners.NETWORK,
-            ):
-                start_plan = prepare_launch_plan(start_request, dependencies=start_dependencies)
-        else:
-            start_plan = prepare_launch_plan(start_request, dependencies=start_dependencies)
+        start_dependencies, start_plan = prepare_live_start_plan(
+            start_request,
+            adapters=adapters,
+            console=console,
+        )
 
         output_view_model = build_sync_output_view_model(start_plan)
         render_launch_output(output_view_model, console=console, json_mode=False)

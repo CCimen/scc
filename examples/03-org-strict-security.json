@@ -27,7 +27,7 @@
         "allowed_mcp_servers": [
             "https://mcp.internal.example.com/*"
         ],
-        "network_policy": "corp-proxy-only",
+        "network_policy": "web-egress-enforced",
         "session": {
             "timeout_hours": 8,
             "auto_resume": false
@@ -61,7 +61,7 @@
         },
         "compliance": {
             "description": "Compliance team with restricted access",
-            "network_policy": "isolated"
+            "network_policy": "locked-down-web"
         }
     },
     "stats": {

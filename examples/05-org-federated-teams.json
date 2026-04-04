@@ -23,7 +23,7 @@
             "core-utils",
             "shared-linter@shared"
         ],
-        "network_policy": "unrestricted",
+        "network_policy": "open",
         "session": {
             "timeout_hours": 12,
             "auto_resume": true

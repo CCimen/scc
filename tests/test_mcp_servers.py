@@ -413,7 +413,7 @@ class TestMCPServerTranslation:
 
     def test_sse_server_translation(self):
         """SSE server should translate to Claude Code format."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         server = MCPServer(
             name="gis-internal",
@@ -429,7 +429,7 @@ class TestMCPServerTranslation:
 
     def test_stdio_server_translation(self):
         """Stdio server should translate to Claude Code format."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         server = MCPServer(
             name="local-tool",
@@ -447,7 +447,7 @@ class TestMCPServerTranslation:
 
     def test_stdio_server_with_env(self):
         """Stdio server with env vars should translate correctly."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         server = MCPServer(
             name="env-tool",
@@ -464,7 +464,7 @@ class TestMCPServerTranslation:
 
     def test_sse_server_with_headers(self):
         """SSE server with headers should translate correctly."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         server = MCPServer(
             name="auth-server",
@@ -479,7 +479,7 @@ class TestMCPServerTranslation:
 
     def test_http_server_translation(self):
         """HTTP server should translate to Claude Code format."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         server = MCPServer(
             name="http-server",
@@ -507,7 +507,7 @@ class TestBuildMCPServers:
 
     def test_build_mcp_servers_from_effective_config(self):
         """Should build MCP servers dict from EffectiveConfig."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         effective = EffectiveConfig(
             plugins=set(),
@@ -532,7 +532,7 @@ class TestBuildMCPServers:
 
     def test_build_mcp_servers_empty_list(self):
         """Should handle empty MCP servers list."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         effective = EffectiveConfig(
             plugins=set(),
@@ -559,7 +559,7 @@ class TestMCPServerIntegration:
 
     def test_mcp_servers_in_claude_settings(self):
         """MCP servers should appear in Claude Code settings."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         effective = EffectiveConfig(
             plugins={"plugin-a"},
@@ -581,7 +581,7 @@ class TestMCPServerIntegration:
 
     def test_no_mcp_servers_key_when_empty(self):
         """Should not include mcpServers key when no servers configured."""
-        from scc_cli import claude_adapter
+        from scc_cli.adapters import claude_settings as claude_adapter
 
         effective = EffectiveConfig(
             plugins={"plugin-a"},

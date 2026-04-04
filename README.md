@@ -283,6 +283,7 @@ scc profile sync --repo ~/dotfiles/scc-profiles --pull --commit --push
 | `scc exceptions list` | View active exceptions |
 | `scc audit plugins` | Audit installed plugins |
 | `scc support bundle` | Generate support bundle for troubleshooting |
+| `scc support launch-audit` | Inspect recent launch diagnostics without opening raw JSONL |
 | `scc completion bash` | Generate shell completions (bash/zsh/fish) |
 
 Run `scc <command> --help` for options. See **[CLI Reference](https://scc-cli.dev/reference/cli/overview/)** for the complete command list (40+ commands).
@@ -378,7 +379,7 @@ Run `scc config paths` to see all locations with sizes and permissions.
 
 ## Troubleshooting
 
-Run `scc doctor` to diagnose issues.
+Run `scc doctor` to diagnose issues. For recent launch failures or preflight blocks, run `scc support launch-audit` to inspect the bounded launch-audit summary instead of opening the raw JSONL sink.
 
 | Problem | Solution |
 |---------|----------|

@@ -38,5 +38,8 @@ All major work starts from `scc-sync-1.7.3` with a green baseline and preserved 
 ## 12. Open-source local runtime, optional enterprise layer
 The local runtime stays inspectable and open. Enterprise value sits above it in identity, policy management, audit export, secrets, and support.
 
+## 13. Maintainability is a first-class requirement
+When touching a large or fragile area, leave it more modular, more typed, better tested, and easier to change. Prefer focused extractions, clear composition roots, and characterization tests over temporary convenience.
+
 ## Amendment rule
 Any change to this constitution must be reflected in `.gsd/DECISIONS.md`, the main plan, and the affected specs in the same change.
