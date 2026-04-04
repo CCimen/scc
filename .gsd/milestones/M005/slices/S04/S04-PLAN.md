@@ -18,7 +18,7 @@ This is a pure core function — no imports from marketplace/, adapters/, or com
   - Estimate: 2h
   - Files: src/scc_cli/core/bundle_resolver.py, src/scc_cli/ports/config_models.py, src/scc_cli/adapters/config_normalizer.py, tests/test_bundle_resolver.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_bundle_resolver.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T02: Claude renderer: project ArtifactRenderPlan into Claude-native surfaces** — Create src/scc_cli/adapters/claude_renderer.py with a function render_claude_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult. This adapter-owned renderer:
+- [x] **T02: Created claude_renderer.py with render_claude_artifacts() projecting ArtifactRenderPlan into Claude-native skills, MCP config, hooks/marketplace/plugin/instruction metadata, and settings fragments, with 26 characterization tests at 98% coverage** — Create src/scc_cli/adapters/claude_renderer.py with a function render_claude_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult. This adapter-owned renderer:
 1. Consumes an ArtifactRenderPlan produced by the core bundle resolver
 2. Renders skills into the Claude skill installation surface
 3. Renders MCP server definitions into Claude-native MCP config
