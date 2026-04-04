@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T16:07:15.401Z",
+  "exported_at": "2026-04-04T16:35:57.820Z",
   "milestones": [
     {
       "id": "M001",
@@ -3360,19 +3360,33 @@
       "milestone_id": "M005",
       "slice_id": "S02",
       "id": "T05",
-      "title": "Decompose UI layer: orchestrator, _dashboard, settings, wizard, and git_interactive",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Decomposed five HARD-FAIL/MANDATORY-SPLIT UI modules (1492, 968, 1081, 931, 884 lines) into focused files all under 800 lines while preserving all 4079 tests",
+      "status": "complete",
+      "one_liner": "Decomposed five HARD-FAIL/MANDATORY-SPLIT UI modules (1492, 968, 1081, 931, 884 lines) into focused files all under 800 lines while preserving all 4079 tests",
+      "narrative": "Extracted five UI-layer modules into smaller focused files: orchestrator.py (1492→399), _dashboard.py (968→611), settings.py (1081→792), wizard.py (931→416), git_interactive.py (884→543). Created five new extraction targets: orchestrator_handlers.py, _dashboard_actions.py, settings_profile.py, wizard_pickers.py, git_interactive_ops.py. Used late-bound module lookup pattern for extracted functions that tests patch on the original module path, ensuring all 4079 tests continue to pass.",
+      "verification_result": "uv run ruff check — All checks passed. uv run mypy src/scc_cli — Success: no issues found in 280 source files. uv run pytest -q — 4079 passed, 23 skipped, 4 xfailed in 65s.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T16:35:57.751Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Used late-bound lookup pattern (_get_picker/_get_confirm_with_layout) instead of direct imports to preserve test-patch compatibility. Did not extract _render from settings.py — profile sync extraction was sufficient to bring it under 800 lines.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "src/scc_cli/ui/dashboard/_dashboard_actions.py",
+        "src/scc_cli/ui/settings_profile.py",
+        "src/scc_cli/ui/wizard_pickers.py",
+        "src/scc_cli/ui/git_interactive_ops.py",
+        "src/scc_cli/ui/dashboard/orchestrator.py",
+        "src/scc_cli/ui/dashboard/_dashboard.py",
+        "src/scc_cli/ui/settings.py",
+        "src/scc_cli/ui/wizard.py",
+        "src/scc_cli/ui/git_interactive.py"
+      ],
+      "key_decisions": [
+        "Used late-bound module lookup (_get_picker/_get_confirm_with_layout) in extracted modules to preserve test-patch compatibility with existing mock targets on original module paths",
+        "Re-exported all moved symbols from original modules with noqa:F401 for backward compatibility"
+      ],
+      "full_summary_md": "---\nid: T05\nparent: S02\nmilestone: M005\nkey_files:\n  - src/scc_cli/ui/dashboard/orchestrator_handlers.py\n  - src/scc_cli/ui/dashboard/_dashboard_actions.py\n  - src/scc_cli/ui/settings_profile.py\n  - src/scc_cli/ui/wizard_pickers.py\n  - src/scc_cli/ui/git_interactive_ops.py\n  - src/scc_cli/ui/dashboard/orchestrator.py\n  - src/scc_cli/ui/dashboard/_dashboard.py\n  - src/scc_cli/ui/settings.py\n  - src/scc_cli/ui/wizard.py\n  - src/scc_cli/ui/git_interactive.py\nkey_decisions:\n  - Used late-bound module lookup (_get_picker/_get_confirm_with_layout) in extracted modules to preserve test-patch compatibility with existing mock targets on original module paths\n  - Re-exported all moved symbols from original modules with noqa:F401 for backward compatibility\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T16:35:57.751Z\nblocker_discovered: false\n---\n\n# T05: Decomposed five HARD-FAIL/MANDATORY-SPLIT UI modules (1492, 968, 1081, 931, 884 lines) into focused files all under 800 lines while preserving all 4079 tests\n\n**Decomposed five HARD-FAIL/MANDATORY-SPLIT UI modules (1492, 968, 1081, 931, 884 lines) into focused files all under 800 lines while preserving all 4079 tests**\n\n## What Happened\n\nExtracted five UI-layer modules into smaller focused files: orchestrator.py (1492→399), _dashboard.py (968→611), settings.py (1081→792), wizard.py (931→416), git_interactive.py (884→543). Created five new extraction targets: orchestrator_handlers.py, _dashboard_actions.py, settings_profile.py, wizard_pickers.py, git_interactive_ops.py. Used late-bound module lookup pattern for extracted functions that tests patch on the original module path, ensuring all 4079 tests continue to pass.\n\n## Verification\n\nuv run ruff check — All checks passed. uv run mypy src/scc_cli — Success: no issues found in 280 source files. uv run pytest -q — 4079 passed, 23 skipped, 4 xfailed in 65s.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 4000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 7000ms |\n| 3 | `uv run pytest -q` | 0 | ✅ pass | 65000ms |\n\n## Deviations\n\nUsed late-bound lookup pattern (_get_picker/_get_confirm_with_layout) instead of direct imports to preserve test-patch compatibility. Did not extract _render from settings.py — profile sync extraction was sufficient to bring it under 800 lines.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py`\n- `src/scc_cli/ui/dashboard/_dashboard_actions.py`\n- `src/scc_cli/ui/settings_profile.py`\n- `src/scc_cli/ui/wizard_pickers.py`\n- `src/scc_cli/ui/git_interactive_ops.py`\n- `src/scc_cli/ui/dashboard/orchestrator.py`\n- `src/scc_cli/ui/dashboard/_dashboard.py`\n- `src/scc_cli/ui/settings.py`\n- `src/scc_cli/ui/wizard.py`\n- `src/scc_cli/ui/git_interactive.py`\n",
       "description": "Extract five UI-layer modules into smaller focused files. These are the outermost layer — inner-layer extractions from T01–T04 are settled.\n\n## Steps\n\n1. **ui/dashboard/orchestrator.py (1489 lines — HARD-FAIL, largest file):** Read fully. Extract `_handle_*` handler clusters (container actions, session actions, worktree actions, profile menu, sandbox import, onboarding — ~650 lines of handler functions) into `src/scc_cli/ui/dashboard/orchestrator_handlers.py`. Keep `run_dashboard` + `_apply_event` + `_run_effect` in `orchestrator.py`. Re-export from `orchestrator.py` and update `ui/dashboard/__init__.py` if needed.\n\n2. **ui/dashboard/_dashboard.py (966 lines):** Read fully. Extract `_handle_action` (355L) into `src/scc_cli/ui/dashboard/_dashboard_actions.py` as a standalone function that takes Dashboard state parameters. Keep rendering + run loop in `_dashboard.py`.\n\n3. **ui/settings.py (1081 lines):** Read fully. The single 969L `SettingsScreen` class needs decomposition. Extract `_render` (219L) + rendering helper methods into `src/scc_cli/ui/settings_render.py`. Extract `_profile_diff` (73L) + `_profile_sync` (58L) + profile-related methods into `src/scc_cli/ui/settings_profile.py`. Keep `_handle_key` + constructor + `run()` in `settings.py`. Since these are class methods, extract them as module-level functions that accept the relevant state as parameters, then call them from the class.\n\n4. **ui/wizard.py (931 lines):** Read fully. Extract `pick_team_repo` (105L) + `pick_workspace_source` (100L) + `pick_recent_workspace` (68L) + `build_workspace_source_options*` (154L) into `src/scc_cli/ui/wizard_pickers.py` (~430 lines). Keep `render_start_wizard_prompt` (192L) + answer types in `wizard.py`. Re-export public names.\n\n5. **ui/git_interactive.py (884 lines):** Read fully. Extract `cleanup_worktree` (147L) + `install_hooks` (83L) + `install_dependencies` (62L) into `src/scc_cli/ui/git_interactive_ops.py` (~300 lines). Keep `create_worktree` + `check_branch_safety` + `clone_repo` in `git_interactive.py`. Re-export public names.\n\n6. Update test imports in `tests/test_dashboard_orchestrator_characterization.py` and `tests/test_wizard_characterization.py`.\n\n7. Run verification: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_dashboard_orchestrator_characterization.py tests/test_wizard_characterization.py tests/test_import_boundaries.py -q`\n\n## Must-Haves\n\n- [ ] `ui/dashboard/orchestrator.py` under 800 lines (from 1489 HARD-FAIL)\n- [ ] `ui/dashboard/_dashboard.py` under 800 lines\n- [ ] `ui/settings.py` under 800 lines\n- [ ] `ui/wizard.py` under 800 lines\n- [ ] `ui/git_interactive.py` under 800 lines\n- [ ] All 26 orchestrator characterization tests pass\n- [ ] All 10 wizard characterization tests pass\n- [ ] Import boundary tests pass\n- [ ] `uv run ruff check && uv run mypy src/scc_cli` clean",
       "estimate": "1h30m",
       "files": [
@@ -5813,6 +5827,39 @@
       "verdict": "✅ pass",
       "duration_ms": 2300,
       "created_at": "2026-04-04T16:07:15.325Z"
+    },
+    {
+      "id": 143,
+      "task_id": "T05",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T16:35:57.751Z"
+    },
+    {
+      "id": 144,
+      "task_id": "T05",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7000,
+      "created_at": "2026-04-04T16:35:57.751Z"
+    },
+    {
+      "id": 145,
+      "task_id": "T05",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 65000,
+      "created_at": "2026-04-04T16:35:57.751Z"
     }
   ]
 }

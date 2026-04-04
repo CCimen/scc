@@ -109,7 +109,7 @@
   - Estimate: 1h
   - Files: src/scc_cli/commands/launch/flow.py, src/scc_cli/commands/launch/flow_interactive.py, src/scc_cli/commands/launch/flow_session.py, src/scc_cli/commands/launch/__init__.py, src/scc_cli/commands/team.py, src/scc_cli/commands/team_validate.py, src/scc_cli/commands/team_info.py, src/scc_cli/commands/config.py, src/scc_cli/commands/config_validate.py, src/scc_cli/commands/config_inspect.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_launch_flow_characterization.py tests/test_team_commands_characterization.py tests/test_config_commands_characterization.py tests/test_import_boundaries.py -q
-- [ ] **T05: Decompose UI layer: orchestrator, _dashboard, settings, wizard, and git_interactive** — Extract five UI-layer modules into smaller focused files. These are the outermost layer — inner-layer extractions from T01–T04 are settled.
+- [x] **T05: Decomposed five HARD-FAIL/MANDATORY-SPLIT UI modules (1492, 968, 1081, 931, 884 lines) into focused files all under 800 lines while preserving all 4079 tests** — Extract five UI-layer modules into smaller focused files. These are the outermost layer — inner-layer extractions from T01–T04 are settled.
 
 ## Steps
 
