@@ -43,7 +43,7 @@
   - Estimate: 1h30m
   - Files: tests/test_codex_renderer.py
   - Verify: uv run pytest tests/test_codex_renderer.py -v && uv run pytest --cov=scc_cli.adapters.codex_renderer --cov-report=term-missing --cov-branch
-- [ ] **T04: Cross-provider render plan equivalence and pipeline integration tests** — Write integration tests that exercise the full planning→rendering pipeline:
+- [x] **T04: Added 44 cross-provider pipeline integration tests covering shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, and boundary contracts between resolver and renderers** — Write integration tests that exercise the full planning→rendering pipeline:
 1. Same org config + same team → same shared artifacts (skills, MCP) appear in both Claude and Codex plans
 2. Provider-specific bindings appear only for the matching provider
 3. Switching provider re-renders from same plan, produces different native outputs

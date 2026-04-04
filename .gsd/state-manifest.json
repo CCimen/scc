@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T20:09:34.445Z",
+  "exported_at": "2026-04-04T20:17:34.495Z",
   "milestones": [
     {
       "id": "M001",
@@ -4135,19 +4135,24 @@
       "milestone_id": "M005",
       "slice_id": "S05",
       "id": "T04",
-      "title": "Cross-provider render plan equivalence and pipeline integration tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 44 cross-provider pipeline integration tests covering shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, and boundary contracts between resolver and renderers",
+      "status": "complete",
+      "one_liner": "Added 44 cross-provider pipeline integration tests covering shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, and boundary contracts between resolver and renderers",
+      "narrative": "Created tests/test_render_pipeline_integration.py with 44 tests across 10 test classes exercising the full planning→rendering pipeline (NormalizedOrgConfig → resolve_render_plan → render_*_artifacts → verify file outputs). Tests cover: shared artifacts appearing in both provider plans, provider-specific bindings filtered correctly, same plan producing different native outputs per provider, end-to-end file verification for both Claude and Codex, backward compatibility for teams without governed_artifacts, pipeline seam contracts between resolver and renderers, multi-bundle rendering, cross-provider equivalence with disjoint file trees, mixed bundle asymmetry, and disabled/filtered artifact exclusion.",
+      "verification_result": "44/44 tests pass. ruff check clean. mypy clean (288 files). Full test suite: 4428 passed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T20:17:34.445Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed path-matching assertions to use relative paths instead of absolute paths to avoid false matches from pytest tmp_path containing test function names.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_render_pipeline_integration.py"
+      ],
+      "key_decisions": [
+        "Organized tests into 10 test classes mapping directly to the 6 plan items plus additional equivalence and asymmetry scenarios",
+        "Used relative path filtering for rendered_paths assertions to avoid false matches from pytest tmp_path"
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S05\nmilestone: M005\nkey_files:\n  - tests/test_render_pipeline_integration.py\nkey_decisions:\n  - Organized tests into 10 test classes mapping directly to the 6 plan items plus additional equivalence and asymmetry scenarios\n  - Used relative path filtering for rendered_paths assertions to avoid false matches from pytest tmp_path\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T20:17:34.445Z\nblocker_discovered: false\n---\n\n# T04: Added 44 cross-provider pipeline integration tests covering shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, and boundary contracts between resolver and renderers\n\n**Added 44 cross-provider pipeline integration tests covering shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, and boundary contracts between resolver and renderers**\n\n## What Happened\n\nCreated tests/test_render_pipeline_integration.py with 44 tests across 10 test classes exercising the full planning→rendering pipeline (NormalizedOrgConfig → resolve_render_plan → render_*_artifacts → verify file outputs). Tests cover: shared artifacts appearing in both provider plans, provider-specific bindings filtered correctly, same plan producing different native outputs per provider, end-to-end file verification for both Claude and Codex, backward compatibility for teams without governed_artifacts, pipeline seam contracts between resolver and renderers, multi-bundle rendering, cross-provider equivalence with disjoint file trees, mixed bundle asymmetry, and disabled/filtered artifact exclusion.\n\n## Verification\n\n44/44 tests pass. ruff check clean. mypy clean (288 files). Full test suite: 4428 passed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_render_pipeline_integration.py -v` | 0 | ✅ pass | 1370ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 500ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5000ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 69410ms |\n\n## Deviations\n\nFixed path-matching assertions to use relative paths instead of absolute paths to avoid false matches from pytest tmp_path containing test function names.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_render_pipeline_integration.py`\n",
       "description": "Write integration tests that exercise the full planning→rendering pipeline:\n1. Same org config + same team → same shared artifacts (skills, MCP) appear in both Claude and Codex plans\n2. Provider-specific bindings appear only for the matching provider\n3. Switching provider re-renders from same plan, produces different native outputs\n4. End-to-end: NormalizedOrgConfig → resolve_render_plan → render_*_artifacts → verify file outputs\n5. Backward compatibility: teams without governed_artifacts config → old marketplace pipeline still works\n6. Coverage across the pipeline seam: bundle_resolver + renderer boundary contracts verified",
       "estimate": "1h30m",
       "files": [
@@ -6816,6 +6821,50 @@
       "verdict": "✅ pass",
       "duration_ms": 68350,
       "created_at": "2026-04-04T20:09:34.397Z"
+    },
+    {
+      "id": 203,
+      "task_id": "T04",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_render_pipeline_integration.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1370,
+      "created_at": "2026-04-04T20:17:34.445Z"
+    },
+    {
+      "id": 204,
+      "task_id": "T04",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-04T20:17:34.445Z"
+    },
+    {
+      "id": 205,
+      "task_id": "T04",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T20:17:34.445Z"
+    },
+    {
+      "id": 206,
+      "task_id": "T04",
+      "slice_id": "S05",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 69410,
+      "created_at": "2026-04-04T20:17:34.445Z"
     }
   ]
 }
