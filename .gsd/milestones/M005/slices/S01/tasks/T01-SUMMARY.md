@@ -3,27 +3,26 @@ id: T01
 parent: S01
 milestone: M005
 key_files:
-  - .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md
+  - (none)
 key_decisions:
-  - Severity thresholds: >1100 lines = HARD-FAIL, >800 lines = MANDATORY-SPLIT, >300 lines = tracked
-  - except-Exception severity classified by domain: docker/credentials/safety = HIGH, application/command = MEDIUM, cleanup/diagnostic = LOW
+  - (none)
 duration: 
 verification_result: passed
-completed_at: 2026-04-04T13:50:58.292Z
+completed_at: 
 blocker_discovered: false
 ---
 
-# T01: Produced ranked maintainability audit with 184 table rows covering 63 hotspot files, 15 boundary violations, 87 except-Exception sites, 71 unchecked subprocess calls, and top-20 action queue
+# T01: Produce ranked maintainability audit with hotspot inventory, boundary-repair map, and robustness-debt catalog
 
-**Produced ranked maintainability audit with 184 table rows covering 63 hotspot files, 15 boundary violations, 87 except-Exception sites, 71 unchecked subprocess calls, and top-20 action queue**
+****
 
 ## What Happened
 
-Ran live codebase scans against src/scc_cli/ (61,089 total lines) to produce MAINTAINABILITY-AUDIT.md. Section 1 found 3 HARD-FAIL files (>1100 lines) and 12 MANDATORY-SPLIT files (>800 lines), with AST analysis of the 25 largest functions (top: interactive_start at 534 lines). Section 2 mapped 4 docker-import violations, 1 critical core→marketplace dependency inversion, and ~20 hardcoded Claude paths in docker/credentials.py. Section 3 cataloged 87 bare except-Exception sites (11 HIGH), 71 subprocess.run calls with only 1 check=True and 1 timeout, 371 dict[str, Any] typing debt references, and 4 xfail markers. The Priority Queue ranks top-20 actions for S02–S06.
+No summary recorded.
 
 ## Verification
 
-Verified artifact exists, has 184 table rows (≥20 required), contains HARD-FAIL/MANDATORY-SPLIT tags and Priority Queue section. All slice verification commands pass: ruff check clean, mypy clean (261 files), pytest 3795 passed.
+No verification recorded.
 
 ## Verification Evidence
 
@@ -45,4 +44,4 @@ None.
 
 ## Files Created/Modified
 
-- `.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md`
+None.

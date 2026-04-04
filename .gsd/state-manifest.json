@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T14:02:47.910Z",
+  "exported_at": "2026-04-04T14:25:22.821Z",
   "milestones": [
     {
       "id": "M001",
@@ -566,11 +566,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "Hotspots, mandatory split targets, boundary leaks, guardrail gaps, and characterization-test needs are ranked and explicit in a single audit artifact, and the top split targets are protected by characterization tests before S02 surgery begins.",
-      "success_criteria": "- A comprehensive maintainability audit artifact exists at `.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md` containing: ranked hotspot inventory for all files > 300 lines, mandatory-split set for all files > 800 lines, boundary-repair map (docker imports, core-marketplace leakage, presentation-runtime coupling, import cycles, Claude-specific shapes), and robustness-debt catalog (except-Exception sites, unchecked subprocess calls, mutable globals, typing debt, xfail inventory).\n- Characterization tests exist for the top-4 split targets: `commands/launch/flow.py`, `ui/dashboard/orchestrator.py`, `docker/launch.py`, `core/personal_profiles.py`.\n- `uv run pytest` passes with all new characterization tests green.\n- `uv run mypy src/scc_cli` passes.\n- `uv run ruff check` passes.\n- No production code is modified — only test files and GSD artifacts.",
-      "proof_level": "This slice proves: analysis baseline + characterization coverage. Real runtime required: no (static analysis + unit tests). Human/UAT required: no.",
-      "integration_closure": "Upstream surfaces consumed: all Python source files under `src/scc_cli/` (read-only measurement), existing test infrastructure in `tests/conftest.py` and `tests/fakes/`. New wiring: none — this slice adds tests and artifacts only. What remains: S02-S06 consume the audit artifact and depend on characterization tests being in place.",
-      "observability_impact": "None — this slice produces only analysis artifacts and test files. No runtime behavior is changed.",
+      "goal": "Establish a quantitative maintainability baseline (hotspot inventory, boundary-repair map, robustness-debt catalog) and protect the top split targets with characterization tests before S02 surgery begins.",
+      "success_criteria": "- MAINTAINABILITY-AUDIT.md exists with ranked hotspot inventory (all files >300 lines), boundary-repair map, and robustness-debt catalog\n- Characterization tests exist for top-4 mandatory-split targets: launch flow, dashboard orchestrator, docker launch, personal profiles\n- All tests pass: `uv run pytest` green, `uv run mypy src/scc_cli` clean, `uv run ruff check` clean\n- No production source code is modified — only test files and GSD artifacts",
+      "proof_level": "contract — artifacts exist with required data points, characterization tests pass and protect existing behavior",
+      "integration_closure": "- Upstream surfaces consumed: `src/scc_cli/` (read-only analysis target), `tests/` (existing test infrastructure)\n- New wiring introduced: none — S01 is pure analysis and test-writing\n- What remains: S02 consumes the audit artifacts to plan module decomposition",
+      "observability_impact": "none — S01 produces artifacts and tests, no runtime changes",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -2967,102 +2967,8 @@
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T01",
-      "title": "Produced ranked maintainability audit with 184 table rows covering 63 hotspot files, 15 boundary violations, 87 except-Exception sites, 71 unchecked subprocess calls, and top-20 action queue",
+      "title": "Produce ranked maintainability audit with hotspot inventory, boundary-repair map, and robustness-debt catalog",
       "status": "complete",
-      "one_liner": "Produced ranked maintainability audit with 184 table rows covering 63 hotspot files, 15 boundary violations, 87 except-Exception sites, 71 unchecked subprocess calls, and top-20 action queue",
-      "narrative": "Ran live codebase scans against src/scc_cli/ (61,089 total lines) to produce MAINTAINABILITY-AUDIT.md. Section 1 found 3 HARD-FAIL files (>1100 lines) and 12 MANDATORY-SPLIT files (>800 lines), with AST analysis of the 25 largest functions (top: interactive_start at 534 lines). Section 2 mapped 4 docker-import violations, 1 critical core→marketplace dependency inversion, and ~20 hardcoded Claude paths in docker/credentials.py. Section 3 cataloged 87 bare except-Exception sites (11 HIGH), 71 subprocess.run calls with only 1 check=True and 1 timeout, 371 dict[str, Any] typing debt references, and 4 xfail markers. The Priority Queue ranks top-20 actions for S02–S06.",
-      "verification_result": "Verified artifact exists, has 184 table rows (≥20 required), contains HARD-FAIL/MANDATORY-SPLIT tags and Priority Queue section. All slice verification commands pass: ruff check clean, mypy clean (261 files), pytest 3795 passed.",
-      "duration": "",
-      "completed_at": "2026-04-04T13:50:58.292Z",
-      "blocker_discovered": false,
-      "deviations": "None.",
-      "known_issues": "None.",
-      "key_files": [
-        ".gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md"
-      ],
-      "key_decisions": [
-        "Severity thresholds: >1100 lines = HARD-FAIL, >800 lines = MANDATORY-SPLIT, >300 lines = tracked",
-        "except-Exception severity classified by domain: docker/credentials/safety = HIGH, application/command = MEDIUM, cleanup/diagnostic = LOW"
-      ],
-      "full_summary_md": "---\nid: T01\nparent: S01\nmilestone: M005\nkey_files:\n  - .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md\nkey_decisions:\n  - Severity thresholds: >1100 lines = HARD-FAIL, >800 lines = MANDATORY-SPLIT, >300 lines = tracked\n  - except-Exception severity classified by domain: docker/credentials/safety = HIGH, application/command = MEDIUM, cleanup/diagnostic = LOW\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T13:50:58.291Z\nblocker_discovered: false\n---\n\n# T01: Produced ranked maintainability audit with 184 table rows covering 63 hotspot files, 15 boundary violations, 87 except-Exception sites, 71 unchecked subprocess calls, and top-20 action queue\n\n**Produced ranked maintainability audit with 184 table rows covering 63 hotspot files, 15 boundary violations, 87 except-Exception sites, 71 unchecked subprocess calls, and top-20 action queue**\n\n## What Happened\n\nRan live codebase scans against src/scc_cli/ (61,089 total lines) to produce MAINTAINABILITY-AUDIT.md. Section 1 found 3 HARD-FAIL files (>1100 lines) and 12 MANDATORY-SPLIT files (>800 lines), with AST analysis of the 25 largest functions (top: interactive_start at 534 lines). Section 2 mapped 4 docker-import violations, 1 critical core→marketplace dependency inversion, and ~20 hardcoded Claude paths in docker/credentials.py. Section 3 cataloged 87 bare except-Exception sites (11 HIGH), 71 subprocess.run calls with only 1 check=True and 1 timeout, 371 dict[str, Any] typing debt references, and 4 xfail markers. The Priority Queue ranks top-20 actions for S02–S06.\n\n## Verification\n\nVerified artifact exists, has 184 table rows (≥20 required), contains HARD-FAIL/MANDATORY-SPLIT tags and Priority Queue section. All slice verification commands pass: ruff check clean, mypy clean (261 files), pytest 3795 passed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `test -f .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md` | 0 | ✅ pass | 50ms |\n| 2 | `grep -c '^|' MAINTAINABILITY-AUDIT.md | xargs test 20 -le` | 0 | ✅ pass | 50ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 2000ms |\n| 4 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5000ms |\n| 5 | `uv run pytest` | 0 | ✅ pass | 65000ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md`\n",
-      "description": "Combine the hotspot inventory, boundary-repair map, and robustness-debt catalog into a single comprehensive audit artifact at `.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md`. This artifact is the input for all S02-S06 planning.\n\nThe audit must contain three major sections:\n\n**Section 1 — Ranked Hotspot Inventory:**\n- Run `find src/scc_cli -name '*.py' | xargs wc -l | sort -rn` to get the live file-size census.\n- Produce a ranked table of all files > 300 lines with columns: Rank, File (relative path), Lines, Domain cluster (commands/ui/application/docker/marketplace/core/other), Layer-mixing assessment (Yes/No + brief note).\n- Tag each file > 800 lines as MANDATORY-SPLIT. Tag files > 1100 lines as HARD-FAIL.\n- Include a top-10 largest functions table using AST analysis: `import ast; for each top file, parse and find functions > 150 lines`.\n\n**Section 2 — Boundary-Repair Map:**\n- Scan for docker imports outside adapter/runtime seams: `grep -rn 'from scc_cli.docker' src/scc_cli/ | grep -v 'adapters/' | grep -v 'docker/'`\n- Scan for core-to-marketplace leakage: `grep -rn 'from scc_cli.marketplace' src/scc_cli/core/`\n- Scan for presentation-to-runtime coupling: `grep -rn 'from.*console' src/scc_cli/docker/`\n- Identify import cycles: check docker.core -> docker.launch and similar bidirectional imports.\n- Catalog Claude-specific shapes in marketplace pipeline: files referencing `.claude`, `claude-plugins-official`, Claude-specific paths.\n- Present all findings in a table with columns: Source file:line, Import target, Violation type, Severity.\n\n**Section 3 — Robustness-Debt Catalog:**\n- Count and list all `except Exception` sites: `grep -rn 'except Exception' src/scc_cli/` grouped by file with severity (HIGH for runtime/credential/docker ops, MEDIUM for application logic, LOW for cleanup/diagnostic).\n- Count and list unchecked subprocess calls: `grep -rn 'subprocess.run' src/scc_cli/` — note which use `check=True`, which capture stderr, which set timeouts.\n- Identify mutable module-level defaults: `grep -rn 'DEFAULT_\\|_DEFAULTS\\|DETECTION_ORDER\\|INSTALL_COMMANDS\\|BLOCK_MESSAGES\\|_RULE_NAMES\\|_NETWORK_POLICY' src/scc_cli/` — assess mutability risk.\n- Count typing debt: `dict[str, Any]` references, `cast()` calls, `TypeAlias = dict` patterns.\n- List existing quality xfails from test files with what each masks.\n\nConstraints:\n- Do NOT modify any production code.\n- All numbers must come from live codebase scans, not copied from the research doc (though the research doc confirms what to expect).\n- Use markdown tables for all structured data.\n- End the document with a 'Priority Queue for S02-S06' section that ranks the top-20 action items across all three categories.",
-      "estimate": "1h",
-      "files": [
-        ".gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md"
-      ],
-      "verify": "test -f .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -c '^|' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md | xargs test 20 -le",
-      "inputs": [
-        "src/scc_cli/"
-      ],
-      "expected_output": [
-        ".gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md"
-      ],
-      "observability_impact": "",
-      "full_plan_md": "",
-      "sequence": 0
-    },
-    {
-      "milestone_id": "M005",
-      "slice_id": "S01",
-      "id": "T02",
-      "title": "Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery",
-      "status": "complete",
-      "one_liner": "Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery",
-      "narrative": "Created four characterization test files for the modules identified as mandatory-split targets in T01's audit: launch flow (17 tests covering wizard state machine, session selection, CLI error paths), dashboard orchestrator (26 tests covering view building, event routing, effect result application, tab fallbacks, placeholder helpers), docker launch (19 tests covering safety-net policy chain, atomic file writing, run_sandbox failure branches, mount race detection, inject_file error handling), and personal profiles (25 tests covering CRUD operations, listing edge cases, MCP merge, applied-state tracking). Tests target application-layer pure logic rather than attempting TUI/Rich Live mocking. Allowlisted the files in the boundary guard test.",
-      "verification_result": "All 87 characterization tests pass. Full suite of 3882 tests passes with no regressions. mypy reports no issues across 261 source files. ruff check passes clean.",
-      "duration": "",
-      "completed_at": "2026-04-04T14:02:47.859Z",
-      "blocker_discovered": false,
-      "deviations": "Tests target application-layer state machine rather than direct interactive_start() testing due to heavy TTY coupling. Added WorkspaceSelected step missing from plan's wizard sequence.",
-      "known_issues": "None.",
-      "key_files": [
-        "tests/test_launch_flow_characterization.py",
-        "tests/test_dashboard_orchestrator_characterization.py",
-        "tests/test_docker_launch_characterization.py",
-        "tests/test_personal_profiles_characterization.py",
-        "tests/test_import_boundaries.py"
-      ],
-      "key_decisions": [
-        "Characterization tests target pure application-layer logic (state machines, policy functions, CRUD) rather than mocking full TUI interactions",
-        "Test files allowlisted in boundary guard with M005/S01/T02 tracking comment"
-      ],
-      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M005\nkey_files:\n  - tests/test_launch_flow_characterization.py\n  - tests/test_dashboard_orchestrator_characterization.py\n  - tests/test_docker_launch_characterization.py\n  - tests/test_personal_profiles_characterization.py\n  - tests/test_import_boundaries.py\nkey_decisions:\n  - Characterization tests target pure application-layer logic (state machines, policy functions, CRUD) rather than mocking full TUI interactions\n  - Test files allowlisted in boundary guard with M005/S01/T02 tracking comment\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T14:02:47.858Z\nblocker_discovered: false\n---\n\n# T02: Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery\n\n**Added 87 characterization tests across 4 files covering top-4 mandatory-split targets as safety net before S02 surgery**\n\n## What Happened\n\nCreated four characterization test files for the modules identified as mandatory-split targets in T01's audit: launch flow (17 tests covering wizard state machine, session selection, CLI error paths), dashboard orchestrator (26 tests covering view building, event routing, effect result application, tab fallbacks, placeholder helpers), docker launch (19 tests covering safety-net policy chain, atomic file writing, run_sandbox failure branches, mount race detection, inject_file error handling), and personal profiles (25 tests covering CRUD operations, listing edge cases, MCP merge, applied-state tracking). Tests target application-layer pure logic rather than attempting TUI/Rich Live mocking. Allowlisted the files in the boundary guard test.\n\n## Verification\n\nAll 87 characterization tests pass. Full suite of 3882 tests passes with no regressions. mypy reports no issues across 261 source files. ruff check passes clean.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_*_characterization.py -v` | 0 | ✅ pass | 1830ms |\n| 2 | `uv run pytest` | 0 | ✅ pass | 63900ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 70000ms |\n| 4 | `uv run ruff check` | 0 | ✅ pass | 500ms |\n\n## Deviations\n\nTests target application-layer state machine rather than direct interactive_start() testing due to heavy TTY coupling. Added WorkspaceSelected step missing from plan's wizard sequence.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_launch_flow_characterization.py`\n- `tests/test_dashboard_orchestrator_characterization.py`\n- `tests/test_docker_launch_characterization.py`\n- `tests/test_personal_profiles_characterization.py`\n- `tests/test_import_boundaries.py`\n",
-      "description": "Write characterization tests that capture current behavior of the top-4 mandatory-split targets. These tests protect against accidental behavior changes when S02 decomposes these modules. The targets are:\n\n1. **`commands/launch/flow.py`** — `interactive_start` (534 lines) and `start` (293 lines). Current tests are AST-level guardrails only. Write behavioral tests that verify:\n   - `start()` returns early with appropriate error when no git repo is found\n   - `start()` handles team override parameter correctly\n   - `interactive_start()` delegates to resume helpers when resume context is provided\n   - Test file: `tests/test_launch_flow_characterization.py`\n\n2. **`ui/dashboard/orchestrator.py`** — `run_dashboard` (232 lines) and action handlers. Only 6% coverage. Write tests that verify:\n   - `run_dashboard` handles empty session list gracefully\n   - Dashboard action dispatch routes to correct handlers\n   - Team switch flow is invoked when team switch is requested\n   - Test file: `tests/test_dashboard_orchestrator_characterization.py`\n\n3. **`docker/launch.py`** — `run_sandbox` (216 lines). 54% coverage. Write tests that verify:\n   - Safety policy injection is applied to container config\n   - Container name generation follows expected format\n   - Failure branches (docker not available, image pull failure) produce correct errors\n   - Test file: `tests/test_docker_launch_characterization.py`\n\n4. **`core/personal_profiles.py`** — Only 7 tests for 839 lines. Write tests that verify:\n   - Profile CRUD operations (create, read, update, delete)\n   - Profile listing returns expected structure\n   - Marketplace-state interaction (load/save managed state)\n   - Edge cases: nonexistent profile, duplicate name, empty profile list\n   - Test file: `tests/test_personal_profiles_characterization.py`\n\n**Testing patterns to follow:**\n- Use existing `tests/conftest.py` fixtures (`temp_dir`, `temp_git_repo`, `build_fake_adapters`)\n- Use existing `tests/fakes/` for fake adapters where needed\n- Use `unittest.mock.patch` for heavy external dependencies (docker, git, subprocess, filesystem)\n- Use `from __future__ import annotations` in all new test files\n- Each test function should have a docstring explaining what behavior it captures\n- Mark any test that cannot be made fully deterministic with `pytest.mark.skip` and a note, rather than writing a flaky test\n\n**Constraints:**\n- Do NOT modify any production code.\n- All tests must pass when run individually AND as part of the full suite.\n- Tests must not make network calls, start containers, or access real filesystem paths outside temp dirs.\n- Target: at least 3-5 meaningful behavioral tests per module (12-20 total new tests).",
-      "estimate": "2h",
-      "files": [
-        "tests/test_launch_flow_characterization.py",
-        "tests/test_dashboard_orchestrator_characterization.py",
-        "tests/test_docker_launch_characterization.py",
-        "tests/test_personal_profiles_characterization.py"
-      ],
-      "verify": "uv run pytest tests/test_launch_flow_characterization.py tests/test_dashboard_orchestrator_characterization.py tests/test_docker_launch_characterization.py tests/test_personal_profiles_characterization.py -v && uv run mypy src/scc_cli && uv run ruff check",
-      "inputs": [
-        "src/scc_cli/commands/launch/flow.py",
-        "src/scc_cli/ui/dashboard/orchestrator.py",
-        "src/scc_cli/docker/launch.py",
-        "src/scc_cli/core/personal_profiles.py",
-        "tests/conftest.py",
-        "tests/fakes/fake_sandbox_runtime.py",
-        "tests/fakes/fake_agent_runner.py",
-        "tests/fakes/fake_safety_engine.py",
-        ".gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md"
-      ],
-      "expected_output": [
-        "tests/test_launch_flow_characterization.py",
-        "tests/test_dashboard_orchestrator_characterization.py",
-        "tests/test_docker_launch_characterization.py",
-        "tests/test_personal_profiles_characterization.py"
-      ],
-      "observability_impact": "",
-      "full_plan_md": "",
-      "sequence": 0
-    },
-    {
-      "milestone_id": "M005",
-      "slice_id": "S01",
-      "id": "T03",
-      "title": "Add characterization tests for all high-priority split targets",
-      "status": "pending",
       "one_liner": "",
       "narrative": "",
       "verification_result": "",
@@ -3074,6 +2980,101 @@
       "key_files": [],
       "key_decisions": [],
       "full_summary_md": "",
+      "description": "Run live measurements against the codebase and produce a single consolidated MAINTAINABILITY-AUDIT.md that S02-S06 will consume as their planning input. Covers file-size census (all files >300 lines ranked by size with domain and layer-mixing tags), boundary violations (application→docker, core→marketplace, docker→presentation, docker internal cycles, Claude-specific shapes), and robustness debt (except-Exception sites with severity, unchecked subprocess calls, mutable module-level defaults, xfails, typing debt).\n\nSteps:\n1. Run file-size census: `find src/scc_cli -name '*.py' | xargs wc -l | sort -rn`\n2. Classify each file >300 lines by domain (UI/Commands/Application/Docker/Core/Marketplace) and layer-mixing (Yes/Moderate/No)\n3. Tag mandatory-split set (>800 lines) with HARD-FAIL (>1100) vs MANDATORY-SPLIT\n4. Run AST analysis on top files to identify largest functions\n5. Grep for import violations across all boundary types\n6. Catalog except-Exception sites, unchecked subprocess calls, mutable globals, xfails, typing debt\n7. Write consolidated MAINTAINABILITY-AUDIT.md with all sections\n8. Verify artifact exists and contains expected data points\n\nReference from research: 64 files >300 lines, 15 >800, 3 >1100, 87 except-Exception sites, 71 subprocess.run calls, 371 dict[str,Any] refs, 46 cast() calls, 4 xfails",
+      "estimate": "45m",
+      "files": [
+        ".gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md"
+      ],
+      "verify": "test -f .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -c '|' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md | xargs test 20 -lt && grep -q 'HARD-FAIL\\|MANDATORY-SPLIT' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -q 'except Exception' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -q 'subprocess' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && uv run ruff check && uv run mypy src/scc_cli && uv run pytest",
+      "inputs": [
+        "`src/scc_cli/` — all Python source files (read-only analysis target)",
+        "`tests/` — existing test files to scan for xfails"
+      ],
+      "expected_output": [
+        "`.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md` — consolidated maintainability audit with hotspot inventory, boundary-repair map, robustness-debt catalog, and priority action queue"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M005",
+      "slice_id": "S01",
+      "id": "T02",
+      "title": "Write characterization tests for top-4 mandatory-split targets before S02 surgery",
+      "status": "complete",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Add behavioral characterization tests for the four highest-priority split targets identified in T01's audit. These tests protect existing behavior before S02 surgery decomposes these modules. docker/launch.py already has existing tests in test_docker_launch_characterization.py — extend coverage there rather than duplicating.\n\nTargets and approach:\n1. `commands/launch/flow.py` (1447 lines) — Create `tests/test_launch_flow_characterization.py` targeting wizard state machine logic, session selection, CLI error paths. Use mock adapters from tests/fakes/.\n2. `ui/dashboard/orchestrator.py` (1489 lines) — Create `tests/test_dashboard_orchestrator_characterization.py` targeting view building, event routing, effect result application, tab fallbacks, placeholder helpers.\n3. `docker/launch.py` (874 lines) — Extend `tests/test_docker_launch_characterization.py` with safety-net policy chain, atomic file writing, run_sandbox failure branches, mount race detection.\n4. `core/personal_profiles.py` (839 lines) — Create `tests/test_personal_profiles_characterization.py` targeting CRUD operations, listing edge cases, MCP merge, applied-state tracking.\n\nAlso create `tests/test_import_boundaries.py` to codify the boundary violations identified in T01 as test assertions.\n\nKey constraints:\n- Tests target pure application-layer logic rather than mocking full TUI interactions\n- Use existing fakes/fixtures from tests/conftest.py and tests/fakes/\n- No production source code modified\n- Allowlist new test files in boundary guard with M005/S01/T02 tracking comment",
+      "estimate": "1h30m",
+      "files": [
+        "tests/test_launch_flow_characterization.py",
+        "tests/test_dashboard_orchestrator_characterization.py",
+        "tests/test_docker_launch_characterization.py",
+        "tests/test_personal_profiles_characterization.py",
+        "tests/test_import_boundaries.py"
+      ],
+      "verify": "uv run pytest tests/test_launch_flow_characterization.py tests/test_dashboard_orchestrator_characterization.py tests/test_docker_launch_characterization.py tests/test_personal_profiles_characterization.py tests/test_import_boundaries.py -v && uv run pytest && uv run mypy src/scc_cli && uv run ruff check",
+      "inputs": [
+        "`src/scc_cli/commands/launch/flow.py` — primary characterization target (1447 lines)",
+        "`src/scc_cli/ui/dashboard/orchestrator.py` — primary characterization target (1489 lines)",
+        "`src/scc_cli/docker/launch.py` — characterization target (874 lines)",
+        "`src/scc_cli/core/personal_profiles.py` — characterization target (839 lines)",
+        "`tests/conftest.py` — existing fixtures",
+        "`tests/fakes/` — fake adapters",
+        "`tests/test_docker_launch_characterization.py` — existing characterization tests to extend",
+        "`.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md` — confirms mandatory-split targets from T01"
+      ],
+      "expected_output": [
+        "`tests/test_launch_flow_characterization.py` — behavioral characterization tests for commands/launch/flow.py",
+        "`tests/test_dashboard_orchestrator_characterization.py` — characterization tests for ui/dashboard/orchestrator.py",
+        "`tests/test_docker_launch_characterization.py` — extended characterization tests for docker/launch.py",
+        "`tests/test_personal_profiles_characterization.py` — characterization tests for core/personal_profiles.py",
+        "`tests/test_import_boundaries.py` — boundary violation assertions codified as tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M005",
+      "slice_id": "S01",
+      "id": "T03",
+      "title": "Added 197 characterization tests across 8 new files covering all testable top-20 split targets as safety net before S02 surgery",
+      "status": "complete",
+      "one_liner": "Added 197 characterization tests across 8 new files covering all testable top-20 split targets as safety net before S02 surgery",
+      "narrative": "Extended characterization test coverage from T02's initial 4 files (87 tests) to cover all remaining high-priority split targets from the maintainability audit. Created 8 new test files with 197 tests covering: compute_effective_config (63 tests for pattern matching, delegation, MCP filtering, full pipeline), app_dashboard (40 tests for view models, event routing, effect application), marketplace_materialize (24 tests for name validation, serialization, manifest I/O, cache freshness), setup (19 tests for config preview, proposed config assembly), team_commands (17 tests for plugin display, path detection, config validation), worktree_use_cases (16 tests for selection items, shell resolution, list/select flows), wizard (10 tests for path normalization, answer factories), and config_commands (8 tests for enforcement status, advisory warnings). Updated boundary guard allowlist. Skipped docker/credentials.py (pure subprocess) and ui/settings.py (heavy TUI coupling) as they have no extractable pure logic to characterize.",
+      "verification_result": "All 197 new characterization tests pass. Full suite of 4079 tests passes with no regressions (23 skipped, 4 xfailed). ruff check clean. mypy clean across 261 source files.",
+      "duration": "",
+      "completed_at": "2026-04-04T14:25:22.763Z",
+      "blocker_discovered": false,
+      "deviations": "Skipped docker/credentials.py and ui/settings.py — both are subprocess-heavy or TUI-coupled with no pure logic to characterize. Priority queue items P17-P20 are code changes, not characterization targets.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_compute_effective_config_characterization.py",
+        "tests/test_app_dashboard_characterization.py",
+        "tests/test_marketplace_materialize_characterization.py",
+        "tests/test_setup_characterization.py",
+        "tests/test_team_commands_characterization.py",
+        "tests/test_worktree_use_cases_characterization.py",
+        "tests/test_wizard_characterization.py",
+        "tests/test_config_commands_characterization.py",
+        "tests/test_import_boundaries.py"
+      ],
+      "key_decisions": [
+        "Skipped docker/credentials.py and ui/settings.py characterization: no extractable pure logic",
+        "Items P14-P20 are boundary guards, robustness changes, or typing debt — not characterization targets"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S01\nmilestone: M005\nkey_files:\n  - tests/test_compute_effective_config_characterization.py\n  - tests/test_app_dashboard_characterization.py\n  - tests/test_marketplace_materialize_characterization.py\n  - tests/test_setup_characterization.py\n  - tests/test_team_commands_characterization.py\n  - tests/test_worktree_use_cases_characterization.py\n  - tests/test_wizard_characterization.py\n  - tests/test_config_commands_characterization.py\n  - tests/test_import_boundaries.py\nkey_decisions:\n  - Skipped docker/credentials.py and ui/settings.py characterization: no extractable pure logic\n  - Items P14-P20 are boundary guards, robustness changes, or typing debt — not characterization targets\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T14:25:22.762Z\nblocker_discovered: false\n---\n\n# T03: Added 197 characterization tests across 8 new files covering all testable top-20 split targets as safety net before S02 surgery\n\n**Added 197 characterization tests across 8 new files covering all testable top-20 split targets as safety net before S02 surgery**\n\n## What Happened\n\nExtended characterization test coverage from T02's initial 4 files (87 tests) to cover all remaining high-priority split targets from the maintainability audit. Created 8 new test files with 197 tests covering: compute_effective_config (63 tests for pattern matching, delegation, MCP filtering, full pipeline), app_dashboard (40 tests for view models, event routing, effect application), marketplace_materialize (24 tests for name validation, serialization, manifest I/O, cache freshness), setup (19 tests for config preview, proposed config assembly), team_commands (17 tests for plugin display, path detection, config validation), worktree_use_cases (16 tests for selection items, shell resolution, list/select flows), wizard (10 tests for path normalization, answer factories), and config_commands (8 tests for enforcement status, advisory warnings). Updated boundary guard allowlist. Skipped docker/credentials.py (pure subprocess) and ui/settings.py (heavy TUI coupling) as they have no extractable pure logic to characterize.\n\n## Verification\n\nAll 197 new characterization tests pass. Full suite of 4079 tests passes with no regressions (23 skipped, 4 xfailed). ruff check clean. mypy clean across 261 source files.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_*_characterization.py tests/test_app_dashboard_characterization.py -v` | 0 | ✅ pass | 2120ms |\n| 2 | `uv run pytest` | 0 | ✅ pass | 65970ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 500ms |\n| 4 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 64000ms |\n\n## Deviations\n\nSkipped docker/credentials.py and ui/settings.py — both are subprocess-heavy or TUI-coupled with no pure logic to characterize. Priority queue items P17-P20 are code changes, not characterization targets.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_compute_effective_config_characterization.py`\n- `tests/test_app_dashboard_characterization.py`\n- `tests/test_marketplace_materialize_characterization.py`\n- `tests/test_setup_characterization.py`\n- `tests/test_team_commands_characterization.py`\n- `tests/test_worktree_use_cases_characterization.py`\n- `tests/test_wizard_characterization.py`\n- `tests/test_config_commands_characterization.py`\n- `tests/test_import_boundaries.py`\n",
       "description": "",
       "estimate": "",
       "files": [
@@ -5424,6 +5425,50 @@
       "verdict": "✅ pass",
       "duration_ms": 500,
       "created_at": "2026-04-04T14:02:47.859Z"
+    },
+    {
+      "id": 119,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_*_characterization.py tests/test_app_dashboard_characterization.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2120,
+      "created_at": "2026-04-04T14:25:22.763Z"
+    },
+    {
+      "id": 120,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run pytest",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 65970,
+      "created_at": "2026-04-04T14:25:22.763Z"
+    },
+    {
+      "id": 121,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-04T14:25:22.763Z"
+    },
+    {
+      "id": 122,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 64000,
+      "created_at": "2026-04-04T14:25:22.763Z"
     }
   ]
 }

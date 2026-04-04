@@ -1,50 +1,34 @@
 ---
-estimated_steps: 25
+estimated_steps: 11
 estimated_files: 1
 skills_used: []
 ---
 
-# T01: Produce comprehensive maintainability audit artifact
+# T01: Produce ranked maintainability audit with hotspot inventory, boundary-repair map, and robustness-debt catalog
 
-Combine the hotspot inventory, boundary-repair map, and robustness-debt catalog into a single comprehensive audit artifact at `.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md`. This artifact is the input for all S02-S06 planning.
+Run live measurements against the codebase and produce a single consolidated MAINTAINABILITY-AUDIT.md that S02-S06 will consume as their planning input. Covers file-size census (all files >300 lines ranked by size with domain and layer-mixing tags), boundary violations (application→docker, core→marketplace, docker→presentation, docker internal cycles, Claude-specific shapes), and robustness debt (except-Exception sites with severity, unchecked subprocess calls, mutable module-level defaults, xfails, typing debt).
 
-The audit must contain three major sections:
+Steps:
+1. Run file-size census: `find src/scc_cli -name '*.py' | xargs wc -l | sort -rn`
+2. Classify each file >300 lines by domain (UI/Commands/Application/Docker/Core/Marketplace) and layer-mixing (Yes/Moderate/No)
+3. Tag mandatory-split set (>800 lines) with HARD-FAIL (>1100) vs MANDATORY-SPLIT
+4. Run AST analysis on top files to identify largest functions
+5. Grep for import violations across all boundary types
+6. Catalog except-Exception sites, unchecked subprocess calls, mutable globals, xfails, typing debt
+7. Write consolidated MAINTAINABILITY-AUDIT.md with all sections
+8. Verify artifact exists and contains expected data points
 
-**Section 1 — Ranked Hotspot Inventory:**
-- Run `find src/scc_cli -name '*.py' | xargs wc -l | sort -rn` to get the live file-size census.
-- Produce a ranked table of all files > 300 lines with columns: Rank, File (relative path), Lines, Domain cluster (commands/ui/application/docker/marketplace/core/other), Layer-mixing assessment (Yes/No + brief note).
-- Tag each file > 800 lines as MANDATORY-SPLIT. Tag files > 1100 lines as HARD-FAIL.
-- Include a top-10 largest functions table using AST analysis: `import ast; for each top file, parse and find functions > 150 lines`.
-
-**Section 2 — Boundary-Repair Map:**
-- Scan for docker imports outside adapter/runtime seams: `grep -rn 'from scc_cli.docker' src/scc_cli/ | grep -v 'adapters/' | grep -v 'docker/'`
-- Scan for core-to-marketplace leakage: `grep -rn 'from scc_cli.marketplace' src/scc_cli/core/`
-- Scan for presentation-to-runtime coupling: `grep -rn 'from.*console' src/scc_cli/docker/`
-- Identify import cycles: check docker.core -> docker.launch and similar bidirectional imports.
-- Catalog Claude-specific shapes in marketplace pipeline: files referencing `.claude`, `claude-plugins-official`, Claude-specific paths.
-- Present all findings in a table with columns: Source file:line, Import target, Violation type, Severity.
-
-**Section 3 — Robustness-Debt Catalog:**
-- Count and list all `except Exception` sites: `grep -rn 'except Exception' src/scc_cli/` grouped by file with severity (HIGH for runtime/credential/docker ops, MEDIUM for application logic, LOW for cleanup/diagnostic).
-- Count and list unchecked subprocess calls: `grep -rn 'subprocess.run' src/scc_cli/` — note which use `check=True`, which capture stderr, which set timeouts.
-- Identify mutable module-level defaults: `grep -rn 'DEFAULT_\|_DEFAULTS\|DETECTION_ORDER\|INSTALL_COMMANDS\|BLOCK_MESSAGES\|_RULE_NAMES\|_NETWORK_POLICY' src/scc_cli/` — assess mutability risk.
-- Count typing debt: `dict[str, Any]` references, `cast()` calls, `TypeAlias = dict` patterns.
-- List existing quality xfails from test files with what each masks.
-
-Constraints:
-- Do NOT modify any production code.
-- All numbers must come from live codebase scans, not copied from the research doc (though the research doc confirms what to expect).
-- Use markdown tables for all structured data.
-- End the document with a 'Priority Queue for S02-S06' section that ranks the top-20 action items across all three categories.
+Reference from research: 64 files >300 lines, 15 >800, 3 >1100, 87 except-Exception sites, 71 subprocess.run calls, 371 dict[str,Any] refs, 46 cast() calls, 4 xfails
 
 ## Inputs
 
-- `src/scc_cli/`
+- ``src/scc_cli/` — all Python source files (read-only analysis target)`
+- ``tests/` — existing test files to scan for xfails`
 
 ## Expected Output
 
-- `.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md`
+- ``.gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md` — consolidated maintainability audit with hotspot inventory, boundary-repair map, robustness-debt catalog, and priority action queue`
 
 ## Verification
 
-test -f .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -c '^|' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md | xargs test 20 -le
+test -f .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -c '|' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md | xargs test 20 -lt && grep -q 'HARD-FAIL\|MANDATORY-SPLIT' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -q 'except Exception' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && grep -q 'subprocess' .gsd/milestones/M005/slices/S01/MAINTAINABILITY-AUDIT.md && uv run ruff check && uv run mypy src/scc_cli && uv run pytest
