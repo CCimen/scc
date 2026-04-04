@@ -168,7 +168,7 @@ The 436-line characterization test file provides strong regression protection. T
   - Estimate: 1h30m
   - Files: src/scc_cli/application/start_session.py, src/scc_cli/commands/launch/flow_interactive.py, src/scc_cli/commands/launch/flow_session.py, src/scc_cli/commands/launch/flow.py, src/scc_cli/commands/launch/flow_types.py, src/scc_cli/commands/launch/render.py, src/scc_cli/commands/launch/sandbox.py, src/scc_cli/commands/launch/team_settings.py, src/scc_cli/commands/config.py, src/scc_cli/commands/config_validate.py, src/scc_cli/commands/exceptions.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir "$PWD" -q
-- [ ] **T05: Convert safety_policy_loader and remaining secondary dict consumers** — Convert `load_safety_policy()` and its callers from raw `dict[str, Any]` to `NormalizedOrgConfig`. Also convert remaining secondary consumers of raw org_config dicts in `personal_profile_policy.py` (the functions not yet converted in T03). Measure final dict[str, Any] reduction to confirm the slice goal is met.
+- [x] **T05: Deferred safety_policy_loader typing per user override — triggering S04-S06 replan around governed-artifact/team-pack architecture** — Convert `load_safety_policy()` and its callers from raw `dict[str, Any]` to `NormalizedOrgConfig`. Also convert remaining secondary consumers of raw org_config dicts in `personal_profile_policy.py` (the functions not yet converted in T03). Measure final dict[str, Any] reduction to confirm the slice goal is met.
 
 ## Steps
 
@@ -197,3 +197,4 @@ The 436-line characterization test file provides strong regression protection. T
   - Estimate: 1h
   - Files: src/scc_cli/core/safety_policy_loader.py, src/scc_cli/application/personal_profile_policy.py, src/scc_cli/doctor/checks/safety.py, src/scc_cli/application/support_bundle.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir "$PWD" -q && test $(grep -rn 'dict\[str, Any\]' src/scc_cli/ | wc -l) -lt 390
+  - Blocker: None. safety_policy_loader already has backward-compatible union signature pattern from T03.

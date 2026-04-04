@@ -170,3 +170,33 @@ User-issued overrides that supersede plan document content.
 **Applied-at:** M005/S02/T06
 
 ---
+
+## Override: 2026-04-04T20:10:00.000Z
+
+**Change:** Finish S03 T04 cleanly (already done). Before starting T05 or any S04 work, stop and rewrite the remaining M005 task plans around the governed-artifact/team-pack architecture.
+
+  What is already done and preserved:
+  - typed governed-artifact foundation landed in S03/T01
+  - NormalizedOrgConfig adoption in T02-T04 is acceptable
+
+  What was still missing and is now explicit in the replanned S04-S06:
+  - one approved SCC team-pack source is canonical
+  - team config references bundle/team-pack IDs, not raw Claude or Codex marketplace URLs
+  - preserve the UX of one team package per team
+  - split provider-neutral planning from provider-native renderers
+  - Claude and Codex native surfaces are asymmetric
+  - Codex plugin does not subsume Codex rules, hooks, config.toml, or AGENTS.md
+  - do not bolt Codex support onto the current Claude-shaped marketplace pipeline
+  - render Claude-native outputs for Claude and Codex-native outputs for Codex from the same bundle plan
+  - do not require dual team configs
+
+  Replan completed:
+  - S03 closed with T01-T04 done, T05 deferred (dict count already under target)
+  - S04 rewritten: provider-neutral artifact planning pipeline + provider-native renderers + failure hardening
+  - S05 rewritten: coverage on governed-artifact/team-pack planning and renderer seams
+  - S06 rewritten: diagnostics/docs truthfulness for team-pack model + guardrails + milestone validation
+  - Decision D019 recorded
+**Scope:** resolved
+**Applied-at:** M005/S03/T05
+
+---

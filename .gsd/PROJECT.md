@@ -51,9 +51,15 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 - Zero HARD-FAIL files remaining in src/scc_cli/
 - Patterns established: re-export residual modules, Callable DI for boundary repair, late-bound module lookup for test-patch compat, deferred imports for circular deps
 
-**Override gate (active):** Before S03+ implementation, S03-S06 must be replanned to incorporate the governed-artifact/team-pack architecture (D-018–D-020, D017, specs/03, specs/06). Do not proceed with generic S03 strict-typing cleanup.
+**S03 complete.** Landed governed-artifact type hierarchy (T01), extended NormalizedOrgConfig with SafetyNetConfig/StatsConfig/from_dict (T02), converted compute_effective_config pipeline to NormalizedOrgConfig (T03), typed StartSessionRequest and normalized all call sites (T04). T05 deferred per user override (D019) — dict[str,Any] count already under target. Key deliverables:
+- 6 frozen governed-artifact model types in core/governed_artifacts.py
+- NormalizedOrgConfig adoption across compute_effective_config/start_session/launch pipeline
+- 4117 tests passing, governed-artifact types defined but not yet consumed by marketplace/renderer pipeline
 
-Remaining: S03 (governed-artifact/team-pack typed models and config flow), S04 (renderer hardening and fail-closed cleanup), S05 (critical-path coverage), S06 (guardrails/diagnostics/docs truthfulness/validation).
+**S04-S06 replanned (D019).** Per user override, remaining slices reorganized around governed-artifact/team-pack architecture:
+- S04: Provider-neutral artifact planning pipeline (bundle resolution → ArtifactRenderPlan) and provider-native renderers (Claude, Codex) with fail-closed error handling
+- S05: Coverage on governed-artifact/team-pack planning and renderer seams
+- S06: Diagnostics/docs truthfulness for team-pack model, guardrail restoration, milestone validation
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -90,8 +96,12 @@ Remaining: S03 (governed-artifact/team-pack typed models and config flow), S04 (
 - Decomposed modules use re-export residuals: original module re-exports all extracted symbols, preserving backward-compatible import paths.
 
 ## Immediate next focus
-- **Replan S03-S06 before implementation.** Per user override, S03-S06 must be replanned to explicitly incorporate the governed-artifact/team-pack architecture (D-018–D-020, D017, specs/03, specs/06) before any further implementation.
-  - S03 must land typed GovernedArtifact/ArtifactBundle/ArtifactRenderPlan models and typed config flow
-  - S04 must harden fetch/render/merge/install failure handling for the provider-native renderer pipeline
-  - S06 must validate docs/diagnostics truthfulness for the team-pack model
-  - One approved SCC team-pack source is canonical; team config references bundle IDs; split provider-neutral planning from provider-native renderers
+- **Execute S04: Provider-neutral artifact planning pipeline and provider-native renderers.**
+  - T01: Bundle resolver — pure core function computing ArtifactRenderPlan from NormalizedOrgConfig
+  - T02: Claude renderer — adapter-owned projection into settings.local.json, marketplace, hooks
+  - T03: Codex renderer — adapter-owned projection into .codex-plugin/, rules, hooks, config.toml, AGENTS.md
+  - T04: Harden fetch/render/merge/install failure handling (fail-closed)
+  - T05: Wire renderers into launch pipeline via AgentProvider.render_artifacts
+  - Team config references bundle IDs, not raw marketplace URLs
+  - Claude and Codex native surfaces are intentionally asymmetric (D019)
+  - Provider-neutral planning has zero imports from marketplace/ or adapters/
