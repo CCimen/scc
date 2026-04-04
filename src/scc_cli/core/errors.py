@@ -317,6 +317,29 @@ class PolicyViolationError(ConfigError):
 
 
 @dataclass
+class ProviderNotAllowedError(PolicyViolationError):
+    """Resolved provider is not in the team's allowed_providers list."""
+
+    provider_id: str = ""
+    allowed_providers: tuple[str, ...] = ()
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message and self.provider_id:
+            allowed = ", ".join(self.allowed_providers) if self.allowed_providers else "none"
+            self.user_message = (
+                f"Provider '{self.provider_id}' is not allowed by team policy. "
+                f"Allowed providers: [{allowed}]"
+            )
+        if not self.suggested_action:
+            self.suggested_action = (
+                "Use one of the allowed providers, or ask your team admin "
+                "to update the allowed_providers list."
+            )
+
+
+@dataclass
 class LaunchPreflightError(ConfigError):
     """Launch was blocked before runtime startup."""
 

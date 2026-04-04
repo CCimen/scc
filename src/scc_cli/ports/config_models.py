@@ -87,6 +87,7 @@ class NormalizedTeamConfig:
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
     delegation: TeamDelegation = field(default_factory=TeamDelegation)
+    allowed_providers: tuple[str, ...] = ()
     enabled_bundles: tuple[str, ...] = ()
 
 

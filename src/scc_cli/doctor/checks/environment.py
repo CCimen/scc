@@ -67,8 +67,8 @@ def check_docker() -> CheckResult:
             name="Docker",
             passed=False,
             message="Docker is not installed or not running",
-            fix_hint="Install Docker Desktop from https://docker.com/products/docker-desktop",
-            fix_url="https://docker.com/products/docker-desktop",
+            fix_hint="Install a compatible Docker CLI/runtime such as OrbStack, Docker Desktop, or Colima",
+            fix_url="https://orbstack.dev/",
             severity=SeverityLevel.ERROR,
         )
 
@@ -81,7 +81,7 @@ def check_docker() -> CheckResult:
 
 
 def check_docker_desktop() -> CheckResult:
-    """Check Docker Desktop version (sandbox requires 4.50+)."""
+    """Check Docker Desktop availability for optional sandbox backend support."""
     from ... import docker as docker_module
 
     desktop_version = docker_module.get_docker_desktop_version()
@@ -89,8 +89,8 @@ def check_docker_desktop() -> CheckResult:
         return CheckResult(
             name="Docker Desktop",
             passed=False,
-            message="Docker Desktop CLI not detected",
-            fix_hint=("Install or update Docker Desktop 4.50+ and ensure its CLI is first in PATH"),
+            message="Docker Desktop CLI not detected (optional unless using Docker sandbox backend)",
+            fix_hint=("Install or update Docker Desktop 4.50+ only if you want the Docker sandbox backend"),
             fix_url="https://docker.com/products/docker-desktop",
             severity=SeverityLevel.WARNING,
         )
@@ -178,7 +178,7 @@ def check_docker_running() -> CheckResult:
                 name="Docker Daemon",
                 passed=False,
                 message="Docker daemon is not running",
-                fix_hint="Start Docker Desktop or run 'sudo systemctl start docker'",
+                fix_hint="Start OrbStack, Docker Desktop, or another compatible Docker daemon",
                 severity=SeverityLevel.ERROR,
             )
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -186,7 +186,7 @@ def check_docker_running() -> CheckResult:
             name="Docker Daemon",
             passed=False,
             message="Could not connect to Docker daemon",
-            fix_hint="Ensure Docker Desktop is running",
+            fix_hint="Ensure a compatible Docker daemon is running",
             severity=SeverityLevel.ERROR,
         )
 
@@ -248,7 +248,7 @@ def check_runtime_backend() -> CheckResult:
             name="Runtime Backend",
             passed=False,
             message=f"Runtime backend: {backend_label} — daemon not reachable",
-            fix_hint="Start Docker Desktop or the Docker daemon",
+            fix_hint="Start OrbStack, Docker Desktop, or another compatible Docker daemon",
             severity=SeverityLevel.WARNING,
         )
 

@@ -47,6 +47,7 @@ USER_CONFIG_DEFAULTS = {
     "config_version": "1.0.0",
     "organization_source": None,  # Set during setup: {"url": "...", "auth": "...", "auth_header": "..."}
     "selected_profile": None,
+    "selected_provider": None,
     "standalone": False,
     "workspace_team_map": {},
     "cache": {
@@ -234,6 +235,32 @@ def set_selected_profile(profile: str) -> None:
     """
     config = load_user_config()
     config["selected_profile"] = profile
+    save_user_config(config)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Provider Selection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def get_selected_provider() -> str | None:
+    """Get the currently selected provider name.
+
+    Returns:
+        Provider name string or None if not selected
+    """
+    config = load_user_config()
+    return config.get("selected_provider")
+
+
+def set_selected_provider(provider: str) -> None:
+    """Set the selected provider.
+
+    Args:
+        provider: Provider name to select (e.g. 'claude', 'codex')
+    """
+    config = load_user_config()
+    config["selected_provider"] = provider
     save_user_config(config)
 
 

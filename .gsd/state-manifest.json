@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T21:34:16.701Z",
+  "exported_at": "2026-04-04T22:51:36.797Z",
   "milestones": [
     {
       "id": "M001",
@@ -108,6 +108,131 @@
       "definition_of_done": [],
       "requirement_coverage": "",
       "boundary_map_markdown": ""
+    },
+    {
+      "id": "M006-d622bc",
+      "title": "Provider Selection UX and End-to-End Codex Launch",
+      "status": "queued",
+      "depends_on": [],
+      "created_at": "2026-04-04T22:04:33.958Z",
+      "completed_at": null,
+      "vision": "SCC becomes a genuine multi-provider runtime. Users choose between Claude and Codex via config or CLI flag, validated against org/team policy. Provider resolution is request-scoped, not a bootstrap-global default. Provider identity is part of container naming, volume naming, session identity, and resume identity — Claude and Codex coexist on the same workspace without collision. The entire launch flow, TUI, doctor readiness, Quick Resume, machine-readable outputs, and diagnostics adapt to the selected provider. Codex has its own Dockerfile, runner, image ref, and operator-ready image lifecycle with standardized build commands. Claude-only features are gated, not renamed. Pre-M006 configs and sessions migrate transparently.",
+      "success_criteria": [
+        "scc start --provider codex launches a Codex session end-to-end through the OCI backend with codex-specific image, settings path, binary, config dir, data volume, and container name.",
+        "scc start --provider claude continues to work exactly as before — zero regression.",
+        "scc start (no flag) uses the persisted default provider from user config (selected_provider field, default: claude).",
+        "Provider selection is validated against effective org/team policy. ProviderNotAllowedError raised early with clear message if the team/org config restricts the chosen provider.",
+        "Provider resolution is request-scoped: shared infra (probe, engine, sink) stays cached in bootstrap, but provider-specific runner/provider/safety-adapter/runtime-spec selection happens per invocation, not baked into the lru_cached DefaultAdapters singleton.",
+        "Provider identity is part of container name (scc-oci-{provider}-{hash}), volume name ({provider}-sandbox-data), and session identity (SessionRecord.provider_id). Containers labeled with scc.provider=<id>.",
+        "Quick Resume filters by workspace + team + provider. Resume refuses or prompts on provider mismatch.",
+        "scc provider list shows available providers. scc provider show prints the active provider and runtime backend. scc provider set <name> persists the choice.",
+        "ProviderRuntimeSpec frozen dataclass carries image_ref, binary_name, config_dir, settings_path_template, data_volume_name, display_name, auth_mount_paths — separate from ProviderCapabilityProfile.",
+        "CodexAgentRunner implements AgentRunner with codex-specific argv, .codex settings path, and describe()='Codex'.",
+        "images/scc-agent-codex/Dockerfile exists and installs Codex CLI on scc-base. SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF defined in image_contracts.py.",
+        "start_session builds SandboxSpec using ProviderRuntimeSpec (image, config dir, volume) instead of hardcoded Claude constants.",
+        "OCI sandbox runtime receives agent binary name, data volume name, and config dir from SandboxSpec or ProviderRuntimeSpec — not from module-level Claude constants.",
+        "provider_id appears in all machine-readable outputs: dry-run JSON, support bundle, audit events (already via preflight), session list --json, and container list output.",
+        "scc doctor separates backend readiness (Docker/OCI) from provider readiness (image exists, auth/config ready). Doctor ready message says 'Ready to run <provider display name>'.",
+        "scc doctor --provider <name> checks readiness for a specific provider. If image missing, prints exact build command: docker build -t scc-agent-{provider}:latest images/scc-agent-{provider}/.",
+        "All TUI surfaces are provider-aware: launch panel, dry-run preview, active stack summary, dashboard, sessions tab, containers tab, quick resume show the active agent/provider.",
+        "Dashboard uses 'a' key for agent/provider switching (not 'p' which is profile_menu).",
+        "Claude-only features (--dangerously-skip-permissions, OAuth credential flow, Desktop sandbox template) are hidden or gated when Codex is selected.",
+        "Pre-M006 user configs without selected_provider default to 'claude'. Pre-M006 SessionRecords without provider_id default to 'claude'. Schema migration is backward-compatible.",
+        "Typed errors: UnsupportedProviderError, ProviderNotReadyError, ProviderImageMissingError, ProviderMismatchError, ProviderNotAllowedError, ProviderFeatureUnavailableError with user_message, suggested_action, and exit_code.",
+        "Branding header adapts: 'Sandboxed Coding CLI' with provider-specific display name. Shared/operator surfaces are SCC-neutral.",
+        "Coexistence test: Claude and Codex containers, volumes, sessions, and Quick Resume entries can both exist for the same workspace without any collision.",
+        "Exit gate: uv run ruff check, uv run mypy src/scc_cli, uv run pytest --rootdir \"$PWD\" -q all pass."
+      ],
+      "key_risks": [
+        {
+          "risk": "OCI runtime hardcodes AGENT_NAME, SANDBOX_DATA_VOLUME, and volume mounts from Claude constants.",
+          "whyItMatters": "Codex launch would use Claude binary, Claude volume, and .claude mount path, causing immediate failure or credential collision."
+        },
+        {
+          "risk": "Container naming is workspace-only (scc-oci-{hash}) with no provider dimension.",
+          "whyItMatters": "Running Claude and Codex on the same workspace would collide: same container name, same volume, same session records."
+        },
+        {
+          "risk": "Bootstrap lru_cache bakes provider-specific adapters at first call.",
+          "whyItMatters": "A user who switches provider mid-process via config would still get the first provider's adapters."
+        },
+        {
+          "risk": "Quick Resume filters by workspace+team only, not provider.",
+          "whyItMatters": "Resuming with wrong provider would exec the wrong binary into the wrong container."
+        },
+        {
+          "risk": "42 files contain hardcoded 'Claude Code' or 'Sandboxed Claude' strings.",
+          "whyItMatters": "Missing any user-facing string means the TUI lies about which provider is active."
+        },
+        {
+          "risk": "No Codex Dockerfile or image ref. No operator build guidance.",
+          "whyItMatters": "Codex launch fails silently at container creation. Operator has no recovery path."
+        },
+        {
+          "risk": "Machine-readable outputs (dry-run JSON, session list --json, support bundle) don't include provider.",
+          "whyItMatters": "Automation and support tooling cannot distinguish Claude vs Codex sessions or diagnose provider-related issues."
+        }
+      ],
+      "proof_strategy": [
+        {
+          "riskOrUnknown": "OCI runtime hardcodes Claude constants",
+          "retireIn": "S02",
+          "whatWillBeProven": "OCI runtime receives binary, volume, config dir from SandboxSpec fields. Tests verify both Claude and Codex values in docker create/exec commands."
+        },
+        {
+          "riskOrUnknown": "Container/volume/session collision",
+          "retireIn": "S04",
+          "whatWillBeProven": "Coexistence test: same workspace, both providers → different container names, different volumes, different sessions, different Quick Resume entries."
+        },
+        {
+          "riskOrUnknown": "Bootstrap lru_cache locks provider",
+          "retireIn": "S01",
+          "whatWillBeProven": "Provider-specific adapters resolved per invocation. Test calls resolve twice with different providers and gets different adapters."
+        },
+        {
+          "riskOrUnknown": "Quick Resume cross-provider mismatch",
+          "retireIn": "S01",
+          "whatWillBeProven": "Quick Resume filters by workspace+team+provider. Test with sessions for both providers, each filter returns only its own."
+        },
+        {
+          "riskOrUnknown": "Branding in 42 files",
+          "retireIn": "S03",
+          "whatWillBeProven": "Grep guardrail test passes: zero 'Claude Code' in user-facing runtime paths."
+        },
+        {
+          "riskOrUnknown": "No Codex image or build guidance",
+          "retireIn": "S02+S03",
+          "whatWillBeProven": "Dockerfile exists. Doctor prints exact build command when image missing."
+        },
+        {
+          "riskOrUnknown": "Machine-readable outputs missing provider",
+          "retireIn": "S03",
+          "whatWillBeProven": "dry-run JSON, session list --json, container list, and support bundle all include provider_id."
+        }
+      ],
+      "verification_contract": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "verification_integration": "scc start --provider claude and scc start --provider codex both reach Docker exec with correct provider-specific values. Provider switch round-trip works. Quick Resume filters by provider. Resume detects mismatch. Policy validation rejects disallowed provider. Coexistence test passes for same workspace.",
+      "verification_operational": "scc doctor separates backend from provider readiness. Doctor prints build command for missing image. Support bundle includes provider. All machine-readable outputs include provider_id.",
+      "verification_uat": "Developer sets codex, launches, sees Codex branding. Switches to claude, sees Claude branding. Both coexist on same workspace. Resume detects mismatch. Doctor shows accurate readiness. Dashboard shows active agent.",
+      "definition_of_done": [
+        "All success criteria verified with evidence.",
+        "All slices complete with summaries.",
+        "scc start --provider codex reaches Docker exec with correct image, binary, settings, volume, and container name.",
+        "scc start (no flag) uses persisted default provider. Provider resolution is per-invocation, not cached.",
+        "Provider validated against org/team policy.",
+        "Container names, volume names, session records all include provider. Coexistence test passes.",
+        "Quick Resume filters by provider. Resume refuses mismatch.",
+        "Doctor separates backend from provider readiness. Prints exact build command for missing image.",
+        "All machine-readable outputs include provider_id.",
+        "All TUI surfaces show active provider.",
+        "Claude-only features gated under Codex.",
+        "Pre-M006 migration tested.",
+        "images/scc-agent-codex/Dockerfile exists.",
+        "Grep guardrail: zero hardcoded 'Claude Code' in user-facing runtime paths.",
+        "Exit gate passes: ruff check, mypy, pytest."
+      ],
+      "requirement_coverage": "R001 \\u2014 Replaces hardcoded Claude assumptions with provider-neutral dispatch throughout the launch path, container/volume/session identity, TUI, and diagnostics. Request-scoped resolution prevents stale caching. Policy validation enforces org intent.",
+      "boundary_map_markdown": "```\\nUser Config (selected_provider) \\u2500\\u2500\\u2510\\nCLI flag (--provider)             \\u2500\\u2500\\u253c\\u2500\\u2500\\u25b6 resolve_active_provider() [per-invocation]\\n                                       \\u2502\\n                                       \\u251c\\u2500\\u2500\\u25b6 validate_provider_allowed(org_config, team) [policy check]\\n                                       \\u2502\\n                                       \\u251c\\u2500\\u2500\\u25b6 ProviderRuntimeSpec (image, binary, config_dir, volume, display_name)\\n                                       \\u251c\\u2500\\u2500\\u25b6 agent_provider (ClaudeAgentProvider | CodexAgentProvider)\\n                                       \\u251c\\u2500\\u2500\\u25b6 agent_runner (ClaudeAgentRunner | CodexAgentRunner)\\n                                       \\u251c\\u2500\\u2500\\u25b6 safety_adapter (ClaudeSafetyAdapter | CodexSafetyAdapter)\\n                                       \\u2502\\n                                       \\u25bc\\n                              start_session \\u2500\\u2500\\u25b6 SandboxSpec (image, agent_binary, data_volume from ProviderRuntimeSpec)\\n                                       \\u2502\\n                                       \\u25bc\\n                              OCI runtime (binary, volume, container_name include provider_id)\\n                                       \\u2502\\n                                       \\u251c\\u2500\\u2500\\u25b6 SessionRecord (provider_id) + Container label (scc.provider=<id>)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Quick Resume (filters workspace+team+provider)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Resume (mismatch detection)\\n                                       \\u251c\\u2500\\u2500\\u25b6 TUI (launch panel, dashboard, sessions, containers)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Doctor (backend health + provider readiness)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Machine outputs (dry-run JSON, audit events, session --json, support bundle)\\n                                       \\u2514\\u2500\\u2500\\u25b6 Branding (provider-aware display + feature gating)\\n```"
     }
   ],
   "slices": [
@@ -707,6 +832,94 @@
       "proof_level": "Contract tests + integration tests verifying portable artifacts render identically on both providers without bindings.",
       "integration_closure": "The resolve_render_plan → render_*_artifacts pipeline now handles the full effective_artifacts set, not just the bindings subset.",
       "observability_impact": "RendererResult now reports portable artifacts in rendered_paths alongside binding-rendered artifacts.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "id": "S01",
+      "title": "Provider selection config, CLI flag, and bootstrap dispatch",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [],
+      "demo": "scc provider show prints the active provider. scc provider set codex persists it. scc start --provider codex overrides the default. Bootstrap dispatches the correct agent_provider, agent_runner, and safety_adapter based on the resolved provider.",
+      "created_at": "2026-04-04T22:05:29.069Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Provider selection flows from user intent (CLI flag, config, default) to bootstrap dispatch, with policy validation against org/team config.",
+      "success_criteria": "- `resolve_active_provider()` resolves CLI flag > config > default with policy validation\n- `scc provider show` prints the active provider\n- `scc provider set codex` persists the selection\n- `scc start --provider codex` overrides the default\n- `build_start_session_dependencies()` dispatches the correct `agent_provider` and `safety_adapter` based on resolved provider\n- `ProviderNotAllowedError` raised when org/team policy blocks a provider\n- All existing tests pass — zero regressions",
+      "proof_level": "This slice proves: contract + integration. Real runtime required: no. Human/UAT required: no.",
+      "integration_closure": "Upstream surfaces consumed: `DefaultAdapters` (bootstrap.py), `NormalizedTeamConfig` (config_models.py), `StartSessionRequest`/`StartSessionDependencies` (start_session.py), `PolicyViolationError` (errors.py), user config helpers (config.py).\nNew wiring introduced: `resolve_active_provider()` core function, `provider_app` CLI subcommand group, `--provider` flag on `start`, provider-aware adapter dispatch in `build_start_session_dependencies()`.\nWhat remains before milestone is truly usable end-to-end: S02 (CodexAgentRunner + image selection), S03 (branding/strings), S04 (error hardening + e2e verification).",
+      "observability_impact": "Runtime signals: `ProviderNotAllowedError` with typed fields (provider_id, allowed list) for policy violation diagnosis. Inspection surfaces: `scc provider show` CLI command for checking active provider. Failure visibility: policy violation errors carry provider_id and allowed_providers list for actionable diagnostics.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "id": "S02",
+      "title": "CodexAgentRunner, provider-aware image selection, and launch path wiring",
+      "status": "pending",
+      "risk": "high",
+      "depends": [
+        "S01"
+      ],
+      "demo": "scc start --provider codex builds a Codex-specific SandboxSpec with the right image, settings path, and agent command. The launch reaches Docker exec with codex argv.",
+      "created_at": "2026-04-04T22:05:29.069Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Create the Codex runtime artifacts and refactor the launch path to be provider-aware: Dockerfile, image refs, CodexAgentRunner, start_session uses ProviderRuntimeSpec for image/config/volume, OCI runtime receives binary/volume/config from SandboxSpec instead of Claude constants, Claude-only flags gated.",
+      "success_criteria": "1. images/scc-agent-codex/Dockerfile exists, builds on scc-base, installs Codex CLI.\n2. SCC_CODEX_IMAGE and SCC_CODEX_IMAGE_REF in image_contracts.py.\n3. CodexAgentRunner implements AgentRunner with codex argv, .codex settings path, describe()='Codex'.\n4. SandboxSpec gains agent_binary_name and data_volume_name fields (populated from ProviderRuntimeSpec by start_session).\n5. start_session._build_sandbox_spec uses ProviderRuntimeSpec for image, config_dir, data_volume — not hardcoded SCC_CLAUDE_IMAGE_REF.\n6. OCI _build_create_cmd uses spec.data_volume_name and spec config dir, not SANDBOX_DATA_VOLUME constant.\n7. OCI _build_exec_cmd uses spec.agent_binary_name, not AGENT_NAME constant.\n8. Claude-only flags (--dangerously-skip-permissions) gated behind provider check in exec command building.\n9. scc-base Dockerfile creates both .claude and .codex home dirs for the agent user.\n10. Docker credentials helper is provider-aware or gated to Claude adapter (no cross-provider credential leakage).\n11. Tests: CodexAgentRunner 4-test contract, provider-aware image routing (both values), OCI runtime binary/volume parameterization (both values), Dockerfile structural tests, Claude-only flag gating test.",
+      "proof_level": "Runner contract tests, start_session image routing tests, OCI runtime parameterization tests, Dockerfile structural validation, flag gating tests.",
+      "integration_closure": "The entire start → prepare → finalize → OCI exec path uses ProviderRuntimeSpec. Claude and Codex reach Docker exec with correct provider-specific image, binary, volume, config dir, and flags.",
+      "observability_impact": "StartSessionPlan carries provider_id. Launch audit events include provider. OCI container labeled. Provider image traceable in diagnostics.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "id": "S03",
+      "title": "Provider-aware branding, panels, diagnostics, and string cleanup",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S01"
+      ],
+      "demo": "All user-facing strings (branding header, launch panel, doctor output, setup wizard) adapt to the active provider. No hardcoded 'Claude Code' in runtime paths.",
+      "created_at": "2026-04-04T22:05:29.069Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Make all user-facing and machine-readable surfaces provider-aware: TUI (launch panel, dry-run, active stack, dashboard, sessions, containers, quick resume), doctor readiness (separate backend from provider, actionable build commands), machine-readable outputs (dry-run JSON, support bundle, session/container list --json), branding (SCC-neutral shared surfaces), and feature gating (Claude-only features hidden under Codex).",
+      "success_criteria": "1. scc doctor separates backend readiness (Docker/OCI health) from provider readiness (image exists, auth/config ready, launch ready).\n2. scc doctor --provider <name> checks specific provider readiness.\n3. If provider image missing, doctor prints: docker build -t scc-agent-{provider}:latest images/scc-agent-{provider}/\n4. Same command printed by scc start if image missing at launch.\n5. Doctor ready message: 'Ready to run <display name>' not hardcoded Claude.\n6. Support bundle includes provider_id field.\n7. dry-run JSON output includes provider_id.\n8. Session list --json includes provider_id per session.\n9. Container list output includes provider.\n10. Audit events already include provider via preflight — verify and test.\n11. Launch panel shows 'Launching <display name>'.\n12. Dry-run preview includes provider.\n13. Active stack summary includes provider.\n14. Dashboard shows active agent/provider. 'a' key for agent switching.\n15. Sessions tab, containers tab show provider.\n16. Quick Resume display includes provider.\n17. Branding header: 'Sandboxed Coding CLI' with provider-specific subtitle.\n18. Help text, CLI descriptions use provider-neutral language where shared.\n19. Claude-only features (--dangerously-skip-permissions in help, OAuth credential UI, Desktop sandbox template) gated/hidden when Codex selected.\n20. Grep guardrail: zero hardcoded 'Claude Code' in user-facing runtime paths (adapter-internal OK).\n21. Tests: doctor provider checks, machine-readable output schema, branding adaptation, feature gating, grep guardrail.",
+      "proof_level": "Doctor output tests, JSON schema tests for provider_id in all machine outputs, branding tests, feature gating tests, grep guardrail test.",
+      "integration_closure": "Every user-facing string and machine-readable output includes provider context. Doctor and support-bundle reflect actual provider state. TUI adapts completely.",
+      "observability_impact": "Doctor reports provider readiness with actionable build commands. Support bundle includes provider. All JSON outputs carry provider_id. Dashboard shows active agent.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "id": "S04",
+      "title": "Error handling hardening, end-to-end verification, zero-regression gate",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S01",
+        "S02",
+        "S03"
+      ],
+      "demo": "All error paths produce typed, user-facing errors. Full test suite passes. Both providers verified end-to-end.",
+      "created_at": "2026-04-04T22:25:49.118Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Prove coexistence, harden all error paths, verify both providers end-to-end through the full launch path, and confirm zero regression against M005 baseline.",
+      "success_criteria": "1. Coexistence test: same workspace, both providers → different container names (scc-oci-claude-{hash} vs scc-oci-codex-{hash}), different volumes ({provider}-sandbox-data), different SessionRecords (both present, each with correct provider_id), Quick Resume returns only same-provider entries.\n2. Typed errors with user_message, suggested_action, and exit_code: UnsupportedProviderError, ProviderNotReadyError, ProviderImageMissingError, ProviderMismatchError, ProviderNotAllowedError, ProviderFeatureUnavailableError.\n3. Error tests cover: unsupported provider name, provider not ready (no image), provider mismatch on resume, policy-disallowed provider, Claude-only feature invoked under Codex, image missing at launch.\n4. End-to-end test: Claude launch path produces correct SandboxSpec (image, binary, volume, container name, settings path) + correct OCI exec args.\n5. End-to-end test: Codex launch path produces correct SandboxSpec + correct OCI exec args.\n6. End-to-end test: provider switch round-trip (set codex, verify spec, set claude, verify spec — both correct, per-invocation).\n7. Full test suite passes (zero regression from M005 baseline of 4486+ tests).\n8. ruff check, mypy, pytest all clean.\n9. All M006 success criteria verified with evidence.",
+      "proof_level": "Coexistence test, error construction tests, end-to-end launch path tests for both providers, full regression gate.",
+      "integration_closure": "Coexistence proven. All provider error scenarios covered. Both providers verified through the complete launch path. Zero regression.",
+      "observability_impact": "Provider errors include actionable next-step guidance. Error category and exit code follow SCCError conventions.",
       "sequence": 0,
       "replan_triggered_at": null
     }
@@ -4547,6 +4760,145 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S01",
+      "id": "T01",
+      "title": "Added pure provider resolver with CLI > config > default precedence, ProviderNotAllowedError, allowed_providers team config field, and selected_provider user config helpers",
+      "status": "complete",
+      "one_liner": "Added pure provider resolver with CLI > config > default precedence, ProviderNotAllowedError, allowed_providers team config field, and selected_provider user config helpers",
+      "narrative": "Created provider_resolution.py in core with resolve_active_provider() implementing CLI flag > config > default ('claude') precedence. Validates against KNOWN_PROVIDERS (ValueError) and team allowed_providers policy (ProviderNotAllowedError). Added ProviderNotAllowedError to errors.py extending PolicyViolationError. Extended NormalizedTeamConfig with allowed_providers field. Added selected_provider to user config defaults with get/set helpers following the selected_profile pattern exactly.",
+      "verification_result": "20/20 tests passed in test_provider_resolution.py. mypy clean on all 4 source files. ruff clean. Full suite 4509 passed, 23 skipped, 2 xfailed — no regressions.",
+      "duration": "",
+      "completed_at": "2026-04-04T22:51:36.764Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/provider_resolution.py",
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/ports/config_models.py",
+        "src/scc_cli/config.py",
+        "tests/test_provider_resolution.py"
+      ],
+      "key_decisions": [
+        "Deferred import of ProviderNotAllowedError inside resolve_active_provider to keep the module import-free of adapters/bootstrap"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S01\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/core/provider_resolution.py\n  - src/scc_cli/core/errors.py\n  - src/scc_cli/ports/config_models.py\n  - src/scc_cli/config.py\n  - tests/test_provider_resolution.py\nkey_decisions:\n  - Deferred import of ProviderNotAllowedError inside resolve_active_provider to keep the module import-free of adapters/bootstrap\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T22:51:36.763Z\nblocker_discovered: false\n---\n\n# T01: Added pure provider resolver with CLI > config > default precedence, ProviderNotAllowedError, allowed_providers team config field, and selected_provider user config helpers\n\n**Added pure provider resolver with CLI > config > default precedence, ProviderNotAllowedError, allowed_providers team config field, and selected_provider user config helpers**\n\n## What Happened\n\nCreated provider_resolution.py in core with resolve_active_provider() implementing CLI flag > config > default ('claude') precedence. Validates against KNOWN_PROVIDERS (ValueError) and team allowed_providers policy (ProviderNotAllowedError). Added ProviderNotAllowedError to errors.py extending PolicyViolationError. Extended NormalizedTeamConfig with allowed_providers field. Added selected_provider to user config defaults with get/set helpers following the selected_profile pattern exactly.\n\n## Verification\n\n20/20 tests passed in test_provider_resolution.py. mypy clean on all 4 source files. ruff clean. Full suite 4509 passed, 23 skipped, 2 xfailed — no regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_provider_resolution.py -v` | 0 | ✅ pass | 11300ms |\n| 2 | `uv run mypy src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py` | 0 | ✅ pass | 7400ms |\n| 3 | `uv run ruff check src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py` | 0 | ✅ pass | 3700ms |\n| 4 | `uv run pytest --tb=short -q` | 0 | ✅ pass | 70400ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/provider_resolution.py`\n- `src/scc_cli/core/errors.py`\n- `src/scc_cli/ports/config_models.py`\n- `src/scc_cli/config.py`\n- `tests/test_provider_resolution.py`\n",
+      "description": "Add the pure-logic foundation for provider selection:\n\n1. Create `src/scc_cli/core/provider_resolution.py` with `resolve_active_provider(cli_flag: str | None, config_provider: str | None, allowed_providers: tuple[str, ...]) -> str`. Precedence: cli_flag > config_provider > default 'claude'. Validate against allowed_providers (empty tuple = all allowed). Raise `ProviderNotAllowedError` on policy violation. Define `KNOWN_PROVIDERS = ('claude', 'codex')` as module constant. Raise ValueError for unknown providers.\n\n2. Add `ProviderNotAllowedError` to `src/scc_cli/core/errors.py` extending `PolicyViolationError`. Fields: `provider_id: str`, `allowed_providers: tuple[str, ...]`. Auto-generate `user_message` and `suggested_action` in `__post_init__`.\n\n3. Add `allowed_providers: tuple[str, ...] = ()` to `NormalizedTeamConfig` in `src/scc_cli/ports/config_models.py`. Empty means all allowed.\n\n4. Add `selected_provider: None` to `USER_CONFIG_DEFAULTS` in `src/scc_cli/config.py`. Add `get_selected_provider() -> str | None` and `set_selected_provider(provider: str) -> None` following the exact `get_selected_profile`/`set_selected_profile` pattern.\n\n5. Write `tests/test_provider_resolution.py` covering: default resolution to 'claude', cli_flag override, config override, cli_flag beats config, unknown provider ValueError, policy validation (allowed non-empty, provider not in list), empty allowed_providers means all allowed.\n\n6. Write tests for config helpers in the same or a companion test file.\n\nConstraints:\n- `resolve_active_provider` must be pure — no imports from adapters or bootstrap.\n- Follow the `selected_profile` pattern exactly for config helpers.\n- `allowed_providers` empty tuple = all allowed (matches `blocked_plugins` pattern).",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/provider_resolution.py",
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/ports/config_models.py",
+        "src/scc_cli/config.py",
+        "tests/test_provider_resolution.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_resolution.py -v && uv run mypy src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py && uv run ruff check src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py",
+      "inputs": [
+        "`src/scc_cli/core/errors.py` — PolicyViolationError base class",
+        "`src/scc_cli/ports/config_models.py` — NormalizedTeamConfig to extend",
+        "`src/scc_cli/config.py` — USER_CONFIG_DEFAULTS and get/set_selected_profile pattern"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/provider_resolution.py` — new module with resolve_active_provider() and KNOWN_PROVIDERS",
+        "`src/scc_cli/core/errors.py` — ProviderNotAllowedError added",
+        "`src/scc_cli/ports/config_models.py` — allowed_providers field on NormalizedTeamConfig",
+        "`src/scc_cli/config.py` — selected_provider in defaults, get/set helpers",
+        "`tests/test_provider_resolution.py` — unit tests for resolver and config helpers"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S01",
+      "id": "T02",
+      "title": "CLI commands (scc provider show/set), --provider flag on start, request model update",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Wire provider selection into the CLI surface:\n\n1. Create `src/scc_cli/commands/provider.py` with `provider_app = typer.Typer()`. Add `show()` command: loads user config via `get_selected_provider()`, prints provider name (default 'claude' if None). Add `set(provider: str)` command: validates against `KNOWN_PROVIDERS`, calls `set_selected_provider()`, prints confirmation. Follow the `profile_app` pattern in `src/scc_cli/commands/profile.py`.\n\n2. Register in `src/scc_cli/cli.py`: import `provider_app` from `.commands.provider`, add `app.add_typer(provider_app, name='provider', rich_help_panel=PANEL_CONFIG)` alongside the existing team/profile registrations.\n\n3. Add `provider_id: str | None = None` field to `StartSessionRequest` in `src/scc_cli/application/start_session.py`.\n\n4. Add `--provider` option to `start()` in `src/scc_cli/commands/launch/flow.py`: `provider: str | None = typer.Option(None, '--provider', help='Agent provider (claude or codex)')`. Thread it into `StartSessionRequest(provider_id=provider, ...)`.\n\n5. Write `tests/test_provider_commands.py` testing: `scc provider show` outputs 'claude' by default, `scc provider set codex` persists, `scc provider set invalid` errors. Use typer.testing.CliRunner or mock config helpers.\n\nConstraints:\n- `provider_app` must use `handle_errors` decorator if the profile_app uses it.\n- `StartSessionRequest.provider_id` must default to None (not 'claude') — resolution happens downstream.\n- The `--provider` flag on start must not resolve or validate the provider — just pass it through.",
+      "estimate": "40m",
+      "files": [
+        "src/scc_cli/commands/provider.py",
+        "src/scc_cli/cli.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "tests/test_provider_commands.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_commands.py -v && uv run mypy src/scc_cli/commands/provider.py src/scc_cli/application/start_session.py && uv run ruff check src/scc_cli/commands/provider.py src/scc_cli/cli.py",
+      "inputs": [
+        "`src/scc_cli/core/provider_resolution.py` — KNOWN_PROVIDERS constant for validation",
+        "`src/scc_cli/config.py` — get_selected_provider/set_selected_provider helpers from T01",
+        "`src/scc_cli/commands/profile.py` — pattern reference for CLI subcommand structure",
+        "`src/scc_cli/cli.py` — existing app.add_typer registrations",
+        "`src/scc_cli/application/start_session.py` — StartSessionRequest to extend",
+        "`src/scc_cli/commands/launch/flow.py` — start() function to add --provider flag"
+      ],
+      "expected_output": [
+        "`src/scc_cli/commands/provider.py` — new module with provider_app, show, set commands",
+        "`src/scc_cli/cli.py` — provider_app registered",
+        "`src/scc_cli/application/start_session.py` — provider_id field on StartSessionRequest",
+        "`src/scc_cli/commands/launch/flow.py` — --provider flag threaded to request",
+        "`tests/test_provider_commands.py` — CLI command tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S01",
+      "id": "T03",
+      "title": "Bootstrap dispatch wiring and slice-level verification",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Wire provider resolution into the launch path so bootstrap dispatches the correct adapters:\n\n1. Update `build_start_session_dependencies()` in `src/scc_cli/commands/launch/dependencies.py` to accept a `provider_id: str` parameter. Use it to select the correct `agent_provider` and `safety_adapter` from `DefaultAdapters`:\n   - `'claude'` → `adapters.agent_provider`, `adapters.claude_safety_adapter`\n   - `'codex'` → `adapters.codex_agent_provider`, `adapters.codex_safety_adapter`\n   - For `agent_runner`: always use `adapters.agent_runner` (ClaudeAgentRunner) for now — CodexAgentRunner is S02's scope. If provider_id is 'codex' and no codex runner exists, this is acceptable — the runner will error at actual launch time in S02.\n   Use a dict-based lookup, not an if/else chain.\n\n2. Update `prepare_live_start_plan()` in the same file to accept and pass through `provider_id`.\n\n3. In `src/scc_cli/commands/launch/flow.py`, before building `StartSessionRequest`, call `resolve_active_provider()` with the CLI `--provider` flag and `get_selected_provider()` config value. Extract `allowed_providers` from the `NormalizedOrgConfig` team config if available. Pass the resolved `provider_id` to `prepare_live_start_plan()`.\n\n4. Write `tests/test_provider_dispatch.py` covering:\n   - Default dispatch (no provider_id) → uses Claude provider and safety adapter\n   - Explicit 'claude' → same result\n   - Explicit 'codex' → uses codex_agent_provider and codex_safety_adapter\n   - Policy violation in flow (mocked org config with restricted allowed_providers) → ProviderNotAllowedError\n\n5. Run the full test suite to verify zero regressions.\n\nConstraints:\n- Do NOT modify `get_default_adapters()` or the lru_cache. Provider dispatch is per-invocation in `build_start_session_dependencies()`, not at bootstrap time (D028).\n- `StartSessionDependencies.agent_provider` must carry the provider-dispatched value, not always Claude.\n- The `allowed_providers` field must be read from the team-level config in NormalizedOrgConfig, falling back to empty (all allowed) if no team config.\n- Keep `safety_adapter` dispatch in `dependencies.py` — thread it into `StartSessionDependencies` if needed, or track it alongside for S04.",
+      "estimate": "50m",
+      "files": [
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "tests/test_provider_dispatch.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_dispatch.py -v && uv run pytest --rootdir \"$PWD\" -q && uv run mypy src/scc_cli/commands/launch/dependencies.py src/scc_cli/commands/launch/flow.py && uv run ruff check",
+      "inputs": [
+        "`src/scc_cli/core/provider_resolution.py` — resolve_active_provider() from T01",
+        "`src/scc_cli/config.py` — get_selected_provider() from T01",
+        "`src/scc_cli/commands/launch/dependencies.py` — build_start_session_dependencies to modify",
+        "`src/scc_cli/commands/launch/flow.py` — start() with --provider flag from T02",
+        "`src/scc_cli/application/start_session.py` — StartSessionRequest.provider_id from T02",
+        "`src/scc_cli/bootstrap.py` — DefaultAdapters field names for dispatch lookup"
+      ],
+      "expected_output": [
+        "`src/scc_cli/commands/launch/dependencies.py` — provider-aware build_start_session_dependencies",
+        "`src/scc_cli/commands/launch/flow.py` — resolve_active_provider() call wired into start()",
+        "`tests/test_provider_dispatch.py` — dispatch and policy tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -4824,6 +5176,42 @@
       "rationale": "User direction: bundle pipeline must be the canonical path for governed teams, not a parallel path alongside the legacy marketplace sync. Temporary Claude fallback is acceptable only if adapter-local and marked transitional.",
       "revisable": "Yes",
       "made_by": "human",
+      "superseded_by": null
+    },
+    {
+      "seq": 24,
+      "id": "D026",
+      "when_context": "M006-d622bc",
+      "scope": "architecture",
+      "decision": "How provider selection flows from user intent to runtime wiring",
+      "choice": "Add a selected_provider field to user config (default: 'claude'), a --provider flag on scc start, and scc provider show/set commands. A resolve_active_provider() function in core resolves CLI flag > config > default. Bootstrap uses the resolved provider to dispatch agent_provider, agent_runner, and safety_adapter. Provider-specific constants (image ref, config dir, agent binary name, display name) live on the ProviderCapabilityProfile or a companion ProviderConstants dataclass, not as module-level globals.",
+      "rationale": "This gives users three levels of control (default, config, flag) with clear precedence. Keeping provider dispatch in bootstrap preserves the existing composition-root pattern. Moving provider-specific constants off module globals into the provider's capability profile ensures adding a third provider requires only a new adapter, not a sweep through constants.py.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 25,
+      "id": "D027",
+      "when_context": "M006-d622bc",
+      "scope": "architecture",
+      "decision": "Whether to introduce ProviderRuntimeSpec as a separate model from ProviderCapabilityProfile",
+      "choice": "Add ProviderRuntimeSpec as a frozen dataclass carrying image_ref, binary_name, config_dir, settings_path_template, data_volume, display_name, and auth_mount_paths. CapabilityProfile stays truth-only metadata (provider_id, display_name, supports_resume, supports_skills, etc.). The runtime spec lives on the provider adapter and is surfaced to start_session and OCI runtime via bootstrap dispatch.",
+      "rationale": "CapabilityProfile answers 'what can this provider do?' — it is consumed by planning, diagnostics, and UI. RuntimeSpec answers 'how do we run this provider?' — it is consumed by start_session, OCI runtime, and container creation. Mixing them would force planning code to import runtime details it doesn't need, and would make CapabilityProfile mutable as runtime requirements change. Keeping them separate follows the existing separation between planning (AgentProvider.capability_profile) and execution (AgentProvider.prepare_launch).",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 26,
+      "id": "D028",
+      "when_context": "M006-d622bc",
+      "scope": "architecture",
+      "decision": "Five M006 execution constraints: policy validation, request-scoped resolution, machine-readable provider output, standardized image build commands, and coexistence testing",
+      "choice": "1. Provider selection must be validated against org/team policy early in the launch path, with typed ProviderNotAllowedError if a team/org config restricts available providers. 2. Provider resolution is request-scoped: shared infra (probe, engine, sink) stays cached in bootstrap, but provider-specific adapters (runner, provider, safety adapter, runtime spec) are selected per invocation via resolve_active_provider() called from the start command, not baked into the lru_cached DefaultAdapters singleton. 3. provider_id must appear in dry-run JSON, support bundle, audit events, session list --json output, and container list output. 4. For missing provider images, doctor and start must print the exact build command: `docker build -t scc-agent-{provider}:latest images/scc-agent-{provider}/`. No scc images build/list command in v1 — operator builds directly. 5. S04 must include a coexistence test proving Claude and Codex containers, volumes, sessions, and Quick Resume entries can both exist for the same workspace without collision.",
+      "rationale": "These five constraints close the gaps between 'provider selection exists' and 'provider selection is production-ready'. Policy validation prevents shadow provider switching that violates org intent. Request-scoped resolution prevents the lru_cache from locking the first provider choice for the process lifetime. Machine-readable output ensures automation and support tooling can consume provider info. Standardized image commands give operators a predictable recovery path. Coexistence testing proves the identity separation actually works.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
       "superseded_by": null
     }
   ],
@@ -7423,6 +7811,50 @@
       "verdict": "✅ pass",
       "duration_ms": 60000,
       "created_at": "2026-04-04T21:30:27.485Z"
+    },
+    {
+      "id": 237,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_provider_resolution.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 11300,
+      "created_at": "2026-04-04T22:51:36.764Z"
+    },
+    {
+      "id": 238,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7400,
+      "created_at": "2026-04-04T22:51:36.764Z"
+    },
+    {
+      "id": 239,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check src/scc_cli/core/provider_resolution.py src/scc_cli/core/errors.py src/scc_cli/ports/config_models.py src/scc_cli/config.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3700,
+      "created_at": "2026-04-04T22:51:36.764Z"
+    },
+    {
+      "id": 240,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest --tb=short -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 70400,
+      "created_at": "2026-04-04T22:51:36.764Z"
     }
   ]
 }
