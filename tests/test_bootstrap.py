@@ -12,6 +12,7 @@ from scc_cli.adapters.local_audit_event_sink import LocalAuditEventSink
 from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
+from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
 from scc_cli.adapters.personal_profile_service_local import LocalPersonalProfileService
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.system_clock import SystemClock
@@ -31,7 +32,7 @@ def test_get_default_adapters_returns_expected_types() -> None:
     assert isinstance(adapters.remote_fetcher, RequestsFetcher)
     assert isinstance(adapters.clock, SystemClock)
     assert isinstance(adapters.agent_runner, ClaudeAgentRunner)
-    assert isinstance(adapters.sandbox_runtime, DockerSandboxRuntime)
+    assert isinstance(adapters.sandbox_runtime, (DockerSandboxRuntime, OciSandboxRuntime))
     assert isinstance(adapters.personal_profile_service, LocalPersonalProfileService)
     assert isinstance(adapters.audit_event_sink, LocalAuditEventSink)
 

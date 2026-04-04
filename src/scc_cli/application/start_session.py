@@ -17,8 +17,9 @@ from scc_cli.application.sync_marketplace import (
 )
 from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
-from scc_cli.core.contracts import AgentLaunchSpec
+from scc_cli.core.contracts import AgentLaunchSpec, RuntimeInfo
 from scc_cli.core.errors import WorkspaceNotFoundError
+from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
@@ -45,6 +46,7 @@ class StartSessionDependencies:
     materialize_marketplace: MarketplaceMaterializer
     agent_provider: AgentProvider | None = None
     audit_event_sink: AuditEventSink | None = None
+    runtime_info: RuntimeInfo | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +111,7 @@ def prepare_start_session(
         resolver_result=resolver_result,
         effective_config=effective_config,
         agent_settings=agent_settings,
+        runtime_info=dependencies.runtime_info,
     )
     agent_launch_spec = _build_agent_launch_spec(
         request=request,
@@ -246,11 +249,19 @@ def _build_sandbox_spec(
     resolver_result: ResolverResult,
     effective_config: EffectiveConfig | None,
     agent_settings: AgentSettings | None,
+    runtime_info: RuntimeInfo | None = None,
 ) -> SandboxSpec | None:
     if request.dry_run:
         return None
+
+    # Route image: SCC-owned image for OCI backend, Docker Desktop template otherwise.
+    if runtime_info is not None and runtime_info.preferred_backend == "oci":
+        image = SCC_CLAUDE_IMAGE_REF
+    else:
+        image = SANDBOX_IMAGE
+
     return SandboxSpec(
-        image=SANDBOX_IMAGE,
+        image=image,
         workspace_mount=MountSpec(
             source=resolver_result.mount_root,
             target=resolver_result.mount_root,

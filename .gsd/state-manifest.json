@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T09:12:32.073Z",
+  "exported_at": "2026-04-04T09:20:05.914Z",
   "milestones": [
     {
       "id": "M001",
@@ -1892,19 +1892,28 @@
       "milestone_id": "M003",
       "slice_id": "S02",
       "id": "T04",
-      "title": "Wire bootstrap backend selection and start_session image routing, run full suite",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Wire bootstrap backend selection and start_session image routing with full suite passing",
+      "status": "complete",
+      "one_liner": "Wire bootstrap backend selection and start_session image routing with full suite passing",
+      "narrative": "Updated bootstrap.py to probe the runtime at construction time and conditionally select OciSandboxRuntime (when preferred_backend == \"oci\") or DockerSandboxRuntime (default). Updated start_session.py to accept optional runtime_info on StartSessionDependencies, thread it through to _build_sandbox_spec, and route the image: SCC_CLAUDE_IMAGE_REF for OCI backend, SANDBOX_IMAGE for Docker Desktop. Created 9 new tests across two test files for backend selection and image routing. Updated the pre-existing test_bootstrap.py to accept either runtime type since the real probe result is environment-dependent.",
+      "verification_result": "Ran uv run ruff check (all checks passed), uv run mypy src/scc_cli (246 files, no issues), and uv run pytest --rootdir \"$PWD\" -q (3353 passed, 23 skipped, 4 xfailed). All three verification commands pass cleanly.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T09:20:05.877Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Updated tests/test_bootstrap.py to accept OciSandboxRuntime as valid — the original assertion was hard-coded to DockerSandboxRuntime which fails on environments where Docker Desktop sandbox is unavailable.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/bootstrap.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_bootstrap_backend_selection.py",
+        "tests/test_start_session_image_routing.py",
+        "tests/test_bootstrap.py"
+      ],
+      "key_decisions": [
+        "Updated existing test_bootstrap.py to accept either runtime type since probe result is environment-dependent",
+        "runtime_info threaded as optional field on StartSessionDependencies rather than adding probe call inside start_session"
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S02\nmilestone: M003\nkey_files:\n  - src/scc_cli/bootstrap.py\n  - src/scc_cli/application/start_session.py\n  - tests/test_bootstrap_backend_selection.py\n  - tests/test_start_session_image_routing.py\n  - tests/test_bootstrap.py\nkey_decisions:\n  - Updated existing test_bootstrap.py to accept either runtime type since probe result is environment-dependent\n  - runtime_info threaded as optional field on StartSessionDependencies rather than adding probe call inside start_session\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T09:20:05.876Z\nblocker_discovered: false\n---\n\n# T04: Wire bootstrap backend selection and start_session image routing with full suite passing\n\n**Wire bootstrap backend selection and start_session image routing with full suite passing**\n\n## What Happened\n\nUpdated bootstrap.py to probe the runtime at construction time and conditionally select OciSandboxRuntime (when preferred_backend == \"oci\") or DockerSandboxRuntime (default). Updated start_session.py to accept optional runtime_info on StartSessionDependencies, thread it through to _build_sandbox_spec, and route the image: SCC_CLAUDE_IMAGE_REF for OCI backend, SANDBOX_IMAGE for Docker Desktop. Created 9 new tests across two test files for backend selection and image routing. Updated the pre-existing test_bootstrap.py to accept either runtime type since the real probe result is environment-dependent.\n\n## Verification\n\nRan uv run ruff check (all checks passed), uv run mypy src/scc_cli (246 files, no issues), and uv run pytest --rootdir \"$PWD\" -q (3353 passed, 23 skipped, 4 xfailed). All three verification commands pass cleanly.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 11000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4000ms |\n| 3 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 54000ms |\n\n## Deviations\n\nUpdated tests/test_bootstrap.py to accept OciSandboxRuntime as valid — the original assertion was hard-coded to DockerSandboxRuntime which fails on environments where Docker Desktop sandbox is unavailable.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/bootstrap.py`\n- `src/scc_cli/application/start_session.py`\n- `tests/test_bootstrap_backend_selection.py`\n- `tests/test_start_session_image_routing.py`\n- `tests/test_bootstrap.py`\n",
       "description": "## Description\n\nIntegration closure: wire bootstrap to conditionally construct `OciSandboxRuntime` when the probe says `preferred_backend == \"oci\"`, and update `_build_sandbox_spec()` in `start_session.py` to select the right image based on the active backend. This task makes the whole slice work end-to-end.\n\nKey constraint from KNOWLEDGE.md: `bootstrap.py` is the composition root — adapters must be imported there and re-exported. Application and command layers must not import directly from `scc_cli.adapters.*`.\n\n## Steps\n\n1. Update `src/scc_cli/bootstrap.py`:\n   a. Import `OciSandboxRuntime` from `scc_cli.adapters.oci_sandbox_runtime`.\n   b. In `get_default_adapters()`, after `probe = DockerRuntimeProbe()`, call `info = probe.probe()` to get RuntimeInfo.\n   c. Select sandbox runtime: if `info.preferred_backend == \"oci\"` → `OciSandboxRuntime(probe=probe)`, else → `DockerSandboxRuntime(probe=probe)` (preserves current default).\n   d. Pass the selected runtime to `sandbox_runtime=` in the `DefaultAdapters` constructor.\n2. Update `src/scc_cli/application/start_session.py`:\n   a. Import `SCC_CLAUDE_IMAGE_REF` from `scc_cli.core.image_contracts`.\n   b. Add `runtime_info: RuntimeInfo | None = None` field to `StartSessionDependencies` with `None` default.\n   c. In `_build_sandbox_spec()`, accept the runtime_info (thread it from the dependencies or pass it through the request). If `runtime_info` is not None and `runtime_info.preferred_backend == \"oci\"` → use `SCC_CLAUDE_IMAGE_REF` as the image. Otherwise → use `SANDBOX_IMAGE` (current default).\n   d. Alternative simpler approach: just pass runtime_info to `_build_sandbox_spec` from `prepare_start_session`, where dependencies carry it. The caller (`prepare_start_session`) can read it from `dependencies.runtime_info` if available.\n3. Update `tests/fakes/__init__.py`:\n   a. Ensure `build_fake_adapters()` still works — the `FakeRuntimeProbe` default has `sandbox_available=True` and should now also have `preferred_backend=\"docker-sandbox\"`, so `DockerSandboxRuntime` is the default in test wiring.\n4. Create `tests/test_bootstrap_backend_selection.py`:\n   a. Test that when probe returns `preferred_backend=\"oci\"`, `get_default_adapters()` produces an `OciSandboxRuntime`.\n   b. Test that when probe returns `preferred_backend=\"docker-sandbox\"`, `get_default_adapters()` produces a `DockerSandboxRuntime`.\n   c. Mock `DockerRuntimeProbe.probe()` to return controlled RuntimeInfo for each case.\n   d. Clear the `lru_cache` before each test: `get_default_adapters.cache_clear()`.\n5. Create or extend `tests/test_start_session_image_routing.py`:\n   a. Test that `_build_sandbox_spec()` returns `SCC_CLAUDE_IMAGE_REF` when RuntimeInfo has `preferred_backend=\"oci\"`.\n   b. Test that `_build_sandbox_spec()` returns `SANDBOX_IMAGE` when RuntimeInfo has `preferred_backend=\"docker-sandbox\"` or is None.\n6. Run full verification:\n   - `uv run ruff check`\n   - `uv run mypy src/scc_cli`\n   - `uv run pytest --rootdir \"$PWD\" -q` (full suite)\n\n## Must-Haves\n\n- Bootstrap selects `OciSandboxRuntime` when `preferred_backend == \"oci\"`\n- Bootstrap defaults to `DockerSandboxRuntime` when sandbox is available or backend is unknown\n- `_build_sandbox_spec()` routes to SCC image for OCI backend\n- `_build_sandbox_spec()` preserves `SANDBOX_IMAGE` for Docker Desktop path\n- Import boundary: `OciSandboxRuntime` imported only in `bootstrap.py`, not in application layer\n- Tests verify both backend selection and image routing\n- Full suite passes: ruff, mypy, pytest",
       "estimate": "1h",
       "files": [
@@ -3348,6 +3357,39 @@
       "verdict": "✅ pass",
       "duration_ms": 58100,
       "created_at": "2026-04-04T09:12:32.035Z"
+    },
+    {
+      "id": 29,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 11000,
+      "created_at": "2026-04-04T09:20:05.877Z"
+    },
+    {
+      "id": 30,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-04T09:20:05.877Z"
+    },
+    {
+      "id": 31,
+      "task_id": "T04",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 54000,
+      "created_at": "2026-04-04T09:20:05.877Z"
     }
   ]
 }

@@ -137,7 +137,7 @@ Critical design differences from `DockerSandboxRuntime`:
   - Estimate: 1h30m
   - Files: src/scc_cli/adapters/oci_sandbox_runtime.py, tests/test_oci_sandbox_runtime.py
   - Verify: uv run pytest tests/test_oci_sandbox_runtime.py -q && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py
-- [ ] **T04: Wire bootstrap backend selection and start_session image routing, run full suite** — ## Description
+- [x] **T04: Wire bootstrap backend selection and start_session image routing with full suite passing** — ## Description
 
 Integration closure: wire bootstrap to conditionally construct `OciSandboxRuntime` when the probe says `preferred_backend == "oci"`, and update `_build_sandbox_spec()` in `start_session.py` to select the right image based on the active backend. This task makes the whole slice work end-to-end.
 

@@ -19,6 +19,7 @@ from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_doctor_runner import LocalDoctorRunner
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
+from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
 from scc_cli.adapters.personal_profile_service_local import LocalPersonalProfileService
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.session_store_json import JsonSessionStore
@@ -67,6 +68,15 @@ def get_default_adapters() -> DefaultAdapters:
     """Return the default adapter wiring for SCC."""
 
     probe = DockerRuntimeProbe()
+    info = probe.probe()
+
+    # Select sandbox runtime based on probe result.
+    sandbox_runtime: SandboxRuntime
+    if info.preferred_backend == "oci":
+        sandbox_runtime = OciSandboxRuntime(probe=probe)
+    else:
+        sandbox_runtime = DockerSandboxRuntime(probe=probe)
+
     return DefaultAdapters(
         filesystem=LocalFilesystem(),
         git_client=LocalGitClient(),
@@ -75,7 +85,7 @@ def get_default_adapters() -> DefaultAdapters:
         clock=SystemClock(),
         agent_runner=ClaudeAgentRunner(),
         agent_provider=ClaudeAgentProvider(),
-        sandbox_runtime=DockerSandboxRuntime(probe=probe),
+        sandbox_runtime=sandbox_runtime,
         personal_profile_service=LocalPersonalProfileService(),
         doctor_runner=LocalDoctorRunner(),
         archive_writer=ZipArchiveWriter(),
