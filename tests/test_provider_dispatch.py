@@ -7,7 +7,8 @@ from dataclasses import replace
 import pytest
 
 from scc_cli.commands.launch.dependencies import build_start_session_dependencies
-from scc_cli.core.errors import ProviderNotAllowedError
+from scc_cli.core.contracts import RuntimeInfo
+from scc_cli.core.errors import InvalidLaunchPlanError, ProviderNotAllowedError
 from scc_cli.core.provider_resolution import resolve_active_provider
 from tests.fakes import build_fake_adapters
 
@@ -43,6 +44,48 @@ class TestBuildStartSessionDependenciesDispatch:
         adapters = replace(build_fake_adapters(), codex_agent_provider=None)
         with pytest.raises(InvalidLaunchPlanError, match="missing provider wiring"):
             build_start_session_dependencies(adapters, provider_id="codex")
+
+
+class TestAgentRunnerDispatch:
+    """agent_runner dispatched per-provider from the dispatch table."""
+
+    def test_claude_dispatch_uses_claude_agent_runner(self) -> None:
+        adapters = build_fake_adapters()
+        deps = build_start_session_dependencies(adapters, provider_id="claude")
+        assert deps.agent_runner is adapters.agent_runner
+
+    def test_codex_dispatch_uses_codex_agent_runner(self) -> None:
+        adapters = build_fake_adapters()
+        deps = build_start_session_dependencies(adapters, provider_id="codex")
+        assert deps.agent_runner is adapters.codex_agent_runner
+
+    def test_unknown_provider_falls_back_to_claude_runner(self) -> None:
+        adapters = build_fake_adapters()
+        deps = build_start_session_dependencies(adapters, provider_id="unknown")
+        assert deps.agent_runner is adapters.agent_runner
+
+    def test_codex_dispatch_with_none_codex_runner_raises(self) -> None:
+        adapters = replace(build_fake_adapters(), codex_agent_runner=None)
+        with pytest.raises(InvalidLaunchPlanError, match="missing agent runner wiring"):
+            build_start_session_dependencies(adapters, provider_id="codex")
+
+
+class TestRuntimeInfoThreading:
+    """runtime_info threaded from runtime_probe into dependencies."""
+
+    def test_runtime_info_threaded_from_probe(self) -> None:
+        """When runtime_probe exists, runtime_info is populated."""
+        adapters = build_fake_adapters()
+        deps = build_start_session_dependencies(adapters)
+        # FakeRuntimeProbe returns a RuntimeInfo — verify it landed
+        assert deps.runtime_info is not None
+        assert isinstance(deps.runtime_info, RuntimeInfo)
+
+    def test_runtime_info_none_when_no_probe(self) -> None:
+        """When runtime_probe is None, runtime_info stays None."""
+        adapters = replace(build_fake_adapters(), runtime_probe=None)
+        deps = build_start_session_dependencies(adapters)
+        assert deps.runtime_info is None
 
 
 class TestProviderPolicyInResolveActiveProvider:

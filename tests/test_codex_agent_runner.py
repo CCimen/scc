@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scc_cli.adapters.codex_agent_runner import CodexAgentRunner, DEFAULT_SETTINGS_PATH
+from scc_cli.adapters.codex_agent_runner import DEFAULT_SETTINGS_PATH, CodexAgentRunner
 
 
 class TestCodexAgentRunner:

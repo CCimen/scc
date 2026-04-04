@@ -14,7 +14,7 @@ from scc_cli.application.start_session import (
 from scc_cli.application.sync_marketplace import SyncError, SyncResult
 from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
-from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult
+from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
 from scc_cli.core.errors import MaterializationError
 from scc_cli.core.governed_artifacts import (
     ArtifactBundle,
@@ -24,6 +24,7 @@ from scc_cli.core.governed_artifacts import (
     GovernedArtifact,
     ProviderArtifactBinding,
 )
+from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
 from scc_cli.ports.models import MountSpec, SandboxSpec
@@ -805,3 +806,305 @@ class TestAgentProviderRenderArtifacts:
 
         assert len(result.warnings) > 0
         assert "codex" in result.warnings[0]
+
+
+# ---------------------------------------------------------------------------
+# S02/T02 — Provider-aware image selection and agent_argv propagation
+# ---------------------------------------------------------------------------
+
+_OCI_RUNTIME_INFO = RuntimeInfo(
+    runtime_id="docker",
+    display_name="Docker (OCI)",
+    cli_name="docker",
+    supports_oci=True,
+    supports_internal_networks=True,
+    supports_host_network=True,
+    version="Docker version 27.5.1, build abc1234",
+    daemon_reachable=True,
+    sandbox_available=True,
+    preferred_backend="oci",
+)
+
+
+def _build_dependencies_with_runtime(
+    *,
+    provider: FakeAgentProvider | None = None,
+    runtime_info: RuntimeInfo | None = None,
+) -> StartSessionDependencies:
+    return StartSessionDependencies(
+        filesystem=MagicMock(),
+        remote_fetcher=MagicMock(),
+        clock=MagicMock(),
+        git_client=FakeGitClient(),
+        agent_runner=FakeAgentRunner(),
+        agent_provider=provider or FakeAgentProvider(),
+        sandbox_runtime=FakeSandboxRuntime(),
+        resolve_effective_config=MagicMock(),
+        materialize_marketplace=MagicMock(),
+        runtime_info=runtime_info,
+    )
+
+
+class TestProviderAwareImageSelection:
+    """_build_sandbox_spec selects image by provider_id on OCI backend."""
+
+    def test_codex_image_for_oci_backend(self, tmp_path: Path) -> None:
+        """Codex provider on OCI backend gets SCC_CODEX_IMAGE_REF."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SCC_CODEX_IMAGE_REF
+
+    def test_claude_image_for_oci_backend(self, tmp_path: Path) -> None:
+        """Claude provider on OCI backend gets SCC_CLAUDE_IMAGE_REF."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        claude_provider = ClaudeAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=claude_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SCC_CLAUDE_IMAGE_REF
+
+    def test_docker_sandbox_backend_uses_sandbox_image(self, tmp_path: Path) -> None:
+        """Non-OCI backend (docker-sandbox) falls back to SANDBOX_IMAGE."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        docker_sandbox_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="Docker version 27.5.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="docker-sandbox",
+        )
+        dependencies = _build_dependencies_with_runtime(runtime_info=docker_sandbox_info)
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SANDBOX_IMAGE
+
+    def test_unknown_provider_falls_back_to_claude_image(self, tmp_path: Path) -> None:
+        """Unknown provider_id on OCI backend falls back to claude image."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        # FakeAgentProvider has provider_id="fake" which is not in _PROVIDER_IMAGE_REF
+        dependencies = _build_dependencies_with_runtime(runtime_info=_OCI_RUNTIME_INFO)
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            patch(
+                "scc_cli.application.start_session.resolve_destination_sets",
+                return_value=(),
+            ),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SCC_CLAUDE_IMAGE_REF
+
+
+class TestAgentArgvPropagation:
+    """agent_argv from AgentLaunchSpec flows into SandboxSpec."""
+
+    def test_agent_argv_from_launch_spec(self, tmp_path: Path) -> None:
+        """agent_argv populated from provider's prepare_launch argv."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies_with_runtime()
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # FakeAgentProvider.prepare_launch returns argv=("fake-agent",)
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.agent_argv == ["fake-agent"]
+
+    def test_agent_argv_empty_when_no_provider(self, tmp_path: Path) -> None:
+        """agent_argv is empty list when no provider is wired."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=FakeAgentRunner(),
+            agent_provider=None,
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.agent_argv == []
+
+    def test_codex_agent_argv_is_codex(self, tmp_path: Path) -> None:
+        """Codex provider produces 'codex' in agent_argv."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.agent_argv == ["codex"]

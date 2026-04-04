@@ -22,7 +22,7 @@ from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
 from scc_cli.core.destination_registry import resolve_destination_sets
 from scc_cli.core.errors import RendererError, WorkspaceNotFoundError
-from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF
+from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
@@ -36,6 +36,13 @@ from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
 logger = logging.getLogger(__name__)
+
+# Provider → OCI image reference mapping.
+# Falls back to Claude image for unknown providers.
+_PROVIDER_IMAGE_REF: dict[str, str] = {
+    "claude": SCC_CLAUDE_IMAGE_REF,
+    "codex": SCC_CODEX_IMAGE_REF,
+}
 
 
 @dataclass(frozen=True)
@@ -125,6 +132,14 @@ def prepare_start_session(
     )
 
     current_branch = _resolve_current_branch(request.workspace_path, dependencies.git_client)
+
+    # Build agent_launch_spec first so its argv can flow into sandbox_spec.
+    agent_launch_spec = _build_agent_launch_spec(
+        request=request,
+        agent_settings=agent_settings,
+        dependencies=dependencies,
+    )
+    agent_argv = list(agent_launch_spec.argv) if agent_launch_spec is not None else None
     sandbox_spec = _build_sandbox_spec(
         request=request,
         resolver_result=resolver_result,
@@ -132,11 +147,7 @@ def prepare_start_session(
         agent_settings=agent_settings,
         runtime_info=dependencies.runtime_info,
         agent_provider=dependencies.agent_provider,
-    )
-    agent_launch_spec = _build_agent_launch_spec(
-        request=request,
-        agent_settings=agent_settings,
-        dependencies=dependencies,
+        agent_argv=agent_argv,
     )
     return StartSessionPlan(
         resolver_result=resolver_result,
@@ -281,13 +292,20 @@ def _build_sandbox_spec(
     agent_settings: AgentSettings | None,
     runtime_info: RuntimeInfo | None = None,
     agent_provider: AgentProvider | None = None,
+    agent_argv: list[str] | None = None,
 ) -> SandboxSpec | None:
     if request.dry_run:
         return None
 
     # Route image: SCC-owned image for OCI backend, Docker Desktop template otherwise.
+    # Provider-aware: select image by provider_id when on OCI backend.
     if runtime_info is not None and runtime_info.preferred_backend == "oci":
-        image = SCC_CLAUDE_IMAGE_REF
+        provider_id = (
+            agent_provider.capability_profile().provider_id
+            if agent_provider is not None
+            else "claude"
+        )
+        image = _PROVIDER_IMAGE_REF.get(provider_id, SCC_CLAUDE_IMAGE_REF)
     else:
         image = SANDBOX_IMAGE
 
@@ -319,6 +337,7 @@ def _build_sandbox_spec(
         force_new=request.fresh,
         agent_settings=agent_settings,
         org_config=request.raw_org_config,
+        agent_argv=agent_argv or [],
     )
 
 

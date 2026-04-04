@@ -38,6 +38,7 @@ class SandboxSpec:
     force_new: bool = False
     agent_settings: AgentSettings | None = None
     org_config: dict[str, Any] | None = None
+    agent_argv: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

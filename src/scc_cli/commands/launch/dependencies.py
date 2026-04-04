@@ -16,6 +16,7 @@ from scc_cli.core.errors import InvalidLaunchPlanError, LaunchAuditUnavailableEr
 from scc_cli.marketplace.materialize import materialize_marketplace
 from scc_cli.marketplace.resolve import resolve_effective_config
 from scc_cli.ports.agent_provider import AgentProvider
+from scc_cli.ports.agent_runner import AgentRunner
 from scc_cli.ports.audit_event_sink import AuditEventSink
 from scc_cli.theme import Spinners
 
@@ -25,10 +26,12 @@ _PROVIDER_DISPATCH: dict[str, dict[str, str]] = {
     "claude": {
         "agent_provider": "agent_provider",
         "safety_adapter": "claude_safety_adapter",
+        "agent_runner": "agent_runner",
     },
     "codex": {
         "agent_provider": "codex_agent_provider",
         "safety_adapter": "codex_safety_adapter",
+        "agent_runner": "codex_agent_runner",
     },
 }
 
@@ -50,18 +53,27 @@ def build_start_session_dependencies(
     raw_provider = getattr(adapters, dispatch["agent_provider"], None)
     provider = _require_agent_provider(raw_provider)
 
+    raw_runner = getattr(adapters, dispatch["agent_runner"], None)
+    runner = _require_agent_runner(raw_runner)
+
+    # Thread runtime_info from the probe if available.
+    runtime_info = None
+    if adapters.runtime_probe is not None:
+        runtime_info = adapters.runtime_probe.probe()
+
     sink = _require_audit_event_sink(adapters.audit_event_sink)
     return StartSessionDependencies(
         filesystem=adapters.filesystem,
         remote_fetcher=adapters.remote_fetcher,
         clock=adapters.clock,
         git_client=adapters.git_client,
-        agent_runner=adapters.agent_runner,
+        agent_runner=runner,
         sandbox_runtime=adapters.sandbox_runtime,
         resolve_effective_config=resolve_effective_config,
         materialize_marketplace=materialize_marketplace,
         agent_provider=provider,
         audit_event_sink=sink,
+        runtime_info=runtime_info,
     )
 
 
@@ -94,6 +106,14 @@ def _should_sync_marketplace(request: StartSessionRequest) -> bool:
         and request.team is not None
         and request.org_config is not None
     )
+
+
+def _require_agent_runner(runner: AgentRunner | None) -> AgentRunner:
+    if runner is None:
+        raise InvalidLaunchPlanError(
+            reason="Launch dependency builder is missing agent runner wiring.",
+        )
+    return runner
 
 
 def _require_agent_provider(provider: AgentProvider | None) -> AgentProvider:

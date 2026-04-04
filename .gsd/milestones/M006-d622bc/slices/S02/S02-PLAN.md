@@ -80,7 +80,7 @@ Create the CodexAgentRunner adapter, add Codex image constants, create the Codex
   - Estimate: 30m
   - Files: src/scc_cli/adapters/codex_agent_runner.py, src/scc_cli/core/image_contracts.py, images/scc-agent-codex/Dockerfile, src/scc_cli/bootstrap.py, tests/fakes/__init__.py, tests/test_codex_agent_runner.py, tests/contracts/test_agent_runner_contract.py
   - Verify: uv run pytest tests/test_codex_agent_runner.py tests/contracts/test_agent_runner_contract.py -v && uv run ruff check src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py && uv run mypy src/scc_cli/adapters/codex_agent_runner.py src/scc_cli/core/image_contracts.py src/scc_cli/bootstrap.py && uv run pytest --rootdir "$PWD" -q
-- [ ] **T02: Provider-aware runner dispatch, runtime_info threading, and image selection** — ---
+- [x] **T02: Wired CodexAgentRunner into provider dispatch table, threaded runtime_info from probe, and made image selection and agent_argv provider-aware with 10 new tests** — ---
 estimated_steps: 5
 estimated_files: 7
 skills_used: []
