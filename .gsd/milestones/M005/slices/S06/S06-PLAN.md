@@ -39,7 +39,7 @@ This is a truthfulness pass — add only language that matches real implementati
   - Estimate: 1h30m
   - Files: pyproject.toml, tests/test_file_sizes.py, tests/test_function_sizes.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_file_sizes.py tests/test_function_sizes.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T04: Final milestone validation and completion** — 1. Run the full M005 verification gate: ruff check + mypy + pyright + pytest --cov --cov-branch
+- [x] **T04: Ran full M005 verification gate and validated all exit criteria; wrote VALIDATION.md with evidence for each criterion** — 1. Run the full M005 verification gate: ruff check + mypy + pyright + pytest --cov --cov-branch
 2. Verify all M005 exit criteria from M005-CONTEXT.md:
    - All modules over 1100 lines reduced below threshold
    - All modules over 800 lines split or justified
