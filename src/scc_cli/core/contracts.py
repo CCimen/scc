@@ -94,6 +94,7 @@ class RuntimeInfo:
     desktop_version: str | None = None
     daemon_reachable: bool = False
     sandbox_available: bool = False
+    preferred_backend: str | None = None
 
 
 @dataclass(frozen=True)

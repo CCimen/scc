@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T08:41:59.947Z",
+  "exported_at": "2026-04-04T09:01:32.084Z",
   "milestones": [
     {
       "id": "M001",
@@ -336,14 +336,14 @@
       "milestone_id": "M003",
       "id": "S01",
       "title": "Capability-based runtime model and detection cleanup",
-      "status": "pending",
+      "status": "complete",
       "risk": "high",
       "depends": [],
       "demo": "",
       "created_at": "2026-04-04T08:09:04.485Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T08:46:01.165Z",
+      "full_summary_md": "---\nid: S01\nparent: M003\nmilestone: M003\nprovides:\n  - RuntimeProbe protocol (ports/runtime_probe.py) with probe() -> RuntimeInfo\n  - RuntimeInfo extended with version, desktop_version, daemon_reachable, sandbox_available fields\n  - DockerRuntimeProbe adapter as the canonical Docker detection surface\n  - FakeRuntimeProbe for test scenarios\n  - DockerSandboxRuntime.ensure_available() now probe-driven\n  - Guardrail preventing direct check_docker_available() outside adapter layer\nrequires:\n  []\naffects:\n  - S02\n  - S03\nkey_files:\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/ports/runtime_probe.py\n  - src/scc_cli/adapters/docker_runtime_probe.py\n  - src/scc_cli/adapters/docker_sandbox_runtime.py\n  - src/scc_cli/bootstrap.py\n  - src/scc_cli/ui/dashboard/orchestrator.py\n  - tests/test_runtime_probe.py\n  - tests/test_runtime_detection_hotspots.py\n  - tests/fakes/fake_runtime_probe.py\n  - tests/fakes/__init__.py\nkey_decisions:\n  - D012: RuntimeProbe protocol as the canonical detection surface — probe() -> RuntimeInfo, DockerRuntimeProbe as sole adapter, bootstrap shares single probe instance, tokenizer guardrail prevents regression\n  - RuntimeProbe.runtime_probe field added as Optional (None default) on DefaultAdapters for incremental adoption\n  - DockerSandboxRuntime.__init__ accepts RuntimeProbe; ensure_available() mirrors exact exception-raising logic using RuntimeInfo fields\n  - Used Python tokenizer instead of regex for guardrail source scanning to correctly distinguish code references from string/comment mentions\npatterns_established:\n  - RuntimeProbe protocol pattern: single probe() method returning a typed RuntimeInfo dataclass with defensive error handling (never raises)\n  - Guardrail test using Python tokenize module for detecting code-level references to deprecated call sites while excluding definitions, re-exports, and adapter wrappers\n  - Shared probe instance pattern in bootstrap: construct once, pass to both the runtime_probe field and DockerSandboxRuntime constructor\nobservability_surfaces:\n  - none — detection is synchronous and results flow through RuntimeInfo fields; no new logs, endpoints, or persisted state added in this slice\ndrill_down_paths:\n  - .gsd/milestones/M003/slices/S01/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M003/slices/S01/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M003/slices/S01/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T08:46:01.165Z\nblocker_discovered: false\n---\n\n# S01: Capability-based runtime model and detection cleanup\n\n**Runtime detection is now typed: a RuntimeProbe protocol populates RuntimeInfo from real Docker state, all launch-path consumers use it instead of calling docker.check_docker_available() directly, and a tokenizer-based guardrail prevents regression.**\n\n## What Happened\n\nThis slice replaced the scattered docker.check_docker_available() detection calls with a single typed detection surface.\n\n**T01** established the foundation: extended RuntimeInfo with four optional detection fields (version, desktop_version, daemon_reachable, sandbox_available), created the RuntimeProbe protocol in ports/ with a single probe() -> RuntimeInfo method, implemented DockerRuntimeProbe as the adapter that calls existing docker/core helpers defensively (never raises from probe()), added FakeRuntimeProbe for tests, wired runtime_probe into DefaultAdapters and build_fake_adapters(), and wrote four-scenario probe tests covering Docker Desktop present, Engine only, not installed, and daemon not running.\n\n**T02** migrated the three consumer call sites: added __init__(probe: RuntimeProbe) to DockerSandboxRuntime and rewrote ensure_available() to inspect RuntimeInfo fields and raise the same four exception types as before; updated bootstrap to share a single probe instance between sandbox_runtime and runtime_probe; migrated _handle_worktree_start and _handle_session_resume in the dashboard orchestrator to call adapters.sandbox_runtime.ensure_available() instead of docker.check_docker_available(). The error behavior is semantically identical — same exceptions, same conditions.\n\n**T03** added a tokenizer-based guardrail test that scans src/scc_cli/ for code-level references to check_docker_available outside three allowed files (the definition, re-export, and adapter), preventing future regression. Used Python's tokenize module instead of regex to correctly distinguish NAME tokens from docstring/comment mentions. Final full-suite run: 3286 passed, 23 skipped, 4 xfailed.\n\n## Verification\n\nAll slice-level verification gates pass:\n\n1. **Targeted tests** — `uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py tests/test_runtime_detection_hotspots.py tests/contracts/test_sandbox_runtime_contract.py -q` → 17 passed\n2. **Ruff lint** — `uv run ruff check` → All checks passed\n3. **Mypy** — `uv run mypy src/scc_cli` → Success: no issues found in 244 source files\n4. **Full suite** — `uv run pytest --rootdir \"$PWD\" -q` → 3286 passed, 23 skipped, 4 xfailed\n\n## Requirements Advanced\n\n- R001 — Replaced scattered docker.check_docker_available() heuristics with a single typed RuntimeProbe protocol behind the adapter boundary, improving testability and maintainability of runtime detection. Added tokenizer guardrail to prevent regression.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nTwo minor deviations from the original plan:\n1. T01: Test patches target the adapter module namespace (scc_cli.adapters.docker_runtime_probe) rather than the definition site (scc_cli.docker.core) due to Python mock scoping with re-exported names. Standard practice, no behavior change.\n2. T02: Used `info.version is None` instead of cli_name emptiness for DockerNotFoundError detection since the probe always populates cli_name as 'docker'. Semantically equivalent.\n3. T03: Switched from regex-based detection to tokenize-based scanning after the initial regex approach incorrectly flagged a docstring mention in docker_sandbox_runtime.py as a violation.\n\n## Known Limitations\n\n- RuntimeInfo.rootless returns None (unknown) — rootless detection is S02 scope.\n- RuntimeProbe field on DefaultAdapters uses Optional with None default for incremental adoption safety; downstream code should handle the None case until all consumers migrate.\n\n## Follow-ups\n\n- S02 needs to extend RuntimeProbe/RuntimeInfo with rootless detection and OCI backend selection.\n- S03 depends on RuntimeInfo.sandbox_available for egress topology decisions.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/contracts.py` — Extended RuntimeInfo with four optional detection fields: version, desktop_version, daemon_reachable, sandbox_available\n- `src/scc_cli/ports/runtime_probe.py` — New file: RuntimeProbe protocol with probe() -> RuntimeInfo\n- `src/scc_cli/adapters/docker_runtime_probe.py` — New file: DockerRuntimeProbe adapter calling docker/core helpers defensively\n- `src/scc_cli/adapters/docker_sandbox_runtime.py` — Added __init__(probe: RuntimeProbe), rewrote ensure_available() to use probe-backed RuntimeInfo\n- `src/scc_cli/bootstrap.py` — Wired shared DockerRuntimeProbe instance into both runtime_probe and sandbox_runtime fields\n- `src/scc_cli/ui/dashboard/orchestrator.py` — Migrated _handle_worktree_start and _handle_session_resume from docker.check_docker_available() to adapters.sandbox_runtime.ensure_available()\n- `tests/test_runtime_probe.py` — New file: four-scenario probe tests (Desktop, Engine only, not installed, daemon down)\n- `tests/test_runtime_detection_hotspots.py` — New file: tokenizer-based guardrail preventing stale check_docker_available() calls\n- `tests/fakes/fake_runtime_probe.py` — New file: FakeRuntimeProbe with configurable RuntimeInfo return\n- `tests/fakes/__init__.py` — Added FakeRuntimeProbe to build_fake_adapters()\n",
+      "full_uat_md": "# S01: Capability-based runtime model and detection cleanup — UAT\n\n**Milestone:** M003\n**Written:** 2026-04-04T08:46:01.166Z\n\n## UAT: S01 — Capability-based runtime model and detection cleanup\n\n### Preconditions\n- Working directory is the scc-sync-1.7.3 repo root.\n- Python 3.10+ with `uv` available.\n- All dependencies installed via `uv sync`.\n\n---\n\n### Test 1: RuntimeProbe protocol exists and is importable\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.ports.runtime_probe import RuntimeProbe; print('OK')\"`\n**Expected:** Prints `OK` with exit code 0.\n\n### Test 2: DockerRuntimeProbe adapter is importable and instantiable\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.adapters.docker_runtime_probe import DockerRuntimeProbe; p = DockerRuntimeProbe(); print(type(p).__name__)\"`\n**Expected:** Prints `DockerRuntimeProbe` with exit code 0.\n\n### Test 3: RuntimeInfo has new detection fields with backward-compatible defaults\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.contracts import RuntimeInfo; ri = RuntimeInfo(); print(ri.version, ri.desktop_version, ri.daemon_reachable, ri.sandbox_available)\"`\n**Expected:** Prints `None None False False` — all new fields have safe defaults.\n\n### Test 4: Four-scenario probe tests pass\n**Steps:**\n1. Run `uv run pytest tests/test_runtime_probe.py -v`\n**Expected:** Four tests pass: Docker Desktop present, Engine only, not installed, daemon not running. Each test verifies correct RuntimeInfo field values for the scenario.\n\n### Test 5: DockerSandboxRuntime.ensure_available() uses probe (not docker.check_docker_available)\n**Steps:**\n1. Run `uv run python -c \"import inspect; from scc_cli.adapters.docker_sandbox_runtime import DockerSandboxRuntime; src = inspect.getsource(DockerSandboxRuntime.ensure_available); assert 'probe' in src; assert 'check_docker_available' not in src; print('OK')\"`\n**Expected:** Prints `OK` — ensure_available references probe, not the old direct call.\n\n### Test 6: Bootstrap wires shared probe instance\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.bootstrap import get_default_adapters; a = get_default_adapters(); print(a.runtime_probe is not None)\"`\n**Expected:** Prints `True`.\n\n### Test 7: Dashboard orchestrator no longer imports docker.check_docker_available\n**Steps:**\n1. Run `grep -n 'check_docker_available' src/scc_cli/ui/dashboard/orchestrator.py`\n**Expected:** No output (exit code 1) — the orchestrator no longer references this function.\n\n### Test 8: Guardrail test catches violations\n**Steps:**\n1. Run `uv run pytest tests/test_runtime_detection_hotspots.py -v`\n**Expected:** 1 test passes. The guardrail scans all .py files under src/scc_cli/ and asserts no code-level references to check_docker_available exist outside the three allowed files.\n\n### Test 9: Existing contract tests remain green\n**Steps:**\n1. Run `uv run pytest tests/test_core_contracts.py tests/contracts/test_sandbox_runtime_contract.py -v`\n**Expected:** All existing tests pass — RuntimeInfo extensions are backward compatible, sandbox runtime contract behavior is preserved.\n\n### Test 10: Full suite green\n**Steps:**\n1. Run `uv run pytest --rootdir \"$PWD\" -q`\n**Expected:** 3286+ passed, 0 failed. The slice did not break any existing behavior.\n\n### Edge Cases\n\n#### E1: FakeRuntimeProbe defaults to fully-capable scenario\n**Steps:**\n1. Run `uv run python -c \"from tests.fakes.fake_runtime_probe import FakeRuntimeProbe; f = FakeRuntimeProbe(); ri = f.probe(); print(ri.daemon_reachable, ri.sandbox_available)\"`\n**Expected:** Prints `True True` — the fake defaults to a Docker Desktop scenario.\n\n#### E2: FakeRuntimeProbe accepts custom RuntimeInfo\n**Steps:**\n1. Run `uv run python -c \"from tests.fakes.fake_runtime_probe import FakeRuntimeProbe; from scc_cli.core.contracts import RuntimeInfo; ri = RuntimeInfo(daemon_reachable=False); f = FakeRuntimeProbe(ri); print(f.probe().daemon_reachable)\"`\n**Expected:** Prints `False` — the fake returns the custom RuntimeInfo.\n",
       "goal": "Runtime selection is typed and no longer depends on name-only heuristics. A RuntimeProbe port populates RuntimeInfo from real detection, and all launch-path consumers (DockerSandboxRuntime, dashboard start/resume) use it instead of calling docker.check_docker_available() directly.",
       "success_criteria": "## Must-Haves\n\n- `RuntimeProbe` protocol in `src/scc_cli/ports/runtime_probe.py` with a `probe() -> RuntimeInfo` method.\n- `DockerRuntimeProbe` adapter in `src/scc_cli/adapters/docker_runtime_probe.py` encapsulating all detection heuristics from `docker/core.py`.\n- `RuntimeInfo` extended with `version`, `desktop_version`, `daemon_reachable`, `sandbox_available` fields (all with defaults for backward compatibility).\n- `FakeRuntimeProbe` in `tests/fakes/fake_runtime_probe.py` for test wiring.\n- `RuntimeProbe` wired into `DefaultAdapters` and `build_fake_adapters()` in bootstrap.\n- `DockerSandboxRuntime.ensure_available()` uses the probe instead of calling `docker.check_docker_available()` directly.\n- Dashboard orchestrator start and resume flows route Docker checks through `sandbox_runtime.ensure_available()` instead of importing `docker` for detection.\n- Guardrail test prevents `docker.check_docker_available()` calls from leaking outside the adapter layer.\n\n## Threat Surface\n\n- **Abuse**: N/A — detection-only, no user input reaches external APIs.\n- **Data exposure**: None — no secrets or PII in runtime detection.\n- **Input trust**: Subprocess output from `docker` CLI is the only external input; already handled by existing helpers.\n\n## Requirement Impact\n\n- **Requirements touched**: R001 (maintainability) — this slice creates smaller typed modules with explicit seams, directly improving detection-path maintainability.\n- **Re-verify**: Launch flow (CLI start, dashboard start, dashboard resume) must still work identically.\n- **Decisions revisited**: None.\n\n## Proof Level\n\n- This slice proves: contract\n- Real runtime required: no (all Docker calls are mocked in tests)\n- Human/UAT required: no\n\n## Verification\n\n- `uv run pytest tests/test_runtime_probe.py -q` — probe adapter returns correct RuntimeInfo for Docker Desktop present, Engine-only, missing, and daemon-not-running scenarios.\n- `uv run pytest tests/test_runtime_detection_hotspots.py -q` — guardrail confirms no stale `docker.check_docker_available()` calls leak outside the adapter layer.\n- `uv run pytest tests/test_docker_core.py tests/contracts/test_sandbox_runtime_contract.py -q` — existing detection and runtime contract tests still pass.\n- `uv run ruff check` — no lint violations.\n- `uv run mypy src/scc_cli` — all new code fully typed.\n- `uv run pytest --rootdir \"$PWD\" -q` — full suite green.\n\n## Observability / Diagnostics\n\n- Runtime signals: `RuntimeInfo` dataclass fields expose detection results as structured typed data instead of scattered exception side effects.\n- Inspection surfaces: `RuntimeInfo.version`, `.desktop_version`, `.daemon_reachable`, `.sandbox_available` fields available to any consumer with a probe reference.\n- Failure visibility: Detection failures surface as specific exception types (`DockerNotFoundError`, `DockerDaemonNotRunningError`, etc.) unchanged from current behavior, but now routed through a single adapter path.\n- Redaction constraints: None — no secrets in detection output.\n\n## Integration Closure\n\n- Upstream surfaces consumed: `RuntimeInfo` dataclass from `src/scc_cli/core/contracts.py` (M001), `SandboxRuntime` protocol from `src/scc_cli/ports/sandbox_runtime.py`, bootstrap `DefaultAdapters` from `src/scc_cli/bootstrap.py`.\n- New wiring introduced in this slice: `RuntimeProbe` field on `DefaultAdapters`, `DockerRuntimeProbe` injected into `DockerSandboxRuntime` constructor.\n- What remains before the milestone is truly usable end-to-end: S02 (OCI backend), S03 (egress topology), S04 (policy integration), S05 (verification/closeout).",
       "proof_level": "contract",
@@ -366,11 +366,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "",
-      "success_criteria": "",
-      "proof_level": "",
-      "integration_closure": "",
-      "observability_impact": "",
+      "goal": "SCC can launch a sandboxed agent session using standard OCI commands (`docker create`/`docker start`/`docker exec`) when Docker Desktop's sandbox feature is unavailable, selecting the correct backend and image automatically based on runtime probe results.",
+      "success_criteria": "- `RuntimeInfo` carries `rootless` (detected) and `preferred_backend` fields\n- `ImageRef` dataclass and SCC image constants exist in `core/image_contracts.py`\n- Dockerfiles for `scc-base` and `scc-agent-claude` exist in `images/`\n- `OciSandboxRuntime` implements `SandboxRuntime` protocol using standard OCI commands\n- Bootstrap selects `OciSandboxRuntime` when `preferred_backend == \"oci\"`\n- `_build_sandbox_spec()` routes to SCC image for OCI backend, Docker sandbox image for desktop backend\n- Contract tests pass for both `FakeSandboxRuntime` and `OciSandboxRuntime` ensure_available\n- All linting, type checking, and existing tests pass",
+      "proof_level": "contract — OCI adapter is fully implemented and wired, but launch flow is tested via mocked subprocess calls rather than a real Docker daemon. Real runtime verification is S05 scope.",
+      "integration_closure": "- Upstream surfaces consumed: `RuntimeProbe` protocol and `RuntimeInfo` from S01 (`ports/runtime_probe.py`, `core/contracts.py`), `SandboxRuntime` protocol (`ports/sandbox_runtime.py`), `SandboxSpec`/`SandboxHandle` models (`ports/models.py`), `DefaultAdapters` and bootstrap wiring (`bootstrap.py`)\n- New wiring introduced: `OciSandboxRuntime` adapter, conditional backend selection in `bootstrap.py`, image routing in `start_session.py`\n- What remains: S03 adds egress proxy/network topology; S04 adds policy integration and destination validation; S05 runs real end-to-end verification",
+      "observability_impact": "- Runtime signals: `RuntimeInfo.preferred_backend` and `RuntimeInfo.rootless` expose detection results to all consumers without additional logging\n- Inspection surfaces: `RuntimeInfo` fields are available via probe; no new endpoints or CLI commands\n- Failure visibility: `OciSandboxRuntime.ensure_available()` raises typed errors (`DockerNotFoundError`, `DockerDaemonNotRunningError`) matching the existing exception hierarchy\n- Redaction constraints: credential volume paths may contain OAuth tokens — OCI adapter must not log volume contents",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -1739,6 +1739,187 @@
       "sequence": 0
     },
     {
+      "milestone_id": "M003",
+      "slice_id": "S02",
+      "id": "T01",
+      "title": "Add preferred_backend field to RuntimeInfo and rootless detection to DockerRuntimeProbe with five test scenarios",
+      "status": "complete",
+      "one_liner": "Add preferred_backend field to RuntimeInfo and rootless detection to DockerRuntimeProbe with five test scenarios",
+      "narrative": "Added `preferred_backend: str | None = None` to RuntimeInfo in contracts.py. Updated DockerRuntimeProbe.probe() to detect rootless mode via `docker info --format '{{.SecurityOptions}}'` with graceful None fallback, and to compute preferred_backend: \"docker-sandbox\" when sandbox is available, \"oci\" when daemon is reachable without sandbox, None otherwise. Updated all four existing test classes with new field assertions and added TestDockerRuntimeProbeRootlessDetectionFailure for the graceful fallback path.",
+      "verification_result": "Ran targeted pytest (16 passed), mypy (no issues), ruff check (all passed), and full pytest suite (3287 passed, 23 skipped, 4 xfailed).",
+      "duration": "",
+      "completed_at": "2026-04-04T09:01:32.043Z",
+      "blocker_discovered": false,
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/adapters/docker_runtime_probe.py",
+        "tests/test_runtime_probe.py",
+        "tests/fakes/fake_runtime_probe.py"
+      ],
+      "key_decisions": [
+        "preferred_backend uses literal strings 'docker-sandbox' and 'oci' rather than an enum, matching task plan contract",
+        "Rootless detection uses broad Exception catch for graceful fallback"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S02\nmilestone: M003\nkey_files:\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/adapters/docker_runtime_probe.py\n  - tests/test_runtime_probe.py\n  - tests/fakes/fake_runtime_probe.py\nkey_decisions:\n  - preferred_backend uses literal strings 'docker-sandbox' and 'oci' rather than an enum, matching task plan contract\n  - Rootless detection uses broad Exception catch for graceful fallback\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T09:01:32.041Z\nblocker_discovered: false\n---\n\n# T01: Add preferred_backend field to RuntimeInfo and rootless detection to DockerRuntimeProbe with five test scenarios\n\n**Add preferred_backend field to RuntimeInfo and rootless detection to DockerRuntimeProbe with five test scenarios**\n\n## What Happened\n\nAdded `preferred_backend: str | None = None` to RuntimeInfo in contracts.py. Updated DockerRuntimeProbe.probe() to detect rootless mode via `docker info --format '{{.SecurityOptions}}'` with graceful None fallback, and to compute preferred_backend: \"docker-sandbox\" when sandbox is available, \"oci\" when daemon is reachable without sandbox, None otherwise. Updated all four existing test classes with new field assertions and added TestDockerRuntimeProbeRootlessDetectionFailure for the graceful fallback path.\n\n## Verification\n\nRan targeted pytest (16 passed), mypy (no issues), ruff check (all passed), and full pytest suite (3287 passed, 23 skipped, 4 xfailed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q` | 0 | ✅ pass | 7600ms |\n| 2 | `uv run mypy src/scc_cli/core/contracts.py src/scc_cli/adapters/docker_runtime_probe.py` | 0 | ✅ pass | 3800ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 56200ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 55100ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/contracts.py`\n- `src/scc_cli/adapters/docker_runtime_probe.py`\n- `tests/test_runtime_probe.py`\n- `tests/fakes/fake_runtime_probe.py`\n",
+      "description": "## Description\n\nRuntimeInfo needs two additions before the OCI adapter or bootstrap wiring can work: (1) populate the existing `rootless: bool | None = None` field with actual detection results, and (2) add a new `preferred_backend: str | None` field that downstream code uses to select `DockerSandboxRuntime` vs `OciSandboxRuntime`.\n\nThe `rootless` field already exists on `RuntimeInfo` but is always `None`. `DockerRuntimeProbe.probe()` must detect rootless mode by inspecting `docker info --format '{{.SecurityOptions}}'` output for the string `rootless`. Defensive handling: if the command fails or the format is unexpected, leave `rootless = None` (unknown).\n\n`preferred_backend` is a new optional string field on `RuntimeInfo`. Logic in `DockerRuntimeProbe.probe()`: if `sandbox_available` is True → `\"docker-sandbox\"`. Else if `daemon_reachable` and `supports_oci` → `\"oci\"`. Else → `None`.\n\n## Steps\n\n1. Add `preferred_backend: str | None = None` field to `RuntimeInfo` in `src/scc_cli/core/contracts.py` (after `sandbox_available`).\n2. In `DockerRuntimeProbe.probe()` in `src/scc_cli/adapters/docker_runtime_probe.py`:\n   a. After the `daemon_reachable` check, run `docker info --format '{{.SecurityOptions}}'` via `run_command` with timeout=5. Parse output: if the string `rootless` appears in the result → `rootless=True`, else `rootless=False`. If the command fails → `rootless=None`.\n   b. Before each `return RuntimeInfo(...)`, compute `preferred_backend`: sandbox_available → `\"docker-sandbox\"`, daemon_reachable and supports_oci → `\"oci\"`, otherwise `None`. Pass it.\n   c. Import `run_command` from the same re-export path already used (it's already available via `scc_cli.docker`).\n3. Update `tests/fakes/fake_runtime_probe.py`: add `preferred_backend=\"docker-sandbox\"` to `_DEFAULT_RUNTIME_INFO`.\n4. Update `tests/test_runtime_probe.py`:\n   a. In `TestDockerRuntimeProbeDesktopPresent`: patch `run_command` in the adapter module to return a CompletedProcess with stdout containing `name=rootless`. Assert `info.rootless is True` and `info.preferred_backend == \"docker-sandbox\"`.\n   b. In `TestDockerRuntimeProbeEngineOnly`: patch `run_command` to return stdout without `rootless`. Assert `info.rootless is False` and `info.preferred_backend == \"oci\"`.\n   c. In `TestDockerRuntimeProbeNotInstalled`: assert `info.preferred_backend is None`.\n   d. In `TestDockerRuntimeProbeDaemonNotRunning`: assert `info.preferred_backend is None`.\n   e. Add a new test class `TestDockerRuntimeProbeRootlessDetectionFailure`: patch `run_command` to raise an exception. Assert `info.rootless is None` (graceful fallback).\n5. Update `tests/test_core_contracts.py` if it constructs RuntimeInfo — add `preferred_backend` to match the new field.\n6. Run `uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py tests/fakes/ -q` and `uv run mypy src/scc_cli/core/contracts.py src/scc_cli/adapters/docker_runtime_probe.py`.\n\n## Must-Haves\n\n- `preferred_backend` field on RuntimeInfo with `None` default\n- Rootless detection via `docker info` SecurityOptions parsing, graceful fallback to `None`\n- `preferred_backend` logic: sandbox → `\"docker-sandbox\"`, daemon+OCI → `\"oci\"`, else `None`\n- All four existing probe test scenarios updated with assertions for new fields\n- New test for rootless detection failure (graceful `None` fallback)",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/adapters/docker_runtime_probe.py",
+        "tests/test_runtime_probe.py",
+        "tests/fakes/fake_runtime_probe.py",
+        "tests/test_core_contracts.py"
+      ],
+      "verify": "uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q && uv run mypy src/scc_cli/core/contracts.py src/scc_cli/adapters/docker_runtime_probe.py",
+      "inputs": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/adapters/docker_runtime_probe.py",
+        "tests/test_runtime_probe.py",
+        "tests/fakes/fake_runtime_probe.py",
+        "tests/test_core_contracts.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/adapters/docker_runtime_probe.py",
+        "tests/test_runtime_probe.py",
+        "tests/fakes/fake_runtime_probe.py",
+        "tests/test_core_contracts.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M003",
+      "slice_id": "S02",
+      "id": "T02",
+      "title": "Define ImageRef dataclass, SCC image constants, and Dockerfiles for scc-base and scc-agent-claude",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nCreate the typed image contract layer and Dockerfiles that define what SCC provides in plain OCI mode. The OCI adapter (T03) and start_session image routing (T04) both consume these constants.\n\n## Steps\n\n1. Create `src/scc_cli/core/image_contracts.py` with:\n   a. A frozen `ImageRef` dataclass with fields: `registry: str = \"\"`, `repository: str`, `tag: str = \"latest\"`, `digest: str | None = None`.\n   b. A `full_ref()` method on `ImageRef` that returns the canonical `registry/repository:tag@digest` string (omitting empty components).\n   c. An `image_ref(ref_string: str) -> ImageRef` parse helper that splits a Docker image reference string into the ImageRef fields. Handle common formats: `repo:tag`, `registry/repo:tag`, `registry/repo@sha256:...`, bare `repo` (implies `latest`).\n   d. Constants: `SCC_BASE_IMAGE = ImageRef(repository=\"scc-base\", tag=\"latest\")` and `SCC_CLAUDE_IMAGE = ImageRef(repository=\"scc-agent-claude\", tag=\"latest\")`.\n   e. A string constant `SCC_CLAUDE_IMAGE_REF = \"scc-agent-claude:latest\"` for use in SandboxSpec.image (which takes a plain string).\n2. Create `images/scc-base/Dockerfile`:\n   - `FROM ubuntu:22.04`\n   - Install: git, curl, ca-certificates, jq\n   - Create agent user: `useradd -m -u 1000 -s /bin/bash agent`\n   - Create `/home/agent/.claude/` directory owned by agent\n   - Set `USER agent` and `WORKDIR /home/agent`\n3. Create `images/scc-agent-claude/Dockerfile`:\n   - `FROM scc-base:latest`\n   - Install Node.js 20 LTS (via NodeSource or nvm) as root, then switch to agent user\n   - Install Claude CLI globally: `npm install -g @anthropic-ai/claude-code`\n   - Verify: `claude --version` in a `RUN` step\n   - Set `ENTRYPOINT [\"/bin/bash\"]` (the OCI adapter will exec claude explicitly)\n4. Create `tests/test_image_contracts.py`:\n   a. Test `ImageRef.full_ref()` for various combinations (with/without registry, digest).\n   b. Test `image_ref()` parse helper for standard Docker reference formats.\n   c. Test constants: `SCC_BASE_IMAGE.repository == \"scc-base\"`, `SCC_CLAUDE_IMAGE.repository == \"scc-agent-claude\"`.\n5. Run `uv run pytest tests/test_image_contracts.py -q && uv run mypy src/scc_cli/core/image_contracts.py`.\n\n## Must-Haves\n\n- Frozen `ImageRef` dataclass with `full_ref()` method and `image_ref()` parser\n- `SCC_BASE_IMAGE`, `SCC_CLAUDE_IMAGE`, `SCC_CLAUDE_IMAGE_REF` constants\n- `images/scc-base/Dockerfile` with agent user (uid 1000), git, curl\n- `images/scc-agent-claude/Dockerfile` building on scc-base with Node.js + Claude CLI\n- Unit tests for ImageRef parsing and constants",
+      "estimate": "40m",
+      "files": [
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-base/Dockerfile",
+        "images/scc-agent-claude/Dockerfile",
+        "tests/test_image_contracts.py"
+      ],
+      "verify": "uv run pytest tests/test_image_contracts.py -q && uv run mypy src/scc_cli/core/image_contracts.py",
+      "inputs": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/core/constants.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/core/image_contracts.py",
+        "images/scc-base/Dockerfile",
+        "images/scc-agent-claude/Dockerfile",
+        "tests/test_image_contracts.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M003",
+      "slice_id": "S02",
+      "id": "T03",
+      "title": "Implement OciSandboxRuntime adapter with subprocess-mocked tests",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nBuild the `OciSandboxRuntime` adapter implementing `SandboxRuntime` using standard OCI commands (`docker create`/`docker start`/`docker exec`) instead of `docker sandbox run`. This is the core deliverable of S02 — it makes SCC work on Docker Engine, OrbStack, Colima, and any OCI-compatible runtime.\n\nCritical design differences from `DockerSandboxRuntime`:\n- Uses `docker create` + `docker start` + `docker exec` instead of `docker sandbox run`\n- Actually consumes `spec.image` (Desktop sandbox ignores it)\n- Uses volume mounts at container creation time for credential persistence instead of the sandbox symlink pattern\n- No dependency on Docker Desktop's sandbox feature\n\n## Steps\n\n1. Create `src/scc_cli/adapters/oci_sandbox_runtime.py` implementing `SandboxRuntime`:\n   a. `__init__(self, probe: RuntimeProbe)` — same pattern as `DockerSandboxRuntime`.\n   b. `ensure_available(self)` — call `self._probe.probe()`, check: if `version is None` and not `daemon_reachable` → raise `DockerNotFoundError`. If not `daemon_reachable` → raise `DockerDaemonNotRunningError`. If not `supports_oci` → raise a descriptive error. Do NOT check `sandbox_available` — this adapter doesn't need it.\n   c. `run(self, spec: SandboxSpec) -> SandboxHandle`:\n      - Build container name: `scc-oci-{hash}` based on workspace path.\n      - Build `docker create` command with: `--name`, `-v` for workspace mount (spec.workspace_mount.source:spec.workspace_mount.target), `-v` for credential volume (`SANDBOX_DATA_VOLUME:/home/agent/.claude`), `-w` for workdir, `-e` for each env var, `--label scc.backend=oci`, the image from `spec.image`, and entrypoint `/bin/bash`.\n      - If `spec.agent_settings` is not None, plan to inject it after creation.\n      - Run `docker create ...` via `subprocess.run`, capture container ID from stdout.\n      - Run `docker start <container_id>` to start the container.\n      - If agent_settings: write settings JSON to a temp file, `docker cp` it into the container at the settings path.\n      - Build `docker exec -it -w <workdir> <container_id> claude --dangerously-skip-permissions` with session flags (`-c` for continue, `--resume` for resume).\n      - Call `os.execvp(\"docker\", exec_cmd)` to hand off to the agent.\n      - Return `SandboxHandle(sandbox_id=container_id, name=container_name)`.\n   d. `resume(self, handle)` — `subprocess.run([\"docker\", \"start\", handle.sandbox_id])`.\n   e. `stop(self, handle)` — `subprocess.run([\"docker\", \"stop\", handle.sandbox_id])`.\n   f. `remove(self, handle)` — `subprocess.run([\"docker\", \"rm\", \"-f\", handle.sandbox_id])`.\n   g. `list_running(self) -> list[SandboxHandle]` — `docker ps --filter label=scc.backend=oci --format '{{.ID}}\\t{{.Names}}'`, parse output.\n   h. `status(self, handle)` — `docker inspect --format '{{.State.Status}}' <id>`, map to `SandboxState`.\n2. Create `tests/test_oci_sandbox_runtime.py`:\n   a. Test `ensure_available` with various `RuntimeInfo` scenarios (mock probe): OCI-capable engine passes, not installed raises `DockerNotFoundError`, daemon not running raises `DockerDaemonNotRunningError`.\n   b. Test `run` method: mock `subprocess.run` and `os.execvp`, verify the correct `docker create` command is built with proper `-v`, `-w`, `-e`, `--label` args. Verify `spec.image` is actually consumed.\n   c. Test that credential volume mount is present in the create command.\n   d. Test `list_running` parsing.\n   e. Test `status` mapping from Docker inspect output to SandboxState.\n3. Run `uv run pytest tests/test_oci_sandbox_runtime.py -q && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py`.\n\n## Failure Modes\n\n| Dependency | On error | On timeout | On malformed response |\n|------------|----------|-----------|----------------------|\n| `docker create` subprocess | Raise `SandboxLaunchError` with stderr | 60s timeout, raise `SandboxLaunchError` | Check returncode != 0, raise with stderr |\n| `docker start` subprocess | Raise `SandboxLaunchError` | 30s timeout | Check returncode |\n| `docker inspect` for status | Return `SandboxState.UNKNOWN` | 10s timeout, return UNKNOWN | Parse defensively, default UNKNOWN |\n| `os.execvp` for exec | Raise `SandboxLaunchError` | N/A (replaces process) | N/A |\n\n## Must-Haves\n\n- `OciSandboxRuntime` implements full `SandboxRuntime` protocol\n- Uses `docker create` + `docker start` + `docker exec`, NOT `docker sandbox run`\n- Actually consumes `spec.image` from `SandboxSpec`\n- Mounts credential volume via `-v SANDBOX_DATA_VOLUME:/home/agent/.claude`\n- Tests cover ensure_available scenarios, run command construction, and status parsing\n- No dependency on Docker Desktop sandbox feature",
+      "estimate": "1h30m",
+      "files": [
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "tests/test_oci_sandbox_runtime.py"
+      ],
+      "verify": "uv run pytest tests/test_oci_sandbox_runtime.py -q && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py",
+      "inputs": [
+        "src/scc_cli/ports/sandbox_runtime.py",
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/ports/runtime_probe.py",
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/core/constants.py",
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/adapters/docker_sandbox_runtime.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "tests/test_oci_sandbox_runtime.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M003",
+      "slice_id": "S02",
+      "id": "T04",
+      "title": "Wire bootstrap backend selection and start_session image routing, run full suite",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nIntegration closure: wire bootstrap to conditionally construct `OciSandboxRuntime` when the probe says `preferred_backend == \"oci\"`, and update `_build_sandbox_spec()` in `start_session.py` to select the right image based on the active backend. This task makes the whole slice work end-to-end.\n\nKey constraint from KNOWLEDGE.md: `bootstrap.py` is the composition root — adapters must be imported there and re-exported. Application and command layers must not import directly from `scc_cli.adapters.*`.\n\n## Steps\n\n1. Update `src/scc_cli/bootstrap.py`:\n   a. Import `OciSandboxRuntime` from `scc_cli.adapters.oci_sandbox_runtime`.\n   b. In `get_default_adapters()`, after `probe = DockerRuntimeProbe()`, call `info = probe.probe()` to get RuntimeInfo.\n   c. Select sandbox runtime: if `info.preferred_backend == \"oci\"` → `OciSandboxRuntime(probe=probe)`, else → `DockerSandboxRuntime(probe=probe)` (preserves current default).\n   d. Pass the selected runtime to `sandbox_runtime=` in the `DefaultAdapters` constructor.\n2. Update `src/scc_cli/application/start_session.py`:\n   a. Import `SCC_CLAUDE_IMAGE_REF` from `scc_cli.core.image_contracts`.\n   b. Add `runtime_info: RuntimeInfo | None = None` field to `StartSessionDependencies` with `None` default.\n   c. In `_build_sandbox_spec()`, accept the runtime_info (thread it from the dependencies or pass it through the request). If `runtime_info` is not None and `runtime_info.preferred_backend == \"oci\"` → use `SCC_CLAUDE_IMAGE_REF` as the image. Otherwise → use `SANDBOX_IMAGE` (current default).\n   d. Alternative simpler approach: just pass runtime_info to `_build_sandbox_spec` from `prepare_start_session`, where dependencies carry it. The caller (`prepare_start_session`) can read it from `dependencies.runtime_info` if available.\n3. Update `tests/fakes/__init__.py`:\n   a. Ensure `build_fake_adapters()` still works — the `FakeRuntimeProbe` default has `sandbox_available=True` and should now also have `preferred_backend=\"docker-sandbox\"`, so `DockerSandboxRuntime` is the default in test wiring.\n4. Create `tests/test_bootstrap_backend_selection.py`:\n   a. Test that when probe returns `preferred_backend=\"oci\"`, `get_default_adapters()` produces an `OciSandboxRuntime`.\n   b. Test that when probe returns `preferred_backend=\"docker-sandbox\"`, `get_default_adapters()` produces a `DockerSandboxRuntime`.\n   c. Mock `DockerRuntimeProbe.probe()` to return controlled RuntimeInfo for each case.\n   d. Clear the `lru_cache` before each test: `get_default_adapters.cache_clear()`.\n5. Create or extend `tests/test_start_session_image_routing.py`:\n   a. Test that `_build_sandbox_spec()` returns `SCC_CLAUDE_IMAGE_REF` when RuntimeInfo has `preferred_backend=\"oci\"`.\n   b. Test that `_build_sandbox_spec()` returns `SANDBOX_IMAGE` when RuntimeInfo has `preferred_backend=\"docker-sandbox\"` or is None.\n6. Run full verification:\n   - `uv run ruff check`\n   - `uv run mypy src/scc_cli`\n   - `uv run pytest --rootdir \"$PWD\" -q` (full suite)\n\n## Must-Haves\n\n- Bootstrap selects `OciSandboxRuntime` when `preferred_backend == \"oci\"`\n- Bootstrap defaults to `DockerSandboxRuntime` when sandbox is available or backend is unknown\n- `_build_sandbox_spec()` routes to SCC image for OCI backend\n- `_build_sandbox_spec()` preserves `SANDBOX_IMAGE` for Docker Desktop path\n- Import boundary: `OciSandboxRuntime` imported only in `bootstrap.py`, not in application layer\n- Tests verify both backend selection and image routing\n- Full suite passes: ruff, mypy, pytest",
+      "estimate": "1h",
+      "files": [
+        "src/scc_cli/bootstrap.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/fakes/__init__.py",
+        "tests/test_bootstrap_backend_selection.py",
+        "tests/test_start_session_image_routing.py"
+      ],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "src/scc_cli/bootstrap.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/core/image_contracts.py",
+        "src/scc_cli/core/contracts.py",
+        "tests/fakes/__init__.py",
+        "tests/fakes/fake_runtime_probe.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/bootstrap.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_bootstrap_backend_selection.py",
+        "tests/test_start_session_image_routing.py",
+        "tests/fakes/__init__.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T01",
@@ -2817,6 +2998,30 @@
       "revisable": "Yes",
       "made_by": "human",
       "superseded_by": null
+    },
+    {
+      "seq": 12,
+      "id": "D012",
+      "when_context": "M003/S01",
+      "scope": "architecture",
+      "decision": "How runtime detection should be structured and consumed in M003 and beyond",
+      "choice": "Introduce a RuntimeProbe protocol with a single probe() -> RuntimeInfo method. DockerRuntimeProbe is the sole adapter calling docker/core helpers. DockerSandboxRuntime accepts a RuntimeProbe in __init__ and its ensure_available() inspects RuntimeInfo fields instead of calling docker.check_docker_available() directly. Bootstrap shares one probe instance between sandbox_runtime and runtime_probe fields. A tokenizer-based guardrail test prevents future direct check_docker_available() calls outside the adapter layer.",
+      "rationale": "This replaces name-only heuristics with typed capability detection, keeps docker-specific knowledge in one adapter boundary, and establishes the RuntimeInfo-driven pattern that S02 (OCI backend) and S03 (egress topology) depend on for portable runtime selection.",
+      "revisable": "Yes",
+      "made_by": "agent",
+      "superseded_by": null
+    },
+    {
+      "seq": 13,
+      "id": "D013",
+      "when_context": "M003/S02",
+      "scope": "architecture",
+      "decision": "How the OCI sandbox backend is introduced alongside the existing Docker Desktop sandbox path",
+      "choice": "Add OciSandboxRuntime as a parallel SandboxRuntime adapter (not a replacement). Bootstrap selects between DockerSandboxRuntime and OciSandboxRuntime based on RuntimeInfo.preferred_backend from the probe. Docker Desktop sandbox path remains the default when sandbox is available. OCI backend uses docker create/start/exec with explicit volume mounts for credential persistence. Image selection is driven by preferred_backend: SANDBOX_IMAGE for docker-sandbox, SCC_CLAUDE_IMAGE_REF for oci.",
+      "rationale": "Constitution §3 prohibits Docker Desktop as a hard dependency. The OCI backend makes SCC work on Docker Engine, OrbStack, and Colima without changing the existing Desktop path. Parallel adapters behind the same protocol keeps risk contained — the Desktop path is untouched. Bootstrap-level selection via probe results means no runtime surprise for users. Credential handling differs fundamentally between backends (symlink pattern vs volume mount), so sharing a single adapter would create accidental coupling.",
+      "revisable": "Yes",
+      "made_by": "agent",
+      "superseded_by": null
     }
   ],
   "verification_evidence": [
@@ -2973,6 +3178,50 @@
       "verdict": "✅ pass",
       "duration_ms": 52000,
       "created_at": "2026-04-04T08:41:59.923Z"
+    },
+    {
+      "id": 15,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_runtime_probe.py tests/test_core_contracts.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 7600,
+      "created_at": "2026-04-04T09:01:32.043Z"
+    },
+    {
+      "id": 16,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli/core/contracts.py src/scc_cli/adapters/docker_runtime_probe.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3800,
+      "created_at": "2026-04-04T09:01:32.043Z"
+    },
+    {
+      "id": 17,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 56200,
+      "created_at": "2026-04-04T09:01:32.043Z"
+    },
+    {
+      "id": 18,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M003",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 55100,
+      "created_at": "2026-04-04T09:01:32.043Z"
     }
   ]
 }

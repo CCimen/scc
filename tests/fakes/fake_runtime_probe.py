@@ -16,6 +16,7 @@ _DEFAULT_RUNTIME_INFO = RuntimeInfo(
     desktop_version="4.50.0",
     daemon_reachable=True,
     sandbox_available=True,
+    preferred_backend="docker-sandbox",
 )
 
 
