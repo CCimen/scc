@@ -113,3 +113,60 @@ User-issued overrides that supersede plan document content.
 **Applied-at:** M004/S04/none
 
 ---
+
+## Override: 2026-04-04T16:40:16.270Z
+
+**Change:** Current M005/S02 UI decomposition work is acceptable. Before starting the next S02 task or any S03 work, pause and re-read .gsd/OVERRIDES.md, specs/03-provider-boundary.md, specs/06-governed-artifacts.md, .gsd/milestones/
+  M005/M005-CONTEXT.md, and .gsd/milestones/M005/M005-ROADMAP.md.
+
+  Then refine the remaining M005 task plans so the governed-artifact/team-pack architecture is explicit.
+
+  Required implementation direction:
+  - one approved SCC team-pack source is canonical
+  - team config references bundle/team-pack IDs, not raw Claude or Codex marketplace URLs
+  - preserve the user-facing experience of one team package per team
+  - split provider-neutral planning from provider-native renderers
+  - Claude and Codex native surfaces are asymmetric
+  - Codex plugin does not subsume Codex rules, hooks, config.toml, or AGENTS.md
+  - do not bolt Codex support onto the current Claude-shaped marketplace pipeline
+  - render Claude-native outputs for Claude and Codex-native outputs for Codex from the same bundle plan
+  - do not require dual team configs
+
+  S02 must still include the marketplace/profile/config cluster split needed for this architecture, not only generic size reduction.
+**Scope:** active
+**Applied-at:** M005/S02/T06
+
+---
+
+## Override: 2026-04-04T16:43:11.295Z
+
+**Change:** Finish the current T06 cleanly, but do not continue into generic S03 work.
+
+  Before starting S03 or any further M005 implementation, stop and replan S03-S06 using the governed-artifact/team-pack architecture already defined in:
+  - .gsd/OVERRIDES.md
+  - specs/03-provider-boundary.md
+  - specs/06-governed-artifacts.md
+  - .gsd/milestones/M005/M005-CONTEXT.md
+  - .gsd/milestones/M005/M005-ROADMAP.md
+
+  Required direction:
+  - one approved SCC team-pack source is canonical
+  - team config references bundle/team-pack IDs, not raw provider marketplace URLs
+  - preserve the UX of one team package per team
+  - split provider-neutral planning from provider-native renderers
+  - Claude and Codex native surfaces are asymmetric
+  - Codex plugin does not subsume Codex rules, hooks, config.toml, or AGENTS.md
+  - do not bolt Codex support onto the current Claude-shaped marketplace pipeline
+  - render Claude-native outputs for Claude and Codex-native outputs for Codex from the same bundle plan
+  - do not require dual team configs
+
+  This means:
+  - S03 must explicitly land typed governed-artifact/team-pack models and typed config flow
+  - S04 must explicitly harden fetch/render/merge/install failure handling for native renderers
+  - S06 must explicitly validate docs/diagnostics truthfulness for the team-pack model
+
+  Do not proceed with generic S03 strict-typing cleanup until these task plans are rewritten to include the team-pack refactor.
+**Scope:** active
+**Applied-at:** M005/S02/T06
+
+---

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T16:35:57.820Z",
+  "exported_at": "2026-04-04T16:57:08.281Z",
   "milestones": [
     {
       "id": "M001",
@@ -3435,19 +3435,29 @@
       "milestone_id": "M005",
       "slice_id": "S02",
       "id": "T06",
-      "title": "Decompose setup.py and run final size verification",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Decomposed setup.py (1336→794 lines) and eliminated all HARD-FAIL files, completing S02 size reduction with all 4079 tests passing",
+      "status": "complete",
+      "one_liner": "Decomposed setup.py (1336→794 lines) and eliminated all HARD-FAIL files, completing S02 size reduction with all 4079 tests passing",
+      "narrative": "Extracted TUI rendering components into setup_ui.py (303 lines) and config building/preview/persistence logic into setup_config.py (310 lines), reducing setup.py from 1336 to 794 lines. Kept run_non_interactive_setup in the residual to preserve test-patch targets. Also extracted secondary overflow in orchestrator_handlers.py (1163→846 lines) into orchestrator_menus.py (344 lines). Updated root sprawl allowlist. All 4079 tests pass, zero HARD-FAIL files remain, all 3 boundary violations confirmed clean.",
+      "verification_result": "Full gate passes: ruff check (0 errors), mypy (0 errors in 283 files), pytest (4079 passed, 0 failed). All 315 characterization+boundary tests pass. All 19 setup characterization tests pass. Zero files exceed 1100 lines. 3 boundary violations confirmed eliminated via AST analysis.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T16:57:08.252Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Kept run_non_interactive_setup in setup.py instead of setup_config.py to preserve test-patch compatibility. Added secondary extraction of orchestrator_handlers.py (not in original plan) to meet no-file-over-1100 must-have.",
+      "known_issues": "orchestrator_handlers.py at 846 lines is WARNING level (>800) but below HARD-FAIL threshold (<1100).",
+      "key_files": [
+        "src/scc_cli/setup.py",
+        "src/scc_cli/setup_ui.py",
+        "src/scc_cli/setup_config.py",
+        "src/scc_cli/ui/dashboard/orchestrator_menus.py",
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "tests/test_no_root_sprawl.py"
+      ],
+      "key_decisions": [
+        "Kept run_non_interactive_setup in setup.py residual to preserve test-patch targets at scc_cli.setup.*",
+        "Extracted orchestrator_handlers.py secondary overflow (1163→846) into orchestrator_menus.py"
+      ],
+      "full_summary_md": "---\nid: T06\nparent: S02\nmilestone: M005\nkey_files:\n  - src/scc_cli/setup.py\n  - src/scc_cli/setup_ui.py\n  - src/scc_cli/setup_config.py\n  - src/scc_cli/ui/dashboard/orchestrator_menus.py\n  - src/scc_cli/ui/dashboard/orchestrator_handlers.py\n  - tests/test_no_root_sprawl.py\nkey_decisions:\n  - Kept run_non_interactive_setup in setup.py residual to preserve test-patch targets at scc_cli.setup.*\n  - Extracted orchestrator_handlers.py secondary overflow (1163→846) into orchestrator_menus.py\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T16:57:08.251Z\nblocker_discovered: false\n---\n\n# T06: Decomposed setup.py (1336→794 lines) and eliminated all HARD-FAIL files, completing S02 size reduction with all 4079 tests passing\n\n**Decomposed setup.py (1336→794 lines) and eliminated all HARD-FAIL files, completing S02 size reduction with all 4079 tests passing**\n\n## What Happened\n\nExtracted TUI rendering components into setup_ui.py (303 lines) and config building/preview/persistence logic into setup_config.py (310 lines), reducing setup.py from 1336 to 794 lines. Kept run_non_interactive_setup in the residual to preserve test-patch targets. Also extracted secondary overflow in orchestrator_handlers.py (1163→846 lines) into orchestrator_menus.py (344 lines). Updated root sprawl allowlist. All 4079 tests pass, zero HARD-FAIL files remain, all 3 boundary violations confirmed clean.\n\n## Verification\n\nFull gate passes: ruff check (0 errors), mypy (0 errors in 283 files), pytest (4079 passed, 0 failed). All 315 characterization+boundary tests pass. All 19 setup characterization tests pass. Zero files exceed 1100 lines. 3 boundary violations confirmed eliminated via AST analysis.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 3700ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 3700ms |\n| 3 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 69700ms |\n| 4 | `uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q` | 0 | ✅ pass | 3200ms |\n| 5 | `python3 -c 'file size check (no >1100)'` | 0 | ✅ pass | 100ms |\n\n## Deviations\n\nKept run_non_interactive_setup in setup.py instead of setup_config.py to preserve test-patch compatibility. Added secondary extraction of orchestrator_handlers.py (not in original plan) to meet no-file-over-1100 must-have.\n\n## Known Issues\n\norchestrator_handlers.py at 846 lines is WARNING level (>800) but below HARD-FAIL threshold (<1100).\n\n## Files Created/Modified\n\n- `src/scc_cli/setup.py`\n- `src/scc_cli/setup_ui.py`\n- `src/scc_cli/setup_config.py`\n- `src/scc_cli/ui/dashboard/orchestrator_menus.py`\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py`\n- `tests/test_no_root_sprawl.py`\n",
       "description": "Extract setup.py (1336 lines — HARD-FAIL) into smaller focused files, then run the final comprehensive verification confirming all 15 targets are below threshold.\n\n## Steps\n\n1. **setup.py (1336 lines — HARD-FAIL):** Read fully. Extract TUI components (`_select_option`, `_render_setup_layout`, `_render_setup_header`, `_render_options`, `show_welcome`) into `src/scc_cli/setup_ui.py` (~400 lines). Extract `run_non_interactive_setup` + `_build_proposed_config` + `_build_config_preview` into `src/scc_cli/setup_config.py` (~300 lines). Keep `run_setup_wizard` + `show_setup_complete` + public API in `setup.py`. Re-export all public names from `setup.py`.\n\n2. Update test imports in `tests/test_setup_characterization.py` if they reference moved internals.\n\n3. Run characterization verification: `uv run pytest tests/test_setup_characterization.py tests/test_import_boundaries.py -q`\n\n4. Run the final comprehensive file-size check to confirm all 15 targets are under 800 lines:\n```python\npython3 -c \"\nfrom pathlib import Path\nfail = False\nfor f in sorted(Path('src/scc_cli').rglob('*.py')):\n    lines = len(f.read_text().splitlines())\n    if lines > 1100:\n        print(f'HARD-FAIL: {f} ({lines} lines)')\n        fail = True\n    elif lines > 800:\n        print(f'WARNING: {f} ({lines} lines)')\nif not fail:\n    print('All HARD-FAIL targets eliminated.')\n\"\n```\n\n5. Run full gate: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q`\n\n6. Run complete characterization suite: `uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q` — all 315 tests must pass.\n\n## Must-Haves\n\n- [ ] `setup.py` under 800 lines (from 1336 HARD-FAIL)\n- [ ] `setup_ui.py` exists with TUI components\n- [ ] `setup_config.py` exists with config logic\n- [ ] No file in src/scc_cli/ exceeds 1100 lines\n- [ ] All 19 setup characterization tests pass\n- [ ] All 315 characterization + boundary tests pass\n- [ ] Full gate passes: ruff + mypy + pytest (4079+ tests)\n- [ ] 3 boundary violations confirmed fixed: no docker.core.ContainerInfo in application/dashboard*, no marketplace.managed in core/personal_profiles*, no console.err_line in docker/launch*",
       "estimate": "45m",
       "files": [
@@ -5860,6 +5870,61 @@
       "verdict": "✅ pass",
       "duration_ms": 65000,
       "created_at": "2026-04-04T16:35:57.751Z"
+    },
+    {
+      "id": 146,
+      "task_id": "T06",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3700,
+      "created_at": "2026-04-04T16:57:08.252Z"
+    },
+    {
+      "id": 147,
+      "task_id": "T06",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3700,
+      "created_at": "2026-04-04T16:57:08.253Z"
+    },
+    {
+      "id": 148,
+      "task_id": "T06",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 69700,
+      "created_at": "2026-04-04T16:57:08.253Z"
+    },
+    {
+      "id": 149,
+      "task_id": "T06",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3200,
+      "created_at": "2026-04-04T16:57:08.253Z"
+    },
+    {
+      "id": 150,
+      "task_id": "T06",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "python3 -c 'file size check (no >1100)'",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 100,
+      "created_at": "2026-04-04T16:57:08.253Z"
     }
   ]
 }

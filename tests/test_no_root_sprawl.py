@@ -84,6 +84,8 @@ ALLOWED_LEGACY = {
     "remote.py",
     "sessions.py",
     "setup.py",
+    "setup_config.py",  # Extracted from setup.py (S02/T06 decomposition)
+    "setup_ui.py",  # Extracted from setup.py (S02/T06 decomposition)
     "source_resolver.py",
     "stats.py",
     "subprocess_utils.py",

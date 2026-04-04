@@ -141,7 +141,7 @@
   - Estimate: 1h30m
   - Files: src/scc_cli/ui/dashboard/orchestrator.py, src/scc_cli/ui/dashboard/orchestrator_handlers.py, src/scc_cli/ui/dashboard/_dashboard.py, src/scc_cli/ui/dashboard/_dashboard_actions.py, src/scc_cli/ui/dashboard/__init__.py, src/scc_cli/ui/settings.py, src/scc_cli/ui/settings_render.py, src/scc_cli/ui/settings_profile.py, src/scc_cli/ui/wizard.py, src/scc_cli/ui/wizard_pickers.py, src/scc_cli/ui/git_interactive.py, src/scc_cli/ui/git_interactive_ops.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_dashboard_orchestrator_characterization.py tests/test_wizard_characterization.py tests/test_import_boundaries.py -q
-- [ ] **T06: Decompose setup.py and run final size verification** — Extract setup.py (1336 lines — HARD-FAIL) into smaller focused files, then run the final comprehensive verification confirming all 15 targets are below threshold.
+- [x] **T06: Decomposed setup.py (1336→794 lines) and eliminated all HARD-FAIL files, completing S02 size reduction with all 4079 tests passing** — Extract setup.py (1336 lines — HARD-FAIL) into smaller focused files, then run the final comprehensive verification confirming all 15 targets are below threshold.
 
 ## Steps
 
