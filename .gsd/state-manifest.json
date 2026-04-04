@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T14:25:22.821Z",
+  "exported_at": "2026-04-04T14:33:20.766Z",
   "milestones": [
     {
       "id": "M001",
@@ -3092,19 +3092,21 @@
       "milestone_id": "M005",
       "slice_id": "S01",
       "id": "T04",
-      "title": "Catalog global mutable state and subprocess handling defects",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Cataloged 63 defects (24 mutable globals, 19 subprocess handling, 20 silent swallows) with severity ratings and priority repair queue for S02",
+      "status": "complete",
+      "one_liner": "Cataloged 63 defects (24 mutable globals, 19 subprocess handling, 20 silent swallows) with severity ratings and priority repair queue for S02",
+      "narrative": "Systematically scanned all 161 Python source files under src/scc_cli/ using AST-based analysis and targeted grep. Identified 24 global mutable state issues (3 singleton mutations via global keyword, 7 module-level Console instances, 12 unfrozen config dicts, 1 lru_cache with Docker probe side effect), 19 subprocess handling defects (12 missing timeouts including 4 high-severity, 3 silently discarded returncodes, 4 missing FileNotFoundError guards), and 20 silent exception swallowing sites (13 bare pass swallows, 7 overly broad catches). Produced priority repair queue with 5 immediate fixes and 7 next-batch items.",
+      "verification_result": "Catalog file exists with 63 defect entries covering all categories. All entries have severity ratings. ruff check, mypy, and pytest all pass (no code changes in this analysis task).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T14:33:20.721Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
+      "deviations": "None. Task plan listed src/scc_cli/**/*.py as expected output (the scan target) — deliverable is the catalog document since this is analysis-only.",
+      "known_issues": "None.",
+      "key_files": [
+        ".gsd/milestones/M005/slices/S01/GLOBAL-STATE-SUBPROCESS-DEFECTS.md"
+      ],
       "key_decisions": [],
-      "full_summary_md": "",
+      "full_summary_md": "---\nid: T04\nparent: S01\nmilestone: M005\nkey_files:\n  - .gsd/milestones/M005/slices/S01/GLOBAL-STATE-SUBPROCESS-DEFECTS.md\nkey_decisions:\n  - (none)\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T14:33:20.720Z\nblocker_discovered: false\n---\n\n# T04: Cataloged 63 defects (24 mutable globals, 19 subprocess handling, 20 silent swallows) with severity ratings and priority repair queue for S02\n\n**Cataloged 63 defects (24 mutable globals, 19 subprocess handling, 20 silent swallows) with severity ratings and priority repair queue for S02**\n\n## What Happened\n\nSystematically scanned all 161 Python source files under src/scc_cli/ using AST-based analysis and targeted grep. Identified 24 global mutable state issues (3 singleton mutations via global keyword, 7 module-level Console instances, 12 unfrozen config dicts, 1 lru_cache with Docker probe side effect), 19 subprocess handling defects (12 missing timeouts including 4 high-severity, 3 silently discarded returncodes, 4 missing FileNotFoundError guards), and 20 silent exception swallowing sites (13 bare pass swallows, 7 overly broad catches). Produced priority repair queue with 5 immediate fixes and 7 next-batch items.\n\n## Verification\n\nCatalog file exists with 63 defect entries covering all categories. All entries have severity ratings. ruff check, mypy, and pytest all pass (no code changes in this analysis task).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 1000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 67000ms |\n| 3 | `uv run pytest` | 0 | ✅ pass | 65270ms |\n| 4 | `test -f .gsd/milestones/M005/slices/S01/GLOBAL-STATE-SUBPROCESS-DEFECTS.md` | 0 | ✅ pass | 50ms |\n\n## Deviations\n\nNone. Task plan listed src/scc_cli/**/*.py as expected output (the scan target) — deliverable is the catalog document since this is analysis-only.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `.gsd/milestones/M005/slices/S01/GLOBAL-STATE-SUBPROCESS-DEFECTS.md`\n",
       "description": "",
       "estimate": "",
       "files": [
@@ -5469,6 +5471,50 @@
       "verdict": "✅ pass",
       "duration_ms": 64000,
       "created_at": "2026-04-04T14:25:22.763Z"
+    },
+    {
+      "id": 123,
+      "task_id": "T04",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-04T14:33:20.721Z"
+    },
+    {
+      "id": 124,
+      "task_id": "T04",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 67000,
+      "created_at": "2026-04-04T14:33:20.721Z"
+    },
+    {
+      "id": 125,
+      "task_id": "T04",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "uv run pytest",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 65270,
+      "created_at": "2026-04-04T14:33:20.721Z"
+    },
+    {
+      "id": 126,
+      "task_id": "T04",
+      "slice_id": "S01",
+      "milestone_id": "M005",
+      "command": "test -f .gsd/milestones/M005/slices/S01/GLOBAL-STATE-SUBPROCESS-DEFECTS.md",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 50,
+      "created_at": "2026-04-04T14:33:20.721Z"
     }
   ]
 }

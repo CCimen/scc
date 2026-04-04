@@ -41,6 +41,6 @@ Key constraints:
 - [x] **T03: Added 197 characterization tests across 8 new files covering all testable top-20 split targets as safety net before S02 surgery** — 
   - Files: tests/**, plus all source files listed above
   - Verify: uv run pytest passes; characterization coverage exists for all top-20 split targets with at least the current public API behavior locked
-- [ ] **T04: Catalog global mutable state and subprocess handling defects** — 
+- [x] **T04: Cataloged 63 defects (24 mutable globals, 19 subprocess handling, 20 silent swallows) with severity ratings and priority repair queue for S02** — 
   - Files: src/scc_cli/**/*.py
   - Verify: defect list covers all mutable globals, all unhandled subprocess sites, and all silent-swallow sites with severity ratings
