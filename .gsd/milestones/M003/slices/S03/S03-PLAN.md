@@ -59,7 +59,7 @@ Create the pure-logic layer that converts network policy mode + destination sets
   - Estimate: 45m
   - Files: src/scc_cli/core/egress_policy.py, tests/test_egress_policy.py, src/scc_cli/core/contracts.py, src/scc_cli/core/enums.py
   - Verify: uv run pytest tests/test_egress_policy.py -q && uv run ruff check src/scc_cli/core/egress_policy.py tests/test_egress_policy.py && uv run mypy src/scc_cli/core/egress_policy.py
-- [ ] **T02: Create proxy sidecar image and NetworkTopologyManager adapter with mocked tests** — ## Description
+- [x] **T02: Created Squid proxy sidecar image definition, NetworkTopologyManager adapter for Docker egress topology, and EgressTopologyInfo dataclass with 14 mocked subprocess tests** — ## Description
 
 Build the Docker network topology management layer: a Squid-based proxy sidecar image definition and a `NetworkTopologyManager` class that creates internal Docker networks, starts/stops the proxy sidecar, and cleans up idempotently. All Docker subprocess calls are mocked in tests.
 

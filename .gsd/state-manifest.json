@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T09:41:44.836Z",
+  "exported_at": "2026-04-04T09:47:39.973Z",
   "milestones": [
     {
       "id": "M001",
@@ -1994,19 +1994,30 @@
       "milestone_id": "M003",
       "slice_id": "S03",
       "id": "T02",
-      "title": "Create proxy sidecar image and NetworkTopologyManager adapter with mocked tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created Squid proxy sidecar image definition, NetworkTopologyManager adapter for Docker egress topology, and EgressTopologyInfo dataclass with 14 mocked subprocess tests",
+      "status": "complete",
+      "one_liner": "Created Squid proxy sidecar image definition, NetworkTopologyManager adapter for Docker egress topology, and EgressTopologyInfo dataclass with 14 mocked subprocess tests",
+      "narrative": "Created the Docker network topology management layer for enforced web-egress. The scc-egress-proxy image is defined as Alpine 3.19 + Squid with a config template containing ACL injection markers, an entrypoint script that injects volume-mounted ACL rules at startup and runs squid in foreground, and a healthcheck. NetworkTopologyManager orchestrates four Docker commands in setup(): create internal network, start proxy container with ACL volume mount, connect proxy to bridge for dual-homing, inspect proxy for internal IP. Teardown is fully idempotent. A local _run_docker helper follows the same SandboxLaunchError pattern as oci_sandbox_runtime without importing it. 14 tests cover happy path, teardown, and all specified failure modes.",
+      "verification_result": "All slice-level verification checks pass: pytest tests/test_egress_topology.py (14 passed), ruff check clean, mypy clean, all three image files exist. T01 regression tests still pass (19 tests). Total 33 tests across both test files.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T09:47:39.929Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Added 6 extra tests beyond the required 8 (14 total) for better coverage. Used specific docker inspect --format with named network instead of iterating all networks.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/egress_topology.py",
+        "tests/test_egress_topology.py",
+        "images/scc-egress-proxy/Dockerfile",
+        "images/scc-egress-proxy/squid.conf.template",
+        "images/scc-egress-proxy/entrypoint.sh"
+      ],
+      "key_decisions": [
+        "Local _run_docker helper instead of importing from oci_sandbox_runtime to avoid cross-adapter coupling",
+        "Proxy IP extracted from specific internal network via docker inspect format template",
+        "ACL rules volume-mounted via temp file and injected by entrypoint.sh sed replacement between marker comments",
+        "Teardown catches both CalledProcessError and SandboxLaunchError for full idempotency"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S03\nmilestone: M003\nkey_files:\n  - src/scc_cli/adapters/egress_topology.py\n  - tests/test_egress_topology.py\n  - images/scc-egress-proxy/Dockerfile\n  - images/scc-egress-proxy/squid.conf.template\n  - images/scc-egress-proxy/entrypoint.sh\nkey_decisions:\n  - Local _run_docker helper instead of importing from oci_sandbox_runtime to avoid cross-adapter coupling\n  - Proxy IP extracted from specific internal network via docker inspect format template\n  - ACL rules volume-mounted via temp file and injected by entrypoint.sh sed replacement between marker comments\n  - Teardown catches both CalledProcessError and SandboxLaunchError for full idempotency\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T09:47:39.928Z\nblocker_discovered: false\n---\n\n# T02: Created Squid proxy sidecar image definition, NetworkTopologyManager adapter for Docker egress topology, and EgressTopologyInfo dataclass with 14 mocked subprocess tests\n\n**Created Squid proxy sidecar image definition, NetworkTopologyManager adapter for Docker egress topology, and EgressTopologyInfo dataclass with 14 mocked subprocess tests**\n\n## What Happened\n\nCreated the Docker network topology management layer for enforced web-egress. The scc-egress-proxy image is defined as Alpine 3.19 + Squid with a config template containing ACL injection markers, an entrypoint script that injects volume-mounted ACL rules at startup and runs squid in foreground, and a healthcheck. NetworkTopologyManager orchestrates four Docker commands in setup(): create internal network, start proxy container with ACL volume mount, connect proxy to bridge for dual-homing, inspect proxy for internal IP. Teardown is fully idempotent. A local _run_docker helper follows the same SandboxLaunchError pattern as oci_sandbox_runtime without importing it. 14 tests cover happy path, teardown, and all specified failure modes.\n\n## Verification\n\nAll slice-level verification checks pass: pytest tests/test_egress_topology.py (14 passed), ruff check clean, mypy clean, all three image files exist. T01 regression tests still pass (19 tests). Total 33 tests across both test files.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_egress_topology.py -q` | 0 | ✅ pass | 1090ms |\n| 2 | `uv run ruff check src/scc_cli/adapters/egress_topology.py tests/test_egress_topology.py` | 0 | ✅ pass | 500ms |\n| 3 | `uv run mypy src/scc_cli/adapters/egress_topology.py` | 0 | ✅ pass | 1000ms |\n| 4 | `test -f images/scc-egress-proxy/Dockerfile && test -f images/scc-egress-proxy/squid.conf.template && test -f images/scc-egress-proxy/entrypoint.sh` | 0 | ✅ pass | 10ms |\n\n## Deviations\n\nAdded 6 extra tests beyond the required 8 (14 total) for better coverage. Used specific docker inspect --format with named network instead of iterating all networks.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/egress_topology.py`\n- `tests/test_egress_topology.py`\n- `images/scc-egress-proxy/Dockerfile`\n- `images/scc-egress-proxy/squid.conf.template`\n- `images/scc-egress-proxy/entrypoint.sh`\n",
       "description": "## Description\n\nBuild the Docker network topology management layer: a Squid-based proxy sidecar image definition and a `NetworkTopologyManager` class that creates internal Docker networks, starts/stops the proxy sidecar, and cleans up idempotently. All Docker subprocess calls are mocked in tests.\n\n## Steps\n\n1. Create `images/scc-egress-proxy/Dockerfile`:\n   - Base: `alpine:3.19`\n   - Install `squid` package\n   - Copy `squid.conf.template` to `/etc/squid/squid.conf.template`\n   - Create a startup script that copies the template to `squid.conf` (allowing runtime config injection via environment or volume mount) and runs `squid -N` (foreground mode)\n   - Expose port 3128 (Squid default)\n   - HEALTHCHECK: `squid -k check` or `wget -q --spider http://localhost:3128` with 5s interval\n2. Create `images/scc-egress-proxy/squid.conf.template`:\n   - Include a marker comment `# SCC_ACL_RULES_START` / `# SCC_ACL_RULES_END` where compiled ACL rules will be injected\n   - Default ports: `acl SSL_ports port 443`, `acl Safe_ports port 80 443`\n   - `http_access deny !Safe_ports`, `http_access deny CONNECT !SSL_ports`\n   - Logging to stdout: `access_log stdio:/dev/stdout`\n   - Cache disabled: `cache deny all`\n   - Listen on `0.0.0.0:3128`\n3. Create `images/scc-egress-proxy/entrypoint.sh`:\n   - If `/etc/squid/acl-rules.conf` exists (volume-mounted by topology manager), include it in the config\n   - Otherwise, use the template as-is (default deny all)\n   - Start squid in foreground: `exec squid -N -f /etc/squid/squid.conf`\n4. Create `src/scc_cli/adapters/egress_topology.py` with class `NetworkTopologyManager`:\n   - `__init__(self, session_id: str)` — session_id used for naming (network: `scc-egress-{session_id}`, proxy container: `scc-proxy-{session_id}`)\n   - `setup(self, acl_config: str) -> EgressTopologyInfo` — (a) Create internal network: `docker network create --internal scc-egress-{session_id}`. (b) Write `acl_config` to a temp file. (c) Start proxy container: `docker run -d --name scc-proxy-{session_id} --network scc-egress-{session_id} --label scc.egress-proxy=true -v {tempfile}:/etc/squid/acl-rules.conf:ro -p 0:3128 scc-egress-proxy:latest`. (d) Connect proxy to default bridge network: `docker network connect bridge scc-proxy-{session_id}`. (e) Get proxy internal IP: `docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' scc-proxy-{session_id}` (use the IP from the internal network, not bridge). (f) Return `EgressTopologyInfo(network_name=..., proxy_container=..., proxy_endpoint=http://{ip}:3128)`.\n   - `teardown(self) -> None` — Idempotent: `docker rm -f scc-proxy-{session_id}` (ignore errors), `docker network rm scc-egress-{session_id}` (ignore errors).\n5. Define `EgressTopologyInfo` as a frozen dataclass in the same module: `network_name: str`, `proxy_container_name: str`, `proxy_endpoint: str`.\n6. Use `_run_docker` helper from `oci_sandbox_runtime.py` — OR define a local equivalent. Decision: import the existing `_run_docker` or extract it to a shared location. Since `_run_docker` is module-private in oci_sandbox_runtime.py, create a minimal `_run_docker` in egress_topology.py following the same pattern (consistent error handling via SandboxLaunchError). Do NOT import from oci_sandbox_runtime to avoid coupling.\n7. Create `tests/test_egress_topology.py` with mocked subprocess tests:\n   - `test_setup_creates_internal_network` — asserts `docker network create --internal` is called\n   - `test_setup_starts_proxy_container` — asserts `docker run` with correct image, labels, volume mount\n   - `test_setup_connects_proxy_to_bridge` — asserts `docker network connect bridge` is called\n   - `test_setup_returns_topology_info` — returned info has correct network name, proxy container name, and proxy endpoint with internal IP\n   - `test_teardown_removes_proxy_and_network` — asserts `docker rm -f` and `docker network rm` are called\n   - `test_teardown_idempotent_on_missing_resources` — teardown succeeds even if rm/network rm fail (CalledProcessError ignored)\n   - `test_setup_failure_on_network_create_raises` — SandboxLaunchError when network create fails\n   - `test_setup_failure_on_proxy_start_triggers_cleanup` — if proxy start fails, teardown is still called for the network\n8. Run lint, mypy, and tests.\n\n## Must-Haves\n\n- [ ] `images/scc-egress-proxy/Dockerfile` with Alpine + Squid + healthcheck\n- [ ] `images/scc-egress-proxy/squid.conf.template` with ACL injection markers and safe defaults\n- [ ] `images/scc-egress-proxy/entrypoint.sh` with ACL include logic\n- [ ] `NetworkTopologyManager.setup()` creates network, starts proxy on dual networks, returns info\n- [ ] `NetworkTopologyManager.teardown()` is idempotent\n- [ ] `EgressTopologyInfo` dataclass with network_name, proxy_container_name, proxy_endpoint\n- [ ] 8+ mocked subprocess tests\n- [ ] mypy clean, ruff clean\n\n## Verification\n\n- `uv run pytest tests/test_egress_topology.py -q` — all tests pass\n- `uv run ruff check src/scc_cli/adapters/egress_topology.py tests/test_egress_topology.py` — clean\n- `uv run mypy src/scc_cli/adapters/egress_topology.py` — no issues\n- `test -f images/scc-egress-proxy/Dockerfile && test -f images/scc-egress-proxy/squid.conf.template && test -f images/scc-egress-proxy/entrypoint.sh` — image files exist\n\n## Failure Modes\n\n| Dependency | On error | On timeout | On malformed response |\n|------------|----------|-----------|----------------------|\n| docker network create | SandboxLaunchError with stderr | SandboxLaunchError (timeout) | N/A |\n| docker run (proxy) | SandboxLaunchError; cleanup triggered for network | SandboxLaunchError (timeout); cleanup triggered | N/A |\n| docker inspect (proxy IP) | SandboxLaunchError; full cleanup triggered | SandboxLaunchError (timeout) | Parse failure → SandboxLaunchError |\n| docker rm/network rm (teardown) | Silently ignored (idempotent) | Silently ignored | N/A |\n\n## Observability Impact\n\n- Signals added: `scc.egress-proxy=true` Docker label on proxy containers for filtering\n- How a future agent inspects this: `docker ps --filter label=scc.egress-proxy` lists proxies; `docker network ls --filter name=scc-egress-` lists egress networks\n- Failure state exposed: SandboxLaunchError includes failing command + stderr",
       "estimate": "1h",
       "files": [
@@ -3567,6 +3578,50 @@
       "verdict": "✅ pass",
       "duration_ms": 1000,
       "created_at": "2026-04-04T09:41:44.797Z"
+    },
+    {
+      "id": 35,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run pytest tests/test_egress_topology.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1090,
+      "created_at": "2026-04-04T09:47:39.929Z"
+    },
+    {
+      "id": 36,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run ruff check src/scc_cli/adapters/egress_topology.py tests/test_egress_topology.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-04T09:47:39.929Z"
+    },
+    {
+      "id": 37,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "uv run mypy src/scc_cli/adapters/egress_topology.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-04T09:47:39.929Z"
+    },
+    {
+      "id": 38,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M003",
+      "command": "test -f images/scc-egress-proxy/Dockerfile && test -f images/scc-egress-proxy/squid.conf.template && test -f images/scc-egress-proxy/entrypoint.sh",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 10,
+      "created_at": "2026-04-04T09:47:39.929Z"
     }
   ]
 }
