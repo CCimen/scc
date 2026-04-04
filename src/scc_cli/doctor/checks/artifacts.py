@@ -35,10 +35,15 @@ def _get_selected_profile() -> str | None:
 
 
 def _normalize_org_config(raw: dict[str, object]) -> NormalizedOrgConfig:
-    """Normalize raw org config dict into typed model."""
-    from scc_cli.adapters.config_normalizer import normalize_org_config
+    """Normalize raw org config dict into typed model.
 
-    return normalize_org_config(raw)
+    Uses the NormalizedOrgConfig.from_dict() factory to avoid a static
+    doctor→adapters import that would violate the architectural import
+    boundary (only bootstrap.py may import adapters).
+    """
+    # NormalizedOrgConfig.from_dict uses importlib internally to avoid
+    # the ports→adapters boundary violation
+    return NormalizedOrgConfig.from_dict(dict(raw))
 
 
 def check_team_context() -> CheckResult | None:

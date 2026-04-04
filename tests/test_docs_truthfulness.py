@@ -368,3 +368,199 @@ def test_safety_adapter_files_exist() -> None:
         f"Safety adapter files missing: {missing}. "
         "These are required M004/S03 deliverables."
     )
+
+
+# ===========================================================================
+# M005 team-pack model truthfulness guardrails
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test k: Codex capability_profile must report supports_skills=True
+# ---------------------------------------------------------------------------
+
+
+def test_codex_capability_profile_supports_skills() -> None:
+    """Codex capability profile must report supports_skills=True.
+
+    The Codex renderer writes skill metadata under .agents/skills/{name}/,
+    so the capability profile must not claim skills are unsupported.
+    """
+    from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+    profile = CodexAgentProvider().capability_profile()
+    assert profile.supports_skills is True, (
+        f"Codex capability_profile.supports_skills is {profile.supports_skills}. "
+        "The Codex renderer handles skills; this must be True."
+    )
+
+
+def test_codex_capability_profile_supports_native_integrations() -> None:
+    """Codex capability profile must report supports_native_integrations=True.
+
+    The Codex renderer writes native integration metadata (rules, hooks,
+    instructions, plugins) so the capability profile must not deny this.
+    """
+    from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+    profile = CodexAgentProvider().capability_profile()
+    assert profile.supports_native_integrations is True, (
+        f"Codex capability_profile.supports_native_integrations is "
+        f"{profile.supports_native_integrations}. "
+        "The Codex renderer handles native integrations; this must be True."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test l: Provider capability profiles must be asymmetric-truthful
+# ---------------------------------------------------------------------------
+
+
+def test_provider_profiles_asymmetric_and_truthful() -> None:
+    """Provider capability profiles must reflect actual renderer capabilities.
+
+    Both providers support skills and native integrations (rendered via
+    their respective renderers). Surfaces are intentionally asymmetric
+    (D019/spec-06), but both must report True for supported features.
+    """
+    from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+    from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+    claude = ClaudeAgentProvider().capability_profile()
+    codex = CodexAgentProvider().capability_profile()
+
+    # Both have renderers that handle skills and native integrations
+    assert claude.supports_skills is True
+    assert codex.supports_skills is True
+    assert claude.supports_native_integrations is True
+    assert codex.supports_native_integrations is True
+
+    # Asymmetric: Codex does not support resume, Claude does
+    assert claude.supports_resume is True
+    assert codex.supports_resume is False
+
+    # Provider IDs are distinct
+    assert claude.provider_id != codex.provider_id
+
+
+# ---------------------------------------------------------------------------
+# Test m: org-v1 schema must include governed_artifacts and enabled_bundles
+# ---------------------------------------------------------------------------
+
+
+def test_schema_includes_governed_artifacts_section() -> None:
+    """org-v1.schema.json must define a governed_artifacts property.
+
+    M005 introduced governed artifacts as the canonical policy surface for
+    skills, MCP servers, and native integrations. The schema must reflect this.
+    """
+    schema_path = SRC / "schemas" / "org-v1.schema.json"
+    assert schema_path.exists(), "org-v1.schema.json not found"
+
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    props = schema.get("properties", {})
+    assert "governed_artifacts" in props, (
+        "org-v1.schema.json does not define a 'governed_artifacts' property. "
+        "M005 requires this section for artifact/bundle/binding definitions."
+    )
+
+    ga = props["governed_artifacts"]
+    ga_props = ga.get("properties", {})
+    for required_key in ("artifacts", "bindings", "bundles"):
+        assert required_key in ga_props, (
+            f"governed_artifacts schema missing '{required_key}' sub-property."
+        )
+
+
+def test_schema_profiles_include_enabled_bundles() -> None:
+    """Profile schema must include enabled_bundles for team-pack selection.
+
+    Teams enable bundles (not raw artifacts). The schema must allow
+    enabled_bundles in profile definitions.
+    """
+    schema_path = SRC / "schemas" / "org-v1.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    profile_props = (
+        schema.get("properties", {})
+        .get("profiles", {})
+        .get("additionalProperties", {})
+        .get("properties", {})
+    )
+    assert "enabled_bundles" in profile_props, (
+        "Profile schema does not include 'enabled_bundles'. "
+        "Teams select bundles from governed_artifacts.bundles via this field."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test n: Renderers must not overclaim — docstrings must say metadata-only
+# ---------------------------------------------------------------------------
+
+
+def test_renderer_docstrings_say_metadata_not_content() -> None:
+    """Renderer module docstrings must honestly describe output as metadata.
+
+    Both renderers write SCC-managed JSON metadata files that reference
+    artifact sources. They do NOT fetch or install actual content. The
+    module docstrings must reflect this to prevent overclaiming.
+    """
+    for renderer_name in ("claude_renderer.py", "codex_renderer.py"):
+        renderer_path = ADAPTERS_DIR / renderer_name
+        assert renderer_path.exists(), f"{renderer_name} not found"
+        source = renderer_path.read_text(encoding="utf-8")
+        assert "metadata" in source.lower()[:2000], (
+            f"{renderer_name} module docstring does not mention 'metadata'. "
+            "The renderer writes metadata/references, not actual native content."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Test o: sync_marketplace_settings_for_start must be marked transitional
+# ---------------------------------------------------------------------------
+
+
+def test_sync_marketplace_settings_for_start_is_transitional() -> None:
+    """sync_marketplace_settings_for_start docstring must note it is transitional.
+
+    This function predates the governed-artifact bundle pipeline. Its
+    docstring must explicitly note it is transitional so operators
+    understand the bundle pipeline is the canonical path.
+    """
+    start_session_path = SRC / "application" / "start_session.py"
+    assert start_session_path.exists()
+    source = start_session_path.read_text(encoding="utf-8")
+
+    # Find the function and its docstring
+    func_start = source.find("def sync_marketplace_settings_for_start")
+    assert func_start != -1, "sync_marketplace_settings_for_start not found"
+
+    # Check the next ~500 chars for the transitional marker
+    context = source[func_start : func_start + 800]
+    assert "transitional" in context.lower(), (
+        "sync_marketplace_settings_for_start docstring does not mention "
+        "'transitional'. It must be marked as predating the bundle pipeline."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test p: bundle_resolver comment must not overclaim renderable for portables
+# ---------------------------------------------------------------------------
+
+
+def test_bundle_resolver_portable_comment_is_truthful() -> None:
+    """Bundle resolver must not claim portable artifacts are rendered without bindings.
+
+    Skills and MCP servers without provider bindings are 'policy-effective'
+    (approved and resolved) but produce no rendered output since renderers
+    only iterate plan.bindings. The resolver comment must be truthful about this.
+    """
+    resolver_path = SRC / "core" / "bundle_resolver.py"
+    source = resolver_path.read_text(encoding="utf-8")
+
+    # The comment around the portable-artifact branch should mention
+    # that no rendering happens without a binding
+    assert "policy-effective" in source or "no rendered output" in source, (
+        "bundle_resolver.py portable-artifact comment does not mention "
+        "that artifacts without bindings produce no rendered output. "
+        "The comment must be truthful: effective ≠ rendered without a binding."
+    )

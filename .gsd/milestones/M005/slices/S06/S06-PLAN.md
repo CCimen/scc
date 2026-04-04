@@ -19,7 +19,7 @@ Add tests for both diagnostic surfaces.
   - Estimate: 2h
   - Files: src/scc_cli/doctor/checks/artifacts.py, src/scc_cli/application/support_bundle.py, tests/test_doctor_artifact_checks.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_doctor_artifact_checks.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T02: Docs and security-language truthfulness audit for team-pack model** — Review and update all docs, README, examples, schemas, and error messages to:
+- [x] **T02: Fixed four truthfulness gaps: Codex capability_profile, portable-artifact contract mismatch, renderer overclaiming, and transitional marketplace sync; added governed_artifacts/enabled_bundles to schema; removed stale xfail; fixed import boundary violation** — Review and update all docs, README, examples, schemas, and error messages to:
 1. Accurately describe the governed-artifact/team-pack model
 2. Not claim Codex bundle parity beyond what codex_renderer implements
 3. Use consistent language: 'team pack' / 'bundle' for the team-facing unit, 'governed artifact' for the policy unit

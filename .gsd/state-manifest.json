@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T20:32:11.958Z",
+  "exported_at": "2026-04-04T20:49:31.608Z",
   "milestones": [
     {
       "id": "M001",
@@ -4221,19 +4221,34 @@
       "milestone_id": "M005",
       "slice_id": "S06",
       "id": "T02",
-      "title": "Docs and security-language truthfulness audit for team-pack model",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Fixed four truthfulness gaps: Codex capability_profile, portable-artifact contract mismatch, renderer overclaiming, and transitional marketplace sync; added governed_artifacts/enabled_bundles to schema; removed stale xfail; fixed import boundary violation",
+      "status": "complete",
+      "one_liner": "Fixed four truthfulness gaps: Codex capability_profile, portable-artifact contract mismatch, renderer overclaiming, and transitional marketplace sync; added governed_artifacts/enabled_bundles to schema; removed stale xfail; fixed import boundary violation",
+      "narrative": "Addressed four specific truthfulness gaps: (1) Updated bundle resolver comment to honestly describe portable artifacts without bindings as 'policy-effective' not 'renderable'; (2) Set Codex capability_profile supports_skills=True and supports_native_integrations=True; (3) Updated both renderer module docstrings to say 'metadata-only' for native integration output; (4) Marked sync_marketplace_settings_for_start as transitional. Also fixed import boundary violation in doctor/checks/artifacts.py, removed stale xfail on test_file_size_limits, updated org-v1.schema.json with governed_artifacts and enabled_bundles, and added 8 truthfulness guardrail tests.",
+      "verification_result": "All three verification gates pass: ruff check (0 errors), mypy (0 issues in 289 files), full pytest suite (4462 passed, 0 failed, 0 xpassed, 23 skipped, 3 xfailed). Truthfulness tests (18/18), import boundaries (31/31), file sizes (1/1 without xfail).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T20:49:31.529Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed import boundary violation in doctor/checks/artifacts.py from T01 — replaced direct scc_cli.adapters.config_normalizer import with NormalizedOrgConfig.from_dict(). Removed stale xfail on test_file_size_limits.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/codex_agent_provider.py",
+        "src/scc_cli/adapters/codex_renderer.py",
+        "src/scc_cli/adapters/claude_renderer.py",
+        "src/scc_cli/core/bundle_resolver.py",
+        "src/scc_cli/doctor/checks/artifacts.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/schemas/org-v1.schema.json",
+        "tests/test_docs_truthfulness.py",
+        "tests/test_file_sizes.py"
+      ],
+      "key_decisions": [
+        "Codex capability_profile updated to supports_skills=True and supports_native_integrations=True to match renderer implementation",
+        "Portable artifacts without bindings are 'policy-effective' not 'renderable' — resolver comment updated",
+        "sync_marketplace_settings_for_start marked as transitional; bundle pipeline is canonical",
+        "Use NormalizedOrgConfig.from_dict() to avoid import boundary violation from doctor to adapters"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S06\nmilestone: M005\nkey_files:\n  - src/scc_cli/adapters/codex_agent_provider.py\n  - src/scc_cli/adapters/codex_renderer.py\n  - src/scc_cli/adapters/claude_renderer.py\n  - src/scc_cli/core/bundle_resolver.py\n  - src/scc_cli/doctor/checks/artifacts.py\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/schemas/org-v1.schema.json\n  - tests/test_docs_truthfulness.py\n  - tests/test_file_sizes.py\nkey_decisions:\n  - Codex capability_profile updated to supports_skills=True and supports_native_integrations=True to match renderer implementation\n  - Portable artifacts without bindings are 'policy-effective' not 'renderable' — resolver comment updated\n  - sync_marketplace_settings_for_start marked as transitional; bundle pipeline is canonical\n  - Use NormalizedOrgConfig.from_dict() to avoid import boundary violation from doctor to adapters\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T20:49:31.528Z\nblocker_discovered: false\n---\n\n# T02: Fixed four truthfulness gaps: Codex capability_profile, portable-artifact contract mismatch, renderer overclaiming, and transitional marketplace sync; added governed_artifacts/enabled_bundles to schema; removed stale xfail; fixed import boundary violation\n\n**Fixed four truthfulness gaps: Codex capability_profile, portable-artifact contract mismatch, renderer overclaiming, and transitional marketplace sync; added governed_artifacts/enabled_bundles to schema; removed stale xfail; fixed import boundary violation**\n\n## What Happened\n\nAddressed four specific truthfulness gaps: (1) Updated bundle resolver comment to honestly describe portable artifacts without bindings as 'policy-effective' not 'renderable'; (2) Set Codex capability_profile supports_skills=True and supports_native_integrations=True; (3) Updated both renderer module docstrings to say 'metadata-only' for native integration output; (4) Marked sync_marketplace_settings_for_start as transitional. Also fixed import boundary violation in doctor/checks/artifacts.py, removed stale xfail on test_file_size_limits, updated org-v1.schema.json with governed_artifacts and enabled_bundles, and added 8 truthfulness guardrail tests.\n\n## Verification\n\nAll three verification gates pass: ruff check (0 errors), mypy (0 issues in 289 files), full pytest suite (4462 passed, 0 failed, 0 xpassed, 23 skipped, 3 xfailed). Truthfulness tests (18/18), import boundaries (31/31), file sizes (1/1 without xfail).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 3000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 3500ms |\n| 3 | `uv run pytest tests/test_docs_truthfulness.py -v` | 0 | ✅ pass (18/18) | 1600ms |\n| 4 | `uv run pytest tests/test_import_boundaries.py -v` | 0 | ✅ pass (31/31) | 1900ms |\n| 5 | `uv run pytest tests/test_file_sizes.py -v` | 0 | ✅ pass (1/1) | 1200ms |\n| 6 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass (4462 passed) | 72000ms |\n\n## Deviations\n\nFixed import boundary violation in doctor/checks/artifacts.py from T01 — replaced direct scc_cli.adapters.config_normalizer import with NormalizedOrgConfig.from_dict(). Removed stale xfail on test_file_size_limits.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/codex_agent_provider.py`\n- `src/scc_cli/adapters/codex_renderer.py`\n- `src/scc_cli/adapters/claude_renderer.py`\n- `src/scc_cli/core/bundle_resolver.py`\n- `src/scc_cli/doctor/checks/artifacts.py`\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/schemas/org-v1.schema.json`\n- `tests/test_docs_truthfulness.py`\n- `tests/test_file_sizes.py`\n",
       "description": "Review and update all docs, README, examples, schemas, and error messages to:\n1. Accurately describe the governed-artifact/team-pack model\n2. Not claim Codex bundle parity beyond what codex_renderer implements\n3. Use consistent language: 'team pack' / 'bundle' for the team-facing unit, 'governed artifact' for the policy unit\n4. Show that provider surfaces are asymmetric and that's intentional\n5. Update org-v1.schema.json to include governed_artifacts and enabled_bundles sections\n6. Add truthfulness guardrail tests for team-pack language\n\nThis is a truthfulness pass — add only language that matches real implementation, remove or qualify claims that exceed it.",
       "estimate": "1h30m",
       "files": [
@@ -6918,6 +6933,72 @@
       "verdict": "✅ pass (1 pre-existing failure)",
       "duration_ms": 72000,
       "created_at": "2026-04-04T20:32:11.901Z"
+    },
+    {
+      "id": 211,
+      "task_id": "T02",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3000,
+      "created_at": "2026-04-04T20:49:31.529Z"
+    },
+    {
+      "id": 212,
+      "task_id": "T02",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3500,
+      "created_at": "2026-04-04T20:49:31.529Z"
+    },
+    {
+      "id": 213,
+      "task_id": "T02",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_docs_truthfulness.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass (18/18)",
+      "duration_ms": 1600,
+      "created_at": "2026-04-04T20:49:31.529Z"
+    },
+    {
+      "id": 214,
+      "task_id": "T02",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_import_boundaries.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass (31/31)",
+      "duration_ms": 1900,
+      "created_at": "2026-04-04T20:49:31.529Z"
+    },
+    {
+      "id": 215,
+      "task_id": "T02",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_file_sizes.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass (1/1)",
+      "duration_ms": 1200,
+      "created_at": "2026-04-04T20:49:31.529Z"
+    },
+    {
+      "id": 216,
+      "task_id": "T02",
+      "slice_id": "S06",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass (4462 passed)",
+      "duration_ms": 72000,
+      "created_at": "2026-04-04T20:49:31.529Z"
     }
   ]
 }

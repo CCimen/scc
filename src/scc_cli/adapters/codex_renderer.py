@@ -4,13 +4,14 @@ Adapter-owned renderer that consumes a provider-neutral ArtifactRenderPlan
 and projects it into Codex's native file structures and config surfaces.
 
 Codex-native surfaces (per spec-06):
-- Skills: placed under .agents/skills/{name}/
-- MCP servers: entries in .mcp.json (workspace-scoped)
-- Native integrations:
-  - .codex-plugin/plugin.json for plugin bundles
-  - .codex/rules/*.rules for rule files
-  - .codex/hooks.json for hook definitions
-  - AGENTS.md content via .codex/.scc-managed/instructions/
+- Skills: writes ``skill.json`` metadata under ``.agents/skills/{name}/``
+- MCP servers: produces an ``.mcp.json`` fragment for the caller to merge
+- Native integrations (metadata-only — the renderer writes SCC-managed
+  JSON metadata files, not the actual native content):
+  - ``.codex-plugin/plugin.json``: plugin manifest referencing a source
+  - ``.codex/rules/{name}.rules.json``: rule metadata with ``managed_by: scc``
+  - ``.codex/hooks.json``: hook metadata under an ``scc_managed`` key
+  - ``.codex/.scc-managed/instructions/{name}.json``: instruction metadata
 
 Codex surfaces are intentionally asymmetric from Claude (D019/spec-06).
 Rules and hooks are separate native config surfaces, not plugin components.
@@ -18,7 +19,8 @@ The renderer does NOT force Codex surfaces into Claude plugin shapes.
 
 The renderer is deterministic and idempotent — the same plan + workspace
 always produce the same output.  Actual content fetching (git clone, URL
-download) is NOT the renderer's job; it writes metadata and references.
+download) is NOT the renderer's job; it writes metadata and references that
+the launch pipeline or runtime can later resolve.
 """
 
 from __future__ import annotations

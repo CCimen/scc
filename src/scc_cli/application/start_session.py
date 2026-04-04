@@ -196,6 +196,14 @@ def sync_marketplace_settings_for_start(
 ) -> tuple[SyncResult | None, str | None]:
     """Sync marketplace settings for a start session.
 
+    **Transitional:** This function predates the governed-artifact bundle
+    pipeline (M005).  It syncs legacy marketplace plugin/MCP definitions
+    that are not yet expressed as governed artifacts.  Once all team
+    config surfaces are migrated to the bundle pipeline
+    (``_render_bundle_artifacts``), this function and its call sites can
+    be removed.  Until then, both paths run: marketplace sync first,
+    then bundle rendering, with the bundle pipeline as the canonical path.
+
     Invariants:
         - Skips syncing in dry-run, offline, or standalone modes.
         - Uses the same sync path as start session preparation.

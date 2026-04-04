@@ -165,9 +165,14 @@ def _resolve_single_bundle(
 
         if not provider_bindings:
             # Artifact exists but has no binding for this provider.
-            # Skills and MCP servers are portable — they still count as effective
-            # even without a provider-specific binding.
-            # Native integrations require a binding.
+            # Skills and MCP servers are portable — they appear in
+            # effective_artifacts even without a provider-specific binding.
+            # However, without a binding the provider renderer has no
+            # rendering instruction, so the artifact is "policy-effective"
+            # (approved and resolved) but produces no rendered output.
+            # A future content-fetching step may use effective_artifacts
+            # to install portable content that requires no binding.
+            # Native integrations always require a binding.
             if artifact.kind == ArtifactKind.NATIVE_INTEGRATION:
                 skipped.append(art_name)
                 diagnostics.append(

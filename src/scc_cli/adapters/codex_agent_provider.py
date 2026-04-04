@@ -27,8 +27,8 @@ class CodexAgentProvider:
             display_name="Codex",
             required_destination_set="openai-core",
             supports_resume=False,
-            supports_skills=False,
-            supports_native_integrations=False,
+            supports_skills=True,
+            supports_native_integrations=True,
         )
 
     def prepare_launch(

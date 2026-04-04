@@ -4,13 +4,19 @@ Adapter-owned renderer that consumes a provider-neutral ArtifactRenderPlan
 and projects it into Claude Code's native file structures and settings.
 
 Claude-native surfaces (per spec-06):
-- Skills: placed under .claude/.scc-managed/skills/{name}/
-- MCP servers: mcpServers entries returned in settings_fragment
-- Native integrations: hooks, marketplace bundles, instructions, plugin dirs
+- Skills: writes ``skill.json`` metadata under ``.claude/.scc-managed/skills/{name}/``
+- MCP servers: produces ``mcpServers`` entries in the settings fragment
+- Native integrations (metadata-only — the renderer writes SCC-managed
+  JSON metadata files, not the actual native content):
+  - ``.claude/.scc-managed/hooks/{name}.json``: hook metadata
+  - ``settings_fragment.extraKnownMarketplaces``: marketplace source entries
+  - ``settings_fragment.enabledPlugins``: plugin enablement entries
+  - ``.claude/.scc-managed/instructions/{name}.json``: instruction metadata
 
 The renderer is deterministic and idempotent — the same plan + workspace
 always produce the same output.  Actual content fetching (git clone, URL
-download) is NOT the renderer's job; it writes metadata and references.
+download) is NOT the renderer's job; it writes metadata and references that
+the launch pipeline or runtime can later resolve.
 """
 
 from __future__ import annotations
