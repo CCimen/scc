@@ -29,6 +29,7 @@ from scc_cli.adapters.claude_renderer import (
     RendererResult,
     render_claude_artifacts,
 )
+from scc_cli.core.errors import MaterializationError, MergeConflictError
 from scc_cli.core.governed_artifacts import (
     ArtifactRenderPlan,
     ProviderArtifactBinding,
@@ -575,3 +576,155 @@ class TestReturnType:
         result = render_claude_artifacts(plan, workspace)
         for p in result.rendered_paths:
             assert isinstance(p, Path)
+
+
+# ---------------------------------------------------------------------------
+# Failure path tests — fail-closed semantics
+# ---------------------------------------------------------------------------
+
+
+class TestSkillMaterializationFailure:
+    def test_read_only_workspace_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """Skill write to read-only dir raises MaterializationError."""
+        # Create the parent dir then make it read-only
+        managed = workspace / SCC_MANAGED_DIR / "skills"
+        managed.mkdir(parents=True, exist_ok=True)
+        managed.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="skills/blocked",
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError) as exc_info:
+            render_claude_artifacts(plan, workspace)
+        err = exc_info.value
+        assert err.bundle_id == "test-bundle"
+        assert "skills/blocked" in err.artifact_name
+        assert err.target_path  # should have the path
+
+        # Cleanup permissions for pytest tmp_path cleanup
+        managed.chmod(0o755)
+
+    def test_materialization_error_has_structured_fields(
+        self, workspace: Path
+    ) -> None:
+        err = MaterializationError(
+            bundle_id="b1",
+            artifact_name="my-skill",
+            target_path="/tmp/foo",
+            reason="Permission denied",
+        )
+        assert "my-skill" in str(err)
+        assert "b1" in str(err)
+        assert "Permission denied" in str(err)
+
+
+class TestNativeIntegrationMaterializationFailure:
+    def test_hooks_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """hooks file write to read-only dir → MaterializationError."""
+        hooks_dir = workspace / SCC_MANAGED_DIR / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        hooks_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"hooks": "./claude/hooks.json"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="hooks"):
+            render_claude_artifacts(plan, workspace)
+
+        hooks_dir.chmod(0o755)
+
+    def test_instructions_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """instructions write to read-only dir → MaterializationError."""
+        instr_dir = workspace / SCC_MANAGED_DIR / "instructions"
+        instr_dir.mkdir(parents=True, exist_ok=True)
+        instr_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_config={"instructions": "./claude/CLAUDE.md"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="instructions"):
+            render_claude_artifacts(plan, workspace)
+
+        instr_dir.chmod(0o755)
+
+
+class TestSettingsFragmentWriteFailure:
+    def test_audit_file_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """Settings audit file write to read-only .claude/ → MaterializationError."""
+        claude_dir = workspace / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+        claude_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="mcp-server",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:8080"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="settings_fragment"):
+            render_claude_artifacts(plan, workspace)
+
+        claude_dir.chmod(0o755)
+
+
+class TestMergeConflictErrorStructure:
+    def test_merge_conflict_error_fields(self) -> None:
+        err = MergeConflictError(
+            bundle_id="my-bundle",
+            target_path="/tmp/settings.json",
+            conflict_detail="key 'mcpServers.foo' already exists with different value",
+        )
+        assert "my-bundle" in str(err)
+        assert "mcpServers.foo" in str(err)
+        assert err.target_path == "/tmp/settings.json"
+
+
+class TestRendererErrorHierarchy:
+    def test_materialization_error_is_renderer_error(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = MaterializationError(
+            user_message="test",
+            bundle_id="b",
+            artifact_name="a",
+            target_path="/foo",
+            reason="bad",
+        )
+        assert isinstance(err, RendererError)
+        assert err.exit_code == 4
+
+    def test_merge_conflict_error_is_renderer_error(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = MergeConflictError(
+            user_message="test",
+            bundle_id="b",
+            target_path="/foo",
+            conflict_detail="dup",
+        )
+        assert isinstance(err, RendererError)

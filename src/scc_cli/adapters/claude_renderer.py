@@ -16,11 +16,15 @@ download) is NOT the renderer's job; it writes metadata and references.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scc_cli.core.errors import MaterializationError
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan, ProviderArtifactBinding
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Renderer result
@@ -80,6 +84,9 @@ def _render_skill_binding(
 
     Returns:
         (rendered_paths, warnings)
+
+    Raises:
+        MaterializationError: If the skill metadata file cannot be written.
     """
     rendered: list[Path] = []
     warnings: list[str] = []
@@ -96,7 +103,6 @@ def _render_skill_binding(
     safe_name = skill_ref.replace("/", "_").replace("\\", "_").replace("..", "_")
 
     skill_dir = workspace / SCC_MANAGED_DIR / SKILLS_SUBDIR / safe_name
-    skill_dir.mkdir(parents=True, exist_ok=True)
 
     metadata: dict[str, Any] = {
         "native_ref": binding.native_ref,
@@ -108,7 +114,16 @@ def _render_skill_binding(
         metadata["native_config"] = dict(binding.native_config)
 
     metadata_path = skill_dir / "skill.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+    try:
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+    except OSError as exc:
+        raise MaterializationError(
+            bundle_id=bundle_id,
+            artifact_name=skill_ref,
+            target_path=str(metadata_path),
+            reason=str(exc),
+        ) from exc
     rendered.append(metadata_path)
 
     return rendered, warnings
@@ -191,6 +206,9 @@ def _render_native_integration_binding(
 
     Returns:
         (rendered_paths, settings_fragment, warnings)
+
+    Raises:
+        MaterializationError: If any file write operation fails.
     """
     rendered: list[Path] = []
     warnings: list[str] = []
@@ -201,7 +219,6 @@ def _render_native_integration_binding(
     if "hooks" in config:
         hooks_ref = config["hooks"]
         hooks_dir = workspace / SCC_MANAGED_DIR / HOOKS_SUBDIR
-        hooks_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = Path(hooks_ref).stem
         hooks_metadata: dict[str, Any] = {
@@ -211,7 +228,16 @@ def _render_native_integration_binding(
             "managed_by": "scc",
         }
         hooks_path = hooks_dir / f"{safe_name}.json"
-        hooks_path.write_text(json.dumps(hooks_metadata, indent=2) + "\n")
+        try:
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+            hooks_path.write_text(json.dumps(hooks_metadata, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=bundle_id,
+                artifact_name=f"hooks:{hooks_ref}",
+                target_path=str(hooks_path),
+                reason=str(exc),
+            ) from exc
         rendered.append(hooks_path)
 
     # ── marketplace_bundle ─────────────────────────────────────────────────
@@ -235,7 +261,6 @@ def _render_native_integration_binding(
     if "instructions" in config:
         instructions_ref = config["instructions"]
         instructions_dir = workspace / SCC_MANAGED_DIR / INSTRUCTIONS_SUBDIR
-        instructions_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = Path(instructions_ref).stem
         instructions_metadata: dict[str, Any] = {
@@ -245,7 +270,16 @@ def _render_native_integration_binding(
             "managed_by": "scc",
         }
         instr_path = instructions_dir / f"{safe_name}.json"
-        instr_path.write_text(json.dumps(instructions_metadata, indent=2) + "\n")
+        try:
+            instructions_dir.mkdir(parents=True, exist_ok=True)
+            instr_path.write_text(json.dumps(instructions_metadata, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=bundle_id,
+                artifact_name=f"instructions:{instructions_ref}",
+                target_path=str(instr_path),
+                reason=str(exc),
+            ) from exc
         rendered.append(instr_path)
 
     return rendered, settings, warnings
@@ -380,11 +414,19 @@ def render_claude_artifacts(
     # Write the settings fragment to a per-bundle file for audit/debug
     if merged_settings:
         settings_dir = workspace / ".claude"
-        settings_dir.mkdir(parents=True, exist_ok=True)
 
         safe_bundle = plan.bundle_id.replace("/", "_").replace("\\", "_")
         fragment_path = settings_dir / f".scc-settings-{safe_bundle}.json"
-        fragment_path.write_text(json.dumps(merged_settings, indent=2) + "\n")
+        try:
+            settings_dir.mkdir(parents=True, exist_ok=True)
+            fragment_path.write_text(json.dumps(merged_settings, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=plan.bundle_id,
+                artifact_name="settings_fragment",
+                target_path=str(fragment_path),
+                reason=str(exc),
+            ) from exc
         all_rendered.append(fragment_path)
 
     return RendererResult(

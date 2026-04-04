@@ -24,11 +24,15 @@ download) is NOT the renderer's job; it writes metadata and references.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scc_cli.core.errors import MaterializationError
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan, ProviderArtifactBinding
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Renderer result
@@ -97,6 +101,9 @@ def _render_skill_binding(
 
     Returns:
         (rendered_paths, warnings)
+
+    Raises:
+        MaterializationError: If the skill metadata file cannot be written.
     """
     rendered: list[Path] = []
     warnings: list[str] = []
@@ -113,7 +120,6 @@ def _render_skill_binding(
     safe_name = skill_ref.replace("/", "_").replace("\\", "_").replace("..", "_")
 
     skill_dir = workspace / SKILLS_DIR / safe_name
-    skill_dir.mkdir(parents=True, exist_ok=True)
 
     metadata: dict[str, Any] = {
         "native_ref": binding.native_ref,
@@ -125,7 +131,16 @@ def _render_skill_binding(
         metadata["native_config"] = dict(binding.native_config)
 
     metadata_path = skill_dir / "skill.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+    try:
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+    except OSError as exc:
+        raise MaterializationError(
+            bundle_id=bundle_id,
+            artifact_name=skill_ref,
+            target_path=str(metadata_path),
+            reason=str(exc),
+        ) from exc
     rendered.append(metadata_path)
 
     return rendered, warnings
@@ -209,6 +224,11 @@ def _render_native_integration_binding(
 
     Returns:
         (rendered_paths, warnings)
+
+    Raises:
+        MaterializationError: If any file write operation fails.
+        MergeConflictError: If hooks.json has conflicting SCC-managed keys
+            from a different bundle that cannot be safely merged.
     """
     rendered: list[Path] = []
     warnings: list[str] = []
@@ -218,7 +238,6 @@ def _render_native_integration_binding(
     if "plugin_bundle" in config:
         plugin_ref = config["plugin_bundle"]
         plugin_dir = workspace / CODEX_PLUGIN_DIR
-        plugin_dir.mkdir(parents=True, exist_ok=True)
 
         plugin_manifest: dict[str, Any] = {
             "source": plugin_ref,
@@ -227,14 +246,22 @@ def _render_native_integration_binding(
             "managed_by": "scc",
         }
         plugin_path = plugin_dir / "plugin.json"
-        plugin_path.write_text(json.dumps(plugin_manifest, indent=2) + "\n")
+        try:
+            plugin_dir.mkdir(parents=True, exist_ok=True)
+            plugin_path.write_text(json.dumps(plugin_manifest, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=bundle_id,
+                artifact_name=f"plugin:{plugin_ref}",
+                target_path=str(plugin_path),
+                reason=str(exc),
+            ) from exc
         rendered.append(plugin_path)
 
     # ── rules ──────────────────────────────────────────────────────────────
     if "rules" in config:
         rules_ref = config["rules"]
         rules_dir = workspace / CODEX_RULES_DIR
-        rules_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = Path(rules_ref).stem
         rules_metadata: dict[str, Any] = {
@@ -244,14 +271,22 @@ def _render_native_integration_binding(
             "managed_by": "scc",
         }
         rules_path = rules_dir / f"{safe_name}.rules.json"
-        rules_path.write_text(json.dumps(rules_metadata, indent=2) + "\n")
+        try:
+            rules_dir.mkdir(parents=True, exist_ok=True)
+            rules_path.write_text(json.dumps(rules_metadata, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=bundle_id,
+                artifact_name=f"rules:{rules_ref}",
+                target_path=str(rules_path),
+                reason=str(exc),
+            ) from exc
         rendered.append(rules_path)
 
     # ── hooks ──────────────────────────────────────────────────────────────
     if "hooks" in config:
         hooks_ref = config["hooks"]
         codex_dir = workspace / CODEX_CONFIG_DIR
-        codex_dir.mkdir(parents=True, exist_ok=True)
 
         hooks_metadata: dict[str, Any] = {
             "source": hooks_ref,
@@ -261,25 +296,35 @@ def _render_native_integration_binding(
         }
         hooks_path = codex_dir / "hooks.json"
 
-        # Merge strategy: read existing file, update SCC-managed entries
-        existing_hooks: dict[str, Any] = {}
-        if hooks_path.exists():
-            try:
-                existing_hooks = json.loads(hooks_path.read_text())
-            except (json.JSONDecodeError, OSError):
-                warnings.append(
-                    f"Could not parse existing {hooks_path}; overwriting"
-                )
+        # Merge strategy: read existing file, update SCC-managed entries.
+        # The entire read-merge-write sequence is wrapped because even
+        # hooks_path.exists() can raise PermissionError on a locked dir.
+        try:
+            existing_hooks: dict[str, Any] = {}
+            if hooks_path.exists():
+                try:
+                    existing_hooks = json.loads(hooks_path.read_text())
+                except json.JSONDecodeError:
+                    warnings.append(
+                        f"Could not parse existing {hooks_path}; overwriting"
+                    )
 
-        existing_hooks.setdefault("scc_managed", {})[bundle_id] = hooks_metadata
-        hooks_path.write_text(json.dumps(existing_hooks, indent=2) + "\n")
+            existing_hooks.setdefault("scc_managed", {})[bundle_id] = hooks_metadata
+            codex_dir.mkdir(parents=True, exist_ok=True)
+            hooks_path.write_text(json.dumps(existing_hooks, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=bundle_id,
+                artifact_name=f"hooks:{hooks_ref}",
+                target_path=str(hooks_path),
+                reason=str(exc),
+            ) from exc
         rendered.append(hooks_path)
 
     # ── instructions ───────────────────────────────────────────────────────
     if "instructions" in config:
         instructions_ref = config["instructions"]
         instructions_dir = workspace / SCC_MANAGED_DIR / INSTRUCTIONS_SUBDIR
-        instructions_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = Path(instructions_ref).stem
         instructions_metadata: dict[str, Any] = {
@@ -289,7 +334,16 @@ def _render_native_integration_binding(
             "managed_by": "scc",
         }
         instr_path = instructions_dir / f"{safe_name}.json"
-        instr_path.write_text(json.dumps(instructions_metadata, indent=2) + "\n")
+        try:
+            instructions_dir.mkdir(parents=True, exist_ok=True)
+            instr_path.write_text(json.dumps(instructions_metadata, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=bundle_id,
+                artifact_name=f"instructions:{instructions_ref}",
+                target_path=str(instr_path),
+                reason=str(exc),
+            ) from exc
         rendered.append(instr_path)
 
     return rendered, warnings
@@ -406,11 +460,19 @@ def render_codex_artifacts(
     # Write the MCP fragment to a per-bundle audit file for debug/diagnostics
     if merged_mcp:
         codex_dir = workspace / CODEX_CONFIG_DIR
-        codex_dir.mkdir(parents=True, exist_ok=True)
 
         safe_bundle = plan.bundle_id.replace("/", "_").replace("\\", "_")
         fragment_path = codex_dir / f".scc-mcp-{safe_bundle}.json"
-        fragment_path.write_text(json.dumps(merged_mcp, indent=2) + "\n")
+        try:
+            codex_dir.mkdir(parents=True, exist_ok=True)
+            fragment_path.write_text(json.dumps(merged_mcp, indent=2) + "\n")
+        except OSError as exc:
+            raise MaterializationError(
+                bundle_id=plan.bundle_id,
+                artifact_name="mcp_fragment",
+                target_path=str(fragment_path),
+                reason=str(exc),
+            ) from exc
         all_rendered.append(fragment_path)
 
     return RendererResult(

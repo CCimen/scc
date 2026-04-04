@@ -5,12 +5,22 @@ Pure core function — no imports from marketplace/, adapters/, or commands/.
 resolve_render_plan() reads a team's enabled_bundles, resolves each bundle ID
 against the org's governed_artifacts catalog, filters by install_intent and
 provider compatibility, and returns an ArtifactRenderPlan per bundle.
+
+Fail-closed semantics:
+- Missing bundle ID → BundleResolutionError with available alternatives.
+- Disabled bundle → skip with audit diagnostic (not an error).
+- Invalid artifact reference → InvalidArtifactReferenceError blocks the bundle.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
+from scc_cli.core.errors import (
+    BundleResolutionError,
+    InvalidArtifactReferenceError,
+)
 from scc_cli.core.governed_artifacts import (
     ArtifactInstallIntent,
     ArtifactKind,
@@ -18,6 +28,8 @@ from scc_cli.core.governed_artifacts import (
     ProviderArtifactBinding,
 )
 from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Resolution diagnostics
@@ -53,15 +65,35 @@ def _resolve_single_bundle(
     bundle_id: str,
     provider: str,
     catalog: GovernedArtifactsCatalog,
+    *,
+    fail_closed: bool = False,
 ) -> tuple[ArtifactRenderPlan, list[BundleResolutionDiagnostic]]:
     """Resolve one bundle into an ArtifactRenderPlan for the given provider.
 
+    Args:
+        bundle_id: The bundle identifier to resolve.
+        provider: Target provider (e.g. ``'claude'``, ``'codex'``).
+        catalog: Governed artifacts catalog to resolve against.
+        fail_closed: If True, missing bundles and invalid artifact references
+            raise typed exceptions instead of producing diagnostics.
+
     Returns:
         A tuple of (plan, diagnostics) where diagnostics lists skipped artifacts.
+
+    Raises:
+        BundleResolutionError: If ``fail_closed`` is True and the bundle
+            is not found in the catalog.
+        InvalidArtifactReferenceError: If ``fail_closed`` is True and an
+            artifact referenced by the bundle does not exist in the catalog.
     """
     bundle = catalog.bundles.get(bundle_id)
     if bundle is None:
         available = sorted(catalog.bundles.keys())
+        if fail_closed:
+            raise BundleResolutionError(
+                bundle_id=bundle_id,
+                available_bundles=tuple(available),
+            )
         diag = BundleResolutionDiagnostic(
             artifact_name=bundle_id,
             reason=f"bundle not found in catalog; available: {available}",
@@ -71,8 +103,9 @@ def _resolve_single_bundle(
             [diag],
         )
 
-    # If the bundle itself is disabled, skip everything
+    # If the bundle itself is disabled, skip everything (audit-logged, not error)
     if bundle.install_intent == ArtifactInstallIntent.DISABLED:
+        logger.info("Bundle '%s' is disabled — skipping", bundle_id)
         diag = BundleResolutionDiagnostic(
             artifact_name=bundle_id,
             reason="bundle install_intent is disabled",
@@ -90,6 +123,12 @@ def _resolve_single_bundle(
     for art_name in bundle.artifacts:
         artifact = catalog.artifacts.get(art_name)
         if artifact is None:
+            if fail_closed:
+                raise InvalidArtifactReferenceError(
+                    bundle_id=bundle_id,
+                    artifact_name=art_name,
+                    reason="artifact not found in governed artifacts catalog",
+                )
             skipped.append(art_name)
             diagnostics.append(
                 BundleResolutionDiagnostic(
@@ -156,6 +195,8 @@ def resolve_render_plan(
     org_config: NormalizedOrgConfig,
     team_name: str,
     provider: str,
+    *,
+    fail_closed: bool = False,
 ) -> BundleResolutionResult:
     """Resolve all enabled bundles for a team into ArtifactRenderPlans.
 
@@ -167,12 +208,20 @@ def resolve_render_plan(
             governed_artifacts catalog and team profiles.
         team_name: Name of the team profile to resolve bundles for.
         provider: Target provider identifier (e.g. 'claude', 'codex').
+        fail_closed: If True, missing bundles and invalid artifact references
+            raise typed exceptions (``BundleResolutionError``,
+            ``InvalidArtifactReferenceError``) instead of producing
+            diagnostics. Default is False for backward compatibility.
 
     Returns:
         BundleResolutionResult with plans and diagnostics.
 
     Raises:
         ValueError: If the team profile does not exist in the org config.
+        BundleResolutionError: If ``fail_closed`` is True and a bundle
+            referenced by the team does not exist in the catalog.
+        InvalidArtifactReferenceError: If ``fail_closed`` is True and a
+            bundle contains an artifact that does not exist in the catalog.
     """
     team = org_config.get_profile(team_name)
     if team is None:
@@ -191,7 +240,9 @@ def resolve_render_plan(
     all_diagnostics: list[BundleResolutionDiagnostic] = []
 
     for bundle_id in team.enabled_bundles:
-        plan, diags = _resolve_single_bundle(bundle_id, provider, catalog)
+        plan, diags = _resolve_single_bundle(
+            bundle_id, provider, catalog, fail_closed=fail_closed
+        )
         all_plans.append(plan)
         all_diagnostics.extend(diags)
 

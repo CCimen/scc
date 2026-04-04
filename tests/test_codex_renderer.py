@@ -36,6 +36,7 @@ from scc_cli.adapters.codex_renderer import (
     RendererResult,
     render_codex_artifacts,
 )
+from scc_cli.core.errors import MaterializationError, MergeConflictError
 from scc_cli.core.governed_artifacts import (
     ArtifactRenderPlan,
     ProviderArtifactBinding,
@@ -659,3 +660,198 @@ class TestReturnType:
         result = render_codex_artifacts(plan, workspace)
         assert isinstance(result.mcp_fragment, dict)
         assert "mcpServers" in result.mcp_fragment
+
+
+# ---------------------------------------------------------------------------
+# Failure path tests — fail-closed semantics
+# ---------------------------------------------------------------------------
+
+
+class TestSkillMaterializationFailure:
+    def test_read_only_workspace_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """Skill write to read-only dir raises MaterializationError."""
+        skills = workspace / SKILLS_DIR
+        skills.mkdir(parents=True, exist_ok=True)
+        skills.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="skills/blocked",
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError) as exc_info:
+            render_codex_artifacts(plan, workspace)
+        err = exc_info.value
+        assert err.bundle_id == "test-bundle"
+        assert "skills/blocked" in err.artifact_name
+
+        skills.chmod(0o755)
+
+
+class TestPluginCreationFailure:
+    def test_plugin_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """Plugin file write to read-only dir → MaterializationError."""
+        plugin_dir = workspace / CODEX_PLUGIN_DIR
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        plugin_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"plugin_bundle": "./codex/plugin-src"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="plugin"):
+            render_codex_artifacts(plan, workspace)
+
+        plugin_dir.chmod(0o755)
+
+
+class TestRulesWriteFailure:
+    def test_rules_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """Rules file write to read-only dir → MaterializationError."""
+        rules_dir = workspace / CODEX_RULES_DIR
+        rules_dir.mkdir(parents=True, exist_ok=True)
+        rules_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"rules": "./codex/rules/safety.rules"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="rules"):
+            render_codex_artifacts(plan, workspace)
+
+        rules_dir.chmod(0o755)
+
+
+class TestHooksWriteFailure:
+    def test_hooks_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """hooks.json write to read-only dir → MaterializationError."""
+        codex_dir = workspace / CODEX_CONFIG_DIR
+        codex_dir.mkdir(parents=True, exist_ok=True)
+        codex_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"hooks": "./codex/hooks-src.json"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="hooks"):
+            render_codex_artifacts(plan, workspace)
+
+        codex_dir.chmod(0o755)
+
+    def test_hooks_read_os_error_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """OSError reading existing hooks.json → MaterializationError (not warning)."""
+        codex_dir = workspace / CODEX_CONFIG_DIR
+        codex_dir.mkdir(parents=True, exist_ok=True)
+        hooks_path = codex_dir / "hooks.json"
+        # Create hooks.json as a directory to cause an OSError on read
+        hooks_path.mkdir()
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"hooks": "./codex/hooks-src.json"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="hooks"):
+            render_codex_artifacts(plan, workspace)
+
+        hooks_path.rmdir()
+
+
+class TestInstructionsWriteFailure:
+    def test_instructions_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """instructions write to read-only dir → MaterializationError."""
+        instr_dir = workspace / SCC_MANAGED_DIR / "instructions"
+        instr_dir.mkdir(parents=True, exist_ok=True)
+        instr_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_config={"instructions": "./codex/AGENTS.md"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="instructions"):
+            render_codex_artifacts(plan, workspace)
+
+        instr_dir.chmod(0o755)
+
+
+class TestMCPAuditWriteFailure:
+    def test_mcp_audit_file_write_failure_raises_materialization_error(
+        self, workspace: Path
+    ) -> None:
+        """MCP audit file write to read-only .codex/ → MaterializationError."""
+        codex_dir = workspace / CODEX_CONFIG_DIR
+        codex_dir.mkdir(parents=True, exist_ok=True)
+        codex_dir.chmod(0o444)
+
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="mcp-server",
+                    transport_type="sse",
+                    native_config={"url": "http://localhost:8080"},
+                ),
+            ),
+        )
+        with pytest.raises(MaterializationError, match="mcp_fragment"):
+            render_codex_artifacts(plan, workspace)
+
+        codex_dir.chmod(0o755)
+
+
+class TestRendererErrorHierarchy:
+    def test_materialization_error_is_renderer_error(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = MaterializationError(
+            user_message="test",
+            bundle_id="b",
+            artifact_name="a",
+            target_path="/foo",
+            reason="bad",
+        )
+        assert isinstance(err, RendererError)
+        assert err.exit_code == 4
+
+    def test_merge_conflict_error_is_renderer_error(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = MergeConflictError(
+            user_message="test",
+            bundle_id="b",
+            target_path="/foo",
+            conflict_detail="dup",
+        )
+        assert isinstance(err, RendererError)

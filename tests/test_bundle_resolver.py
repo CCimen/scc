@@ -21,6 +21,10 @@ from scc_cli.core.bundle_resolver import (
     BundleResolutionResult,
     resolve_render_plan,
 )
+from scc_cli.core.errors import (
+    BundleResolutionError,
+    InvalidArtifactReferenceError,
+)
 from scc_cli.core.governed_artifacts import (
     ArtifactBundle,
     ArtifactInstallIntent,
@@ -662,6 +666,134 @@ class TestConfigNormalization:
 # ---------------------------------------------------------------------------
 # Return type shape
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed mode
+# ---------------------------------------------------------------------------
+
+
+class TestFailClosedMissingBundle:
+    def test_missing_bundle_raises_bundle_resolution_error(self) -> None:
+        """fail_closed=True: missing bundle ID raises BundleResolutionError."""
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("nonexistent",))},
+        )
+        with pytest.raises(BundleResolutionError, match="nonexistent"):
+            resolve_render_plan(org, "t", "claude", fail_closed=True)
+
+    def test_missing_bundle_error_has_available_bundles(self) -> None:
+        catalog = GovernedArtifactsCatalog(
+            bundles={
+                "alpha": ArtifactBundle(name="alpha", artifacts=()),
+                "beta": ArtifactBundle(name="beta", artifacts=()),
+            },
+        )
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("ghost",))},
+            catalog=catalog,
+        )
+        with pytest.raises(BundleResolutionError) as exc_info:
+            resolve_render_plan(org, "t", "codex", fail_closed=True)
+        err = exc_info.value
+        assert "alpha" in err.available_bundles
+        assert "beta" in err.available_bundles
+        assert err.bundle_id == "ghost"
+
+    def test_missing_bundle_error_has_structured_user_message(self) -> None:
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("gone",))},
+        )
+        with pytest.raises(BundleResolutionError) as exc_info:
+            resolve_render_plan(org, "t", "claude", fail_closed=True)
+        assert "gone" in str(exc_info.value)
+
+    def test_missing_bundle_soft_mode_still_produces_diagnostic(self) -> None:
+        """Default (fail_closed=False) still returns diagnostics, not errors."""
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("missing",))},
+        )
+        result = resolve_render_plan(org, "t", "claude")
+        assert len(result.diagnostics) == 1
+        assert "not found" in result.diagnostics[0].reason
+
+
+class TestFailClosedInvalidArtifact:
+    def test_invalid_artifact_ref_raises_error(self) -> None:
+        """fail_closed=True: artifact not in catalog → InvalidArtifactReferenceError."""
+        catalog = GovernedArtifactsCatalog(
+            bundles={
+                "b": ArtifactBundle(name="b", artifacts=("ghost-artifact",)),
+            },
+        )
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("b",))},
+            catalog=catalog,
+        )
+        with pytest.raises(InvalidArtifactReferenceError, match="ghost-artifact"):
+            resolve_render_plan(org, "t", "claude", fail_closed=True)
+
+    def test_invalid_artifact_error_has_bundle_id(self) -> None:
+        catalog = GovernedArtifactsCatalog(
+            bundles={
+                "my-bundle": ArtifactBundle(name="my-bundle", artifacts=("missing-art",)),
+            },
+        )
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("my-bundle",))},
+            catalog=catalog,
+        )
+        with pytest.raises(InvalidArtifactReferenceError) as exc_info:
+            resolve_render_plan(org, "t", "claude", fail_closed=True)
+        assert exc_info.value.bundle_id == "my-bundle"
+        assert exc_info.value.artifact_name == "missing-art"
+
+    def test_disabled_bundle_in_fail_closed_mode_skips_not_raises(self) -> None:
+        """Disabled bundles produce diagnostics even in fail_closed mode."""
+        catalog = GovernedArtifactsCatalog(
+            artifacts={
+                "s": GovernedArtifact(
+                    kind=ArtifactKind.SKILL, name="s",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                ),
+            },
+            bundles={
+                "dis": ArtifactBundle(
+                    name="dis", artifacts=("s",),
+                    install_intent=ArtifactInstallIntent.DISABLED,
+                ),
+            },
+        )
+        org = _make_org(
+            profiles={"t": _make_team("t", bundles=("dis",))},
+            catalog=catalog,
+        )
+        # Should NOT raise — disabled is an audit skip, not a failure
+        result = resolve_render_plan(org, "t", "claude", fail_closed=True)
+        assert len(result.diagnostics) == 1
+        assert "disabled" in result.diagnostics[0].reason
+
+
+# ---------------------------------------------------------------------------
+# Error hierarchy structure
+# ---------------------------------------------------------------------------
+
+
+class TestErrorHierarchy:
+    def test_bundle_resolution_error_is_renderer_error(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = BundleResolutionError(bundle_id="b")
+        assert isinstance(err, RendererError)
+
+    def test_invalid_artifact_error_is_renderer_error(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = InvalidArtifactReferenceError(bundle_id="b", artifact_name="a", reason="bad")
+        assert isinstance(err, RendererError)
+
+    def test_renderer_error_has_exit_code_4(self) -> None:
+        from scc_cli.core.errors import RendererError
+        err = RendererError(user_message="test")
+        assert err.exit_code == 4
 
 
 class TestReturnTypes:

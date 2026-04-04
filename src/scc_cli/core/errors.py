@@ -397,3 +397,115 @@ class LaunchAuditUnavailableError(ConfigError):
     suggested_action: str = field(
         default="Use the SCC-wired launch dependency builder so preflight can audit before startup."
     )
+
+
+# ---------------------------------------------------------------------------
+# Renderer / artifact pipeline errors  (fail-closed)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RendererError(SCCError):
+    """Base error for artifact rendering pipeline failures.
+
+    All renderer errors are fail-closed — if an artifact cannot be safely
+    rendered, the pipeline blocks rather than silently skipping.  Error
+    payloads are structured for support bundles and ``scc doctor`` checks.
+    """
+
+    bundle_id: str = ""
+    artifact_name: str = ""
+    exit_code: int = field(default=4, init=False)
+
+
+@dataclass
+class BundleResolutionError(RendererError):
+    """A bundle referenced by the team config could not be resolved.
+
+    Raised for missing bundle IDs or invalid artifact references that
+    cannot be silently skipped under fail-closed policy.
+    """
+
+    available_bundles: tuple[str, ...] = ()
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check the team's enabled_bundles list against the governed_artifacts catalog."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            available = ", ".join(self.available_bundles) if self.available_bundles else "none"
+            self.user_message = (
+                f"Bundle '{self.bundle_id}' not found in the governed artifacts catalog. "
+                f"Available bundles: [{available}]"
+            )
+
+
+@dataclass
+class InvalidArtifactReferenceError(RendererError):
+    """An artifact reference inside a bundle is invalid or malformed.
+
+    Fail-closed: the entire bundle is blocked if any artifact reference
+    cannot be validated.
+    """
+
+    reason: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Fix the artifact reference in the governed_artifacts catalog and retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = (
+                f"Invalid artifact reference '{self.artifact_name}' "
+                f"in bundle '{self.bundle_id}': {self.reason}"
+            )
+
+
+@dataclass
+class MaterializationError(RendererError):
+    """Artifact content could not be materialized to disk.
+
+    Covers file-write failures, directory creation errors, and
+    serialization problems during rendering.
+    """
+
+    target_path: str = ""
+    reason: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check filesystem permissions and disk space, then retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            where = f" at '{self.target_path}'" if self.target_path else ""
+            self.user_message = (
+                f"Failed to materialize artifact '{self.artifact_name}'"
+                f"{where} for bundle '{self.bundle_id}': {self.reason}"
+            )
+
+
+@dataclass
+class MergeConflictError(RendererError):
+    """A merge conflict was detected on a single-file surface.
+
+    Covers hooks.json merge conflicts, .mcp.json merge conflicts,
+    and settings.local.json merge conflicts.
+    """
+
+    target_path: str = ""
+    conflict_detail: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Resolve the conflict manually or remove the conflicting file and retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            where = f" in '{self.target_path}'" if self.target_path else ""
+            self.user_message = (
+                f"Merge conflict{where} for bundle '{self.bundle_id}': "
+                f"{self.conflict_detail}"
+            )
