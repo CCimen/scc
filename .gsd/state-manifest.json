@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T12:17:33.894Z",
+  "exported_at": "2026-04-04T12:24:03.754Z",
   "milestones": [
     {
       "id": "M001",
@@ -2581,19 +2581,34 @@
       "milestone_id": "M004",
       "slice_id": "S02",
       "id": "T02",
-      "title": "Create shell wrappers, update Dockerfile, add sync guardrail and integration tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created 7 shell wrappers, updated scc-base Dockerfile with python3 + evaluator install, and added 71 tests (sync guardrail + integration) — all passing alongside 3726 existing tests",
+      "status": "complete",
+      "one_liner": "Created 7 shell wrappers, updated scc-base Dockerfile with python3 + evaluator install, and added 71 tests (sync guardrail + integration) — all passing alongside 3726 existing tests",
+      "narrative": "Created 7 shell wrapper scripts in images/scc-base/wrappers/bin/ with anti-recursion pattern (absolute REAL_BIN, basename $0). Updated scc-base Dockerfile to install python3, copy evaluator and wrappers to /usr/local/lib/scc/, and set PATH/PYTHONPATH. Wrote sync guardrail test (3 tests) comparing core↔evaluator module copies with import normalization. Wrote integration tests (68 tests) covering wrapper structural checks, blocked/allowed commands, fail-closed behavior, policy overrides, and negative cases. Also fixed ruff T201 violations and import sorting from T01.",
+      "verification_result": "All verification gates passed: ruff check clean, mypy clean (254 files), 68 new tests pass, 28 contract tests pass, full regression 3726 passed (23 skipped, 4 xfailed), no scc_cli imports in evaluator package.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T12:24:03.717Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed ruff T201 violations in evaluator package from T01 by adding per-file-ignores. Fixed unused pytest import and import sorting in test_safety_eval_contract.py. Added wget/openssh-client/rsync to Dockerfile apt-get install. Fixed one test to check stderr instead of stdout for block reasons.",
+      "known_issues": "None.",
+      "key_files": [
+        "images/scc-base/wrappers/bin/git",
+        "images/scc-base/wrappers/bin/curl",
+        "images/scc-base/wrappers/bin/wget",
+        "images/scc-base/wrappers/bin/ssh",
+        "images/scc-base/wrappers/bin/scp",
+        "images/scc-base/wrappers/bin/sftp",
+        "images/scc-base/wrappers/bin/rsync",
+        "images/scc-base/Dockerfile",
+        "tests/test_safety_eval_sync.py",
+        "tests/test_runtime_wrappers.py"
+      ],
+      "key_decisions": [
+        "Added per-file-ignores for images/**/scc_safety_eval/*.py to allow T201 (print to stderr is the evaluator's sole output mechanism)",
+        "Shell wrappers use absolute REAL_BIN=/usr/bin/<tool> to prevent self-recursion",
+        "Added wget/openssh-client/rsync to Dockerfile apt-get to provide real binaries for wrapped tools"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S02\nmilestone: M004\nkey_files:\n  - images/scc-base/wrappers/bin/git\n  - images/scc-base/wrappers/bin/curl\n  - images/scc-base/wrappers/bin/wget\n  - images/scc-base/wrappers/bin/ssh\n  - images/scc-base/wrappers/bin/scp\n  - images/scc-base/wrappers/bin/sftp\n  - images/scc-base/wrappers/bin/rsync\n  - images/scc-base/Dockerfile\n  - tests/test_safety_eval_sync.py\n  - tests/test_runtime_wrappers.py\nkey_decisions:\n  - Added per-file-ignores for images/**/scc_safety_eval/*.py to allow T201 (print to stderr is the evaluator's sole output mechanism)\n  - Shell wrappers use absolute REAL_BIN=/usr/bin/<tool> to prevent self-recursion\n  - Added wget/openssh-client/rsync to Dockerfile apt-get to provide real binaries for wrapped tools\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T12:24:03.717Z\nblocker_discovered: false\n---\n\n# T02: Created 7 shell wrappers, updated scc-base Dockerfile with python3 + evaluator install, and added 71 tests (sync guardrail + integration) — all passing alongside 3726 existing tests\n\n**Created 7 shell wrappers, updated scc-base Dockerfile with python3 + evaluator install, and added 71 tests (sync guardrail + integration) — all passing alongside 3726 existing tests**\n\n## What Happened\n\nCreated 7 shell wrapper scripts in images/scc-base/wrappers/bin/ with anti-recursion pattern (absolute REAL_BIN, basename $0). Updated scc-base Dockerfile to install python3, copy evaluator and wrappers to /usr/local/lib/scc/, and set PATH/PYTHONPATH. Wrote sync guardrail test (3 tests) comparing core↔evaluator module copies with import normalization. Wrote integration tests (68 tests) covering wrapper structural checks, blocked/allowed commands, fail-closed behavior, policy overrides, and negative cases. Also fixed ruff T201 violations and import sorting from T01.\n\n## Verification\n\nAll verification gates passed: ruff check clean, mypy clean (254 files), 68 new tests pass, 28 contract tests pass, full regression 3726 passed (23 skipped, 4 xfailed), no scc_cli imports in evaluator package.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 2000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 3000ms |\n| 3 | `uv run pytest tests/test_safety_eval_sync.py tests/test_runtime_wrappers.py -v` | 0 | ✅ pass | 1500ms |\n| 4 | `uv run pytest tests/test_safety_eval_contract.py -v` | 0 | ✅ pass | 1500ms |\n| 5 | `uv run pytest --rootdir $PWD -q` | 0 | ✅ pass | 43000ms |\n| 6 | `grep -r scc_cli images/scc-base/wrappers/scc_safety_eval/ && echo FAIL || echo PASS` | 0 | ✅ pass | 100ms |\n\n## Deviations\n\nFixed ruff T201 violations in evaluator package from T01 by adding per-file-ignores. Fixed unused pytest import and import sorting in test_safety_eval_contract.py. Added wget/openssh-client/rsync to Dockerfile apt-get install. Fixed one test to check stderr instead of stdout for block reasons.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `images/scc-base/wrappers/bin/git`\n- `images/scc-base/wrappers/bin/curl`\n- `images/scc-base/wrappers/bin/wget`\n- `images/scc-base/wrappers/bin/ssh`\n- `images/scc-base/wrappers/bin/scp`\n- `images/scc-base/wrappers/bin/sftp`\n- `images/scc-base/wrappers/bin/rsync`\n- `images/scc-base/Dockerfile`\n- `tests/test_safety_eval_sync.py`\n- `tests/test_runtime_wrappers.py`\n",
       "description": "---\nestimated_steps: 5\nestimated_files: 11\nskills_used: []\n---\n\n# T02: Create shell wrappers, update Dockerfile, add sync guardrail and integration tests\n\n**Slice:** S02 — Runtime wrapper baseline in scc-base\n**Milestone:** M004\n\n## Description\n\nCreate the 7 shell wrapper scripts for git, curl, wget, ssh, scp, sftp, and rsync. Update the scc-base Dockerfile to install python3, COPY the evaluator and wrappers, and set PATH. Write a sync guardrail test that detects drift between evaluator copies and core originals. Write integration tests that verify the full wrapper → evaluator → verdict chain and edge cases (missing policy, malformed JSON, wrapper self-recursion prevention).\n\n## Steps\n\n1. Create shell wrapper scripts in `images/scc-base/wrappers/bin/` for all 7 tools: git, curl, wget, ssh, scp, sftp, rsync. Each wrapper follows this exact pattern:\n   ```bash\n   #!/bin/bash\n   set -euo pipefail\n   REAL_BIN=/usr/bin/<tool>\n   EVAL_DIR=\"$(dirname \"$(dirname \"$(readlink -f \"$0\")\")\")\" \n   verdict=$(python3 -m scc_safety_eval \"$(basename \"$0\")\" \"$@\" 2>&1) || {\n     rc=$?\n     if [ \"$rc\" -eq 2 ]; then\n       echo \"$verdict\" >&2\n       exit 2\n     fi\n   }\n   exec \"$REAL_BIN\" \"$@\"\n   ```\n   The EVAL_DIR line resolves to the wrappers/ parent containing scc_safety_eval. The `PYTHONPATH` is set to include this directory so `python3 -m scc_safety_eval` works. Use absolute path for REAL_BIN to prevent self-recursion. `basename \"$0\"` gives the tool name (e.g. `git`).\n\n   Important: The actual wrapper should set PYTHONPATH to `/usr/local/lib/scc` (the install location in the Dockerfile) so the evaluator package is importable. For testing outside Docker, tests will add the wrappers dir to PYTHONPATH themselves.\n\n2. Update `images/scc-base/Dockerfile` to:\n   - Add `python3` to the `apt-get install` line\n   - COPY `wrappers/scc_safety_eval/` to `/usr/local/lib/scc/scc_safety_eval/`\n   - COPY `wrappers/bin/` to `/usr/local/lib/scc/bin/`\n   - `RUN chmod +x /usr/local/lib/scc/bin/*`\n   - `ENV PYTHONPATH=/usr/local/lib/scc`\n   - `ENV PATH=\"/usr/local/lib/scc/bin:$PATH\"`\n\n3. Write `tests/test_safety_eval_sync.py` — sync guardrail test that:\n   - For each of shell_tokenizer.py, git_safety_rules.py, network_tool_rules.py: reads the core version and the evaluator copy\n   - Compares them, accounting for the known import-line differences (scc_cli.core.X → relative .X)\n   - After normalizing import lines, the files should be identical — if they diverge on logic, the test fails\n   - This catches accidental drift when someone edits core without updating the evaluator copy\n\n4. Write `tests/test_runtime_wrappers.py` — wrapper behavior tests that:\n   - Test the evaluator CLI directly via subprocess (python3 -m scc_safety_eval) — not the shell wrappers themselves (those need Docker)\n   - Test: blocked git command → exit code 2 + reason on stderr\n   - Test: allowed git command → exit code 0\n   - Test: network tool → exit code 2\n   - Test: safe command (ls) → exit code 0\n   - Test: missing SCC_POLICY_PATH → fail-closed (exit code 2 for dangerous commands)\n   - Test: malformed JSON in policy file → fail-closed\n   - Test: valid policy with action=allow → exit code 0\n   - Add `images/scc-base/wrappers` to PYTHONPATH in subprocess env so the evaluator is importable\n   - Verify shell wrapper scripts exist, are executable (file permission check), and contain the expected REAL_BIN path and anti-recursion pattern\n\n5. Run full verification: `uv run mypy src/scc_cli`, `uv run ruff check`, `uv run pytest --rootdir \"$PWD\" -q`.\n\n## Negative Tests\n\n- **Malformed inputs**: Empty tool name to evaluator CLI, policy file with invalid JSON, policy file with wrong schema (missing 'action' key)\n- **Error paths**: SCC_POLICY_PATH set to non-existent file → fail-closed block; SCC_POLICY_PATH unset → fail-closed block\n- **Boundary conditions**: Command with only whitespace args; tool name with path prefix (/usr/bin/git); wrapper script targeting correct absolute binary path\n\n## Must-Haves\n\n- [ ] 7 shell wrapper scripts in `images/scc-base/wrappers/bin/` with correct tool names\n- [ ] Each wrapper uses absolute REAL_BIN path (no self-recursion risk)\n- [ ] Dockerfile installs python3, COPYs evaluator+wrappers, sets PATH and PYTHONPATH\n- [ ] Sync guardrail test catches evaluator↔core drift\n- [ ] Integration tests verify CLI exit codes for block/allow/fail-closed scenarios\n- [ ] All 3630+ existing tests still pass; mypy and ruff clean\n\n## Verification\n\n```bash\n# Wrapper scripts exist and are well-formed\ntest -f images/scc-base/wrappers/bin/git && test -f images/scc-base/wrappers/bin/curl && echo PASS\n\n# Sync guardrail\nuv run pytest tests/test_safety_eval_sync.py -v\n\n# Runtime wrapper tests\nuv run pytest tests/test_runtime_wrappers.py -v\n\n# Type checking and lint\nuv run mypy src/scc_cli\nuv run ruff check\n\n# Full regression\nuv run pytest --rootdir \"$PWD\" -q\n```\n\n## Inputs\n\n- `images/scc-base/wrappers/scc_safety_eval/__main__.py` — CLI entry point from T01\n- `images/scc-base/wrappers/scc_safety_eval/engine.py` — standalone engine from T01\n- `images/scc-base/wrappers/scc_safety_eval/policy.py` — policy loader from T01\n- `images/scc-base/Dockerfile` — existing Dockerfile to update\n- `src/scc_cli/core/shell_tokenizer.py` — core original for sync comparison\n- `src/scc_cli/core/git_safety_rules.py` — core original for sync comparison\n- `src/scc_cli/core/network_tool_rules.py` — core original for sync comparison\n\n## Expected Output\n\n- `images/scc-base/wrappers/bin/git` — shell wrapper\n- `images/scc-base/wrappers/bin/curl` — shell wrapper\n- `images/scc-base/wrappers/bin/wget` — shell wrapper\n- `images/scc-base/wrappers/bin/ssh` — shell wrapper\n- `images/scc-base/wrappers/bin/scp` — shell wrapper\n- `images/scc-base/wrappers/bin/sftp` — shell wrapper\n- `images/scc-base/wrappers/bin/rsync` — shell wrapper\n- `images/scc-base/Dockerfile` — updated with python3 + wrappers\n- `tests/test_safety_eval_sync.py` — sync guardrail test\n- `tests/test_runtime_wrappers.py` — wrapper behavior and integration tests",
       "estimate": "1h",
       "files": [
@@ -4644,6 +4659,72 @@
       "verdict": "✅ pass",
       "duration_ms": 43010,
       "created_at": "2026-04-04T12:17:33.837Z"
+    },
+    {
+      "id": 80,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M004",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2000,
+      "created_at": "2026-04-04T12:24:03.717Z"
+    },
+    {
+      "id": 81,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3000,
+      "created_at": "2026-04-04T12:24:03.718Z"
+    },
+    {
+      "id": 82,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_safety_eval_sync.py tests/test_runtime_wrappers.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1500,
+      "created_at": "2026-04-04T12:24:03.718Z"
+    },
+    {
+      "id": 83,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_safety_eval_contract.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1500,
+      "created_at": "2026-04-04T12:24:03.718Z"
+    },
+    {
+      "id": 84,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M004",
+      "command": "uv run pytest --rootdir $PWD -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 43000,
+      "created_at": "2026-04-04T12:24:03.718Z"
+    },
+    {
+      "id": 85,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M004",
+      "command": "grep -r scc_cli images/scc-base/wrappers/scc_safety_eval/ && echo FAIL || echo PASS",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 100,
+      "created_at": "2026-04-04T12:24:03.718Z"
     }
   ]
 }

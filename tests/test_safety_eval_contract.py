@@ -10,19 +10,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 # ── Make the standalone package importable ─────────────────────────────────
 _wrappers_dir = str(Path(__file__).resolve().parent.parent / "images" / "scc-base" / "wrappers")
 if _wrappers_dir not in sys.path:
     sys.path.insert(0, _wrappers_dir)
 
-from scc_cli.core.contracts import SafetyPolicy as HostPolicy  # noqa: E402
-from scc_cli.core.safety_engine import DefaultSafetyEngine as HostEngine  # noqa: E402
-
 from scc_safety_eval.contracts import SafetyPolicy as StandalonePolicy  # noqa: E402
 from scc_safety_eval.engine import DefaultSafetyEngine as StandaloneEngine  # noqa: E402
 
+from scc_cli.core.contracts import SafetyPolicy as HostPolicy  # noqa: E402
+from scc_cli.core.safety_engine import DefaultSafetyEngine as HostEngine  # noqa: E402
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 

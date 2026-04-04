@@ -101,7 +101,7 @@ uv run pytest --rootdir "$PWD" -q
   - Estimate: 1h30m
   - Files: images/scc-base/wrappers/scc_safety_eval/__init__.py, images/scc-base/wrappers/scc_safety_eval/contracts.py, images/scc-base/wrappers/scc_safety_eval/enums.py, images/scc-base/wrappers/scc_safety_eval/shell_tokenizer.py, images/scc-base/wrappers/scc_safety_eval/git_safety_rules.py, images/scc-base/wrappers/scc_safety_eval/network_tool_rules.py, images/scc-base/wrappers/scc_safety_eval/engine.py, images/scc-base/wrappers/scc_safety_eval/policy.py, images/scc-base/wrappers/scc_safety_eval/__main__.py, tests/test_safety_eval_contract.py
   - Verify: grep -r 'scc_cli' images/scc-base/wrappers/scc_safety_eval/ && exit 1 || true; uv run pytest tests/test_safety_eval_contract.py -v; uv run pytest --rootdir "$PWD" -q
-- [ ] **T02: Create shell wrappers, update Dockerfile, add sync guardrail and integration tests** — ---
+- [x] **T02: Created 7 shell wrappers, updated scc-base Dockerfile with python3 + evaluator install, and added 71 tests (sync guardrail + integration) — all passing alongside 3726 existing tests** — ---
 estimated_steps: 5
 estimated_files: 11
 skills_used: []
