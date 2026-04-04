@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T16:57:08.281Z",
+  "exported_at": "2026-04-04T17:28:19.250Z",
   "milestones": [
     {
       "id": "M001",
@@ -578,16 +578,16 @@
       "milestone_id": "M005",
       "id": "S02",
       "title": "Decompose oversized modules and repair boundaries",
-      "status": "pending",
+      "status": "complete",
       "risk": "high",
       "depends": [
         "S01"
       ],
       "demo": "",
       "created_at": "2026-04-04T08:09:04.487Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-04T17:11:48.937Z",
+      "full_summary_md": "---\nid: S02\nparent: M005\nmilestone: M005\nprovides:\n  - All 15 HARD-FAIL/MANDATORY-SPLIT files decomposed below 800 lines\n  - 3 boundary violations eliminated (application→docker, core→marketplace, docker→presentation)\n  - Zero regression: all 4079 tests + 315 characterization/boundary tests pass\n  - Decomposition patterns (re-export, DI, logging) established for downstream use\nrequires:\n  - slice: S01\n    provides: Maintainability baseline, characterization tests, defect catalog identifying the 15 HARD-FAIL/MANDATORY-SPLIT files and 3 boundary violations\naffects:\n  - S03\n  - S04\n  - S05\n  - S06\nkey_files:\n  - src/scc_cli/application/dashboard_models.py\n  - src/scc_cli/application/dashboard_loaders.py\n  - src/scc_cli/application/worktree/models.py\n  - src/scc_cli/application/worktree/operations.py\n  - src/scc_cli/core/personal_profiles_merge.py\n  - src/scc_cli/docker/sandbox.py\n  - src/scc_cli/marketplace/materialize_git.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/flow_session.py\n  - src/scc_cli/commands/team_validate.py\n  - src/scc_cli/commands/team_info.py\n  - src/scc_cli/commands/config_validate.py\n  - src/scc_cli/commands/config_inspect.py\n  - src/scc_cli/ui/dashboard/orchestrator_handlers.py\n  - src/scc_cli/ui/dashboard/orchestrator_menus.py\n  - src/scc_cli/ui/dashboard/orchestrator_container_actions.py\n  - src/scc_cli/ui/dashboard/_dashboard_actions.py\n  - src/scc_cli/ui/settings_profile.py\n  - src/scc_cli/ui/wizard_pickers.py\n  - src/scc_cli/ui/git_interactive_ops.py\n  - src/scc_cli/setup_ui.py\n  - src/scc_cli/setup_config.py\nkey_decisions:\n  - Re-export all extracted symbols from residual modules to preserve backward-compatible import paths\n  - Used Callable DI parameter to eliminate core→marketplace boundary violation in personal_profiles_merge.py\n  - Replaced console.err_line with logging.warning() to eliminate docker→presentation boundary violation\n  - Introduced ContainerSummary dataclass as application-layer boundary type replacing docker.core.ContainerInfo\n  - Used deferred imports in flow_session.py and sandbox.py to break circular dependencies after extraction\n  - Used late-bound module lookup pattern (_get_picker/_get_confirm) in extracted UI modules to preserve test-patch compatibility\npatterns_established:\n  - Residual + extracted-modules pattern: keep the original module as a thin re-exporter, move definitions to focused files. All public symbols remain importable from the original path.\n  - DI-for-boundary-repair: when a cross-layer import violates boundaries, accept the dependency as a Callable parameter. The call site in the correct layer passes the concrete implementation.\n  - Logging-for-presentation-boundary: replace direct UI output calls (err_line) with logging.warning() in infrastructure modules. The presentation layer can attach appropriate log handlers.\n  - Late-bound module lookup for test-patch compatibility: when extracting methods that are mock targets, use a _get_module() indirection so tests patching the original module path still work.\n  - Deferred imports for circular-dependency breaking: use function-level imports when two extracted modules would otherwise create a circular import at module level.\nobservability_surfaces:\n  - none\ndrill_down_paths:\n  - .gsd/milestones/M005/slices/S02/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M005/slices/S02/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M005/slices/S02/tasks/T03-SUMMARY.md\n  - .gsd/milestones/M005/slices/S02/tasks/T04-SUMMARY.md\n  - .gsd/milestones/M005/slices/S02/tasks/T05-SUMMARY.md\n  - .gsd/milestones/M005/slices/S02/tasks/T06-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-04T17:11:48.938Z\nblocker_discovered: false\n---\n\n# S02: Decompose oversized modules and repair boundaries\n\n**Decomposed all 15 HARD-FAIL/MANDATORY-SPLIT files below 800 lines through mechanical code extraction, repaired 3 architecture boundary violations, and confirmed all 4079 tests + 315 characterization/boundary tests pass.**\n\n## What Happened\n\nS02 executed 6 tasks (T01–T06) over the application, core, docker, marketplace, commands, UI, and setup layers to mechanically decompose every file exceeding 800 lines and fix three concrete architecture boundary violations.\n\n**T01 — dashboard.py (1084→388 lines):** Extracted 33 dataclass/enum model definitions into `dashboard_models.py` (390L) and 4 tab loaders into `dashboard_loaders.py` (481L). Introduced a `ContainerSummary` dataclass as an application-layer boundary type replacing the direct `docker.core.ContainerInfo` import.\n\n**T02 — Three application/core modules:** Decomposed `worktree/use_cases.py` (1044→446) into `worktree/models.py` (363L) and `worktree/operations.py` (317L). Decomposed `core/personal_profiles.py` (839→554) into `personal_profiles_merge.py` (322L) with a `Callable` DI parameter replacing the direct `marketplace.managed` import. Decomposed `launch/start_wizard.py` (914→737) into `wizard_models.py` (215L).\n\n**T03 — docker/launch.py and marketplace/materialize.py:** Extracted `docker/sandbox.py` (433L) from `docker/launch.py` (874→498). Replaced `console.err_line` import with `logging.warning()` to eliminate the docker→presentation boundary violation. Extracted `marketplace/materialize_git.py` (306L) from `marketplace/materialize.py` (866→612).\n\n**T04 — Three commands-layer modules:** Decomposed `commands/launch/flow.py` (1447→338, the largest HARD-FAIL) into `flow_interactive.py` (717L) and `flow_session.py` (404L). Decomposed `commands/team.py` (1036→416) into `team_validate.py` (317L) and `team_info.py` (291L). Decomposed `commands/config.py` (1029→628) into `config_validate.py` (234L) and `config_inspect.py` (166L).\n\n**T05 — Five UI modules:** Decomposed `ui/dashboard/orchestrator.py` (1489→399, the second-largest HARD-FAIL) into `orchestrator_handlers.py` + `orchestrator_menus.py`. Decomposed `_dashboard.py` (966→611) into `_dashboard_actions.py` (406L). Decomposed `settings.py` (1081→792) into `settings_profile.py` (404L). Decomposed `wizard.py` (931→416) into `wizard_pickers.py` (443L). Decomposed `git_interactive.py` (884→543) into `git_interactive_ops.py` (381L).\n\n**T06 — setup.py (1336→794):** Extracted `setup_ui.py` (303L) and `setup_config.py` (310L). Secondary extraction of `orchestrator_container_actions.py` (114L) from `orchestrator_handlers.py` (846→777) to bring the last remaining >800L file under threshold.\n\n**Boundary violations fixed:**\n1. `application/dashboard*.py` → no import of `docker.core.ContainerInfo` (replaced with `ContainerSummary` dataclass)\n2. `core/personal_profiles*.py` → no import of `marketplace.managed` (replaced with `Callable` DI parameter)\n3. `docker/launch.py`, `docker/sandbox.py` → no import of `console.err_line` (replaced with `logging.warning()`)\n\n**Final verification:** All files under 800 lines. ruff check clean. mypy clean (284 source files). 4079 tests pass. 315 characterization + boundary tests pass.\n\n## Verification\n\nAll slice-level verification checks pass:\n1. `uv run ruff check` → All checks passed\n2. `uv run mypy src/scc_cli` → Success: no issues found in 284 source files\n3. `uv run pytest --rootdir \"$PWD\" -q` → 4079 passed, 23 skipped, 3 xfailed, 1 xpassed (65.31s)\n4. `uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q` → 315 passed (3.19s)\n5. File size scan: zero files in src/scc_cli/ exceed 800 lines\n6. Boundary violations: all 3 confirmed eliminated (grep confirms only docstring/error-message references remain, no actual imports)\n\n## Requirements Advanced\n\n- R001 — Completed all 15 HARD-FAIL/MANDATORY-SPLIT decompositions and 3 boundary violation repairs. Every file in src/scc_cli/ is now under 800 lines. All 315 characterization tests + 31 boundary tests pass, confirming no regressions from mechanical extraction.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nMinor deviation from plan: T05 left orchestrator_handlers.py at 846 lines (over the 800 threshold). T06 performed a secondary extraction into orchestrator_menus.py bringing it to 846, then the slice closer extracted orchestrator_container_actions.py (114L) bringing it to 777 lines. The settings_render.py file mentioned in the plan was not created — instead T05 extracted settings_profile.py (404L) which was sufficient to bring settings.py under 800 (792L). The slice goal of all files under 800 lines is fully met.\n\n## Known Limitations\n\n- orchestrator_handlers.py (777L) is close to the 800-line threshold and may grow back above it if new dashboard handlers are added without further extraction\n- Re-export approach means some modules have non-trivial import prologues (~10-20 lines of re-exports) which adds minor complexity\n- The ContainerSummary/ContainerInfo union type in the UI layer (_dashboard.py) is a temporary bridge — should be resolved when the full typed config flow lands in S03\n\n## Follow-ups\n\n- S03 must be replanned to incorporate the governed-artifact/team-pack architecture per user override (D-018–D-020, D017) before implementation\n- The ContainerSummary boundary type should become the sole container representation in the application layer once S03 establishes the full typed model hierarchy\n- Consider establishing a pre-commit hook or CI check to prevent files from growing back above 800 lines\n\n## Files Created/Modified\n\n- `src/scc_cli/application/dashboard.py` — Residual module (1084→388L): event/effect logic only, re-exports models + loaders\n- `src/scc_cli/application/dashboard_models.py` — New: 33 dataclass/enum model definitions (390L) extracted from dashboard.py\n- `src/scc_cli/application/dashboard_loaders.py` — New: 4 tab data loaders (481L) with ContainerSummary boundary type\n- `src/scc_cli/application/worktree/use_cases.py` — Residual module (1044→446L): re-exports models + operations\n- `src/scc_cli/application/worktree/models.py` — New: 18 dataclass model definitions (363L) extracted from use_cases.py\n- `src/scc_cli/application/worktree/operations.py` — New: enter_worktree_shell + create_worktree (317L)\n- `src/scc_cli/core/personal_profiles.py` — Residual module (839→554L): re-exports merge functions\n- `src/scc_cli/core/personal_profiles_merge.py` — New: merge functions with Callable DI replacing marketplace.managed import (322L)\n- `src/scc_cli/application/launch/start_wizard.py` — Residual module (914→737L): state machine + event handling\n- `src/scc_cli/application/launch/wizard_models.py` — New: 26 ViewModel/Option dataclasses (215L)\n- `src/scc_cli/docker/launch.py` — Residual module (874→498L): launch orchestration\n- `src/scc_cli/docker/sandbox.py` — New: run_sandbox + inject_plugin_settings (433L), logging replaces err_line\n- `src/scc_cli/marketplace/materialize.py` — Residual module (866→612L): high-level dispatch\n- `src/scc_cli/marketplace/materialize_git.py` — New: download_and_extract + run_git_clone (306L)\n- `src/scc_cli/commands/launch/flow.py` — Residual module (1447→338L): start command orchestration\n- `src/scc_cli/commands/launch/flow_interactive.py` — New: interactive_start + run_start_wizard_flow (717L)\n- `src/scc_cli/commands/launch/flow_session.py` — New: session resolution + helpers (404L)\n- `src/scc_cli/commands/team.py` — Residual module (1036→416L): team_switch + team_callback\n- `src/scc_cli/commands/team_validate.py` — New: team_validate + render (317L)\n- `src/scc_cli/commands/team_info.py` — New: team_info + team_list (291L)\n- `src/scc_cli/commands/config.py` — Residual module (1029→628L): config_cmd + setup_cmd\n- `src/scc_cli/commands/config_validate.py` — New: config validation + rendering (234L)\n- `src/scc_cli/commands/config_inspect.py` — New: config_paths + render_active_exceptions (166L)\n- `src/scc_cli/ui/dashboard/orchestrator.py` — Residual module (1489→399L): run_dashboard + event loop\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py` — New: handler functions for dashboard effects (777L)\n- `src/scc_cli/ui/dashboard/orchestrator_menus.py` — New: profile menu + sandbox import + settings + onboarding (344L)\n- `src/scc_cli/ui/dashboard/orchestrator_container_actions.py` — New: container stop/resume/remove handlers (114L)\n- `src/scc_cli/ui/dashboard/_dashboard.py` — Residual module (966→611L): rendering + run loop\n- `src/scc_cli/ui/dashboard/_dashboard_actions.py` — New: _handle_action extracted (406L)\n- `src/scc_cli/ui/settings.py` — Residual module (1081→792L): SettingsScreen core\n- `src/scc_cli/ui/settings_profile.py` — New: profile diff + sync methods (404L)\n- `src/scc_cli/ui/wizard.py` — Residual module (931→416L): render_start_wizard_prompt + answer types\n- `src/scc_cli/ui/wizard_pickers.py` — New: picker functions + option builders (443L)\n- `src/scc_cli/ui/git_interactive.py` — Residual module (884→543L): create_worktree + clone_repo\n- `src/scc_cli/ui/git_interactive_ops.py` — New: cleanup_worktree + install_hooks + install_dependencies (381L)\n- `src/scc_cli/setup.py` — Residual module (1336→794L): run_setup_wizard + public API\n- `src/scc_cli/setup_ui.py` — New: TUI components for setup wizard (303L)\n- `src/scc_cli/setup_config.py` — New: non-interactive setup + config building (310L)\n",
+      "full_uat_md": "# S02: Decompose oversized modules and repair boundaries — UAT\n\n**Milestone:** M005\n**Written:** 2026-04-04T17:11:48.938Z\n\n## UAT: S02 — Decompose oversized modules and repair boundaries\n\n### Preconditions\n- Working directory: `scc-sync-1.7.3`\n- Python environment: `uv sync` completed\n- Baseline: S01 characterization tests and boundary tests exist\n\n---\n\n### Test 1: No file exceeds 800 lines\n**Steps:**\n1. Run: `python3 -c \"from pathlib import Path; over=[f'{f} ({len(f.read_text().splitlines())}L)' for f in sorted(Path('src/scc_cli').rglob('*.py')) if len(f.read_text().splitlines()) > 800]; print('PASS: all under 800' if not over else 'FAIL: ' + ', '.join(over))\"`\n\n**Expected:** Output is `PASS: all under 800`\n\n---\n\n### Test 2: Boundary violation — no docker.core.ContainerInfo in application layer\n**Steps:**\n1. Run: `grep -rn \"from.*docker\\.core.*import.*ContainerInfo\" src/scc_cli/application/ 2>/dev/null; echo \"exit: $?\"`\n\n**Expected:** No output lines before the exit code. Exit code is 1 (no matches).\n\n---\n\n### Test 3: Boundary violation — no marketplace.managed in core layer\n**Steps:**\n1. Run: `grep -rn \"from.*marketplace\\.managed.*import\\|from.*marketplace.*import.*load_managed\" src/scc_cli/core/ 2>/dev/null; echo \"exit: $?\"`\n\n**Expected:** No output lines before the exit code. Exit code is 1 (no matches).\n\n---\n\n### Test 4: Boundary violation — no console.err_line in docker layer\n**Steps:**\n1. Run: `grep -rn \"from.*console.*import.*err_line\" src/scc_cli/docker/ 2>/dev/null; echo \"exit: $?\"`\n\n**Expected:** No output lines before the exit code. Exit code is 1 (no matches).\n\n---\n\n### Test 5: All 315 characterization + boundary tests pass\n**Steps:**\n1. Run: `uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q`\n\n**Expected:** `315 passed` with zero failures.\n\n---\n\n### Test 6: Full test suite passes (4079+ tests)\n**Steps:**\n1. Run: `uv run pytest --rootdir \"$PWD\" -q`\n\n**Expected:** `4079 passed` (or more), zero failures. Skipped/xfailed are acceptable.\n\n---\n\n### Test 7: Ruff lint clean\n**Steps:**\n1. Run: `uv run ruff check`\n\n**Expected:** `All checks passed!`\n\n---\n\n### Test 8: Mypy type check clean\n**Steps:**\n1. Run: `uv run mypy src/scc_cli`\n\n**Expected:** `Success: no issues found in 284 source files` (or more).\n\n---\n\n### Test 9: Backward-compatible imports preserved\n**Steps:**\n1. Run: `python3 -c \"from scc_cli.application.dashboard import DashboardTab, load_status_tab_data; print('dashboard OK')\"`\n2. Run: `python3 -c \"from scc_cli.application.worktree.use_cases import WorktreeInfo, enter_worktree_shell; print('worktree OK')\"`\n3. Run: `python3 -c \"from scc_cli.core.personal_profiles import merge_personal_settings; print('profiles OK')\"`\n4. Run: `python3 -c \"from scc_cli.commands.launch.flow import interactive_start; print('flow OK')\"`\n\n**Expected:** All four print their OK messages without ImportError.\n\n---\n\n### Test 10: Extracted files exist and are non-trivial\n**Steps:**\n1. Run: `for f in dashboard_models dashboard_loaders; do wc -l src/scc_cli/application/$f.py; done`\n2. Run: `for f in models operations; do wc -l src/scc_cli/application/worktree/$f.py; done`\n3. Run: `wc -l src/scc_cli/core/personal_profiles_merge.py`\n4. Run: `wc -l src/scc_cli/docker/sandbox.py`\n5. Run: `wc -l src/scc_cli/marketplace/materialize_git.py`\n6. Run: `for f in flow_interactive flow_session; do wc -l src/scc_cli/commands/launch/$f.py; done`\n7. Run: `for f in team_validate team_info; do wc -l src/scc_cli/commands/$f.py; done`\n8. Run: `for f in config_validate config_inspect; do wc -l src/scc_cli/commands/$f.py; done`\n9. Run: `for f in orchestrator_handlers orchestrator_menus orchestrator_container_actions _dashboard_actions; do wc -l src/scc_cli/ui/dashboard/$f.py; done`\n10. Run: `for f in settings_profile wizard_pickers git_interactive_ops; do wc -l src/scc_cli/ui/$f.py; done`\n11. Run: `for f in setup_ui setup_config; do wc -l src/scc_cli/$f.py; done`\n\n**Expected:** All files exist and have >50 lines (non-trivial extraction, not stubs).\n\n---\n\n### Edge Case: DI parameter in merge_personal_settings\n**Steps:**\n1. Run: `python3 -c \"\nfrom scc_cli.core.personal_profiles_merge import merge_personal_settings\nimport inspect\nsig = inspect.signature(merge_personal_settings)\nassert 'managed_state_loader' in sig.parameters, 'DI parameter missing'\nprint('DI parameter present:', sig.parameters['managed_state_loader'].annotation)\n\"`\n\n**Expected:** Output confirms `managed_state_loader` parameter exists with `Callable` type annotation.\n",
       "goal": "Reduce all 15 HARD-FAIL (>1100 lines) and MANDATORY-SPLIT (>800 lines) files below 800 lines through mechanical code extraction, and repair 3 concrete architecture boundary violations (application→docker, core→marketplace, docker→presentation), while preserving all 315 characterization tests and public API surfaces.",
       "success_criteria": "- No Python file in src/scc_cli/ exceeds 1100 lines (HARD-FAIL eliminated)\n- No more than 2 files exceed 800 lines (all 15 MANDATORY-SPLIT targets addressed)\n- All 315 characterization tests pass: `uv run pytest tests/test_*_characterization.py tests/test_import_boundaries.py -q`\n- 3 boundary violations fixed: application/dashboard.py no longer imports docker.core.ContainerInfo; core/personal_profiles.py no longer imports marketplace.managed; docker/launch.py no longer imports console.err_line\n- Full gate passes: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q`\n- All public API re-exports preserved — no import breakage for external callers",
       "proof_level": "contract — characterization tests and import boundary tests mechanically prove behavior preservation after every extraction",
@@ -610,11 +610,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "Raise Pyright and mypy to strict mode on `src/scc_cli` with only narrow, documented, justified exceptions. Replace the ~200+ `dict[str, Any]` config/policy pipeline with typed models. Make `InteractionRequest.value` generic. Eliminate all untyped definitions from the maintained source tree.",
-      "success_criteria": "",
-      "proof_level": "",
-      "integration_closure": "",
-      "observability_impact": "",
+      "goal": "Land the governed-artifact/team-pack typed model hierarchy from spec-06 and convert the highest-value dict[str, Any] flows (compute_effective_config, start_session, safety_policy_loader) to use typed NormalizedOrgConfig, measurably reducing raw dict usage across the codebase.",
+      "success_criteria": "- All governed artifact models from spec-06 exist as frozen dataclasses in `core/governed_artifacts.py`\n- `compute_effective_config` accepts `NormalizedOrgConfig` not `dict[str, Any]`\n- `StartSessionRequest.org_config` is typed as `NormalizedOrgConfig | None`, not raw dict\n- `UserConfig: TypeAlias = dict[str, Any]` is eliminated from `flow_types.py`\n- `load_safety_policy` accepts `NormalizedOrgConfig | None` not `dict[str, Any] | None`\n- `NormalizedOrgConfig` covers `security.safety_net` fields (KNOWLEDGE.md gap fixed)\n- Total `dict[str, Any]` count in `src/scc_cli/` decreases from 443 to < 390\n- No new `# type: ignore` or `cast()` calls added\n- All 4106 existing tests pass\n- `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest` all clean",
+      "proof_level": "Contract — all changes are internal type system improvements verified by existing characterization tests plus new model unit tests. No runtime behavior change.",
+      "integration_closure": "- Upstream surfaces consumed: `ports/config_models.py` (NormalizedOrgConfig), `adapters/config_normalizer.py` (normalize_org_config), `core/contracts.py` (SafetyPolicy)\n- New wiring: `NormalizedOrgConfig.from_dict()` convenience constructor wrapping normalize_org_config; governed artifact models in `core/governed_artifacts.py` re-exported from `core/contracts.py`\n- What remains: S04 hardens failure handling for renderer pipeline consuming these types; S05 elevates coverage; S06 validates docs/diagnostics truthfulness",
+      "observability_impact": "None — these are compile-time type system changes with no runtime behavior change.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -3485,37 +3485,45 @@
       "milestone_id": "M005",
       "slice_id": "S03",
       "id": "T01",
-      "title": "Introduce typed config/policy models to replace dict[str, Any]",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 6 frozen model types (ArtifactKind, ArtifactInstallIntent, GovernedArtifact, ProviderArtifactBinding, ArtifactBundle, ArtifactRenderPlan) implementing spec-06 governed artifact type hierarchy with 20 passing tests",
+      "status": "complete",
+      "one_liner": "Added 6 frozen model types (ArtifactKind, ArtifactInstallIntent, GovernedArtifact, ProviderArtifactBinding, ArtifactBundle, ArtifactRenderPlan) implementing spec-06 governed artifact type hierarchy with 20 passing tests",
+      "narrative": "Created src/scc_cli/core/governed_artifacts.py with the complete spec-06 type hierarchy: 2 str enums (ArtifactKind with 4 members, ArtifactInstallIntent with 4 members) and 4 frozen dataclasses (GovernedArtifact, ProviderArtifactBinding, ArtifactBundle, ArtifactRenderPlan). All models use only stdlib types (dataclasses, enum) — no pydantic dependency. ProviderArtifactBinding keeps Claude and Codex native details asymmetric per spec. Added re-exports to contracts.py. Created 20 unit tests covering construction, defaults, immutability, enum coverage, re-export identity, and a cross-model integration test matching the spec-06 YAML example.",
+      "verification_result": "All 4 verification commands passed: ruff check (0 errors), mypy src/scc_cli (0 issues in 285 files), pytest on new test file (20/20 passed), full test suite (4099 passed, 23 skipped, 3 xfailed, 1 xpassed — no regressions).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T17:28:19.198Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
-      "description": "",
-      "estimate": "",
-      "files": [
-        "src/scc_cli/core/personal_profiles.py",
-        "src/scc_cli/application/compute_effective_config.py",
-        "src/scc_cli/commands/launch/flow.py",
-        "src/scc_cli/claude_adapter.py",
-        "src/scc_cli/teams.py",
-        "src/scc_cli/commands/team.py",
-        "src/scc_cli/docker/launch.py",
-        "src/scc_cli/remote.py",
-        "src/scc_cli/config.py",
-        "src/scc_cli/ports/personal_profile_service.py",
-        "src/scc_cli/adapters/personal_profile_service_local.py"
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/governed_artifacts.py",
+        "src/scc_cli/core/contracts.py",
+        "tests/test_governed_artifact_models.py"
       ],
-      "verify": "grep -r \"dict\\[str, Any\\]\" src/scc_cli | wc -l shows substantial reduction; uv run mypy src/scc_cli passes",
-      "inputs": [],
-      "expected_output": [],
+      "key_decisions": [
+        "Used tuple[str, ...] for collection fields to enforce full immutability, matching existing contracts.py pattern",
+        "ProviderArtifactBinding.native_config typed as dict[str, str] to keep provider config surface tight and string-serializable",
+        "ArtifactInstallIntent.REQUEST_ONLY uses 'request-only' (hyphenated) value matching spec-06 YAML vocabulary"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S03\nmilestone: M005\nkey_files:\n  - src/scc_cli/core/governed_artifacts.py\n  - src/scc_cli/core/contracts.py\n  - tests/test_governed_artifact_models.py\nkey_decisions:\n  - Used tuple[str, ...] for collection fields to enforce full immutability, matching existing contracts.py pattern\n  - ProviderArtifactBinding.native_config typed as dict[str, str] to keep provider config surface tight and string-serializable\n  - ArtifactInstallIntent.REQUEST_ONLY uses 'request-only' (hyphenated) value matching spec-06 YAML vocabulary\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T17:28:19.197Z\nblocker_discovered: false\n---\n\n# T01: Added 6 frozen model types (ArtifactKind, ArtifactInstallIntent, GovernedArtifact, ProviderArtifactBinding, ArtifactBundle, ArtifactRenderPlan) implementing spec-06 governed artifact type hierarchy with 20 passing tests\n\n**Added 6 frozen model types (ArtifactKind, ArtifactInstallIntent, GovernedArtifact, ProviderArtifactBinding, ArtifactBundle, ArtifactRenderPlan) implementing spec-06 governed artifact type hierarchy with 20 passing tests**\n\n## What Happened\n\nCreated src/scc_cli/core/governed_artifacts.py with the complete spec-06 type hierarchy: 2 str enums (ArtifactKind with 4 members, ArtifactInstallIntent with 4 members) and 4 frozen dataclasses (GovernedArtifact, ProviderArtifactBinding, ArtifactBundle, ArtifactRenderPlan). All models use only stdlib types (dataclasses, enum) — no pydantic dependency. ProviderArtifactBinding keeps Claude and Codex native details asymmetric per spec. Added re-exports to contracts.py. Created 20 unit tests covering construction, defaults, immutability, enum coverage, re-export identity, and a cross-model integration test matching the spec-06 YAML example.\n\n## Verification\n\nAll 4 verification commands passed: ruff check (0 errors), mypy src/scc_cli (0 issues in 285 files), pytest on new test file (20/20 passed), full test suite (4099 passed, 23 skipped, 3 xfailed, 1 xpassed — no regressions).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 3900ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 3900ms |\n| 3 | `uv run pytest tests/test_governed_artifact_models.py -v` | 0 | ✅ pass | 1320ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 69180ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/governed_artifacts.py`\n- `src/scc_cli/core/contracts.py`\n- `tests/test_governed_artifact_models.py`\n",
+      "description": "Create the governed-artifact type hierarchy specified in spec-06 as frozen dataclasses. These models (GovernedArtifact, ArtifactBundle, ArtifactInstallIntent, ProviderArtifactBinding, ArtifactRenderPlan, ArtifactKind) define the provider-neutral bundle architecture's type surface. They are pure data definitions with no behavioral logic.\n\n## Steps\n\n1. Read `specs/06-governed-artifacts.md` to confirm model names, fields, and relationships.\n2. Create `src/scc_cli/core/governed_artifacts.py` with:\n   - `ArtifactKind` enum: `skill`, `mcp_server`, `native_integration`, `bundle`\n   - `ArtifactInstallIntent` enum: `required`, `available`, `disabled`, `request_only`\n   - `GovernedArtifact` frozen dataclass: kind, name, version, publisher, pinned, provenance fields\n   - `ProviderArtifactBinding` frozen dataclass: provider name, native_ref, native_config dict, transport_type\n   - `ArtifactBundle` frozen dataclass: name, description, artifacts list, install_intent\n   - `ArtifactRenderPlan` frozen dataclass: bundle_id, provider, bindings list, skipped list, effective_artifacts\n3. Add re-exports in `src/scc_cli/core/contracts.py` so downstream code can import from either location.\n4. Create `tests/test_governed_artifact_models.py` with:\n   - Construction tests for each model with all fields\n   - Frozen immutability assertions\n   - Enum membership and value coverage tests\n   - Default value tests\n5. Run `uv run ruff check`, `uv run mypy src/scc_cli`, `uv run pytest tests/test_governed_artifact_models.py`.\n\n## Must-Haves\n\n- [ ] All 6 model types exist as frozen dataclasses or enums\n- [ ] Models use only stdlib types (dataclasses, enum) — no pydantic dependency\n- [ ] ProviderArtifactBinding is provider-specific (Claude and Codex are NOT flattened)\n- [ ] ArtifactBundle carries install_intent, not raw marketplace URLs\n- [ ] Re-exports added to core/contracts.py\n- [ ] Unit tests pass\n\n## Verification\n\n- `uv run ruff check`\n- `uv run mypy src/scc_cli`\n- `uv run pytest tests/test_governed_artifact_models.py -v`\n- `uv run pytest --rootdir \"$PWD\" -q` (all 4106+ tests still pass)",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/governed_artifacts.py",
+        "src/scc_cli/core/contracts.py",
+        "tests/test_governed_artifact_models.py"
+      ],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_governed_artifact_models.py -v && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`specs/06-governed-artifacts.md` — canonical model specification",
+        "`src/scc_cli/core/contracts.py` — existing contracts module for re-exports",
+        "`src/scc_cli/core/enums.py` — existing enum patterns to follow"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/governed_artifacts.py` — new module with 6 model types",
+        "`src/scc_cli/core/contracts.py` — updated with re-exports",
+        "`tests/test_governed_artifact_models.py` — new unit tests"
+      ],
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
@@ -3524,7 +3532,7 @@
       "milestone_id": "M005",
       "slice_id": "S03",
       "id": "T02",
-      "title": "Make InteractionRequest generic and eliminate cast() abuse",
+      "title": "Extend NormalizedOrgConfig and normalizer for safety_net, stats, and from_dict helper",
       "status": "pending",
       "one_liner": "",
       "narrative": "",
@@ -3537,20 +3545,25 @@
       "key_files": [],
       "key_decisions": [],
       "full_summary_md": "",
-      "description": "",
-      "estimate": "",
+      "description": "The current NormalizedOrgConfig silently drops `security.safety_net`, `stats`, and `config_source` fields (documented in KNOWLEDGE.md as a known gap). This task extends the config model and normalizer to cover these fields, and adds a `NormalizedOrgConfig.from_dict()` convenience class method that wraps `normalize_org_config()`. The from_dict helper is critical for T03-T05 because ~50+ test files construct inline `org_config = {...}` dicts — the helper avoids massive test fixture rewrites.\n\n## Steps\n\n1. Read `src/scc_cli/ports/config_models.py` and `src/scc_cli/adapters/config_normalizer.py` to understand existing patterns.\n2. Add to `src/scc_cli/ports/config_models.py`:\n   - `SafetyNetConfig` frozen dataclass: action (str, default 'block'), rules (dict[str, Any], default empty) — mirrors SafetyPolicy but lives in the config model layer\n   - `StatsConfig` frozen dataclass: enabled (bool, default False), endpoint (str | None, default None)\n   - Add `safety_net: SafetyNetConfig` field to `SecurityConfig` (default=SafetyNetConfig())\n   - Add `stats: StatsConfig` field to `NormalizedOrgConfig` (default=StatsConfig())\n   - Add `config_source: str | None` field to `NormalizedOrgConfig` (default=None)\n   - Add `@classmethod from_dict(cls, raw: dict[str, Any]) -> NormalizedOrgConfig` that calls `normalize_org_config(raw)`\n3. Update `src/scc_cli/adapters/config_normalizer.py`:\n   - Add `_normalize_safety_net(raw: dict[str, Any] | None) -> SafetyNetConfig`\n   - Add `_normalize_stats(raw: dict[str, Any] | None) -> StatsConfig`\n   - Update `_normalize_security()` to include safety_net normalization\n   - Update `normalize_org_config()` to pass stats and config_source\n4. Extend `tests/test_config_normalization.py` with:\n   - Tests for safety_net normalization (with action, with rules, missing, invalid)\n   - Tests for stats normalization\n   - Tests for config_source passthrough\n   - Tests for NormalizedOrgConfig.from_dict() convenience method\n5. Run full verification.\n\n## Must-Haves\n\n- [ ] SafetyNetConfig and StatsConfig exist as frozen dataclasses\n- [ ] SecurityConfig.safety_net field added with safe default\n- [ ] NormalizedOrgConfig.stats and .config_source fields added\n- [ ] from_dict() class method works and returns NormalizedOrgConfig\n- [ ] Normalizer covers security.safety_net extraction\n- [ ] D016 respected: SafetyPolicy.rules stays dict[str, Any] — SafetyNetConfig.rules also uses dict[str, Any]\n- [ ] All existing config normalization tests still pass\n\n## Verification\n\n- `uv run ruff check`\n- `uv run mypy src/scc_cli`\n- `uv run pytest tests/test_config_normalization.py -v`\n- `uv run pytest --rootdir \"$PWD\" -q`",
+      "estimate": "1h",
       "files": [
-        "src/scc_cli/application/interaction_requests.py",
-        "src/scc_cli/commands/launch/flow.py",
-        "src/scc_cli/ui/wizard.py",
-        "src/scc_cli/validate.py",
-        "src/scc_cli/config.py",
-        "src/scc_cli/docker/launch.py",
-        "src/scc_cli/sessions.py"
+        "src/scc_cli/ports/config_models.py",
+        "src/scc_cli/adapters/config_normalizer.py",
+        "tests/test_config_normalization.py"
       ],
-      "verify": "grep -r \"cast(\" src/scc_cli | wc -l shows substantial reduction; uv run pyright src/scc_cli passes",
-      "inputs": [],
-      "expected_output": [],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_config_normalization.py -v && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/ports/config_models.py` — existing config models to extend",
+        "`src/scc_cli/adapters/config_normalizer.py` — existing normalizer to extend",
+        "`src/scc_cli/core/contracts.py` — SafetyPolicy shape (D016: rules stays dict[str, Any])",
+        "`tests/test_config_normalization.py` — existing tests to extend"
+      ],
+      "expected_output": [
+        "`src/scc_cli/ports/config_models.py` — extended with SafetyNetConfig, StatsConfig, from_dict",
+        "`src/scc_cli/adapters/config_normalizer.py` — extended normalizer covering safety_net and stats",
+        "`tests/test_config_normalization.py` — extended with new field tests"
+      ],
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
@@ -3559,7 +3572,7 @@
       "milestone_id": "M005",
       "slice_id": "S03",
       "id": "T03",
-      "title": "Fix core contracts and models for strict typing",
+      "title": "Convert compute_effective_config and helpers to NormalizedOrgConfig",
       "status": "pending",
       "one_liner": "",
       "narrative": "",
@@ -3572,15 +3585,29 @@
       "key_files": [],
       "key_decisions": [],
       "full_summary_md": "",
-      "description": "",
-      "estimate": "",
+      "description": "Convert the `compute_effective_config()` function and its 4 helper functions (`is_team_delegated_for_plugins`, `is_team_delegated_for_mcp`, `is_project_delegated`, `validate_stdio_server`) from accepting `org_config: dict[str, Any]` to `org_config: NormalizedOrgConfig`. This is the highest-ROI single conversion — it eliminates ~15 raw `.get()` dict navigations with typed field access across the most cross-cutting config function in the codebase.\n\nThe 436-line characterization test file provides strong regression protection. Test fixtures that construct raw dicts should use `NormalizedOrgConfig.from_dict()` to minimize churn.\n\n## Steps\n\n1. Read `src/scc_cli/application/compute_effective_config.py` to identify all `org_config.get()` call sites and what fields they read.\n2. Read `src/scc_cli/application/personal_profile_policy.py` — it also calls `validate_stdio_server(server_dict, org_config)` with raw dicts. It must be updated in sync or will break.\n3. Change `compute_effective_config()` signature: `org_config: dict[str, Any]` → `org_config: NormalizedOrgConfig`.\n4. Change `validate_stdio_server()` signature: `org_config: dict[str, Any]` → `org_config: NormalizedOrgConfig`. Update body to use `org_config.security.allow_stdio_mcp`, `org_config.security.allowed_stdio_prefixes` instead of dict access.\n5. Change `is_team_delegated_for_plugins()`, `is_team_delegated_for_mcp()`, `is_project_delegated()` signatures similarly. Update body to use typed field access (`org_config.delegation.teams.allow_additional_plugins`, `org_config.profiles.get(team_name)`, etc.).\n6. Update body of `compute_effective_config()` to replace all `org_config.get('security', {}).get(...)` patterns with typed field access: `org_config.security.blocked_plugins`, `org_config.defaults.enabled_plugins`, `org_config.profiles`, etc.\n7. Update `src/scc_cli/application/personal_profile_policy.py` — it calls `validate_stdio_server(server_dict, org_config)`. Change its `org_config` parameter to `NormalizedOrgConfig` too, or convert at the call site.\n8. Update callers that pass `org_config` directly: `src/scc_cli/profiles.py` re-exports must still work.\n9. Update test fixtures in `tests/test_compute_effective_config_characterization.py` to use `NormalizedOrgConfig.from_dict({...})` wrapper around raw dict construction.\n10. Run full test suite to confirm zero regressions.\n\n**Key constraints:**\n- Do NOT change callers outside this module yet (those are T04/T05 scope). If external callers pass raw dicts, they must normalize at the call boundary. For now, update the function signatures and all internal logic, plus the characterization test fixtures.\n- `profiles.py` re-exports the functions — make sure the re-exported names still work.\n- Do NOT touch SafetyPolicy.rules (D016: stays dict[str, Any]).\n\n## Must-Haves\n\n- [ ] compute_effective_config accepts NormalizedOrgConfig, not dict[str, Any]\n- [ ] validate_stdio_server accepts NormalizedOrgConfig\n- [ ] is_team_delegated_for_plugins, is_team_delegated_for_mcp, is_project_delegated accept NormalizedOrgConfig\n- [ ] All dict .get() patterns in compute_effective_config body replaced with typed field access\n- [ ] personal_profile_policy.py updated to pass NormalizedOrgConfig to validate_stdio_server\n- [ ] All 436 characterization tests pass\n- [ ] profiles.py re-exports still functional\n\n## Verification\n\n- `uv run ruff check`\n- `uv run mypy src/scc_cli`\n- `uv run pytest tests/test_compute_effective_config_characterization.py -v`\n- `uv run pytest --rootdir \"$PWD\" -q`",
+      "estimate": "2h",
       "files": [
-        "src/scc_cli/core/*.py",
-        "src/scc_cli/ports/*.py"
+        "src/scc_cli/application/compute_effective_config.py",
+        "src/scc_cli/application/personal_profile_policy.py",
+        "src/scc_cli/profiles.py",
+        "tests/test_compute_effective_config_characterization.py"
       ],
-      "verify": "uv run pyright src/scc_cli/core src/scc_cli/ports && uv run mypy src/scc_cli/core src/scc_cli/ports — zero errors, zero suppressions",
-      "inputs": [],
-      "expected_output": [],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_compute_effective_config_characterization.py -v && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/application/compute_effective_config.py` — function to convert",
+        "`src/scc_cli/application/personal_profile_policy.py` — calls validate_stdio_server with org_config",
+        "`src/scc_cli/ports/config_models.py` — NormalizedOrgConfig with from_dict (from T02)",
+        "`src/scc_cli/adapters/config_normalizer.py` — normalize_org_config (from T02)",
+        "`tests/test_compute_effective_config_characterization.py` — 436-line test file to update fixtures",
+        "`src/scc_cli/profiles.py` — re-exports module"
+      ],
+      "expected_output": [
+        "`src/scc_cli/application/compute_effective_config.py` — all 5 functions accept NormalizedOrgConfig",
+        "`src/scc_cli/application/personal_profile_policy.py` — updated to use NormalizedOrgConfig for validate_stdio_server calls",
+        "`tests/test_compute_effective_config_characterization.py` — fixtures use NormalizedOrgConfig.from_dict()",
+        "`src/scc_cli/profiles.py` — re-exports verified working"
+      ],
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
@@ -3589,7 +3616,7 @@
       "milestone_id": "M005",
       "slice_id": "S03",
       "id": "T04",
-      "title": "Fix application, adapters, and service layers for strict typing",
+      "title": "Convert StartSessionRequest, launch pipeline callers, and eliminate UserConfig alias",
       "status": "pending",
       "one_liner": "",
       "narrative": "",
@@ -3602,17 +3629,46 @@
       "key_files": [],
       "key_decisions": [],
       "full_summary_md": "",
-      "description": "",
-      "estimate": "",
+      "description": "Push the typed NormalizedOrgConfig boundary outward through the launch pipeline. Convert `StartSessionRequest.org_config` from `dict[str, Any] | None` to `NormalizedOrgConfig | None`. Eliminate the `UserConfig: TypeAlias = dict[str, Any]` alias. Update all callers that construct StartSessionRequest or call compute_effective_config with raw dicts to normalize at the call boundary.\n\n## Steps\n\n1. Change `StartSessionRequest.org_config` type in `src/scc_cli/application/start_session.py` from `dict[str, Any] | None` to `NormalizedOrgConfig | None`. Update import.\n2. Update `_compute_effective_config(request)` in the same file — it currently passes `request.org_config` to `compute_effective_config()`. Since both are now typed, this should just work.\n3. Find all callers that construct `StartSessionRequest(org_config=raw_dict, ...)` and add `NormalizedOrgConfig.from_dict()` at the call site:\n   - `src/scc_cli/commands/launch/flow_interactive.py`\n   - `src/scc_cli/commands/launch/flow_session.py`\n   - `src/scc_cli/commands/launch/flow.py`\n   - Test files that construct StartSessionRequest\n4. Update callers of `compute_effective_config()` that still pass raw dicts:\n   - `src/scc_cli/commands/config.py` (line 313)\n   - `src/scc_cli/commands/config_validate.py` (line 84)\n   - `src/scc_cli/commands/launch/render.py` (line 87)\n   - `src/scc_cli/commands/launch/sandbox.py` (line 67)\n   - `src/scc_cli/commands/exceptions.py` (line 511)\n   Each of these gets `org_config` as a raw dict from somewhere upstream. Add `NormalizedOrgConfig.from_dict(org_config)` at the call boundary.\n5. Eliminate `UserConfig: TypeAlias = dict[str, Any]` from `src/scc_cli/commands/launch/flow_types.py`. Replace all `UserConfig` references (flow_session.py, flow_interactive.py, team_settings.py) with `dict[str, Any]` directly or, where the value is already a NormalizedUserConfig, use that type.\n6. Run full verification.\n\n**Key constraints:**\n- Push normalization to the outermost call site. Do NOT normalize mid-stack (double normalization risk from research pitfalls).\n- The `UserConfig` alias is used in 3 files. Check each usage to determine if the value is truly a raw dict (from JSON load) or already a normalized config.\n\n## Must-Haves\n\n- [ ] StartSessionRequest.org_config is NormalizedOrgConfig | None\n- [ ] UserConfig alias eliminated from flow_types.py\n- [ ] All compute_effective_config callers pass NormalizedOrgConfig\n- [ ] No double normalization — normalize at outermost call site only\n- [ ] All existing tests pass\n\n## Verification\n\n- `uv run ruff check`\n- `uv run mypy src/scc_cli`\n- `uv run pytest tests/test_application_start_session.py -v` (if it exists)\n- `uv run pytest --rootdir \"$PWD\" -q`",
+      "estimate": "1h30m",
       "files": [
-        "src/scc_cli/application/**/*.py",
-        "src/scc_cli/adapters/*.py",
-        "src/scc_cli/services/**/*.py",
-        "src/scc_cli/evaluation/*.py"
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/launch/flow_session.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_types.py",
+        "src/scc_cli/commands/launch/render.py",
+        "src/scc_cli/commands/launch/sandbox.py",
+        "src/scc_cli/commands/launch/team_settings.py",
+        "src/scc_cli/commands/config.py",
+        "src/scc_cli/commands/config_validate.py",
+        "src/scc_cli/commands/exceptions.py"
       ],
-      "verify": "uv run pyright src/scc_cli && uv run mypy src/scc_cli passes",
-      "inputs": [],
-      "expected_output": [],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q",
+      "inputs": [
+        "`src/scc_cli/application/start_session.py` — StartSessionRequest to convert",
+        "`src/scc_cli/application/compute_effective_config.py` — now accepts NormalizedOrgConfig (from T03)",
+        "`src/scc_cli/ports/config_models.py` — NormalizedOrgConfig with from_dict (from T02)",
+        "`src/scc_cli/commands/launch/flow_types.py` — UserConfig alias to eliminate",
+        "`src/scc_cli/commands/launch/flow_interactive.py` — caller to update",
+        "`src/scc_cli/commands/launch/flow_session.py` — caller to update",
+        "`src/scc_cli/commands/launch/render.py` — caller to update",
+        "`src/scc_cli/commands/launch/sandbox.py` — caller to update",
+        "`src/scc_cli/commands/config.py` — caller to update",
+        "`src/scc_cli/commands/config_validate.py` — caller to update",
+        "`src/scc_cli/commands/exceptions.py` — caller to update"
+      ],
+      "expected_output": [
+        "`src/scc_cli/application/start_session.py` — org_config typed as NormalizedOrgConfig | None",
+        "`src/scc_cli/commands/launch/flow_types.py` — UserConfig alias removed",
+        "`src/scc_cli/commands/launch/flow_interactive.py` — uses NormalizedOrgConfig",
+        "`src/scc_cli/commands/launch/flow_session.py` — uses NormalizedOrgConfig",
+        "`src/scc_cli/commands/launch/render.py` — normalizes at call boundary",
+        "`src/scc_cli/commands/launch/sandbox.py` — normalizes at call boundary",
+        "`src/scc_cli/commands/config.py` — normalizes at call boundary",
+        "`src/scc_cli/commands/config_validate.py` — normalizes at call boundary",
+        "`src/scc_cli/commands/exceptions.py` — normalizes at call boundary"
+      ],
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
@@ -3621,7 +3677,7 @@
       "milestone_id": "M005",
       "slice_id": "S03",
       "id": "T05",
-      "title": "Fix remaining modules and remove all transitional mypy/pyright relaxations",
+      "title": "Convert safety_policy_loader and remaining secondary dict consumers",
       "status": "pending",
       "one_liner": "",
       "narrative": "",
@@ -3634,20 +3690,28 @@
       "key_files": [],
       "key_decisions": [],
       "full_summary_md": "",
-      "description": "",
-      "estimate": "",
+      "description": "Convert `load_safety_policy()` and its callers from raw `dict[str, Any]` to `NormalizedOrgConfig`. Also convert remaining secondary consumers of raw org_config dicts in `personal_profile_policy.py` (the functions not yet converted in T03). Measure final dict[str, Any] reduction to confirm the slice goal is met.\n\n## Steps\n\n1. Convert `load_safety_policy(org_config: dict[str, Any] | None)` in `src/scc_cli/core/safety_policy_loader.py` to accept `NormalizedOrgConfig | None`. Update body to use `org_config.security.safety_net.action` and `org_config.security.safety_net.rules` (the SafetyNetConfig added in T02) instead of `org_config.get('security', {}).get('safety_net', {})`.\n2. Update callers of `load_safety_policy`:\n   - `src/scc_cli/doctor/checks/safety.py` (line 70) — passes `raw_org` dict. Add `NormalizedOrgConfig.from_dict()` at call site.\n   - `src/scc_cli/application/support_bundle.py` (line 296) — passes `raw_org_config`. Normalize at call site.\n3. Review `src/scc_cli/application/personal_profile_policy.py` for remaining `org_config: dict[str, Any]` parameters not already converted in T03. Convert function signatures `filter_personal_settings()` and `filter_personal_mcp()` to accept NormalizedOrgConfig. Update their callers.\n4. Run `grep -c 'dict\\[str, Any\\]' src/scc_cli/**/*.py | ...` to measure final count. Target: < 390 (down from 443).\n5. Run full verification.\n\n## Must-Haves\n\n- [ ] load_safety_policy accepts NormalizedOrgConfig | None\n- [ ] All callers of load_safety_policy updated to normalize at boundary\n- [ ] personal_profile_policy functions accept NormalizedOrgConfig where they previously took raw dicts\n- [ ] dict[str, Any] count in src/scc_cli/ < 390 (measured and reported)\n- [ ] All 4106+ tests pass\n\n## Verification\n\n- `uv run ruff check`\n- `uv run mypy src/scc_cli`\n- `uv run pytest --rootdir \"$PWD\" -q`\n- `grep -rn 'dict\\[str, Any\\]' src/scc_cli/ | wc -l` reports < 390",
+      "estimate": "1h",
       "files": [
-        "src/scc_cli/cli.py",
-        "src/scc_cli/docker/*.py",
-        "src/scc_cli/marketplace/*.py",
-        "src/scc_cli/doctor/*.py",
-        "src/scc_cli/commands/**/*.py",
-        "src/scc_cli/ui/**/*.py",
-        "pyproject.toml"
+        "src/scc_cli/core/safety_policy_loader.py",
+        "src/scc_cli/application/personal_profile_policy.py",
+        "src/scc_cli/doctor/checks/safety.py",
+        "src/scc_cli/application/support_bundle.py"
       ],
-      "verify": "uv run pyright src/scc_cli && uv run mypy src/scc_cli && uv run ruff check && uv run pytest; pyproject.toml has no transitional mypy overrides remaining",
-      "inputs": [],
-      "expected_output": [],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest --rootdir \"$PWD\" -q && test $(grep -rn 'dict\\[str, Any\\]' src/scc_cli/ | wc -l) -lt 390",
+      "inputs": [
+        "`src/scc_cli/core/safety_policy_loader.py` — function to convert",
+        "`src/scc_cli/ports/config_models.py` — NormalizedOrgConfig with SafetyNetConfig (from T02)",
+        "`src/scc_cli/application/personal_profile_policy.py` — partially converted in T03, finish here",
+        "`src/scc_cli/doctor/checks/safety.py` — caller to update",
+        "`src/scc_cli/application/support_bundle.py` — caller to update"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/safety_policy_loader.py` — accepts NormalizedOrgConfig | None",
+        "`src/scc_cli/application/personal_profile_policy.py` — all org_config params are NormalizedOrgConfig",
+        "`src/scc_cli/doctor/checks/safety.py` — normalizes at call boundary",
+        "`src/scc_cli/application/support_bundle.py` — normalizes at call boundary"
+      ],
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
@@ -4271,6 +4335,30 @@
       "choice": "Keep `SafetyPolicy.rules` as `dict[str, Any]` (existing frozen dataclass). Add standalone `_matched_rule_to_policy_key()` mapping function in `core/safety_engine.py` and use `policy.rules.get(key, True)` for fail-closed rule enablement checking. Do not add a `SafetyRule` typed model in M004/S01.",
       "rationale": "SafetyPolicy is an existing frozen dataclass used across test_core_contracts.py and other test code. Changing `rules` to a stricter type would break existing tests and require migration. A standalone mapping function achieves the same fail-closed semantics without breaking the contract surface. A typed SafetyRule model can be introduced in a later slice if needed.",
       "revisable": "Yes",
+      "made_by": "agent",
+      "superseded_by": null
+    },
+    {
+      "seq": 17,
+      "id": "D017",
+      "when_context": "M005/S02/T06",
+      "scope": "roadmap",
+      "decision": "How M005/S03-S06 should be scoped after S02 decomposition completes",
+      "choice": "Replan S03-S06 to explicitly incorporate the governed-artifact/team-pack architecture. S03 must land typed GovernedArtifact/ArtifactBundle/ArtifactRenderPlan models and typed config flow — not generic strict-typing cleanup. S04 must harden fetch/render/merge/install failure handling for the provider-native renderer pipeline. S06 must validate docs/diagnostics truthfulness for the team-pack model. Generic strict-typing and error-handling work is still in scope but subordinate to the team-pack architecture. One approved SCC team-pack source is canonical; team config references bundle IDs not raw marketplace URLs; split provider-neutral planning from provider-native renderers; Claude and Codex native surfaces are asymmetric; do not bolt Codex onto the Claude-shaped marketplace pipeline; render per-provider native outputs from the same bundle plan; do not require dual team configs.",
+      "rationale": "User overrides during M005/S02/T06 directed that S03-S06 must not proceed as generic quality cleanup. The governed-artifact/team-pack architecture from D018-D020, specs/03-provider-boundary.md, and specs/06-governed-artifacts.md must be the organizing principle for remaining M005 work. This ensures the architecture quality milestone actually delivers the provider-neutral bundle model instead of treating it as optional future work.",
+      "revisable": "Yes",
+      "made_by": "human",
+      "superseded_by": null
+    },
+    {
+      "seq": 18,
+      "id": "D018",
+      "when_context": "M005/S03",
+      "scope": "architecture",
+      "decision": "Whether to include wizard cast() cleanup (23 casts across wizard.py and flow_interactive.py) in S03",
+      "choice": "Defer wizard cast cleanup to future work. S03 focuses on the governed-artifact model hierarchy and NormalizedOrgConfig adoption. The wizard cast pattern is type-unsafe but functionally correct — it does not block the typed config flow, and refactoring the wizard state machine is a significant effort with high blast radius touching all wizard tests.",
+      "rationale": "D017 scopes S03 to the governed-artifact/team-pack typed model adoption and config flow typing. The wizard casts are a separate concern (interaction dispatch, not config models) and the refactor risk is high relative to the benefit. The cast pattern works; it just loses generic type parameters.",
+      "revisable": "Yes — can be added to S06 or a future milestone",
       "made_by": "agent",
       "superseded_by": null
     }
@@ -5925,6 +6013,50 @@
       "verdict": "✅ pass",
       "duration_ms": 100,
       "created_at": "2026-04-04T16:57:08.253Z"
+    },
+    {
+      "id": 151,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3900,
+      "created_at": "2026-04-04T17:28:19.198Z"
+    },
+    {
+      "id": 152,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3900,
+      "created_at": "2026-04-04T17:28:19.198Z"
+    },
+    {
+      "id": 153,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_governed_artifact_models.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1320,
+      "created_at": "2026-04-04T17:28:19.198Z"
+    },
+    {
+      "id": 154,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 69180,
+      "created_at": "2026-04-04T17:28:19.198Z"
     }
   ]
 }

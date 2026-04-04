@@ -7,7 +7,7 @@ M005: Architecture Quality, Strictness, And Hardening
 | ID | Slice | Risk | Depends | Done | After this |
 |----|-------|------|---------|------|------------|
 | S01 | Maintainability baseline and refactor queue | medium | — | ✅ | TBD |
-| S02 | Decompose oversized modules and repair boundaries | high | S01 | ⬜ | TBD |
+| S02 | Decompose oversized modules and repair boundaries | high | S01 | ✅ | TBD |
 | S03 | Typed config model adoption and strict typing cleanup | high | S02 | ⬜ | TBD |
 | S04 | Error handling, subprocess hardening, and fail-closed cleanup | high | S02 | ⬜ | TBD |
 | S05 | Critical-path coverage elevation | high | S03, S04 | ⬜ | TBD |

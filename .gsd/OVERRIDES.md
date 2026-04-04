@@ -109,7 +109,7 @@ User-issued overrides that supersede plan document content.
   - Do not start M005 implementation early.
   - In M004, only document current truth and verify truthful safety/provider messaging; do not implement the new team-pack pipeline there.
 
-**Scope:** open
+**Scope:** resolved
 **Applied-at:** M004/S04/none
 
 ---
@@ -133,7 +133,7 @@ User-issued overrides that supersede plan document content.
   - do not require dual team configs
 
   S02 must still include the marketplace/profile/config cluster split needed for this architecture, not only generic size reduction.
-**Scope:** active
+**Scope:** resolved
 **Applied-at:** M005/S02/T06
 
 ---
@@ -166,7 +166,7 @@ User-issued overrides that supersede plan document content.
   - S06 must explicitly validate docs/diagnostics truthfulness for the team-pack model
 
   Do not proceed with generic S03 strict-typing cleanup until these task plans are rewritten to include the team-pack refactor.
-**Scope:** active
+**Scope:** resolved
 **Applied-at:** M005/S02/T06
 
 ---

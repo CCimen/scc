@@ -14,6 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from .enums import NetworkPolicy, SeverityLevel
+from .governed_artifacts import (  # noqa: F401 — re-exports for downstream consumers
+    ArtifactBundle,
+    ArtifactInstallIntent,
+    ArtifactKind,
+    ArtifactRenderPlan,
+    GovernedArtifact,
+    ProviderArtifactBinding,
+)
 
 
 @dataclass(frozen=True)
