@@ -44,7 +44,7 @@ Constraints:
   - Estimate: 40m
   - Files: src/scc_cli/commands/provider.py, src/scc_cli/cli.py, src/scc_cli/application/start_session.py, src/scc_cli/commands/launch/flow.py, tests/test_provider_commands.py
   - Verify: uv run pytest tests/test_provider_commands.py -v && uv run mypy src/scc_cli/commands/provider.py src/scc_cli/application/start_session.py && uv run ruff check src/scc_cli/commands/provider.py src/scc_cli/cli.py
-- [ ] **T03: Bootstrap dispatch wiring and slice-level verification** — Wire provider resolution into the launch path so bootstrap dispatches the correct adapters:
+- [x] **T03: Wired provider resolution into the launch path with dict-based adapter dispatch, team policy validation, and _resolve_provider helper extraction** — Wire provider resolution into the launch path so bootstrap dispatches the correct adapters:
 
 1. Update `build_start_session_dependencies()` in `src/scc_cli/commands/launch/dependencies.py` to accept a `provider_id: str` parameter. Use it to select the correct `agent_provider` and `safety_adapter` from `DefaultAdapters`:
    - `'claude'` → `adapters.agent_provider`, `adapters.claude_safety_adapter`

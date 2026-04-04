@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T23:01:26.860Z",
+  "exported_at": "2026-04-04T23:10:53.953Z",
   "milestones": [
     {
       "id": "M001",
@@ -4871,19 +4871,27 @@
       "milestone_id": "M006-d622bc",
       "slice_id": "S01",
       "id": "T03",
-      "title": "Bootstrap dispatch wiring and slice-level verification",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Wired provider resolution into the launch path with dict-based adapter dispatch, team policy validation, and _resolve_provider helper extraction",
+      "status": "complete",
+      "one_liner": "Wired provider resolution into the launch path with dict-based adapter dispatch, team policy validation, and _resolve_provider helper extraction",
+      "narrative": "Updated build_start_session_dependencies() to accept provider_id and dispatch the correct agent_provider from DefaultAdapters using a _PROVIDER_DISPATCH dict-based lookup table. Wired resolve_active_provider() into flow.py's start() before request building, extracting allowed_providers from team config. Extracted _resolve_provider() helper to keep start() under the 300-line guardrail. Added isinstance guard to normalize typer OptionInfo objects. Wrote 11 tests covering dispatch and policy validation.",
+      "verification_result": "All 4529 tests pass (23 skipped, 2 xfailed). mypy clean on both modified files. ruff check clean. Function size guardrail passes (start() at 297 lines). Focused test run: 11/11 passed in test_provider_dispatch.py.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T23:10:53.930Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Extracted _resolve_provider() helper from start() (not in plan) to satisfy 300-line function size guardrail. Added isinstance(provider, str) guard to normalize typer OptionInfo defaults. Safety adapter dispatch recorded in table but not threaded into StartSessionDependencies (deferred to S04).",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "tests/test_provider_dispatch.py"
+      ],
+      "key_decisions": [
+        "Used dict-based _PROVIDER_DISPATCH table for provider→adapter field mapping with claude fallback for unknown providers",
+        "Extracted _resolve_provider() helper to keep start() under 300-line guardrail",
+        "Normalized typer OptionInfo to None with isinstance check for direct-call test compatibility"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S01\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/commands/launch/dependencies.py\n  - src/scc_cli/commands/launch/flow.py\n  - tests/test_provider_dispatch.py\nkey_decisions:\n  - Used dict-based _PROVIDER_DISPATCH table for provider→adapter field mapping with claude fallback for unknown providers\n  - Extracted _resolve_provider() helper to keep start() under 300-line guardrail\n  - Normalized typer OptionInfo to None with isinstance check for direct-call test compatibility\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T23:10:53.930Z\nblocker_discovered: false\n---\n\n# T03: Wired provider resolution into the launch path with dict-based adapter dispatch, team policy validation, and _resolve_provider helper extraction\n\n**Wired provider resolution into the launch path with dict-based adapter dispatch, team policy validation, and _resolve_provider helper extraction**\n\n## What Happened\n\nUpdated build_start_session_dependencies() to accept provider_id and dispatch the correct agent_provider from DefaultAdapters using a _PROVIDER_DISPATCH dict-based lookup table. Wired resolve_active_provider() into flow.py's start() before request building, extracting allowed_providers from team config. Extracted _resolve_provider() helper to keep start() under the 300-line guardrail. Added isinstance guard to normalize typer OptionInfo objects. Wrote 11 tests covering dispatch and policy validation.\n\n## Verification\n\nAll 4529 tests pass (23 skipped, 2 xfailed). mypy clean on both modified files. ruff check clean. Function size guardrail passes (start() at 297 lines). Focused test run: 11/11 passed in test_provider_dispatch.py.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_provider_dispatch.py -v` | 0 | ✅ pass | 1300ms |\n| 2 | `uv run mypy src/scc_cli/commands/launch/dependencies.py src/scc_cli/commands/launch/flow.py` | 0 | ✅ pass | 4400ms |\n| 3 | `uv run ruff check` | 0 | ✅ pass | 4600ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 70300ms |\n\n## Deviations\n\nExtracted _resolve_provider() helper from start() (not in plan) to satisfy 300-line function size guardrail. Added isinstance(provider, str) guard to normalize typer OptionInfo defaults. Safety adapter dispatch recorded in table but not threaded into StartSessionDependencies (deferred to S04).\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/dependencies.py`\n- `src/scc_cli/commands/launch/flow.py`\n- `tests/test_provider_dispatch.py`\n",
       "description": "Wire provider resolution into the launch path so bootstrap dispatches the correct adapters:\n\n1. Update `build_start_session_dependencies()` in `src/scc_cli/commands/launch/dependencies.py` to accept a `provider_id: str` parameter. Use it to select the correct `agent_provider` and `safety_adapter` from `DefaultAdapters`:\n   - `'claude'` → `adapters.agent_provider`, `adapters.claude_safety_adapter`\n   - `'codex'` → `adapters.codex_agent_provider`, `adapters.codex_safety_adapter`\n   - For `agent_runner`: always use `adapters.agent_runner` (ClaudeAgentRunner) for now — CodexAgentRunner is S02's scope. If provider_id is 'codex' and no codex runner exists, this is acceptable — the runner will error at actual launch time in S02.\n   Use a dict-based lookup, not an if/else chain.\n\n2. Update `prepare_live_start_plan()` in the same file to accept and pass through `provider_id`.\n\n3. In `src/scc_cli/commands/launch/flow.py`, before building `StartSessionRequest`, call `resolve_active_provider()` with the CLI `--provider` flag and `get_selected_provider()` config value. Extract `allowed_providers` from the `NormalizedOrgConfig` team config if available. Pass the resolved `provider_id` to `prepare_live_start_plan()`.\n\n4. Write `tests/test_provider_dispatch.py` covering:\n   - Default dispatch (no provider_id) → uses Claude provider and safety adapter\n   - Explicit 'claude' → same result\n   - Explicit 'codex' → uses codex_agent_provider and codex_safety_adapter\n   - Policy violation in flow (mocked org config with restricted allowed_providers) → ProviderNotAllowedError\n\n5. Run the full test suite to verify zero regressions.\n\nConstraints:\n- Do NOT modify `get_default_adapters()` or the lru_cache. Provider dispatch is per-invocation in `build_start_session_dependencies()`, not at bootstrap time (D028).\n- `StartSessionDependencies.agent_provider` must carry the provider-dispatched value, not always Claude.\n- The `allowed_providers` field must be read from the team-level config in NormalizedOrgConfig, falling back to empty (all allowed) if no team config.\n- Keep `safety_adapter` dispatch in `dependencies.py` — thread it into `StartSessionDependencies` if needed, or track it alongside for S04.",
       "estimate": "50m",
       "files": [
@@ -7908,6 +7916,50 @@
       "verdict": "✅ pass",
       "duration_ms": 2000,
       "created_at": "2026-04-04T23:01:26.829Z"
+    },
+    {
+      "id": 245,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_provider_dispatch.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1300,
+      "created_at": "2026-04-04T23:10:53.930Z"
+    },
+    {
+      "id": 246,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/commands/launch/dependencies.py src/scc_cli/commands/launch/flow.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4400,
+      "created_at": "2026-04-04T23:10:53.930Z"
+    },
+    {
+      "id": 247,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4600,
+      "created_at": "2026-04-04T23:10:53.930Z"
+    },
+    {
+      "id": 248,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 70300,
+      "created_at": "2026-04-04T23:10:53.930Z"
     }
   ]
 }

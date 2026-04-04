@@ -19,10 +19,37 @@ from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.audit_event_sink import AuditEventSink
 from scc_cli.theme import Spinners
 
+# Dict-based dispatch tables keyed by provider ID.
+# Values are DefaultAdapters field names for each role.
+_PROVIDER_DISPATCH: dict[str, dict[str, str]] = {
+    "claude": {
+        "agent_provider": "agent_provider",
+        "safety_adapter": "claude_safety_adapter",
+    },
+    "codex": {
+        "agent_provider": "codex_agent_provider",
+        "safety_adapter": "codex_safety_adapter",
+    },
+}
 
-def build_start_session_dependencies(adapters: DefaultAdapters) -> StartSessionDependencies:
-    """Build the live start-session dependency bundle from wired adapters."""
-    provider = _require_agent_provider(adapters.agent_provider)
+_DEFAULT_PROVIDER_ID = "claude"
+
+
+def build_start_session_dependencies(
+    adapters: DefaultAdapters,
+    provider_id: str = _DEFAULT_PROVIDER_ID,
+) -> StartSessionDependencies:
+    """Build the live start-session dependency bundle from wired adapters.
+
+    Uses provider_id to dispatch the correct agent_provider and safety_adapter
+    from the available adapters. Falls back to 'claude' if provider_id is not
+    in the dispatch table.
+    """
+    dispatch = _PROVIDER_DISPATCH.get(provider_id, _PROVIDER_DISPATCH[_DEFAULT_PROVIDER_ID])
+
+    raw_provider = getattr(adapters, dispatch["agent_provider"], None)
+    provider = _require_agent_provider(raw_provider)
+
     sink = _require_audit_event_sink(adapters.audit_event_sink)
     return StartSessionDependencies(
         filesystem=adapters.filesystem,
@@ -43,9 +70,10 @@ def prepare_live_start_plan(
     *,
     adapters: DefaultAdapters,
     console: Console,
+    provider_id: str = _DEFAULT_PROVIDER_ID,
 ) -> tuple[StartSessionDependencies, StartSessionPlan]:
     """Build dependencies and prepare a live start plan with shared sync behavior."""
-    dependencies = build_start_session_dependencies(adapters)
+    dependencies = build_start_session_dependencies(adapters, provider_id=provider_id)
     if _should_sync_marketplace(request):
         with Status(
             "[cyan]Syncing marketplace settings...[/cyan]",

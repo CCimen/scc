@@ -51,6 +51,32 @@ __all__ = [
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Provider resolution helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _resolve_provider(
+    cli_flag: str | None,
+    normalized_org: NormalizedOrgConfig | None,
+    team: str | None,
+) -> str:
+    """Resolve the active provider from CLI flag, user config, and team policy."""
+    from scc_cli.core.provider_resolution import resolve_active_provider
+
+    allowed_providers: tuple[str, ...] = ()
+    if normalized_org is not None and team:
+        team_profile = normalized_org.get_profile(team)
+        if team_profile is not None:
+            allowed_providers = team_profile.allowed_providers
+
+    return resolve_active_provider(
+        cli_flag=cli_flag,
+        config_provider=config.get_selected_provider(),
+        allowed_providers=allowed_providers,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Start Command Flow
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -222,6 +248,13 @@ def start(
         was_auto_detected = False
 
     workspace_arg = None if was_auto_detected else str(workspace_path)
+
+    # ── Step 6.1: Resolve active provider ────────────────────────────────────
+    normalized_org = NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None
+    # Normalize typer default: direct calls pass OptionInfo, not None.
+    cli_provider = provider if isinstance(provider, str) else None
+    resolved_provider = _resolve_provider(cli_provider, normalized_org, team)
+
     start_request = StartSessionRequest(
         workspace_path=workspace_path,
         workspace_arg=workspace_arg,
@@ -234,14 +267,15 @@ def start(
         standalone=standalone,
         dry_run=dry_run,
         allow_suspicious=allow_suspicious_workspace,
-        org_config=NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None,
+        org_config=normalized_org,
         raw_org_config=org_config,
-        provider_id=provider,
+        provider_id=resolved_provider,
     )
     start_dependencies, start_plan = prepare_live_start_plan(
         start_request,
         adapters=adapters,
         console=console,
+        provider_id=resolved_provider,
     )
 
     output_view_model = build_sync_output_view_model(start_plan)
