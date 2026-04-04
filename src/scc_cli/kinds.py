@@ -52,6 +52,7 @@ class Kind(str, Enum):
     # Support
     SUPPORT_BUNDLE = "SupportBundle"
     LAUNCH_AUDIT = "LaunchAudit"
+    SAFETY_AUDIT = "SafetyAudit"
 
     # Config
     CONFIG_EXPLAIN = "ConfigExplain"

@@ -67,7 +67,7 @@
   - Estimate: 45m
   - Files: src/scc_cli/core/safety_policy_loader.py, src/scc_cli/doctor/checks/safety.py, src/scc_cli/doctor/checks/__init__.py, src/scc_cli/doctor/core.py, tests/test_safety_policy_loader.py, tests/test_safety_doctor_check.py
   - Verify: uv run pytest tests/test_safety_policy_loader.py tests/test_safety_doctor_check.py -v && uv run ruff check && uv run mypy src/scc_cli && grep -r 'from scc_cli.docker' src/scc_cli/core/safety_policy_loader.py; test $? -eq 1
-- [ ] **T02: Safety audit reader, CLI command, support-bundle integration, and tests** — Create `application/safety_audit.py` with a bounded reader over the canonical JSONL sink filtered to `safety.check` events. Add `scc support safety-audit` CLI command under the existing `support_app` with human and `--json` modes. Add `SAFETY_AUDIT` kind to the enum. Create the JSON presenter. Add a `safety` section to the support bundle manifest with effective policy summary and recent safety events. Write comprehensive tests.
+- [x] **T02: Added safety audit reader filtering safety.check events from JSONL sink, scc support safety-audit CLI command, support bundle safety section, and 13 tests** — Create `application/safety_audit.py` with a bounded reader over the canonical JSONL sink filtered to `safety.check` events. Add `scc support safety-audit` CLI command under the existing `support_app` with human and `--json` modes. Add `SAFETY_AUDIT` kind to the enum. Create the JSON presenter. Add a `safety` section to the support bundle manifest with effective policy summary and recent safety events. Write comprehensive tests.
 
 ## Steps
 

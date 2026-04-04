@@ -6,6 +6,16 @@ M005 is the final quality-bar milestone for the current v1 arc and should run af
 ## Vision
 Turn the completed v1 feature set into a highly maintainable, strongly typed, well-tested, and robust codebase that is easy to understand, modify, and extend without reintroducing provider leakage, architectural drift, or misleading operational behavior.
 
+## Steering Note For Governed Artifacts
+M005 is the implementation milestone for the governed-artifact and team-pack refactor. M004 may document current truth and verify that SCC does not overclaim Codex-native behavior, but it should not become the milestone that introduces the new provider-neutral bundle pipeline.
+
+The intended M005 direction is:
+- keep one org/team policy model
+- keep one approved team-pack source per bundle
+- remove Claude-shaped plugin references from core control-plane models
+- introduce explicit provider-neutral planning plus asymmetric Claude and Codex native renderers
+- preserve the user-facing experience of "one team package" without requiring dual team configs
+
 ## Current Audit Baseline
 - 58 Python files exceed 300 lines; 23 exceed 700, 15 exceed 800, 8 exceed 1000, and 3 exceed 1100.
 - The highest-risk large-file clusters are in `commands/`, `ui/`, `application/`, `marketplace/`, `docker/`, and `core/`.
@@ -53,12 +63,17 @@ Turn the completed v1 feature set into a highly maintainable, strongly typed, we
 2. `T02` Split the dashboard/settings UI cluster: `ui/dashboard/orchestrator.py`, `ui/dashboard/_dashboard.py`, `ui/settings.py`, `ui/wizard.py`, `ui/git_interactive.py`, `ui/picker.py`, and `ui/keys.py`.
 3. `T03` Split the commands cluster: `commands/team.py`, `commands/config.py`, `commands/profile.py`, `commands/reset.py`, `commands/admin.py`, and worktree command surfaces.
 4. `T04` Split the application/control-plane cluster: `application/dashboard.py`, `application/worktree/use_cases.py`, `application/compute_effective_config.py`, `application/settings/use_cases.py`, and nearby orchestration helpers.
-5. `T05` Split the marketplace/profile/config cluster: `marketplace/materialize.py`, `marketplace/team_fetch.py`, `marketplace/resolve.py`, `application/sync_marketplace.py`, `core/personal_profiles.py`, and `setup.py`. Separate provider-neutral governed-artifact planning from Claude- and Codex-specific renderers so native plugin layouts stop leaking into the control plane.
+5. `T05` Split the marketplace/profile/config cluster: `marketplace/materialize.py`, `marketplace/team_fetch.py`, `marketplace/resolve.py`, `application/sync_marketplace.py`, `core/personal_profiles.py`, and `setup.py`. Separate provider-neutral governed-artifact planning from Claude- and Codex-specific renderers so native plugin layouts stop leaking into the control plane. This is the first concrete implementation wedge for the new team-pack model.
 6. `T06` Repair architecture boundaries as part of the splits: remove direct runtime/backend imports from core/application/commands/UI, break import cycles, and move provider/runtime-specific logic behind explicit ports/adapters.
 
 ### S03 — Typed Config Model Adoption And Strict Typing Cleanup
 1. `T01` Adopt typed internal config models as the default control-plane shape for org, project, user, team, session, governed artifacts, bundles, provider bindings, marketplace, and MCP data; raw dictionaries remain edge-only.
 2. `T02` Eliminate raw-dict launch/config aliases such as `UserConfig: TypeAlias = dict[str, Any]` from launch, config, setup, validation, and policy-merging paths, and replace plugin-centric internal control-plane shapes with provider-neutral governed artifact plans.
+   The resulting typed model should support one approved team pack mapping to:
+   - shared skills
+   - shared MCP definitions
+   - Claude-native plugin and hook assets
+   - Codex-native plugin plus separate rules/hooks/config/instruction surfaces
 3. `T03` Make the interaction request/response flow generic end-to-end so launch and wizard code stop relying on repeated `cast(answer.value, ...)` recovery.
 4. `T04` Remove transitional mypy relaxations, redundant casts, and broad `Any` flow in touched modules while keeping any remaining exceptions explicit and documented.
 5. `T05` Centralize typed serialization boundaries so JSON envelopes and adapter persistence do not leak raw-dict shapes back into application logic.
@@ -81,6 +96,15 @@ Turn the completed v1 feature set into a highly maintainable, strongly typed, we
 2. `T02` Remove transitional Ruff ignore categories and reduce mypy overrides to narrow intentional cases, ideally tests only.
 3. `T03` Run a final truthfulness pass on docs, JSON/human diagnostics, and operator-facing wording about provider, runtime, network, safety, enforcement, and governed-artifact portability. Docs must distinguish shared skills/MCP from provider-native plugins/hooks/marketplaces and must not imply dual team configs are required.
 4. `T04` Validate the milestone against the success criteria with a before/after hotspot summary, an unresolved-risk register, and the full green verification gate.
+
+## Recommended Execution Order Inside M005
+For the governed-artifact/team-pack architecture specifically, prefer this sequence:
+1. S02/T05 — split the current marketplace/profile/config cluster and isolate provider-neutral planning from provider-native renderers
+2. S03/T01-T03 — land typed governed-artifact and bundle models plus typed team-pack config flow
+3. S04/T01-T05 — harden error handling and fail-closed behavior for source fetch, render, merge, and install surfaces
+4. S06/T03-T04 — truthfulness pass and milestone validation after the new renderer split is real
+
+Do not start by bolting Codex support onto the current Claude-shaped marketplace pipeline. That would deliver short-term behavior at the cost of the exact technical debt this milestone is meant to remove.
 
 ## Parallelism
 Inside M005, S03 and S04 can run in parallel after S02 because they focus on different failure modes. M005 itself should not run in parallel with M003 or M004 because those milestones still reshape the same launch/runtime/safety surfaces.

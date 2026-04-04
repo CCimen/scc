@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T13:08:22.292Z",
+  "exported_at": "2026-04-04T13:16:12.094Z",
   "milestones": [
     {
       "id": "M001",
@@ -2824,19 +2824,30 @@
       "milestone_id": "M004",
       "slice_id": "S04",
       "id": "T02",
-      "title": "Safety audit reader, CLI command, support-bundle integration, and tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added safety audit reader filtering safety.check events from JSONL sink, scc support safety-audit CLI command, support bundle safety section, and 13 tests",
+      "status": "complete",
+      "one_liner": "Added safety audit reader filtering safety.check events from JSONL sink, scc support safety-audit CLI command, support bundle safety section, and 13 tests",
+      "narrative": "Created application/safety_audit.py with SafetyAuditEventRecord and SafetyAuditDiagnostics frozen dataclasses and read_safety_audit_diagnostics() that uses bounded tail-read (reuses _tail_lines from launch audit) filtering to event_type == \"safety.check\". Tracks blocked/allowed counts and last blocked event. Created presentation/json/safety_audit_json.py with envelope builder using Kind.SAFETY_AUDIT. Added SAFETY_AUDIT to the Kind enum. Added scc support safety-audit command in commands/support.py following the exact launch-audit pattern with --limit, --json, --pretty options. Added safety section to build_support_bundle_manifest() with effective policy (from load_safety_policy) and recent audit events, wrapped in try/except for partial results. Wrote 13 tests covering empty sink, event filtering, blocked/allowed counts, last blocked, bounded scan, malformed lines, path redaction, JSON serializable output, CLI human mode, CLI JSON mode, unavailable sink, and support bundle integration.",
+      "verification_result": "All 13 targeted tests pass. ruff check clean. mypy clean (261 files). Full regression: 3790 passed, 23 skipped, 4 xfailed — zero regressions.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T13:16:12.051Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Added extra tests beyond plan (test_redact_paths_disabled, test_to_dict_returns_serializable). Non-safety JSONL events parsed as valid JSON are silently skipped rather than counted as malformed.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/application/safety_audit.py",
+        "src/scc_cli/presentation/json/safety_audit_json.py",
+        "src/scc_cli/commands/support.py",
+        "src/scc_cli/application/support_bundle.py",
+        "src/scc_cli/kinds.py",
+        "tests/test_safety_audit.py"
+      ],
+      "key_decisions": [
+        "Reused _tail_lines from launch audit_log for bounded reading (no full-file scan)",
+        "Non-safety events parsed as valid JSON are silently skipped (not counted as malformed)",
+        "Safety section uses _load_raw_org_config_for_bundle() indirection matching T01 doctor pattern"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S04\nmilestone: M004\nkey_files:\n  - src/scc_cli/application/safety_audit.py\n  - src/scc_cli/presentation/json/safety_audit_json.py\n  - src/scc_cli/commands/support.py\n  - src/scc_cli/application/support_bundle.py\n  - src/scc_cli/kinds.py\n  - tests/test_safety_audit.py\nkey_decisions:\n  - Reused _tail_lines from launch audit_log for bounded reading (no full-file scan)\n  - Non-safety events parsed as valid JSON are silently skipped (not counted as malformed)\n  - Safety section uses _load_raw_org_config_for_bundle() indirection matching T01 doctor pattern\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T13:16:12.050Z\nblocker_discovered: false\n---\n\n# T02: Added safety audit reader filtering safety.check events from JSONL sink, scc support safety-audit CLI command, support bundle safety section, and 13 tests\n\n**Added safety audit reader filtering safety.check events from JSONL sink, scc support safety-audit CLI command, support bundle safety section, and 13 tests**\n\n## What Happened\n\nCreated application/safety_audit.py with SafetyAuditEventRecord and SafetyAuditDiagnostics frozen dataclasses and read_safety_audit_diagnostics() that uses bounded tail-read (reuses _tail_lines from launch audit) filtering to event_type == \"safety.check\". Tracks blocked/allowed counts and last blocked event. Created presentation/json/safety_audit_json.py with envelope builder using Kind.SAFETY_AUDIT. Added SAFETY_AUDIT to the Kind enum. Added scc support safety-audit command in commands/support.py following the exact launch-audit pattern with --limit, --json, --pretty options. Added safety section to build_support_bundle_manifest() with effective policy (from load_safety_policy) and recent audit events, wrapped in try/except for partial results. Wrote 13 tests covering empty sink, event filtering, blocked/allowed counts, last blocked, bounded scan, malformed lines, path redaction, JSON serializable output, CLI human mode, CLI JSON mode, unavailable sink, and support bundle integration.\n\n## Verification\n\nAll 13 targeted tests pass. ruff check clean. mypy clean (261 files). Full regression: 3790 passed, 23 skipped, 4 xfailed — zero regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_safety_audit.py -v` | 0 | ✅ pass | 4700ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 5000ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4400ms |\n| 4 | `uv run pytest --tb=short -q` | 0 | ✅ pass | 46600ms |\n\n## Deviations\n\nAdded extra tests beyond plan (test_redact_paths_disabled, test_to_dict_returns_serializable). Non-safety JSONL events parsed as valid JSON are silently skipped rather than counted as malformed.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/application/safety_audit.py`\n- `src/scc_cli/presentation/json/safety_audit_json.py`\n- `src/scc_cli/commands/support.py`\n- `src/scc_cli/application/support_bundle.py`\n- `src/scc_cli/kinds.py`\n- `tests/test_safety_audit.py`\n",
       "description": "Create `application/safety_audit.py` with a bounded reader over the canonical JSONL sink filtered to `safety.check` events. Add `scc support safety-audit` CLI command under the existing `support_app` with human and `--json` modes. Add `SAFETY_AUDIT` kind to the enum. Create the JSON presenter. Add a `safety` section to the support bundle manifest with effective policy summary and recent safety events. Write comprehensive tests.\n\n## Steps\n\n1. Add `SAFETY_AUDIT = \"SafetyAudit\"` to `Kind` enum in `src/scc_cli/kinds.py`.\n\n2. Create `src/scc_cli/application/safety_audit.py`:\n   - Define `SafetyAuditEventRecord` frozen dataclass: `line_number: int`, `event_type: str`, `message: str`, `severity: str`, `occurred_at: str`, `command: str | None`, `verdict_allowed: str | None`, `matched_rule: str | None`, `provider_id: str | None`, `metadata: dict[str, Any]`\n   - Define `SafetyAuditDiagnostics` frozen dataclass: `sink_path: str`, `state: str`, `requested_limit: int`, `scanned_line_count: int`, `malformed_line_count: int`, `last_malformed_line: int | None`, `recent_events: tuple[SafetyAuditEventRecord, ...]`, `last_blocked: SafetyAuditEventRecord | None`, `blocked_count: int`, `allowed_count: int`, `error: str | None = None`\n   - Add `to_dict()` method on `SafetyAuditDiagnostics` using `dataclasses.asdict`\n   - Implement `read_safety_audit_diagnostics(*, audit_path: Path | None = None, limit: int = 10, redact_paths: bool = True) -> SafetyAuditDiagnostics`\n   - Reuse `_tail_lines` from `application/launch/audit_log.py` (import it) for bounded tail-read\n   - Filter parsed records to `event_type == \"safety.check\"` only\n   - Extract `command`, `verdict_allowed`, `matched_rule`, `provider_id` from record metadata\n   - Track `blocked_count` / `allowed_count` and `last_blocked`\n   - Reuse the `_redact_string` pattern for path redaction\n\n3. Create `src/scc_cli/presentation/json/safety_audit_json.py`:\n   - Implement `build_safety_audit_envelope(diagnostics: SafetyAuditDiagnostics) -> dict[str, object]`\n   - Use `build_envelope(Kind.SAFETY_AUDIT, data=diagnostics.to_dict())`\n\n4. Add `scc support safety-audit` command in `src/scc_cli/commands/support.py`:\n   - Follow the exact pattern of `support_launch_audit_cmd`\n   - Options: `--limit` (default 10), `--json`, `--pretty`\n   - Human mode: render sink state, blocked/allowed counts, last blocked command, recent events\n   - JSON mode: use `build_safety_audit_envelope`\n   - Import from `application.safety_audit` and `presentation.json.safety_audit_json`\n\n5. Add `safety` section to `build_support_bundle_manifest()` in `src/scc_cli/application/support_bundle.py`:\n   - Wrap in try/except (partial results pattern per KNOWLEDGE.md)\n   - Include effective policy summary via `load_safety_policy()` from `core/safety_policy_loader.py`\n   - Include recent safety audit events via `read_safety_audit_diagnostics(limit=5)`\n   - Structure: `{\"effective_policy\": {\"action\": ..., \"source\": ...}, \"recent_audit\": diagnostics.to_dict()}`\n\n6. Create `tests/test_safety_audit.py` with tests:\n   - `test_empty_sink_returns_empty_state` — no file exists → state \"unavailable\"\n   - `test_filters_to_safety_check_events` — mixed JSONL with launch and safety.check events → only safety.check returned\n   - `test_blocked_allowed_counts` — verify blocked_count and allowed_count\n   - `test_last_blocked_populated` — verify last_blocked is the most recent blocked event\n   - `test_bounded_scan` — verify limit parameter works\n   - `test_malformed_lines_skipped` — malformed JSON lines don't crash, increment malformed count\n   - `test_redact_paths` — home dir replaced with ~\n   - `test_support_bundle_has_safety_section` — mock dependencies, verify manifest[\"safety\"] key exists\n\n## Must-Haves\n\n- [ ] Safety audit reader filters to `event_type == \"safety.check\"` only\n- [ ] Reader uses bounded tail-read (reuses `_tail_lines`), not full-file scan\n- [ ] `scc support safety-audit` works in both human and `--json` modes\n- [ ] Support bundle manifest includes `safety` section with effective policy and recent audit\n- [ ] `SAFETY_AUDIT` kind registered in `kinds.py`\n- [ ] All tests in `test_safety_audit.py` pass\n- [ ] `uv run ruff check` clean\n- [ ] `uv run mypy src/scc_cli` clean\n- [ ] Full regression ≥3746 passed",
       "estimate": "60m",
       "files": [
@@ -5089,6 +5100,50 @@
       "verdict": "✅ pass",
       "duration_ms": 46200,
       "created_at": "2026-04-04T13:08:22.251Z"
+    },
+    {
+      "id": 99,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run pytest tests/test_safety_audit.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4700,
+      "created_at": "2026-04-04T13:16:12.051Z"
+    },
+    {
+      "id": 100,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T13:16:12.051Z"
+    },
+    {
+      "id": 101,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4400,
+      "created_at": "2026-04-04T13:16:12.051Z"
+    },
+    {
+      "id": 102,
+      "task_id": "T02",
+      "slice_id": "S04",
+      "milestone_id": "M004",
+      "command": "uv run pytest --tb=short -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 46600,
+      "created_at": "2026-04-04T13:16:12.051Z"
     }
   ]
 }

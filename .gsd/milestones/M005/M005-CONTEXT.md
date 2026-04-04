@@ -47,6 +47,20 @@ These are already decided and should not be reopened:
 - No backward-compatibility aliases for pre-M001 terminology belong in core.
 - M005 is the post-M004 quality-bar milestone, not an earlier substitute for M003 or M004.
 
+## Specific Decision For Team-Pack Work
+If GSD reaches the team-pack or governed-artifact refactor in M005, it should implement it here rather than trying to squeeze it into the remaining M004 safety slices.
+
+Reason:
+- the current issue is primarily control-plane shape, renderer decomposition, typed config adoption, and adapter-boundary cleanup
+- those are M005 concerns
+- M004 should only make current capability and safety posture truthful
+
+The desired M005 implementation target is one approved team-pack source that SCC can project into:
+- Claude-native plugin and adjacent native surfaces
+- Codex-native plugin plus separate rules/hooks/config/instruction surfaces
+
+without requiring a second team policy document.
+
 ## In Scope
 - Decomposition of large or mixed-responsibility files into smaller cohesive modules
 - Architecture boundary repair and cycle removal
@@ -139,6 +153,7 @@ Current repo evidence shows these concrete boundary problems:
 - `marketplace/materialize.py`, `marketplace/render.py`, and `application/sync_marketplace.py` are still anchored to Claude-native concepts such as `settings.local.json`, `.claude-plugin/marketplace.json`, and `claude-plugins-official`, even though the product goal is one governed artifact model that renders to both Claude and Codex.
 - There is not yet one explicit adapter-owned model for Codex plugins, Codex rules, Codex hooks, and provider-native instruction files, which risks future drift if new support is bolted onto the current Claude-shaped pipeline.
 - Claude and Codex plugin surfaces are intentionally asymmetric. M005 should not "solve" this by inventing a fake shared plugin format in core; it should make the provider-neutral bundle plan explicit and keep native projection logic inside adapters.
+- The developer-facing UX should remain close to the old SCC model: choose a team and get one team package. The code-facing architecture should achieve that by rendering from one approved team-pack source, not by making Claude marketplace shape the canonical config model.
 
 ## Canonical References To Load First
 Read these before planning any M005 slice work:

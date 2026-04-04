@@ -11,7 +11,9 @@ from typing import Any
 
 from scc_cli import __version__, config
 from scc_cli.application.launch.audit_log import read_launch_audit_diagnostics
+from scc_cli.application.safety_audit import read_safety_audit_diagnostics
 from scc_cli.core.errors import SCCError
+from scc_cli.core.safety_policy_loader import load_safety_policy
 from scc_cli.doctor.serialization import build_doctor_json_data
 from scc_cli.ports.archive_writer import ArchiveWriter
 from scc_cli.ports.clock import Clock
@@ -165,6 +167,14 @@ class SupportBundleResult:
     manifest: dict[str, Any]
 
 
+def _load_raw_org_config_for_bundle() -> dict[str, Any] | None:
+    """Load raw org config for the safety section (fail-safe)."""
+    try:
+        return config.load_cached_org_config()
+    except Exception:
+        return None
+
+
 def _load_user_config(filesystem: Filesystem, path: Path) -> dict[str, Any]:
     try:
         if not filesystem.exists(path):
@@ -280,6 +290,25 @@ def build_support_bundle_manifest(
         "resolved_destination_sets": resolved_destination_sets,
     }
 
+    # Safety: effective policy + recent safety audit events
+    try:
+        raw_org_config = _load_raw_org_config_for_bundle()
+        policy = load_safety_policy(raw_org_config)
+        safety_audit_diag = read_safety_audit_diagnostics(
+            audit_path=dependencies.launch_audit_path,
+            limit=SUPPORT_BUNDLE_AUDIT_LIMIT,
+            redact_paths=request.redact_paths,
+        )
+        safety_section: dict[str, Any] = {
+            "effective_policy": {
+                "action": policy.action,
+                "source": policy.source,
+            },
+            "recent_audit": safety_audit_diag.to_dict(),
+        }
+    except Exception as exc:
+        safety_section = {"error": f"Failed to load safety diagnostics: {exc}"}
+
     bundle_data: dict[str, Any] = {
         "generated_at": generated_at,
         "cli_version": __version__,
@@ -289,6 +318,7 @@ def build_support_bundle_manifest(
         "doctor": doctor_data,
         "launch_audit": launch_audit,
         "effective_egress": effective_egress,
+        "safety": safety_section,
     }
 
     if request.workspace_path:

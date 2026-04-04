@@ -17,6 +17,11 @@ from ..application.launch.audit_log import (
     LaunchAuditEventRecord,
     read_launch_audit_diagnostics,
 )
+from ..application.safety_audit import (
+    SafetyAuditDiagnostics,
+    SafetyAuditEventRecord,
+    read_safety_audit_diagnostics,
+)
 from ..application.support_bundle import (
     SupportBundleRequest,
     build_default_support_bundle_dependencies,
@@ -27,6 +32,7 @@ from ..application.support_bundle import (
 from ..cli_common import console, handle_errors
 from ..output_mode import json_output_mode, print_json, set_pretty_mode
 from ..presentation.json.launch_audit_json import build_launch_audit_envelope
+from ..presentation.json.safety_audit_json import build_safety_audit_envelope
 from ..presentation.json.support_json import build_support_bundle_envelope
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,4 +215,107 @@ def support_launch_audit_cmd(
             raise typer.Exit(0)
 
     _render_launch_audit_human(diagnostics)
+    raise typer.Exit(0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Safety Audit Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _render_safety_audit_human(diagnostics: SafetyAuditDiagnostics) -> None:
+    """Render safety-audit diagnostics for human readers."""
+    console.print(f"[bold cyan]Safety audit[/bold cyan]\nSink: {diagnostics.sink_path}")
+
+    if diagnostics.state == "unavailable":
+        console.print("State: unavailable")
+        if diagnostics.error:
+            console.print(f"Error: {diagnostics.error}")
+        else:
+            console.print("No audit file exists yet.")
+        return
+
+    if diagnostics.state == "empty":
+        console.print("State: empty")
+        console.print("The audit file exists, but it has no safety-check records yet.")
+        return
+
+    console.print("State: available")
+    console.print(f"Recent scan lines: {diagnostics.scanned_line_count}")
+    console.print(f"Malformed records in recent scan: {diagnostics.malformed_line_count}")
+    if diagnostics.last_malformed_line is not None:
+        console.print(f"Last malformed line in recent scan: {diagnostics.last_malformed_line}")
+
+    console.print()
+    console.print(f"Blocked: {diagnostics.blocked_count}  Allowed: {diagnostics.allowed_count}")
+
+    console.print()
+    console.print("[bold]Last blocked[/bold]")
+    if diagnostics.last_blocked is None:
+        console.print("No blocked safety event was found in the recent scan.")
+    else:
+        _render_safety_audit_event(diagnostics.last_blocked)
+
+    console.print()
+    console.print(f"[bold]Recent safety events[/bold] (limit {diagnostics.requested_limit})")
+    if len(diagnostics.recent_events) == 0:
+        console.print("No recent safety events matched the requested limit.")
+        return
+
+    for event in diagnostics.recent_events:
+        _render_safety_audit_event(event)
+        console.print()
+
+
+def _render_safety_audit_event(event: SafetyAuditEventRecord) -> None:
+    provider = event.provider_id or "unknown"
+    verdict = event.verdict_allowed or "unknown"
+    console.print(
+        f"- {event.occurred_at} [{event.severity}] {event.event_type} "
+        f"provider={provider} verdict={verdict} line={event.line_number}"
+    )
+    console.print(f"  {event.message}")
+    if event.command:
+        console.print(f"  Command: {event.command}")
+    if event.matched_rule:
+        console.print(f"  Rule: {event.matched_rule}")
+
+
+@support_app.command("safety-audit")
+@handle_errors
+def support_safety_audit_cmd(
+    limit: int = typer.Option(
+        10,
+        "--limit",
+        min=0,
+        help="Maximum number of recent safety events to show.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output diagnostics as JSON.",
+    ),
+    pretty: bool = typer.Option(
+        False,
+        "--pretty",
+        help="Pretty-print JSON output (implies --json).",
+    ),
+) -> None:
+    """Show recent safety-check diagnostics from SCC's durable JSONL sink."""
+    if pretty:
+        json_output = True
+        set_pretty_mode(True)
+
+    diagnostics = read_safety_audit_diagnostics(
+        audit_path=config.LAUNCH_AUDIT_FILE,
+        limit=limit,
+        redact_paths=True,
+    )
+
+    if json_output:
+        with json_output_mode():
+            print_json(build_safety_audit_envelope(diagnostics))
+            raise typer.Exit(0)
+
+    _render_safety_audit_human(diagnostics)
     raise typer.Exit(0)
