@@ -21,80 +21,41 @@ A security or platform team can approve SCC because its governance model, runtim
 - Prefer smaller cohesive modules, typed seams, and composition-root boundaries over growing central orchestrators.
 - When a slice touches a large or fragile file, plan the smallest safe extraction that improves testability and future changeability.
 - Pair refactors with characterization or contract tests so maintainability work stays measurable.
-- Do not advance M005 ahead of M003 or M004; keep M005 as the final quality-bar milestone.
-- In M003 and M004, allow only local maintainability extractions that directly enable the active slice in touched files.
+- Do not advance M005 ahead of M004; keep M005 as the final quality-bar milestone.
+- In M004, allow only local maintainability extractions that directly enable the active slice in touched files.
 - Reserve repo-wide decomposition, broad typed-config migration, guardrail restoration, xfail removal, and the larger coverage campaign for M005.
 
-## Current milestone state
-**M003: Portable Runtime And Enforced Web Egress** is in progress. S01, S02, S03, and S04 are complete. S05 (Verification, docs truthfulness, and milestone closeout) is the final remaining slice.
+## Milestone history
+
+### M001 — Provider-Neutral Launch Boundary ✅
+Established typed contracts (core/contracts.py), AgentProvider protocol, and provider-neutral seam for launch, runtime, network, safety, and audit planning.
+
+### M002 — Provider-Neutral Launch Pipeline ✅
+Made AgentProvider and AgentLaunchSpec part of the real launch path. Claude settings are adapter-owned. Codex is a first-class provider. Preflight validation, durable JSONL audit sink, and application-owned support-bundle converged. Launch wizard resume extracted to typed helpers.
+
+### M003 — Portable Runtime And Enforced Web Egress ✅
+Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topology-enforced web egress via Squid proxy sidecar, provider destination validation, operator diagnostics, and docs truthfulness guardrails. +178 net new tests (3464 total). Key deliverables:
+- RuntimeProbe protocol as canonical detection surface
+- OciSandboxRuntime using docker create/start/exec
+- Three-layer egress enforcement: pure policy → infrastructure adapter → runtime integration
+- Provider destination registry → SandboxSpec → egress plan pipeline
+- Doctor check for runtime backend, support-bundle effective egress section
+- 5 docs-truthfulness guardrail tests
 
 ## Next milestone order
-1. **M003 — Portable Runtime And Enforced Web Egress** (active — S05 remaining)
-2. **M004 — Cross-Agent Runtime Safety**
-3. **M005 — Architecture Quality, Strictness, And Hardening**
-
-## M003 slice status
-| Slice | Title | Status |
-|-------|-------|--------|
-| S01 | Capability-based runtime model and detection cleanup | ✅ complete |
-| S02 | SCC-owned image contracts and plain OCI backend | ✅ complete |
-| S03 | Enforced web-egress topology and proxy ACLs | ✅ complete |
-| S04 | Policy integration, provider destination validation, and operator diagnostics | ✅ complete |
-| S05 | Verification, docs truthfulness, and milestone closeout | ⬜ pending (depends: S03, S04) |
-
-## M003/S01 outcome summary
-- RuntimeProbe protocol (ports/runtime_probe.py) with a single `probe() -> RuntimeInfo` method is the new canonical detection surface.
-- DockerRuntimeProbe is the sole adapter calling docker/core helpers; it never raises from probe().
-- RuntimeInfo extended with version, desktop_version, daemon_reachable, sandbox_available fields (backward compatible defaults).
-- DockerSandboxRuntime.ensure_available() is now probe-driven instead of calling docker.check_docker_available() directly.
-- Dashboard orchestrator worktree start and session resume migrated to probe-backed detection.
-- Tokenizer-based guardrail test prevents future direct check_docker_available() calls outside the adapter layer.
-- Bootstrap shares one DockerRuntimeProbe instance between runtime_probe and sandbox_runtime fields.
-
-## M003/S02 outcome summary
-- OciSandboxRuntime adapter implements full SandboxRuntime protocol using docker create/start/exec (no Docker Desktop dependency).
-- Frozen ImageRef dataclass with full_ref()/image_ref() roundtrip and SCC image constants (SCC_BASE_IMAGE, SCC_CLAUDE_IMAGE, SCC_CLAUDE_IMAGE_REF).
-- Dockerfiles for scc-base (Ubuntu 22.04, git, curl, agent user) and scc-agent-claude (Node.js 20 LTS, Claude CLI).
-- RuntimeInfo.preferred_backend field drives bootstrap backend selection: "docker-sandbox" → DockerSandboxRuntime, "oci" → OciSandboxRuntime.
-- Rootless detection via docker info SecurityOptions parsing with graceful None fallback.
-- start_session.py routes image selection: SCC_CLAUDE_IMAGE_REF for OCI, SANDBOX_IMAGE for Desktop.
-- 34 OCI runtime tests, 23 image contract tests, 9 bootstrap/routing integration tests added.
-- scc.backend=oci label convention and scc-oci-{hash} container naming for OCI containers.
-
-## M003/S03 outcome summary
-- Three-layer enforced web-egress: pure policy logic (core/egress_policy.py), infrastructure adapter (adapters/egress_topology.py), runtime integration (adapters/oci_sandbox_runtime.py).
-- `build_egress_plan()` produces NetworkPolicyPlan with default deny rules for IP literals, loopback, private CIDRs, link-local, and metadata endpoints.
-- `compile_squid_acl()` compiles plans into valid Squid ACL config with deny-before-allow ordering.
-- NetworkTopologyManager creates internal-only Docker network, starts dual-homed Squid proxy sidecar, returns EgressTopologyInfo.
-- Squid proxy sidecar image defined in images/scc-egress-proxy/ (Dockerfile, squid.conf.template, entrypoint.sh).
-- OCI adapter orchestrates topology for web-egress-enforced (internal network + proxy env), uses --network=none for locked-down-web, unchanged for open.
-- Topology teardown wired into both stop() and remove() with idempotent cleanup.
-- 49 new tests across three test files plus guardrail preventing regression to default network.
-
-## M003/S04 outcome summary
-- Provider destination registry (`core/destination_registry.py`) maps named sets (anthropic-core, openai-core) to typed DestinationSet objects with resolve and rule-generation helpers.
-- SandboxSpec.destination_sets field carries resolved sets through the launch pipeline (frozen dataclass, default empty tuple).
-- `_build_sandbox_spec()` resolves provider destinations for OCI backends; OCI adapter converts to allow rules in egress plan.
-- Enforced-mode preflight validates destination resolvability before launch — unknown sets raise LaunchPolicyBlockedError.
-- `check_runtime_backend()` doctor check reports preferred_backend, display_name, and version via bootstrap probe.
-- `effective_egress` support-bundle section includes runtime_backend, network_policy, and resolved_destination_sets with independent try/except resilience.
-- 30 net new tests (3432 total suite).
-
-## M002 outcome summary
-- `AgentProvider` and `AgentLaunchSpec` are now part of the real launch path rather than planned-only seams.
-- Claude-specific settings/auth behavior is adapter-owned behind `src/scc_cli/adapters/claude_settings.py` and `bootstrap.py` remains the only allowed higher-layer adapter boundary.
-- Codex is a first-class provider on the same seam through `src/scc_cli/adapters/codex_agent_provider.py` with honest capability metadata.
-- SCC now performs provider-neutral preflight before runtime startup and fails early on blocked or malformed launches.
-- Launch/preflight decisions persist through one canonical JSONL audit sink at `~/.config/scc/audit/launch-events.jsonl`.
-- Support-bundle generation now has one application-owned implementation, and launch-wizard resume behavior sits behind typed helpers with hotspot guardrails.
+1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
+2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
+3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
+4. **M004 — Cross-Agent Runtime Safety** (next)
+5. **M005 — Architecture Quality, Strictness, And Hardening**
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003/S01 (RuntimeProbe protocol), M003/S02 (OCI adapter follows adapter-boundary conventions), M003/S03 (three-layer egress enforcement with 49 tests, local _run_docker to avoid cross-adapter coupling), and M003/S04 (pure destination registry, import boundary compliance for doctor checks, resilient support-bundle diagnostics).
+- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003 across all 5 slices (RuntimeProbe protocol, OCI adapter following adapter-boundary conventions, three-layer egress enforcement, pure destination registry, docs-truthfulness guardrails).
 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (Success: no issues found in 249 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (3432 passed, 23 skipped, 4 xfailed)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (3437 passed, 23 skipped, 4 xfailed — 3464 total)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -113,7 +74,7 @@ A security or platform team can approve SCC because its governance model, runtim
 - Provider destination sets flow through: registry resolve → SandboxSpec.destination_sets → OCI adapter allow rules → egress plan. Enforced-mode preflight validates resolvability before launch.
 - Doctor checks access runtime probes via bootstrap.get_default_adapters(), never direct adapter imports.
 - Support-bundle sections use independent try/except per data source for partial-failure resilience.
+- Docs-truthfulness guardrail tests prevent stale network-mode vocabulary from reappearing in source, tests, or docs.
 
 ## Immediate next focus
-- S05 (Verification, docs truthfulness, and milestone closeout) is unblocked and should start next.
-- S05 should verify that diagnostic surfaces match D015 requirements, confirm docs truthfulness against actual enforcement, and close out M003.
+- M003 is complete. M004 (Cross-Agent Runtime Safety) is the next milestone.
