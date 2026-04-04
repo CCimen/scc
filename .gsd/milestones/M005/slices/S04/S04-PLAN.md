@@ -31,7 +31,7 @@ Add characterization tests that verify the renderer produces expected file struc
   - Estimate: 2h30m
   - Files: src/scc_cli/adapters/claude_renderer.py, tests/test_claude_renderer.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_claude_renderer.py -v && uv run pytest --rootdir "$PWD" -q
-- [ ] **T03: Codex renderer: project ArtifactRenderPlan into Codex-native surfaces** — Create src/scc_cli/adapters/codex_renderer.py with a function render_codex_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult. This adapter-owned renderer:
+- [x] **T03: Created codex_renderer.py projecting ArtifactRenderPlan into Codex-native skills, MCP config, plugin/rules/hooks/instruction surfaces, with 29 characterization tests at 99% coverage** — Create src/scc_cli/adapters/codex_renderer.py with a function render_codex_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult. This adapter-owned renderer:
 1. Consumes an ArtifactRenderPlan produced by the core bundle resolver
 2. Renders skills into Codex skill installation surface (.agents/skills/)
 3. Renders MCP server definitions into .codex/config.toml or .mcp.json

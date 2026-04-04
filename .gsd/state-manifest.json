@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T19:02:28.249Z",
+  "exported_at": "2026-04-04T19:11:00.377Z",
   "milestones": [
     {
       "id": "M001",
@@ -3854,19 +3854,27 @@
       "milestone_id": "M005",
       "slice_id": "S04",
       "id": "T03",
-      "title": "Codex renderer: project ArtifactRenderPlan into Codex-native surfaces",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created codex_renderer.py projecting ArtifactRenderPlan into Codex-native skills, MCP config, plugin/rules/hooks/instruction surfaces, with 29 characterization tests at 99% coverage",
+      "status": "complete",
+      "one_liner": "Created codex_renderer.py projecting ArtifactRenderPlan into Codex-native skills, MCP config, plugin/rules/hooks/instruction surfaces, with 29 characterization tests at 99% coverage",
+      "narrative": "Implemented src/scc_cli/adapters/codex_renderer.py as an adapter-owned renderer consuming provider-neutral ArtifactRenderPlan and projecting it into Codex-native file structures. Uses the same classify→dispatch pattern as the Claude renderer but targets intentionally asymmetric Codex surfaces per D019/spec-06: skills → .agents/skills/, MCP servers → mcp_fragment dict for caller merge, plugin_bundle → .codex-plugin/plugin.json, rules → .codex/rules/*.rules.json, hooks → .codex/hooks.json with merge-safe scc_managed namespace, instructions → .codex/.scc-managed/instructions/. Returns RendererResult with rendered_paths, skipped_artifacts, warnings, and mcp_fragment. 29 characterization tests at 99% coverage covering all binding types, merge strategies, edge cases, and idempotent rendering.",
+      "verification_result": "ruff check: 0 errors. mypy: 0 errors in 288 files. pytest tests/test_codex_renderer.py -v: 29 passed (99% coverage). Full suite: 4195 passed, 23 skipped, 3 xfailed, 1 xpassed — no regressions.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T19:11:00.299Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/codex_renderer.py",
+        "tests/test_codex_renderer.py"
+      ],
+      "key_decisions": [
+        "Renderer returns mcp_fragment for caller to merge into .mcp.json; does not write .mcp.json directly",
+        "Hooks merge strategy: scc_managed namespace per bundle preserves existing user content",
+        "Rules rendered as metadata JSON (.rules.json) alongside native .rules files",
+        "Instructions placed under .codex/.scc-managed/instructions/ to avoid AGENTS.md collision"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S04\nmilestone: M005\nkey_files:\n  - src/scc_cli/adapters/codex_renderer.py\n  - tests/test_codex_renderer.py\nkey_decisions:\n  - Renderer returns mcp_fragment for caller to merge into .mcp.json; does not write .mcp.json directly\n  - Hooks merge strategy: scc_managed namespace per bundle preserves existing user content\n  - Rules rendered as metadata JSON (.rules.json) alongside native .rules files\n  - Instructions placed under .codex/.scc-managed/instructions/ to avoid AGENTS.md collision\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T19:11:00.298Z\nblocker_discovered: false\n---\n\n# T03: Created codex_renderer.py projecting ArtifactRenderPlan into Codex-native skills, MCP config, plugin/rules/hooks/instruction surfaces, with 29 characterization tests at 99% coverage\n\n**Created codex_renderer.py projecting ArtifactRenderPlan into Codex-native skills, MCP config, plugin/rules/hooks/instruction surfaces, with 29 characterization tests at 99% coverage**\n\n## What Happened\n\nImplemented src/scc_cli/adapters/codex_renderer.py as an adapter-owned renderer consuming provider-neutral ArtifactRenderPlan and projecting it into Codex-native file structures. Uses the same classify→dispatch pattern as the Claude renderer but targets intentionally asymmetric Codex surfaces per D019/spec-06: skills → .agents/skills/, MCP servers → mcp_fragment dict for caller merge, plugin_bundle → .codex-plugin/plugin.json, rules → .codex/rules/*.rules.json, hooks → .codex/hooks.json with merge-safe scc_managed namespace, instructions → .codex/.scc-managed/instructions/. Returns RendererResult with rendered_paths, skipped_artifacts, warnings, and mcp_fragment. 29 characterization tests at 99% coverage covering all binding types, merge strategies, edge cases, and idempotent rendering.\n\n## Verification\n\nruff check: 0 errors. mypy: 0 errors in 288 files. pytest tests/test_codex_renderer.py -v: 29 passed (99% coverage). Full suite: 4195 passed, 23 skipped, 3 xfailed, 1 xpassed — no regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 5000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5000ms |\n| 3 | `uv run pytest tests/test_codex_renderer.py -v` | 0 | ✅ pass | 1300ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q` | 0 | ✅ pass | 73000ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/codex_renderer.py`\n- `tests/test_codex_renderer.py`\n",
       "description": "Create src/scc_cli/adapters/codex_renderer.py with a function render_codex_artifacts(plan: ArtifactRenderPlan, workspace: Path) -> RendererResult. This adapter-owned renderer:\n1. Consumes an ArtifactRenderPlan produced by the core bundle resolver\n2. Renders skills into Codex skill installation surface (.agents/skills/)\n3. Renders MCP server definitions into .codex/config.toml or .mcp.json\n4. Renders native_integration bindings into Codex-specific surfaces:\n   - .codex-plugin/plugin.json for plugin bundles\n   - .codex/rules/*.rules for rule files\n   - .codex/hooks.json for hook definitions\n   - AGENTS.md content for instruction layers\n5. Does NOT try to force Codex surfaces into Claude plugin shapes or vice versa\n6. Returns RendererResult with rendered paths, skipped items, and warnings\n\nCodex surfaces are intentionally asymmetric from Claude (D019). The renderer handles:\n- Plugin bundle != all Codex artifacts (rules, hooks, config.toml, AGENTS.md are separate)\n- Merge strategy for single-file surfaces (hooks.json, config.toml)\n- SCC-managed section marking in shared files",
       "estimate": "2h30m",
       "files": [
@@ -6428,6 +6436,50 @@
       "verdict": "✅ pass",
       "duration_ms": 72000,
       "created_at": "2026-04-04T19:02:28.198Z"
+    },
+    {
+      "id": 176,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T19:11:00.299Z"
+    },
+    {
+      "id": 177,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-04T19:11:00.299Z"
+    },
+    {
+      "id": 178,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_codex_renderer.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1300,
+      "created_at": "2026-04-04T19:11:00.299Z"
+    },
+    {
+      "id": 179,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M005",
+      "command": "uv run pytest --rootdir \"$PWD\" -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 73000,
+      "created_at": "2026-04-04T19:11:00.299Z"
     }
   ]
 }
