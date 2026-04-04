@@ -1004,3 +1004,203 @@ class TestDisabledAndFilteredArtifacts:
         plan = result.plans[0]
         assert "request-skill" not in plan.effective_artifacts
         assert "request-skill" in plan.skipped
+
+
+# ---------------------------------------------------------------------------
+# D023: Portable artifacts without bindings — full pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestPortableArtifactPipeline:
+    """D023: Skills and MCP servers without provider bindings render on both providers."""
+
+    def test_portable_skill_resolved_and_rendered_claude(self, workspace: Path) -> None:
+        """Skill with no binding → portable_artifacts → Claude renderer produces output."""
+        catalog = GovernedArtifactsCatalog(
+            artifacts={
+                "portable-skill": GovernedArtifact(
+                    kind=ArtifactKind.SKILL,
+                    name="portable-skill",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                    source_type="git",
+                    source_url="https://example.com/skill.git",
+                    source_ref="v1.0",
+                    version="1.0",
+                ),
+            },
+            bindings={},  # no bindings at all
+            bundles={
+                "dev-bundle": ArtifactBundle(
+                    name="dev-bundle", artifacts=("portable-skill",)
+                ),
+            },
+        )
+        org = _org(
+            profiles={"dev": _team("dev", bundles=("dev-bundle",))},
+            catalog=catalog,
+        )
+        result = resolve_render_plan(org, "dev", "claude")
+        plan = result.plans[0]
+        assert "portable-skill" in plan.effective_artifacts
+        assert len(plan.portable_artifacts) == 1
+        assert plan.portable_artifacts[0].name == "portable-skill"
+        assert plan.portable_artifacts[0].source_url == "https://example.com/skill.git"
+
+        render_result = render_claude_artifacts(plan, workspace)
+        assert len(render_result.rendered_paths) == 1
+        skill_path = workspace / CLAUDE_SCC_DIR / "skills" / "portable-skill" / "skill.json"
+        assert skill_path.exists()
+        data = json.loads(skill_path.read_text())
+        assert data["portable"] is True
+        assert data["source_url"] == "https://example.com/skill.git"
+
+    def test_portable_skill_resolved_and_rendered_codex(self, workspace: Path) -> None:
+        """Skill with no binding → portable_artifacts → Codex renderer produces output."""
+        catalog = GovernedArtifactsCatalog(
+            artifacts={
+                "portable-skill": GovernedArtifact(
+                    kind=ArtifactKind.SKILL,
+                    name="portable-skill",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                    source_type="git",
+                    source_url="https://example.com/skill.git",
+                    source_ref="v1.0",
+                ),
+            },
+            bindings={},
+            bundles={
+                "dev-bundle": ArtifactBundle(
+                    name="dev-bundle", artifacts=("portable-skill",)
+                ),
+            },
+        )
+        org = _org(
+            profiles={"dev": _team("dev", bundles=("dev-bundle",))},
+            catalog=catalog,
+        )
+        result = resolve_render_plan(org, "dev", "codex")
+        plan = result.plans[0]
+        assert len(plan.portable_artifacts) == 1
+
+        render_result = render_codex_artifacts(plan, workspace)
+        assert len(render_result.rendered_paths) == 1
+        skill_path = workspace / CODEX_SKILLS_DIR / "portable-skill" / "skill.json"
+        assert skill_path.exists()
+        data = json.loads(skill_path.read_text())
+        assert data["portable"] is True
+        assert data["provider"] == "codex"
+
+    def test_portable_mcp_resolved_and_rendered_both_providers(
+        self, workspace: Path
+    ) -> None:
+        """MCP server with no binding → portable rendering on both providers."""
+        catalog = GovernedArtifactsCatalog(
+            artifacts={
+                "shared-mcp": GovernedArtifact(
+                    kind=ArtifactKind.MCP_SERVER,
+                    name="shared-mcp",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                    source_url="https://mcp.example.com/shared",
+                ),
+            },
+            bindings={},
+            bundles={
+                "mcp-bundle": ArtifactBundle(
+                    name="mcp-bundle", artifacts=("shared-mcp",)
+                ),
+            },
+        )
+        org = _org(
+            profiles={"dev": _team("dev", bundles=("mcp-bundle",))},
+            catalog=catalog,
+        )
+
+        # Claude
+        claude_plan = resolve_render_plan(org, "dev", "claude").plans[0]
+        assert len(claude_plan.portable_artifacts) == 1
+        claude_ws = workspace / "claude"
+        claude_ws.mkdir()
+        claude_result = render_claude_artifacts(claude_plan, claude_ws)
+        assert "mcpServers" in claude_result.settings_fragment
+        assert "shared-mcp" in claude_result.settings_fragment["mcpServers"]
+
+        # Codex
+        codex_plan = resolve_render_plan(org, "dev", "codex").plans[0]
+        assert len(codex_plan.portable_artifacts) == 1
+        codex_ws = workspace / "codex"
+        codex_ws.mkdir()
+        codex_result = render_codex_artifacts(codex_plan, codex_ws)
+        assert "mcpServers" in codex_result.mcp_fragment
+        assert "shared-mcp" in codex_result.mcp_fragment["mcpServers"]
+
+    def test_mixed_bound_and_portable_in_same_bundle(self, workspace: Path) -> None:
+        """Bundle with bound + portable artifacts → both render."""
+        catalog = GovernedArtifactsCatalog(
+            artifacts={
+                "bound-skill": GovernedArtifact(
+                    kind=ArtifactKind.SKILL,
+                    name="bound-skill",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                ),
+                "portable-skill": GovernedArtifact(
+                    kind=ArtifactKind.SKILL,
+                    name="portable-skill",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                    source_type="git",
+                    source_url="https://example.com/portable.git",
+                ),
+            },
+            bindings={
+                "bound-skill": (
+                    ProviderArtifactBinding(provider="claude", native_ref="skills/bound"),
+                ),
+                # portable-skill has NO binding
+            },
+            bundles={
+                "mixed": ArtifactBundle(
+                    name="mixed", artifacts=("bound-skill", "portable-skill")
+                ),
+            },
+        )
+        org = _org(
+            profiles={"dev": _team("dev", bundles=("mixed",))},
+            catalog=catalog,
+        )
+        plan = resolve_render_plan(org, "dev", "claude").plans[0]
+        assert "bound-skill" in plan.effective_artifacts
+        assert "portable-skill" in plan.effective_artifacts
+        assert len(plan.bindings) == 1  # only bound-skill has a binding
+        assert len(plan.portable_artifacts) == 1  # portable-skill
+
+        result = render_claude_artifacts(plan, workspace)
+        # Both should produce output
+        assert len(result.rendered_paths) == 2
+        paths_str = [str(p) for p in result.rendered_paths]
+        assert any("bound" in p for p in paths_str)
+        assert any("portable" in p for p in paths_str)
+
+    def test_native_integration_still_requires_binding(self) -> None:
+        """Native integration without binding is skipped (not portable)."""
+        catalog = GovernedArtifactsCatalog(
+            artifacts={
+                "hooks-native": GovernedArtifact(
+                    kind=ArtifactKind.NATIVE_INTEGRATION,
+                    name="hooks-native",
+                    install_intent=ArtifactInstallIntent.REQUIRED,
+                ),
+            },
+            bindings={},
+            bundles={
+                "native-only": ArtifactBundle(
+                    name="native-only", artifacts=("hooks-native",)
+                ),
+            },
+        )
+        org = _org(
+            profiles={"dev": _team("dev", bundles=("native-only",))},
+            catalog=catalog,
+        )
+        plan = resolve_render_plan(org, "dev", "claude").plans[0]
+        assert "hooks-native" not in plan.effective_artifacts
+        assert "hooks-native" in plan.skipped
+        assert len(plan.portable_artifacts) == 0

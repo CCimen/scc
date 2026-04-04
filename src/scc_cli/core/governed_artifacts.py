@@ -132,6 +132,34 @@ class ArtifactBundle:
 
 
 @dataclass(frozen=True)
+class PortableArtifact:
+    """A portable artifact that can be rendered without a provider-specific binding.
+
+    Skills and MCP servers are inherently portable — they work on any provider.
+    When they appear in a bundle without a provider-specific binding, the
+    resolver includes them here so renderers can project them into
+    provider-native surfaces using the artifact's own source metadata.
+
+    Attributes:
+        name: Artifact name matching the GovernedArtifact.name.
+        kind: Artifact kind (SKILL or MCP_SERVER only).
+        source_type: Origin kind — ``git``, ``url``, ``local``, etc.
+        source_url: Remote location of the artifact source.
+        source_path: Path within the source tree, if applicable.
+        source_ref: Git ref, tag, or commit for pinning.
+        version: Pinned version, if known.
+    """
+
+    name: str
+    kind: ArtifactKind
+    source_type: str | None = None
+    source_url: str | None = None
+    source_path: str | None = None
+    source_ref: str | None = None
+    version: str | None = None
+
+
+@dataclass(frozen=True)
 class ArtifactRenderPlan:
     """Effective per-session materialization plan after policy merge.
 
@@ -144,6 +172,9 @@ class ArtifactRenderPlan:
         bindings: Provider-native bindings to render.
         skipped: Artifact names that could not be rendered for this provider.
         effective_artifacts: Artifact names included in the effective plan.
+        portable_artifacts: Portable skills and MCP servers that have no
+            provider-specific binding but are still renderable using their
+            source metadata (D023).
     """
 
     bundle_id: str
@@ -151,6 +182,7 @@ class ArtifactRenderPlan:
     bindings: tuple[ProviderArtifactBinding, ...] = ()
     skipped: tuple[str, ...] = ()
     effective_artifacts: tuple[str, ...] = ()
+    portable_artifacts: tuple[PortableArtifact, ...] = ()
 
 
 __all__ = [
@@ -159,5 +191,6 @@ __all__ = [
     "ArtifactKind",
     "ArtifactRenderPlan",
     "GovernedArtifact",
+    "PortableArtifact",
     "ProviderArtifactBinding",
 ]

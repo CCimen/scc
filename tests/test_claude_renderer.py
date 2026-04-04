@@ -41,7 +41,9 @@ from scc_cli.adapters.claude_renderer import (
 )
 from scc_cli.core.errors import MaterializationError, MergeConflictError
 from scc_cli.core.governed_artifacts import (
+    ArtifactKind,
     ArtifactRenderPlan,
+    PortableArtifact,
     ProviderArtifactBinding,
 )
 
@@ -63,6 +65,7 @@ def _plan(
     bindings: tuple[ProviderArtifactBinding, ...] = (),
     skipped: tuple[str, ...] = (),
     effective_artifacts: tuple[str, ...] = (),
+    portable_artifacts: tuple[PortableArtifact, ...] = (),
 ) -> ArtifactRenderPlan:
     return ArtifactRenderPlan(
         bundle_id=bundle_id,
@@ -70,6 +73,7 @@ def _plan(
         bindings=bindings,
         skipped=skipped,
         effective_artifacts=effective_artifacts,
+        portable_artifacts=portable_artifacts,
     )
 
 
@@ -1312,3 +1316,196 @@ class TestMCPBindingNonPrefixKeys:
         server = mcp_config["extra-keys-stdio"]
         assert server["env"] == {"API_KEY": "secret"}
         assert "custom_flag" not in server
+
+
+# ---------------------------------------------------------------------------
+# Portable artifact rendering (D023)
+# ---------------------------------------------------------------------------
+
+
+class TestPortableSkillRendering:
+    """D023: Portable skills without provider bindings are renderable."""
+
+    def test_portable_skill_writes_metadata(self, workspace: Path) -> None:
+        """Portable skill produces skill.json under .scc-managed/skills/."""
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(
+                    name="code-review",
+                    kind=ArtifactKind.SKILL,
+                    source_type="git",
+                    source_url="https://git.example.com/skills/code-review",
+                    source_ref="v1.2.0",
+                    version="1.2.0",
+                ),
+            ),
+            effective_artifacts=("code-review",),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.rendered_paths) == 1
+        metadata_path = workspace / SCC_MANAGED_DIR / "skills" / "code-review" / "skill.json"
+        assert metadata_path.exists()
+        data = json.loads(metadata_path.read_text())
+        assert data["name"] == "code-review"
+        assert data["portable"] is True
+        assert data["provider"] == "claude"
+        assert data["bundle_id"] == "test-bundle"
+        assert data["source_type"] == "git"
+        assert data["source_url"] == "https://git.example.com/skills/code-review"
+        assert data["source_ref"] == "v1.2.0"
+        assert data["version"] == "1.2.0"
+        assert result.warnings == ()
+
+    def test_portable_skill_minimal_metadata(self, workspace: Path) -> None:
+        """Portable skill with no source metadata still writes file."""
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(name="minimal-skill", kind=ArtifactKind.SKILL),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.rendered_paths) == 1
+        data = json.loads(result.rendered_paths[0].read_text())
+        assert data["name"] == "minimal-skill"
+        assert data["portable"] is True
+        assert "source_url" not in data
+
+    def test_portable_skill_name_sanitized(self, workspace: Path) -> None:
+        """Skill name with slashes is sanitized for filesystem."""
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(name="org/team/skill", kind=ArtifactKind.SKILL),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.rendered_paths) == 1
+        assert "org_team_skill" in str(result.rendered_paths[0])
+
+    def test_portable_skill_materialization_error(self, workspace: Path) -> None:
+        """OSError during portable skill write raises MaterializationError."""
+        # Make the target parent directory a file to cause OSError
+        block = workspace / SCC_MANAGED_DIR / "skills" / "blocked-skill"
+        block.parent.mkdir(parents=True, exist_ok=True)
+        block.write_text("not-a-dir")
+
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(name="blocked-skill", kind=ArtifactKind.SKILL),
+            ),
+        )
+        with pytest.raises(MaterializationError):
+            render_claude_artifacts(plan, workspace)
+
+
+class TestPortableMcpRendering:
+    """D023: Portable MCP servers without provider bindings are renderable."""
+
+    def test_portable_mcp_with_url(self, workspace: Path) -> None:
+        """Portable MCP server with source_url → settings fragment entry."""
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(
+                    name="github-mcp",
+                    kind=ArtifactKind.MCP_SERVER,
+                    source_url="https://mcp.example.com/github",
+                    source_ref="v2.0.0",
+                ),
+            ),
+            effective_artifacts=("github-mcp",),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert "mcpServers" in result.settings_fragment
+        server = result.settings_fragment["mcpServers"]["github-mcp"]
+        assert server["type"] == "sse"
+        assert server["url"] == "https://mcp.example.com/github"
+        assert server["portable"] is True
+        assert server["source_ref"] == "v2.0.0"
+        assert result.warnings == ()
+        # Audit file should be written
+        assert len(result.rendered_paths) == 1  # just the audit file
+
+    def test_portable_mcp_no_url_warns(self, workspace: Path) -> None:
+        """Portable MCP server with no source_url → warning."""
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(
+                    name="local-mcp",
+                    kind=ArtifactKind.MCP_SERVER,
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        assert len(result.warnings) == 1
+        assert "no source_url" in result.warnings[0]
+
+    def test_portable_mcp_version_in_config(self, workspace: Path) -> None:
+        """Version metadata propagates to settings fragment."""
+        plan = _plan(
+            portable_artifacts=(
+                PortableArtifact(
+                    name="versioned-mcp",
+                    kind=ArtifactKind.MCP_SERVER,
+                    source_url="https://mcp.example.com/v",
+                    version="3.1.0",
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        server = result.settings_fragment["mcpServers"]["versioned-mcp"]
+        assert server["version"] == "3.1.0"
+
+
+class TestPortableMixedWithBindings:
+    """D023: Portable artifacts render alongside binding-based artifacts."""
+
+    def test_mixed_bindings_and_portable(self, workspace: Path) -> None:
+        """Plan with both bindings and portable artifacts renders both."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="bound-skill",
+                ),
+            ),
+            portable_artifacts=(
+                PortableArtifact(
+                    name="portable-skill",
+                    kind=ArtifactKind.SKILL,
+                    source_type="git",
+                    source_url="https://example.com/skill",
+                ),
+            ),
+            effective_artifacts=("bound-skill", "portable-skill"),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        # bound-skill renders via binding, portable-skill via portable path
+        assert len(result.rendered_paths) == 2
+        paths_str = [str(p) for p in result.rendered_paths]
+        assert any("bound-skill" in p for p in paths_str)
+        assert any("portable-skill" in p for p in paths_str)
+
+    def test_portable_mcp_merges_with_binding_mcp(self, workspace: Path) -> None:
+        """Portable MCP and binding MCP coexist in settings_fragment."""
+        plan = _plan(
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="bound-mcp",
+                    transport_type="sse",
+                    native_config={"url": "https://bound.example.com"},
+                ),
+            ),
+            portable_artifacts=(
+                PortableArtifact(
+                    name="portable-mcp",
+                    kind=ArtifactKind.MCP_SERVER,
+                    source_url="https://portable.example.com",
+                ),
+            ),
+        )
+        result = render_claude_artifacts(plan, workspace)
+        mcp = result.settings_fragment["mcpServers"]
+        assert "bound-mcp" in mcp
+        assert "portable-mcp" in mcp
+        assert mcp["bound-mcp"]["url"] == "https://bound.example.com"
+        assert mcp["portable-mcp"]["url"] == "https://portable.example.com"

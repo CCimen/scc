@@ -548,19 +548,19 @@ def test_sync_marketplace_settings_for_start_is_transitional() -> None:
 
 
 def test_bundle_resolver_portable_comment_is_truthful() -> None:
-    """Bundle resolver must not claim portable artifacts are rendered without bindings.
+    """Bundle resolver must document that portable artifacts are renderable (D023).
 
-    Skills and MCP servers without provider bindings are 'policy-effective'
-    (approved and resolved) but produce no rendered output since renderers
-    only iterate plan.bindings. The resolver comment must be truthful about this.
+    Skills and MCP servers without provider bindings are portable — they
+    can be rendered from source metadata alone. The resolver populates
+    portable_artifacts so renderers project them into provider-native surfaces.
+    The comment must reflect this D023 implementation.
     """
     resolver_path = SRC / "core" / "bundle_resolver.py"
     source = resolver_path.read_text(encoding="utf-8")
 
-    # The comment around the portable-artifact branch should mention
-    # that no rendering happens without a binding
-    assert "policy-effective" in source or "no rendered output" in source, (
+    # The comment should mention D023 and portable_artifacts
+    assert "D023" in source or "portable_artifacts" in source, (
         "bundle_resolver.py portable-artifact comment does not mention "
-        "that artifacts without bindings produce no rendered output. "
-        "The comment must be truthful: effective ≠ rendered without a binding."
+        "D023 or portable_artifacts. The comment must document that "
+        "portable skills/MCP servers are renderable without bindings."
     )

@@ -42,46 +42,47 @@ Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topol
 ### M004 — Cross-Agent Runtime Safety ✅
 Delivered shared safety policy and verdict engine, runtime wrapper baseline, provider-specific safety adapters, fail-closed policy loader, safety audit reader, doctor safety-policy check, and `scc support safety-audit` CLI command. +289 net new tests (3790 total across S01–S04).
 
-### M005 — Architecture Quality, Strictness, And Hardening (active)
-**S01 complete.** Established quantitative maintainability baseline (272-line audit, 153-line defect catalog) and 315 characterization + boundary tests protecting all top split targets before S02 surgery.
+### M005 — Architecture Quality, Strictness, And Hardening ✅
+Delivered comprehensive architecture quality improvements across 7 slices:
 
-**S02 complete.** Decomposed all 15 HARD-FAIL/MANDATORY-SPLIT files below 800 lines, repaired 3 architecture boundary violations (application→docker, core→marketplace, docker→presentation), all 4079 tests passing.
+**S01 (Baseline):** Quantitative maintainability baseline — 272-line audit, 153-line defect catalog, 315 characterization + boundary tests.
 
-**S03 complete.** Landed governed-artifact type hierarchy (T01), extended NormalizedOrgConfig with SafetyNetConfig/StatsConfig/from_dict (T02), converted compute_effective_config pipeline to NormalizedOrgConfig (T03), typed StartSessionRequest and normalized all call sites (T04). T05 deferred per D021.
+**S02 (Decomposition):** All 15 HARD-FAIL/MANDATORY-SPLIT files decomposed below 800 lines, 3 boundary violations repaired. Zero regressions.
 
-**S04 complete.** Built the provider-neutral bundle resolution → ArtifactRenderPlan → provider-native renderer pipeline for Claude and Codex, with fail-closed error handling and launch pipeline integration, adding 126 new tests (4237 total). Key deliverables:
-- Pure core bundle resolver (`resolve_render_plan()`) computing ArtifactRenderPlan from NormalizedOrgConfig + team + provider
-- Claude-native renderer projecting ArtifactRenderPlan into skills, MCP config, hooks, marketplace, plugin, instruction surfaces
-- Codex-native renderer projecting into intentionally asymmetric surfaces (D019): .agents/skills/, .codex-plugin/, .codex/rules/, .codex/hooks.json, .codex/.scc-managed/instructions/
-- RendererError exception hierarchy with fail-closed semantics (exit_code=4)
-- RenderArtifactsResult unified return type, AgentProvider.render_artifacts() protocol method
-- Bundle pipeline wired into prepare_start_session launch flow with skip gates and error capture
-- Decisions D022-D025 recorded
+**S03 (Typed Models):** Governed-artifact type hierarchy (GovernedArtifact, ArtifactBundle, ArtifactRenderPlan, ProviderArtifactBinding). NormalizedOrgConfig extended. Typed config pipeline adoption.
 
-**S05 complete.** Added 191 net-new tests (4428 total) covering the governed-artifact/team-pack planning and renderer seams with 100% branch coverage on all three core modules (bundle_resolver.py, claude_renderer.py, codex_renderer.py) plus 44 cross-provider pipeline integration tests. Key deliverables:
-- 59 contract tests covering all 9 bundle_resolver.py behavior contracts
-- 40 characterization tests extending Claude renderer to 74 total (100% stmt + branch)
-- 48 characterization tests extending Codex renderer to 86 total (100% stmt + branch)
-- 44 cross-provider pipeline integration tests (shared artifact equivalence, provider-specific filtering, end-to-end file rendering, backward compatibility, boundary contracts)
+**S04 (Pipeline):** Provider-neutral bundle resolution → ArtifactRenderPlan → provider-native renderer pipeline. Claude and Codex renderers. Fail-closed error handling. Launch pipeline integration. 126 new tests.
 
-**S06 remaining.**
-- S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model
+**S05 (Coverage):** 100% branch coverage on all three pipeline modules (bundle_resolver, claude_renderer, codex_renderer). 44 cross-provider integration tests. 191 net-new tests.
+
+**S06 (Diagnostics):** Team-pack diagnostics in doctor/support-bundle. 4 truthfulness fixes. All guardrail xfails removed. M005 validation passed.
+
+**S07 (D023):** Portable artifact rendering — skills and MCP servers without provider bindings now renderable by both providers. PortableArtifact type, resolver population, both renderers extended. 23 new tests.
+
+Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files >1100 lines.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
-5. **M005 — Architecture Quality, Strictness, And Hardening** (active — S01 ✅, S02 ✅, S03 ✅, S04 ✅, S05 ✅, S06 remaining)
+5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated by M002/S05. Advanced by M003, M004/S01–S04, M005/S01 (baseline + characterization tests), M005/S02 (all 15 decompositions + 3 boundary repairs), M005/S03 (governed-artifact types + typed config flow), M005/S04 (bundle resolver + provider renderers with 100%/98%/99% coverage), and M005/S05 (191 net-new contract + characterization + integration tests driving 100% branch coverage on all three pipeline modules).
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all five milestones. M005 final state: zero files >1100 lines (from 3), one justified file in 800–1100 zone, all import boundaries enforced (31 tests), typed config models adopted, governed-artifact pipeline at 99-100% coverage, file/function size guardrails passing without xfail, 18 truthfulness tests, D023 portable artifact rendering implemented, 4486 total tests.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 288 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4428 passed, 23 skipped, 3 xfailed, 1 xpassed)
-- Zero files in src/scc_cli/ exceed 800 lines
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 289 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4486 passed, 23 skipped, 2 xfailed)
+- Zero files in src/scc_cli/ exceed 1100 lines
+- One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
+
+## Known deferred items from M005
+- Wizard cast cleanup (23 casts in wizard.py/flow_interactive.py) — deferred per D018
+- Legacy module coverage (docker_sandbox_runtime 30%, overall 73%) — deprioritized per D017/D021 user overrides
+- Portable MCP stdio transport support — requires additional source metadata
+- Live bundle registry integration — renderers write metadata references only
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -105,10 +106,8 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 - Provider-native surfaces are intentionally asymmetric between Claude and Codex (D019).
 - .scc-managed/ subdirectories avoid collisions with user-authored files.
 - Bundle pipeline in launch flow uses fail_closed=True for resolution; errors captured on StartSessionPlan, not raised.
-
-## Immediate next focus
-- **Execute S06: Diagnostics, docs truthfulness, guardrails, and milestone validation for team-pack model.**
-  - Diagnostics show active team context, effective bundles, shared vs native, rendered/skipped/blocked
-  - Docs claims match implementation
-  - File-size/complexity guardrails pass without xfail
-  - Milestone validation passes
+- Doctor checks report governed-artifact health: team context, bundle resolution, and catalog health.
+- 18 truthfulness guardrail tests enforce accurate docs claims about provider capabilities and architecture.
+- File/function size guardrails pass without xfail — all functions under 300 lines, all files under 1100 lines.
+- Portable artifacts (skills, MCP servers) without provider bindings are renderable via PortableArtifact metadata in ArtifactRenderPlan (D023).
+- Only SKILL and MCP_SERVER kinds qualify as portable — NATIVE_INTEGRATION always requires provider-specific bindings.

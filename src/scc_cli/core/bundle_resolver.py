@@ -25,6 +25,7 @@ from scc_cli.core.governed_artifacts import (
     ArtifactInstallIntent,
     ArtifactKind,
     ArtifactRenderPlan,
+    PortableArtifact,
     ProviderArtifactBinding,
 )
 from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
@@ -117,6 +118,7 @@ def _resolve_single_bundle(
 
     effective_artifacts: list[str] = []
     collected_bindings: list[ProviderArtifactBinding] = []
+    collected_portable: list[PortableArtifact] = []
     skipped: list[str] = []
     diagnostics: list[BundleResolutionDiagnostic] = []
 
@@ -165,14 +167,7 @@ def _resolve_single_bundle(
 
         if not provider_bindings:
             # Artifact exists but has no binding for this provider.
-            # Skills and MCP servers are portable — they appear in
-            # effective_artifacts even without a provider-specific binding.
-            # However, without a binding the provider renderer has no
-            # rendering instruction, so the artifact is "policy-effective"
-            # (approved and resolved) but produces no rendered output.
-            # A future content-fetching step may use effective_artifacts
-            # to install portable content that requires no binding.
-            # Native integrations always require a binding.
+            # Native integrations always require a binding — skip them.
             if artifact.kind == ArtifactKind.NATIVE_INTEGRATION:
                 skipped.append(art_name)
                 diagnostics.append(
@@ -183,6 +178,23 @@ def _resolve_single_bundle(
                 )
                 continue
 
+            # Skills and MCP servers are portable — they can be rendered
+            # from their source metadata without a provider-specific
+            # binding (D023). Include them in portable_artifacts so
+            # renderers can project them into provider-native surfaces.
+            if artifact.kind in (ArtifactKind.SKILL, ArtifactKind.MCP_SERVER):
+                collected_portable.append(
+                    PortableArtifact(
+                        name=artifact.name,
+                        kind=artifact.kind,
+                        source_type=artifact.source_type,
+                        source_url=artifact.source_url,
+                        source_path=artifact.source_path,
+                        source_ref=artifact.source_ref,
+                        version=artifact.version,
+                    )
+                )
+
         effective_artifacts.append(art_name)
         collected_bindings.extend(provider_bindings)
 
@@ -192,6 +204,7 @@ def _resolve_single_bundle(
         bindings=tuple(collected_bindings),
         skipped=tuple(skipped),
         effective_artifacts=tuple(effective_artifacts),
+        portable_artifacts=tuple(collected_portable),
     )
     return plan, diagnostics
 

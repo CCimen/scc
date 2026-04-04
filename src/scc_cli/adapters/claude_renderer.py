@@ -28,7 +28,12 @@ from pathlib import Path
 from typing import Any
 
 from scc_cli.core.errors import MaterializationError
-from scc_cli.core.governed_artifacts import ArtifactRenderPlan, ProviderArtifactBinding
+from scc_cli.core.governed_artifacts import (
+    ArtifactKind,
+    ArtifactRenderPlan,
+    PortableArtifact,
+    ProviderArtifactBinding,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -335,6 +340,106 @@ def _classify_binding(
 
 
 # ---------------------------------------------------------------------------
+# Portable artifact rendering (D023)
+# ---------------------------------------------------------------------------
+
+
+def _render_portable_skill(
+    artifact: PortableArtifact,
+    workspace: Path,
+    bundle_id: str,
+) -> tuple[list[Path], list[str]]:
+    """Render a portable skill that has no provider-specific binding.
+
+    Uses the artifact's source metadata to write skill placement metadata
+    under ``.claude/.scc-managed/skills/<safe_name>/skill.json``.
+
+    Returns:
+        (rendered_paths, warnings)
+
+    Raises:
+        MaterializationError: If the skill metadata file cannot be written.
+    """
+    rendered: list[Path] = []
+    warnings: list[str] = []
+
+    safe_name = artifact.name.replace("/", "_").replace("\\", "_").replace("..", "_")
+    skill_dir = workspace / SCC_MANAGED_DIR / SKILLS_SUBDIR / safe_name
+
+    metadata: dict[str, Any] = {
+        "name": artifact.name,
+        "provider": "claude",
+        "bundle_id": bundle_id,
+        "managed_by": "scc",
+        "portable": True,
+    }
+    if artifact.source_type:
+        metadata["source_type"] = artifact.source_type
+    if artifact.source_url:
+        metadata["source_url"] = artifact.source_url
+    if artifact.source_path:
+        metadata["source_path"] = artifact.source_path
+    if artifact.source_ref:
+        metadata["source_ref"] = artifact.source_ref
+    if artifact.version:
+        metadata["version"] = artifact.version
+
+    metadata_path = skill_dir / "skill.json"
+    try:
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+    except OSError as exc:
+        raise MaterializationError(
+            bundle_id=bundle_id,
+            artifact_name=artifact.name,
+            target_path=str(metadata_path),
+            reason=str(exc),
+        ) from exc
+    rendered.append(metadata_path)
+
+    return rendered, warnings
+
+
+def _render_portable_mcp(
+    artifact: PortableArtifact,
+    bundle_id: str,
+) -> tuple[dict[str, Any], list[str]]:
+    """Render a portable MCP server that has no provider-specific binding.
+
+    Uses the artifact's source metadata to produce a settings fragment entry.
+    For MCP servers with source_url, renders as SSE transport by default.
+
+    Returns:
+        (mcp_config_dict, warnings)
+    """
+    warnings: list[str] = []
+
+    server_name = artifact.name
+    server_config: dict[str, Any] = {
+        "managed_by": "scc",
+        "bundle_id": bundle_id,
+        "portable": True,
+    }
+
+    if artifact.source_url:
+        server_config["type"] = "sse"
+        server_config["url"] = artifact.source_url
+    else:
+        warnings.append(
+            f"Portable MCP server '{artifact.name}' in bundle '{bundle_id}' "
+            "has no source_url; cannot determine connection endpoint"
+        )
+        server_config["type"] = "sse"
+
+    if artifact.source_ref:
+        server_config["source_ref"] = artifact.source_ref
+    if artifact.version:
+        server_config["version"] = artifact.version
+
+    return {server_name: server_config}, warnings
+
+
+# ---------------------------------------------------------------------------
 # Main renderer
 # ---------------------------------------------------------------------------
 
@@ -416,6 +521,22 @@ def render_claude_artifacts(
                 f"Binding in bundle '{plan.bundle_id}' has no native_ref, "
                 "transport_type, or recognised native_config keys; skipping"
             )
+
+    # Render portable artifacts that have no provider-specific binding (D023)
+    for portable in plan.portable_artifacts:
+        if portable.kind == ArtifactKind.SKILL:
+            paths, warnings = _render_portable_skill(
+                portable, workspace, plan.bundle_id
+            )
+            all_rendered.extend(paths)
+            all_warnings.extend(warnings)
+
+        elif portable.kind == ArtifactKind.MCP_SERVER:
+            mcp_config, warnings = _render_portable_mcp(
+                portable, plan.bundle_id
+            )
+            all_warnings.extend(warnings)
+            merged_settings.setdefault("mcpServers", {}).update(mcp_config)
 
     # Write the settings fragment to a per-bundle file for audit/debug
     if merged_settings:
