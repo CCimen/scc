@@ -1233,6 +1233,8 @@ def _handle_profile_menu() -> str | None:
         return None
 
     # Import profile functions
+    from scc_cli.marketplace.managed import load_managed_state
+
     from ...core.personal_profiles import (
         compute_fingerprints,
         load_personal_profile,
@@ -1271,7 +1273,8 @@ def _handle_profile_menu() -> str | None:
             # Merge profile into workspace
             if profile.settings:
                 merged_settings = merge_personal_settings(
-                    workspace, current_settings, profile.settings
+                    workspace, current_settings, profile.settings,
+                    managed_state_loader=load_managed_state,
                 )
                 write_workspace_settings(workspace, merged_settings)
 

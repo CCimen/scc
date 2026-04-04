@@ -1,6 +1,6 @@
 """Worktree application use cases."""
 
-from scc_cli.application.worktree.use_cases import (
+from scc_cli.application.worktree.models import (
     ShellCommand,
     WorktreeConfirmation,
     WorktreeCreateRequest,
@@ -17,8 +17,12 @@ from scc_cli.application.worktree.use_cases import (
     WorktreeSummary,
     WorktreeSwitchRequest,
     WorktreeWarningOutcome,
+)
+from scc_cli.application.worktree.operations import (
     create_worktree,
     enter_worktree_shell,
+)
+from scc_cli.application.worktree.use_cases import (
     list_worktrees,
     select_worktree,
     switch_worktree,

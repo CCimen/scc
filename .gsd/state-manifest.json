@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-04T15:07:34.536Z",
+  "exported_at": "2026-04-04T15:23:29.839Z",
   "milestones": [
     {
       "id": "M001",
@@ -3172,19 +3172,30 @@
       "milestone_id": "M005",
       "slice_id": "S02",
       "id": "T02",
-      "title": "Decompose application/worktree, core/personal_profiles, and application/launch/start_wizard",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Decomposed three oversized modules (1044, 839, 914 lines) into focused files under 800 lines and eliminated the core→marketplace boundary violation via dependency injection",
+      "status": "complete",
+      "one_liner": "Decomposed three oversized modules (1044, 839, 914 lines) into focused files under 800 lines and eliminated the core→marketplace boundary violation via dependency injection",
+      "narrative": "Extracted three oversized modules into smaller focused files:\\n\\n1. application/worktree/use_cases.py (1044→446 lines): Extracted 18 dataclass models into models.py (363 lines) and enter_worktree_shell/create_worktree into operations.py (320 lines).\\n\\n2. core/personal_profiles.py (839→554 lines): Extracted merge/diff/sandbox-import logic into personal_profiles_merge.py (321 lines). Boundary fix: merge_personal_settings now accepts managed_state_loader: Callable parameter. All 5 callers updated.\\n\\n3. application/launch/start_wizard.py (914→737 lines): Extracted 16 ViewModel/Option/Prompt dataclasses into wizard_models.py (215 lines).\\n\\nAll residual modules re-export extracted symbols for backward compatibility. No downstream import changes needed except for the managed_state_loader parameter.",
+      "verification_result": "uv run ruff check — clean. uv run mypy src/scc_cli — clean (267 files). uv run pytest (full suite) — 4079 passed, 23 skipped, 4 xfailed. Targeted tests (worktree characterization, personal profiles characterization, import boundaries) — 64 passed. Boundary check: no marketplace imports in core/.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-04T15:23:29.785Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "merge_personal_settings boundary fix uses Callable parameter with ValueError default instead of plain required parameter — provides safety net. operations.py uses lazy local imports to avoid circular dependencies between extracted modules.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/application/worktree/models.py",
+        "src/scc_cli/application/worktree/operations.py",
+        "src/scc_cli/application/worktree/use_cases.py",
+        "src/scc_cli/core/personal_profiles_merge.py",
+        "src/scc_cli/core/personal_profiles.py",
+        "src/scc_cli/application/launch/wizard_models.py",
+        "src/scc_cli/application/launch/start_wizard.py"
+      ],
+      "key_decisions": [
+        "merge_personal_settings uses managed_state_loader: Callable DI parameter to eliminate core→marketplace boundary violation",
+        "Re-export all extracted symbols from residual modules for backward compatibility"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S02\nmilestone: M005\nkey_files:\n  - src/scc_cli/application/worktree/models.py\n  - src/scc_cli/application/worktree/operations.py\n  - src/scc_cli/application/worktree/use_cases.py\n  - src/scc_cli/core/personal_profiles_merge.py\n  - src/scc_cli/core/personal_profiles.py\n  - src/scc_cli/application/launch/wizard_models.py\n  - src/scc_cli/application/launch/start_wizard.py\nkey_decisions:\n  - merge_personal_settings uses managed_state_loader: Callable DI parameter to eliminate core→marketplace boundary violation\n  - Re-export all extracted symbols from residual modules for backward compatibility\nduration: \nverification_result: passed\ncompleted_at: 2026-04-04T15:23:29.784Z\nblocker_discovered: false\n---\n\n# T02: Decomposed three oversized modules (1044, 839, 914 lines) into focused files under 800 lines and eliminated the core→marketplace boundary violation via dependency injection\n\n**Decomposed three oversized modules (1044, 839, 914 lines) into focused files under 800 lines and eliminated the core→marketplace boundary violation via dependency injection**\n\n## What Happened\n\nExtracted three oversized modules into smaller focused files:\\n\\n1. application/worktree/use_cases.py (1044→446 lines): Extracted 18 dataclass models into models.py (363 lines) and enter_worktree_shell/create_worktree into operations.py (320 lines).\\n\\n2. core/personal_profiles.py (839→554 lines): Extracted merge/diff/sandbox-import logic into personal_profiles_merge.py (321 lines). Boundary fix: merge_personal_settings now accepts managed_state_loader: Callable parameter. All 5 callers updated.\\n\\n3. application/launch/start_wizard.py (914→737 lines): Extracted 16 ViewModel/Option/Prompt dataclasses into wizard_models.py (215 lines).\\n\\nAll residual modules re-export extracted symbols for backward compatibility. No downstream import changes needed except for the managed_state_loader parameter.\n\n## Verification\n\nuv run ruff check — clean. uv run mypy src/scc_cli — clean (267 files). uv run pytest (full suite) — 4079 passed, 23 skipped, 4 xfailed. Targeted tests (worktree characterization, personal profiles characterization, import boundaries) — 64 passed. Boundary check: no marketplace imports in core/.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 4100ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4600ms |\n| 3 | `uv run pytest tests/test_worktree_use_cases_characterization.py tests/test_personal_profiles_characterization.py tests/test_import_boundaries.py -q` | 0 | ✅ pass | 4900ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 72300ms |\n\n## Deviations\n\nmerge_personal_settings boundary fix uses Callable parameter with ValueError default instead of plain required parameter — provides safety net. operations.py uses lazy local imports to avoid circular dependencies between extracted modules.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/application/worktree/models.py`\n- `src/scc_cli/application/worktree/operations.py`\n- `src/scc_cli/application/worktree/use_cases.py`\n- `src/scc_cli/core/personal_profiles_merge.py`\n- `src/scc_cli/core/personal_profiles.py`\n- `src/scc_cli/application/launch/wizard_models.py`\n- `src/scc_cli/application/launch/start_wizard.py`\n",
       "description": "Extract three application/core layer modules into smaller focused files. Fix the core→marketplace boundary violation in personal_profiles.\n\n## Steps\n\n1. **application/worktree/use_cases.py (1044 lines):** Read fully. Extract 18 dataclass model definitions (~L24–L370, ~346 lines) into `src/scc_cli/application/worktree/models.py`. Extract `enter_worktree_shell` (134L) + `create_worktree` (94L) + their helper functions into `src/scc_cli/application/worktree/operations.py`. Update `use_cases.py` to import and re-export all public names. Update `src/scc_cli/application/worktree/__init__.py` if it imports from `use_cases` — add imports from `models` and `operations` as needed.\n\n2. **core/personal_profiles.py (839 lines):** Read fully. Extract `compute_structured_diff` (97L) + `DiffItem`/`StructuredDiff` classes + merge functions (`merge_personal_settings`, `merge_personal_mcp`) into `src/scc_cli/core/personal_profiles_merge.py` (~250 lines). **Boundary fix:** In the extracted merge file, replace the direct `from scc_cli.marketplace.managed import load_managed_state` with a `managed_state_loader: Callable` parameter — the function should accept the loader as a parameter instead of importing it. Update the call site(s) that invoke `merge_personal_settings` to pass `load_managed_state` as an argument. Re-export all moved symbols from `personal_profiles.py`.\n\n3. **application/launch/start_wizard.py (914 lines):** Read fully. Extract 26 ViewModel/Option dataclass definitions (~L409–L594, ~185 lines) into `src/scc_cli/application/launch/wizard_models.py`. Keep state machine + `apply_start_wizard_event` in `start_wizard.py`. Re-export from `start_wizard.py`. Update `src/scc_cli/application/launch/__init__.py` if needed.\n\n4. Update test imports in `tests/test_worktree_use_cases_characterization.py`, `tests/test_personal_profiles_characterization.py`, and any other affected test files.\n\n5. Run verification: `uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_worktree_use_cases_characterization.py tests/test_personal_profiles_characterization.py tests/test_import_boundaries.py -q`\n\n## Must-Haves\n\n- [ ] `application/worktree/use_cases.py` under 800 lines\n- [ ] `core/personal_profiles.py` under 800 lines\n- [ ] `application/launch/start_wizard.py` under 800 lines\n- [ ] No import of `marketplace.managed` in core/personal_profiles*.py\n- [ ] All characterization tests for these 3 modules pass\n- [ ] Import boundary tests pass\n- [ ] `uv run ruff check && uv run mypy src/scc_cli` clean",
       "estimate": "1h",
       "files": [
@@ -5645,6 +5656,50 @@
       "verdict": "✅ pass",
       "duration_ms": 69200,
       "created_at": "2026-04-04T15:07:34.488Z"
+    },
+    {
+      "id": 131,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4100,
+      "created_at": "2026-04-04T15:23:29.785Z"
+    },
+    {
+      "id": 132,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4600,
+      "created_at": "2026-04-04T15:23:29.785Z"
+    },
+    {
+      "id": 133,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest tests/test_worktree_use_cases_characterization.py tests/test_personal_profiles_characterization.py tests/test_import_boundaries.py -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4900,
+      "created_at": "2026-04-04T15:23:29.785Z"
+    },
+    {
+      "id": 134,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M005",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 72300,
+      "created_at": "2026-04-04T15:23:29.785Z"
     }
   ]
 }

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scc_cli.core import personal_profiles
-from scc_cli.marketplace.managed import ManagedState, save_managed_state
+from scc_cli.marketplace.managed import ManagedState, load_managed_state, save_managed_state
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -55,7 +55,7 @@ def test_merge_personal_settings_respects_managed(tmp_path: Path) -> None:
     existing = {"enabledPlugins": {"team@market": True, "user@market": True}}
     personal = {"enabledPlugins": {"team@market": False, "new@market": True}}
 
-    merged = personal_profiles.merge_personal_settings(tmp_path, existing, personal)
+    merged = personal_profiles.merge_personal_settings(tmp_path, existing, personal, managed_state_loader=load_managed_state)
 
     assert merged["enabledPlugins"]["team@market"] is False
     assert merged["enabledPlugins"]["user@market"] is True

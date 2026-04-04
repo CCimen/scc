@@ -32,7 +32,7 @@
   - Estimate: 45m
   - Files: src/scc_cli/application/dashboard.py, src/scc_cli/application/dashboard_models.py, src/scc_cli/application/dashboard_loaders.py, tests/test_app_dashboard_characterization.py
   - Verify: uv run ruff check && uv run mypy src/scc_cli && uv run pytest tests/test_app_dashboard_characterization.py tests/test_import_boundaries.py -q
-- [ ] **T02: Decompose application/worktree, core/personal_profiles, and application/launch/start_wizard** — Extract three application/core layer modules into smaller focused files. Fix the core→marketplace boundary violation in personal_profiles.
+- [x] **T02: Decomposed three oversized modules (1044, 839, 914 lines) into focused files under 800 lines and eliminated the core→marketplace boundary violation via dependency injection** — Extract three application/core layer modules into smaller focused files. Fix the core→marketplace boundary violation in personal_profiles.
 
 ## Steps
 

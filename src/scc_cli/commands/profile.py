@@ -44,6 +44,7 @@ from ..core.personal_profiles import (
     write_workspace_mcp,
     write_workspace_settings,
 )
+from ..marketplace.managed import load_managed_state
 from ..subprocess_utils import run_command
 from ..ui.gate import is_interactive_allowed
 
@@ -363,7 +364,7 @@ def apply_cmd(
                 diff_settings = build_diff_text(
                     f"settings.local.json ({profile.repo_id})",
                     existing_settings,
-                    merge_personal_settings(ws_path, existing_settings, profile_settings),
+                    merge_personal_settings(ws_path, existing_settings, profile_settings, managed_state_loader=load_managed_state),
                 )
                 if diff_settings:
                     console.print(diff_settings)
@@ -383,7 +384,7 @@ def apply_cmd(
             )
             raise typer.Exit(EXIT_USAGE)
 
-    merged_settings = merge_personal_settings(ws_path, existing_settings, profile_settings)
+    merged_settings = merge_personal_settings(ws_path, existing_settings, profile_settings, managed_state_loader=load_managed_state)
     merged_mcp = merge_personal_mcp(existing_mcp, profile_mcp)
 
     if merged_settings == existing_settings and merged_mcp == existing_mcp:
