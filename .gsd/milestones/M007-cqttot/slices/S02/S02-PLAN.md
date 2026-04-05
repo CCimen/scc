@@ -82,7 +82,7 @@ All production code changes for S02. Rename three Claude-named helper functions 
   - Estimate: 45m
   - Files: src/scc_cli/sessions.py, src/scc_cli/commands/audit.py, src/scc_cli/commands/launch/sandbox.py, src/scc_cli/commands/worktree/session_commands.py, src/scc_cli/contexts.py, src/scc_cli/application/launch/start_wizard.py
   - Verify: uv run ruff check src/scc_cli/sessions.py src/scc_cli/commands/audit.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/commands/worktree/session_commands.py src/scc_cli/contexts.py src/scc_cli/application/launch/start_wizard.py && uv run mypy src/scc_cli/sessions.py src/scc_cli/commands/audit.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/commands/worktree/session_commands.py src/scc_cli/contexts.py src/scc_cli/application/launch/start_wizard.py && uv run pytest -q
-- [ ] **T02: Add tests for provider-parameterized helpers and CLI surfaces** — ## Description
+- [x] **T02: Added 21 tests covering provider-parameterized session, audit, context, and CLI surfaces** — ## Description
 
 Write comprehensive tests validating all S02 production code changes: renamed session/audit helpers use registry correctly, WorkContext serializes provider_id with backward compat, session list CLI includes provider column, and sandbox records provider_id='claude'.
 

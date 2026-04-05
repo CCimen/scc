@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T12:56:35.619Z",
+  "exported_at": "2026-04-05T13:00:27.638Z",
   "milestones": [
     {
       "id": "M001",
@@ -5917,19 +5917,21 @@
       "milestone_id": "M007-cqttot",
       "slice_id": "S02",
       "id": "T02",
-      "title": "Add tests for provider-parameterized helpers and CLI surfaces",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 21 tests covering provider-parameterized session, audit, context, and CLI surfaces",
+      "status": "complete",
+      "one_liner": "Added 21 tests covering provider-parameterized session, audit, context, and CLI surfaces",
+      "narrative": "Created tests/test_s02_provider_sessions.py with four test classes (21 tests total) validating all S02 production changes: provider registry lookups for sessions and audit config dirs, WorkContext provider_id serialization round-trip and backward compatibility, display_label behavior with default and non-default providers, and session list CLI provider_id dict-building logic.",
+      "verification_result": "All 21 new tests pass. Ruff clean after fixing one import sort. Full suite: 4675 passed (21 new), 23 skipped, 2 xfailed, 0 failures — zero regressions vs T01 baseline of 4654.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T13:00:27.578Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_s02_provider_sessions.py"
+      ],
       "key_decisions": [],
-      "full_summary_md": "",
+      "full_summary_md": "---\nid: T02\nparent: S02\nmilestone: M007-cqttot\nkey_files:\n  - tests/test_s02_provider_sessions.py\nkey_decisions:\n  - (none)\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T13:00:27.577Z\nblocker_discovered: false\n---\n\n# T02: Added 21 tests covering provider-parameterized session, audit, context, and CLI surfaces\n\n**Added 21 tests covering provider-parameterized session, audit, context, and CLI surfaces**\n\n## What Happened\n\nCreated tests/test_s02_provider_sessions.py with four test classes (21 tests total) validating all S02 production changes: provider registry lookups for sessions and audit config dirs, WorkContext provider_id serialization round-trip and backward compatibility, display_label behavior with default and non-default providers, and session list CLI provider_id dict-building logic.\n\n## Verification\n\nAll 21 new tests pass. Ruff clean after fixing one import sort. Full suite: 4675 passed (21 new), 23 skipped, 2 xfailed, 0 failures — zero regressions vs T01 baseline of 4654.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_s02_provider_sessions.py -v` | 0 | ✅ pass | 4800ms |\n| 2 | `uv run ruff check tests/test_s02_provider_sessions.py` | 0 | ✅ pass | 2100ms |\n| 3 | `uv run pytest -q` | 0 | ✅ pass | 52300ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_s02_provider_sessions.py`\n",
       "description": "## Description\n\nWrite comprehensive tests validating all S02 production code changes: renamed session/audit helpers use registry correctly, WorkContext serializes provider_id with backward compat, session list CLI includes provider column, and sandbox records provider_id='claude'.\n\n## Steps\n\n1. **Create `tests/test_s02_provider_sessions.py`** with the following test classes:\n\n2. **Test renamed session helpers (`TestProviderSessionsDir`):**\n   - `test_get_provider_sessions_dir_claude` — verify returns `Path.home() / '.claude'` for provider_id='claude'\n   - `test_get_provider_sessions_dir_codex` — verify returns `Path.home() / '.codex'` for provider_id='codex'\n   - `test_get_provider_sessions_dir_unknown_raises` — verify raises `InvalidProviderError` for unknown provider\n   - `test_get_provider_recent_sessions_empty` — verify returns empty list when sessions.json doesn't exist\n\n3. **Test renamed audit helper (`TestProviderConfigDir`):**\n   - `test_get_provider_config_dir_claude` — verify returns `Path.home() / '.claude'`\n   - `test_get_provider_config_dir_codex` — verify returns `Path.home() / '.codex'`\n\n4. **Test WorkContext provider_id (`TestWorkContextProviderId`):**\n   - `test_work_context_provider_id_roundtrip` — create with provider_id='codex', to_dict, from_dict, verify provider_id preserved\n   - `test_work_context_provider_id_default_none` — create without provider_id, verify it's None\n   - `test_work_context_from_dict_backward_compat` — from_dict with no provider_id key, verify defaults to None\n   - `test_display_label_without_provider` — verify display_label unchanged when provider_id is None\n   - `test_display_label_with_claude_provider` — verify display_label unchanged when provider is 'claude' (default, not shown)\n   - `test_display_label_with_codex_provider` — verify display_label includes '(codex)' suffix\n\n5. **Test session list provider column (`TestSessionListProvider`):**\n   - `test_session_dicts_includes_provider_id` — mock sessions with provider_id, verify session_dicts include the field\n\n6. **Run full verification:**\n   - `uv run pytest tests/test_s02_provider_sessions.py -v` — all new tests pass\n   - `uv run ruff check tests/test_s02_provider_sessions.py` — clean\n   - `uv run pytest -q` — full suite, zero regressions\n\n## Must-Haves\n\n- [ ] Tests for renamed session helpers (claude, codex, unknown provider)\n- [ ] Tests for renamed audit helper\n- [ ] Tests for WorkContext provider_id round-trip and backward compat\n- [ ] Tests for display_label with and without provider\n- [ ] Tests for session list provider column\n- [ ] All tests pass including full suite regression check\n\n## Verification\n\n- `uv run pytest tests/test_s02_provider_sessions.py -v` — all new tests pass\n- `uv run ruff check tests/test_s02_provider_sessions.py` — zero errors\n- `uv run pytest -q` — full suite passes, zero regressions vs S01 baseline (4654 passed)\n\n## Inputs\n\n- `src/scc_cli/sessions.py` — T01 output: renamed helpers\n- `src/scc_cli/commands/audit.py` — T01 output: renamed get_provider_config_dir\n- `src/scc_cli/contexts.py` — T01 output: WorkContext with provider_id\n- `src/scc_cli/commands/worktree/session_commands.py` — T01 output: session list with provider column\n- `src/scc_cli/core/provider_registry.py` — S01 output: get_runtime_spec()\n- `src/scc_cli/core/errors.py` — S01 output: InvalidProviderError\n\n## Expected Output\n\n- `tests/test_s02_provider_sessions.py` — comprehensive test file for all S02 changes",
       "estimate": "30m",
       "files": [
@@ -9790,6 +9792,39 @@
       "verdict": "✅ pass",
       "duration_ms": 48200,
       "created_at": "2026-04-05T12:56:35.556Z"
+    },
+    {
+      "id": 305,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_s02_provider_sessions.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4800,
+      "created_at": "2026-04-05T13:00:27.578Z"
+    },
+    {
+      "id": 306,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check tests/test_s02_provider_sessions.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2100,
+      "created_at": "2026-04-05T13:00:27.578Z"
+    },
+    {
+      "id": 307,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 52300,
+      "created_at": "2026-04-05T13:00:27.578Z"
     }
   ]
 }
