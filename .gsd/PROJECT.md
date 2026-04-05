@@ -31,60 +31,16 @@ Established typed contracts (core/contracts.py), AgentProvider protocol, and pro
 Made AgentProvider and AgentLaunchSpec part of the real launch path. Claude settings are adapter-owned. Codex is a first-class provider. Preflight validation, durable JSONL audit sink, and application-owned support-bundle converged. Launch wizard resume extracted to typed helpers.
 
 ### M003 — Portable Runtime And Enforced Web Egress ✅
-Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topology-enforced web egress via Squid proxy sidecar, provider destination validation, operator diagnostics, and docs truthfulness guardrails. +178 net new tests (3464 total). Key deliverables:
-- RuntimeProbe protocol as canonical detection surface
-- OciSandboxRuntime using docker create/start/exec
-- Three-layer egress enforcement: pure policy → infrastructure adapter → runtime integration
-- Provider destination registry → SandboxSpec → egress plan pipeline
-- Doctor check for runtime backend, support-bundle effective egress section
-- 5 docs-truthfulness guardrail tests
+Delivered portable OCI sandbox backend (no Docker Desktop dependency) with topology-enforced web egress via Squid proxy sidecar, provider destination validation, operator diagnostics, and docs truthfulness guardrails. +178 net new tests (3464 total).
 
 ### M004 — Cross-Agent Runtime Safety ✅
-Delivered shared safety policy and verdict engine, runtime wrapper baseline, provider-specific safety adapters, fail-closed policy loader, safety audit reader, doctor safety-policy check, and `scc support safety-audit` CLI command. +289 net new tests (3790 total across S01–S04).
+Delivered shared safety policy and verdict engine, runtime wrapper baseline, provider-specific safety adapters, fail-closed policy loader, safety audit reader, doctor safety-policy check, and `scc support safety-audit` CLI command. +289 net new tests (3790 total).
 
 ### M005 — Architecture Quality, Strictness, And Hardening ✅
-Delivered comprehensive architecture quality improvements across 7 slices:
+Delivered comprehensive architecture quality: module decomposition (15 files split), typed governed-artifact model hierarchy, provider-neutral bundle resolution/rendering pipeline, 100% branch coverage on pipeline modules, D023 portable artifact rendering, and 18 truthfulness guardrail tests. Final: 4486 tests.
 
-**S01 (Baseline):** Quantitative maintainability baseline — 272-line audit, 153-line defect catalog, 315 characterization + boundary tests.
-
-**S02 (Decomposition):** All 15 HARD-FAIL/MANDATORY-SPLIT files decomposed below 800 lines, 3 boundary violations repaired. Zero regressions.
-
-**S03 (Typed Models):** Governed-artifact type hierarchy (GovernedArtifact, ArtifactBundle, ArtifactRenderPlan, ProviderArtifactBinding). NormalizedOrgConfig extended. Typed config pipeline adoption.
-
-**S04 (Pipeline):** Provider-neutral bundle resolution → ArtifactRenderPlan → provider-native renderer pipeline. Claude and Codex renderers. Fail-closed error handling. Launch pipeline integration. 126 new tests.
-
-**S05 (Coverage):** 100% branch coverage on all three pipeline modules (bundle_resolver, claude_renderer, codex_renderer). 44 cross-provider integration tests. 191 net-new tests.
-
-**S06 (Diagnostics):** Team-pack diagnostics in doctor/support-bundle. 4 truthfulness fixes. All guardrail xfails removed. M005 validation passed.
-
-**S07 (D023):** Portable artifact rendering — skills and MCP servers without provider bindings now renderable by both providers. PortableArtifact type, resolver population, both renderers extended. 23 new tests.
-
-Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files >1100 lines.
-
-### M006 — Provider Selection UX and End-to-End Codex Launch (in progress)
-**S01 complete.** Provider selection flows from user intent to bootstrap dispatch:
-- Pure provider resolver with CLI > config > default precedence (`core/provider_resolution.py`)
-- `scc provider show/set` CLI commands
-- `--provider` flag on `scc start`
-- Dict-based adapter dispatch in `build_start_session_dependencies()` — request-scoped per D028
-- Team policy validation via `allowed_providers` field on `NormalizedTeamConfig`
-- 40 new tests (4529 total), mypy/ruff clean
-
-**S02 complete.** Codex launch path fully wired from provider selection through Docker exec:
-- CodexAgentRunner adapter with codex-specific argv, settings path, and describe
-- SCC_CODEX_IMAGE / SCC_CODEX_IMAGE_REF constants and scc-agent-codex Dockerfile
-- Provider-aware SandboxSpec population (image, argv, volume, config_dir) via dict lookups in application layer
-- OCI runtime exec/create commands branch on spec fields with backward-compat fallbacks
-- Infrastructure layer stays provider-agnostic — never inspects provider_id
-- 38 net new tests (4568 total), mypy/ruff clean
-
-**S03 complete.** Provider-aware branding, panels, diagnostics, and string cleanup:
-- `get_provider_display_name()` helper maps provider IDs to human-readable names
-- Branding header updated to "Sandboxed Code CLI" (provider-neutral product identity)
-- Launch panels, doctor summary, and all CLI help text parameterized by provider
-- 27+ files swept of hardcoded "Claude Code" references
-- Guardrail test prevents regressions of provider-specific references in non-adapter code
-- 18 branding tests, 4586 total tests passing, mypy/ruff clean
+### M006 — Provider Selection UX and End-to-End Codex Launch ✅
+SCC became a genuine multi-provider runtime. Users choose Claude or Codex via config or CLI flag (`scc provider show/set`, `scc start --provider codex`), validated against org/team policy. Provider identity flows through container naming, volume naming, session identity, machine-readable outputs (dry-run JSON, support bundle, session list). CodexAgentRunner adapter with Codex-specific image, settings, and argv. Provider-aware branding ("Sandboxed Code CLI"), doctor image check with exact build commands, and 16 coexistence proofs. 153 new tests, 4643 total, zero regressions.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -92,23 +48,30 @@ Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files 
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
-6. **M006 — Provider Selection UX and End-to-End Codex Launch** (S01 ✅, S02 ✅, S03 ✅, S04 pending)
+6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all five milestones. M005 final state: zero files >1100 lines (from 3), one justified file in 800–1100 zone, all import boundaries enforced (31 tests), typed config models adopted, governed-artifact pipeline at 99-100% coverage, file/function size guardrails passing without xfail, 18 truthfulness tests, D023 portable artifact rendering implemented, 4486 total tests.
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all six milestones.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 291 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4586 passed, 23 skipped, 2 xfailed)
+- `uv run mypy src/scc_cli` ✅ (Success: no issues found in 292 source files)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4643 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
-## Known deferred items from M005
+## Known deferred items
 - Wizard cast cleanup (23 casts in wizard.py/flow_interactive.py) — deferred per D018
 - Legacy module coverage (docker_sandbox_runtime 30%, overall 73%) — deprioritized per D017/D021 user overrides
 - Portable MCP stdio transport support — requires additional source metadata
 - Live bundle registry integration — renderers write metadata references only
+- ProviderRuntimeSpec frozen dataclass — dict lookups sufficient for 2 providers, add if third provider introduced
+- Dashboard provider switching TUI feature (dashboard 'a' key)
+- Quick Resume provider mismatch prompt
+- Full typed error hierarchy (UnsupportedProviderError, ProviderNotReadyError, etc.)
+- scc doctor --provider flag for explicit provider readiness checking
+- Container labels (scc.provider=<id>) for external tooling discovery
+- Image build/push pipeline for scc-agent-codex
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -141,3 +104,6 @@ Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files 
 - SandboxSpec field-forwarding pattern: application layer resolves provider_id → concrete values (image, volume, config_dir, argv) via dict lookups; infrastructure adapter consumes spec fields with empty-string/empty-tuple fallbacks to existing constants. Infrastructure never inspects provider_id.
 - `get_provider_display_name()` is the single source for provider-to-human-name mapping — all UI surfaces use it instead of raw provider IDs.
 - Guardrail test `TestNoCloudeCodeInNonAdapterModules` prevents regression of hardcoded provider references in non-adapter code.
+- provider_id is threaded through session recording, dry-run JSON, support bundle manifest, session list JSON, and container naming hash — all machine-readable outputs carry provider identity.
+- check_provider_image() doctor check reports missing provider agent images with exact `docker build` fix_commands for operator recovery.
+- Container naming includes provider_id in hash input to prevent Claude/Codex coexistence collisions on the same workspace.
