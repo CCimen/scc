@@ -1,10 +1,12 @@
-# S05: Product naming, documentation truthfulness, and milestone validation
+---
+estimated_steps: 22
+estimated_files: 3
+skills_used: []
+---
 
-**Goal:** README says 'Sandboxed Code CLI'. pyproject.toml description is provider-neutral. Truthfulness guardrail tests cover M007 deliverables (ProviderRuntimeSpec, fail-closed dispatch, doctor provider-awareness, legacy constant cleanup).
-**Demo:** After this: README says 'Sandboxed Code CLI'. D-001 updated. All user-facing strings consistent. Truthfulness guardrail expanded to cover M007 changes.
+# T01: Fix product naming and add M007 truthfulness guardrail tests
 
-## Tasks
-- [x] **T01: Updated README title to 'SCC - Sandboxed Code CLI', made pyproject.toml provider-neutral, added 5 M007 truthfulness guardrail tests** — Fix the product name in README.md and pyproject.toml per D030, then add ~5 truthfulness guardrail tests to test_docs_truthfulness.py covering M007 deliverables.
+Fix the product name in README.md and pyproject.toml per D030, then add ~5 truthfulness guardrail tests to test_docs_truthfulness.py covering M007 deliverables.
 
 ## Steps
 
@@ -32,6 +34,24 @@
 - `uv run ruff check` — zero errors
 - `uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v` — all pass
 - `uv run pytest -q` — >= 4750 passed, 0 failed
-  - Estimate: 20m
-  - Files: README.md, pyproject.toml, tests/test_docs_truthfulness.py
-  - Verify: uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v && uv run ruff check && uv run pytest -q
+
+## Inputs
+
+- ``README.md` — line 1 contains stale 'Sandboxed Claude CLI' product name`
+- ``pyproject.toml` — line 8 contains Claude-specific description`
+- ``tests/test_docs_truthfulness.py` — existing 18 truthfulness tests covering M003-M005; append M007 section`
+- ``src/scc_cli/core/provider_registry.py` — M007/S01 deliverable, must exist (read-only verification target)`
+- ``src/scc_cli/core/contracts.py` — contains ProviderRuntimeSpec (read-only verification target)`
+- ``src/scc_cli/core/errors.py` — contains InvalidProviderError (read-only verification target)`
+- ``src/scc_cli/doctor/checks/environment.py` — contains check_provider_auth (read-only verification target)`
+- ``src/scc_cli/core/constants.py` — must NOT contain Claude-specific constants (read-only verification target)`
+
+## Expected Output
+
+- ``README.md` — title line updated to 'SCC - Sandboxed Code CLI'`
+- ``pyproject.toml` — description updated to provider-neutral text`
+- ``tests/test_docs_truthfulness.py` — ~5 new M007 truthfulness guardrail tests appended`
+
+## Verification
+
+uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v && uv run ruff check && uv run pytest -q

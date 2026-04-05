@@ -564,3 +564,136 @@ def test_bundle_resolver_portable_comment_is_truthful() -> None:
         "D023 or portable_artifacts. The comment must document that "
         "portable skills/MCP servers are renderable without bindings."
     )
+
+
+# ===========================================================================
+# M007 multi-provider runtime truthfulness guardrails
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test q: README title must say 'Sandboxed Code CLI' (D030)
+# ---------------------------------------------------------------------------
+
+
+def test_readme_title_says_sandboxed_code_cli() -> None:
+    """README title must say 'Sandboxed Code CLI', not 'Sandboxed Claude CLI'.
+
+    Per D030, the product name is provider-neutral. The title line must
+    contain 'Sandboxed Code CLI' — not 'Sandboxed Claude CLI' or
+    'Sandboxed Coding CLI'.
+    """
+    first_line = README.read_text(encoding="utf-8").splitlines()[0]
+    assert "Sandboxed Code CLI" in first_line, (
+        f"README.md title does not contain 'Sandboxed Code CLI'. Got: {first_line!r}"
+    )
+    assert "Sandboxed Claude CLI" not in first_line, (
+        f"README.md title still contains stale 'Sandboxed Claude CLI'. Got: {first_line!r}"
+    )
+    assert "Sandboxed Coding CLI" not in first_line, (
+        f"README.md title contains incorrect 'Sandboxed Coding CLI'. Got: {first_line!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test r: ProviderRuntimeSpec exists in core contracts, registry in core
+# ---------------------------------------------------------------------------
+
+
+def test_provider_runtime_spec_exists_in_core() -> None:
+    """core/provider_registry.py must exist with PROVIDER_REGISTRY, and
+    core/contracts.py must define ProviderRuntimeSpec.
+
+    These are M007/S01 deliverables — the multi-provider dispatch foundation.
+    """
+    registry_path = SRC / "core" / "provider_registry.py"
+    contracts_path = SRC / "core" / "contracts.py"
+
+    assert registry_path.exists(), "core/provider_registry.py missing (M007/S01 deliverable)"
+    assert contracts_path.exists(), "core/contracts.py missing"
+
+    registry_src = registry_path.read_text(encoding="utf-8")
+    assert "PROVIDER_REGISTRY" in registry_src, (
+        "core/provider_registry.py does not define PROVIDER_REGISTRY"
+    )
+
+    contracts_src = contracts_path.read_text(encoding="utf-8")
+    assert "ProviderRuntimeSpec" in contracts_src, (
+        "core/contracts.py does not define ProviderRuntimeSpec"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test s: fail-closed dispatch error exists in core/errors.py
+# ---------------------------------------------------------------------------
+
+
+def test_fail_closed_dispatch_error_exists() -> None:
+    """core/errors.py must define InvalidProviderError for fail-closed dispatch.
+
+    When an unknown provider_id is requested, the dispatch must fail closed
+    with a typed error rather than silently falling back. M007/S01 delivers
+    this error class.
+    """
+    errors_path = SRC / "core" / "errors.py"
+    assert errors_path.exists(), "core/errors.py missing"
+
+    source = errors_path.read_text(encoding="utf-8")
+    assert "class InvalidProviderError" in source, (
+        "core/errors.py does not define InvalidProviderError. "
+        "M007/S01 fail-closed dispatch requires this error class."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test t: doctor check_provider_auth exists
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_check_provider_auth_exists() -> None:
+    """doctor/checks/environment.py must define check_provider_auth.
+
+    M007/S03 delivers provider-aware doctor checks. The check_provider_auth
+    function validates provider-specific authentication prerequisites.
+    """
+    env_checks_path = SRC / "doctor" / "checks" / "environment.py"
+    assert env_checks_path.exists(), "doctor/checks/environment.py missing"
+
+    source = env_checks_path.read_text(encoding="utf-8")
+    assert "def check_provider_auth" in source, (
+        "doctor/checks/environment.py does not define check_provider_auth. "
+        "M007/S03 requires provider-aware doctor checks."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test u: core/constants.py must NOT contain Claude-specific runtime constants
+# ---------------------------------------------------------------------------
+
+
+def test_core_constants_no_claude_specifics() -> None:
+    """core/constants.py must not contain Claude-specific runtime constants.
+
+    Provider-specific values (SANDBOX_IMAGE, AGENT_NAME, DATA_VOLUME,
+    CLAUDE_IMAGE, CLAUDE_CONTAINER) belong in adapter modules, not in
+    core constants. This complements test_no_claude_constants_in_core.py
+    but lives here for documentation-truthfulness continuity.
+    """
+    constants_path = SRC / "core" / "constants.py"
+    assert constants_path.exists(), "core/constants.py missing"
+
+    source = constants_path.read_text(encoding="utf-8")
+    banned = [
+        "SANDBOX_IMAGE",
+        "AGENT_NAME",
+        "DATA_VOLUME",
+        "CLAUDE_IMAGE",
+        "CLAUDE_CONTAINER",
+        "CODEX_IMAGE",
+        "CODEX_CONTAINER",
+    ]
+    found = [name for name in banned if name in source]
+    assert not found, (
+        f"core/constants.py contains provider-specific constants: {found}. "
+        "These belong in adapter modules, not in the product-level constants file."
+    )

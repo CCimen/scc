@@ -200,3 +200,127 @@ User-issued overrides that supersede plan document content.
 **Applied-at:** M005/S03/T05
 
 ---
+
+## Override: 2026-04-05T14:16:09.080Z
+
+**Change:** Do not close M007 as docs-only yet. The final M007 architecture and the current code are still out of sync in a few important places, and S05 must include reconciliation tasks before milestone closeout.
+
+  Current state I want you to address explicitly:
+  - S05 has no tasks yet.
+  - S01-S04 are marked complete.
+  - The roadmap/context now promise stronger architecture than the code currently provides.
+  - Do not paper over those gaps with documentation.
+
+  Please add explicit S05 reconciliation tasks or reopen implementation work before final validation.
+
+  Required reconciliation items:
+
+  1. Implement D041 for real, not only in docs.
+  - The final M007 context says SCC uses provider-native config layering:
+    - Claude: SCC-owned settings.json layer, user-owned settings.local.json
+    - Codex: SCC-owned project-scoped .codex/config.toml layer, user-owned ~/.codex/config.toml untouched
+  - Current code still builds settings under /home/agent using spec.settings_path.
+  - Implement the actual ownership model so Codex SCC-managed config is not treated like home-level provider config.
+  - If the chosen Codex overlay is workspace-scoped .codex/config.toml, handle repo cleanliness explicitly:
+    - either ensure .codex is excluded/ignored safely without mutating tracked files unexpectedly
+    - or use a different SCC-managed sidecar path / launch mechanism
+  - Do not let SCC silently dirty user repos.
+  - Add tests for repo cleanliness / expected ignored behavior.
+
+  2. Implement D035 for real: provider-owned settings serialization.
+  - Current OCI runtime still does json.dumps(spec.agent_settings.content) for all providers.
+  - That is not provider-neutral and is structurally wrong for Codex TOML.
+  - Refactor so AgentRunner or a provider-owned settings renderer produces final rendered text/bytes plus target path.
+  - OCI runtime must copy rendered content verbatim and must not serialize provider config itself.
+  - Update contracts accordingly.
+  - Add tests proving:
+    - Claude settings render as JSON to the Claude target
+    - Codex settings render as TOML to the Codex target
+    - runtime no longer assumes JSON
+
+  3. Implement D033 for real: Codex launch policy.
+  - Current codex runner still launches plain `codex`.
+  - Final M007 context says the in-container policy is `codex --dangerously-bypass-approvals-and-sandbox`.
+  - Either implement D033 exactly and test it, or explicitly revise D033 if you determine a different policy is correct.
+  - Do not leave the docs saying one thing and the code doing another.
+  - Keep this runner-owned, not runtime-spec-owned.
+
+  4. Implement D040 for real: file-based Codex auth in containers.
+  - Codex auth persistence must support “login once, reuse until token expiry/refresh”.
+  - In the containerized Codex path, force `cli_auth_credentials_store = "file"` via the SCC-managed Codex config layer.
+  - Do not rely on keyring/auto behavior inside containers.
+  - Ensure refreshed auth writes back to the persistent provider volume.
+  - Add tests around:
+    - presence of file-based auth config in the SCC-managed Codex layer
+    - auth persistence across container restarts
+    - no forced re-login on every start when auth cache is still valid
+
+  5. Finish D037 properly: adapter-owned auth readiness, not only doctor-local file checks.
+  - Current check_provider_auth is useful but still uses local provider→filename mapping and only basic file existence probing.
+  - Move auth readiness ownership to the provider adapter boundary (for example provider.auth_check(data_volume) -> AuthReadiness or equivalent).
+  - Doctor should consume the provider-owned auth readiness result.
+  - Auth wording must stay truthful:
+    - say “auth cache present” if the check is local and non-networked
+    - do not imply “logged in” or “validated” unless that is actually checked
+  - Improve the local readiness quality:
+    - at minimum require file existence plus non-empty content
+    - parseable JSON for providers that use JSON auth files if feasible
+  - Keep validated/networked auth checks out of scope unless deliberately added.
+
+  6. Remove remaining active-launch Claude fallbacks.
+  - D032 says active launch logic fails closed.
+  - Check and eliminate any remaining launch/runtime paths that still substitute Claude when provider wiring is missing or unknown.
+  - In particular, active launch logic must not silently choose Claude if agent_provider is absent or provider identity is invalid.
+  - Missing provider wiring should surface a typed launch error, not a Claude fallback.
+
+  7. Strengthen the persistence model implementation, not just the docs.
+  - The current “one provider volume per provider” model is acceptable for v1, but config freshness must be deterministic.
+  - Implement D038/D042 fully:
+    - on every fresh launch, SCC writes or clears its own managed config layer deterministically
+    - on resume, the original session config remains
+  - Add tests for:
+    - governed launch -> standalone launch
+    - team A -> team B
+    - settings -> no-settings
+  - Do not rely on fresh container creation alone for freshness.
+
+  8. Implement runtime permission normalization robustly.
+  - Build-time Dockerfile permissions are not enough.
+  - Runtime launch must normalize mounted provider state permissions where needed:
+    - provider state dir 0700
+    - auth files 0600
+    - uid 1000 ownership
+  - Keep this scoped to provider state/auth paths, not broad recursive chmod on unrelated mounts.
+  - Add tests for the normalization command construction.
+
+  9. Finish image hardening.
+  - scc-base should prepare both ~/.claude and ~/.codex with correct ownership/permissions.
+  - scc-agent-codex should pin the Codex package version, ideally via ARG, not floating latest.
+  - Keep image builds deterministic and document the upgrade path.
+  - Ensure doctor/build guidance matches the actual image tags and build commands.
+
+  10. Keep architecture clean and avoid unnecessary churn.
+  - The highest priority is behavior, ownership, auth persistence, and truthfulness.
+  - Do not spend time moving provider_registry purely for module-placement aesthetics unless it materially helps these goals.
+  - If current provider_registry placement is acceptable after the behavior is fixed, update the docs/decisions accordingly instead of churning code just to satisfy an earlier wording choice.
+
+  11. Expand S05 to include truthfulness validation against code, not only docs.
+  - README/product naming update is still required.
+  - But S05 must also verify that the final decisions D033/D035/D037/D040/D041 are reflected in code and tests before milestone closeout.
+  - If these items do not fit cleanly into S05, explicitly add new S05 tasks or reopen the relevant slice. Do not mark M007 complete while these remain doc-only promises.
+
+  Acceptance criteria to add before M007 close:
+  - Codex SCC-managed config uses the intended ownership/layering model and does not unintentionally overwrite user-owned config.
+  - SCC does not dirty user repos unexpectedly when applying the Codex config layer.
+  - Agent settings serialization is provider-owned; OCI runtime copies bytes/text verbatim and no longer assumes JSON.
+  - Codex launch argv matches the recorded decision D033, or D033 is explicitly revised and implemented consistently.
+  - Codex auth cache persists across container restarts without forcing re-login each time.
+  - Doctor reports truthful backend/image/auth readiness without overstating validation.
+  - Active launch logic never silently falls back to Claude for unknown/missing providers.
+  - README, docs, and UI naming are consistent with “SCC — Sandboxed Code CLI”.
+
+  Please update the plan and implement these reconciliation tasks before treating S05 as pure docs/validation."
+**Scope:** active
+**Applied-at:** M007-cqttot/S05/T01
+
+---
