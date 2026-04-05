@@ -42,7 +42,7 @@ Add `provider_id: str | None = None` to SessionRecord, SessionSummary, and Sessi
   - Estimate: 45m
   - Files: src/scc_cli/ports/session_models.py, src/scc_cli/application/sessions/use_cases.py, src/scc_cli/sessions.py, src/scc_cli/commands/launch/flow_session.py, src/scc_cli/commands/launch/flow.py, src/scc_cli/commands/launch/flow_interactive.py, src/scc_cli/commands/launch/sandbox.py, tests/test_session_provider_id.py
   - Verify: uv run pytest tests/test_session_provider_id.py -v --no-cov && uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py && uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py && uv run pytest --rootdir "$PWD" -q --no-cov
-- [ ] **T02: Machine-readable provider_id outputs and provider-aware container naming** — ## Description
+- [x] **T02: Added provider_id to dry-run JSON, support bundle manifest, session list JSON, and provider-aware container naming to SandboxSpec and OCI runtime** — ## Description
 
 Two related D028 deliverables: (1) add provider_id to dry-run JSON, support bundle manifest, and session list JSON envelope; (2) include provider_id in container naming for coexistence.
 

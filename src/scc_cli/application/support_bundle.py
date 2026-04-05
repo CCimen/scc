@@ -317,9 +317,17 @@ def build_support_bundle_manifest(
     except Exception as exc:
         artifact_diagnostics = {"error": f"Failed to load artifact diagnostics: {exc}"}
 
+    # Resolve provider_id for the bundle manifest
+    selected_provider: str | None = None
+    try:
+        selected_provider = config.get_selected_provider()
+    except Exception:
+        pass
+
     bundle_data: dict[str, Any] = {
         "generated_at": generated_at,
         "cli_version": __version__,
+        "provider_id": selected_provider,
         "system": system_info,
         "config": user_config,
         "org_config": org_config,

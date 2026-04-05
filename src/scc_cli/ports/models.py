@@ -41,6 +41,7 @@ class SandboxSpec:
     agent_argv: list[str] = field(default_factory=list)
     data_volume: str = ""
     config_dir: str = ""
+    provider_id: str = ""
 
 
 @dataclass(frozen=True)

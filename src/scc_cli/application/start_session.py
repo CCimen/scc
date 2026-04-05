@@ -312,15 +312,20 @@ def _build_sandbox_spec(
     # Route image, data volume, and config dir by provider_id on OCI backend.
     # Falls back to Claude defaults for unknown providers.
     if runtime_info is not None and runtime_info.preferred_backend == "oci":
-        provider_id = (
+        resolved_pid = (
             agent_provider.capability_profile().provider_id
             if agent_provider is not None
             else "claude"
         )
-        image = _PROVIDER_IMAGE_REF.get(provider_id, SCC_CLAUDE_IMAGE_REF)
-        data_volume = _PROVIDER_DATA_VOLUME.get(provider_id, _PROVIDER_DATA_VOLUME["claude"])
-        config_dir = _PROVIDER_CONFIG_DIR.get(provider_id, _PROVIDER_CONFIG_DIR["claude"])
+        image = _PROVIDER_IMAGE_REF.get(resolved_pid, SCC_CLAUDE_IMAGE_REF)
+        data_volume = _PROVIDER_DATA_VOLUME.get(resolved_pid, _PROVIDER_DATA_VOLUME["claude"])
+        config_dir = _PROVIDER_CONFIG_DIR.get(resolved_pid, _PROVIDER_CONFIG_DIR["claude"])
     else:
+        resolved_pid = (
+            agent_provider.capability_profile().provider_id
+            if agent_provider is not None
+            else ""
+        )
         image = SANDBOX_IMAGE
         data_volume = ""
         config_dir = ""
@@ -356,6 +361,7 @@ def _build_sandbox_spec(
         agent_argv=agent_argv or [],
         data_volume=data_volume,
         config_dir=config_dir,
+        provider_id=resolved_pid,
     )
 
 

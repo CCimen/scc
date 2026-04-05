@@ -46,9 +46,16 @@ _OCI_LABEL = "scc.backend=oci"
 _AGENT_HOME = "/home/agent"
 
 
-def _container_name(workspace: Path) -> str:
-    """Derive a deterministic container name from a workspace path."""
-    digest = hashlib.sha256(str(workspace).encode()).hexdigest()[:12]
+def _container_name(workspace: Path, provider_id: str = "") -> str:
+    """Derive a deterministic container name from a workspace path and provider.
+
+    When ``provider_id`` is non-empty the hash input changes, producing a
+    different container name per provider for the same workspace.  This
+    prevents coexistence collisions when two providers target the same
+    directory.
+    """
+    hash_input = f"{provider_id}:{workspace}" if provider_id else str(workspace)
+    digest = hashlib.sha256(hash_input.encode()).hexdigest()[:12]
     return f"scc-oci-{digest}"
 
 
@@ -130,7 +137,7 @@ class OciSandboxRuntime:
         operation.  The :class:`SandboxHandle` return is provided for the
         protocol signature and for testing with a mocked ``os.execvp``.
         """
-        container_name = _container_name(spec.workspace_mount.source)
+        container_name = _container_name(spec.workspace_mount.source, spec.provider_id)
 
         # -- Set up egress topology for enforced mode ----------------------
         network_name: str | None = None

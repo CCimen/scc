@@ -56,6 +56,7 @@ def build_dry_run_data(
     mount_root: Path | None = None,
     container_workdir: str | None = None,
     resolution_reason: str | None = None,
+    provider_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Build dry run data showing resolved configuration.
@@ -113,6 +114,7 @@ def build_dry_run_data(
         "mount_root": str(effective_mount),
         "container_workdir": effective_cw,
         "team": team,
+        "provider_id": provider_id,
         "plugins": plugins,
         "blocked_items": blocked_items,
         "network_policy": network_policy,
