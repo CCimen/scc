@@ -107,7 +107,7 @@ Steps:
   - Estimate: 30m
   - Files: src/scc_cli/commands/launch/start_session.py, src/scc_cli/commands/launch/dependencies.py, src/scc_cli/adapters/oci_sandbox_runtime.py, tests/commands/launch/test_start_session.py
   - Verify: uv run pytest tests/commands/launch/ tests/adapters/test_oci_sandbox_runtime.py -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T08: Implement D038/D042: config freshness on every fresh launch** — On every fresh launch (not resume), SCC writes the SCC-managed config layer deterministically — even when logically empty. On resume, existing config is left in place. Scoped to SCC-owned config layers only.
+- [x] **T08: Fresh launch now deterministically writes SCC-managed config layer (even when empty); resume skips injection to preserve session context** — On every fresh launch (not resume), SCC writes the SCC-managed config layer deterministically — even when logically empty. On resume, existing config is left in place. Scoped to SCC-owned config layers only.
 
 Steps:
 1. Read current OCI runtime fresh-launch vs resume paths

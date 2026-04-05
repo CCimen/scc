@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -190,7 +191,13 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
 
     assert plan.sync_result is None
     assert plan.sync_error_message == "sync failed"
-    assert plan.agent_settings is None
+    # D038: fresh launch (resume=False) always produces agent_settings,
+    # even when sync fails — an empty config overwrites stale volume state.
+    assert plan.agent_settings is not None
+    import json as _json
+
+    parsed = _json.loads(plan.agent_settings.rendered_bytes)
+    assert parsed == {}
     assert plan.sandbox_spec is not None
 
 
@@ -1307,3 +1314,279 @@ class TestProviderAwareDataVolumeAndConfigDir:
         assert plan.sandbox_spec is not None
         assert plan.sandbox_spec.data_volume == ""
         assert plan.sandbox_spec.config_dir == ""
+
+
+# ---------------------------------------------------------------------------
+# D038/D042 — Config freshness on every fresh launch
+# ---------------------------------------------------------------------------
+
+
+class TestConfigFreshness:
+    """D038/D042: fresh launch always writes SCC-managed config; resume skips."""
+
+    def _make_request(
+        self,
+        workspace_path: Path,
+        *,
+        resume: bool = False,
+        team: str | None = None,
+        org_config: NormalizedOrgConfig | None = None,
+        raw_org_config: dict[str, Any] | None = None,
+    ) -> StartSessionRequest:
+        return StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=team,
+            session_name=None,
+            resume=resume,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=org_config,
+            raw_org_config=raw_org_config,
+            provider_id="claude",
+        )
+
+    def test_fresh_launch_no_settings_produces_empty_config(self, tmp_path: Path) -> None:
+        """D038: fresh launch with no sync/effective config still writes empty settings."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = self._make_request(workspace_path, resume=False)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {}
+
+    def test_resume_skips_settings_injection(self, tmp_path: Path) -> None:
+        """D038: resume leaves existing container config untouched (returns None)."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = self._make_request(workspace_path, resume=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Resume returns None — OCI runtime skips injection
+        assert plan.agent_settings is None
+
+    def test_governed_to_standalone_transition(self, tmp_path: Path) -> None:
+        """D038: governed→standalone fresh launch overwrites with empty config.
+
+        Simulates: team A config was injected on a prior launch.  A new
+        fresh launch with no team/no org config still writes an empty
+        settings file, clearing stale team-specific config from the volume.
+        """
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        # Standalone: no team, no org config
+        request = self._make_request(workspace_path, resume=False, team=None)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Fresh launch always writes settings, even standalone
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {}
+
+    def test_team_a_to_team_b_transition(self, tmp_path: Path) -> None:
+        """D038: teamA→teamB fresh launch writes new team config.
+
+        Simulates: team A settings were injected on a prior launch.
+        A new fresh launch with team B writes team B's settings,
+        replacing whatever was in the volume.
+        """
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        _raw = {
+            "defaults": {},
+            "profiles": {"beta": {"network_policy": "open"}},
+        }
+        # Not standalone/offline — so sync runs and produces team B settings
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team="beta",
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=NormalizedOrgConfig.from_dict(_raw),
+            raw_org_config=_raw,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        sync_result = SyncResult(
+            success=True,
+            rendered_settings={"plugins": ["team-b-plugin"]},
+        )
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            patch(
+                "scc_cli.application.start_session.sync_marketplace_settings",
+                return_value=sync_result,
+            ),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Fresh launch with team B config written
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {"plugins": ["team-b-plugin"]}
+
+    def test_settings_to_no_settings_transition(self, tmp_path: Path) -> None:
+        """D038: prior launch had settings, new fresh launch has no settings content.
+
+        The empty config write clears the stale governed config from
+        the persistent volume.
+        """
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        _raw = {
+            "defaults": {},
+            "profiles": {"alpha": {}},
+        }
+        request = self._make_request(
+            workspace_path,
+            resume=False,
+            team="alpha",
+            org_config=NormalizedOrgConfig.from_dict(_raw),
+            raw_org_config=_raw,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            patch(
+                "scc_cli.application.start_session.sync_marketplace_settings",
+                return_value=SyncResult(success=True, rendered_settings=None),
+            ),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Even with no rendered settings, fresh launch writes empty config
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {}
+
+    def test_resume_with_team_still_skips_settings(self, tmp_path: Path) -> None:
+        """D038: resume with team config available still skips injection."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        _raw = {
+            "defaults": {},
+            "profiles": {"alpha": {}},
+        }
+        request = self._make_request(
+            workspace_path,
+            resume=True,
+            team="alpha",
+            org_config=NormalizedOrgConfig.from_dict(_raw),
+            raw_org_config=_raw,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is None
+
+    def test_codex_fresh_launch_empty_config_includes_scc_defaults(
+        self, tmp_path: Path
+    ) -> None:
+        """D038+D040: Codex fresh launch with no content still gets SCC-managed defaults.
+
+        The CodexAgentRunner.build_settings merges _SCC_MANAGED_DEFAULTS
+        (cli_auth_credentials_store='file') even into an empty config dict.
+        """
+        from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="codex",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=CodexAgentRunner(),
+            agent_provider=CodexAgentProvider(),
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is not None
+        content = plan.agent_settings.rendered_bytes.decode()
+        assert "cli_auth_credentials_store" in content
+        assert "file" in content
+        assert plan.agent_settings.suffix == ".toml"

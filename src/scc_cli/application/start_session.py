@@ -134,6 +134,7 @@ def prepare_start_session(
         effective_config=effective_config,
         provider_id=_provider_id,
         workspace_path=resolver_result.mount_root,
+        is_resume=request.resume,
     )
 
     # ── Bundle pipeline: resolve plans → render artifacts ─────────────────
@@ -272,7 +273,20 @@ def _build_agent_settings(
     effective_config: EffectiveConfig | None,
     provider_id: str,
     workspace_path: Path | None = None,
+    is_resume: bool = False,
 ) -> AgentSettings | None:
+    """Build agent settings for injection into the container.
+
+    D038/D042: On every fresh launch (not resume), SCC deterministically
+    writes the SCC-managed config layer — even when logically empty.  This
+    ensures no stale team/workspace config persists from a prior launch.
+    On resume, the existing config is left in place (belongs to the session
+    being resumed), so we return None to skip injection.
+    """
+    # D038: on resume, leave existing container config untouched.
+    if is_resume:
+        return None
+
     settings: dict[str, Any] | None = None
     if sync_result and sync_result.rendered_settings:
         settings = dict(sync_result.rendered_settings)
@@ -282,8 +296,12 @@ def _build_agent_settings(
 
         settings = merge_mcp_servers(settings, effective_config)
 
-    if not settings:
-        return None
+    # D038/D042: on fresh launch, always produce a settings file — even if
+    # the dict is empty.  This overwrites any stale config left in the
+    # persistent volume from a prior launch (e.g. governed→standalone,
+    # teamA→teamB transitions).
+    if settings is None:
+        settings = {}
 
     spec = get_runtime_spec(provider_id)
     # D041: route settings path by scope.
