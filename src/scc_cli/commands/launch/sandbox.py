@@ -31,6 +31,7 @@ def launch_sandbox(
     should_continue_session: bool,
     fresh: bool,
     plugin_settings: dict[str, Any] | None = None,
+    display_name: str = "Claude Code",
 ) -> None:
     """
     Execute the Docker sandbox with all configurations applied.
@@ -48,6 +49,7 @@ def launch_sandbox(
         current_branch: Git branch name.
         should_continue_session: Whether to continue existing session.
         fresh: Force new container.
+        display_name: Provider display name for the launch panel title.
         plugin_settings: Plugin settings dict to inject into container HOME.
             Contains extraKnownMarketplaces and enabledPlugins with absolute
             paths pointing to the bind-mounted workspace.
@@ -145,6 +147,7 @@ def launch_sandbox(
         session_name=session_name,
         branch=current_branch,
         is_resume=is_resume,
+        display_name=display_name,
     )
 
     # Pass org_config for safety-net policy injection (mounted read-only)

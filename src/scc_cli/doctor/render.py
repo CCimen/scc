@@ -28,7 +28,11 @@ from .types import DoctorResult
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def render_doctor_results(console: Console, result: DoctorResult) -> None:
+def render_doctor_results(
+    console: Console,
+    result: DoctorResult,
+    provider_id: str | None = None,
+) -> None:
     """Render doctor results with beautiful Rich formatting.
 
     Uses consistent styling with the rest of the CLI:
@@ -36,6 +40,11 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
     - Green for success
     - Yellow for warnings
     - Red for errors
+
+    Args:
+        console: Rich console for output.
+        result: Doctor check results.
+        provider_id: Active provider identifier for branding. Defaults to "claude".
     """
     # Header
     console.print()
@@ -110,9 +119,12 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
 
     # Summary line
     if result.all_ok:
+        from scc_cli.core.provider_resolution import get_provider_display_name
+
+        _display = get_provider_display_name(provider_id or "claude")
         console.print()
         console.print(
-            "  [bold green]All prerequisites met![/bold green] [dim]Ready to run Claude Code.[/dim]"
+            f"  [bold green]All prerequisites met![/bold green] [dim]Ready to run {_display}.[/dim]"
         )
     else:
         console.print()

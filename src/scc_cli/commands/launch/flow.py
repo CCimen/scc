@@ -21,6 +21,7 @@ from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
+from ...core.provider_resolution import get_provider_display_name
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_info_panel
 from ...ports.config_models import NormalizedOrgConfig
@@ -376,5 +377,6 @@ def start(
         session_name=session_name,
         branch=current_branch,
         is_resume=False,
+        display_name=get_provider_display_name(resolved_provider),
     )
     finalize_launch(start_plan, dependencies=start_dependencies)

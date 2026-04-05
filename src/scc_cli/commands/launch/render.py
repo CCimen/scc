@@ -127,6 +127,7 @@ def show_launch_panel(
     session_name: str | None,
     branch: str | None,
     is_resume: bool,
+    display_name: str = "Claude Code",
 ) -> None:
     """Display launch info panel with session details.
 
@@ -136,6 +137,7 @@ def show_launch_panel(
         session_name: Optional session name for identification.
         branch: Current git branch, or None if not in a git repo.
         is_resume: True if resuming an existing container.
+        display_name: Provider display name for the panel title.
     """
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", no_wrap=True)
@@ -161,7 +163,7 @@ def show_launch_panel(
 
     panel = Panel(
         grid,
-        title="[bold green]Launching Claude Code[/bold green]",
+        title=f"[bold green]Launching {display_name}[/bold green]",
         border_style="green",
         padding=(0, 1),
     )
@@ -257,7 +259,10 @@ def show_dry_run_panel(data: dict[str, Any]) -> None:
     console.print()
 
 
-def show_launch_context_panel(ctx: LaunchContext) -> None:
+def show_launch_context_panel(
+    ctx: LaunchContext,
+    display_name: str = "Claude Code",
+) -> None:
     """Display enhanced launch context panel with path information.
 
     Shows:
@@ -266,6 +271,10 @@ def show_launch_context_panel(ctx: LaunchContext) -> None:
     - Mount root (MR) only if different from WR (worktree expansion)
     - Container workdir (CW)
     - Team / branch / session / mode
+
+    Args:
+        ctx: Launch context with path and session information.
+        display_name: Provider display name for the panel title.
     """
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", no_wrap=True)
@@ -306,7 +315,7 @@ def show_launch_context_panel(ctx: LaunchContext) -> None:
 
     panel = Panel(
         grid,
-        title="[bold green]Launching Claude Code[/bold green]",
+        title=f"[bold green]Launching {display_name}[/bold green]",
         border_style="green",
         padding=(0, 1),
     )

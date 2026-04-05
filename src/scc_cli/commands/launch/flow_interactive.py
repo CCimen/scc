@@ -55,6 +55,7 @@ from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.exit_codes import EXIT_CONFIG
+from ...core.provider_resolution import get_provider_display_name
 from ...panels import create_info_panel, create_warning_panel
 from ...ports.config_models import NormalizedOrgConfig
 from ...ports.git_client import GitClient
@@ -716,6 +717,7 @@ def run_start_wizard_flow(
             session_name=session_name,
             branch=current_branch,
             is_resume=False,
+            display_name=get_provider_display_name(start_request.provider_id or "claude"),
         )
         finalize_launch(start_plan, dependencies=start_dependencies)
         return True

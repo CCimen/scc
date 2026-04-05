@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T00:08:13.431Z",
+  "exported_at": "2026-04-05T00:16:49.430Z",
   "milestones": [
     {
       "id": "M001",
@@ -5144,19 +5144,29 @@
       "milestone_id": "M006-d622bc",
       "slice_id": "S03",
       "id": "T02",
-      "title": "Parameterize launch panels and doctor summary with provider display name",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added display_name parameter to show_launch_panel(), show_launch_context_panel(), and render_doctor_results(); threaded resolved provider at all call sites",
+      "status": "complete",
+      "one_liner": "Added display_name parameter to show_launch_panel(), show_launch_context_panel(), and render_doctor_results(); threaded resolved provider at all call sites",
+      "narrative": "Added display_name/provider_id parameters to the three render functions with backward-compatible defaults. Threaded get_provider_display_name() at all launch flow call sites (flow.py, flow_interactive.py, sandbox.py). Doctor render uses deferred import. 7 new tests verify panel titles and doctor summary adapt to different providers.",
+      "verification_result": "17 tests pass in test_provider_branding.py. Ruff check clean on all 5 source files. Mypy clean on all 5 source files. Slice-level ruff/mypy on provider_resolution, branding, theme also clean.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T00:16:49.376Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "sandbox.py receives display_name as string rather than provider_id to avoid widening the function's dependency surface. Doctor render call sites in admin.py and settings.py not modified — default falls back to claude.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/launch/render.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/launch/sandbox.py",
+        "src/scc_cli/doctor/render.py",
+        "tests/test_provider_branding.py"
+      ],
+      "key_decisions": [
+        "Doctor render uses deferred import for get_provider_display_name to avoid top-level cross-module coupling",
+        "sandbox.py receives display_name string rather than provider_id to keep it decoupled from provider_resolution"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S03\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/commands/launch/render.py\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/sandbox.py\n  - src/scc_cli/doctor/render.py\n  - tests/test_provider_branding.py\nkey_decisions:\n  - Doctor render uses deferred import for get_provider_display_name to avoid top-level cross-module coupling\n  - sandbox.py receives display_name string rather than provider_id to keep it decoupled from provider_resolution\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T00:16:49.376Z\nblocker_discovered: false\n---\n\n# T02: Added display_name parameter to show_launch_panel(), show_launch_context_panel(), and render_doctor_results(); threaded resolved provider at all call sites\n\n**Added display_name parameter to show_launch_panel(), show_launch_context_panel(), and render_doctor_results(); threaded resolved provider at all call sites**\n\n## What Happened\n\nAdded display_name/provider_id parameters to the three render functions with backward-compatible defaults. Threaded get_provider_display_name() at all launch flow call sites (flow.py, flow_interactive.py, sandbox.py). Doctor render uses deferred import. 7 new tests verify panel titles and doctor summary adapt to different providers.\n\n## Verification\n\n17 tests pass in test_provider_branding.py. Ruff check clean on all 5 source files. Mypy clean on all 5 source files. Slice-level ruff/mypy on provider_resolution, branding, theme also clean.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_provider_branding.py -v --no-cov` | 0 | ✅ pass | 140ms |\n| 2 | `uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py` | 0 | ✅ pass | 300ms |\n| 3 | `uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py` | 0 | ✅ pass | 500ms |\n\n## Deviations\n\nsandbox.py receives display_name as string rather than provider_id to avoid widening the function's dependency surface. Doctor render call sites in admin.py and settings.py not modified — default falls back to claude.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/render.py`\n- `src/scc_cli/commands/launch/flow.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/commands/launch/sandbox.py`\n- `src/scc_cli/doctor/render.py`\n- `tests/test_provider_branding.py`\n",
       "description": "## Description\n\nUpdate `show_launch_panel()`, `show_launch_context_panel()`, and `render_doctor_results()` to accept and display the active provider's display name instead of hardcoded \"Claude Code\". Thread `provider_id` from the launch flow call sites.\n\n## Steps\n\n1. Update `src/scc_cli/commands/launch/render.py`:\n   - `show_launch_panel()`: Add `display_name: str = \"Claude Code\"` parameter. Change Panel title from `\"Launching Claude Code\"` to `f\"Launching {display_name}\"`.\n   - `show_launch_context_panel()`: Add `display_name: str = \"Claude Code\"` parameter. Same Panel title change.\n2. Thread `display_name` at all 3 call sites:\n   - `src/scc_cli/commands/launch/flow.py` line ~373: Import `get_provider_display_name` from `core.provider_resolution`. The `resolved_provider` variable is already in scope (line ~256). Pass `display_name=get_provider_display_name(resolved_provider)` to `show_launch_panel()`.\n   - `src/scc_cli/commands/launch/flow_interactive.py` line ~713: The function needs access to the resolved provider. It receives `start_request` which has `provider_id`. Import `get_provider_display_name`, pass `display_name=get_provider_display_name(start_request.provider_id or \"claude\")`.\n   - `src/scc_cli/commands/launch/sandbox.py` line ~142: This function receives `start_request` from its caller. Import and pass the same way.\n3. Update `src/scc_cli/doctor/render.py`:\n   - `render_doctor_results()`: Add `provider_id: str | None = None` parameter. When `result.all_ok`, use `get_provider_display_name(provider_id or \"claude\")` in the summary line: `\"Ready to run {display_name}.\"`\n4. Find the doctor render call site and thread `provider_id` if easily accessible. If not, the default (\"claude\") preserves current behavior.\n5. Write tests in `tests/test_provider_branding.py` (extend T01's file):\n   - `show_launch_panel()` with default `display_name` renders \"Launching Claude Code\"\n   - `show_launch_panel(display_name=\"Codex\")` renders \"Launching Codex\"\n   - `show_launch_context_panel()` title adapts similarly\n   - Doctor summary with `provider_id=\"codex\"` renders \"Ready to run Codex\"\n6. Run ruff and mypy on all touched files.\n\n## Must-Haves\n\n- [ ] `show_launch_panel()` accepts `display_name` and renders it in the title\n- [ ] `show_launch_context_panel()` accepts `display_name` and renders it in the title\n- [ ] All 3 call sites pass the resolved provider's display name\n- [ ] Doctor summary line is parameterized\n- [ ] Tests pass\n\n## Verification\n\n- `uv run pytest tests/test_provider_branding.py -v` — all pass (including new tests)\n- `uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py` — clean\n- `uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py` — clean",
       "estimate": "30m",
       "files": [
@@ -8506,6 +8516,39 @@
       "verdict": "✅ pass",
       "duration_ms": 8100,
       "created_at": "2026-04-05T00:08:13.392Z"
+    },
+    {
+      "id": 266,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_provider_branding.py -v --no-cov",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 140,
+      "created_at": "2026-04-05T00:16:49.377Z"
+    },
+    {
+      "id": 267,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 300,
+      "created_at": "2026-04-05T00:16:49.377Z"
+    },
+    {
+      "id": 268,
+      "task_id": "T02",
+      "slice_id": "S03",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 500,
+      "created_at": "2026-04-05T00:16:49.377Z"
     }
   ]
 }

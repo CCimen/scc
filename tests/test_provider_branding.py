@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from rich.console import Console
+from rich.panel import Panel
 
 from scc_cli.core.provider_resolution import get_provider_display_name
 from scc_cli.ui.branding import get_brand_tagline, get_version_header
@@ -62,3 +66,139 @@ class TestGetBrandTagline:
     def test_tagline_with_unknown_provider(self) -> None:
         tagline = get_brand_tagline(provider_id="custom")
         assert "Custom" in tagline
+
+
+# ── show_launch_panel ────────────────────────────────────────────────────────
+
+
+def _capture_panel_title(fn: object, *args: object, **kwargs: object) -> str:
+    """Call a render function and return the Panel title from the first Panel printed."""
+    panels: list[Panel] = []
+
+    def capturing_layout(*a: object, **kw: object) -> None:
+        for arg in a:
+            if isinstance(arg, Panel):
+                panels.append(arg)
+
+    with patch("scc_cli.commands.launch.render.console") as mock_console:
+        mock_console.print = MagicMock()
+        with patch("scc_cli.commands.launch.render.print_with_layout", capturing_layout):
+            fn(*args, **kwargs)  # type: ignore[operator]
+
+    assert panels, "No Panel was printed"
+    title = panels[0].title
+    # Rich title is a Text or str; convert to plain string
+    return str(title) if title else ""
+
+
+class TestShowLaunchPanel:
+    """show_launch_panel() adapts the panel title to display_name."""
+
+    def test_default_display_name_is_claude_code(self) -> None:
+        from scc_cli.commands.launch.render import show_launch_panel
+
+        title = _capture_panel_title(
+            show_launch_panel,
+            workspace=Path("/tmp/ws"),
+            team=None,
+            session_name=None,
+            branch=None,
+            is_resume=False,
+        )
+        assert "Launching Claude Code" in title
+
+    def test_codex_display_name(self) -> None:
+        from scc_cli.commands.launch.render import show_launch_panel
+
+        title = _capture_panel_title(
+            show_launch_panel,
+            workspace=Path("/tmp/ws"),
+            team=None,
+            session_name=None,
+            branch=None,
+            is_resume=False,
+            display_name="Codex",
+        )
+        assert "Launching Codex" in title
+
+    def test_custom_display_name(self) -> None:
+        from scc_cli.commands.launch.render import show_launch_panel
+
+        title = _capture_panel_title(
+            show_launch_panel,
+            workspace=Path("/tmp/ws"),
+            team=None,
+            session_name=None,
+            branch=None,
+            is_resume=False,
+            display_name="My Agent",
+        )
+        assert "Launching My Agent" in title
+
+
+# ── show_launch_context_panel ────────────────────────────────────────────────
+
+
+class TestShowLaunchContextPanel:
+    """show_launch_context_panel() adapts the panel title to display_name."""
+
+    def _make_ctx(self) -> MagicMock:
+        ctx = MagicMock()
+        ctx.workspace_root = Path("/tmp/ws")
+        ctx.entry_dir = Path("/tmp/ws")
+        ctx.entry_dir_relative = "."
+        ctx.mount_root = Path("/tmp/ws")
+        ctx.container_workdir = "/tmp/ws"
+        ctx.team = None
+        ctx.branch = None
+        ctx.session_name = None
+        ctx.mode = "new"
+        return ctx
+
+    def test_default_title_is_claude_code(self) -> None:
+        from scc_cli.commands.launch.render import show_launch_context_panel
+
+        title = _capture_panel_title(show_launch_context_panel, self._make_ctx())
+        assert "Launching Claude Code" in title
+
+    def test_codex_title(self) -> None:
+        from scc_cli.commands.launch.render import show_launch_context_panel
+
+        title = _capture_panel_title(
+            show_launch_context_panel,
+            self._make_ctx(),
+            display_name="Codex",
+        )
+        assert "Launching Codex" in title
+
+
+# ── render_doctor_results ────────────────────────────────────────────────────
+
+
+class TestRenderDoctorResults:
+    """render_doctor_results() adapts the summary line to provider_id."""
+
+    def _make_ok_result(self) -> MagicMock:
+        result = MagicMock()
+        result.all_ok = True
+        result.checks = []
+        result.error_count = 0
+        result.warning_count = 0
+        return result
+
+    def test_default_summary_says_claude_code(self) -> None:
+        from scc_cli.doctor.render import render_doctor_results
+
+        buf = Console(file=__import__("io").StringIO(), force_terminal=True)
+        render_doctor_results(buf, self._make_ok_result())
+        output = buf.file.getvalue()  # type: ignore[union-attr]
+        assert "Claude Code" in output
+
+    def test_codex_summary(self) -> None:
+        from scc_cli.doctor.render import render_doctor_results
+
+        buf = Console(file=__import__("io").StringIO(), force_terminal=True)
+        render_doctor_results(buf, self._make_ok_result(), provider_id="codex")
+        output = buf.file.getvalue()  # type: ignore[union-attr]
+        assert "Codex" in output
+        assert "Claude Code" not in output

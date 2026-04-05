@@ -41,7 +41,7 @@ Create `get_provider_display_name()` in `core/provider_resolution.py` and update
   - Estimate: 25m
   - Files: src/scc_cli/core/provider_resolution.py, src/scc_cli/ui/branding.py, src/scc_cli/theme.py, tests/test_provider_branding.py
   - Verify: uv run pytest tests/test_provider_branding.py -v && uv run ruff check src/scc_cli/core/provider_resolution.py src/scc_cli/ui/branding.py src/scc_cli/theme.py && uv run mypy src/scc_cli/core/provider_resolution.py src/scc_cli/ui/branding.py src/scc_cli/theme.py
-- [ ] **T02: Parameterize launch panels and doctor summary with provider display name** — ## Description
+- [x] **T02: Added display_name parameter to show_launch_panel(), show_launch_context_panel(), and render_doctor_results(); threaded resolved provider at all call sites** — ## Description
 
 Update `show_launch_panel()`, `show_launch_context_panel()`, and `render_doctor_results()` to accept and display the active provider's display name instead of hardcoded "Claude Code". Thread `provider_id` from the launch flow call sites.
 
