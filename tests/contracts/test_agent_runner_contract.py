@@ -19,8 +19,9 @@ def test_agent_runner_builds_settings_and_command() -> None:
     settings = runner.build_settings(payload, path=settings_path)
     command = runner.build_command(settings)
 
-    assert settings.content == payload
+    assert isinstance(settings.rendered_bytes, bytes)
     assert settings.path == settings_path
+    assert settings.suffix == ".json"
     assert command.argv[0] == "claude"
     assert runner.describe()
 
@@ -53,7 +54,7 @@ _RUNNERS: list[tuple[str, AgentRunner, str, Path]] = [
 class TestAgentRunnerContract:
     """Every AgentRunner must satisfy the same structural contract."""
 
-    def test_build_settings_round_trips(
+    def test_build_settings_produces_rendered_bytes(
         self,
         label: str,
         runner: AgentRunner,
@@ -61,8 +62,10 @@ class TestAgentRunnerContract:
         expected_settings_path: Path,
     ) -> None:
         settings = runner.build_settings({"key": "val"}, path=expected_settings_path)
-        assert settings.content == {"key": "val"}
+        assert isinstance(settings.rendered_bytes, bytes)
+        assert len(settings.rendered_bytes) > 0
         assert settings.path == expected_settings_path
+        assert settings.suffix in (".json", ".toml")
 
     def test_build_command_returns_expected_argv(
         self,

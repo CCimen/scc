@@ -82,7 +82,20 @@ class AgentCommand:
 
 @dataclass(frozen=True)
 class AgentSettings:
-    """Settings payload and target location for an agent."""
+    """Pre-rendered settings payload and target location for an agent.
 
-    content: dict[str, Any]
+    The runner (``AgentRunner.build_settings``) is responsible for
+    serialising the config dict into the correct wire format (JSON for
+    Claude, TOML for Codex, etc.) and returning ``rendered_bytes``.
+    The OCI runtime writes these bytes verbatim — it never assumes a
+    particular serialisation format.  See D035.
+
+    Attributes:
+        rendered_bytes: Serialised config content ready to write to disk.
+        path: Absolute target path inside the container.
+        suffix: File extension hint (e.g. ``".json"``, ``".toml"``).
+    """
+
+    rendered_bytes: bytes
     path: Path
+    suffix: str = ".json"

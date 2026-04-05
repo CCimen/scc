@@ -47,7 +47,7 @@ Steps:
   - Estimate: 45m
   - Files: src/scc_cli/core/provider_registry.py, src/scc_cli/adapters/oci_sandbox_runtime.py, src/scc_cli/commands/launch/start_session.py, tests/test_provider_registry.py, tests/adapters/test_oci_sandbox_runtime.py
   - Verify: uv run pytest tests/test_provider_registry.py tests/adapters/test_oci_sandbox_runtime.py -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T03: Implement D035: provider-owned settings serialization** — Refactor AgentSettings so the runner produces rendered bytes, not a dict. OCI runtime writes bytes verbatim without format assumption. AgentRunner.build_settings() becomes responsible for serialization (JSON for Claude, TOML for Codex).
+- [x] **T03: Refactored AgentSettings from content:dict to rendered_bytes:bytes so runners own serialization and OCI runtime writes bytes verbatim** — Refactor AgentSettings so the runner produces rendered bytes, not a dict. OCI runtime writes bytes verbatim without format assumption. AgentRunner.build_settings() becomes responsible for serialization (JSON for Claude, TOML for Codex).
 
 Steps:
 1. Read current AgentSettings model and its consumers

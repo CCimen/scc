@@ -8,7 +8,6 @@ work on Docker Engine, OrbStack, Colima, and any OCI-compatible runtime.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import subprocess
 import tempfile
@@ -386,7 +385,11 @@ class OciSandboxRuntime:
 
     @staticmethod
     def _inject_settings(container_id: str, spec: SandboxSpec) -> None:
-        """Write agent settings into the container via ``docker cp``.
+        """Write pre-rendered agent settings into the container via ``docker cp``.
+
+        The runtime is format-agnostic — ``rendered_bytes`` are written
+        verbatim.  The runner (``AgentRunner.build_settings``) owns
+        serialisation (JSON for Claude, TOML for Codex, etc.).  See D035.
 
         For workspace-scoped settings (D041, e.g. Codex project config),
         the parent directory is created inside the container and the config
@@ -396,7 +399,6 @@ class OciSandboxRuntime:
         if spec.agent_settings is None:
             return  # pragma: no cover
 
-        settings_json = json.dumps(spec.agent_settings.content)
         target_path = str(spec.agent_settings.path)
 
         # D041: ensure workspace-scoped config dir exists and is git-excluded.
@@ -409,10 +411,11 @@ class OciSandboxRuntime:
                 container_id, workspace_target, config_dir_name
             )
 
+        suffix = spec.agent_settings.suffix or ".json"
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
+            mode="wb", suffix=suffix, delete=False
         ) as tmp:
-            tmp.write(settings_json)
+            tmp.write(spec.agent_settings.rendered_bytes)
             tmp_path = tmp.name
 
         try:

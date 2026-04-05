@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T14:33:35.432Z",
+  "exported_at": "2026-04-05T14:46:44.059Z",
   "milestones": [
     {
       "id": "M001",
@@ -6330,19 +6330,33 @@
       "milestone_id": "M007-cqttot",
       "slice_id": "S05",
       "id": "T03",
-      "title": "Implement D035: provider-owned settings serialization",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Refactored AgentSettings from content:dict to rendered_bytes:bytes so runners own serialization and OCI runtime writes bytes verbatim",
+      "status": "complete",
+      "one_liner": "Refactored AgentSettings from content:dict to rendered_bytes:bytes so runners own serialization and OCI runtime writes bytes verbatim",
+      "narrative": "Changed AgentSettings in ports/models.py from content: dict[str, Any] + path: Path to rendered_bytes: bytes + path: Path + suffix: str. ClaudeAgentRunner.build_settings() now serializes config to JSON bytes. CodexAgentRunner.build_settings() serializes to TOML bytes via a minimal _serialize_toml() helper. The OCI runtime's _inject_settings() writes rendered_bytes verbatim with the correct file suffix — no more json.dumps(). The legacy DockerSandboxRuntime deserializes bytes back to dict for backward compatibility. Updated _build_agent_launch_spec to pass empty dict to prepare_launch since providers don't consume the config content. Updated all test construction sites, created test_claude_agent_runner.py, and extended Codex runner tests with TOML round-trip verification.",
+      "verification_result": "uv run ruff check — zero errors. uv run mypy src/scc_cli — 0 issues in 293 files. uv run pytest targeted tests — 106 passed. uv run pytest truthfulness/branding — 41 passed. uv run pytest -q — 4740 passed, 23 skipped, 2 xfailed, 0 failed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T14:46:43.977Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Added _serialize_toml helper in codex_agent_runner.py instead of adding tomli_w dependency. Legacy DockerSandboxRuntime deserializes rendered_bytes back to dict via json.loads. _build_agent_launch_spec passes config={} to prepare_launch since providers ignore it.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/adapters/claude_agent_runner.py",
+        "src/scc_cli/adapters/codex_agent_runner.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/adapters/docker_sandbox_runtime.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_claude_agent_runner.py",
+        "tests/test_codex_agent_runner.py",
+        "tests/test_oci_sandbox_runtime.py"
+      ],
+      "key_decisions": [
+        "Minimal _serialize_toml in codex_agent_runner.py instead of adding tomli_w dependency",
+        "Pass empty dict to prepare_launch config param since providers ignore it",
+        "Legacy DockerSandboxRuntime deserializes rendered_bytes back to dict for backward compat"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S05\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/ports/models.py\n  - src/scc_cli/adapters/claude_agent_runner.py\n  - src/scc_cli/adapters/codex_agent_runner.py\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - src/scc_cli/adapters/docker_sandbox_runtime.py\n  - src/scc_cli/application/start_session.py\n  - tests/test_claude_agent_runner.py\n  - tests/test_codex_agent_runner.py\n  - tests/test_oci_sandbox_runtime.py\nkey_decisions:\n  - Minimal _serialize_toml in codex_agent_runner.py instead of adding tomli_w dependency\n  - Pass empty dict to prepare_launch config param since providers ignore it\n  - Legacy DockerSandboxRuntime deserializes rendered_bytes back to dict for backward compat\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T14:46:43.977Z\nblocker_discovered: false\n---\n\n# T03: Refactored AgentSettings from content:dict to rendered_bytes:bytes so runners own serialization and OCI runtime writes bytes verbatim\n\n**Refactored AgentSettings from content:dict to rendered_bytes:bytes so runners own serialization and OCI runtime writes bytes verbatim**\n\n## What Happened\n\nChanged AgentSettings in ports/models.py from content: dict[str, Any] + path: Path to rendered_bytes: bytes + path: Path + suffix: str. ClaudeAgentRunner.build_settings() now serializes config to JSON bytes. CodexAgentRunner.build_settings() serializes to TOML bytes via a minimal _serialize_toml() helper. The OCI runtime's _inject_settings() writes rendered_bytes verbatim with the correct file suffix — no more json.dumps(). The legacy DockerSandboxRuntime deserializes bytes back to dict for backward compatibility. Updated _build_agent_launch_spec to pass empty dict to prepare_launch since providers don't consume the config content. Updated all test construction sites, created test_claude_agent_runner.py, and extended Codex runner tests with TOML round-trip verification.\n\n## Verification\n\nuv run ruff check — zero errors. uv run mypy src/scc_cli — 0 issues in 293 files. uv run pytest targeted tests — 106 passed. uv run pytest truthfulness/branding — 41 passed. uv run pytest -q — 4740 passed, 23 skipped, 2 xfailed, 0 failed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 4500ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4500ms |\n| 3 | `uv run pytest tests/test_claude_agent_runner.py tests/test_codex_agent_runner.py tests/test_oci_sandbox_runtime.py tests/contracts/test_agent_runner_contract.py tests/test_application_start_session.py -v` | 0 | ✅ pass | 5600ms |\n| 4 | `uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v` | 0 | ✅ pass | 3900ms |\n| 5 | `uv run pytest -q` | 0 | ✅ pass | 57400ms |\n\n## Deviations\n\nAdded _serialize_toml helper in codex_agent_runner.py instead of adding tomli_w dependency. Legacy DockerSandboxRuntime deserializes rendered_bytes back to dict via json.loads. _build_agent_launch_spec passes config={} to prepare_launch since providers ignore it.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/ports/models.py`\n- `src/scc_cli/adapters/claude_agent_runner.py`\n- `src/scc_cli/adapters/codex_agent_runner.py`\n- `src/scc_cli/adapters/oci_sandbox_runtime.py`\n- `src/scc_cli/adapters/docker_sandbox_runtime.py`\n- `src/scc_cli/application/start_session.py`\n- `tests/test_claude_agent_runner.py`\n- `tests/test_codex_agent_runner.py`\n- `tests/test_oci_sandbox_runtime.py`\n",
       "description": "Refactor AgentSettings so the runner produces rendered bytes, not a dict. OCI runtime writes bytes verbatim without format assumption. AgentRunner.build_settings() becomes responsible for serialization (JSON for Claude, TOML for Codex).\n\nSteps:\n1. Read current AgentSettings model and its consumers\n2. Change AgentSettings from content:dict to rendered_bytes:bytes + path:Path + suffix:str\n3. Update ClaudeAgentRunner.build_settings() to serialize JSON\n4. Update CodexAgentRunner.build_settings() to serialize TOML\n5. Update OCI runtime _inject_settings to write rendered_bytes verbatim (remove json.dumps)\n6. Add tests proving Claude renders JSON, Codex renders TOML, runtime no longer assumes JSON\n7. Run full test suite",
       "estimate": "45m",
       "files": [
@@ -10890,6 +10904,61 @@
       "verdict": "✅ pass",
       "duration_ms": 56000,
       "created_at": "2026-04-05T14:33:35.379Z"
+    },
+    {
+      "id": 335,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4500,
+      "created_at": "2026-04-05T14:46:43.977Z"
+    },
+    {
+      "id": 336,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4500,
+      "created_at": "2026-04-05T14:46:43.977Z"
+    },
+    {
+      "id": 337,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_claude_agent_runner.py tests/test_codex_agent_runner.py tests/test_oci_sandbox_runtime.py tests/contracts/test_agent_runner_contract.py tests/test_application_start_session.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5600,
+      "created_at": "2026-04-05T14:46:43.977Z"
+    },
+    {
+      "id": 338,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3900,
+      "created_at": "2026-04-05T14:46:43.977Z"
+    },
+    {
+      "id": 339,
+      "task_id": "T03",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 57400,
+      "created_at": "2026-04-05T14:46:43.977Z"
     }
   ]
 }

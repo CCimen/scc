@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from scc_cli import docker
 from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.errors import (
@@ -79,7 +81,13 @@ class DockerSandboxRuntime(SandboxRuntime):
             env_vars=runtime_env,
         )
         container_name = _extract_container_name(docker_cmd)
-        plugin_settings = spec.agent_settings.content if spec.agent_settings else None
+        # Legacy Desktop sandbox path: expects a dict (Claude JSON only).
+        # Deserialize rendered_bytes back to dict for backward compat.
+        plugin_settings: dict[str, Any] | None = None
+        if spec.agent_settings is not None:
+            import json as _json
+
+            plugin_settings = _json.loads(spec.agent_settings.rendered_bytes)
         docker.run(
             docker_cmd,
             org_config=spec.org_config,

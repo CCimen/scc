@@ -465,11 +465,11 @@ def _build_agent_launch_spec(
     if provider is None:
         return None
     settings_path = agent_settings.path if agent_settings is not None else None
-    config: dict[str, Any] = {}
-    if agent_settings is not None:
-        config = dict(agent_settings.content)
+    # D035: config content is already serialised inside agent_settings.rendered_bytes.
+    # Providers do not consume the config dict — they use settings_path for
+    # artifact_paths only.  Pass an empty dict to satisfy the protocol signature.
     return provider.prepare_launch(
-        config=config,
+        config={},
         workspace=request.workspace_path,
         settings_path=settings_path,
     )

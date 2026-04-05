@@ -139,7 +139,10 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
     assert plan.sync_error_message is None
     assert plan.current_branch == "main"
     assert plan.agent_settings is not None
-    assert plan.agent_settings.content == {"plugins": []}
+    import json as _json
+
+    parsed = _json.loads(plan.agent_settings.rendered_bytes)
+    assert parsed == {"plugins": []}
     assert plan.agent_settings.path == Path("/home/agent") / ".claude" / "settings.json"
     assert plan.sandbox_spec is not None
     assert plan.sandbox_spec.image == SANDBOX_IMAGE
@@ -238,8 +241,11 @@ def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
         plan = prepare_start_session(request, dependencies=dependencies)
 
     assert plan.agent_settings is not None
-    assert "mcpServers" in plan.agent_settings.content
-    assert "gis-internal" in plan.agent_settings.content["mcpServers"]
+    import json as _json
+
+    parsed = _json.loads(plan.agent_settings.rendered_bytes)
+    assert "mcpServers" in parsed
+    assert "gis-internal" in parsed["mcpServers"]
 
 
 def test_start_session_runs_sandbox_runtime(tmp_path: Path) -> None:

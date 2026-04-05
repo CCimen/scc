@@ -253,8 +253,9 @@ class TestRun:
     ) -> None:
         mock_run_docker.return_value = MagicMock(stdout="cid123\n")
         settings = AgentSettings(
-            content={"key": "value"},
+            rendered_bytes=b'{"key": "value"}',
             path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
         )
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
@@ -264,6 +265,27 @@ class TestRun:
         cp_cmd: list[str] = mock_run_docker.call_args_list[2][0][0]
         assert cp_cmd[0] == "cp"
         assert "cid123:" in cp_cmd[2]
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_settings_written_as_raw_bytes_not_json(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """D035: runtime writes rendered_bytes verbatim, no json.dumps."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        raw_toml = b'model = "o3"\ncli_auth_credentials_store = "file"\n'
+        settings = AgentSettings(
+            rendered_bytes=raw_toml,
+            path=Path("/home/agent/.codex/config.toml"),
+            suffix=".toml",
+        )
+        spec = _minimal_spec(agent_settings=settings)
+        runtime.run(spec)
+
+        # The cp call should use a .toml suffix temp file
+        cp_cmd: list[str] = mock_run_docker.call_args_list[2][0][0]
+        assert cp_cmd[0] == "cp"
+        assert cp_cmd[1].endswith(".toml")  # temp file suffix
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
@@ -596,8 +618,9 @@ class TestWorkspaceScopedConfigInjection:
         # Use /workspace as the mount target — must match _minimal_spec defaults
         workspace_target = Path("/workspace")
         settings = AgentSettings(
-            content={"sandbox": {"auto_approve": []}},
+            rendered_bytes=b'[sandbox]\nauto_approve = []\n',
             path=workspace_target / ".codex" / "config.toml",
+            suffix=".toml",
         )
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
@@ -625,8 +648,9 @@ class TestWorkspaceScopedConfigInjection:
         """Settings path under /home/agent (Claude) does NOT trigger git exclude."""
         mock_run_docker.return_value = MagicMock(stdout="cid123\n")
         settings = AgentSettings(
-            content={"permissions": {}},
+            rendered_bytes=b'{"permissions": {}}',
             path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
         )
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
@@ -647,8 +671,9 @@ class TestWorkspaceScopedConfigInjection:
         mock_run_docker.return_value = MagicMock(stdout="cid123\n")
         workspace_target = Path("/workspace")
         settings = AgentSettings(
-            content={"sandbox": {"auto_approve": []}},
+            rendered_bytes=b'[sandbox]\nauto_approve = []\n',
             path=workspace_target / ".codex" / "config.toml",
+            suffix=".toml",
         )
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
