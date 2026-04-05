@@ -37,7 +37,7 @@ from scc_cli.ports.sandbox_runtime import SandboxRuntime
 logger = logging.getLogger(__name__)
 
 # Claude-specific fallback image (used when no RuntimeInfo is available)
-_SANDBOX_IMAGE = "docker/sandbox-templates:claude-code"
+_DOCKER_DESKTOP_CLAUDE_IMAGE = "docker/sandbox-templates:claude-code"
 
 
 @dataclass(frozen=True)
@@ -316,7 +316,7 @@ def _build_sandbox_spec(
             if agent_provider is not None
             else ""
         )
-        image = _SANDBOX_IMAGE
+        image = _DOCKER_DESKTOP_CLAUDE_IMAGE
         data_volume = ""
         config_dir = ""
 

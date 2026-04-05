@@ -45,7 +45,7 @@ The docker/ module (core.py, credentials.py, launch.py) is the Docker Desktop sa
   - Estimate: 30m
   - Files: src/scc_cli/docker/core.py, src/scc_cli/docker/credentials.py, src/scc_cli/docker/launch.py, src/scc_cli/core/constants.py, tests/test_docker_policy_integration.py
   - Verify: uv run pytest tests/test_docker.py tests/test_docker_core.py tests/test_docker_launch_characterization.py tests/test_docker_policy.py tests/test_docker_policy_integration.py tests/test_docker_org_config.py -v && uv run ruff check src/scc_cli/docker/ src/scc_cli/core/constants.py && uv run mypy src/scc_cli/docker/ src/scc_cli/core/constants.py
-- [ ] **T02: Isolate Claude constants in OCI adapter, start_session.py, and document profile.py as Claude-only** — ## Description
+- [x] **T02: Renamed localized Claude constants to _CLAUDE_AGENT_NAME, _CLAUDE_DATA_VOLUME, _DOCKER_DESKTOP_CLAUDE_IMAGE and documented profile.py as Claude provider only** — ## Description
 
 The OCI sandbox adapter and start_session.py still import Claude-specific constants from core/constants.py (which T01 will have cleaned). This task localizes those imports and documents commands/profile.py as Claude-only.
 

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
-from scc_cli.application.start_session import _SANDBOX_IMAGE as SANDBOX_IMAGE
+from scc_cli.application.start_session import _DOCKER_DESKTOP_CLAUDE_IMAGE as SANDBOX_IMAGE
 from scc_cli.application.start_session import (
     StartSessionDependencies,
     StartSessionPlan,

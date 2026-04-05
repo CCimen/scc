@@ -1,6 +1,12 @@
-"""Personal profile commands.
+"""Personal profile commands (Claude provider only).
 
 Manage per-project personal settings layered on top of team config.
+
+This module manages Claude-specific personal settings via
+``.claude/settings.local.json``.  The hardcoded references to the Claude
+settings path are intentional — this module operates exclusively within
+the Claude provider surface.  Future provider generalisation tracked
+separately.
 """
 
 from __future__ import annotations
