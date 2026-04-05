@@ -114,8 +114,20 @@ def prepare_start_session(
     effective_config = _compute_effective_config(request)
     sync_result, sync_error_message = sync_marketplace_settings_for_start(request, dependencies)
     # Resolve provider_id for settings path routing.
-    # Use request.provider_id (explicit from CLI/config), defaulting to "claude".
-    _provider_id = request.provider_id or "claude"
+    # D032: fail-closed — active launch must not silently default to Claude.
+    # Prefer request.provider_id; fall back to the wired provider's identity.
+    if request.provider_id:
+        _provider_id = request.provider_id
+    elif dependencies.agent_provider is not None:
+        _provider_id = dependencies.agent_provider.capability_profile().provider_id
+    else:
+        from scc_cli.core.errors import InvalidProviderError
+        from scc_cli.core.provider_registry import PROVIDER_REGISTRY
+
+        raise InvalidProviderError(
+            provider_id="(none)",
+            known_providers=tuple(PROVIDER_REGISTRY.keys()),
+        )
     agent_settings = _build_agent_settings(
         sync_result,
         dependencies.agent_runner,
@@ -258,7 +270,7 @@ def _build_agent_settings(
     agent_runner: AgentRunner,
     *,
     effective_config: EffectiveConfig | None,
-    provider_id: str = "claude",
+    provider_id: str,
     workspace_path: Path | None = None,
 ) -> AgentSettings | None:
     settings: dict[str, Any] | None = None
@@ -307,23 +319,26 @@ def _build_sandbox_spec(
         return None
 
     # Route image, data volume, and config dir by provider_id on OCI backend.
-    # Raises InvalidProviderError for unknown providers (fail-closed).
+    # D032: fail-closed — missing provider wiring raises, never falls back to Claude.
     if runtime_info is not None and runtime_info.preferred_backend == "oci":
-        resolved_pid = (
-            agent_provider.capability_profile().provider_id
-            if agent_provider is not None
-            else "claude"
-        )
+        if agent_provider is None:
+            from scc_cli.core.errors import ProviderNotReadyError
+
+            raise ProviderNotReadyError(
+                provider_id="(none)",
+                user_message="No agent provider wired for OCI launch.",
+                suggested_action="Ensure a provider is selected via --provider or config.",
+            )
+        resolved_pid = agent_provider.capability_profile().provider_id
         spec = get_runtime_spec(resolved_pid)
         image = spec.image_ref
         data_volume = spec.data_volume
         config_dir = spec.config_dir
     else:
-        resolved_pid = (
-            agent_provider.capability_profile().provider_id
-            if agent_provider is not None
-            else ""
-        )
+        if agent_provider is not None:
+            resolved_pid = agent_provider.capability_profile().provider_id
+        else:
+            resolved_pid = ""
         image = _DOCKER_DESKTOP_CLAUDE_IMAGE
         data_volume = ""
         config_dir = ""

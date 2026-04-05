@@ -95,7 +95,7 @@ Steps:
   - Estimate: 40m
   - Files: src/scc_cli/ports/agent_provider.py, src/scc_cli/adapters/claude_agent_provider.py, src/scc_cli/adapters/codex_agent_provider.py, src/scc_cli/doctor/checks/environment.py, tests/adapters/test_claude_agent_provider.py, tests/adapters/test_codex_agent_provider.py, tests/doctor/test_environment_checks.py
   - Verify: uv run pytest tests/adapters/test_claude_agent_provider.py tests/adapters/test_codex_agent_provider.py tests/doctor/ -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T07: Remove remaining active-launch Claude fallbacks (D032)** — Check and eliminate any remaining launch/runtime paths that still substitute Claude when provider wiring is missing or unknown. Active launch logic must not silently choose Claude if agent_provider is absent or provider identity is invalid. Missing provider wiring should surface a typed launch error.
+- [x] **T07: Eliminated silent Claude fallback from all active launch paths; missing provider wiring now raises typed errors per D032** — Check and eliminate any remaining launch/runtime paths that still substitute Claude when provider wiring is missing or unknown. Active launch logic must not silently choose Claude if agent_provider is absent or provider identity is invalid. Missing provider wiring should surface a typed launch error.
 
 Steps:
 1. Search codebase for Claude fallback patterns in launch/runtime paths

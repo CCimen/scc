@@ -240,6 +240,13 @@ def worktree_create_cmd(
             standalone_mode = config.is_standalone_mode()
             team = None if standalone_mode else user_config.get("selected_profile")
             raw_org_config = None if standalone_mode else config.load_cached_org_config()
+            # D032: resolve provider explicitly — never silent-default to Claude.
+            from scc_cli.core.provider_resolution import resolve_active_provider
+
+            resolved_provider = resolve_active_provider(
+                cli_flag=None,
+                config_provider=user_config.get("selected_provider"),
+            )
             start_request = StartSessionRequest(
                 workspace_path=result.worktree_path,
                 workspace_arg=str(result.worktree_path),
@@ -254,11 +261,13 @@ def worktree_create_cmd(
                 allow_suspicious=False,
                 org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
                 raw_org_config=raw_org_config,
+                provider_id=resolved_provider,
             )
             start_dependencies, start_plan = prepare_live_start_plan(
                 start_request,
                 adapters=adapters,
                 console=console,
+                provider_id=resolved_provider,
             )
             finalize_launch(start_plan, dependencies=start_dependencies)
 

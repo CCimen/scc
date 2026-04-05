@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T15:05:27.083Z",
+  "exported_at": "2026-04-05T15:21:12.183Z",
   "milestones": [
     {
       "id": "M001",
@@ -6528,19 +6528,32 @@
       "milestone_id": "M007-cqttot",
       "slice_id": "S05",
       "id": "T07",
-      "title": "Remove remaining active-launch Claude fallbacks (D032)",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Eliminated silent Claude fallback from all active launch paths; missing provider wiring now raises typed errors per D032",
+      "status": "complete",
+      "one_liner": "Eliminated silent Claude fallback from all active launch paths; missing provider wiring now raises typed errors per D032",
+      "narrative": "Searched the codebase for all \"claude\" references in active launch/runtime paths and classified each as either an active-launch fallback (to fix) or a read/migration boundary (to preserve per D032). Removed silent Claude defaults from prepare_start_session, _build_agent_settings, _build_sandbox_spec, build_start_session_dependencies, prepare_live_start_plan, flow_interactive, and worktree_commands. Added three-step fail-closed provider resolution: request.provider_id → agent_provider.capability_profile().provider_id → InvalidProviderError. OCI backend without agent_provider now raises ProviderNotReadyError. Preserved legacy Docker Desktop sandbox path, session dir defaults, and CLI resolution defaults as read/migration boundaries per D032. Updated 17 test request constructions to include explicit provider_id and converted 4 tests to D032 fail-closed assertions.",
+      "verification_result": "uv run ruff check — zero errors. uv run mypy src/scc_cli — zero errors. uv run pytest -q — 4761 passed, 0 failed. All targeted tests (113) pass including new fail-closed behavior tests.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T15:21:12.093Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Converted existing tests to D032-compliant assertions instead of creating new test files. Plan referenced tests/commands/launch/ which doesn't exist; actual test files are in tests/ root.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/worktree/worktree_commands.py",
+        "tests/test_application_start_session.py",
+        "tests/test_start_session_image_routing.py",
+        "tests/test_provider_dispatch.py",
+        "tests/test_bootstrap.py"
+      ],
+      "key_decisions": [
+        "D032 fail-closed: three-step provider resolution (request → wired provider → typed error) instead of binary request-or-crash",
+        "OCI backend without agent_provider raises ProviderNotReadyError rather than InvalidProviderError (more actionable)",
+        "Legacy Docker Desktop sandbox path preserved as-is — it's a migration boundary, not active dispatch"
+      ],
+      "full_summary_md": "---\nid: T07\nparent: S05\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/commands/launch/dependencies.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/worktree/worktree_commands.py\n  - tests/test_application_start_session.py\n  - tests/test_start_session_image_routing.py\n  - tests/test_provider_dispatch.py\n  - tests/test_bootstrap.py\nkey_decisions:\n  - D032 fail-closed: three-step provider resolution (request → wired provider → typed error) instead of binary request-or-crash\n  - OCI backend without agent_provider raises ProviderNotReadyError rather than InvalidProviderError (more actionable)\n  - Legacy Docker Desktop sandbox path preserved as-is — it's a migration boundary, not active dispatch\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T15:21:12.092Z\nblocker_discovered: false\n---\n\n# T07: Eliminated silent Claude fallback from all active launch paths; missing provider wiring now raises typed errors per D032\n\n**Eliminated silent Claude fallback from all active launch paths; missing provider wiring now raises typed errors per D032**\n\n## What Happened\n\nSearched the codebase for all \"claude\" references in active launch/runtime paths and classified each as either an active-launch fallback (to fix) or a read/migration boundary (to preserve per D032). Removed silent Claude defaults from prepare_start_session, _build_agent_settings, _build_sandbox_spec, build_start_session_dependencies, prepare_live_start_plan, flow_interactive, and worktree_commands. Added three-step fail-closed provider resolution: request.provider_id → agent_provider.capability_profile().provider_id → InvalidProviderError. OCI backend without agent_provider now raises ProviderNotReadyError. Preserved legacy Docker Desktop sandbox path, session dir defaults, and CLI resolution defaults as read/migration boundaries per D032. Updated 17 test request constructions to include explicit provider_id and converted 4 tests to D032 fail-closed assertions.\n\n## Verification\n\nuv run ruff check — zero errors. uv run mypy src/scc_cli — zero errors. uv run pytest -q — 4761 passed, 0 failed. All targeted tests (113) pass including new fail-closed behavior tests.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 3600ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 8400ms |\n| 3 | `uv run pytest -q` | 0 | ✅ pass | 51800ms |\n| 4 | `uv run pytest tests/test_application_start_session.py tests/test_start_session_image_routing.py tests/test_provider_dispatch.py tests/test_bootstrap.py tests/test_oci_sandbox_runtime.py -v` | 0 | ✅ pass | 3100ms |\n\n## Deviations\n\nConverted existing tests to D032-compliant assertions instead of creating new test files. Plan referenced tests/commands/launch/ which doesn't exist; actual test files are in tests/ root.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/commands/launch/dependencies.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/commands/worktree/worktree_commands.py`\n- `tests/test_application_start_session.py`\n- `tests/test_start_session_image_routing.py`\n- `tests/test_provider_dispatch.py`\n- `tests/test_bootstrap.py`\n",
       "description": "Check and eliminate any remaining launch/runtime paths that still substitute Claude when provider wiring is missing or unknown. Active launch logic must not silently choose Claude if agent_provider is absent or provider identity is invalid. Missing provider wiring should surface a typed launch error.\n\nSteps:\n1. Search codebase for Claude fallback patterns in launch/runtime paths\n2. Identify any silent substitutions (default='claude' in active logic, not read/migration boundaries)\n3. Replace with typed errors (InvalidProviderError or ProviderNotReadyError)\n4. Preserve read/migration defaults (SessionRecord, config read) per D032\n5. Add tests for fail-closed behavior on missing/invalid provider\n6. Run full test suite",
       "estimate": "30m",
       "files": [
@@ -11147,6 +11160,50 @@
       "verdict": "✅ pass",
       "duration_ms": 55000,
       "created_at": "2026-04-05T15:05:27.000Z"
+    },
+    {
+      "id": 355,
+      "task_id": "T07",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3600,
+      "created_at": "2026-04-05T15:21:12.093Z"
+    },
+    {
+      "id": 356,
+      "task_id": "T07",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 8400,
+      "created_at": "2026-04-05T15:21:12.093Z"
+    },
+    {
+      "id": 357,
+      "task_id": "T07",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 51800,
+      "created_at": "2026-04-05T15:21:12.093Z"
+    },
+    {
+      "id": 358,
+      "task_id": "T07",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_application_start_session.py tests/test_start_session_image_routing.py tests/test_provider_dispatch.py tests/test_bootstrap.py tests/test_oci_sandbox_runtime.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3100,
+      "created_at": "2026-04-05T15:21:12.093Z"
     }
   ]
 }

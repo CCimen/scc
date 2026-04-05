@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scc_cli.application.start_session import _DOCKER_DESKTOP_CLAUDE_IMAGE as SANDBOX_IMAGE
 from scc_cli.application.start_session import StartSessionRequest, _build_sandbox_spec
 from scc_cli.core.contracts import RuntimeInfo
+from scc_cli.core.errors import ProviderNotReadyError
 from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult
 
@@ -57,7 +60,9 @@ class TestBuildSandboxSpecImageRouting:
     """Verify _build_sandbox_spec selects the correct image based on runtime_info."""
 
     def test_oci_backend_uses_scc_image(self) -> None:
-        """OCI backend routes to SCC_CLAUDE_IMAGE_REF."""
+        """OCI backend routes to SCC_CLAUDE_IMAGE_REF when provider is wired."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
         info = _make_runtime_info("oci")
         spec = _build_sandbox_spec(
             request=_make_request(),
@@ -65,9 +70,22 @@ class TestBuildSandboxSpecImageRouting:
             effective_config=None,
             agent_settings=None,
             runtime_info=info,
+            agent_provider=ClaudeAgentProvider(),
         )
         assert spec is not None
         assert spec.image == SCC_CLAUDE_IMAGE_REF
+
+    def test_oci_backend_no_provider_raises(self) -> None:
+        """D032: OCI backend without provider wiring raises ProviderNotReadyError."""
+        info = _make_runtime_info("oci")
+        with pytest.raises(ProviderNotReadyError):
+            _build_sandbox_spec(
+                request=_make_request(),
+                resolver_result=_make_resolver_result(),
+                effective_config=None,
+                agent_settings=None,
+                runtime_info=info,
+            )
 
     def test_docker_sandbox_backend_uses_default_image(self) -> None:
         """Docker-sandbox backend uses the Docker Desktop sandbox template image."""

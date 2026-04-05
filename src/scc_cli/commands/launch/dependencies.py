@@ -35,12 +35,9 @@ _PROVIDER_DISPATCH: dict[str, dict[str, str]] = {
     },
 }
 
-_DEFAULT_PROVIDER_ID = "claude"
-
-
 def build_start_session_dependencies(
     adapters: DefaultAdapters,
-    provider_id: str = _DEFAULT_PROVIDER_ID,
+    provider_id: str,
 ) -> StartSessionDependencies:
     """Build the live start-session dependency bundle from wired adapters.
 
@@ -90,10 +87,23 @@ def prepare_live_start_plan(
     *,
     adapters: DefaultAdapters,
     console: Console,
-    provider_id: str = _DEFAULT_PROVIDER_ID,
+    provider_id: str | None = None,
 ) -> tuple[StartSessionDependencies, StartSessionPlan]:
-    """Build dependencies and prepare a live start plan with shared sync behavior."""
-    dependencies = build_start_session_dependencies(adapters, provider_id=provider_id)
+    """Build dependencies and prepare a live start plan with shared sync behavior.
+
+    D032: provider_id must be explicitly supplied — either as a keyword argument
+    or on ``request.provider_id``.  Raises InvalidProviderError when missing.
+    """
+    resolved_pid = provider_id or request.provider_id
+    if not resolved_pid:
+        from scc_cli.core.errors import InvalidProviderError
+        from scc_cli.core.provider_registry import PROVIDER_REGISTRY
+
+        raise InvalidProviderError(
+            provider_id="(none)",
+            known_providers=tuple(PROVIDER_REGISTRY.keys()),
+        )
+    dependencies = build_start_session_dependencies(adapters, provider_id=resolved_pid)
     if _should_sync_marketplace(request):
         with Status(
             "[cyan]Syncing marketplace settings...[/cyan]",

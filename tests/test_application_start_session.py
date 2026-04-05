@@ -115,6 +115,7 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
             "defaults": {"network_policy": "restricted"},
             "profiles": {"alpha": {}},
         },
+        provider_id="claude",
     )
     sync_result = SyncResult(success=True, rendered_settings={"plugins": []})
     resolver_result = _build_resolver_result(workspace_path)
@@ -170,6 +171,7 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
         allow_suspicious=False,
         org_config=NormalizedOrgConfig.from_dict(_raw),
         raw_org_config=_raw,
+        provider_id="claude",
     )
     resolver_result = _build_resolver_result(workspace_path)
     dependencies = _build_dependencies(FakeGitClient())
@@ -213,6 +215,7 @@ def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
         allow_suspicious=False,
         org_config=NormalizedOrgConfig.from_dict(_raw),
         raw_org_config=_raw,
+        provider_id="claude",
     )
     sync_result = SyncResult(
         success=True,
@@ -319,6 +322,7 @@ def test_prepared_plan_carries_typed_agent_launch_spec(tmp_path: Path) -> None:
         dry_run=False,
         allow_suspicious=False,
         org_config=None,
+        provider_id="claude",
     )
     resolver_result = _build_resolver_result(workspace_path)
     dependencies = _build_dependencies(FakeGitClient())
@@ -435,7 +439,8 @@ def _build_bundle_request(
         dry_run=dry_run,
         allow_suspicious=False,
         org_config=org_config,
-        raw_org_config=None,  # Prevents marketplace sync (intentional)
+        raw_org_config=None,  # Prevents marketplace sync (intentional),
+        provider_id="claude",
     )
 
 
@@ -480,6 +485,7 @@ class TestBundlePipelineWiring:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         dependencies = _build_dependencies(FakeGitClient())
@@ -544,11 +550,26 @@ class TestBundlePipelineWiring:
         assert plan.bundle_render_results == ()
         assert plan.bundle_render_error is None
 
-    def test_bundle_pipeline_skipped_when_no_provider(self, tmp_path: Path) -> None:
-        """When no agent_provider is wired, the bundle pipeline is skipped."""
+    def test_bundle_pipeline_no_provider_raises_d032(self, tmp_path: Path) -> None:
+        """D032: no agent_provider wired + no provider_id raises InvalidProviderError."""
         workspace_path = tmp_path / "workspace"
         workspace_path.mkdir()
-        request = _build_bundle_request(workspace_path)
+        # Deliberately omit provider_id to trigger fail-closed behavior
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team="alpha",
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=_build_org_config_with_bundles("alpha"),
+            raw_org_config=None,
+        )
         resolver_result = _build_resolver_result(workspace_path)
         dependencies = StartSessionDependencies(
             filesystem=MagicMock(),
@@ -562,14 +583,14 @@ class TestBundlePipelineWiring:
             materialize_marketplace=MagicMock(),
         )
 
-        with patch(
-            "scc_cli.application.start_session.resolve_workspace",
-            return_value=WorkspaceContext(resolver_result),
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            pytest.raises(InvalidProviderError),
         ):
-            plan = prepare_start_session(request, dependencies=dependencies)
-
-        assert plan.bundle_render_results == ()
-        assert plan.bundle_render_error is None
+            prepare_start_session(request, dependencies=dependencies)
 
     def test_bundle_pipeline_captures_resolution_error(self, tmp_path: Path) -> None:
         """When bundle resolution fails (missing bundle), error is captured fail-closed."""
@@ -875,6 +896,7 @@ class TestProviderAwareImageSelection:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         codex_provider = CodexAgentProvider()
@@ -911,6 +933,7 @@ class TestProviderAwareImageSelection:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         claude_provider = ClaudeAgentProvider()
@@ -945,6 +968,7 @@ class TestProviderAwareImageSelection:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         docker_sandbox_info = RuntimeInfo(
@@ -987,6 +1011,7 @@ class TestProviderAwareImageSelection:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         # FakeAgentProvider has provider_id="fake" which is not in the registry
@@ -1026,6 +1051,7 @@ class TestAgentArgvPropagation:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         dependencies = _build_dependencies_with_runtime()
@@ -1040,10 +1066,11 @@ class TestAgentArgvPropagation:
         assert plan.sandbox_spec is not None
         assert plan.sandbox_spec.agent_argv == ["fake-agent"]
 
-    def test_agent_argv_empty_when_no_provider(self, tmp_path: Path) -> None:
-        """agent_argv is empty list when no provider is wired."""
+    def test_no_provider_no_provider_id_raises(self, tmp_path: Path) -> None:
+        """D032: no provider wired + no provider_id raises InvalidProviderError."""
         workspace_path = tmp_path / "workspace"
         workspace_path.mkdir()
+        # Deliberately omit provider_id to trigger fail-closed behavior
         request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -1071,14 +1098,14 @@ class TestAgentArgvPropagation:
             materialize_marketplace=MagicMock(),
         )
 
-        with patch(
-            "scc_cli.application.start_session.resolve_workspace",
-            return_value=WorkspaceContext(resolver_result),
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            pytest.raises(InvalidProviderError),
         ):
-            plan = prepare_start_session(request, dependencies=dependencies)
-
-        assert plan.sandbox_spec is not None
-        assert plan.sandbox_spec.agent_argv == []
+            prepare_start_session(request, dependencies=dependencies)
 
     def test_codex_agent_argv_is_codex(self, tmp_path: Path) -> None:
         """Codex provider produces 'codex' in agent_argv."""
@@ -1099,6 +1126,7 @@ class TestAgentArgvPropagation:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         codex_provider = CodexAgentProvider()
@@ -1143,6 +1171,7 @@ class TestProviderAwareDataVolumeAndConfigDir:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         codex_provider = CodexAgentProvider()
@@ -1179,6 +1208,7 @@ class TestProviderAwareDataVolumeAndConfigDir:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         codex_provider = CodexAgentProvider()
@@ -1215,6 +1245,7 @@ class TestProviderAwareDataVolumeAndConfigDir:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         claude_provider = ClaudeAgentProvider()
@@ -1250,6 +1281,7 @@ class TestProviderAwareDataVolumeAndConfigDir:
             dry_run=False,
             allow_suspicious=False,
             org_config=None,
+            provider_id="claude",
         )
         resolver_result = _build_resolver_result(workspace_path)
         docker_sandbox_info = RuntimeInfo(

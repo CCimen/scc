@@ -20,10 +20,11 @@ from tests.fakes import build_fake_adapters
 class TestBuildStartSessionDependenciesDispatch:
     """Provider dispatch via build_start_session_dependencies."""
 
-    def test_default_dispatch_uses_claude_provider(self) -> None:
+    def test_empty_provider_id_raises_invalid_provider_error(self) -> None:
+        """D032: empty provider_id must fail-closed, not default to Claude."""
         adapters = build_fake_adapters()
-        deps = build_start_session_dependencies(adapters)
-        assert deps.agent_provider is adapters.agent_provider
+        with pytest.raises(InvalidProviderError):
+            build_start_session_dependencies(adapters, provider_id="")
 
     def test_explicit_claude_dispatch(self) -> None:
         adapters = build_fake_adapters()
@@ -81,7 +82,7 @@ class TestRuntimeInfoThreading:
     def test_runtime_info_threaded_from_probe(self) -> None:
         """When runtime_probe exists, runtime_info is populated."""
         adapters = build_fake_adapters()
-        deps = build_start_session_dependencies(adapters)
+        deps = build_start_session_dependencies(adapters, provider_id="claude")
         # FakeRuntimeProbe returns a RuntimeInfo — verify it landed
         assert deps.runtime_info is not None
         assert isinstance(deps.runtime_info, RuntimeInfo)
@@ -89,7 +90,7 @@ class TestRuntimeInfoThreading:
     def test_runtime_info_none_when_no_probe(self) -> None:
         """When runtime_probe is None, runtime_info stays None."""
         adapters = replace(build_fake_adapters(), runtime_probe=None)
-        deps = build_start_session_dependencies(adapters)
+        deps = build_start_session_dependencies(adapters, provider_id="claude")
         assert deps.runtime_info is None
 
 

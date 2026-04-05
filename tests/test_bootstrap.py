@@ -66,20 +66,20 @@ def test_build_start_session_dependencies_requires_provider_wiring() -> None:
     adapters = replace(build_fake_adapters(), agent_provider=None)
 
     with pytest.raises(InvalidLaunchPlanError, match="missing provider wiring"):
-        build_start_session_dependencies(adapters)
+        build_start_session_dependencies(adapters, provider_id="claude")
 
 
 def test_build_start_session_dependencies_requires_audit_sink_wiring() -> None:
     adapters = replace(build_fake_adapters(), audit_event_sink=None)
 
     with pytest.raises(LaunchAuditUnavailableError):
-        build_start_session_dependencies(adapters)
+        build_start_session_dependencies(adapters, provider_id="claude")
 
 
 def test_build_start_session_dependencies_threads_provider_and_sink() -> None:
     adapters = build_fake_adapters()
 
-    dependencies = build_start_session_dependencies(adapters)
+    dependencies = build_start_session_dependencies(adapters, provider_id="claude")
 
     assert dependencies.agent_provider is adapters.agent_provider
     assert dependencies.audit_event_sink is adapters.audit_event_sink
