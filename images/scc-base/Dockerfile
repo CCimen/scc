@@ -30,9 +30,10 @@ ENV PATH="/usr/local/lib/scc/bin:$PATH"
 # Create agent user (uid 1000) with home directory
 RUN useradd -m -u 1000 -s /bin/bash agent
 
-# Pre-create the Claude config directory owned by agent
-RUN mkdir -p /home/agent/.claude \
-    && chown agent:agent /home/agent/.claude
+# Pre-create provider config directories owned by agent with strict permissions
+RUN mkdir -p /home/agent/.claude /home/agent/.codex \
+    && chmod 0700 /home/agent/.claude /home/agent/.codex \
+    && chown agent:agent /home/agent/.claude /home/agent/.codex
 
 USER agent
 WORKDIR /home/agent

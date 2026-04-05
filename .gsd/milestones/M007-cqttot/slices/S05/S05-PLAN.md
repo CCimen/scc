@@ -129,7 +129,7 @@ Steps:
   - Estimate: 30m
   - Files: src/scc_cli/adapters/oci_sandbox_runtime.py, tests/adapters/test_oci_sandbox_runtime.py
   - Verify: uv run pytest tests/adapters/test_oci_sandbox_runtime.py -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T10: Image hardening: scc-base and scc-agent-codex improvements** — scc-base should prepare both ~/.claude and ~/.codex with correct ownership/permissions. scc-agent-codex should pin Codex package version via ARG. Keep builds deterministic.
+- [x] **T10: scc-base now pre-creates both .claude and .codex dirs with 0700/uid1000; scc-agent-codex pins Codex CLI version via ARG; 25 structural tests cover all image Dockerfiles** — scc-base should prepare both ~/.claude and ~/.codex with correct ownership/permissions. scc-agent-codex should pin Codex package version via ARG. Keep builds deterministic.
 
 Steps:
 1. Read current Dockerfile definitions in images/
