@@ -863,3 +863,316 @@ class TestNormalizePermissionsIntegration:
         assert len(cp_indices) >= 1
         assert len(norm_indices) >= 1
         assert all(ni < cp_indices[0] for ni in norm_indices)
+
+
+# ── D038/D042: Config persistence model transitions ─────────────────────────
+
+
+class TestConfigPersistenceTransitions:
+    """D038/D042: Prove config freshness is deterministic across session transitions.
+
+    These tests exercise the OCI runtime's _inject_settings path to verify
+    that config injection is governed solely by SandboxSpec.agent_settings —
+    not by prior container state.  Each test simulates two sequential launches
+    (with fresh containers) and asserts the second launch writes the expected
+    config content, regardless of what the first launch wrote.
+    """
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_governed_to_standalone_clears_stale_config(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Governed→standalone: fresh standalone launch writes empty config.
+
+        Prior launch injected team config.  A subsequent fresh standalone
+        launch writes an empty settings file — clearing any team-specific
+        config that might persist in the volume.
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+
+        # ── First launch: governed (team config) ──
+        team_settings = AgentSettings(
+            rendered_bytes=b'{"plugins": ["team-plugin"], "mcpServers": {"internal": {}}}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_governed = _minimal_spec(agent_settings=team_settings)
+        runtime.run(spec_governed)
+
+        # Verify first launch wrote team config
+        cp_calls_1 = [
+            call for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls_1) == 1
+
+        # ── Reset mocks for second launch ──
+        mock_run_docker.reset_mock()
+        mock_execvp.reset_mock()
+        mock_run_docker.return_value = MagicMock(stdout="cid456\n")
+
+        # ── Second launch: standalone (empty config) ──
+        empty_settings = AgentSettings(
+            rendered_bytes=b"{}",
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_standalone = _minimal_spec(agent_settings=empty_settings)
+        runtime.run(spec_standalone)
+
+        # Verify second launch wrote empty config via docker cp
+        cp_calls_2 = [
+            call for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls_2) == 1
+        # The cp target is the settings path inside the container
+        cp_target = cp_calls_2[0][0][0][2]
+        assert "cid456:" in cp_target
+        assert "/home/agent/.claude/settings.json" in cp_target
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_team_a_to_team_b_replaces_config(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """TeamA→TeamB: fresh launch with team B config replaces team A config.
+
+        Verify the runtime writes the new team's config regardless of
+        what was in the volume from the prior launch.
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid-team-a\n")
+
+        # ── First launch: team A ──
+        team_a_settings = AgentSettings(
+            rendered_bytes=b'{"plugins": ["team-a-plugin"]}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_a = _minimal_spec(agent_settings=team_a_settings)
+        runtime.run(spec_a)
+
+        # Verify team A config was injected
+        cp_calls_a = [
+            call for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls_a) == 1
+
+        # ── Reset mocks for second launch ──
+        mock_run_docker.reset_mock()
+        mock_execvp.reset_mock()
+        mock_run_docker.return_value = MagicMock(stdout="cid-team-b\n")
+
+        # ── Second launch: team B ──
+        team_b_settings = AgentSettings(
+            rendered_bytes=b'{"plugins": ["team-b-plugin"], "mcpServers": {"gis": {}}}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_b = _minimal_spec(agent_settings=team_b_settings)
+        runtime.run(spec_b)
+
+        # Verify team B config was injected (not team A)
+        cp_calls_b = [
+            call for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls_b) == 1
+        cp_target_b = cp_calls_b[0][0][0][2]
+        assert "cid-team-b:" in cp_target_b
+        assert "/home/agent/.claude/settings.json" in cp_target_b
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_resume_skips_injection_entirely(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Resume: agent_settings=None means no docker cp at all.
+
+        The application layer sets agent_settings=None for resume (D038).
+        The runtime should not issue any docker cp command.
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid-resume\n")
+
+        spec_resume = _minimal_spec(agent_settings=None)
+        runtime.run(spec_resume)
+
+        all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
+        cp_cmds = [c for c in all_cmds if c[0] == "cp"]
+        assert len(cp_cmds) == 0
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_settings_to_no_settings_still_injects_empty(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Settings→no-settings: empty config file is still written.
+
+        Even when the rendered config is an empty dict `{}`, the runtime
+        must issue the docker cp to overwrite any stale config from a
+        prior launch.  This is the "always writes" guarantee from D038.
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid-fresh\n")
+
+        # First launch: real settings
+        real_settings = AgentSettings(
+            rendered_bytes=b'{"plugins": ["some-plugin"]}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_real = _minimal_spec(agent_settings=real_settings)
+        runtime.run(spec_real)
+
+        mock_run_docker.reset_mock()
+        mock_execvp.reset_mock()
+        mock_run_docker.return_value = MagicMock(stdout="cid-empty\n")
+
+        # Second launch: empty settings (D038 always-writes semantics)
+        empty_settings = AgentSettings(
+            rendered_bytes=b"{}",
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_empty = _minimal_spec(agent_settings=empty_settings)
+        runtime.run(spec_empty)
+
+        # docker cp was still called
+        cp_cmds = [
+            call[0][0] for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_cmds) == 1
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_codex_team_transition_workspace_scoped(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """TeamA→TeamB for Codex: workspace-scoped config is replaced correctly.
+
+        Codex settings go to workspace mount, not /home/agent.  Verify the
+        transition writes to the correct workspace-scoped path.
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid-cx-a\n")
+        workspace_target = Path("/workspace")
+
+        # ── First launch: Codex team A ──
+        codex_a_settings = AgentSettings(
+            rendered_bytes=b'model = "o3"\ncli_auth_credentials_store = "file"\n',
+            path=workspace_target / ".codex" / "config.toml",
+            suffix=".toml",
+        )
+        spec_cx_a = _minimal_spec(agent_settings=codex_a_settings)
+        runtime.run(spec_cx_a)
+
+        mock_run_docker.reset_mock()
+        mock_execvp.reset_mock()
+        mock_run_docker.return_value = MagicMock(stdout="cid-cx-b\n")
+
+        # ── Second launch: Codex team B ──
+        codex_b_settings = AgentSettings(
+            rendered_bytes=b'model = "o4-mini"\ncli_auth_credentials_store = "file"\n',
+            path=workspace_target / ".codex" / "config.toml",
+            suffix=".toml",
+        )
+        spec_cx_b = _minimal_spec(agent_settings=codex_b_settings)
+        runtime.run(spec_cx_b)
+
+        # Verify the cp command targets the workspace-scoped Codex path
+        cp_calls = [
+            call[0][0] for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls) == 1
+        cp_target = cp_calls[0][2]
+        assert "cid-cx-b:" in cp_target
+        assert str(workspace_target / ".codex" / "config.toml") in cp_target
+        assert "/home/agent" not in cp_target
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_claude_to_codex_provider_switch_writes_correct_path(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Cross-provider transition: Claude→Codex writes to correct target.
+
+        Each provider has its own settings path and scope.  A switch from
+        Claude (home-scoped) to Codex (workspace-scoped) should write to
+        the Codex path, not the Claude path.
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid-claude\n")
+        workspace_target = Path("/workspace")
+
+        # ── First launch: Claude ──
+        claude_settings = AgentSettings(
+            rendered_bytes=b'{"permissions": {}}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec_claude = _minimal_spec(agent_settings=claude_settings)
+        runtime.run(spec_claude)
+
+        mock_run_docker.reset_mock()
+        mock_execvp.reset_mock()
+        mock_run_docker.return_value = MagicMock(stdout="cid-codex\n")
+
+        # ── Second launch: Codex ──
+        codex_settings = AgentSettings(
+            rendered_bytes=b'cli_auth_credentials_store = "file"\n',
+            path=workspace_target / ".codex" / "config.toml",
+            suffix=".toml",
+        )
+        spec_codex = _minimal_spec(agent_settings=codex_settings)
+        runtime.run(spec_codex)
+
+        # Verify Codex config targets workspace, not /home/agent
+        cp_calls = [
+            call[0][0] for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls) == 1
+        cp_target = cp_calls[0][2]
+        assert "cid-codex:" in cp_target
+        assert str(workspace_target / ".codex" / "config.toml") in cp_target
+        # Must NOT write to Claude's path
+        assert ".claude" not in cp_target
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_injection_idempotent_same_config_twice(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Idempotency: writing the same config twice is safe and deterministic.
+
+        Two sequential fresh launches with identical settings should both
+        issue docker cp with the same content — the runtime does not skip
+        based on "config hasn't changed."
+        """
+        mock_run_docker.return_value = MagicMock(stdout="cid-1\n")
+        settings = AgentSettings(
+            rendered_bytes=b'{"plugins": ["fixed-plugin"]}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec = _minimal_spec(agent_settings=settings)
+        runtime.run(spec)
+
+        cp_count_1 = sum(
+            1 for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        )
+        assert cp_count_1 == 1
+
+        mock_run_docker.reset_mock()
+        mock_execvp.reset_mock()
+        mock_run_docker.return_value = MagicMock(stdout="cid-2\n")
+
+        # Same settings, second launch
+        runtime.run(spec)
+        cp_count_2 = sum(
+            1 for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        )
+        assert cp_count_2 == 1

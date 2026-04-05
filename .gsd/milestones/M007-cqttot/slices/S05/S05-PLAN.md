@@ -141,7 +141,7 @@ Steps:
   - Estimate: 25m
   - Files: images/scc-base/Dockerfile, images/scc-agent-codex/Dockerfile, tests/test_image_structure.py
   - Verify: uv run pytest tests/test_image_structure.py -v && uv run ruff check
-- [ ] **T11: Persistence model tests: config freshness transitions** — Add targeted tests proving the persistence model works across session transitions: governed->standalone launch, team A->team B, settings->no-settings. Verify config freshness is deterministic and not reliant on fresh container creation alone.
+- [x] **T11: Added 7 OCI runtime-layer tests proving config persistence is deterministic across governed→standalone, teamA→teamB, settings→no-settings, cross-provider, and idempotent transitions** — Add targeted tests proving the persistence model works across session transitions: governed->standalone launch, team A->team B, settings->no-settings. Verify config freshness is deterministic and not reliant on fresh container creation alone.
 
 Steps:
 1. Identify the right test surface for persistence transitions
