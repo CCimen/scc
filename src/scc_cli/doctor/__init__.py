@@ -30,6 +30,7 @@ from scc_cli.doctor.checks import (
     check_git_version_for_worktrees,
     check_marketplace_auth_available,
     check_org_config_reachable,
+    check_provider_auth,
     check_proxy_environment,
     check_runtime_backend,
     check_user_config_valid,
@@ -89,6 +90,7 @@ __all__ = [
     "check_cache_readable",
     "check_cache_ttl_status",
     "check_exception_stores",
+    "check_provider_auth",
     "check_proxy_environment",
     "run_all_checks",
     # Orchestration and rendering

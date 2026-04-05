@@ -18,7 +18,7 @@
   - Estimate: 45m
   - Files: src/scc_cli/core/errors.py, src/scc_cli/core/contracts.py, src/scc_cli/doctor/types.py, src/scc_cli/doctor/checks/environment.py, src/scc_cli/doctor/checks/__init__.py, tests/test_doctor_provider_errors.py
   - Verify: uv run pytest tests/test_doctor_provider_errors.py -v && uv run mypy src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py && uv run ruff check src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py
-- [ ] **T02: Wire --provider flag, category assignment, and grouped doctor output** — Wire all T01 additions into the existing doctor flow: threading provider_id, CLI flag, category assignment, and grouped rendering.
+- [x] **T02: Wired --provider flag, category assignment, and grouped doctor output with 20 new tests** — Wire all T01 additions into the existing doctor flow: threading provider_id, CLI flag, category assignment, and grouped rendering.
 
 1. Update run_doctor() in doctor/core.py: add `provider_id: str | None = None` parameter. Pass provider_id to check_provider_image(provider_id=provider_id). Call check_provider_auth(provider_id=provider_id) when docker_ok (same guard as check_provider_image). Assign category to each CheckResult after construction: 'backend' for Git/Docker/Docker Daemon/Sandbox Backend/Runtime Backend, 'provider' for Provider Image/Provider Auth, 'config' for Config Directory/User Config/Safety Policy, 'worktree' for Git Worktrees/Worktree Health/Branch Conflicts, 'general' for WSL2/Workspace Path and anything else.
 

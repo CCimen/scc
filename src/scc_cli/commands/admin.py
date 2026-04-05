@@ -289,8 +289,20 @@ def doctor_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick status only"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
+    provider: str | None = typer.Option(None, "--provider", help="Check readiness for a specific provider"),
 ) -> None:
     """Check prerequisites and system health."""
+    # Validate --provider against KNOWN_PROVIDERS
+    if provider is not None:
+        from scc_cli.core.provider_resolution import KNOWN_PROVIDERS
+
+        if provider not in KNOWN_PROVIDERS:
+            console.print(
+                f"[bold red]Error:[/bold red] Unknown provider '{provider}'. "
+                f"Known providers: {', '.join(KNOWN_PROVIDERS)}"
+            )
+            raise typer.Exit(2)
+
     workspace_path = Path(workspace).expanduser().resolve() if workspace else None
 
     # --pretty implies --json
@@ -300,7 +312,7 @@ def doctor_cmd(
 
     if json_output:
         with json_output_mode():
-            result = doctor.run_doctor(workspace_path)
+            result = doctor.run_doctor(workspace_path, provider_id=provider)
             data = doctor.build_doctor_json_data(result)
             envelope = build_envelope(Kind.DOCTOR_REPORT, data=data, ok=result.all_ok)
             print_json(envelope)
@@ -309,12 +321,12 @@ def doctor_cmd(
             raise typer.Exit(0)
 
     with Status("[cyan]Running health checks...[/cyan]", console=console, spinner=Spinners.DEFAULT):
-        result = doctor.run_doctor(workspace_path)
+        result = doctor.run_doctor(workspace_path, provider_id=provider)
 
     if quick:
         doctor.render_quick_status(console, result)
     else:
-        doctor.render_doctor_results(console, result)
+        doctor.render_doctor_results(console, result, provider_id=provider)
 
     # Return proper exit code
     if not result.all_ok:

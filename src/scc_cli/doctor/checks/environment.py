@@ -418,23 +418,27 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
     )
 
 
-def check_provider_image() -> CheckResult:
+def check_provider_image(provider_id: str | None = None) -> CheckResult:
     """Check whether the active provider's agent image is available locally.
 
     Runs ``docker image inspect`` for the image ref corresponding to the
     currently selected provider. On failure, returns a CheckResult with
     ``fix_commands`` containing the exact ``docker build`` invocation.
+
+    Args:
+        provider_id: Provider to check.  Falls back to selected or ``claude``.
     """
     from scc_cli.core.errors import InvalidProviderError
     from scc_cli.core.provider_registry import get_runtime_spec
 
     # Resolve the active provider — fall back to claude if unset/unknown
-    try:
-        from scc_cli import config as config_module
+    if provider_id is None:
+        try:
+            from scc_cli import config as config_module
 
-        provider_id = config_module.get_selected_provider() or "claude"
-    except Exception:
-        provider_id = "claude"
+            provider_id = config_module.get_selected_provider() or "claude"
+        except Exception:
+            provider_id = "claude"
 
     try:
         spec = get_runtime_spec(provider_id)
@@ -454,6 +458,7 @@ def check_provider_image() -> CheckResult:
                 name="Provider Image",
                 passed=True,
                 message=f"{image_ref} found",
+                category="provider",
             )
         # Image not found
         return CheckResult(
@@ -463,6 +468,7 @@ def check_provider_image() -> CheckResult:
             fix_commands=[f"docker build -t {image_ref} images/scc-agent-{provider_id}/"],
             fix_hint=f"Build the {provider_id} agent image",
             severity=SeverityLevel.WARNING,
+            category="provider",
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
         return CheckResult(
@@ -471,4 +477,5 @@ def check_provider_image() -> CheckResult:
             message=f"Could not check provider image: {exc}",
             fix_hint="Ensure Docker is installed and reachable",
             severity=SeverityLevel.WARNING,
+            category="provider",
         )

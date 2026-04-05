@@ -21,11 +21,27 @@ from scc_cli import __version__
 from scc_cli.core.enums import SeverityLevel
 
 from .core import run_doctor
-from .types import DoctorResult
+from .types import CheckResult, DoctorResult
+
+# Category display order and labels for grouped rendering
+_CATEGORY_ORDER: list[str] = ["backend", "provider", "config", "worktree", "general"]
+_CATEGORY_LABELS: dict[str, str] = {
+    "backend": "Backend",
+    "provider": "Provider",
+    "config": "Configuration",
+    "worktree": "Worktree",
+    "general": "General",
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Rich Terminal UI Rendering
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _sort_checks_by_category(checks: list[CheckResult]) -> list[CheckResult]:
+    """Sort checks by category order, preserving insertion order within each category."""
+    order_map = {cat: idx for idx, cat in enumerate(_CATEGORY_ORDER)}
+    return sorted(checks, key=lambda c: order_map.get(c.category, len(_CATEGORY_ORDER)))
 
 
 def render_doctor_results(
@@ -40,6 +56,8 @@ def render_doctor_results(
     - Green for success
     - Yellow for warnings
     - Red for errors
+
+    Checks are grouped by category with section headers.
 
     Args:
         console: Rich console for output.
@@ -62,14 +80,27 @@ def render_doctor_results(
     table.add_column("Check", min_width=20)
     table.add_column("Details", min_width=30)
 
-    for check in result.checks:
+    sorted_checks = _sort_checks_by_category(result.checks)
+    current_category: str | None = None
+
+    for check in sorted_checks:
+        # Insert category header when category changes
+        if check.category != current_category:
+            current_category = check.category
+            label = _CATEGORY_LABELS.get(current_category, current_category.title())
+            table.add_row(
+                Text(""),
+                Text(f"── {label} ──", style="bold cyan"),
+                Text(""),
+            )
+
         # Status icon with color
         if check.passed:
-            status = Text("  ", style="bold green")
+            status = Text("  ✓", style="bold green")
         elif check.severity == SeverityLevel.WARNING:
-            status = Text("  ", style="bold yellow")
+            status = Text("  ⚠", style="bold yellow")
         else:
-            status = Text("  ", style="bold red")
+            status = Text("  ✗", style="bold red")
 
         # Check name
         name = Text(check.name, style="white")

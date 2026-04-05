@@ -10,6 +10,7 @@ from .checks import (
     check_docker_running,
     check_docker_sandbox,
     check_git,
+    check_provider_auth,
     check_provider_image,
     check_runtime_backend,
     check_safety_policy,
@@ -17,11 +18,48 @@ from .checks import (
     check_workspace_path,
     check_wsl2,
 )
-from .types import DoctorResult
+from .types import CheckResult, DoctorResult
+
+# Category assignment rules: check name → category
+_CATEGORY_MAP: dict[str, str] = {
+    "Git": "backend",
+    "Docker": "backend",
+    "Docker Daemon": "backend",
+    "Docker Desktop": "backend",
+    "Sandbox Backend": "backend",
+    "Runtime Backend": "backend",
+    "Provider Image": "provider",
+    "Provider Auth": "provider",
+    "Config Directory": "config",
+    "User Config": "config",
+    "Safety Policy": "config",
+    "Git Worktrees": "worktree",
+    "Worktree Health": "worktree",
+    "Branch Conflicts": "worktree",
+}
 
 
-def run_doctor(workspace: Path | None = None) -> DoctorResult:
-    """Run all health checks and return comprehensive results."""
+def _assign_category(check: CheckResult) -> None:
+    """Assign a category to a check result based on its name.
+
+    If the check already has a non-default category set (e.g. by the check
+    function itself), leave it alone.
+    """
+    if check.category != "general":
+        return  # already set by the check function
+    check.category = _CATEGORY_MAP.get(check.name, "general")
+
+
+def run_doctor(
+    workspace: Path | None = None,
+    provider_id: str | None = None,
+) -> DoctorResult:
+    """Run all health checks and return comprehensive results.
+
+    Args:
+        workspace: Optional workspace path to validate.
+        provider_id: When set, scopes provider checks to this provider.
+    """
 
     result = DoctorResult()
 
@@ -54,8 +92,16 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
     # Provider image check — only meaningful when Docker is reachable
     if result.docker_ok:
         try:
-            image_check = check_provider_image()
+            image_check = check_provider_image(provider_id=provider_id)
             result.checks.append(image_check)
+        except Exception:
+            pass  # partial-results — don't block other checks
+
+    # Provider auth check — only meaningful when Docker is reachable
+    if result.docker_ok:
+        try:
+            auth_check = check_provider_auth(provider_id=provider_id)
+            result.checks.append(auth_check)
         except Exception:
             pass  # partial-results — don't block other checks
 
@@ -96,5 +142,9 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
 
     safety_check = check_safety_policy()
     result.checks.append(safety_check)
+
+    # Assign categories to all checks
+    for check in result.checks:
+        _assign_category(check)
 
     return result

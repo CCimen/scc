@@ -21,7 +21,6 @@ from scc_cli.core.errors import ProviderImageMissingError, ProviderNotReadyError
 from scc_cli.doctor.checks.environment import check_provider_auth
 from scc_cli.doctor.types import CheckResult
 
-
 # ---------------------------------------------------------------------------
 # ProviderNotReadyError
 # ---------------------------------------------------------------------------
