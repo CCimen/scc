@@ -4,7 +4,7 @@ Worktree package - Typer app definitions and command wiring.
 This module contains the Typer app definitions and wires commands from:
 - worktree_commands.py: Git worktree management
 - container_commands.py: Docker container management
-- session_commands.py: Claude Code session management
+- session_commands.py: Session management
 - context_commands.py: Work context management
 """
 

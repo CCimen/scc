@@ -1,5 +1,5 @@
 """
-Launch package - commands for starting Claude Code in Docker sandboxes.
+Launch package - commands for starting agents in Docker sandboxes.
 
 This package contains the decomposed launch functionality:
 - render.py: Pure output/display functions (no business logic)

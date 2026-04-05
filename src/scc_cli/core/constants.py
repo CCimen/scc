@@ -2,7 +2,7 @@
 Backend-specific constants for SCC-CLI.
 
 Centralized location for all backend-specific values that identify the
-AI coding assistant being sandboxed. Currently supports Claude Code.
+AI coding assistant being sandboxed. Supports multiple AI coding agents.
 
 This module enables future extensibility to support other AI coding CLIs
 (e.g., Codex, Gemini) by providing a single location to update when

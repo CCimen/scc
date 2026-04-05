@@ -37,7 +37,7 @@ def _load_containers_tab_data() -> TabData:
 
 
 def _load_sessions_tab_data() -> TabData:
-    """Load Sessions tab data showing recent Claude sessions."""
+    """Load Sessions tab data showing recent sessions."""
     session_service = sessions.get_session_service()
     tab_data = app_dashboard.load_sessions_tab_data(
         session_service=session_service,

@@ -61,7 +61,7 @@ from .prompts import confirm_with_layout, prompt_with_layout  # noqa: F401
 
 
 def check_branch_safety(path: Path, console: Console) -> bool:
-    """Check if current branch is safe for Claude Code work.
+    """Check if current branch is safe for agent work.
 
     Display a visual "speed bump" for protected branches with
     interactive options to create a feature branch or continue.
@@ -86,7 +86,7 @@ def check_branch_safety(path: Path, console: Console) -> bool:
         warning = create_warning_panel(
             "Protected Branch",
             f"You are on branch '{current}'\n\n"
-            "For safety, Claude Code work should happen on a feature branch.\n"
+            "For safety, agent work should happen on a feature branch.\n"
             "Direct pushes to protected branches are blocked by git hooks.",
             "Create a feature branch for isolated, safe development",
         )

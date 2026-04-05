@@ -1,5 +1,5 @@
 """
-Typed exceptions for SCC - Sandboxed Claude CLI.
+Typed exceptions for SCC - Sandboxed Code CLI.
 
 Error handling philosophy: "One message, one action"
 - Each error has a clear user_message (what went wrong)

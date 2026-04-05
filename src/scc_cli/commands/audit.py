@@ -1,6 +1,6 @@
 """Provide CLI commands for plugin audit functionality.
 
-Audit installed Claude Code plugins via the `scc audit plugins` command,
+Audit installed plugins via the `scc audit plugins` command,
 including manifest validation and MCP server/hooks discovery.
 """
 
@@ -36,7 +36,7 @@ audit_app = typer.Typer(
 
 
 def get_claude_dir() -> Path:
-    """Get the Claude Code directory path."""
+    """Get the agent config directory path."""
     return Path.home() / AGENT_CONFIG_DIR
 
 
@@ -226,7 +226,7 @@ def audit_plugins_cmd(
         help="Output as JSON with schemaVersion for CI integration.",
     ),
 ) -> None:
-    """Audit installed Claude Code plugins.
+    """Audit installed plugins.
 
     Shows manifest status, MCP servers, and hooks for all installed plugins.
 

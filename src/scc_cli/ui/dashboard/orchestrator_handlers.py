@@ -279,7 +279,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
 
 
 def _handle_session_resume(session: SessionSummary) -> bool:
-    """Resume a Claude Code session from the dashboard.
+    """Resume a session from the dashboard.
 
     This function executes OUTSIDE Rich Live context (the dashboard has
     already exited via the exception unwind before this is called).
@@ -422,7 +422,7 @@ def _handle_session_resume(session: SessionSummary) -> bool:
 def _handle_statusline_install() -> bool:
     """Handle statusline installation request from dashboard.
 
-    Installs the Claude Code statusline enhancement using the same logic
+    Installs the statusline enhancement using the same logic
     as `scc statusline`. Works cross-platform (Windows, macOS, Linux).
 
     Returns:
@@ -736,7 +736,7 @@ def _handle_worktree_action_menu(worktree_path: str) -> str | None:
     _prepare_for_nested_ui(console)
 
     items: list[ListItem[str]] = [
-        ListItem(value="start", label="Start session here", description="Launch Claude"),
+        ListItem(value="start", label="Start session here", description="Launch agent"),
         ListItem(
             value="open_shell",
             label="Open shell",

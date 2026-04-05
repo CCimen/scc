@@ -13,7 +13,7 @@ from .flow import start as _start
 
 launch_app = typer.Typer(
     name="launch",
-    help="Start Claude Code in sandboxes.",
+    help="Start agent in sandboxes.",
     no_args_is_help=False,
     context_settings={"help_option_names": ["-h", "--help"]},
 )

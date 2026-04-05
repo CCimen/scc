@@ -1,12 +1,12 @@
 """
-Manage Claude Code sessions.
+Manage agent sessions.
 
 Track recent sessions, workspaces, containers, and enable resuming.
 
 Container Linking:
 - Sessions are linked to their Docker container names
 - Container names are deterministic: scc-<workspace>-<hash>
-- This enables seamless resume of Claude Code conversations
+- This enables seamless resume of agent conversations
 """
 
 from __future__ import annotations
@@ -189,17 +189,17 @@ def prune_orphaned_sessions(filesystem: Filesystem | None = None) -> int:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Claude Code Integration
+# Agent Integration
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 def get_claude_sessions_dir() -> Path:
-    """Return the Claude Code sessions directory."""
+    """Return the agent sessions directory."""
     return Path.home() / AGENT_CONFIG_DIR
 
 
 def get_claude_recent_sessions() -> list[dict[Any, Any]]:
-    """Return recent sessions from Claude Code's own storage."""
+    """Return recent sessions from the agent's own storage."""
     claude_dir = get_claude_sessions_dir()
     sessions_file = claude_dir / "sessions.json"
 

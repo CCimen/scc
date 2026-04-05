@@ -357,7 +357,7 @@ def statusline_cmd(
     ),
     show: bool = typer.Option(False, "--show", "-s", help="Show current status line config"),
 ) -> None:
-    """Configure Claude Code status line to show git worktree info.
+    """Configure status line to show git worktree info.
 
     The status line displays: Model | Git branch/worktree | Context usage | Cost
 
@@ -459,7 +459,7 @@ def statusline_cmd(
                 "[bold]Model[/bold] | [cyan]🌿 branch[/cyan] or [magenta]⎇ worktree[/magenta]:branch | "
                 "[green]Ctx %[/green] | [yellow]$cost[/yellow][/dim]"
             )
-            console.print("[dim]Restart Claude Code sandbox to see the changes.[/dim]")
+            console.print("[dim]Restart sandbox to see the changes.[/dim]")
         else:
             console.print(
                 create_warning_panel(
@@ -475,7 +475,7 @@ def statusline_cmd(
     console.print(
         create_info_panel(
             "Status Line",
-            "Configure a custom status line for Claude Code.",
+            "Configure a custom status line.",
             "Use --install to set up, --show to view, --uninstall to remove",
         )
     )

@@ -118,7 +118,7 @@ def start(
         help="Agent provider override (claude or codex)",
     ),
 ) -> None:
-    """Start Claude Code in a Docker sandbox.
+    """Start agent in a Docker sandbox.
 
     If no arguments provided, launches interactive mode.
     """

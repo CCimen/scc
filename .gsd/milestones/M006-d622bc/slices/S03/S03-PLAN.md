@@ -80,7 +80,7 @@ Update `show_launch_panel()`, `show_launch_context_panel()`, and `render_doctor_
   - Estimate: 30m
   - Files: src/scc_cli/commands/launch/render.py, src/scc_cli/commands/launch/flow.py, src/scc_cli/commands/launch/flow_interactive.py, src/scc_cli/commands/launch/sandbox.py, src/scc_cli/doctor/render.py, tests/test_provider_branding.py
   - Verify: uv run pytest tests/test_provider_branding.py -v && uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py && uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/doctor/render.py
-- [ ] **T03: Sweep static help text, dashboard strings, docstrings, and add guardrail test** — ## Description
+- [x] **T03: Swept all 'Claude Code' and 'Sandboxed Claude' references from non-adapter modules to provider-neutral language and added guardrail test** — ## Description
 
 Update all remaining user-facing "Claude Code" references in non-adapter modules to provider-neutral language. Add a guardrail test that scans for regressions. This is the completeness gate — after T03, no user-facing code outside Claude-specific adapters should mention "Claude Code".
 

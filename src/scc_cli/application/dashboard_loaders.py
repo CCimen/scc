@@ -271,7 +271,7 @@ def load_sessions_tab_data(
     session_service: SessionService,
     format_last_used: Callable[[str], str] | None = None,
 ) -> DashboardTabData:
-    """Load Sessions tab data showing recent Claude sessions."""
+    """Load Sessions tab data showing recent sessions."""
     items: list[DashboardItem] = []
 
     try:

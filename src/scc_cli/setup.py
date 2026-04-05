@@ -1,5 +1,5 @@
 """
-Setup wizard for SCC - Sandboxed Claude CLI.
+Setup wizard for SCC - Sandboxed Code CLI.
 
 Remote organization config workflow:
 - Prompt for org config URL (or standalone mode)
@@ -124,7 +124,7 @@ def prompt_auth_method(console: Console, *, rendered: bool = False) -> str | Non
         console.print()
         console.print("[dim]This is only used to fetch your organization config URL.[/dim]")
         console.print("[dim]If your config is private, SCC needs a token to download it.[/dim]")
-        console.print("[dim]This does not affect Claude auth inside the container.[/dim]")
+        console.print("[dim]This does not affect agent auth inside the container.[/dim]")
         console.print()
         console.print("[dim]How would you like to provide the token?[/dim]")
         console.print()
@@ -370,7 +370,7 @@ def show_setup_complete(
         console.print()
     _print_padded(
         console,
-        "  [cyan]scc start ~/project[/cyan]   [dim]Launch Claude in a workspace[/dim]",
+        "  [cyan]scc start ~/project[/cyan]   [dim]Launch agent in a workspace[/dim]",
         metrics,
     )
     _print_padded(

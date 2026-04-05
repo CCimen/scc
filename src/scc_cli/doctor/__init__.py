@@ -1,7 +1,7 @@
 """Provide system diagnostics and health checks for SCC-CLI.
 
 Offer comprehensive health checks for all prerequisites needed to run
-Claude Code in Docker sandboxes.
+AI coding agents in Docker sandboxes.
 
 Philosophy: "Fast feedback, clear guidance"
 - Check all prerequisites quickly

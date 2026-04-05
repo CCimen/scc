@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SCC - Sandboxed Claude CLI
+SCC - Sandboxed Code CLI
 
-A command-line tool for safely running Claude Code in Docker sandboxes
+A command-line tool for safely running AI coding agents in Docker sandboxes
 with team-specific configurations and worktree management.
 
 This module serves as the thin orchestrator that composes commands from:
@@ -58,7 +58,7 @@ from .commands.worktree import (
 
 app = typer.Typer(
     name="scc-cli",
-    help="Safely run Claude Code with team configurations and worktree management.",
+    help="Safely run AI coding agents with team configurations and worktree management.",
     no_args_is_help=False,
     rich_markup_mode="rich",
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -94,9 +94,9 @@ def main_callback(
     ),
 ) -> None:
     """
-    [bold cyan]SCC[/bold cyan] - Sandboxed Claude CLI
+    [bold cyan]SCC[/bold cyan] - Sandboxed Code CLI
 
-    Safely run Claude Code in Docker sandboxes with team configurations.
+    Safely run AI coding agents in Docker sandboxes with team configurations.
     """
     state.debug = debug
 

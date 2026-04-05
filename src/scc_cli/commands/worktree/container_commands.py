@@ -145,7 +145,7 @@ def stop_cmd(
         help="Container name or ID to stop (omit for interactive picker)",
     ),
     all_containers: bool = typer.Option(
-        False, "--all", "-a", help="Stop all running Claude Code sandboxes"
+        False, "--all", "-a", help="Stop all running sandboxes"
     ),
     interactive: bool = typer.Option(
         False, "-i", "--interactive", help="Use multi-select picker to choose containers"
@@ -171,7 +171,7 @@ def stop_cmd(
         console.print(
             create_info_panel(
                 "No Running Sandboxes",
-                "No Claude Code sandboxes are currently running.",
+                "No sandboxes are currently running.",
                 "Start one with: scc -w /path/to/project",
             )
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -10,7 +11,6 @@ from rich.panel import Panel
 
 from scc_cli.core.provider_resolution import get_provider_display_name
 from scc_cli.ui.branding import get_brand_tagline, get_version_header
-
 
 # ── get_provider_display_name ────────────────────────────────────────────────
 
@@ -202,3 +202,72 @@ class TestRenderDoctorResults:
         output = buf.file.getvalue()  # type: ignore[union-attr]
         assert "Codex" in output
         assert "Claude Code" not in output
+
+
+# ── Guardrail: no "Claude Code" in non-adapter user-facing code ─────────────
+
+# Directories and file prefixes that are allowed to mention "Claude Code"
+# because they are Claude-specific adapters or infrastructure.
+_ALLOWED_DIRS = {"adapters", "docker", "marketplace"}
+_ALLOWED_PREFIXES = {"claude_"}
+
+# Files that legitimately contain the string as a lookup value or default
+_ALLOWED_FILES = {
+    "provider_resolution.py",  # lookup table mapping "claude" -> "Claude Code"
+}
+
+# Pattern for default parameter values like `display_name: str = "Claude Code"`
+# These are acceptable because the default is overridden at call sites.
+_DEFAULT_PARAM_RE = re.compile(r'display_name:\s*str\s*=\s*"Claude Code"')
+
+
+class TestNoCloudeCodeInNonAdapterModules:
+    """Guardrail: scan src/scc_cli/ for 'Claude Code' or 'Sandboxed Claude'
+    outside adapter/infrastructure modules. Any unexpected match fails the test.
+    """
+
+    def _collect_violations(self) -> list[str]:
+        src_root = Path(__file__).resolve().parent.parent / "src" / "scc_cli"
+        violations: list[str] = []
+
+        for py_file in sorted(src_root.rglob("*.py")):
+            rel = py_file.relative_to(src_root)
+            parts = rel.parts
+
+            # Skip __pycache__
+            if "__pycache__" in parts:
+                continue
+
+            # Skip allowed directories
+            if parts[0] in _ALLOWED_DIRS:
+                continue
+
+            # Skip files with allowed prefixes (e.g. claude_renderer.py)
+            if any(parts[-1].startswith(p) for p in _ALLOWED_PREFIXES):
+                continue
+
+            # Skip allowed individual files
+            if parts[-1] in _ALLOWED_FILES:
+                continue
+
+            try:
+                content = py_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+
+            for lineno, line in enumerate(content.splitlines(), start=1):
+                # Skip default parameter values — these are overridden at call sites
+                if _DEFAULT_PARAM_RE.search(line):
+                    continue
+
+                if "Claude Code" in line or "Sandboxed Claude" in line:
+                    violations.append(f"{rel}:{lineno}: {line.strip()}")
+
+        return violations
+
+    def test_no_claude_code_references(self) -> None:
+        violations = self._collect_violations()
+        assert violations == [], (
+            "Found 'Claude Code' or 'Sandboxed Claude' in non-adapter modules:\n"
+            + "\n".join(f"  {v}" for v in violations)
+        )

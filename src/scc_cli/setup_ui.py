@@ -160,7 +160,7 @@ def _select_option(
 WELCOME_BANNER = """
 [cyan]╔═══════════════════════════════════════════════════════════╗[/cyan]
 [cyan]║[/cyan]                                                           [cyan]║[/cyan]
-[cyan]║[/cyan]   [bold white]Welcome to SCC - Sandboxed Claude CLI[/bold white]                [cyan]║[/cyan]
+[cyan]║[/cyan]   [bold white]Welcome to SCC - Sandboxed Code CLI[/bold white]                [cyan]║[/cyan]
 [cyan]║[/cyan]                                                           [cyan]║[/cyan]
 [cyan]║[/cyan]   [dim]Safe development environment for AI-assisted coding[/dim]   [cyan]║[/cyan]
 [cyan]║[/cyan]                                                           [cyan]║[/cyan]

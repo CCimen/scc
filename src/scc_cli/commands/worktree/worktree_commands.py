@@ -133,7 +133,7 @@ def worktree_create_cmd(
         None, "-b", "--base", help="Base branch (default: current)"
     ),
     start_claude: bool = typer.Option(
-        True, "--start/--no-start", help="Start Claude after creating"
+        True, "--start/--no-start", help="Start agent after creating"
     ),
     install_deps: bool = typer.Option(
         False, "--install-deps", help="Install dependencies after creating worktree"
@@ -234,7 +234,7 @@ def worktree_create_cmd(
 
     if start_claude:
         console.print()
-        if Confirm.ask("[cyan]Start Claude Code in this worktree?[/cyan]", default=True):
+        if Confirm.ask("[cyan]Start agent in this worktree?[/cyan]", default=True):
             adapters.sandbox_runtime.ensure_available()
             user_config = config.load_user_config()
             standalone_mode = config.is_standalone_mode()

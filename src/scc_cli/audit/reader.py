@@ -2,7 +2,7 @@
 
 Implement file system operations for:
 - Reading manifest files from plugin directories
-- Discovering installed plugins from the Claude Code registry
+- Discovering installed plugins from the agent registry
 - Creating audit results for plugins
 """
 
@@ -88,7 +88,7 @@ def read_plugin_manifests(plugin_dir: Path) -> PluginManifests:
 
 
 def discover_installed_plugins(claude_dir: Path) -> list[dict[str, Any]]:
-    """Discover installed plugins from the Claude Code registry.
+    """Discover installed plugins from the agent registry.
 
     Args:
         claude_dir: Path to the .claude directory (typically ~/.claude).
