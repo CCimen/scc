@@ -130,7 +130,7 @@ D028 constraint 4: for missing provider images, doctor must print the exact buil
   - Estimate: 30m
   - Files: src/scc_cli/doctor/checks/environment.py, src/scc_cli/doctor/checks/__init__.py, src/scc_cli/doctor/core.py, tests/test_doctor_image_check.py
   - Verify: uv run pytest tests/test_doctor_image_check.py -v --no-cov && uv run ruff check src/scc_cli/doctor/checks/environment.py src/scc_cli/doctor/core.py && uv run mypy src/scc_cli/doctor/checks/environment.py src/scc_cli/doctor/core.py && uv run pytest --rootdir "$PWD" -q --no-cov
-- [ ] **T04: Coexistence proof test and zero-regression gate** — ## Description
+- [x] **T04: Created 16 coexistence proof tests and passed zero-regression gate (4643 tests, 0 failures, ruff clean, mypy clean)** — ## Description
 
 D028 constraint 5: prove that Claude and Codex containers, volumes, sessions, and Quick Resume entries coexist for the same workspace without collision. Plus the full regression gate.
 

@@ -5,8 +5,6 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from scc_cli.doctor.checks.environment import check_provider_image
 
 
@@ -147,7 +145,7 @@ class TestCheckProviderImageInDoctor:
         mock_subprocess.return_value = MagicMock(returncode=0)
 
         with (
-            patch("scc_cli.doctor.checks.environment.check_git") as mock_git,
+            patch("scc_cli.doctor.checks.environment.check_git"),
             patch("scc_cli.doctor.core.check_git") as mock_core_git,
             patch("scc_cli.doctor.core.check_docker") as mock_docker,
             patch("scc_cli.doctor.core.check_docker_running") as mock_daemon,

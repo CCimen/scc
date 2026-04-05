@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T01:15:11.338Z",
+  "exported_at": "2026-04-05T01:20:48.485Z",
   "milestones": [
     {
       "id": "M001",
@@ -5489,19 +5489,25 @@
       "milestone_id": "M006-d622bc",
       "slice_id": "S04",
       "id": "T04",
-      "title": "Coexistence proof test and zero-regression gate",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created 16 coexistence proof tests and passed zero-regression gate (4643 tests, 0 failures, ruff clean, mypy clean)",
+      "status": "complete",
+      "one_liner": "Created 16 coexistence proof tests and passed zero-regression gate (4643 tests, 0 failures, ruff clean, mypy clean)",
+      "narrative": "Created tests/test_provider_coexistence.py with 16 tests in 5 classes proving Claude and Codex containers, volumes, config dirs, sessions, and SandboxSpec fields don't collide for the same workspace. Fixed 3 inherited ruff lint errors in test_doctor_image_check.py and test_provider_machine_readable.py. Full regression suite passes with 4643 tests.",
+      "verification_result": "All 7 verification checks pass: coexistence tests (16/16), ruff check (clean), mypy (292 files, no issues), full regression (4643 passed), plus all 3 slice-level checks (session provider_id tests, targeted ruff, targeted mypy).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T01:20:48.443Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed 3 ruff lint errors from prior S04 tasks (unused import pytest in two files, unused mock_git variable) that were causing ruff check to fail.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_provider_coexistence.py",
+        "tests/test_doctor_image_check.py",
+        "tests/test_provider_machine_readable.py"
+      ],
+      "key_decisions": [
+        "Test coexistence at the data-structure level rather than requiring Docker — fast, deterministic, proves hash/naming isolation"
+      ],
+      "full_summary_md": "---\nid: T04\nparent: S04\nmilestone: M006-d622bc\nkey_files:\n  - tests/test_provider_coexistence.py\n  - tests/test_doctor_image_check.py\n  - tests/test_provider_machine_readable.py\nkey_decisions:\n  - Test coexistence at the data-structure level rather than requiring Docker — fast, deterministic, proves hash/naming isolation\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T01:20:48.442Z\nblocker_discovered: false\n---\n\n# T04: Created 16 coexistence proof tests and passed zero-regression gate (4643 tests, 0 failures, ruff clean, mypy clean)\n\n**Created 16 coexistence proof tests and passed zero-regression gate (4643 tests, 0 failures, ruff clean, mypy clean)**\n\n## What Happened\n\nCreated tests/test_provider_coexistence.py with 16 tests in 5 classes proving Claude and Codex containers, volumes, config dirs, sessions, and SandboxSpec fields don't collide for the same workspace. Fixed 3 inherited ruff lint errors in test_doctor_image_check.py and test_provider_machine_readable.py. Full regression suite passes with 4643 tests.\n\n## Verification\n\nAll 7 verification checks pass: coexistence tests (16/16), ruff check (clean), mypy (292 files, no issues), full regression (4643 passed), plus all 3 slice-level checks (session provider_id tests, targeted ruff, targeted mypy).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_provider_coexistence.py -v --no-cov` | 0 | ✅ pass | 5400ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 5400ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 69000ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q --no-cov` | 0 | ✅ pass | 63000ms |\n| 5 | `uv run pytest tests/test_session_provider_id.py -v --no-cov` | 0 | ✅ pass | 4000ms |\n| 6 | `uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py` | 0 | ✅ pass | 2000ms |\n| 7 | `uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py` | 0 | ✅ pass | 5000ms |\n\n## Deviations\n\nFixed 3 ruff lint errors from prior S04 tasks (unused import pytest in two files, unused mock_git variable) that were causing ruff check to fail.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_provider_coexistence.py`\n- `tests/test_doctor_image_check.py`\n- `tests/test_provider_machine_readable.py`\n",
       "description": "## Description\n\nD028 constraint 5: prove that Claude and Codex containers, volumes, sessions, and Quick Resume entries coexist for the same workspace without collision. Plus the full regression gate.\n\n## Steps\n\n1. Create `tests/test_provider_coexistence.py` with a comprehensive coexistence proof:\n   - **Container name collision test**: Import `_container_name` from `scc_cli.adapters.oci_sandbox_runtime`. Create two calls with the same workspace Path but different provider_ids (\"claude\" and \"codex\"). Assert the returned names differ.\n   - **Data volume collision test**: Import `_PROVIDER_DATA_VOLUME` from `scc_cli.application.start_session`. Assert `_PROVIDER_DATA_VOLUME[\"claude\"] != _PROVIDER_DATA_VOLUME[\"codex\"]`.\n   - **Session coexistence test**: Create two SessionRecord instances for the same workspace with different provider_ids. Assert both can exist. Create a SessionFilter with provider_id=\"claude\" and verify filtering logic returns only the Claude session (use the SessionService or test the filter manually by constructing records and applying the filter).\n   - **Session list isolation test**: Build two sessions, list with provider_id filter, assert only matching provider returned.\n   - **SandboxSpec identity test**: Build two SandboxSpec instances (or use `_build_sandbox_spec` if accessible) for the same workspace with different providers. Assert image_ref, data_volume, config_dir, and agent_argv all differ.\n2. Run the full regression gate: `uv run pytest --rootdir \"$PWD\" -q --no-cov` — must be 0 failures.\n3. Run `uv run ruff check` — must be 0 errors.\n4. Run `uv run mypy src/scc_cli` — must be 0 issues (or same as baseline).\n\n## Must-Haves\n\n- [ ] Container names for same workspace + different providers are distinct\n- [ ] Data volume names for claude and codex are distinct\n- [ ] Sessions with different provider_ids can coexist and be filtered independently\n- [ ] SandboxSpec fields (image_ref, data_volume, config_dir, agent_argv) differ per provider\n- [ ] Full test suite: 0 failures\n- [ ] ruff check: 0 errors\n- [ ] mypy: 0 issues\n\n## Verification\n\n- `uv run pytest tests/test_provider_coexistence.py -v --no-cov` — all coexistence tests pass\n- `uv run pytest --rootdir \"$PWD\" -q --no-cov` — 0 failures (4600+ tests expected)\n- `uv run ruff check` — 0 errors\n- `uv run mypy src/scc_cli` — success",
       "estimate": "30m",
       "files": [
@@ -8996,6 +9002,83 @@
       "verdict": "✅ pass",
       "duration_ms": 63330,
       "created_at": "2026-04-05T01:15:11.295Z"
+    },
+    {
+      "id": 288,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_provider_coexistence.py -v --no-cov",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5400,
+      "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 289,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5400,
+      "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 290,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 69000,
+      "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 291,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest --rootdir \"$PWD\" -q --no-cov",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 63000,
+      "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 292,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_session_provider_id.py -v --no-cov",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4000,
+      "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 293,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2000,
+      "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 294,
+      "task_id": "T04",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-05T01:20:48.443Z"
     }
   ]
 }
