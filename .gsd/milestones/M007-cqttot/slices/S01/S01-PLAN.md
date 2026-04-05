@@ -63,7 +63,7 @@
   - Estimate: 45m
   - Files: src/scc_cli/core/contracts.py, src/scc_cli/core/errors.py, src/scc_cli/provider_registry.py, tests/test_provider_registry.py
   - Verify: uv run pytest tests/test_provider_registry.py -v && uv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py && uv run ruff check src/scc_cli/provider_registry.py
-- [ ] **T02: Wire registry into start_session, dependencies, and doctor; fix settings-path; flip fallback tests** — Replace all 5 scattered provider dicts with registry lookups, fix the hardcoded Claude settings path, make unknown providers fail closed, and update all affected tests.
+- [x] **T02: Replaced all 5 scattered provider dicts with PROVIDER_REGISTRY lookups, fixed hardcoded Claude settings path, made unknown providers fail-closed, and flipped 4 fallback tests** — Replace all 5 scattered provider dicts with registry lookups, fix the hardcoded Claude settings path, make unknown providers fail closed, and update all affected tests.
 
 ## Steps
 

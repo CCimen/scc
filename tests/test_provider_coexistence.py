@@ -5,11 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scc_cli.adapters.oci_sandbox_runtime import _container_name
-from scc_cli.application.start_session import (
-    _PROVIDER_CONFIG_DIR,
-    _PROVIDER_DATA_VOLUME,
-    _PROVIDER_IMAGE_REF,
-)
+from scc_cli.core.provider_registry import PROVIDER_REGISTRY
 from scc_cli.ports.models import MountSpec, SandboxSpec
 from scc_cli.ports.session_models import SessionFilter, SessionRecord
 
@@ -38,25 +34,25 @@ class TestDataVolumeCoexistence:
     """Data volume names must differ per provider."""
 
     def test_claude_codex_volumes_differ(self) -> None:
-        assert _PROVIDER_DATA_VOLUME["claude"] != _PROVIDER_DATA_VOLUME["codex"]
+        assert PROVIDER_REGISTRY["claude"].data_volume != PROVIDER_REGISTRY["codex"].data_volume
 
     def test_volumes_are_nonempty(self) -> None:
-        for pid, vol in _PROVIDER_DATA_VOLUME.items():
-            assert vol, f"volume for {pid} is empty"
+        for pid, spec in PROVIDER_REGISTRY.items():
+            assert spec.data_volume, f"volume for {pid} is empty"
 
 
 class TestConfigDirCoexistence:
     """Config directory names must differ per provider."""
 
     def test_claude_codex_config_dirs_differ(self) -> None:
-        assert _PROVIDER_CONFIG_DIR["claude"] != _PROVIDER_CONFIG_DIR["codex"]
+        assert PROVIDER_REGISTRY["claude"].config_dir != PROVIDER_REGISTRY["codex"].config_dir
 
 
 class TestImageRefCoexistence:
     """Image references must differ per provider."""
 
     def test_claude_codex_images_differ(self) -> None:
-        assert _PROVIDER_IMAGE_REF["claude"] != _PROVIDER_IMAGE_REF["codex"]
+        assert PROVIDER_REGISTRY["claude"].image_ref != PROVIDER_REGISTRY["codex"].image_ref
 
 
 class TestSessionCoexistence:
@@ -111,9 +107,10 @@ class TestSandboxSpecCoexistence:
 
     @staticmethod
     def _make_spec(provider_id: str) -> SandboxSpec:
-        image = _PROVIDER_IMAGE_REF[provider_id]
-        data_vol = _PROVIDER_DATA_VOLUME[provider_id]
-        config_dir = _PROVIDER_CONFIG_DIR[provider_id]
+        reg = PROVIDER_REGISTRY[provider_id]
+        image = reg.image_ref
+        data_vol = reg.data_volume
+        config_dir = reg.config_dir
         return SandboxSpec(
             image=image,
             workspace_mount=MountSpec(source=Path("/w"), target=Path("/workspace")),

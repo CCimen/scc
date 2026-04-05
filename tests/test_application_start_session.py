@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
 from scc_cli.application.start_session import (
     StartSessionDependencies,
@@ -15,7 +17,7 @@ from scc_cli.application.sync_marketplace import SyncError, SyncResult
 from scc_cli.application.workspace import WorkspaceContext
 from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
-from scc_cli.core.errors import MaterializationError
+from scc_cli.core.errors import InvalidProviderError, MaterializationError
 from scc_cli.core.governed_artifacts import (
     ArtifactBundle,
     ArtifactInstallIntent,
@@ -962,8 +964,8 @@ class TestProviderAwareImageSelection:
         assert plan.sandbox_spec is not None
         assert plan.sandbox_spec.image == SANDBOX_IMAGE
 
-    def test_unknown_provider_falls_back_to_claude_image(self, tmp_path: Path) -> None:
-        """Unknown provider_id on OCI backend falls back to claude image."""
+    def test_unknown_provider_raises_invalid_provider_error(self, tmp_path: Path) -> None:
+        """Unknown provider_id on OCI backend raises InvalidProviderError."""
         workspace_path = tmp_path / "workspace"
         workspace_path.mkdir()
         request = StartSessionRequest(
@@ -981,7 +983,7 @@ class TestProviderAwareImageSelection:
             org_config=None,
         )
         resolver_result = _build_resolver_result(workspace_path)
-        # FakeAgentProvider has provider_id="fake" which is not in _PROVIDER_IMAGE_REF
+        # FakeAgentProvider has provider_id="fake" which is not in the registry
         dependencies = _build_dependencies_with_runtime(runtime_info=_OCI_RUNTIME_INFO)
 
         with (
@@ -993,11 +995,9 @@ class TestProviderAwareImageSelection:
                 "scc_cli.application.start_session.resolve_destination_sets",
                 return_value=(),
             ),
+            pytest.raises(InvalidProviderError),
         ):
-            plan = prepare_start_session(request, dependencies=dependencies)
-
-        assert plan.sandbox_spec is not None
-        assert plan.sandbox_spec.image == SCC_CLAUDE_IMAGE_REF
+            prepare_start_session(request, dependencies=dependencies)
 
 
 class TestAgentArgvPropagation:

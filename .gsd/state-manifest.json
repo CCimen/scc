@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T12:25:38.650Z",
+  "exported_at": "2026-04-05T12:35:40.245Z",
   "milestones": [
     {
       "id": "M001",
@@ -5792,19 +5792,33 @@
       "milestone_id": "M007-cqttot",
       "slice_id": "S01",
       "id": "T02",
-      "title": "Wire registry into start_session, dependencies, and doctor; fix settings-path; flip fallback tests",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Replaced all 5 scattered provider dicts with PROVIDER_REGISTRY lookups, fixed hardcoded Claude settings path, made unknown providers fail-closed, and flipped 4 fallback tests",
+      "status": "complete",
+      "one_liner": "Replaced all 5 scattered provider dicts with PROVIDER_REGISTRY lookups, fixed hardcoded Claude settings path, made unknown providers fail-closed, and flipped 4 fallback tests",
+      "narrative": "Removed _PROVIDER_IMAGE_REF, _PROVIDER_DATA_VOLUME, and _PROVIDER_CONFIG_DIR dicts from start_session.py and replaced all usages with get_runtime_spec() lookups from the canonical registry in core/provider_registry.py. Fixed the hardcoded settings path bug: _build_agent_settings now uses spec.settings_path from the registry. Made dependencies.py fail-closed with InvalidProviderError. Updated doctor's check_provider_image to use registry with diagnostic-safe fallback. Flipped 4 tests from asserting Claude fallback to asserting InvalidProviderError. Updated coexistence tests to import from PROVIDER_REGISTRY. Moved provider_registry.py to core/ to satisfy the no-root-sprawl guardrail.",
+      "verification_result": "All three verification gates pass: uv run ruff check (clean), uv run mypy on 6 source files (clean), uv run pytest -q (4654 passed, 23 skipped, 2 xfailed). Targeted test run of 107 tests across 7 test files all pass.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T12:35:40.217Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Moved provider_registry.py from root to core/ to satisfy test_no_root_sprawl guardrail. Settings path resolution uses request.provider_id (defaulting to \"claude\") instead of adapter self-reported ID to avoid breaking tests with FakeAgentProvider. Added missing import pytest to test_application_start_session.py.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/provider_registry.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/doctor/checks/environment.py",
+        "tests/test_provider_dispatch.py",
+        "tests/test_provider_coexistence.py",
+        "tests/test_application_start_session.py",
+        "tests/test_provider_registry.py",
+        "tests/test_provider_branding.py"
+      ],
+      "key_decisions": [
+        "provider_registry.py moved to core/ to satisfy no-root-sprawl guardrail",
+        "Settings path resolution uses request.provider_id rather than adapter self-reported ID",
+        "Doctor check_provider_image gracefully falls back to claude image for unknown providers (diagnostic path per D032)"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/core/provider_registry.py\n  - src/scc_cli/application/start_session.py\n  - src/scc_cli/commands/launch/dependencies.py\n  - src/scc_cli/doctor/checks/environment.py\n  - tests/test_provider_dispatch.py\n  - tests/test_provider_coexistence.py\n  - tests/test_application_start_session.py\n  - tests/test_provider_registry.py\n  - tests/test_provider_branding.py\nkey_decisions:\n  - provider_registry.py moved to core/ to satisfy no-root-sprawl guardrail\n  - Settings path resolution uses request.provider_id rather than adapter self-reported ID\n  - Doctor check_provider_image gracefully falls back to claude image for unknown providers (diagnostic path per D032)\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T12:35:40.216Z\nblocker_discovered: false\n---\n\n# T02: Replaced all 5 scattered provider dicts with PROVIDER_REGISTRY lookups, fixed hardcoded Claude settings path, made unknown providers fail-closed, and flipped 4 fallback tests\n\n**Replaced all 5 scattered provider dicts with PROVIDER_REGISTRY lookups, fixed hardcoded Claude settings path, made unknown providers fail-closed, and flipped 4 fallback tests**\n\n## What Happened\n\nRemoved _PROVIDER_IMAGE_REF, _PROVIDER_DATA_VOLUME, and _PROVIDER_CONFIG_DIR dicts from start_session.py and replaced all usages with get_runtime_spec() lookups from the canonical registry in core/provider_registry.py. Fixed the hardcoded settings path bug: _build_agent_settings now uses spec.settings_path from the registry. Made dependencies.py fail-closed with InvalidProviderError. Updated doctor's check_provider_image to use registry with diagnostic-safe fallback. Flipped 4 tests from asserting Claude fallback to asserting InvalidProviderError. Updated coexistence tests to import from PROVIDER_REGISTRY. Moved provider_registry.py to core/ to satisfy the no-root-sprawl guardrail.\n\n## Verification\n\nAll three verification gates pass: uv run ruff check (clean), uv run mypy on 6 source files (clean), uv run pytest -q (4654 passed, 23 skipped, 2 xfailed). Targeted test run of 107 tests across 7 test files all pass.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 2400ms |\n| 2 | `uv run mypy (6 source files)` | 0 | ✅ pass | 2400ms |\n| 3 | `uv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py tests/test_provider_registry.py tests/test_no_root_sprawl.py tests/test_provider_branding.py -v` | 0 | ✅ pass | 1130ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 47400ms |\n\n## Deviations\n\nMoved provider_registry.py from root to core/ to satisfy test_no_root_sprawl guardrail. Settings path resolution uses request.provider_id (defaulting to \"claude\") instead of adapter self-reported ID to avoid breaking tests with FakeAgentProvider. Added missing import pytest to test_application_start_session.py.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/provider_registry.py`\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/commands/launch/dependencies.py`\n- `src/scc_cli/doctor/checks/environment.py`\n- `tests/test_provider_dispatch.py`\n- `tests/test_provider_coexistence.py`\n- `tests/test_application_start_session.py`\n- `tests/test_provider_registry.py`\n- `tests/test_provider_branding.py`\n",
       "description": "Replace all 5 scattered provider dicts with registry lookups, fix the hardcoded Claude settings path, make unknown providers fail closed, and update all affected tests.\n\n## Steps\n\n1. **Remove scattered dicts from `start_session.py`:**\n   - Delete `_PROVIDER_IMAGE_REF`, `_PROVIDER_DATA_VOLUME`, `_PROVIDER_CONFIG_DIR` dicts (lines ~42-58)\n   - Add `from scc_cli.provider_registry import get_runtime_spec` import\n\n2. **Wire `_build_sandbox_spec` to use registry:**\n   - Replace the `.get()` fallback block (lines ~320-322) with:\n     ```python\n     spec = get_runtime_spec(resolved_pid)\n     image = spec.image_ref\n     data_volume = spec.data_volume\n     config_dir = spec.config_dir\n     ```\n   - `InvalidProviderError` propagates naturally — no try/except needed here\n\n3. **Fix `_build_agent_settings` settings path (the bug):**\n   - Thread `provider_id` into `_build_agent_settings` — add `provider_id: str = \"claude\"` parameter\n   - Replace `settings_path = Path(\"/home/agent\") / AGENT_CONFIG_DIR / \"settings.json\"` with:\n     ```python\n     spec = get_runtime_spec(provider_id)\n     settings_path = Path(\"/home/agent\") / spec.settings_path\n     ```\n   - Update the call site in `prepare_start_session` to pass `provider_id` — extract it from `dependencies.agent_provider.capability_profile().provider_id` if available, else `\"claude\"`\n   - Note: can remove the `AGENT_CONFIG_DIR` import from this file if it's no longer used here\n\n4. **Fix `dependencies.py` fail-closed dispatch:**\n   - Replace `_PROVIDER_DISPATCH.get(provider_id, _PROVIDER_DISPATCH[_DEFAULT_PROVIDER_ID])` with:\n     ```python\n     if provider_id not in _PROVIDER_DISPATCH:\n         from scc_cli.core.errors import InvalidProviderError\n         from scc_cli.provider_registry import PROVIDER_REGISTRY\n         raise InvalidProviderError(\n             provider_id=provider_id,\n             known_providers=tuple(PROVIDER_REGISTRY.keys()),\n         )\n     dispatch = _PROVIDER_DISPATCH[provider_id]\n     ```\n   - Update the docstring to say \"Raises InvalidProviderError\" instead of \"Falls back to claude\"\n\n5. **Fix doctor `image_map` in `environment.py`:**\n   - Replace the local `image_map` dict (lines ~305-308) and `image_ref = image_map.get(...)` with:\n     ```python\n     from scc_cli.provider_registry import get_runtime_spec, PROVIDER_REGISTRY\n     try:\n         spec = get_runtime_spec(provider_id)\n         image_ref = spec.image_ref\n     except InvalidProviderError:\n         # Doctor is diagnostic — fall back to claude image for unknown providers\n         image_ref = get_runtime_spec(\"claude\").image_ref\n     ```\n   - Doctor is diagnostic, not a launch path — graceful fallback here is correct per D032\n\n6. **Flip dispatch fallback tests in `test_provider_dispatch.py`:**\n   - `test_unknown_provider_falls_back_to_claude` (line ~34): change from asserting `deps.agent_provider is adapters.agent_provider` to `pytest.raises(InvalidProviderError)`\n   - `test_unknown_provider_falls_back_to_claude_runner` (line ~62): same flip\n   - Import `InvalidProviderError` from `scc_cli.core.errors`\n\n7. **Flip start_session fallback test:**\n   - `test_unknown_provider_falls_back_to_claude_image` in `test_application_start_session.py` (~line 965): change to assert `InvalidProviderError` is raised instead of Claude image fallback\n\n8. **Update `test_provider_coexistence.py` imports:**\n   - Replace `from scc_cli.application.start_session import _PROVIDER_CONFIG_DIR, _PROVIDER_DATA_VOLUME, _PROVIDER_IMAGE_REF` with `from scc_cli.provider_registry import PROVIDER_REGISTRY`\n   - Update test assertions to use `PROVIDER_REGISTRY[\"claude\"].data_volume` etc. instead of dict access\n   - Tests themselves stay structurally the same — they still prove coexistence isolation\n\n9. **Update `test_doctor_image_check.py`:**\n   - `test_unknown_provider_falls_back_to_claude` (~line 66): update if the behavior changed — doctor still falls back gracefully, so this test may just need import updates\n\n10. **Add guardrail test for KNOWN_PROVIDERS sync** (if not already in T01's test file):\n    - In `test_provider_registry.py`, verify `set(PROVIDER_REGISTRY.keys()) == set(KNOWN_PROVIDERS)`\n\n## Must-Haves\n\n- [ ] `_PROVIDER_IMAGE_REF`, `_PROVIDER_DATA_VOLUME`, `_PROVIDER_CONFIG_DIR` removed from `start_session.py`\n- [ ] `_build_sandbox_spec` uses `get_runtime_spec()` — no silent Claude fallback\n- [ ] Settings path uses `spec.settings_path` — Codex gets `.codex/config.toml`, not `.claude/settings.json`\n- [ ] `dependencies.py` raises `InvalidProviderError` for unknown provider_id\n- [ ] Doctor uses registry for image ref lookup\n- [ ] Two dispatch fallback tests flipped to assert `InvalidProviderError`\n- [ ] Start session fallback test flipped\n- [ ] Coexistence tests import from registry\n- [ ] Full test suite passes with zero regressions\n\n## Verification\n\n- `uv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py tests/test_provider_registry.py -v` — all targeted tests pass\n- `uv run mypy src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py` — clean\n- `uv run pytest -q` — full suite passes, no regressions\n- `uv run ruff check src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py` — clean",
       "estimate": "60m",
       "files": [
@@ -9591,6 +9605,50 @@
       "verdict": "✅ pass",
       "duration_ms": 2400,
       "created_at": "2026-04-05T12:25:38.612Z"
+    },
+    {
+      "id": 298,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2400,
+      "created_at": "2026-04-05T12:35:40.217Z"
+    },
+    {
+      "id": 299,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy (6 source files)",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2400,
+      "created_at": "2026-04-05T12:35:40.217Z"
+    },
+    {
+      "id": 300,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py tests/test_provider_registry.py tests/test_no_root_sprawl.py tests/test_provider_branding.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1130,
+      "created_at": "2026-04-05T12:35:40.217Z"
+    },
+    {
+      "id": 301,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 47400,
+      "created_at": "2026-04-05T12:35:40.217Z"
     }
   ]
 }

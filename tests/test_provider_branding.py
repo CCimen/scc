@@ -214,6 +214,7 @@ _ALLOWED_PREFIXES = {"claude_"}
 # Files that legitimately contain the string as a lookup value or default
 _ALLOWED_FILES = {
     "provider_resolution.py",  # lookup table mapping "claude" -> "Claude Code"
+    "provider_registry.py",  # registry data: display_name is a factual field, not UI copy
 }
 
 # Pattern for default parameter values like `display_name: str = "Claude Code"`

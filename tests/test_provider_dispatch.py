@@ -8,7 +8,11 @@ import pytest
 
 from scc_cli.commands.launch.dependencies import build_start_session_dependencies
 from scc_cli.core.contracts import RuntimeInfo
-from scc_cli.core.errors import InvalidLaunchPlanError, ProviderNotAllowedError
+from scc_cli.core.errors import (
+    InvalidLaunchPlanError,
+    InvalidProviderError,
+    ProviderNotAllowedError,
+)
 from scc_cli.core.provider_resolution import resolve_active_provider
 from tests.fakes import build_fake_adapters
 
@@ -31,11 +35,11 @@ class TestBuildStartSessionDependenciesDispatch:
         deps = build_start_session_dependencies(adapters, provider_id="codex")
         assert deps.agent_provider is adapters.codex_agent_provider
 
-    def test_unknown_provider_falls_back_to_claude(self) -> None:
-        """Unknown provider_id not in dispatch table falls back to claude."""
+    def test_unknown_provider_raises_invalid_provider_error(self) -> None:
+        """Unknown provider_id not in dispatch table raises InvalidProviderError."""
         adapters = build_fake_adapters()
-        deps = build_start_session_dependencies(adapters, provider_id="unknown")
-        assert deps.agent_provider is adapters.agent_provider
+        with pytest.raises(InvalidProviderError):
+            build_start_session_dependencies(adapters, provider_id="unknown")
 
     def test_codex_dispatch_with_none_codex_provider_raises(self) -> None:
         """If codex_agent_provider is None, dispatch raises InvalidLaunchPlanError."""
@@ -59,10 +63,11 @@ class TestAgentRunnerDispatch:
         deps = build_start_session_dependencies(adapters, provider_id="codex")
         assert deps.agent_runner is adapters.codex_agent_runner
 
-    def test_unknown_provider_falls_back_to_claude_runner(self) -> None:
+    def test_unknown_provider_raises_invalid_provider_error_runner(self) -> None:
+        """Unknown provider_id raises before runner dispatch is reached."""
         adapters = build_fake_adapters()
-        deps = build_start_session_dependencies(adapters, provider_id="unknown")
-        assert deps.agent_runner is adapters.agent_runner
+        with pytest.raises(InvalidProviderError):
+            build_start_session_dependencies(adapters, provider_id="unknown")
 
     def test_codex_dispatch_with_none_codex_runner_raises(self) -> None:
         adapters = replace(build_fake_adapters(), codex_agent_runner=None)

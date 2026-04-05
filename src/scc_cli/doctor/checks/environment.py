@@ -300,12 +300,8 @@ def check_provider_image() -> CheckResult:
     currently selected provider. On failure, returns a CheckResult with
     ``fix_commands`` containing the exact ``docker build`` invocation.
     """
-    from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
-
-    image_map: dict[str, str] = {
-        "claude": SCC_CLAUDE_IMAGE_REF,
-        "codex": SCC_CODEX_IMAGE_REF,
-    }
+    from scc_cli.core.errors import InvalidProviderError
+    from scc_cli.core.provider_registry import get_runtime_spec
 
     # Resolve the active provider — fall back to claude if unset/unknown
     try:
@@ -315,7 +311,12 @@ def check_provider_image() -> CheckResult:
     except Exception:
         provider_id = "claude"
 
-    image_ref = image_map.get(provider_id, SCC_CLAUDE_IMAGE_REF)
+    try:
+        spec = get_runtime_spec(provider_id)
+        image_ref = spec.image_ref
+    except InvalidProviderError:
+        # Doctor is diagnostic — graceful fallback for unknown providers
+        image_ref = get_runtime_spec("claude").image_ref
 
     try:
         result = subprocess.run(

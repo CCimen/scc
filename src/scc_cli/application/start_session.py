@@ -18,11 +18,11 @@ from scc_cli.application.sync_marketplace import (
 )
 from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from scc_cli.core.bundle_resolver import BundleResolutionResult, resolve_render_plan
-from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
+from scc_cli.core.constants import SANDBOX_IMAGE
 from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
 from scc_cli.core.destination_registry import resolve_destination_sets
 from scc_cli.core.errors import RendererError, WorkspaceNotFoundError
-from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
+from scc_cli.core.provider_registry import get_runtime_spec
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
@@ -36,25 +36,6 @@ from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
 logger = logging.getLogger(__name__)
-
-# Provider → OCI image reference mapping.
-# Falls back to Claude image for unknown providers.
-_PROVIDER_IMAGE_REF: dict[str, str] = {
-    "claude": SCC_CLAUDE_IMAGE_REF,
-    "codex": SCC_CODEX_IMAGE_REF,
-}
-
-# Provider → Docker named volume for credential/data persistence.
-_PROVIDER_DATA_VOLUME: dict[str, str] = {
-    "claude": "docker-claude-sandbox-data",
-    "codex": "docker-codex-sandbox-data",
-}
-
-# Provider → config directory name under /home/agent/.
-_PROVIDER_CONFIG_DIR: dict[str, str] = {
-    "claude": ".claude",
-    "codex": ".codex",
-}
 
 
 @dataclass(frozen=True)
@@ -130,10 +111,14 @@ def prepare_start_session(
     resolver_result = _resolve_workspace_context(request)
     effective_config = _compute_effective_config(request)
     sync_result, sync_error_message = sync_marketplace_settings_for_start(request, dependencies)
+    # Resolve provider_id for settings path routing.
+    # Use request.provider_id (explicit from CLI/config), defaulting to "claude".
+    _provider_id = request.provider_id or "claude"
     agent_settings = _build_agent_settings(
         sync_result,
         dependencies.agent_runner,
         effective_config=effective_config,
+        provider_id=_provider_id,
     )
 
     # ── Bundle pipeline: resolve plans → render artifacts ─────────────────
@@ -270,6 +255,7 @@ def _build_agent_settings(
     agent_runner: AgentRunner,
     *,
     effective_config: EffectiveConfig | None,
+    provider_id: str = "claude",
 ) -> AgentSettings | None:
     settings: dict[str, Any] | None = None
     if sync_result and sync_result.rendered_settings:
@@ -283,7 +269,8 @@ def _build_agent_settings(
     if not settings:
         return None
 
-    settings_path = Path("/home/agent") / AGENT_CONFIG_DIR / "settings.json"
+    spec = get_runtime_spec(provider_id)
+    settings_path = Path("/home/agent") / spec.settings_path
     return agent_runner.build_settings(settings, path=settings_path)
 
 
@@ -310,16 +297,17 @@ def _build_sandbox_spec(
         return None
 
     # Route image, data volume, and config dir by provider_id on OCI backend.
-    # Falls back to Claude defaults for unknown providers.
+    # Raises InvalidProviderError for unknown providers (fail-closed).
     if runtime_info is not None and runtime_info.preferred_backend == "oci":
         resolved_pid = (
             agent_provider.capability_profile().provider_id
             if agent_provider is not None
             else "claude"
         )
-        image = _PROVIDER_IMAGE_REF.get(resolved_pid, SCC_CLAUDE_IMAGE_REF)
-        data_volume = _PROVIDER_DATA_VOLUME.get(resolved_pid, _PROVIDER_DATA_VOLUME["claude"])
-        config_dir = _PROVIDER_CONFIG_DIR.get(resolved_pid, _PROVIDER_CONFIG_DIR["claude"])
+        spec = get_runtime_spec(resolved_pid)
+        image = spec.image_ref
+        data_volume = spec.data_volume
+        config_dir = spec.config_dir
     else:
         resolved_pid = (
             agent_provider.capability_profile().provider_id

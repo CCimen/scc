@@ -7,9 +7,8 @@ import pytest
 from scc_cli.core.contracts import ProviderRuntimeSpec
 from scc_cli.core.errors import InvalidProviderError
 from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
+from scc_cli.core.provider_registry import PROVIDER_REGISTRY, get_runtime_spec
 from scc_cli.core.provider_resolution import KNOWN_PROVIDERS
-from scc_cli.provider_registry import PROVIDER_REGISTRY, get_runtime_spec
-
 
 # ── Claude spec ──────────────────────────────────────────────────────────
 

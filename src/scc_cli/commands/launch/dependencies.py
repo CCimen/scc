@@ -45,10 +45,18 @@ def build_start_session_dependencies(
     """Build the live start-session dependency bundle from wired adapters.
 
     Uses provider_id to dispatch the correct agent_provider and safety_adapter
-    from the available adapters. Falls back to 'claude' if provider_id is not
-    in the dispatch table.
+    from the available adapters.  Raises InvalidProviderError if provider_id
+    is not in the dispatch table.
     """
-    dispatch = _PROVIDER_DISPATCH.get(provider_id, _PROVIDER_DISPATCH[_DEFAULT_PROVIDER_ID])
+    if provider_id not in _PROVIDER_DISPATCH:
+        from scc_cli.core.errors import InvalidProviderError
+        from scc_cli.core.provider_registry import PROVIDER_REGISTRY
+
+        raise InvalidProviderError(
+            provider_id=provider_id,
+            known_providers=tuple(PROVIDER_REGISTRY.keys()),
+        )
+    dispatch = _PROVIDER_DISPATCH[provider_id]
 
     raw_provider = getattr(adapters, dispatch["agent_provider"], None)
     provider = _require_agent_provider(raw_provider)
