@@ -42,8 +42,22 @@ class TestCodexAgentRunner:
         runner = CodexAgentRunner()
         settings = runner.build_settings({}, path=DEFAULT_SETTINGS_PATH)
         command = runner.build_command(settings)
-        assert command.argv == ["codex"]
+        assert command.argv[0] == "codex"
+        # D033: must include bypass flag for container-level sandbox deferral
+        assert "--dangerously-bypass-approvals-and-sandbox" in command.argv
+        # Claude-style flag must NOT appear
         assert "--dangerously-skip-permissions" not in command.argv
+
+    def test_build_command_includes_d033_bypass_flag(self) -> None:
+        """D033: Codex launched with --dangerously-bypass-approvals-and-sandbox.
+
+        SCC's container isolation is the hard boundary; Codex's OS-level
+        sandbox is redundant inside Docker and may interfere.
+        """
+        runner = CodexAgentRunner()
+        settings = runner.build_settings({}, path=DEFAULT_SETTINGS_PATH)
+        command = runner.build_command(settings)
+        assert command.argv == ["codex", "--dangerously-bypass-approvals-and-sandbox"]
 
     def test_describe_returns_codex(self) -> None:
         runner = CodexAgentRunner()

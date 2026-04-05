@@ -54,7 +54,15 @@ class CodexAgentRunner(AgentRunner):
         return AgentSettings(rendered_bytes=rendered, path=path, suffix=".toml")
 
     def build_command(self, settings: AgentSettings) -> AgentCommand:
-        return AgentCommand(argv=["codex"], env={}, workdir=settings.path.parent)
+        # D033: SCC's container-level isolation is the hard enforcement
+        # boundary.  Codex's built-in OS-level sandbox (Seatbelt/Landlock)
+        # is redundant inside Docker and can interfere with legitimate
+        # agent operations.  Bypass it explicitly.
+        return AgentCommand(
+            argv=["codex", "--dangerously-bypass-approvals-and-sandbox"],
+            env={},
+            workdir=settings.path.parent,
+        )
 
     def describe(self) -> str:
         return "Codex"

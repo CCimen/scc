@@ -60,7 +60,7 @@ Steps:
   - Estimate: 45m
   - Files: src/scc_cli/core/contracts.py, src/scc_cli/adapters/claude_agent_runner.py, src/scc_cli/adapters/codex_agent_runner.py, src/scc_cli/adapters/oci_sandbox_runtime.py, tests/adapters/test_claude_agent_runner.py, tests/adapters/test_codex_agent_runner.py, tests/adapters/test_oci_sandbox_runtime.py
   - Verify: uv run pytest tests/adapters/test_claude_agent_runner.py tests/adapters/test_codex_agent_runner.py tests/adapters/test_oci_sandbox_runtime.py -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T04: Implement D033: Codex launch policy argv** — Current CodexAgentRunner still launches plain `codex`. D033 says launch with `codex --dangerously-bypass-approvals-and-sandbox` inside the SCC container. Implement or explicitly revise D033 if a different policy is correct. Keep runner-owned.
+- [x] **T04: CodexAgentRunner now launches `codex --dangerously-bypass-approvals-and-sandbox`, deferring OS-level sandbox to SCC's container isolation per D033** — Current CodexAgentRunner still launches plain `codex`. D033 says launch with `codex --dangerously-bypass-approvals-and-sandbox` inside the SCC container. Implement or explicitly revise D033 if a different policy is correct. Keep runner-owned.
 
 Steps:
 1. Read current CodexAgentRunner.build_command()
