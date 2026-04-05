@@ -83,7 +83,7 @@ After T01, core/constants.py no longer has AGENT_NAME, SANDBOX_IMAGE, SANDBOX_DA
   - Estimate: 25m
   - Files: src/scc_cli/adapters/oci_sandbox_runtime.py, src/scc_cli/application/start_session.py, src/scc_cli/commands/profile.py, tests/test_oci_sandbox_runtime.py, tests/test_application_start_session.py, tests/test_start_session_image_routing.py
   - Verify: uv run pytest tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py tests/test_start_session_image_routing.py -v && uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/application/start_session.py src/scc_cli/commands/profile.py && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/application/start_session.py src/scc_cli/commands/profile.py
-- [ ] **T03: Add guardrail test and run full-suite verification** — ## Description
+- [x] **T03: Added guardrail test preventing Claude-specific constants in core/constants.py; fixed ruff I001 import-sorting violation in test_oci_sandbox_runtime.py** — ## Description
 
 Add a guardrail test that prevents Claude-specific runtime constants from being re-added to core/constants.py. Verify the entire codebase has zero Claude-constant imports from core/constants.py. Run the full test suite.
 

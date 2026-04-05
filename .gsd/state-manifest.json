@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T13:56:11.574Z",
+  "exported_at": "2026-04-05T14:01:46.520Z",
   "milestones": [
     {
       "id": "M001",
@@ -6191,19 +6191,24 @@
       "milestone_id": "M007-cqttot",
       "slice_id": "S04",
       "id": "T03",
-      "title": "Add guardrail test and run full-suite verification",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added guardrail test preventing Claude-specific constants in core/constants.py; fixed ruff I001 import-sorting violation in test_oci_sandbox_runtime.py",
+      "status": "complete",
+      "one_liner": "Added guardrail test preventing Claude-specific constants in core/constants.py; fixed ruff I001 import-sorting violation in test_oci_sandbox_runtime.py",
+      "narrative": "Created tests/test_no_claude_constants_in_core.py with two tests: (1) tokenize-based scan of core/constants.py for Claude-specific NAME tokens, (2) codebase-wide scan for imports of Claude constants from core.constants. Also fixed a pre-existing ruff I001 violation in test_oci_sandbox_runtime.py caused by T02's import restructuring.",
+      "verification_result": "All four verification gates pass: ruff check (0 errors), mypy on core/constants.py (no issues), guardrail test (2/2 passed), full pytest suite (4720 passed, 23 skipped, 2 xfailed). rg scan confirms zero Claude-constant imports from core.constants.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T14:01:46.484Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed pre-existing ruff I001 violation in tests/test_oci_sandbox_runtime.py that was introduced by T02's import changes — not in the task plan but required for the ruff check gate.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_no_claude_constants_in_core.py",
+        "tests/test_oci_sandbox_runtime.py"
+      ],
+      "key_decisions": [
+        "Used tokenize-based scanning for constant definitions (per KNOWLEDGE.md) and simple string matching for import-line scanning"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S04\nmilestone: M007-cqttot\nkey_files:\n  - tests/test_no_claude_constants_in_core.py\n  - tests/test_oci_sandbox_runtime.py\nkey_decisions:\n  - Used tokenize-based scanning for constant definitions (per KNOWLEDGE.md) and simple string matching for import-line scanning\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T14:01:46.483Z\nblocker_discovered: false\n---\n\n# T03: Added guardrail test preventing Claude-specific constants in core/constants.py; fixed ruff I001 import-sorting violation in test_oci_sandbox_runtime.py\n\n**Added guardrail test preventing Claude-specific constants in core/constants.py; fixed ruff I001 import-sorting violation in test_oci_sandbox_runtime.py**\n\n## What Happened\n\nCreated tests/test_no_claude_constants_in_core.py with two tests: (1) tokenize-based scan of core/constants.py for Claude-specific NAME tokens, (2) codebase-wide scan for imports of Claude constants from core.constants. Also fixed a pre-existing ruff I001 violation in test_oci_sandbox_runtime.py caused by T02's import restructuring.\n\n## Verification\n\nAll four verification gates pass: ruff check (0 errors), mypy on core/constants.py (no issues), guardrail test (2/2 passed), full pytest suite (4720 passed, 23 skipped, 2 xfailed). rg scan confirms zero Claude-constant imports from core.constants.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 3400ms |\n| 2 | `uv run mypy src/scc_cli/core/constants.py` | 0 | ✅ pass | 45400ms |\n| 3 | `uv run pytest tests/test_no_claude_constants_in_core.py -v` | 0 | ✅ pass | 12600ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 50800ms |\n\n## Deviations\n\nFixed pre-existing ruff I001 violation in tests/test_oci_sandbox_runtime.py that was introduced by T02's import changes — not in the task plan but required for the ruff check gate.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_no_claude_constants_in_core.py`\n- `tests/test_oci_sandbox_runtime.py`\n",
       "description": "## Description\n\nAdd a guardrail test that prevents Claude-specific runtime constants from being re-added to core/constants.py. Verify the entire codebase has zero Claude-constant imports from core/constants.py. Run the full test suite.\n\nThe guardrail test follows the established pattern in tests/test_provider_branding.py (TestNoCloudeCodeInNonAdapterModules) — it scans source and fails on violations.\n\n## Steps\n\n1. Create `tests/test_no_claude_constants_in_core.py` with:\n   - A test class `TestNoCloudeSpecificConstantsInCore` that reads `src/scc_cli/core/constants.py` and asserts none of the known Claude-specific constant names are defined there\n   - Known Claude constant names to check: `AGENT_NAME`, `SANDBOX_IMAGE`, `AGENT_CONFIG_DIR`, `SANDBOX_DATA_VOLUME`, `SANDBOX_DATA_MOUNT`, `CREDENTIAL_PATHS`, `OAUTH_CREDENTIAL_KEY`, `DEFAULT_MARKETPLACE_REPO`\n   - Use Python's `tokenize` module (per KNOWLEDGE.md guidance) to scan for NAME tokens matching these constants, avoiding false positives from comments or strings\n   - A second test `test_no_claude_constant_imports_from_core` that scans all .py files under `src/scc_cli/` for `from.*core.constants import` lines containing any of the Claude-specific constant names\n   - Both tests should produce actionable error messages listing the exact file and line\n\n2. Verify the guardrail test passes: `uv run pytest tests/test_no_claude_constants_in_core.py -v`\n\n3. Run rg scan to confirm zero Claude-constant imports from core.constants across the codebase: `rg 'from.*core\\.constants import.*(AGENT_NAME|SANDBOX_IMAGE|SANDBOX_DATA_VOLUME|SANDBOX_DATA_MOUNT|OAUTH_CREDENTIAL_KEY|AGENT_CONFIG_DIR|CREDENTIAL_PATHS|DEFAULT_MARKETPLACE_REPO)' src/scc_cli/`\n\n4. Run full suite: `uv run pytest -q` — must pass with zero regressions\n\n5. Run `uv run ruff check` and `uv run mypy src/scc_cli/core/constants.py` for final lint/type check\n\n## Must-Haves\n\n- [ ] Guardrail test exists and passes\n- [ ] Guardrail test would fail if a Claude constant were re-added to core/constants.py (verify by temporarily adding one)\n- [ ] Full test suite passes with zero regressions\n- [ ] Zero Claude-constant imports from core.constants in src/scc_cli/",
       "estimate": "20m",
       "files": [
@@ -10258,6 +10263,50 @@
       "verdict": "✅ pass",
       "duration_ms": 4500,
       "created_at": "2026-04-05T13:56:11.512Z"
+    },
+    {
+      "id": 323,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 3400,
+      "created_at": "2026-04-05T14:01:46.484Z"
+    },
+    {
+      "id": 324,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli/core/constants.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 45400,
+      "created_at": "2026-04-05T14:01:46.484Z"
+    },
+    {
+      "id": 325,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_no_claude_constants_in_core.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 12600,
+      "created_at": "2026-04-05T14:01:46.484Z"
+    },
+    {
+      "id": 326,
+      "task_id": "T03",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 50800,
+      "created_at": "2026-04-05T14:01:46.484Z"
     }
   ]
 }
