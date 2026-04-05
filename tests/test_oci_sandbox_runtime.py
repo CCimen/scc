@@ -12,15 +12,19 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.adapters.oci_sandbox_runtime import (
+    _AGENT_HOME,
+    _AGENT_UID,
+    _AUTH_FILES,
+    _OCI_LABEL,
+    OciSandboxRuntime,
+    _container_name,
+    _normalize_provider_permissions,
+)
+from scc_cli.adapters.oci_sandbox_runtime import (
     _CLAUDE_AGENT_NAME as AGENT_NAME,
 )
 from scc_cli.adapters.oci_sandbox_runtime import (
     _CLAUDE_DATA_VOLUME as SANDBOX_DATA_VOLUME,
-)
-from scc_cli.adapters.oci_sandbox_runtime import (
-    _OCI_LABEL,
-    OciSandboxRuntime,
-    _container_name,
 )
 from scc_cli.core.contracts import RuntimeInfo
 from scc_cli.core.errors import (
@@ -143,8 +147,8 @@ class TestRun:
         spec = _minimal_spec()
         handle = runtime.run(spec)
 
-        # Two calls: docker create, docker start
-        assert mock_run_docker.call_count == 2
+        # Calls: create, start, normalize-dir, normalize-auth
+        assert mock_run_docker.call_count == 4
 
         create_args = mock_run_docker.call_args_list[0]
         create_cmd: list[str] = create_args[0][0]
@@ -260,9 +264,9 @@ class TestRun:
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
 
-        # 3 calls: create, start, cp (for settings)
-        assert mock_run_docker.call_count == 3
-        cp_cmd: list[str] = mock_run_docker.call_args_list[2][0][0]
+        # 5 calls: create, start, normalize-dir, normalize-auth, cp
+        assert mock_run_docker.call_count == 5
+        cp_cmd: list[str] = mock_run_docker.call_args_list[4][0][0]
         assert cp_cmd[0] == "cp"
         assert "cid123:" in cp_cmd[2]
 
@@ -282,8 +286,8 @@ class TestRun:
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
 
-        # The cp call should use a .toml suffix temp file
-        cp_cmd: list[str] = mock_run_docker.call_args_list[2][0][0]
+        # The cp call should use a .toml suffix temp file (after normalization)
+        cp_cmd: list[str] = mock_run_docker.call_args_list[4][0][0]
         assert cp_cmd[0] == "cp"
         assert cp_cmd[1].endswith(".toml")  # temp file suffix
 
@@ -633,10 +637,13 @@ class TestWorkspaceScopedConfigInjection:
         assert len(mkdir_calls) == 1
         assert f"{workspace_target}/.codex" in " ".join(mkdir_calls[0])
 
-        # Find the git exclude shell command
-        exec_calls = [c for c in all_calls if "sh" in c and "-c" in c]
-        assert len(exec_calls) == 1
-        shell_cmd = exec_calls[0][-1]  # The shell command string
+        # Find the git exclude shell command (filter out D039 normalization)
+        git_exclude_calls = [
+            c for c in all_calls
+            if "sh" in c and "-c" in c and ".git/info/exclude" in c[-1]
+        ]
+        assert len(git_exclude_calls) == 1
+        shell_cmd = git_exclude_calls[0][-1]
         assert ".codex" in shell_cmd
         assert ".git/info/exclude" in shell_cmd
 
@@ -655,12 +662,18 @@ class TestWorkspaceScopedConfigInjection:
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
 
-        # Only 3 calls: create, start, cp (no mkdir or git exclude)
-        assert mock_run_docker.call_count == 3
+        # 5 calls: create, start, normalize-dir, normalize-auth, cp (no mkdir or git exclude)
+        assert mock_run_docker.call_count == 5
         all_calls = [call[0][0] for call in mock_run_docker.call_args_list]
         assert all_calls[0][0] == "create"
         assert all_calls[1] == ["start", "cid123"]
-        assert all_calls[2][0] == "cp"
+        # Normalization exec calls at 2 and 3
+        assert all_calls[2][0] == "exec"
+        assert all_calls[3][0] == "exec"
+        assert all_calls[4][0] == "cp"
+        # No git-exclude calls
+        git_exclude_calls = [c for c in all_calls if "-c" in c and ".git/info/exclude" in str(c)]
+        assert len(git_exclude_calls) == 0
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
@@ -688,3 +701,165 @@ class TestWorkspaceScopedConfigInjection:
         assert "cid123:" in cp_target
         assert str(workspace_target / ".codex" / "config.toml") in cp_target
         assert "/home/agent" not in cp_target
+
+
+# ── D039: Runtime permission normalization ───────────────────────────────────
+
+
+class TestNormalizeProviderPermissions:
+    """D039: Verify permission normalization command construction."""
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_claude_config_dir_chmod_and_chown(self, mock_run: MagicMock) -> None:
+        """Claude (.claude) config dir gets 0700, uid 1000."""
+        _normalize_provider_permissions("cid123", ".claude")
+
+        # First call: chown+chmod the config dir
+        dir_call = mock_run.call_args_list[0]
+        dir_cmd: list[str] = dir_call[0][0]
+        assert dir_cmd[:3] == ["exec", "cid123", "sh"]
+        shell_str = dir_cmd[-1]
+        assert f"chown {_AGENT_UID}:{_AGENT_UID} {_AGENT_HOME}/.claude" in shell_str
+        assert f"chmod 0700 {_AGENT_HOME}/.claude" in shell_str
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_claude_auth_file_chmod(self, mock_run: MagicMock) -> None:
+        """Claude auth file (.credentials.json) gets 0600 if it exists."""
+        _normalize_provider_permissions("cid123", ".claude")
+
+        # Second call: auth file chmod
+        assert mock_run.call_count == 2
+        auth_call = mock_run.call_args_list[1]
+        auth_cmd: list[str] = auth_call[0][0]
+        shell_str = auth_cmd[-1]
+        assert "test -f" in shell_str
+        assert ".credentials.json" in shell_str
+        assert "chmod 0600" in shell_str
+        assert f"chown {_AGENT_UID}:{_AGENT_UID}" in shell_str
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_codex_config_dir_chmod_and_chown(self, mock_run: MagicMock) -> None:
+        """Codex (.codex) config dir gets 0700, uid 1000."""
+        _normalize_provider_permissions("cid123", ".codex")
+
+        dir_call = mock_run.call_args_list[0]
+        shell_str = dir_call[0][0][-1]
+        assert f"chown {_AGENT_UID}:{_AGENT_UID} {_AGENT_HOME}/.codex" in shell_str
+        assert f"chmod 0700 {_AGENT_HOME}/.codex" in shell_str
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_codex_auth_file_chmod(self, mock_run: MagicMock) -> None:
+        """Codex auth file (auth.json) gets 0600 if it exists."""
+        _normalize_provider_permissions("cid123", ".codex")
+
+        assert mock_run.call_count == 2
+        auth_call = mock_run.call_args_list[1]
+        shell_str = auth_call[0][0][-1]
+        assert "auth.json" in shell_str
+        assert "chmod 0600" in shell_str
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_unknown_config_dir_skips_auth_files(self, mock_run: MagicMock) -> None:
+        """Unknown config dir has no known auth files — only dir chmod runs."""
+        _normalize_provider_permissions("cid123", ".future-provider")
+
+        # Only one call — the directory chmod; no auth file calls
+        assert mock_run.call_count == 1
+        shell_str = mock_run.call_args_list[0][0][0][-1]
+        assert ".future-provider" in shell_str
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_empty_config_dir_defaults_to_claude(self, mock_run: MagicMock) -> None:
+        """Empty config_dir falls back to .claude (matches _build_create_cmd default)."""
+        _normalize_provider_permissions("cid123", "")
+
+        dir_call = mock_run.call_args_list[0]
+        shell_str = dir_call[0][0][-1]
+        assert f"{_AGENT_HOME}/.claude" in shell_str
+        # Should also check .credentials.json
+        assert mock_run.call_count == 2
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_check_false_on_all_calls(self, mock_run: MagicMock) -> None:
+        """All normalization commands are best-effort (check=False)."""
+        _normalize_provider_permissions("cid123", ".claude")
+
+        for call in mock_run.call_args_list:
+            assert call[1].get("check") is False
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_auth_files_registry_consistency(self, mock_run: MagicMock) -> None:
+        """_AUTH_FILES has entries for both known providers."""
+        assert ".claude" in _AUTH_FILES
+        assert ".codex" in _AUTH_FILES
+        assert ".credentials.json" in _AUTH_FILES[".claude"]
+        assert "auth.json" in _AUTH_FILES[".codex"]
+
+
+class TestNormalizePermissionsIntegration:
+    """D039: Verify normalization is called in the run() flow."""
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_normalization_called_in_run_for_claude(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """run() calls normalization between start and settings injection."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        spec = _minimal_spec()  # defaults to Claude (empty config_dir)
+        runtime.run(spec)
+
+        # Calls: create, start, dir-chmod, auth-chmod, exec(via execvp)
+        all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
+        assert all_cmds[0][0] == "create"
+        assert all_cmds[1] == ["start", "cid123"]
+        # Normalization calls (check=False) at positions 2 and 3
+        assert all_cmds[2][0] == "exec"  # dir chmod
+        assert "chmod 0700" in all_cmds[2][-1]
+        assert all_cmds[3][0] == "exec"  # auth file chmod
+        assert "chmod 0600" in all_cmds[3][-1]
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_normalization_called_in_run_for_codex(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """run() calls normalization with Codex config dir."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        spec = _minimal_spec(config_dir=".codex")
+        runtime.run(spec)
+
+        all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
+        # Dir chmod references .codex
+        dir_shell = all_cmds[2][-1]
+        assert ".codex" in dir_shell
+        assert "chmod 0700" in dir_shell
+        # Auth chmod references auth.json
+        auth_shell = all_cmds[3][-1]
+        assert "auth.json" in auth_shell
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_normalization_before_settings_injection(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Normalization runs before docker cp (settings injection)."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        settings = AgentSettings(
+            rendered_bytes=b'{"permissions": {}}',
+            path=Path("/home/agent/.claude/settings.json"),
+            suffix=".json",
+        )
+        spec = _minimal_spec(agent_settings=settings)
+        runtime.run(spec)
+
+        all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
+        # Find positions: cp must come after normalization exec calls
+        cp_indices = [i for i, c in enumerate(all_cmds) if c[0] == "cp"]
+        norm_indices = [
+            i for i, c in enumerate(all_cmds)
+            if c[0] == "exec" and "chmod" in str(c)
+        ]
+        assert len(cp_indices) >= 1
+        assert len(norm_indices) >= 1
+        assert all(ni < cp_indices[0] for ni in norm_indices)

@@ -47,6 +47,15 @@ _CLAUDE_DATA_VOLUME = "docker-claude-sandbox-data"
 # Agent home inside the container
 _AGENT_HOME = "/home/agent"
 
+# Agent UID inside the container
+_AGENT_UID = 1000
+
+# Known auth file names per provider config dir (D039 permission targets)
+_AUTH_FILES: dict[str, tuple[str, ...]] = {
+    ".claude": (".credentials.json",),
+    ".codex": ("auth.json",),
+}
+
 
 def _container_name(workspace: Path, provider_id: str = "") -> str:
     """Derive a deterministic container name from a workspace path and provider.
@@ -133,6 +142,54 @@ def _ensure_workspace_config_excluded(
     )
 
 
+def _normalize_provider_permissions(
+    container_id: str,
+    config_dir: str,
+) -> None:
+    """Normalise ownership and permissions on the provider state directory.
+
+    D039: Build-time Dockerfile permissions only apply when the volume is
+    first populated.  Runtime normalisation ensures that provider config
+    dirs are always 0700 and auth files are always 0600, owned by the
+    agent uid, regardless of volume history.
+
+    Best-effort: failures are non-fatal — the agent session can still
+    launch even if a ``chmod``/``chown`` fails (e.g. auth file does not
+    exist yet on a fresh volume).
+    """
+    config_dirname = config_dir if config_dir else ".claude"
+    config_path = f"{_AGENT_HOME}/{config_dirname}"
+
+    # 1. chown + chmod the provider config directory itself
+    _run_docker(
+        [
+            "exec", container_id,
+            "sh", "-c",
+            f"chown {_AGENT_UID}:{_AGENT_UID} {config_path} && chmod 0700 {config_path}",
+        ],
+        timeout=_DEFAULT_TIMEOUT,
+        check=False,
+    )
+
+    # 2. chmod known auth files to 0600 (if they exist)
+    auth_files = _AUTH_FILES.get(config_dirname, ())
+    for auth_file in auth_files:
+        auth_path = f"{config_path}/{auth_file}"
+        _run_docker(
+            [
+                "exec", container_id,
+                "sh", "-c",
+                (
+                    f"test -f {auth_path} && "
+                    f"chown {_AGENT_UID}:{_AGENT_UID} {auth_path} && "
+                    f"chmod 0600 {auth_path}"
+                ),
+            ],
+            timeout=_DEFAULT_TIMEOUT,
+            check=False,
+        )
+
+
 class OciSandboxRuntime:
     """SandboxRuntime backed by plain OCI container commands.
 
@@ -211,6 +268,9 @@ class OciSandboxRuntime:
 
         # -- Start the container -------------------------------------------
         _run_docker(["start", container_id], timeout=_START_TIMEOUT)
+
+        # -- D039: normalise provider state permissions --------------------
+        _normalize_provider_permissions(container_id, spec.config_dir)
 
         # -- Inject agent settings via docker cp if needed -----------------
         if spec.agent_settings is not None:

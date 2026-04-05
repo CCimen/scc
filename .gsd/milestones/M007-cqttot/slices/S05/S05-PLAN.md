@@ -118,7 +118,7 @@ Steps:
   - Estimate: 35m
   - Files: src/scc_cli/adapters/oci_sandbox_runtime.py, src/scc_cli/commands/launch/start_session.py, tests/adapters/test_oci_sandbox_runtime.py, tests/commands/launch/test_start_session.py
   - Verify: uv run pytest tests/adapters/test_oci_sandbox_runtime.py tests/commands/launch/ -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T09: Implement D039: runtime permission normalization** — Build-time Dockerfile permissions are not enough. Runtime launch must normalize mounted provider state permissions. Provider state dir 0700, auth files 0600, uid 1000 ownership. Scoped to provider state/auth paths only.
+- [x] **T09: Added runtime permission normalization step to OCI launch path: provider config dir 0700, auth files 0600, uid 1000 ownership via docker exec after container start** — Build-time Dockerfile permissions are not enough. Runtime launch must normalize mounted provider state permissions. Provider state dir 0700, auth files 0600, uid 1000 ownership. Scoped to provider state/auth paths only.
 
 Steps:
 1. Read current OCI runtime launch sequence
