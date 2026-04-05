@@ -28,13 +28,13 @@ def get_version_header(version: str) -> str:
     if supports_unicode():
         return (
             "╭───────────────────────────────────────╮\n"
-            f"│  [cyan bold]SCC[/cyan bold]  Sandboxed Claude CLI  [dim]{v_padded}[/dim] │\n"
+            f"│  [cyan bold]SCC[/cyan bold]  Sandboxed Code CLI   [dim]{v_padded}[/dim] │\n"
             "╰───────────────────────────────────────╯"
         )
     else:
         return (
             "+---------------------------------------+\n"
-            f"|  [cyan bold]SCC[/cyan bold]  Sandboxed Claude CLI  [dim]{v_padded}[/dim] |\n"
+            f"|  [cyan bold]SCC[/cyan bold]  Sandboxed Code CLI   [dim]{v_padded}[/dim] |\n"
             "+---------------------------------------+"
         )
 
@@ -59,10 +59,19 @@ def get_doctor_header() -> str:
         )
 
 
-def get_brand_tagline() -> str:
+def get_brand_tagline(provider_id: str | None = None) -> str:
     """Get the brand tagline for SCC.
+
+    Args:
+        provider_id: Optional provider ID. When given, the provider's
+            display name is appended to the tagline.
 
     Returns:
         The official tagline string.
     """
-    return "Safe development environment manager for Claude Code"
+    base = "Safe development environment manager"
+    if provider_id is not None:
+        from scc_cli.core.provider_resolution import get_provider_display_name
+
+        return f"{base} for {get_provider_display_name(provider_id)}"
+    return base

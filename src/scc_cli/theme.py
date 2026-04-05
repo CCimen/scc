@@ -339,10 +339,10 @@ def get_brand_header(*, unicode: bool | None = None) -> str:
     if use_unicode:
         return """\
 ╭───────────────────────────────────────╮
-│  SCC  Sandboxed Claude CLI            │
+│  SCC  Sandboxed Code CLI              │
 ╰───────────────────────────────────────╯"""
     else:
         return """\
 +---------------------------------------+
-|  SCC  Sandboxed Claude CLI            |
+|  SCC  Sandboxed Code CLI              |
 +---------------------------------------+"""

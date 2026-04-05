@@ -13,6 +13,26 @@ KNOWN_PROVIDERS: tuple[str, ...] = ("claude", "codex")
 
 _DEFAULT_PROVIDER: str = "claude"
 
+_PROVIDER_DISPLAY_NAMES: dict[str, str] = {
+    "claude": "Claude Code",
+    "codex": "Codex",
+}
+
+
+def get_provider_display_name(provider_id: str) -> str:
+    """Return a human-readable display name for a provider.
+
+    Known providers map to their canonical display names.
+    Unknown providers get title-cased.
+
+    Args:
+        provider_id: The provider identifier (e.g. "claude", "codex").
+
+    Returns:
+        Human-readable display name.
+    """
+    return _PROVIDER_DISPLAY_NAMES.get(provider_id, provider_id.title())
+
 
 def resolve_active_provider(
     cli_flag: str | None,
