@@ -340,6 +340,26 @@ class ProviderNotAllowedError(PolicyViolationError):
 
 
 @dataclass
+class InvalidProviderError(SCCError):
+    """Provider ID is not recognised by the runtime registry."""
+
+    provider_id: str = ""
+    known_providers: tuple[str, ...] = ()
+    exit_code: int = field(default=2, init=False)
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = (
+                f"Unknown provider '{self.provider_id}'. "
+                f"Known providers: {', '.join(self.known_providers)}"
+            )
+        if not self.suggested_action:
+            self.suggested_action = f"Use one of: {', '.join(self.known_providers)}"
+
+
+@dataclass
 class LaunchPreflightError(ConfigError):
     """Launch was blocked before runtime startup."""
 

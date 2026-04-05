@@ -49,6 +49,7 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
+7. **M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup** ← active
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all six milestones.
@@ -65,13 +66,10 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 - Legacy module coverage (docker_sandbox_runtime 30%, overall 73%) — deprioritized per D017/D021 user overrides
 - Portable MCP stdio transport support — requires additional source metadata
 - Live bundle registry integration — renderers write metadata references only
-- ProviderRuntimeSpec frozen dataclass — dict lookups sufficient for 2 providers, add if third provider introduced
 - Dashboard provider switching TUI feature (dashboard 'a' key)
-- Quick Resume provider mismatch prompt
-- Full typed error hierarchy (UnsupportedProviderError, ProviderNotReadyError, etc.)
-- scc doctor --provider flag for explicit provider readiness checking
 - Container labels (scc.provider=<id>) for external tooling discovery
 - Image build/push pipeline for scc-agent-codex
+- Podman support on the same SandboxRuntime contracts
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -101,7 +99,14 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 - Portable artifacts (skills, MCP servers) without provider bindings are renderable via PortableArtifact metadata in ArtifactRenderPlan (D023).
 - Only SKILL and MCP_SERVER kinds qualify as portable — NATIVE_INTEGRATION always requires provider-specific bindings.
 - Provider dispatch is request-scoped in `build_start_session_dependencies()`, not baked into the lru_cached DefaultAdapters singleton (D028). Shared infra stays cached; provider-specific adapters are selected per invocation.
-- SandboxSpec field-forwarding pattern: application layer resolves provider_id → concrete values (image, volume, config_dir, argv) via dict lookups; infrastructure adapter consumes spec fields with empty-string/empty-tuple fallbacks to existing constants. Infrastructure never inspects provider_id.
+- SandboxSpec field-forwarding pattern: application layer resolves provider_id → concrete values (image, volume, config_dir) via ProviderRuntimeSpec lookup; infrastructure adapter consumes spec fields and fails clearly if required fields are empty. Infrastructure never inspects provider_id.
+- ProviderRuntimeSpec (frozen dataclass) is defined in core/contracts.py; PROVIDER_REGISTRY (concrete entries) lives in src/scc_cli/provider_registry.py — a top-level composition module accessible to all consumers (D034, supersedes D031).
+- Unknown, forbidden, or unavailable providers fail closed in active launch logic — never silently fall back to Claude. Legacy Claude defaults are permitted only at migration/read boundaries (D032).
+- AgentRunner owns settings serialization format: build_settings() produces rendered_bytes, not dict. OCI runtime writes bytes verbatim — no format assumption (D035).
+- Launch argv is runner-owned via build_command(), not guessed by infrastructure. SandboxSpec.agent_argv must be populated; OCI runtime fails on empty argv (no Claude fallback).
+- SCC launches Codex with --dangerously-bypass-approvals-and-sandbox inside the hardened SCC container; Codex's OS-level sandbox is redundant under SCC's container isolation (D033).
+- V1 persistence model: one named volume per provider mapped to full config dir. Auth, config, and history persist between containers. SCC-managed launch config is ephemeral *in effect* because SCC deterministically writes it on every fresh launch, even when empty (D038). Auth files require strict permissions (dir 0700, files 0600, uid 1000) enforced both at image build time and at runtime via normalization (D039). Codex forces file-based auth in containers (D040). Fine-grained volume splitting deferred (D036).
+- Auth readiness checking is adapter-owned via AgentProvider.auth_check() → AuthReadiness. Core never hardcodes auth file names. Future scc auth commands compose on this model (D037).
 - `get_provider_display_name()` is the single source for provider-to-human-name mapping — all UI surfaces use it instead of raw provider IDs.
 - Guardrail test `TestNoCloudeCodeInNonAdapterModules` prevents regression of hardcoded provider references in non-adapter code.
 - provider_id is threaded through session recording, dry-run JSON, support bundle manifest, session list JSON, and container naming hash — all machine-readable outputs carry provider identity.

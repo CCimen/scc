@@ -174,6 +174,31 @@ class AuditEvent:
 
 
 @dataclass(frozen=True)
+class ProviderRuntimeSpec:
+    """Frozen runtime constants for a known agent provider.
+
+    Centralises image ref, config directory, settings path, and data
+    volume in one place so that scattered dicts can be replaced with a
+    single registry lookup.
+
+    Attributes:
+        provider_id: Stable provider identifier (e.g. ``claude``, ``codex``).
+        display_name: Human-readable provider name.
+        image_ref: OCI image reference string for the provider container.
+        config_dir: Provider config directory name under ``/home/agent/``.
+        settings_path: Relative path to the provider settings file.
+        data_volume: Docker named volume for credential/data persistence.
+    """
+
+    provider_id: str
+    display_name: str
+    image_ref: str
+    config_dir: str
+    settings_path: str
+    data_volume: str
+
+
+@dataclass(frozen=True)
 class ProviderCapabilityProfile:
     """Provider-neutral description of adapter capabilities and requirements.
 

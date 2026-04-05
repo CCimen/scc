@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T01:41:58.743Z",
+  "exported_at": "2026-04-05T12:25:38.650Z",
   "milestones": [
     {
       "id": "M001",
@@ -233,6 +233,100 @@
       ],
       "requirement_coverage": "R001 \\u2014 Replaces hardcoded Claude assumptions with provider-neutral dispatch throughout the launch path, container/volume/session identity, TUI, and diagnostics. Request-scoped resolution prevents stale caching. Policy validation enforces org intent.",
       "boundary_map_markdown": "```\\nUser Config (selected_provider) \\u2500\\u2500\\u2510\\nCLI flag (--provider)             \\u2500\\u2500\\u253c\\u2500\\u2500\\u25b6 resolve_active_provider() [per-invocation]\\n                                       \\u2502\\n                                       \\u251c\\u2500\\u2500\\u25b6 validate_provider_allowed(org_config, team) [policy check]\\n                                       \\u2502\\n                                       \\u251c\\u2500\\u2500\\u25b6 ProviderRuntimeSpec (image, binary, config_dir, volume, display_name)\\n                                       \\u251c\\u2500\\u2500\\u25b6 agent_provider (ClaudeAgentProvider | CodexAgentProvider)\\n                                       \\u251c\\u2500\\u2500\\u25b6 agent_runner (ClaudeAgentRunner | CodexAgentRunner)\\n                                       \\u251c\\u2500\\u2500\\u25b6 safety_adapter (ClaudeSafetyAdapter | CodexSafetyAdapter)\\n                                       \\u2502\\n                                       \\u25bc\\n                              start_session \\u2500\\u2500\\u25b6 SandboxSpec (image, agent_binary, data_volume from ProviderRuntimeSpec)\\n                                       \\u2502\\n                                       \\u25bc\\n                              OCI runtime (binary, volume, container_name include provider_id)\\n                                       \\u2502\\n                                       \\u251c\\u2500\\u2500\\u25b6 SessionRecord (provider_id) + Container label (scc.provider=<id>)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Quick Resume (filters workspace+team+provider)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Resume (mismatch detection)\\n                                       \\u251c\\u2500\\u2500\\u25b6 TUI (launch panel, dashboard, sessions, containers)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Doctor (backend health + provider readiness)\\n                                       \\u251c\\u2500\\u2500\\u25b6 Machine outputs (dry-run JSON, audit events, session --json, support bundle)\\n                                       \\u2514\\u2500\\u2500\\u25b6 Branding (provider-aware display + feature gating)\\n```"
+    },
+    {
+      "id": "M007-cqttot",
+      "title": "Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup",
+      "status": "queued",
+      "depends_on": [],
+      "created_at": "2026-04-05T10:47:59.855Z",
+      "completed_at": null,
+      "vision": "SCC stops leaking Claude assumptions through shared/core/operator paths. ProviderRuntimeSpec model replaces scattered dicts. Settings serialization is provider-owned (JSON for Claude, TOML for Codex). SCC uses provider-native config layering to inject managed settings without overwriting user config — Claude settings.json is SCC-owned, Codex project-scoped .codex/config.toml is SCC-owned, user-level config in the persistent volume is never touched. Unknown providers fail closed. Config freshness is deterministic on every fresh launch. Auth persistence is intentional with runtime permission normalization and file-based Codex auth. Doctor separates backend, image, and auth readiness. Product naming is consistent. Legacy Claude paths are isolated.",
+      "success_criteria": [
+        "ProviderRuntimeSpec in core/contracts.py with provider_id, display_name, image_ref, config_dir, settings_path, data_volume.",
+        "PROVIDER_REGISTRY in provider_registry.py with fail-closed get_runtime_spec().",
+        "AgentSettings carries rendered_bytes:bytes + path:Path. Runners serialize format. OCI writes verbatim.",
+        "Claude settings injected to .claude/settings.json (SCC-owned). Codex settings injected to workspace .codex/config.toml (project-scoped, SCC-owned). User-level config in volume never modified.",
+        "Unknown provider raises InvalidProviderError. No silent Claude fallback in active logic.",
+        "OCI runtime fails clearly on missing agent_argv, data_volume, or config_dir.",
+        "CodexAgentRunner uses --dangerously-bypass-approvals-and-sandbox (D033).",
+        "Codex project config includes cli_auth_credentials_store='file' (D040).",
+        "Config freshness: SCC writes its config layer on every fresh launch even when empty. Resume skips. Tests: governed→standalone, teamA→teamB, settings→no-settings.",
+        "User/provider-owned persistent settings are preserved across launches. Test: user config.toml preferences survive fresh SCC launch.",
+        "Runtime permission normalization on every fresh launch: config dir 0700, auth files 0600, uid 1000.",
+        ".scc-provider-state.json in volume with provider_id, layout_version, auth_storage_mode.",
+        "AuthReadiness(status, mechanism, guidance). Doctor wording: 'auth cache present' not 'logged in'.",
+        "constants.py shared-only. Claude constants in docker/constants.py. Guardrail test.",
+        "Sessions helper provider-parameterized. Audit from provider. sandbox.py records 'claude'.",
+        "Quick Resume shows provider, warns on mismatch.",
+        "Doctor --provider flag. Backend→image→auth readiness sections.",
+        "Typed errors: InvalidProviderError, ProviderNotReadyError, ProviderImageMissingError.",
+        "provider_id in dry-run JSON, support bundle, audit events, session list --json.",
+        "scc-base: both config dirs 0700 uid 1000. scc-agent-codex: ARG CODEX_VERSION, cache cleanup.",
+        "README and surfaces use 'SCC — Sandboxed Code CLI'. D-001 updated.",
+        "Exit gate: ruff, mypy, pytest pass."
+      ],
+      "key_risks": [
+        {
+          "risk": "Codex project-scoped config requires workspace .codex/ dir creation and trust handling",
+          "whyItMatters": "Codex only loads project config from trusted projects. SCC must ensure the container workspace is trusted or use CLI flag overrides."
+        },
+        {
+          "risk": "AgentSettings model change touches protocol, runners, fakes, OCI runtime",
+          "whyItMatters": "Small but precise protocol change."
+        },
+        {
+          "risk": "TOML writing requires tomli_w or manual generation",
+          "whyItMatters": "Dependency decision."
+        },
+        {
+          "risk": "Moving constants has 34+ import sites",
+          "whyItMatters": "High blast radius in docker/."
+        }
+      ],
+      "proof_strategy": [
+        {
+          "riskOrUnknown": "Config ownership — user preferences survive SCC launch",
+          "retireIn": "S02",
+          "whatWillBeProven": "Test: user-level config.toml in volume is not modified by SCC fresh launch. Test: SCC project config overrides user defaults."
+        },
+        {
+          "riskOrUnknown": "Settings format and path",
+          "retireIn": "S02",
+          "whatWillBeProven": "Test: Codex config is TOML at workspace .codex/config.toml. Claude is JSON at .claude/settings.json."
+        },
+        {
+          "riskOrUnknown": "Stale config leakage",
+          "retireIn": "S02",
+          "whatWillBeProven": "Tests: governed→standalone, teamA→teamB, settings→no-settings."
+        },
+        {
+          "riskOrUnknown": "Silent Claude fallback",
+          "retireIn": "S01",
+          "whatWillBeProven": "Tests: unknown provider raises. Empty argv/volume/config raises."
+        },
+        {
+          "riskOrUnknown": "Auth persistence",
+          "retireIn": "S03",
+          "whatWillBeProven": "Test: auth_check returns present when volume has auth. Returns missing with guidance when absent."
+        }
+      ],
+      "verification_contract": "Each slice: targeted tests + full regression gate.",
+      "verification_integration": "S01 registry consumed by S02-S04. S02 config model consumed by S03 auth check. Full suite at each boundary.",
+      "verification_operational": "Doctor for backend/image/auth. Config freshness across scenarios. Permissions. Auth storage. User config preservation.",
+      "verification_uat": "All surfaces tested programmatically.",
+      "definition_of_done": [
+        "All success criteria verified.",
+        "SCC never overwrites user-level provider config.",
+        "SCC config layer is deterministically fresh.",
+        "Unknown providers fail closed.",
+        "AgentRunner owns serialization.",
+        "Auth persists, permissions enforced.",
+        "README says 'Sandboxed Code CLI'.",
+        "Exit gate passes."
+      ],
+      "requirement_coverage": "R001 (maintainability): typed registry, provider-owned serialization, provider-native config layering, fail-closed resolution, constant isolation.",
+      "boundary_map_markdown": "```\\nSCC config ownership:\\n  Claude: SCC writes .claude/settings.json (container)\\n         User owns .claude/settings.local.json (volume)\\n  Codex:  SCC writes /workspace/.codex/config.toml (workspace mount)\\n         User owns ~/.codex/config.toml (volume)\\n\\nprovider_registry.py: PROVIDER_REGISTRY, get_runtime_spec() [fail-closed]\\ncore/contracts.py: ProviderRuntimeSpec, AgentSettings(rendered_bytes), AuthReadiness\\nadapters/: Runners own serialization + command. Providers own auth_check.\\nOCI runtime: format-agnostic, config freshness, permission normalization.\\ndocker/: Claude-only, docker/constants.py.\\nconstants.py: shared-only.\\n```"
     }
   ],
   "slices": [
@@ -920,6 +1014,117 @@
       "proof_level": "This slice proves: contract + integration. Real runtime required: no (all verification is unit-level with mocks). Human/UAT required: no.",
       "integration_closure": "Upstream surfaces consumed: `resolve_active_provider()` from S01, `_PROVIDER_DISPATCH` from S01, `_PROVIDER_IMAGE_REF`/`_PROVIDER_DATA_VOLUME`/`_PROVIDER_CONFIG_DIR` dicts from S02, `get_provider_display_name()` from S03, `SandboxSpec` fields from S02, branding guardrail from S03. New wiring: provider_id threaded into session recording, dry-run output, support bundle, container naming, and doctor checks. What remains: nothing — this is the final slice of M006.",
       "observability_impact": "Doctor check for provider image adds a new diagnostic surface. Support bundle manifest gains provider_id for triage. Session list gains provider_id for filtering and operator visibility.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "id": "S01",
+      "title": "ProviderRuntimeSpec model, fail-closed dispatch, and settings-path fix",
+      "status": "pending",
+      "risk": "high",
+      "depends": [],
+      "demo": "ProviderRuntimeSpec defined in core/contracts.py. PROVIDER_REGISTRY in dependencies.py with get_runtime_spec() fail-closed lookup. _build_agent_settings uses spec.settings_path. Unknown provider_id raises InvalidProviderError. Full test suite passes.",
+      "created_at": "2026-04-05T10:50:01.315Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "ProviderRuntimeSpec frozen dataclass in core/contracts.py. provider_registry.py with PROVIDER_REGISTRY dict and fail-closed get_runtime_spec() lookup. InvalidProviderError in core/errors.py. All 5 scattered provider dicts replaced with registry lookups. Settings path from registry (not hardcoded Claude). Unknown providers raise InvalidProviderError instead of silently falling back to Claude. Doctor image_map uses registry.",
+      "success_criteria": "## Must-Haves\n\n- `ProviderRuntimeSpec` frozen dataclass in `core/contracts.py` with fields: `provider_id`, `display_name`, `image_ref`, `config_dir`, `settings_path`, `data_volume`\n- `InvalidProviderError(SCCError)` in `core/errors.py` with `provider_id` and `known_providers` fields\n- `src/scc_cli/provider_registry.py` with `PROVIDER_REGISTRY` dict mapping `\"claude\"` and `\"codex\"` to `ProviderRuntimeSpec` instances, and a `get_runtime_spec(provider_id)` function that raises `InvalidProviderError` for unknown providers\n- `_PROVIDER_IMAGE_REF`, `_PROVIDER_DATA_VOLUME`, `_PROVIDER_CONFIG_DIR` dicts removed from `start_session.py` — replaced with registry lookups\n- `_build_sandbox_spec` uses `get_runtime_spec()` instead of `.get()` with Claude fallback\n- Settings path at `start_session.py:286` uses `spec.settings_path` from registry instead of hardcoded `AGENT_CONFIG_DIR / \"settings.json\"`\n- `dependencies.py` raises `InvalidProviderError` for unknown `provider_id` instead of falling back to Claude dispatch\n- Doctor `image_map` in `environment.py` uses registry\n- `KNOWN_PROVIDERS` in `provider_resolution.py` stays in sync with registry keys (guardrail test)\n- All existing tests pass, fallback tests flipped to assert `InvalidProviderError`\n\n## Threat Surface\n\n- **Abuse**: Unknown provider_id injection could previously bypass org restrictions via silent Claude fallback — this slice closes that gap by failing closed\n- **Data exposure**: None — registry carries only image refs, volume names, and config paths\n- **Input trust**: provider_id arrives from CLI flag, user config, or team policy — all validated upstream in `resolve_active_provider()`\n\n## Requirement Impact\n\n- **Requirements touched**: None active — R001 (validated) is indirectly supported by this maintainability improvement\n- **Re-verify**: Provider dispatch, launch flow, coexistence isolation, doctor image checks\n- **Decisions revisited**: D029 (superseded by D031/D034 for placement), D032 (implemented)\n\n## Proof Level\n\n- This slice proves: contract\n- Real runtime required: no\n- Human/UAT required: no\n\n## Verification\n\n```bash\n# Registry unit tests\nuv run pytest tests/test_provider_registry.py -v\n\n# Consumer wiring tests\nuv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py -v\n\n# Type checking on all touched files\nuv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py\n\n# Full regression\nuv run pytest -q\n```\n\n## Integration Closure\n\n- Upstream surfaces consumed: `core/contracts.py` (ProviderRuntimeSpec type), `core/errors.py` (InvalidProviderError), `core/image_contracts.py` (image ref constants), `core/provider_resolution.py` (KNOWN_PROVIDERS, display names)\n- New wiring introduced: `provider_registry.py` module at composition layer, imported by `start_session.py`, `dependencies.py`, `doctor/checks/environment.py`\n- What remains before the milestone is truly usable end-to-end: S02 (settings rendering/serialization), S03 (auth/doctor/resume), S04 (legacy isolation), S05 (naming/validation)\n\n## Tasks\n\n- [ ] **T01: Create ProviderRuntimeSpec model, InvalidProviderError, and provider_registry module with tests** `est:45m`\n  - Why: Foundation types and registry that all downstream consumers depend on. Cannot wire consumers until these exist and are tested.\n  - Files: `src/scc_cli/core/contracts.py`, `src/scc_cli/core/errors.py`, `src/scc_cli/provider_registry.py`, `tests/test_provider_registry.py`\n  - Do: Add `ProviderRuntimeSpec` frozen dataclass to `core/contracts.py`. Add `InvalidProviderError(SCCError)` to `core/errors.py`. Create `provider_registry.py` with `PROVIDER_REGISTRY` dict and `get_runtime_spec()`. Write exhaustive tests covering: known providers return correct spec, unknown raises `InvalidProviderError`, all fields non-empty, registry keys match `KNOWN_PROVIDERS`, error message includes known providers list.\n  - Verify: `uv run pytest tests/test_provider_registry.py -v && uv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py`\n  - Done when: ProviderRuntimeSpec, InvalidProviderError, and provider_registry.py exist with passing tests and clean mypy\n\n- [ ] **T02: Wire registry into start_session, dependencies, and doctor; fix settings-path; flip fallback tests** `est:60m`\n  - Why: Replaces all 5 scattered dicts with registry lookups, fixes the hardcoded Claude settings path for Codex, and makes unknown providers fail closed. This is the behavioral change that delivers the slice goal.\n  - Files: `src/scc_cli/application/start_session.py`, `src/scc_cli/commands/launch/dependencies.py`, `src/scc_cli/doctor/checks/environment.py`, `tests/test_provider_dispatch.py`, `tests/test_provider_coexistence.py`, `tests/test_application_start_session.py`, `tests/test_doctor_image_check.py`\n  - Do: (1) Remove `_PROVIDER_IMAGE_REF`, `_PROVIDER_DATA_VOLUME`, `_PROVIDER_CONFIG_DIR` from `start_session.py` and import `get_runtime_spec` from `provider_registry`. (2) In `_build_sandbox_spec`, replace `.get()` fallbacks with `get_runtime_spec(resolved_pid)` — let `InvalidProviderError` propagate. (3) Fix `_build_agent_settings` settings path: thread provider_id (or spec) through and use `spec.settings_path` instead of `AGENT_CONFIG_DIR / \"settings.json\"`. (4) In `dependencies.py`, replace `_PROVIDER_DISPATCH.get(..., fallback)` with explicit `if provider_id not in _PROVIDER_DISPATCH: raise InvalidProviderError(...)`. (5) In `doctor/checks/environment.py`, replace `image_map` dict with `get_runtime_spec()`. (6) Flip `test_unknown_provider_falls_back_to_claude` and `test_unknown_provider_falls_back_to_claude_runner` to assert `InvalidProviderError`. (7) Flip `test_unknown_provider_falls_back_to_claude_image` to assert `InvalidProviderError`. (8) Update `test_provider_coexistence.py` imports from `start_session._PROVIDER_*` to `provider_registry`. (9) Update `test_doctor_image_check.py` for registry-based lookup. (10) Add guardrail test asserting `KNOWN_PROVIDERS` keys match `PROVIDER_REGISTRY` keys.\n  - Verify: `uv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py tests/test_provider_registry.py -v && uv run mypy src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py && uv run pytest -q`\n  - Done when: All 5 scattered dicts removed, settings path uses registry, unknown providers raise InvalidProviderError, full test suite passes\n\n## Files Likely Touched\n\n- `src/scc_cli/core/contracts.py`\n- `src/scc_cli/core/errors.py`\n- `src/scc_cli/provider_registry.py`\n- `src/scc_cli/application/start_session.py`\n- `src/scc_cli/commands/launch/dependencies.py`\n- `src/scc_cli/doctor/checks/environment.py`\n- `tests/test_provider_registry.py`\n- `tests/test_provider_dispatch.py`\n- `tests/test_provider_coexistence.py`\n- `tests/test_application_start_session.py`\n- `tests/test_doctor_image_check.py`",
+      "proof_level": "contract",
+      "integration_closure": "Upstream: core/contracts.py (ProviderRuntimeSpec type), core/errors.py (InvalidProviderError), core/image_contracts.py (image ref constants), core/provider_resolution.py (KNOWN_PROVIDERS, display names). New wiring: provider_registry.py module at composition layer. Remaining for milestone: S02 (settings rendering), S03 (auth/doctor/resume), S04 (legacy isolation), S05 (naming/validation).",
+      "observability_impact": "InvalidProviderError provides structured error with provider_id and known_providers list, enabling clear diagnostics when an unknown provider is attempted. No runtime observability changes — this is contract-level enforcement.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "id": "S02",
+      "title": "Session, resume, and machine-readable output provider hardening",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S01"
+      ],
+      "demo": "sessions.get_claude_sessions_dir renamed to provider-parameterized helper. audit.py derives path from provider. sandbox.py records provider_id='claude'. Quick Resume shows provider_id. Session list CLI displays provider column.",
+      "created_at": "2026-04-05T10:50:01.315Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Make settings serialization provider-owned. Implement config ownership model (D041): SCC writes its own layer using provider-native precedence, never overwrites user config. Enforce config freshness (D042). Add runtime permission normalization (D039). Set Codex launch policy (D033) and auth storage (D040). Write state marker. Harden Dockerfiles.",
+      "success_criteria": "- AgentSettings: rendered_bytes:bytes + path:Path\n- ClaudeRunner.build_settings → JSON bytes, path .claude/settings.json\n- CodexRunner.build_settings → TOML bytes, path resolved to workspace .codex/config.toml\n- Codex TOML includes cli_auth_credentials_store='file'\n- OCI _inject_settings writes rendered_bytes verbatim\n- Config freshness: fresh launch writes SCC config layer even when empty. Resume skips.\n- User-level config in volume never modified by SCC.\n- Tests: governed→standalone, teamA→teamB, settings→no-settings\n- Test: user config.toml preferences survive fresh launch\n- CodexRunner.build_command → --dangerously-bypass-approvals-and-sandbox\n- Runtime permission normalization: dir 0700, auth 0600, uid 1000\n- .scc-provider-state.json: {provider_id, layout_version:1, auth_storage_mode}\n- scc-base: both .claude/.codex dirs, 0700, uid 1000\n- scc-agent-codex: ARG CODEX_VERSION, cache cleanup\n- Full regression gate",
+      "proof_level": "Config ownership + freshness + serialization + permissions + argv tests + full regression",
+      "integration_closure": "After S02, OCI is format-agnostic, config ownership is correct, auth is persistent",
+      "observability_impact": "State marker. Permission normalization log.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "id": "S03",
+      "title": "Doctor provider-awareness and typed provider errors",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S01"
+      ],
+      "demo": "scc doctor --provider codex checks Codex readiness specifically. Doctor output groups backend health vs provider readiness. ProviderNotReadyError and ProviderImageMissingError exist with user_message and suggested_action.",
+      "created_at": "2026-04-05T10:50:01.315Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Add auth readiness checking with truthful wording ('cache present' not 'logged in'). Make doctor, sessions, audit, resume, and machine-readable outputs provider-truthful. Add typed provider errors.",
+      "success_criteria": "- AuthReadiness in core/contracts.py: status('missing'/'present'), mechanism, guidance\n- AgentProvider.auth_check(data_volume) optional, default=present\n- ClaudeProvider: checks OAuth creds. CodexProvider: checks auth.json\n- Doctor: backend→image→auth sections. Wording: 'auth cache present'\n- Doctor --provider flag\n- ProviderNotReadyError, ProviderImageMissingError\n- get_provider_sessions_dir(provider_id) replaces get_claude_sessions_dir\n- audit.py from provider. sandbox.py records 'claude'\n- Quick Resume shows provider, warns on mismatch\n- provider_id in dry-run JSON, support bundle, session list --json\n- Full regression gate",
+      "proof_level": "Auth check + doctor + session + machine-readable tests + full regression",
+      "integration_closure": "Doctor/sessions consume registry. Auth check uses config_dir from spec.",
+      "observability_impact": "Doctor auth readiness. Machine-readable provider_id.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "id": "S04",
+      "title": "Legacy Claude path isolation and Docker module cleanup",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S01"
+      ],
+      "demo": "docker/core.py, docker/credentials.py, docker/launch.py use local Claude constants instead of shared imports. commands/profile.py documented as Claude-only. No shared constant import from constants.py for Claude runtime values anywhere in the codebase.",
+      "created_at": "2026-04-05T10:50:01.315Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Move Claude constants to docker/constants.py. Clean constants.py. Guardrail test enforces boundary.",
+      "success_criteria": "- docker/constants.py with all Claude runtime constants\n- docker/ modules import from docker/constants.py\n- profile.py documented Claude-only\n- constants.py: only shared values\n- Guardrail: no non-docker/adapter module imports Claude constants\n- Full regression gate",
+      "proof_level": "Guardrail + docker tests + full regression",
+      "integration_closure": "constants.py is provider-neutral",
+      "observability_impact": "None",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "id": "S05",
+      "title": "Product naming, documentation truthfulness, and milestone validation",
+      "status": "pending",
+      "risk": "low",
+      "depends": [
+        "S01",
+        "S02",
+        "S03",
+        "S04"
+      ],
+      "demo": "README says 'Sandboxed Code CLI'. D-001 updated. All user-facing strings consistent. Truthfulness guardrail expanded to cover M007 changes.",
+      "created_at": "2026-04-05T10:50:01.315Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Consistent naming. Persistence model documented precisely. TUI neutral. Deferred items clear. Milestone validated.",
+      "success_criteria": "- README.md: 'SCC — Sandboxed Code CLI'\n- D-001 updated\n- TUI surfaces audited\n- Claude-only surfaces documented\n- Persistence model documented: what persists, what is ephemeral-in-effect, config ownership per provider, permissions, cross-workspace scope\n- Deferred: scc auth commands, fine-grained volumes, validated auth, container labels\n- PROJECT.md reflects all D029-D042\n- Truthfulness guardrails expanded\n- Exit gate passes",
+      "proof_level": "Guardrails + naming audit + full regression",
+      "integration_closure": "Final validation",
+      "observability_impact": "None",
       "sequence": 0,
       "replan_triggered_at": null
     }
@@ -5529,6 +5734,112 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S01",
+      "id": "T01",
+      "title": "Added ProviderRuntimeSpec frozen dataclass, InvalidProviderError, and provider_registry module with fail-closed lookup and 11-test suite",
+      "status": "complete",
+      "one_liner": "Added ProviderRuntimeSpec frozen dataclass, InvalidProviderError, and provider_registry module with fail-closed lookup and 11-test suite",
+      "narrative": "Added ProviderRuntimeSpec frozen dataclass to core/contracts.py with six typed fields (provider_id, display_name, image_ref, config_dir, settings_path, data_volume). Added InvalidProviderError(SCCError) to core/errors.py with exit_code=2 and auto-populated user_message/suggested_action. Created provider_registry.py at the composition layer with PROVIDER_REGISTRY dict (claude and codex entries matching current scattered dicts) and get_runtime_spec() fail-closed lookup. Wrote 11 tests covering field correctness, error raising, message content, registry integrity, coexistence uniqueness, and immutability.",
+      "verification_result": "All three verification commands pass cleanly: pytest 11/11 passed, mypy clean on all 3 source files, ruff clean on provider_registry.py.",
+      "duration": "",
+      "completed_at": "2026-04-05T12:25:38.612Z",
+      "blocker_discovered": false,
+      "deviations": "Added 3 extra tests beyond the 8 specified (test_spec_is_frozen, test_invalid_provider_error_suggested_action, test_empty_string_provider_raises) for stronger contract coverage. settings_path uses relative path — container-absolute prefix applied at call site per existing pattern.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/provider_registry.py",
+        "tests/test_provider_registry.py"
+      ],
+      "key_decisions": [
+        "ProviderRuntimeSpec placed in core/contracts.py next to ProviderCapabilityProfile",
+        "InvalidProviderError inherits from SCCError directly with exit_code=2",
+        "provider_registry.py at composition layer — imports only from core",
+        "settings_path uses relative paths; container-absolute prefix applied at call site"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S01\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/core/errors.py\n  - src/scc_cli/provider_registry.py\n  - tests/test_provider_registry.py\nkey_decisions:\n  - ProviderRuntimeSpec placed in core/contracts.py next to ProviderCapabilityProfile\n  - InvalidProviderError inherits from SCCError directly with exit_code=2\n  - provider_registry.py at composition layer — imports only from core\n  - settings_path uses relative paths; container-absolute prefix applied at call site\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T12:25:38.611Z\nblocker_discovered: false\n---\n\n# T01: Added ProviderRuntimeSpec frozen dataclass, InvalidProviderError, and provider_registry module with fail-closed lookup and 11-test suite\n\n**Added ProviderRuntimeSpec frozen dataclass, InvalidProviderError, and provider_registry module with fail-closed lookup and 11-test suite**\n\n## What Happened\n\nAdded ProviderRuntimeSpec frozen dataclass to core/contracts.py with six typed fields (provider_id, display_name, image_ref, config_dir, settings_path, data_volume). Added InvalidProviderError(SCCError) to core/errors.py with exit_code=2 and auto-populated user_message/suggested_action. Created provider_registry.py at the composition layer with PROVIDER_REGISTRY dict (claude and codex entries matching current scattered dicts) and get_runtime_spec() fail-closed lookup. Wrote 11 tests covering field correctness, error raising, message content, registry integrity, coexistence uniqueness, and immutability.\n\n## Verification\n\nAll three verification commands pass cleanly: pytest 11/11 passed, mypy clean on all 3 source files, ruff clean on provider_registry.py.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_provider_registry.py -v` | 0 | ✅ pass | 11200ms |\n| 2 | `uv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py` | 0 | ✅ pass | 5100ms |\n| 3 | `uv run ruff check src/scc_cli/provider_registry.py` | 0 | ✅ pass | 2400ms |\n\n## Deviations\n\nAdded 3 extra tests beyond the 8 specified (test_spec_is_frozen, test_invalid_provider_error_suggested_action, test_empty_string_provider_raises) for stronger contract coverage. settings_path uses relative path — container-absolute prefix applied at call site per existing pattern.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/contracts.py`\n- `src/scc_cli/core/errors.py`\n- `src/scc_cli/provider_registry.py`\n- `tests/test_provider_registry.py`\n",
+      "description": "Create the foundation types and registry module that all downstream consumers will depend on.\n\n## Steps\n\n1. Add `ProviderRuntimeSpec` frozen dataclass to `src/scc_cli/core/contracts.py`:\n   - Fields: `provider_id: str`, `display_name: str`, `image_ref: str`, `config_dir: str`, `settings_path: str`, `data_volume: str`\n   - Place it near the existing `ProviderCapabilityProfile` dataclass\n   - Import image refs from `core.image_contracts` (SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF)\n\n2. Add `InvalidProviderError(SCCError)` to `src/scc_cli/core/errors.py`:\n   - Fields: `provider_id: str = \"\"`, `known_providers: tuple[str, ...] = ()`\n   - Set `exit_code = 2` (invalid usage)\n   - `user_message` should say: `Unknown provider '{provider_id}'. Known providers: {', '.join(known_providers)}`\n   - `suggested_action` should say: `Use one of: {', '.join(known_providers)}`\n   - Follow the existing error patterns like `ProviderNotAllowedError`\n\n3. Create `src/scc_cli/provider_registry.py`:\n   - Import `ProviderRuntimeSpec` from `core.contracts`\n   - Import `InvalidProviderError` from `core.errors`\n   - Import image refs from `core.image_contracts`\n   - Define `PROVIDER_REGISTRY: dict[str, ProviderRuntimeSpec]` with entries for `\"claude\"` and `\"codex\"`\n   - Claude entry: `display_name=\"Claude Code\"`, `image_ref=SCC_CLAUDE_IMAGE_REF`, `config_dir=\".claude\"`, `settings_path=\".claude/settings.json\"`, `data_volume=\"docker-claude-sandbox-data\"`\n   - Codex entry: `display_name=\"Codex\"`, `image_ref=SCC_CODEX_IMAGE_REF`, `config_dir=\".codex\"`, `settings_path=\".codex/config.toml\"`, `data_volume=\"docker-codex-sandbox-data\"`\n   - Define `get_runtime_spec(provider_id: str) -> ProviderRuntimeSpec` that does `PROVIDER_REGISTRY[provider_id]` with KeyError → `InvalidProviderError` conversion\n   - This module sits at the composition layer (same level as bootstrap.py) — do NOT import from adapters or commands\n\n4. Write `tests/test_provider_registry.py`:\n   - `test_claude_spec_returns_correct_fields` — verify all 6 fields\n   - `test_codex_spec_returns_correct_fields` — verify all 6 fields\n   - `test_unknown_provider_raises_invalid_provider_error` — assert raises with correct provider_id and known_providers\n   - `test_all_registry_fields_are_nonempty` — iterate all entries, assert no empty strings\n   - `test_registry_keys_match_known_providers` — import `KNOWN_PROVIDERS` from `core.provider_resolution` and assert `set(PROVIDER_REGISTRY.keys()) == set(KNOWN_PROVIDERS)` (guardrail)\n   - `test_different_providers_have_different_volumes` — coexistence safety\n   - `test_different_providers_have_different_config_dirs` — coexistence safety\n   - `test_invalid_provider_error_message_includes_known_providers` — verify error message content\n\n## Must-Haves\n\n- [ ] `ProviderRuntimeSpec` frozen dataclass in `core/contracts.py` with 6 typed fields\n- [ ] `InvalidProviderError(SCCError)` in `core/errors.py` with provider_id and known_providers\n- [ ] `provider_registry.py` at composition layer with PROVIDER_REGISTRY and get_runtime_spec()\n- [ ] Registry entries for claude and codex with correct values matching current scattered dicts\n- [ ] Exhaustive test coverage in `tests/test_provider_registry.py`\n- [ ] Clean mypy on all three files\n\n## Negative Tests\n\n- **Malformed inputs**: empty string provider_id, None-like values\n- **Error paths**: unknown provider raises InvalidProviderError with correct fields\n- **Boundary conditions**: registry key sync with KNOWN_PROVIDERS\n\n## Verification\n\n- `uv run pytest tests/test_provider_registry.py -v` — all registry tests pass\n- `uv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py` — clean\n- `uv run ruff check src/scc_cli/provider_registry.py` — clean",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/provider_registry.py",
+        "tests/test_provider_registry.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_registry.py -v && uv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py && uv run ruff check src/scc_cli/provider_registry.py",
+      "inputs": [
+        "`src/scc_cli/core/contracts.py` — existing contract types, placement reference for ProviderRuntimeSpec",
+        "`src/scc_cli/core/errors.py` — existing error hierarchy, pattern reference for InvalidProviderError",
+        "`src/scc_cli/core/image_contracts.py` — SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF constants",
+        "`src/scc_cli/core/provider_resolution.py` — KNOWN_PROVIDERS tuple, _PROVIDER_DISPLAY_NAMES dict",
+        "`src/scc_cli/application/start_session.py` — current _PROVIDER_IMAGE_REF, _PROVIDER_DATA_VOLUME, _PROVIDER_CONFIG_DIR values to match"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/contracts.py` — ProviderRuntimeSpec frozen dataclass added",
+        "`src/scc_cli/core/errors.py` — InvalidProviderError added",
+        "`src/scc_cli/provider_registry.py` — new module with PROVIDER_REGISTRY and get_runtime_spec()",
+        "`tests/test_provider_registry.py` — new test file with 8+ tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S01",
+      "id": "T02",
+      "title": "Wire registry into start_session, dependencies, and doctor; fix settings-path; flip fallback tests",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Replace all 5 scattered provider dicts with registry lookups, fix the hardcoded Claude settings path, make unknown providers fail closed, and update all affected tests.\n\n## Steps\n\n1. **Remove scattered dicts from `start_session.py`:**\n   - Delete `_PROVIDER_IMAGE_REF`, `_PROVIDER_DATA_VOLUME`, `_PROVIDER_CONFIG_DIR` dicts (lines ~42-58)\n   - Add `from scc_cli.provider_registry import get_runtime_spec` import\n\n2. **Wire `_build_sandbox_spec` to use registry:**\n   - Replace the `.get()` fallback block (lines ~320-322) with:\n     ```python\n     spec = get_runtime_spec(resolved_pid)\n     image = spec.image_ref\n     data_volume = spec.data_volume\n     config_dir = spec.config_dir\n     ```\n   - `InvalidProviderError` propagates naturally — no try/except needed here\n\n3. **Fix `_build_agent_settings` settings path (the bug):**\n   - Thread `provider_id` into `_build_agent_settings` — add `provider_id: str = \"claude\"` parameter\n   - Replace `settings_path = Path(\"/home/agent\") / AGENT_CONFIG_DIR / \"settings.json\"` with:\n     ```python\n     spec = get_runtime_spec(provider_id)\n     settings_path = Path(\"/home/agent\") / spec.settings_path\n     ```\n   - Update the call site in `prepare_start_session` to pass `provider_id` — extract it from `dependencies.agent_provider.capability_profile().provider_id` if available, else `\"claude\"`\n   - Note: can remove the `AGENT_CONFIG_DIR` import from this file if it's no longer used here\n\n4. **Fix `dependencies.py` fail-closed dispatch:**\n   - Replace `_PROVIDER_DISPATCH.get(provider_id, _PROVIDER_DISPATCH[_DEFAULT_PROVIDER_ID])` with:\n     ```python\n     if provider_id not in _PROVIDER_DISPATCH:\n         from scc_cli.core.errors import InvalidProviderError\n         from scc_cli.provider_registry import PROVIDER_REGISTRY\n         raise InvalidProviderError(\n             provider_id=provider_id,\n             known_providers=tuple(PROVIDER_REGISTRY.keys()),\n         )\n     dispatch = _PROVIDER_DISPATCH[provider_id]\n     ```\n   - Update the docstring to say \"Raises InvalidProviderError\" instead of \"Falls back to claude\"\n\n5. **Fix doctor `image_map` in `environment.py`:**\n   - Replace the local `image_map` dict (lines ~305-308) and `image_ref = image_map.get(...)` with:\n     ```python\n     from scc_cli.provider_registry import get_runtime_spec, PROVIDER_REGISTRY\n     try:\n         spec = get_runtime_spec(provider_id)\n         image_ref = spec.image_ref\n     except InvalidProviderError:\n         # Doctor is diagnostic — fall back to claude image for unknown providers\n         image_ref = get_runtime_spec(\"claude\").image_ref\n     ```\n   - Doctor is diagnostic, not a launch path — graceful fallback here is correct per D032\n\n6. **Flip dispatch fallback tests in `test_provider_dispatch.py`:**\n   - `test_unknown_provider_falls_back_to_claude` (line ~34): change from asserting `deps.agent_provider is adapters.agent_provider` to `pytest.raises(InvalidProviderError)`\n   - `test_unknown_provider_falls_back_to_claude_runner` (line ~62): same flip\n   - Import `InvalidProviderError` from `scc_cli.core.errors`\n\n7. **Flip start_session fallback test:**\n   - `test_unknown_provider_falls_back_to_claude_image` in `test_application_start_session.py` (~line 965): change to assert `InvalidProviderError` is raised instead of Claude image fallback\n\n8. **Update `test_provider_coexistence.py` imports:**\n   - Replace `from scc_cli.application.start_session import _PROVIDER_CONFIG_DIR, _PROVIDER_DATA_VOLUME, _PROVIDER_IMAGE_REF` with `from scc_cli.provider_registry import PROVIDER_REGISTRY`\n   - Update test assertions to use `PROVIDER_REGISTRY[\"claude\"].data_volume` etc. instead of dict access\n   - Tests themselves stay structurally the same — they still prove coexistence isolation\n\n9. **Update `test_doctor_image_check.py`:**\n   - `test_unknown_provider_falls_back_to_claude` (~line 66): update if the behavior changed — doctor still falls back gracefully, so this test may just need import updates\n\n10. **Add guardrail test for KNOWN_PROVIDERS sync** (if not already in T01's test file):\n    - In `test_provider_registry.py`, verify `set(PROVIDER_REGISTRY.keys()) == set(KNOWN_PROVIDERS)`\n\n## Must-Haves\n\n- [ ] `_PROVIDER_IMAGE_REF`, `_PROVIDER_DATA_VOLUME`, `_PROVIDER_CONFIG_DIR` removed from `start_session.py`\n- [ ] `_build_sandbox_spec` uses `get_runtime_spec()` — no silent Claude fallback\n- [ ] Settings path uses `spec.settings_path` — Codex gets `.codex/config.toml`, not `.claude/settings.json`\n- [ ] `dependencies.py` raises `InvalidProviderError` for unknown provider_id\n- [ ] Doctor uses registry for image ref lookup\n- [ ] Two dispatch fallback tests flipped to assert `InvalidProviderError`\n- [ ] Start session fallback test flipped\n- [ ] Coexistence tests import from registry\n- [ ] Full test suite passes with zero regressions\n\n## Verification\n\n- `uv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py tests/test_provider_registry.py -v` — all targeted tests pass\n- `uv run mypy src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py` — clean\n- `uv run pytest -q` — full suite passes, no regressions\n- `uv run ruff check src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py` — clean",
+      "estimate": "60m",
+      "files": [
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/launch/dependencies.py",
+        "src/scc_cli/doctor/checks/environment.py",
+        "tests/test_provider_dispatch.py",
+        "tests/test_provider_coexistence.py",
+        "tests/test_application_start_session.py",
+        "tests/test_doctor_image_check.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_dispatch.py tests/test_provider_coexistence.py tests/test_application_start_session.py tests/test_doctor_image_check.py tests/test_provider_registry.py -v && uv run mypy src/scc_cli/application/start_session.py src/scc_cli/commands/launch/dependencies.py src/scc_cli/doctor/checks/environment.py && uv run pytest -q",
+      "inputs": [
+        "`src/scc_cli/provider_registry.py` — T01 output: PROVIDER_REGISTRY and get_runtime_spec()",
+        "`src/scc_cli/core/errors.py` — T01 output: InvalidProviderError",
+        "`src/scc_cli/core/contracts.py` — T01 output: ProviderRuntimeSpec",
+        "`src/scc_cli/application/start_session.py` — current scattered dicts and hardcoded settings path to replace",
+        "`src/scc_cli/commands/launch/dependencies.py` — current _PROVIDER_DISPATCH fallback to fix",
+        "`src/scc_cli/doctor/checks/environment.py` — current image_map dict to replace",
+        "`tests/test_provider_dispatch.py` — fallback tests to flip",
+        "`tests/test_provider_coexistence.py` — imports to update from scattered dicts to registry",
+        "`tests/test_application_start_session.py` — fallback test to flip"
+      ],
+      "expected_output": [
+        "`src/scc_cli/application/start_session.py` — scattered dicts removed, registry used, settings path fixed",
+        "`src/scc_cli/commands/launch/dependencies.py` — fail-closed dispatch with InvalidProviderError",
+        "`src/scc_cli/doctor/checks/environment.py` — registry-based image lookup",
+        "`tests/test_provider_dispatch.py` — fallback tests assert InvalidProviderError",
+        "`tests/test_provider_coexistence.py` — imports from provider_registry",
+        "`tests/test_application_start_session.py` — fallback test asserts InvalidProviderError",
+        "`tests/test_doctor_image_check.py` — updated for registry-based lookup"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -5840,6 +6151,174 @@
       "decision": "Five M006 execution constraints: policy validation, request-scoped resolution, machine-readable provider output, standardized image build commands, and coexistence testing",
       "choice": "1. Provider selection must be validated against org/team policy early in the launch path, with typed ProviderNotAllowedError if a team/org config restricts available providers. 2. Provider resolution is request-scoped: shared infra (probe, engine, sink) stays cached in bootstrap, but provider-specific adapters (runner, provider, safety adapter, runtime spec) are selected per invocation via resolve_active_provider() called from the start command, not baked into the lru_cached DefaultAdapters singleton. 3. provider_id must appear in dry-run JSON, support bundle, audit events, session list --json output, and container list output. 4. For missing provider images, doctor and start must print the exact build command: `docker build -t scc-agent-{provider}:latest images/scc-agent-{provider}/`. No scc images build/list command in v1 — operator builds directly. 5. S04 must include a coexistence test proving Claude and Codex containers, volumes, sessions, and Quick Resume entries can both exist for the same workspace without collision.",
       "rationale": "These five constraints close the gaps between 'provider selection exists' and 'provider selection is production-ready'. Policy validation prevents shadow provider switching that violates org intent. Request-scoped resolution prevents the lru_cache from locking the first provider choice for the process lifetime. Machine-readable output ensures automation and support tooling can consume provider info. Standardized image commands give operators a predictable recovery path. Coexistence testing proves the identity separation actually works.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 27,
+      "id": "D029",
+      "when_context": "M007-cqttot",
+      "scope": "architecture",
+      "decision": "What should be the single source of truth for provider runtime details (image ref, binary name, config dir, settings path, data volume, display name, default argv)?",
+      "choice": "Introduce a ProviderRuntimeSpec frozen dataclass and a PROVIDER_REGISTRY dict in core/provider_resolution.py. Replace the 5 scattered dicts across start_session.py, dependencies.py, and provider_resolution.py with registry lookups. ProviderRuntimeSpec carries image_ref, binary_name, config_dir, settings_path, data_volume, display_name, and default_argv. Adding a third provider requires one new ProviderRuntimeSpec entry, not edits to 4 modules.",
+      "rationale": "Currently provider data is scattered across _PROVIDER_IMAGE_REF, _PROVIDER_DATA_VOLUME, _PROVIDER_CONFIG_DIR (start_session.py), _PROVIDER_DISPATCH (dependencies.py), and _PROVIDER_DISPLAY_NAMES (provider_resolution.py). This creates drift risk and makes adding a provider expensive. A single typed registry with one dataclass per provider is the smallest consolidation that eliminates drift without building a framework. Constitution §7 prefers typed contracts over loose dictionaries.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 28,
+      "id": "D030",
+      "when_context": "M007-cqttot",
+      "scope": "architecture",
+      "decision": "What is the canonical product name for SCC?",
+      "choice": "SCC — Sandboxed Code CLI. Update D-001 which says 'Sandboxed Coding CLI' to match the actual codebase usage of 'Sandboxed Code CLI'. Apply consistently across README, CLI branding, docs, and all user-facing surfaces.",
+      "rationale": "The codebase already uses 'Sandboxed Code CLI' in branding.py, theme.py, cli.py, setup_ui.py, errors.py, and init.py. The README still says 'Sandboxed Claude CLI'. D-001 says 'Sandboxed Coding CLI'. Three different names creates confusion. 'Sandboxed Code CLI' is already dominant in the codebase and provider-neutral.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 29,
+      "id": "D031",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "Resolve the D027 vs D029 contradiction: where does ProviderRuntimeSpec live and who owns the registry?",
+      "choice": "ProviderRuntimeSpec is a typed model defined in core/contracts.py (where ProviderCapabilityProfile already lives). The PROVIDER_REGISTRY that maps provider_id → ProviderRuntimeSpec lives in commands/launch/dependencies.py (the composition/dispatch layer), not in core/provider_resolution.py. Core defines the shape; the dispatch layer owns the concrete entries. This supersedes D029's placement of the registry in core and aligns with D027's intent that runtime spec data is surfaced through bootstrap dispatch, not owned by shared core. get_provider_display_name() in core/provider_resolution.py becomes a thin lookup that accepts a ProviderRuntimeSpec or provider_id, but does not own the registry itself.",
+      "rationale": "D027 correctly identified that runtime spec is execution data, not planning data — it answers 'how do we run this provider' not 'what can this provider do.' Core should define the typed contract but not own the concrete provider entries, because that would make core the authority on provider-specific runtime details (image refs, binary names, config dirs) — violating Constitution §6 which says provider-specific behavior belongs in adapters. The dispatch layer (dependencies.py) already owns _PROVIDER_DISPATCH and is the natural home for a typed PROVIDER_REGISTRY. This keeps core provider-agnostic while giving the dispatch layer one consolidated typed table instead of 5 scattered dicts.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 30,
+      "id": "D032",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "How should unknown, forbidden, or unavailable providers behave in active launch logic?",
+      "choice": "Fail closed. Unknown provider_id in the launch path raises a typed error (InvalidProviderError), never silently falls back to Claude. Forbidden providers raise ProviderNotAllowedError (existing). Unavailable providers (missing image, missing config) raise ProviderNotReadyError. Silent Claude fallback is permitted only at migration/read boundaries: old SessionRecord.provider_id=None defaults to 'claude' during deserialization, old config with no selected_provider defaults to 'claude' during config read. The launch path, OCI runtime, and dispatch layer must never substitute Claude for an unrecognized provider_id.",
+      "rationale": "Silent fallback to Claude on unknown providers is a security gap in governed environments: an org that restricts providers to codex-only would have their restriction silently bypassed if someone passes provider_id='typo'. It also makes debugging harder — a Codex user who gets Claude behavior has no error message to diagnose. Fail-closed is the correct default for a governed runtime (Constitution §5, least privilege by default). Legacy compat at deserialization boundaries is acceptable because it affects display/history, not active launch decisions.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 31,
+      "id": "D033",
+      "when_context": "M007-cqttot planning",
+      "scope": "architecture",
+      "decision": "How SCC should launch Codex CLI inside the hardened SCC container",
+      "choice": "Launch Codex with `codex --dangerously-bypass-approvals-and-sandbox` (equivalently `--yolo`) inside the SCC container. SCC's container-level isolation (internal-only Docker network, Squid proxy sidecar, safety wrappers) is the hard enforcement boundary — Codex's built-in OS-level sandbox (Seatbelt/Landlock) is redundant inside a Docker container and can interfere with legitimate agent operations. This mirrors the Claude pattern where `--dangerously-skip-permissions` defers to SCC's external sandbox. The flag is runner-owned (CodexAgentRunner.build_command), not part of ProviderRuntimeSpec.",
+      "rationale": "Codex's built-in sandbox uses OS-level mechanisms (macOS Seatbelt, Linux Landlock/seccomp) that are designed for bare-metal execution. Inside a Docker container, these mechanisms are either unsupported, redundant, or actively interfere with operations the container already restricts. SCC's enforcement model is container-level: internal-only network, proxy-enforced egress, safety wrappers, and volume isolation. Running Codex's own sandbox inside SCC's sandbox creates confusing double-enforcement with no security benefit. The official Codex docs explicitly recommend `--sandbox danger-full-access` when running in Docker. Making this decision explicit prevents future confusion about which sandbox layer is authoritative.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 32,
+      "id": "D034",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "Where should the PROVIDER_REGISTRY live for neutral cross-cutting access?",
+      "choice": "Create a new module `src/scc_cli/provider_registry.py` at the top of the package (same level as bootstrap.py, sessions.py). It contains the ProviderRuntimeSpec entries and a get_runtime_spec(provider_id) fail-closed lookup. This is accessible to commands/launch/dependencies.py, doctor, sessions, support_bundle, and any future provider tooling without circular imports or layer violations. ProviderRuntimeSpec (the type) stays in core/contracts.py. The registry module imports from core but is not part of core — it is composition-layer infrastructure like bootstrap.py.",
+      "rationale": "D031 correctly identified that core should not own the registry, but placing it in commands/launch/dependencies.py (as D031 proposed) creates an access problem: doctor, sessions, support_bundle, and audit also need runtime specs and would have to import from a launch-command module, violating layering. A top-level provider_registry.py is the simplest solution — it sits at the composition layer alongside bootstrap.py (which already owns adapter wiring), is importable by any consumer, and carries no command-layer or adapter-layer coupling. It is not 'core' — it contains concrete provider data, not abstract contracts.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 33,
+      "id": "D035",
+      "when_context": "M007-cqttot planning",
+      "scope": "architecture",
+      "decision": "How should provider settings be serialized and injected into the container?",
+      "choice": "Change AgentSettings from `content: dict[str, Any]` + `path: Path` to `rendered_bytes: bytes` + `path: Path` + `suffix: str`. AgentRunner.build_settings() becomes responsible for serializing the config dict into the correct format (JSON for Claude, TOML for Codex, whatever for future providers) and returning pre-rendered bytes. The OCI runtime's _inject_settings() writes rendered_bytes verbatim via docker cp — it no longer calls json.dumps(). This makes the sandbox runtime format-agnostic.",
+      "rationale": "The current AgentSettings carries `content: dict[str, Any]` and the OCI runtime calls `json.dumps()` on it. This bakes a JSON assumption into infrastructure code that should be provider-agnostic. Codex uses TOML config (config.toml), not JSON. Future providers may use YAML, INI, or other formats. Making the runner responsible for serialization follows the existing AgentRunner protocol pattern — the runner already owns command construction (build_command) and settings path selection. Serialization is the natural companion. The change is small: ~15 lines in AgentSettings, ~5 lines in each runner, ~5 lines in OCI runtime.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 34,
+      "id": "D036",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "What is the provider state persistence model for containerized agents in SCC v1?",
+      "choice": "V1 uses one Docker named volume per provider (docker-claude-sandbox-data, docker-codex-sandbox-data) mapped to the provider config dir (/home/agent/.claude, /home/agent/.codex). The entire provider home persists between containers. This is intentional and correct for v1: auth tokens survive restarts, session history enables resume, and provider-native config/plugins persist. SCC-managed launch config (settings injected via docker cp) is ephemeral by nature — it overwrites the settings file in each fresh container. A finer-grained persistence model (auth-only volume, ephemeral config tmpfs) is deferred to a future milestone when enterprise data-retention policies require it. Auth files must have strict permissions: directory 0700, files 0600, owned by agent (uid 1000). scc-base Dockerfile sets these permissions at image build time.",
+      "rationale": "Splitting the volume into auth-only vs ephemeral partitions would require custom entrypoint scripts, multiple volume mounts, and complex lifecycle management — all for a problem that doesn't exist yet. The current model already handles the critical concern (auth persistence) and the secondary concern (SCC config freshness — docker cp overwrites on each launch). Enterprise data-retention refinement is a real future need but belongs in a separate milestone focused on operator controls for session/history/transcript retention. Over-engineering persistence now would delay the actual M007 deliverables (fail-closed resolution, settings format fix, provider neutrality) without solving a current user problem.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 35,
+      "id": "D037",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "How should SCC handle auth readiness checking and future auth commands for Codex?",
+      "choice": "M007 adds auth readiness checking to doctor via a provider-owned auth_check() method on AgentProvider. For Claude, this checks for OAuth credentials in the data volume. For Codex, this checks for auth.json in the data volume. Both return a structured AuthReadiness(ready: bool, mechanism: str, guidance: str). Future scc auth login/status/logout commands are deferred but the model is designed so they compose naturally: scc auth login would open the provider's auth flow, scc auth status would call auth_check(), scc auth logout would clear the auth cache in the volume. Provider auth handling remains adapter-owned — shared core never hardcodes auth file names or assumes one auth model.",
+      "rationale": "Doctor already checks image readiness; adding auth readiness is the natural next step and directly improves operator UX. Making it adapter-owned (via AgentProvider) means each provider can implement its own mechanism without core coupling. The AuthReadiness return type is simple enough to design now and enables future scc auth commands without restructuring. Full auth commands (login/status/logout) are out of M007 scope but the model should make them cheap to add later.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 36,
+      "id": "D038",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "How should SCC ensure managed provider config does not leak between launches?",
+      "choice": "On every fresh launch (not resume), SCC deterministically writes the SCC-managed settings file to the container — even when logically empty (writes an empty/default config). This ensures no stale team-specific or workspace-specific config persists from a prior launch. On resume, the existing config is left in place (it belongs to the session being resumed). The OCI runtime's _inject_settings path is split into: (1) clear-or-overwrite-settings always on fresh launch, (2) inject only on resume if new settings are provided. A sentinel comment or key in the written file identifies it as SCC-managed so future diagnostics can distinguish SCC-injected config from user-edited config.",
+      "rationale": "The provider config volume persists between container lifetimes. If SCC injects team A's settings on launch 1 and then launches standalone (no team) on launch 2, the old team A settings file remains in the volume and the agent reads stale config. Writing even when empty is cheaper and more reliable than conditional clearing — it avoids the need to enumerate all possible stale files. Resume is the exception because the session context should match what was originally launched with.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 37,
+      "id": "D039",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "How should provider state volume permissions be enforced at runtime?",
+      "choice": "Add a runtime permission normalization step to the OCI launch path, executed after container creation and before settings injection. The normalization runs `docker exec` to: (1) set the provider config dir to 0700 owned by uid 1000, (2) set known auth files (if present) to 0600 owned by uid 1000. This runs on every fresh launch. Build-time permissions in the Dockerfile serve as the initial state for empty volumes; runtime normalization handles volumes that already have data with incorrect permissions (e.g. from manual intervention or Docker volume driver quirks).",
+      "rationale": "Docker named volumes that already contain data from a previous container lifecycle may have incorrect ownership or permissions — the volume content is not reset by the Dockerfile's RUN commands. Build-time permissions only apply when the volume is first populated. Runtime normalization is the defense-in-depth layer that ensures auth files are never world-readable regardless of volume history.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 38,
+      "id": "D040",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "How should Codex auth storage be configured in SCC containers?",
+      "choice": "SCC injects `cli_auth_credentials_store = \"file\"` into the Codex config.toml written at launch time. This forces file-based auth caching (auth.json) instead of keyring/auto detection. The auth.json file lives in the persistent provider volume (/home/agent/.codex/auth.json) so users log in once and reuse the token cache until expiry. Refreshed tokens persist back to the same file in the volume. SCC does not manage the auth flow itself — Codex handles login/refresh natively. SCC only ensures the storage mode is file-based and the file is persisted.",
+      "rationale": "Inside Docker containers, OS keyring is unreliable or unavailable. Codex's auto-detection mode may attempt keyring and fail silently or prompt unexpectedly. Forcing file-based auth is the only reliable container path. The auth.json file in the volume survives container restarts, so users don't re-login every launch. This is the same model Claude uses with its credentials files in the data volume.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 39,
+      "id": "D041",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "How should SCC manage provider config without overwriting user/provider-owned preferences?",
+      "choice": "SCC uses provider-native config layering to write SCC-managed settings to a scope that takes precedence over user config but does not overwrite user-owned files. For Claude, SCC writes to /home/agent/.claude/settings.json (an SCC-owned injection surface) — this is already separate from settings.local.json (user-owned) and the Claude runtime merges both. For Codex, SCC writes to a project-scoped .codex/config.toml inside the workspace mount (/workspace/.codex/config.toml) — Codex's config precedence puts project config above user config, so SCC-managed values (MCP servers, sandbox bypass, auth storage mode) override user defaults without destroying them. The user-level ~/.codex/config.toml in the persistent volume stays untouched and retains model preferences, feature flags, agent definitions, and other user settings. On fresh launch, SCC writes the project-scoped config deterministically (D038); on resume, it is left in place. Auth storage (cli_auth_credentials_store='file') is injected via the project config, not the user config.",
+      "rationale": "Both Claude and Codex natively support layered config with clear precedence (project > user > system > defaults). SCC should use this layering rather than fight it. Overwriting the user-level config.toml would destroy model preferences, agent definitions, feature flags, and sandbox policies — the exact concern raised. Project-scoped config is the right injection point because: (1) it takes precedence per Codex's own resolution order, (2) it lives in the workspace mount which SCC already controls, (3) it is naturally ephemeral per workspace, (4) Codex only loads it when the project is trusted (and SCC can ensure trust via launch flags). For Claude, the existing settings.json injection is already the correct pattern — it was always separate from the user-owned file.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 40,
+      "id": "D042",
+      "when_context": "M007-cqttot planning refinement",
+      "scope": "architecture",
+      "decision": "Refinement of D038: what exactly does SCC write on fresh launch for config freshness?",
+      "choice": "On every fresh launch, SCC writes the SCC-managed config file deterministically, even when logically empty. For Claude: writes /home/agent/.claude/settings.json (already the pattern). For Codex: writes /workspace/.codex/config.toml with SCC-managed values (cli_auth_credentials_store, sandbox/approval overrides, MCP servers from governed bundles). These are provider-native injection surfaces that do NOT overwrite user-level config in the persistent volume. On resume, SCC leaves existing config in place. The fresh-launch write is scoped to SCC-owned config layers only — user/provider preferences in the persistent volume are never modified.",
+      "rationale": "D038 as originally stated ('write the authoritative settings file on every fresh launch') was ambiguous about which file was being written. With D041 establishing that SCC uses provider-native layering (project-scoped for Codex, settings.json for Claude), D038's freshness guarantee becomes precise: SCC deterministically writes its own layer, not the user's config. This preserves user preferences while guaranteeing no stale team/workspace config leaks.",
       "revisable": "Yes",
       "made_by": "collaborative",
       "superseded_by": null
@@ -9079,6 +9558,39 @@
       "verdict": "✅ pass",
       "duration_ms": 5000,
       "created_at": "2026-04-05T01:20:48.443Z"
+    },
+    {
+      "id": 295,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_provider_registry.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 11200,
+      "created_at": "2026-04-05T12:25:38.612Z"
+    },
+    {
+      "id": 296,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli/provider_registry.py src/scc_cli/core/contracts.py src/scc_cli/core/errors.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5100,
+      "created_at": "2026-04-05T12:25:38.612Z"
+    },
+    {
+      "id": 297,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check src/scc_cli/provider_registry.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2400,
+      "created_at": "2026-04-05T12:25:38.612Z"
     }
   ]
 }
