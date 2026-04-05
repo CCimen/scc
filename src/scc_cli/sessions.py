@@ -23,7 +23,7 @@ from scc_cli.ports.session_models import SessionFilter, SessionRecord, SessionSu
 from scc_cli.ports.session_store import SessionStore
 from scc_cli.ui.time_format import format_relative_time_from_datetime
 
-from .core.constants import AGENT_CONFIG_DIR
+from .core.provider_registry import get_runtime_spec
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Store Wiring
@@ -195,14 +195,14 @@ def prune_orphaned_sessions(filesystem: Filesystem | None = None) -> int:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def get_claude_sessions_dir() -> Path:
-    """Return the agent sessions directory."""
-    return Path.home() / AGENT_CONFIG_DIR
+def get_provider_sessions_dir(provider_id: str = "claude") -> Path:
+    """Return the agent sessions directory for a provider."""
+    return Path.home() / get_runtime_spec(provider_id).config_dir
 
 
-def get_claude_recent_sessions() -> list[dict[Any, Any]]:
+def get_provider_recent_sessions(provider_id: str = "claude") -> list[dict[Any, Any]]:
     """Return recent sessions from the agent's own storage."""
-    claude_dir = get_claude_sessions_dir()
+    claude_dir = get_provider_sessions_dir(provider_id)
     sessions_file = claude_dir / "sessions.json"
 
     if sessions_file.exists():

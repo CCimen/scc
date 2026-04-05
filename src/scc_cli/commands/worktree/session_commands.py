@@ -90,6 +90,7 @@ def sessions_cmd(
             "last_used": session.last_used,
             "container_name": session.container_name,
             "branch": session.branch,
+            "provider_id": session.provider_id or "claude",
         }
         for session in recent
     ]
@@ -139,6 +140,7 @@ def sessions_cmd(
                 ws,
                 _format_last_used(session.last_used),
                 session.team or "-",
+                session.provider_id or "claude",
             ]
         )
 
@@ -158,6 +160,7 @@ def sessions_cmd(
         wide_columns=[
             ("Last Used", "yellow"),
             ("Team", "green"),
+            ("Provider", "magenta"),
         ],
     )
 

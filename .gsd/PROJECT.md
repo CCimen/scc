@@ -42,6 +42,9 @@ Delivered comprehensive architecture quality: module decomposition (15 files spl
 ### M006 — Provider Selection UX and End-to-End Codex Launch ✅
 SCC became a genuine multi-provider runtime. Users choose Claude or Codex via config or CLI flag (`scc provider show/set`, `scc start --provider codex`), validated against org/team policy. Provider identity flows through container naming, volume naming, session identity, machine-readable outputs (dry-run JSON, support bundle, session list). CodexAgentRunner adapter with Codex-specific image, settings, and argv. Provider-aware branding ("Sandboxed Code CLI"), doctor image check with exact build commands, and 16 coexistence proofs. 153 new tests, 4643 total, zero regressions.
 
+### M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup (active)
+S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. Settings path bug fixed (Codex no longer gets Claude's settings.json). Unknown providers fail closed with InvalidProviderError. +11 new tests, 4654 total.
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
@@ -49,15 +52,15 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
-7. **M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup** ← active
+7. **M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup** ← active (S01 done, S02–S05 remaining)
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all six milestones.
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all seven milestones.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (Success: no issues found in 292 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4643 passed, 23 skipped, 2 xfailed)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4654 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
@@ -99,8 +102,7 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 - Portable artifacts (skills, MCP servers) without provider bindings are renderable via PortableArtifact metadata in ArtifactRenderPlan (D023).
 - Only SKILL and MCP_SERVER kinds qualify as portable — NATIVE_INTEGRATION always requires provider-specific bindings.
 - Provider dispatch is request-scoped in `build_start_session_dependencies()`, not baked into the lru_cached DefaultAdapters singleton (D028). Shared infra stays cached; provider-specific adapters are selected per invocation.
-- SandboxSpec field-forwarding pattern: application layer resolves provider_id → concrete values (image, volume, config_dir) via ProviderRuntimeSpec lookup; infrastructure adapter consumes spec fields and fails clearly if required fields are empty. Infrastructure never inspects provider_id.
-- ProviderRuntimeSpec (frozen dataclass) is defined in core/contracts.py; PROVIDER_REGISTRY (concrete entries) lives in src/scc_cli/provider_registry.py — a top-level composition module accessible to all consumers (D034, supersedes D031).
+- **ProviderRuntimeSpec** (frozen dataclass in `core/contracts.py`) is the single source of truth for provider runtime details (image ref, config dir, settings path, data volume, display name). **PROVIDER_REGISTRY** in `core/provider_registry.py` maps provider_id → spec. `get_runtime_spec()` is the fail-closed lookup — unknown providers raise `InvalidProviderError`. Replaces the 5 scattered dicts that existed in M006 (D029, D031, D034, D043).
 - Unknown, forbidden, or unavailable providers fail closed in active launch logic — never silently fall back to Claude. Legacy Claude defaults are permitted only at migration/read boundaries (D032).
 - AgentRunner owns settings serialization format: build_settings() produces rendered_bytes, not dict. OCI runtime writes bytes verbatim — no format assumption (D035).
 - Launch argv is runner-owned via build_command(), not guessed by infrastructure. SandboxSpec.agent_argv must be populated; OCI runtime fails on empty argv (no Claude fallback).

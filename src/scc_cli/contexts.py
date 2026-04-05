@@ -101,6 +101,7 @@ class WorkContext:
     last_session_id: str | None = None
     last_used: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     pinned: bool = False
+    provider_id: str | None = None
 
     @property
     def repo_name(self) -> str:
@@ -119,9 +120,14 @@ class WorkContext:
         Uses branch name if available, otherwise falls back to worktree directory name.
         This provides meaningful labels (branch names) while maintaining stability
         (directory names don't change when branches switch).
+
+        Appends provider info when provider_id is set and not 'claude' (the default).
         """
         name = self.branch or self.worktree_name
-        return f"{self.team_label} · {self.repo_name} · {name}"
+        label = f"{self.team_label} · {self.repo_name} · {name}"
+        if self.provider_id and self.provider_id != "claude":
+            label = f"{label} ({self.provider_id})"
+        return label
 
     @property
     def unique_key(self) -> tuple[str | None, Path, Path]:
@@ -139,6 +145,7 @@ class WorkContext:
             "last_session_id": self.last_session_id,
             "last_used": self.last_used,
             "pinned": self.pinned,
+            "provider_id": self.provider_id,
         }
 
     @classmethod
@@ -156,6 +163,7 @@ class WorkContext:
             last_session_id=data.get("last_session_id"),
             last_used=data.get("last_used", datetime.now(timezone.utc).isoformat()),
             pinned=data.get("pinned", False),
+            provider_id=data.get("provider_id"),
         )
 
 
@@ -259,6 +267,7 @@ def _merge_contexts(existing: WorkContext, incoming: WorkContext) -> WorkContext
         last_session_id=incoming.last_session_id or existing.last_session_id,
         last_used=datetime.now(timezone.utc).isoformat(),
         pinned=existing.pinned,  # Preserve pinned status
+        provider_id=incoming.provider_id or existing.provider_id,
     )
 
 
@@ -288,6 +297,7 @@ def record_context(context: WorkContext) -> None:
             last_session_id=context.last_session_id,
             last_used=datetime.now(timezone.utc).isoformat(),
             pinned=context.pinned,
+            provider_id=context.provider_id,
         )
 
         # Find and update or append
@@ -351,6 +361,7 @@ def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> b
                     last_session_id=ctx.last_session_id,
                     last_used=ctx.last_used,
                     pinned=not ctx.pinned,
+                    provider_id=ctx.provider_id,
                 )
                 _save_contexts_raw([c.to_dict() for c in contexts])
                 return contexts[i].pinned

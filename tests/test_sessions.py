@@ -783,8 +783,14 @@ class TestSessionsCommandOutput:
         call_kwargs = mock_table.call_args.kwargs
         assert call_kwargs["title"] == "Recent Sessions (platform)"
         assert call_kwargs["columns"] == [("Session", "cyan"), ("Workspace", "white")]
-        assert call_kwargs["wide_columns"] == [("Last Used", "yellow"), ("Team", "green")]
-        assert call_kwargs["rows"] == [["session-1", "..." + "a" * 37, "2h ago", "platform"]]
+        assert call_kwargs["wide_columns"] == [
+            ("Last Used", "yellow"),
+            ("Team", "green"),
+            ("Provider", "magenta"),
+        ]
+        assert call_kwargs["rows"] == [
+            ["session-1", "..." + "a" * 37, "2h ago", "platform", "claude"]
+        ]
 
     def test_sessions_cmd_json_output(self, capsys) -> None:
         from scc_cli.commands.worktree.session_commands import sessions_cmd
