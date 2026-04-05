@@ -82,7 +82,7 @@ Two related D028 deliverables: (1) add provider_id to dry-run JSON, support bund
   - Estimate: 1h
   - Files: src/scc_cli/commands/launch/render.py, src/scc_cli/commands/launch/flow.py, src/scc_cli/application/support_bundle.py, src/scc_cli/presentation/json/sessions_json.py, src/scc_cli/adapters/oci_sandbox_runtime.py, src/scc_cli/ports/models.py, src/scc_cli/application/start_session.py, tests/test_provider_machine_readable.py
   - Verify: uv run pytest tests/test_provider_machine_readable.py -v --no-cov && uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/application/support_bundle.py src/scc_cli/presentation/json/sessions_json.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py && uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/application/support_bundle.py src/scc_cli/presentation/json/sessions_json.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py && uv run pytest --rootdir "$PWD" -q --no-cov
-- [ ] **T03: Doctor provider image check with build command hint** — ## Description
+- [x] **T03: Added check_provider_image() doctor check that detects missing provider agent images and returns exact docker build command as fix_commands** — ## Description
 
 D028 constraint 4: for missing provider images, doctor must print the exact build command. Add a `check_provider_image()` doctor check that runs `docker image inspect` for the active provider's image ref and returns a CheckResult with fix_commands on failure.
 

@@ -10,6 +10,7 @@ from .checks import (
     check_docker_running,
     check_docker_sandbox,
     check_git,
+    check_provider_image,
     check_runtime_backend,
     check_safety_policy,
     check_user_config_valid,
@@ -49,6 +50,14 @@ def run_doctor(workspace: Path | None = None) -> DoctorResult:
 
     runtime_check = check_runtime_backend()
     result.checks.append(runtime_check)
+
+    # Provider image check — only meaningful when Docker is reachable
+    if result.docker_ok:
+        try:
+            image_check = check_provider_image()
+            result.checks.append(image_check)
+        except Exception:
+            pass  # partial-results — don't block other checks
 
     wsl2_check, is_wsl2 = check_wsl2()
     result.checks.append(wsl2_check)

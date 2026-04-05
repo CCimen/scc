@@ -44,6 +44,7 @@ from .environment import (
     check_docker_running,
     check_docker_sandbox,
     check_git,
+    check_provider_image,
     check_runtime_backend,
     check_workspace_path,
     check_wsl2,
@@ -97,6 +98,11 @@ def run_all_checks() -> list[CheckResult]:
     results.append(wsl2_result)
 
     results.append(check_runtime_backend())
+
+    try:
+        results.append(check_provider_image())
+    except Exception:
+        pass  # partial-results pattern — don't block other checks
 
     results.append(check_config_directory())
 
@@ -171,6 +177,7 @@ __all__ = [
     "check_docker_sandbox",
     "check_docker_running",
     "check_wsl2",
+    "check_provider_image",
     "check_runtime_backend",
     "check_workspace_path",
     # Worktree checks

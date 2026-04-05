@@ -291,3 +291,58 @@ def check_workspace_path(workspace: Path | None = None) -> CheckResult:
         passed=True,
         message=f"Workspace path is optimal: {workspace}",
     )
+
+
+def check_provider_image() -> CheckResult:
+    """Check whether the active provider's agent image is available locally.
+
+    Runs ``docker image inspect`` for the image ref corresponding to the
+    currently selected provider. On failure, returns a CheckResult with
+    ``fix_commands`` containing the exact ``docker build`` invocation.
+    """
+    from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
+
+    image_map: dict[str, str] = {
+        "claude": SCC_CLAUDE_IMAGE_REF,
+        "codex": SCC_CODEX_IMAGE_REF,
+    }
+
+    # Resolve the active provider — fall back to claude if unset/unknown
+    try:
+        from scc_cli import config as config_module
+
+        provider_id = config_module.get_selected_provider() or "claude"
+    except Exception:
+        provider_id = "claude"
+
+    image_ref = image_map.get(provider_id, SCC_CLAUDE_IMAGE_REF)
+
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", image_ref],
+            capture_output=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            return CheckResult(
+                name="Provider Image",
+                passed=True,
+                message=f"{image_ref} found",
+            )
+        # Image not found
+        return CheckResult(
+            name="Provider Image",
+            passed=False,
+            message=f"{image_ref} not found",
+            fix_commands=[f"docker build -t {image_ref} images/scc-agent-{provider_id}/"],
+            fix_hint=f"Build the {provider_id} agent image",
+            severity=SeverityLevel.WARNING,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        return CheckResult(
+            name="Provider Image",
+            passed=False,
+            message=f"Could not check provider image: {exc}",
+            fix_hint="Ensure Docker is installed and reachable",
+            severity=SeverityLevel.WARNING,
+        )
