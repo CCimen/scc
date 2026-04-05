@@ -6,7 +6,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.contracts import (
+    AgentLaunchSpec,
+    AuthReadiness,
+    ProviderCapabilityProfile,
+    RenderArtifactsResult,
+)
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan
 
 
@@ -30,6 +35,18 @@ class AgentProvider(Protocol):
         settings_path: Path | None = None,
     ) -> AgentLaunchSpec:
         """Build a provider-owned launch specification for one workspace."""
+        ...
+
+    def auth_check(self) -> AuthReadiness:
+        """Check whether provider auth credentials are present and usable.
+
+        Each adapter owns the definition of "ready": file existence, non-empty
+        content, parseable format. Wording must be truthful — "auth cache
+        present" not "logged in" (we check file presence, not token validity).
+
+        Returns:
+            AuthReadiness with status, mechanism, and user-facing guidance.
+        """
         ...
 
     def render_artifacts(

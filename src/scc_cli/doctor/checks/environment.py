@@ -294,10 +294,14 @@ def check_workspace_path(workspace: Path | None = None) -> CheckResult:
 
 
 def check_provider_auth(provider_id: str | None = None) -> CheckResult:
-    """Check whether a provider's auth credentials are present in its data volume.
+    """Check whether a provider's auth credentials are cached and usable.
 
-    Probes the provider's Docker named volume for the expected auth file.
-    Claude uses ``.credentials.json``; Codex uses ``auth.json``.
+    Delegates to the adapter-owned ``auth_check()`` method on the provider's
+    ``AgentProvider`` implementation (D037).  Each adapter defines its own
+    readiness criteria: file existence, non-empty content, parseable JSON.
+
+    Wording is truthful: "auth cache present" — we verify the cached file,
+    not whether the token is valid or unexpired.
 
     Args:
         provider_id: Provider to check.  Falls back to selected or ``claude``.
@@ -305,9 +309,6 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
     Returns:
         CheckResult with ``category='provider'``.
     """
-    from scc_cli.core.errors import InvalidProviderError
-    from scc_cli.core.provider_registry import get_runtime_spec
-
     # Resolve provider
     if provider_id is None:
         try:
@@ -317,15 +318,28 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
         except Exception:
             provider_id = "claude"
 
-    # Map provider → auth file name
-    auth_files: dict[str, str] = {
-        "claude": ".credentials.json",
-        "codex": "auth.json",
-    }
-
+    # Look up the adapter via bootstrap
     try:
-        spec = get_runtime_spec(provider_id)
-    except InvalidProviderError:
+        from scc_cli.bootstrap import get_default_adapters
+
+        adapters = get_default_adapters()
+    except Exception:
+        return CheckResult(
+            name="Provider Auth",
+            passed=False,
+            message="Could not initialise adapter wiring for auth check",
+            severity=SeverityLevel.WARNING,
+            category="provider",
+        )
+
+    # Dispatch to the correct adapter
+    provider_adapter = None
+    if provider_id == "claude":
+        provider_adapter = adapters.agent_provider
+    elif provider_id == "codex":
+        provider_adapter = adapters.codex_agent_provider
+
+    if provider_adapter is None:
         return CheckResult(
             name="Provider Auth",
             passed=False,
@@ -334,85 +348,32 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
             category="provider",
         )
 
-    auth_file = auth_files.get(provider_id, ".credentials.json")
-    volume = spec.data_volume
-
-    # Step 1: verify the volume exists
+    # Call adapter-owned auth_check()
     try:
-        vol_result = subprocess.run(
-            ["docker", "volume", "inspect", volume],
-            capture_output=True,
-            timeout=10,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        readiness = provider_adapter.auth_check()
+    except Exception as exc:
         return CheckResult(
             name="Provider Auth",
             passed=False,
-            message=f"Could not inspect volume '{volume}': {exc}",
-            fix_hint="Ensure Docker is installed and reachable",
+            message=f"Auth check failed for {provider_id}: {exc}",
+            fix_hint=f"Run 'scc start --provider {provider_id}' to set up auth",
             severity=SeverityLevel.WARNING,
             category="provider",
         )
 
-    if vol_result.returncode != 0:
-        return CheckResult(
-            name="Provider Auth",
-            passed=False,
-            message=f"Data volume '{volume}' does not exist (provider may not have been launched yet)",
-            fix_hint=f"Run 'scc start --provider {provider_id}' to perform initial setup",
-            severity=SeverityLevel.WARNING,
-            category="provider",
-        )
-
-    # Step 2: check whether the auth file exists inside the volume
-    try:
-        file_result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{volume}:/check",
-                "alpine",
-                "test",
-                "-f",
-                f"/check/{auth_file}",
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        return CheckResult(
-            name="Provider Auth",
-            passed=False,
-            message="Timed out checking auth file in volume",
-            fix_hint="Check Docker daemon health and available resources",
-            severity=SeverityLevel.WARNING,
-            category="provider",
-        )
-    except (FileNotFoundError, OSError) as exc:
-        return CheckResult(
-            name="Provider Auth",
-            passed=False,
-            message=f"Could not run auth file check: {exc}",
-            fix_hint="Ensure Docker is installed and reachable",
-            severity=SeverityLevel.WARNING,
-            category="provider",
-        )
-
-    if file_result.returncode == 0:
+    if readiness.status == "present":
         return CheckResult(
             name="Provider Auth",
             passed=True,
-            message=f"{provider_id} auth ({auth_file}) present in {volume}",
+            message=f"{provider_id} auth cache present ({readiness.mechanism})",
             category="provider",
         )
 
     return CheckResult(
         name="Provider Auth",
         passed=False,
-        message=f"{provider_id} auth ({auth_file}) not found in {volume}",
-        fix_hint=f"Launch the provider once to complete auth setup: scc start --provider {provider_id}",
+        message=f"{provider_id} auth cache not ready ({readiness.mechanism})",
+        fix_hint=readiness.guidance,
         severity=SeverityLevel.WARNING,
         category="provider",
     )

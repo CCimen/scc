@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from scc_cli.adapters.codex_renderer import render_codex_artifacts
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.contracts import (
+    AgentLaunchSpec,
+    AuthReadiness,
+    ProviderCapabilityProfile,
+    RenderArtifactsResult,
+)
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan
 
 logger = logging.getLogger(__name__)
+
+_CODEX_AUTH_FILE = "auth.json"
+_CODEX_DATA_VOLUME = "docker-codex-sandbox-data"
 
 
 class CodexAgentProvider:
@@ -29,6 +39,98 @@ class CodexAgentProvider:
             supports_resume=False,
             supports_skills=True,
             supports_native_integrations=True,
+        )
+
+    def auth_check(self) -> AuthReadiness:
+        """Check whether Codex auth credentials are cached in the data volume.
+
+        Probes the Docker named volume for ``auth.json``.  Validates that the
+        file exists, is non-empty, and contains parseable JSON.  Wording is
+        truthful: "auth cache present" — we verify the file, not whether the
+        token is actually valid or unexpired.
+        """
+        volume = _CODEX_DATA_VOLUME
+        auth_file = _CODEX_AUTH_FILE
+        mechanism = "auth_json_file"
+
+        # Step 1: volume existence
+        try:
+            vol_result = subprocess.run(
+                ["docker", "volume", "inspect", volume],
+                capture_output=True,
+                timeout=10,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=f"Cannot reach Docker to check volume '{volume}'",
+            )
+
+        if vol_result.returncode != 0:
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance="Run 'scc start --provider codex' to perform initial auth setup",
+            )
+
+        # Step 2: read file content from volume
+        try:
+            file_result = subprocess.run(
+                [
+                    "docker", "run", "--rm",
+                    "-v", f"{volume}:/check",
+                    "alpine",
+                    "cat", f"/check/{auth_file}",
+                ],
+                capture_output=True,
+                timeout=30,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance="Timed out reading auth file from volume",
+            )
+
+        if file_result.returncode != 0:
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=(
+                    f"Auth file '{auth_file}' not found in volume '{volume}'. "
+                    "Run 'scc start --provider codex' to authenticate."
+                ),
+            )
+
+        # Step 3: non-empty + parseable JSON
+        content = file_result.stdout.strip()
+        if not content:
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=(
+                    f"Auth file '{auth_file}' is empty. "
+                    "Run 'scc start --provider codex' to authenticate."
+                ),
+            )
+
+        try:
+            json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=(
+                    f"Auth file '{auth_file}' contains invalid JSON. "
+                    "Run 'scc start --provider codex' to re-authenticate."
+                ),
+            )
+
+        return AuthReadiness(
+            status="present",
+            mechanism=mechanism,
+            guidance="Codex auth cache present — no action needed",
         )
 
     def prepare_launch(

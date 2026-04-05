@@ -5,13 +5,11 @@ Covers:
 - ProviderImageMissingError message/action/exit_code
 - AuthReadiness field access
 - CheckResult category default and explicit values
-- check_provider_auth happy path, missing auth, volume missing, subprocess
-  timeout, unknown provider fallback
+- check_provider_auth via adapter-owned auth_check() (D037)
 """
 
 from __future__ import annotations
 
-import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -150,96 +148,130 @@ class TestCheckResultCategory:
 # ---------------------------------------------------------------------------
 
 
-def _mock_subprocess_run(
+def _make_fake_adapters(
     *,
-    volume_rc: int = 0,
-    file_rc: int = 0,
-    volume_exc: Exception | None = None,
-    file_exc: Exception | None = None,
+    claude_readiness: AuthReadiness | None = None,
+    codex_readiness: AuthReadiness | None = None,
+    claude_exc: Exception | None = None,
+    codex_exc: Exception | None = None,
 ) -> MagicMock:
-    """Build a side-effect callable for subprocess.run that routes by subcommand."""
+    """Build a fake DefaultAdapters with configurable auth_check() results."""
+    claude_provider = MagicMock()
+    codex_provider = MagicMock()
 
-    def _side_effect(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        # volume inspect
-        if "volume" in cmd and "inspect" in cmd:
-            if volume_exc is not None:
-                raise volume_exc
-            return subprocess.CompletedProcess(cmd, volume_rc, b"", b"")
-        # docker run ... test -f ...
-        if "run" in cmd and "test" in cmd:
-            if file_exc is not None:
-                raise file_exc
-            return subprocess.CompletedProcess(cmd, file_rc, b"", b"")
-        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+    if claude_exc is not None:
+        claude_provider.auth_check.side_effect = claude_exc
+    elif claude_readiness is not None:
+        claude_provider.auth_check.return_value = claude_readiness
+    else:
+        claude_provider.auth_check.return_value = AuthReadiness(
+            status="present", mechanism="oauth_file", guidance="No action needed"
+        )
 
-    return MagicMock(side_effect=_side_effect)
+    if codex_exc is not None:
+        codex_provider.auth_check.side_effect = codex_exc
+    elif codex_readiness is not None:
+        codex_provider.auth_check.return_value = codex_readiness
+    else:
+        codex_provider.auth_check.return_value = AuthReadiness(
+            status="present", mechanism="auth_json_file", guidance="No action needed"
+        )
+
+    adapters = MagicMock()
+    adapters.agent_provider = claude_provider
+    adapters.codex_agent_provider = codex_provider
+    return adapters
 
 
 class TestCheckProviderAuth:
-    """check_provider_auth probes Docker volumes for auth credentials."""
+    """check_provider_auth delegates to adapter-owned auth_check() (D037)."""
 
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_happy_path_auth_present(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(volume_rc=0, file_rc=0).side_effect
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_happy_path_claude_auth_present(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.return_value = _make_fake_adapters()
         result = check_provider_auth(provider_id="claude")
         assert result.passed is True
         assert result.category == "provider"
-        assert ".credentials.json" in result.message
+        assert "auth cache present" in result.message
+        assert "oauth_file" in result.message
 
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_auth_missing(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(volume_rc=0, file_rc=1).side_effect
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_claude_auth_missing(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.return_value = _make_fake_adapters(
+            claude_readiness=AuthReadiness(
+                status="missing",
+                mechanism="oauth_file",
+                guidance="Run 'scc start --provider claude' to authenticate.",
+            )
+        )
         result = check_provider_auth(provider_id="claude")
         assert result.passed is False
         assert result.category == "provider"
-        assert ".credentials.json" in result.message
+        assert "not ready" in result.message
 
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_codex_auth_file(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(volume_rc=0, file_rc=0).side_effect
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_codex_auth_present(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.return_value = _make_fake_adapters()
         result = check_provider_auth(provider_id="codex")
         assert result.passed is True
-        assert "auth.json" in result.message
+        assert "auth cache present" in result.message
+        assert "auth_json_file" in result.message
 
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_volume_missing(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(volume_rc=1).side_effect
-        result = check_provider_auth(provider_id="claude")
-        assert result.passed is False
-        assert "does not exist" in result.message
-        assert result.category == "provider"
-
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_subprocess_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(
-            volume_exc=subprocess.TimeoutExpired(cmd=["docker"], timeout=10),
-        ).side_effect
-        result = check_provider_auth(provider_id="claude")
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_codex_auth_missing(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.return_value = _make_fake_adapters(
+            codex_readiness=AuthReadiness(
+                status="missing",
+                mechanism="auth_json_file",
+                guidance="Run 'scc start --provider codex' to authenticate.",
+            )
+        )
+        result = check_provider_auth(provider_id="codex")
         assert result.passed is False
         assert result.category == "provider"
 
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_file_check_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(
-            volume_rc=0,
-            file_exc=subprocess.TimeoutExpired(cmd=["docker"], timeout=30),
-        ).side_effect
-        result = check_provider_auth(provider_id="claude")
-        assert result.passed is False
-        assert "Timed out" in result.message
-        assert result.category == "provider"
-
-    def test_unknown_provider_fallback(self) -> None:
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_unknown_provider_fallback(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.return_value = _make_fake_adapters()
         result = check_provider_auth(provider_id="nonexistent")
         assert result.passed is False
         assert "Unknown provider" in result.message
         assert result.category == "provider"
 
-    @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    def test_docker_not_found(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _mock_subprocess_run(
-            volume_exc=FileNotFoundError("docker not found"),
-        ).side_effect
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_adapter_exception_handled(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.return_value = _make_fake_adapters(
+            claude_exc=RuntimeError("Docker not reachable")
+        )
         result = check_provider_auth(provider_id="claude")
         assert result.passed is False
         assert result.category == "provider"
+        assert "Auth check failed" in result.message
+
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_bootstrap_failure_handled(self, mock_adapters: MagicMock) -> None:
+        mock_adapters.side_effect = RuntimeError("Cannot initialise")
+        result = check_provider_auth(provider_id="claude")
+        assert result.passed is False
+        assert "Could not initialise" in result.message
+        assert result.category == "provider"
+
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_truthful_wording_present(self, mock_adapters: MagicMock) -> None:
+        """D037: wording says 'auth cache present', not 'logged in'."""
+        mock_adapters.return_value = _make_fake_adapters()
+        result = check_provider_auth(provider_id="claude")
+        assert "auth cache present" in result.message
+        assert "logged in" not in result.message.lower()
+
+    @patch("scc_cli.bootstrap.get_default_adapters")
+    def test_truthful_wording_missing(self, mock_adapters: MagicMock) -> None:
+        """D037: wording says 'not ready', not 'not logged in'."""
+        mock_adapters.return_value = _make_fake_adapters(
+            claude_readiness=AuthReadiness(
+                status="missing", mechanism="oauth_file", guidance="Authenticate first"
+            )
+        )
+        result = check_provider_auth(provider_id="claude")
+        assert "not ready" in result.message
+        assert "logged in" not in result.message.lower()

@@ -82,7 +82,7 @@ Steps:
   - Estimate: 30m
   - Files: src/scc_cli/adapters/codex_agent_runner.py, src/scc_cli/commands/launch/start_session.py, tests/adapters/test_codex_agent_runner.py
   - Verify: uv run pytest tests/adapters/test_codex_agent_runner.py -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T06: Implement D037: adapter-owned auth readiness checks** — Move auth readiness ownership to the provider adapter boundary. Doctor should consume provider-owned auth readiness results. Auth wording must stay truthful: 'auth cache present' not 'logged in'. Improve local readiness quality: file existence + non-empty content. Parseable JSON for JSON auth files.
+- [x] **T06: Added auth_check() to AgentProvider protocol; Claude and Codex adapters validate file existence, non-empty content, and parseable JSON; doctor delegates to adapter-owned results with truthful wording** — Move auth readiness ownership to the provider adapter boundary. Doctor should consume provider-owned auth readiness results. Auth wording must stay truthful: 'auth cache present' not 'logged in'. Improve local readiness quality: file existence + non-empty content. Parseable JSON for JSON auth files.
 
 Steps:
 1. Read current check_provider_auth in doctor/checks

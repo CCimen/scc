@@ -6,7 +6,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.contracts import (
+    AgentLaunchSpec,
+    AuthReadiness,
+    ProviderCapabilityProfile,
+    RenderArtifactsResult,
+)
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan
 
 
@@ -23,6 +28,13 @@ class FakeAgentProvider:
             required_destination_set="fake-core",
             supports_resume=True,
             supports_skills=True,
+        )
+
+    def auth_check(self) -> AuthReadiness:
+        return AuthReadiness(
+            status="present",
+            mechanism="fake",
+            guidance="Fake auth always present",
         )
 
     def prepare_launch(

@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from scc_cli.adapters.claude_renderer import render_claude_artifacts
-from scc_cli.core.contracts import AgentLaunchSpec, ProviderCapabilityProfile, RenderArtifactsResult
+from scc_cli.core.contracts import (
+    AgentLaunchSpec,
+    AuthReadiness,
+    ProviderCapabilityProfile,
+    RenderArtifactsResult,
+)
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan
 
 logger = logging.getLogger(__name__)
+
+_CLAUDE_AUTH_FILE = ".credentials.json"
+_CLAUDE_DATA_VOLUME = "docker-claude-sandbox-data"
 
 
 class ClaudeAgentProvider:
@@ -29,6 +39,98 @@ class ClaudeAgentProvider:
             supports_resume=True,
             supports_skills=True,
             supports_native_integrations=True,
+        )
+
+    def auth_check(self) -> AuthReadiness:
+        """Check whether Claude OAuth credentials are cached in the data volume.
+
+        Probes the Docker named volume for ``.credentials.json``.  Validates
+        that the file exists, is non-empty, and contains parseable JSON.
+        Wording is truthful: "auth cache present" — we verify the file, not
+        whether the token is actually valid or unexpired.
+        """
+        volume = _CLAUDE_DATA_VOLUME
+        auth_file = _CLAUDE_AUTH_FILE
+        mechanism = "oauth_file"
+
+        # Step 1: volume existence
+        try:
+            vol_result = subprocess.run(
+                ["docker", "volume", "inspect", volume],
+                capture_output=True,
+                timeout=10,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=f"Cannot reach Docker to check volume '{volume}'",
+            )
+
+        if vol_result.returncode != 0:
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance="Run 'scc start --provider claude' to perform initial auth setup",
+            )
+
+        # Step 2: read file content from volume
+        try:
+            file_result = subprocess.run(
+                [
+                    "docker", "run", "--rm",
+                    "-v", f"{volume}:/check",
+                    "alpine",
+                    "cat", f"/check/{auth_file}",
+                ],
+                capture_output=True,
+                timeout=30,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance="Timed out reading auth file from volume",
+            )
+
+        if file_result.returncode != 0:
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=(
+                    f"Auth file '{auth_file}' not found in volume '{volume}'. "
+                    "Run 'scc start --provider claude' to authenticate."
+                ),
+            )
+
+        # Step 3: non-empty + parseable JSON
+        content = file_result.stdout.strip()
+        if not content:
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=(
+                    f"Auth file '{auth_file}' is empty. "
+                    "Run 'scc start --provider claude' to authenticate."
+                ),
+            )
+
+        try:
+            json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            return AuthReadiness(
+                status="missing",
+                mechanism=mechanism,
+                guidance=(
+                    f"Auth file '{auth_file}' contains invalid JSON. "
+                    "Run 'scc start --provider claude' to re-authenticate."
+                ),
+            )
+
+        return AuthReadiness(
+            status="present",
+            mechanism=mechanism,
+            guidance="Claude auth cache present — no action needed",
         )
 
     def prepare_launch(
