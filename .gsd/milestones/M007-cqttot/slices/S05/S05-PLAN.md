@@ -152,7 +152,7 @@ Steps:
   - Estimate: 30m
   - Files: tests/adapters/test_oci_sandbox_runtime.py, tests/commands/launch/test_start_session.py
   - Verify: uv run pytest tests/adapters/test_oci_sandbox_runtime.py tests/commands/launch/ -v && uv run ruff check
-- [ ] **T12: Final truthfulness validation: decisions vs code reconciliation** — Verify that D033, D035, D037, D040, D041 are reflected in code and tests. Expand truthfulness guardrail tests to cover reconciliation items. Ensure README, docs, and UI naming are consistent with 'SCC — Sandboxed Code CLI'. Run milestone exit gate.
+- [x] **T12: Added 10 decision-reconciliation guardrail tests (D033/D035/D037/D040/D041) and corrected D-001 product identity to 'Sandboxed Code CLI'; full suite passes at 4820 tests** — Verify that D033, D035, D037, D040, D041 are reflected in code and tests. Expand truthfulness guardrail tests to cover reconciliation items. Ensure README, docs, and UI naming are consistent with 'SCC — Sandboxed Code CLI'. Run milestone exit gate.
 
 Steps:
 1. Add truthfulness tests validating each reconciliation decision is implemented

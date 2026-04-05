@@ -697,3 +697,199 @@ def test_core_constants_no_claude_specifics() -> None:
         f"core/constants.py contains provider-specific constants: {found}. "
         "These belong in adapter modules, not in the product-level constants file."
     )
+
+
+# ===========================================================================
+# M007/S05 decision-vs-code reconciliation guardrails
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test v: D033 — Codex launch argv includes --dangerously-bypass-approvals-and-sandbox
+# ---------------------------------------------------------------------------
+
+
+def test_d033_codex_bypass_flag_in_runner() -> None:
+    """D033: CodexAgentRunner must launch with --dangerously-bypass-approvals-and-sandbox.
+
+    SCC's container isolation is the hard boundary; Codex's built-in
+    OS-level sandbox is redundant inside Docker. The flag must appear
+    in the runner's default argv, not in ProviderRuntimeSpec.
+    """
+    runner_path = ADAPTERS_DIR / "codex_agent_runner.py"
+    assert runner_path.exists(), "codex_agent_runner.py missing"
+    source = runner_path.read_text(encoding="utf-8")
+
+    assert "--dangerously-bypass-approvals-and-sandbox" in source, (
+        "codex_agent_runner.py does not contain '--dangerously-bypass-approvals-and-sandbox'. "
+        "D033 requires this flag for Codex launch inside SCC containers."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test w: D035 — AgentSettings uses rendered_bytes, OCI runtime is format-agnostic
+# ---------------------------------------------------------------------------
+
+
+def test_d035_agent_settings_rendered_bytes() -> None:
+    """D035: AgentSettings must use rendered_bytes, not content:dict.
+
+    The runner serializes; the OCI runtime writes bytes verbatim.
+    This makes the sandbox runtime format-agnostic.
+    """
+    import dataclasses
+
+    from scc_cli.ports.models import AgentSettings
+
+    field_names = {f.name for f in dataclasses.fields(AgentSettings)}
+    assert "rendered_bytes" in field_names, (
+        "AgentSettings does not have a 'rendered_bytes' field. "
+        "D035 requires pre-rendered bytes instead of content:dict."
+    )
+    assert "content" not in field_names, (
+        "AgentSettings still has a 'content' field. "
+        "D035 replaced content:dict with rendered_bytes:bytes."
+    )
+
+
+def test_d035_oci_runtime_no_json_dumps_in_inject_settings() -> None:
+    """D035: OCI runtime _inject_settings must not call json.dumps.
+
+    The runtime writes rendered_bytes verbatim — it is format-agnostic.
+    json.dumps in _inject_settings would re-introduce a JSON assumption.
+    """
+    runtime_path = ADAPTERS_DIR / "oci_sandbox_runtime.py"
+    assert runtime_path.exists(), "oci_sandbox_runtime.py missing"
+    source = runtime_path.read_text(encoding="utf-8")
+
+    # Find _inject_settings method body
+    inject_start = source.find("def _inject_settings")
+    assert inject_start != -1, "_inject_settings not found in OCI runtime"
+
+    # Find the next method (def ...) after _inject_settings
+    next_def = source.find("\n    def ", inject_start + 1)
+    if next_def == -1:
+        inject_body = source[inject_start:]
+    else:
+        inject_body = source[inject_start:next_def]
+
+    assert "json.dumps" not in inject_body, (
+        "OCI runtime _inject_settings still calls json.dumps. "
+        "D035 requires format-agnostic byte writing via rendered_bytes."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test x: D037 — AgentProvider protocol has auth_check method
+# ---------------------------------------------------------------------------
+
+
+def test_d037_agent_provider_has_auth_check() -> None:
+    """D037: AgentProvider protocol must define auth_check() -> AuthReadiness.
+
+    Auth readiness is adapter-owned. Doctor consumes the structured result.
+    """
+    from scc_cli.ports.agent_provider import AgentProvider
+
+    assert hasattr(AgentProvider, "auth_check"), (
+        "AgentProvider protocol does not define auth_check. "
+        "D037 requires adapter-owned auth readiness checking."
+    )
+
+
+def test_d037_both_providers_implement_auth_check() -> None:
+    """D037: Both ClaudeAgentProvider and CodexAgentProvider must implement auth_check."""
+    from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+    from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+    assert hasattr(ClaudeAgentProvider, "auth_check"), (
+        "ClaudeAgentProvider does not implement auth_check (D037)."
+    )
+    assert hasattr(CodexAgentProvider, "auth_check"), (
+        "CodexAgentProvider does not implement auth_check (D037)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test y: D040 — Codex config includes file-based auth store
+# ---------------------------------------------------------------------------
+
+
+def test_d040_codex_runner_forces_file_auth_store() -> None:
+    """D040: CodexAgentRunner must inject cli_auth_credentials_store='file'.
+
+    Inside Docker containers, OS keyring is unavailable. File-based auth
+    caching ensures auth.json persists in the provider volume.
+    """
+    runner_path = ADAPTERS_DIR / "codex_agent_runner.py"
+    assert runner_path.exists(), "codex_agent_runner.py missing"
+    source = runner_path.read_text(encoding="utf-8")
+
+    assert "cli_auth_credentials_store" in source, (
+        "codex_agent_runner.py does not set cli_auth_credentials_store. "
+        "D040 requires file-based auth caching for container reliability."
+    )
+    # Must set to "file", not "keyring" or "auto"
+    assert '"file"' in source or "'file'" in source, (
+        "codex_agent_runner.py does not set cli_auth_credentials_store to 'file'. "
+        "D040 requires file-based auth, not keyring or auto."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test z: D041 — Codex settings path is workspace-scoped
+# ---------------------------------------------------------------------------
+
+
+def test_d041_codex_settings_scope_is_workspace() -> None:
+    """D041: Codex ProviderRuntimeSpec must use settings_scope='workspace'.
+
+    Project-scoped .codex/config.toml in the workspace mount takes precedence
+    over user config without overwriting user-owned files. Claude uses 'home'.
+    """
+    from scc_cli.core.provider_registry import PROVIDER_REGISTRY
+
+    codex_spec = PROVIDER_REGISTRY.get("codex")
+    assert codex_spec is not None, "Codex not found in PROVIDER_REGISTRY"
+    assert codex_spec.settings_scope == "workspace", (
+        f"Codex settings_scope is '{codex_spec.settings_scope}', expected 'workspace'. "
+        "D041 requires workspace-scoped config to avoid overwriting user preferences."
+    )
+
+
+def test_d041_claude_settings_scope_is_home() -> None:
+    """D041: Claude ProviderRuntimeSpec must use settings_scope='home'.
+
+    Claude's settings.json lives in /home/agent/.claude/ (the provider
+    config dir). This is distinct from Codex's workspace-scoped pattern.
+    """
+    from scc_cli.core.provider_registry import PROVIDER_REGISTRY
+
+    claude_spec = PROVIDER_REGISTRY.get("claude")
+    assert claude_spec is not None, "Claude not found in PROVIDER_REGISTRY"
+    assert claude_spec.settings_scope == "home", (
+        f"Claude settings_scope is '{claude_spec.settings_scope}', expected 'home'. "
+        "Claude settings inject to the provider config dir, not the workspace."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test: D-001 product identity is consistent with D030
+# ---------------------------------------------------------------------------
+
+
+def test_d001_product_identity_consistent() -> None:
+    """D-001 and D030 both establish the product name as 'Sandboxed Code CLI'.
+
+    The pyproject.toml description must not contain 'Claude' in a way
+    that implies the product is Claude-specific.
+    """
+    pyproject = ROOT / "pyproject.toml"
+    assert pyproject.exists(), "pyproject.toml missing"
+    text = pyproject.read_text(encoding="utf-8")
+
+    # The description line should not say "Sandboxed Claude CLI"
+    assert "Sandboxed Claude CLI" not in text, (
+        "pyproject.toml still contains 'Sandboxed Claude CLI'. "
+        "D030 requires provider-neutral naming."
+    )

@@ -5,9 +5,9 @@ This file is append-only. Record new decisions as new entries.
 ---
 
 ## D-001 — Product identity
-SCC means **Sandboxed Coding CLI**.
+SCC means **Sandboxed Code CLI**.
 
-Status: accepted
+Status: accepted (updated per D030)
 
 ---
 
