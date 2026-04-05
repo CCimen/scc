@@ -18,7 +18,6 @@ from scc_cli.application.sync_marketplace import (
 )
 from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
 from scc_cli.core.bundle_resolver import BundleResolutionResult, resolve_render_plan
-from scc_cli.core.constants import SANDBOX_IMAGE
 from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
 from scc_cli.core.destination_registry import resolve_destination_sets
 from scc_cli.core.errors import RendererError, WorkspaceNotFoundError
@@ -36,6 +35,9 @@ from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
 logger = logging.getLogger(__name__)
+
+# Claude-specific fallback image (used when no RuntimeInfo is available)
+_SANDBOX_IMAGE = "docker/sandbox-templates:claude-code"
 
 
 @dataclass(frozen=True)
@@ -314,7 +316,7 @@ def _build_sandbox_spec(
             if agent_provider is not None
             else ""
         )
-        image = SANDBOX_IMAGE
+        image = _SANDBOX_IMAGE
         data_volume = ""
         config_dir = ""
 

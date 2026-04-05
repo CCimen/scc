@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
+from scc_cli.application.start_session import _SANDBOX_IMAGE as SANDBOX_IMAGE
 from scc_cli.application.start_session import (
     StartSessionDependencies,
     StartSessionPlan,
@@ -15,7 +16,6 @@ from scc_cli.application.start_session import (
 )
 from scc_cli.application.sync_marketplace import SyncError, SyncResult
 from scc_cli.application.workspace import WorkspaceContext
-from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
 from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
 from scc_cli.core.errors import InvalidProviderError, MaterializationError
 from scc_cli.core.governed_artifacts import (
@@ -140,7 +140,7 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
     assert plan.current_branch == "main"
     assert plan.agent_settings is not None
     assert plan.agent_settings.content == {"plugins": []}
-    assert plan.agent_settings.path == Path("/home/agent") / AGENT_CONFIG_DIR / "settings.json"
+    assert plan.agent_settings.path == Path("/home/agent") / ".claude" / "settings.json"
     assert plan.sandbox_spec is not None
     assert plan.sandbox_spec.image == SANDBOX_IMAGE
     assert plan.sandbox_spec.network_policy == "restricted"

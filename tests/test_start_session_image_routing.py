@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scc_cli.application.start_session import _SANDBOX_IMAGE as SANDBOX_IMAGE
 from scc_cli.application.start_session import StartSessionRequest, _build_sandbox_spec
-from scc_cli.core.constants import SANDBOX_IMAGE
 from scc_cli.core.contracts import RuntimeInfo
 from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult

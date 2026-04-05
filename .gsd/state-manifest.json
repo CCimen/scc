@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T13:27:15.328Z",
+  "exported_at": "2026-04-05T13:51:04.319Z",
   "milestones": [
     {
       "id": "M001",
@@ -1063,16 +1063,16 @@
       "milestone_id": "M007-cqttot",
       "id": "S03",
       "title": "Doctor provider-awareness and typed provider errors",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [
         "S01"
       ],
       "demo": "scc doctor --provider codex checks Codex readiness specifically. Doctor output groups backend health vs provider readiness. ProviderNotReadyError and ProviderImageMissingError exist with user_message and suggested_action.",
       "created_at": "2026-04-05T10:50:01.315Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-05T13:31:07.876Z",
+      "full_summary_md": "---\nid: S03\nparent: M007-cqttot\nmilestone: M007-cqttot\nprovides:\n  - ProviderNotReadyError and ProviderImageMissingError typed errors for use in launch and preflight paths\n  - check_provider_auth() exported from doctor/checks/__init__.py and doctor/__init__.py\n  - CheckResult.category field for downstream grouping/filtering\n  - --provider flag on scc doctor command\nrequires:\n  - slice: S01\n    provides: ProviderRuntimeSpec registry and get_runtime_spec() fail-closed lookup\naffects:\n  - S05\nkey_files:\n  - src/scc_cli/core/errors.py\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/doctor/types.py\n  - src/scc_cli/doctor/core.py\n  - src/scc_cli/doctor/render.py\n  - src/scc_cli/doctor/serialization.py\n  - src/scc_cli/doctor/checks/environment.py\n  - src/scc_cli/doctor/checks/__init__.py\n  - src/scc_cli/commands/admin.py\n  - tests/test_doctor_provider_errors.py\n  - tests/test_doctor_provider_wiring.py\nkey_decisions:\n  - Category assignment uses a name→category map in core.py with _assign_category() applied post-collection, preserving categories already set by check functions\n  - Render grouping uses fixed category order (backend→provider→config→worktree→general) with bold cyan section headers\n  - Auth file names mapped per provider via local dict (claude → .credentials.json, codex → auth.json) with .credentials.json fallback for unknown providers\npatterns_established:\n  - Doctor checks can set their own category at creation time; _assign_category() only overrides when category is still 'general'\n  - CLI --provider flag validates against KNOWN_PROVIDERS before entering any business logic — early exit with code 2\nobservability_surfaces:\n  - scc doctor --provider codex scopes checks to Codex-specific readiness\n  - Doctor JSON output includes category field for each check\n  - Doctor table output groups checks by category with section headers\ndrill_down_paths:\n  - .gsd/milestones/M007-cqttot/slices/S03/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M007-cqttot/slices/S03/tasks/T02-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-05T13:31:07.877Z\nblocker_discovered: false\n---\n\n# S03: Doctor provider-awareness and typed provider errors\n\n**Doctor is provider-aware: --provider flag scopes checks, output groups by category, and two typed provider errors exist with actionable messages.**\n\n## What Happened\n\nThis slice made `scc doctor` provider-aware across two tasks.\n\nT01 added all new types and check logic as pure additive work — no existing control flow changed. Two typed errors (ProviderNotReadyError, ProviderImageMissingError) follow the existing InvalidProviderError pattern with auto-populated user_message/suggested_action and exit_code=3. AuthReadiness frozen dataclass models auth credential status. CheckResult gained a `category` field (default 'general') for output grouping. `check_provider_auth()` uses a two-step Docker probe (volume inspect → alpine test -f) to check provider auth files, with provider-specific auth file names resolved from a local mapping dict. 23 tests cover all paths including timeout, missing volume, unknown provider fallback, and Docker-not-found.\n\nT02 wired all T01 additions into the existing doctor pipeline. `run_doctor()` accepts `provider_id` and threads it to both `check_provider_image()` and `check_provider_auth()`. A `_CATEGORY_MAP` and `_assign_category()` helper classifies checks into backend/provider/config/worktree/general categories post-collection, preserving categories already set by check functions. `doctor_cmd` gained a `--provider` flag validated against KNOWN_PROVIDERS (exit code 2 for unknown providers). `render_doctor_results()` sorts checks by category order and inserts bold cyan section headers. `build_doctor_json_data()` includes category in each check dict. 20 tests cover category assignment, provider threading, CLI flag validation, JSON serialization, and render grouping.\n\n## Verification\n\nSlice verification gate: `uv run pytest tests/test_doctor_provider_wiring.py tests/test_doctor_provider_errors.py tests/test_doctor_image_check.py tests/test_doctor_checks.py -v` → 101 passed. `uv run mypy src/scc_cli/doctor/core.py src/scc_cli/doctor/render.py src/scc_cli/doctor/serialization.py src/scc_cli/commands/admin.py` → no issues. `uv run ruff check src/scc_cli/doctor/ src/scc_cli/commands/admin.py` → all passed. Full suite: `uv run pytest -q` → 4718 passed, 23 skipped, 2 xfailed.\n\n## Requirements Advanced\n\n- R001 — Doctor decomposition: typed errors, categorized output, and provider-scoped checks improve testability (43 new tests) and maintainability of the doctor subsystem\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nNone. Both tasks completed as planned.\n\n## Known Limitations\n\ncheck_provider_auth() requires Docker to be available — it probes Docker volumes directly. On systems without Docker, the check reports 'could not verify' rather than failing hard.\n\n## Follow-ups\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/errors.py` — Added ProviderNotReadyError and ProviderImageMissingError with auto-populated messages\n- `src/scc_cli/core/contracts.py` — Added AuthReadiness frozen dataclass for auth credential status\n- `src/scc_cli/doctor/types.py` — Added category field to CheckResult (default 'general')\n- `src/scc_cli/doctor/core.py` — Added provider_id parameter to run_doctor(), _assign_category() helper, check_provider_auth call\n- `src/scc_cli/doctor/render.py` — Category-based sorting and section headers in render_doctor_results()\n- `src/scc_cli/doctor/serialization.py` — Added category to JSON output\n- `src/scc_cli/doctor/checks/environment.py` — Added check_provider_auth(), provider_id param on check_provider_image()\n- `src/scc_cli/doctor/checks/__init__.py` — Re-exported check_provider_auth\n- `src/scc_cli/doctor/__init__.py` — Re-exported check_provider_auth\n- `src/scc_cli/commands/admin.py` — Added --provider flag to doctor_cmd with validation\n- `tests/test_doctor_provider_errors.py` — 23 tests for typed errors, AuthReadiness, CheckResult.category, check_provider_auth\n- `tests/test_doctor_provider_wiring.py` — 20 tests for category assignment, provider threading, CLI flag, JSON, render grouping\n",
+      "full_uat_md": "# S03: Doctor provider-awareness and typed provider errors — UAT\n\n**Milestone:** M007-cqttot\n**Written:** 2026-04-05T13:31:07.878Z\n\n## UAT: Doctor provider-awareness and typed provider errors\n\n### Preconditions\n- SCC installed from scc-sync-1.7.3 with `uv sync`\n- Docker daemon running (for auth-check tests that need Docker)\n- No specific provider configured (tests exercise both Claude and Codex paths)\n\n### Test Cases\n\n#### TC-1: Typed provider errors have actionable messages\n```\nSteps:\n1. In Python: `from scc_cli.core.errors import ProviderNotReadyError; e = ProviderNotReadyError(provider_id='codex')`\n2. Check e.user_message contains 'codex'\n3. Check e.suggested_action contains 'scc doctor'\n4. Check e.exit_code == 3\n\nExpected: Error auto-populates message with provider name and actionable guidance.\n```\n\n#### TC-2: ProviderImageMissingError includes image reference\n```\nSteps:\n1. `from scc_cli.core.errors import ProviderImageMissingError`\n2. `e = ProviderImageMissingError(provider_id='codex', image_ref='scc-agent-codex:latest')`\n3. Check e.user_message contains 'codex' and 'scc-agent-codex:latest'\n4. Check e.suggested_action contains 'docker build'\n\nExpected: Error message includes both provider and image reference for operator recovery.\n```\n\n#### TC-3: AuthReadiness dataclass is frozen and typed\n```\nSteps:\n1. `from scc_cli.core.contracts import AuthReadiness`\n2. `ar = AuthReadiness(status='present', mechanism='oauth_file', guidance='Auth is configured')`\n3. Verify ar.status == 'present', ar.mechanism == 'oauth_file'\n4. Attempt ar.status = 'missing' — should raise FrozenInstanceError\n\nExpected: Immutable dataclass with correct field access.\n```\n\n#### TC-4: CheckResult has default category 'general'\n```\nSteps:\n1. `from scc_cli.doctor.types import CheckResult`\n2. `cr = CheckResult(name='Test', passed=True, message='ok')`\n3. Verify cr.category == 'general'\n\nExpected: Backward-compatible default category.\n```\n\n#### TC-5: check_provider_auth happy path (mocked Docker)\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_errors.py::TestCheckProviderAuth::test_happy_path_auth_present -v`\n\nExpected: Test passes — check_provider_auth returns passed=True with category='provider' when Docker volume exists and auth file is found.\n```\n\n#### TC-6: check_provider_auth with missing volume\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_errors.py::TestCheckProviderAuth::test_volume_missing -v`\n\nExpected: Test passes — check_provider_auth returns passed=False when Docker volume does not exist.\n```\n\n#### TC-7: check_provider_auth uses correct auth file per provider\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_errors.py::TestCheckProviderAuth::test_codex_auth_file -v`\n\nExpected: Test passes — Codex uses auth.json, Claude uses .credentials.json.\n```\n\n#### TC-8: --provider flag validates against known providers\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_wiring.py::TestDoctorCmdProviderFlag::test_unknown_provider_exits_with_code_2 -v`\n\nExpected: Unknown provider name causes exit code 2 with error message.\n```\n\n#### TC-9: --provider flag threads to run_doctor\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_wiring.py::TestDoctorCmdProviderFlag::test_valid_provider_passes_to_run_doctor -v`\n\nExpected: Valid provider_id reaches run_doctor() and is forwarded to check functions.\n```\n\n#### TC-10: Category assignment classifies all check names correctly\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_wiring.py::TestCategoryAssignment -v`\n\nExpected: All 10 tests pass — Git/Docker → backend, Provider Image/Auth → provider, Config/Safety → config, Worktree → worktree, unknown → general, pre-existing category preserved.\n```\n\n#### TC-11: Doctor JSON output includes category\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_wiring.py::TestJsonDataCategory -v`\n\nExpected: JSON check dicts contain 'category' key with correct values.\n```\n\n#### TC-12: Doctor render groups by category with section headers\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_wiring.py::TestRenderGrouping -v`\n\nExpected: Checks sorted by category order (backend→provider→config→worktree→general). Render does not crash with mixed categories.\n```\n\n#### TC-13: Full doctor test suite regression\n```\nSteps:\n1. Run `uv run pytest tests/test_doctor_provider_wiring.py tests/test_doctor_provider_errors.py tests/test_doctor_image_check.py tests/test_doctor_checks.py -v`\n\nExpected: All 101 tests pass with no regressions.\n```\n\n#### TC-14: Full project test suite\n```\nSteps:\n1. Run `uv run pytest -q`\n\nExpected: 4718+ tests pass, 0 failures. Mypy and ruff clean.\n```\n",
       "goal": "scc doctor is provider-aware: `--provider` flag scopes checks, output groups by category (backend/provider/config/worktree), and two typed provider errors (ProviderNotReadyError, ProviderImageMissingError) exist with actionable messages.",
       "success_criteria": "- `scc doctor --provider codex` runs provider-scoped checks (image + auth) for Codex specifically\n- Doctor output groups checks by category (Backend Health, Provider Readiness, Configuration, Worktree, General) with section headers between groups\n- ProviderNotReadyError and ProviderImageMissingError exist in core/errors.py with user_message and suggested_action\n- AuthReadiness dataclass exists in core/contracts.py\n- check_provider_auth() function probes Docker volume for auth files\n- CheckResult has a `category` field, serialization includes it\n- `--provider` with an unknown provider returns a user-friendly error, not a crash\n- All new code has tests, full suite passes with zero regressions",
       "proof_level": "contract — all behavior is verified through unit tests mocking subprocess/Docker calls. No Docker daemon required.",
@@ -1095,11 +1095,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "Move Claude constants to docker/constants.py. Clean constants.py. Guardrail test enforces boundary.",
-      "success_criteria": "- docker/constants.py with all Claude runtime constants\n- docker/ modules import from docker/constants.py\n- profile.py documented Claude-only\n- constants.py: only shared values\n- Guardrail: no non-docker/adapter module imports Claude constants\n- Full regression gate",
-      "proof_level": "Guardrail + docker tests + full regression",
-      "integration_closure": "constants.py is provider-neutral",
-      "observability_impact": "None",
+      "goal": "Claude-specific runtime constants removed from core/constants.py and localized in each consumer module. commands/profile.py documented as Claude-only. Guardrail test prevents re-introduction.",
+      "success_criteria": "- `rg 'AGENT_NAME|SANDBOX_IMAGE|SANDBOX_DATA_VOLUME|SANDBOX_DATA_MOUNT|OAUTH_CREDENTIAL_KEY|AGENT_CONFIG_DIR|CREDENTIAL_PATHS|DEFAULT_MARKETPLACE_REPO' src/scc_cli/core/constants.py` returns zero matches (only CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX, and version helper remain)\n- `rg 'from.*core\\.constants import' src/scc_cli/docker/ src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/application/start_session.py` returns zero matches\n- `uv run pytest -q` full suite passes with zero regressions\n- New guardrail test in tests/test_no_claude_constants_in_core.py passes and would fail if a Claude constant were added back\n- commands/profile.py has module-level docstring noting Claude-only status",
+      "proof_level": "contract — pure import/constant refactoring verified by existing tests + new guardrail",
+      "integration_closure": "Upstream: S01 ProviderRuntimeSpec and PROVIDER_REGISTRY. No new wiring — constants are relocated, not restructured. Downstream: S05 documentation truthfulness can reference the cleaned constants.py.",
+      "observability_impact": "None — no runtime behavior change, pure import refactoring.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -6073,6 +6073,144 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S04",
+      "id": "T01",
+      "title": "Localize 9 Claude-specific constants from core/constants.py into 5 consumer modules (docker/, adapters/, application/)",
+      "status": "complete",
+      "one_liner": "Localize 9 Claude-specific constants from core/constants.py into 5 consumer modules (docker/, adapters/, application/)",
+      "narrative": "Scanned all imports of Claude-specific constants from core/constants.py. Extended scope beyond docker/ to also localize constants in adapters/oci_sandbox_runtime.py (AGENT_NAME, SANDBOX_DATA_VOLUME) and application/start_session.py (SANDBOX_IMAGE) — necessary to make the removal safe. Each consumer module got underscore-prefixed local constants. Updated 4 test files to import from localized sources. Stripped constants.py to product-level values only (CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX).",
+      "verification_result": "ruff check: 0 errors. mypy src/scc_cli: 293 files clean. Full pytest: 4718 passed, 23 skipped, 2 xfailed. Targeted docker/adapter/start_session tests: 294 passed.",
+      "duration": "",
+      "completed_at": "2026-04-05T13:51:04.283Z",
+      "blocker_discovered": false,
+      "deviations": "Extended scope beyond docker/ to also localize constants in adapters/oci_sandbox_runtime.py and application/start_session.py — required to make the constants.py removal safe.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/constants.py",
+        "src/scc_cli/docker/core.py",
+        "src/scc_cli/docker/credentials.py",
+        "src/scc_cli/docker/launch.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/start_session.py"
+      ],
+      "key_decisions": [
+        "Localized constants in all consumer modules (docker/, adapters/, application/) not just docker/",
+        "Used underscore-prefixed names to signal module-private scope",
+        "Test files use aliased imports to minimize test churn"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S04\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/core/constants.py\n  - src/scc_cli/docker/core.py\n  - src/scc_cli/docker/credentials.py\n  - src/scc_cli/docker/launch.py\n  - src/scc_cli/adapters/oci_sandbox_runtime.py\n  - src/scc_cli/application/start_session.py\nkey_decisions:\n  - Localized constants in all consumer modules (docker/, adapters/, application/) not just docker/\n  - Used underscore-prefixed names to signal module-private scope\n  - Test files use aliased imports to minimize test churn\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T13:51:04.282Z\nblocker_discovered: false\n---\n\n# T01: Localize 9 Claude-specific constants from core/constants.py into 5 consumer modules (docker/, adapters/, application/)\n\n**Localize 9 Claude-specific constants from core/constants.py into 5 consumer modules (docker/, adapters/, application/)**\n\n## What Happened\n\nScanned all imports of Claude-specific constants from core/constants.py. Extended scope beyond docker/ to also localize constants in adapters/oci_sandbox_runtime.py (AGENT_NAME, SANDBOX_DATA_VOLUME) and application/start_session.py (SANDBOX_IMAGE) — necessary to make the removal safe. Each consumer module got underscore-prefixed local constants. Updated 4 test files to import from localized sources. Stripped constants.py to product-level values only (CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX).\n\n## Verification\n\nruff check: 0 errors. mypy src/scc_cli: 293 files clean. Full pytest: 4718 passed, 23 skipped, 2 xfailed. Targeted docker/adapter/start_session tests: 294 passed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 4800ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 4800ms |\n| 3 | `uv run pytest` | 0 | ✅ pass | 51400ms |\n| 4 | `uv run pytest tests/test_docker*.py tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py tests/test_start_session_image_routing.py -v` | 0 | ✅ pass | 6100ms |\n\n## Deviations\n\nExtended scope beyond docker/ to also localize constants in adapters/oci_sandbox_runtime.py and application/start_session.py — required to make the constants.py removal safe.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/constants.py`\n- `src/scc_cli/docker/core.py`\n- `src/scc_cli/docker/credentials.py`\n- `src/scc_cli/docker/launch.py`\n- `src/scc_cli/adapters/oci_sandbox_runtime.py`\n- `src/scc_cli/application/start_session.py`\n",
+      "description": "## Description\n\nThe docker/ module (core.py, credentials.py, launch.py) is the Docker Desktop sandbox adapter — entirely Claude-specific. It currently imports Claude runtime constants from core/constants.py, creating a false impression these are shared. This task defines each constant locally in the consuming docker module and removes the Claude-specific constants from core/constants.py.\n\n## Steps\n\n1. In `src/scc_cli/docker/core.py`:\n   - Remove `from ..core.constants import SANDBOX_IMAGE` (line 17)\n   - Remove deferred `from ..core.constants import SANDBOX_DATA_MOUNT` (line 251)\n   - Add module-level constants: `_SANDBOX_IMAGE = \"docker/sandbox-templates:claude-code\"` and `_SANDBOX_DATA_MOUNT = \"/mnt/claude-data\"`\n   - Replace all usages of `SANDBOX_IMAGE` with `_SANDBOX_IMAGE` and `SANDBOX_DATA_MOUNT` with `_SANDBOX_DATA_MOUNT`\n\n2. In `src/scc_cli/docker/credentials.py`:\n   - Remove `from ..core.constants import OAUTH_CREDENTIAL_KEY, SANDBOX_DATA_VOLUME` (line 32)\n   - Add module-level constants: `_OAUTH_CREDENTIAL_KEY = \"claudeAiOauth\"` and `_SANDBOX_DATA_VOLUME = \"docker-claude-sandbox-data\"`\n   - Replace all usages\n\n3. In `src/scc_cli/docker/launch.py`:\n   - Remove `from ..core.constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT, SANDBOX_DATA_VOLUME` (line 16)\n   - Add module-level constants: `_SAFETY_NET_POLICY_FILENAME = \"effective_policy.json\"`, `_SANDBOX_DATA_MOUNT = \"/mnt/claude-data\"`, `_SANDBOX_DATA_VOLUME = \"docker-claude-sandbox-data\"`\n   - Replace all usages\n\n4. In `src/scc_cli/core/constants.py`:\n   - Remove these Claude-specific constants: `AGENT_NAME`, `SANDBOX_IMAGE`, `AGENT_CONFIG_DIR`, `SANDBOX_DATA_VOLUME`, `SANDBOX_DATA_MOUNT`, `SAFETY_NET_POLICY_FILENAME`, `CREDENTIAL_PATHS`, `OAUTH_CREDENTIAL_KEY`, `DEFAULT_MARKETPLACE_REPO`\n   - Update the module docstring to reflect it now holds only product-level constants (CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX)\n   - Keep the Usage example using the remaining constants\n\n5. Update test files that imported docker-related constants from core/constants:\n   - `tests/test_docker_policy_integration.py`: Replace `from scc_cli.core.constants import SAFETY_NET_POLICY_FILENAME` with `from scc_cli.docker.launch import _SAFETY_NET_POLICY_FILENAME as SAFETY_NET_POLICY_FILENAME` or inline the value\n\n6. Verify: `uv run pytest tests/test_docker.py tests/test_docker_core.py tests/test_docker_launch_characterization.py tests/test_docker_policy.py tests/test_docker_policy_integration.py tests/test_docker_org_config.py -v` all pass, `uv run ruff check src/scc_cli/docker/ src/scc_cli/core/constants.py`, `uv run mypy src/scc_cli/docker/ src/scc_cli/core/constants.py`\n\n## Must-Haves\n\n- [ ] No docker/ module imports from core.constants for Claude-specific values\n- [ ] core/constants.py retains only CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX and version helper\n- [ ] All existing docker tests pass with zero regressions\n- [ ] ruff check and mypy clean on touched files",
+      "estimate": "30m",
+      "files": [
+        "src/scc_cli/docker/core.py",
+        "src/scc_cli/docker/credentials.py",
+        "src/scc_cli/docker/launch.py",
+        "src/scc_cli/core/constants.py",
+        "tests/test_docker_policy_integration.py"
+      ],
+      "verify": "uv run pytest tests/test_docker.py tests/test_docker_core.py tests/test_docker_launch_characterization.py tests/test_docker_policy.py tests/test_docker_policy_integration.py tests/test_docker_org_config.py -v && uv run ruff check src/scc_cli/docker/ src/scc_cli/core/constants.py && uv run mypy src/scc_cli/docker/ src/scc_cli/core/constants.py",
+      "inputs": [
+        "`src/scc_cli/core/constants.py` — current source of Claude-specific constants to be removed",
+        "`src/scc_cli/docker/core.py` — imports SANDBOX_IMAGE, SANDBOX_DATA_MOUNT from constants",
+        "`src/scc_cli/docker/credentials.py` — imports OAUTH_CREDENTIAL_KEY, SANDBOX_DATA_VOLUME from constants",
+        "`src/scc_cli/docker/launch.py` — imports SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT, SANDBOX_DATA_VOLUME from constants",
+        "`tests/test_docker_policy_integration.py` — imports SAFETY_NET_POLICY_FILENAME from core.constants"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/constants.py` — stripped of all Claude-specific constants, docstring updated",
+        "`src/scc_cli/docker/core.py` — local _SANDBOX_IMAGE, _SANDBOX_DATA_MOUNT constants",
+        "`src/scc_cli/docker/credentials.py` — local _OAUTH_CREDENTIAL_KEY, _SANDBOX_DATA_VOLUME constants",
+        "`src/scc_cli/docker/launch.py` — local _SAFETY_NET_POLICY_FILENAME, _SANDBOX_DATA_MOUNT, _SANDBOX_DATA_VOLUME constants",
+        "`tests/test_docker_policy_integration.py` — updated import source"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S04",
+      "id": "T02",
+      "title": "Isolate Claude constants in OCI adapter, start_session.py, and document profile.py as Claude-only",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nThe OCI sandbox adapter and start_session.py still import Claude-specific constants from core/constants.py (which T01 will have cleaned). This task localizes those imports and documents commands/profile.py as Claude-only.\n\nAfter T01, core/constants.py no longer has AGENT_NAME, SANDBOX_IMAGE, SANDBOX_DATA_VOLUME etc. — so these imports will be broken and must be replaced.\n\n## Steps\n\n1. In `src/scc_cli/adapters/oci_sandbox_runtime.py`:\n   - Remove `from scc_cli.core.constants import AGENT_NAME, SANDBOX_DATA_VOLUME` (line 18)\n   - Add local constants: `_CLAUDE_AGENT_NAME = \"claude\"` and `_CLAUDE_DATA_VOLUME = \"docker-claude-sandbox-data\"`\n   - At line 268, replace `SANDBOX_DATA_VOLUME` with `_CLAUDE_DATA_VOLUME` in the fallback\n   - At line 339, replace `AGENT_NAME` with `_CLAUDE_AGENT_NAME`\n\n2. In `src/scc_cli/application/start_session.py`:\n   - Remove `from scc_cli.core.constants import SANDBOX_IMAGE` (line 21)\n   - Add local constant: `_DOCKER_DESKTOP_CLAUDE_IMAGE = \"docker/sandbox-templates:claude-code\"`\n   - At line 317 (approx), replace `SANDBOX_IMAGE` with `_DOCKER_DESKTOP_CLAUDE_IMAGE`\n\n3. Update test files:\n   - `tests/test_oci_sandbox_runtime.py`: Replace `from scc_cli.core.constants import AGENT_NAME, SANDBOX_DATA_VOLUME` with imports from the adapter's local constants, or inline the values\n   - `tests/test_application_start_session.py`: Replace `from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE` — AGENT_CONFIG_DIR is `.claude`, inline it; SANDBOX_IMAGE replace with local value or import from start_session\n   - `tests/test_start_session_image_routing.py`: Replace `from scc_cli.core.constants import SANDBOX_IMAGE` with inline value\n\n4. In `src/scc_cli/commands/profile.py`:\n   - Update the module-level docstring to clearly note this module is Claude-only: \"\"\"Personal profile commands (Claude provider only). ... This module manages Claude-specific personal settings layered on top of team config. The hardcoded references to .claude/settings.local.json are intentional — this module operates exclusively within the Claude provider surface. Future provider generalization tracked separately.\"\"\"\n\n5. Verify: `uv run pytest tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py tests/test_start_session_image_routing.py -v` all pass, `uv run ruff check` on touched files, `uv run mypy` on touched source files\n\n## Must-Haves\n\n- [ ] No OCI adapter or start_session.py imports from core.constants for Claude-specific values\n- [ ] Test files updated to not import Claude constants from core.constants\n- [ ] profile.py docstring documents Claude-only status\n- [ ] All existing tests pass, ruff and mypy clean",
+      "estimate": "25m",
+      "files": [
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/application/start_session.py",
+        "src/scc_cli/commands/profile.py",
+        "tests/test_oci_sandbox_runtime.py",
+        "tests/test_application_start_session.py",
+        "tests/test_start_session_image_routing.py"
+      ],
+      "verify": "uv run pytest tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py tests/test_start_session_image_routing.py -v && uv run ruff check src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/application/start_session.py src/scc_cli/commands/profile.py && uv run mypy src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/application/start_session.py src/scc_cli/commands/profile.py",
+      "inputs": [
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — imports AGENT_NAME, SANDBOX_DATA_VOLUME from core.constants",
+        "`src/scc_cli/application/start_session.py` — imports SANDBOX_IMAGE from core.constants",
+        "`src/scc_cli/commands/profile.py` — needs Claude-only documentation",
+        "`tests/test_oci_sandbox_runtime.py` — imports AGENT_NAME, SANDBOX_DATA_VOLUME from core.constants",
+        "`tests/test_application_start_session.py` — imports AGENT_CONFIG_DIR, SANDBOX_IMAGE from core.constants",
+        "`tests/test_start_session_image_routing.py` — imports SANDBOX_IMAGE from core.constants"
+      ],
+      "expected_output": [
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — local _CLAUDE_AGENT_NAME, _CLAUDE_DATA_VOLUME constants",
+        "`src/scc_cli/application/start_session.py` — local _DOCKER_DESKTOP_CLAUDE_IMAGE constant",
+        "`src/scc_cli/commands/profile.py` — updated docstring noting Claude-only status",
+        "`tests/test_oci_sandbox_runtime.py` — updated imports",
+        "`tests/test_application_start_session.py` — updated imports",
+        "`tests/test_start_session_image_routing.py` — updated imports"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S04",
+      "id": "T03",
+      "title": "Add guardrail test and run full-suite verification",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nAdd a guardrail test that prevents Claude-specific runtime constants from being re-added to core/constants.py. Verify the entire codebase has zero Claude-constant imports from core/constants.py. Run the full test suite.\n\nThe guardrail test follows the established pattern in tests/test_provider_branding.py (TestNoCloudeCodeInNonAdapterModules) — it scans source and fails on violations.\n\n## Steps\n\n1. Create `tests/test_no_claude_constants_in_core.py` with:\n   - A test class `TestNoCloudeSpecificConstantsInCore` that reads `src/scc_cli/core/constants.py` and asserts none of the known Claude-specific constant names are defined there\n   - Known Claude constant names to check: `AGENT_NAME`, `SANDBOX_IMAGE`, `AGENT_CONFIG_DIR`, `SANDBOX_DATA_VOLUME`, `SANDBOX_DATA_MOUNT`, `CREDENTIAL_PATHS`, `OAUTH_CREDENTIAL_KEY`, `DEFAULT_MARKETPLACE_REPO`\n   - Use Python's `tokenize` module (per KNOWLEDGE.md guidance) to scan for NAME tokens matching these constants, avoiding false positives from comments or strings\n   - A second test `test_no_claude_constant_imports_from_core` that scans all .py files under `src/scc_cli/` for `from.*core.constants import` lines containing any of the Claude-specific constant names\n   - Both tests should produce actionable error messages listing the exact file and line\n\n2. Verify the guardrail test passes: `uv run pytest tests/test_no_claude_constants_in_core.py -v`\n\n3. Run rg scan to confirm zero Claude-constant imports from core.constants across the codebase: `rg 'from.*core\\.constants import.*(AGENT_NAME|SANDBOX_IMAGE|SANDBOX_DATA_VOLUME|SANDBOX_DATA_MOUNT|OAUTH_CREDENTIAL_KEY|AGENT_CONFIG_DIR|CREDENTIAL_PATHS|DEFAULT_MARKETPLACE_REPO)' src/scc_cli/`\n\n4. Run full suite: `uv run pytest -q` — must pass with zero regressions\n\n5. Run `uv run ruff check` and `uv run mypy src/scc_cli/core/constants.py` for final lint/type check\n\n## Must-Haves\n\n- [ ] Guardrail test exists and passes\n- [ ] Guardrail test would fail if a Claude constant were re-added to core/constants.py (verify by temporarily adding one)\n- [ ] Full test suite passes with zero regressions\n- [ ] Zero Claude-constant imports from core.constants in src/scc_cli/",
+      "estimate": "20m",
+      "files": [
+        "tests/test_no_claude_constants_in_core.py"
+      ],
+      "verify": "uv run pytest tests/test_no_claude_constants_in_core.py -v && uv run pytest -q && uv run ruff check tests/test_no_claude_constants_in_core.py",
+      "inputs": [
+        "`src/scc_cli/core/constants.py` — the cleaned constants file from T01",
+        "`tests/test_provider_branding.py` — reference pattern for guardrail tests"
+      ],
+      "expected_output": [
+        "`tests/test_no_claude_constants_in_core.py` — guardrail test preventing Claude-specific constants in core/constants.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -10034,6 +10172,50 @@
       "verdict": "✅ pass",
       "duration_ms": 1000,
       "created_at": "2026-04-05T13:27:15.273Z"
+    },
+    {
+      "id": 316,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4800,
+      "created_at": "2026-04-05T13:51:04.283Z"
+    },
+    {
+      "id": 317,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4800,
+      "created_at": "2026-04-05T13:51:04.283Z"
+    },
+    {
+      "id": 318,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 51400,
+      "created_at": "2026-04-05T13:51:04.283Z"
+    },
+    {
+      "id": 319,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_docker*.py tests/test_oci_sandbox_runtime.py tests/test_application_start_session.py tests/test_start_session_image_routing.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 6100,
+      "created_at": "2026-04-05T13:51:04.283Z"
     }
   ]
 }

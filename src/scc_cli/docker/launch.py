@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from ..config import get_cache_dir
-from ..core.constants import SAFETY_NET_POLICY_FILENAME, SANDBOX_DATA_MOUNT, SANDBOX_DATA_VOLUME
 from .core import (
     build_command,
     validate_container_filename,
@@ -30,6 +29,13 @@ from .sandbox import (  # noqa: F401
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Claude-specific Docker Desktop constants (local to this adapter)
+# ─────────────────────────────────────────────────────────────────────────────
+_SAFETY_NET_POLICY_FILENAME = "effective_policy.json"
+_SANDBOX_DATA_MOUNT = "/mnt/claude-data"
+_SANDBOX_DATA_VOLUME = "docker-claude-sandbox-data"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Safety Net Policy Injection
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -40,7 +46,7 @@ DEFAULT_SAFETY_NET_POLICY: dict[str, Any] = {"action": "block"}
 VALID_SAFETY_NET_ACTIONS: frozenset[str] = frozenset({"block", "warn", "allow"})
 
 # Container path for policy (constant derived from mount point)
-CONTAINER_POLICY_PATH = f"{SANDBOX_DATA_MOUNT}/{SAFETY_NET_POLICY_FILENAME}"
+CONTAINER_POLICY_PATH = f"{_SANDBOX_DATA_MOUNT}/{_SAFETY_NET_POLICY_FILENAME}"
 
 
 def extract_safety_net_policy(org_config: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -117,7 +123,7 @@ def _write_policy_to_dir(policy: dict[str, Any], target_dir: Path) -> Path | Non
     except OSError:
         return None
 
-    policy_path = target_dir / SAFETY_NET_POLICY_FILENAME
+    policy_path = target_dir / _SAFETY_NET_POLICY_FILENAME
     content = json.dumps(policy, indent=2)
 
     try:
@@ -213,7 +219,7 @@ def _cleanup_fallback_policy_files() -> None:
     Failures are silently ignored - this is purely optional hygiene.
     """
     fallback_dir = _get_fallback_policy_dir()
-    fallback_file = fallback_dir / SAFETY_NET_POLICY_FILENAME
+    fallback_file = fallback_dir / _SAFETY_NET_POLICY_FILENAME
     try:
         fallback_file.unlink(missing_ok=True)
         # Also try to remove the directory if empty
@@ -314,7 +320,7 @@ def inject_file_to_sandbox_volume(filename: str, content: str) -> bool:
                 "run",
                 "--rm",
                 "-v",
-                f"{SANDBOX_DATA_VOLUME}:/data",
+                f"{_SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "sh",
                 "-c",
@@ -343,7 +349,7 @@ def get_sandbox_settings() -> dict[str, Any] | None:
                 "run",
                 "--rm",
                 "-v",
-                f"{SANDBOX_DATA_VOLUME}:/data",
+                f"{_SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "cat",
                 "/data/settings.json",
@@ -413,7 +419,7 @@ def reset_plugin_caches() -> bool:
                 "run",
                 "--rm",
                 "-v",
-                f"{SANDBOX_DATA_VOLUME}:/data",
+                f"{_SANDBOX_DATA_VOLUME}:/data",
                 "alpine",
                 "sh",
                 "-c",

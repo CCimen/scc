@@ -15,7 +15,6 @@ import tempfile
 from pathlib import Path
 
 from scc_cli.adapters.egress_topology import NetworkTopologyManager
-from scc_cli.core.constants import AGENT_NAME, SANDBOX_DATA_VOLUME
 from scc_cli.core.destination_registry import destination_sets_to_allow_rules
 from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl
 from scc_cli.core.enums import NetworkPolicy
@@ -41,6 +40,10 @@ _DEFAULT_TIMEOUT = 15
 
 # Label used to identify OCI-backend containers
 _OCI_LABEL = "scc.backend=oci"
+
+# Claude-specific defaults for OCI sandbox runtime
+_AGENT_NAME = "claude"
+_SANDBOX_DATA_VOLUME = "docker-claude-sandbox-data"
 
 # Agent home inside the container
 _AGENT_HOME = "/home/agent"
@@ -265,7 +268,7 @@ class OciSandboxRuntime:
     ) -> list[str]:
         """Assemble the ``docker create`` argument list."""
         # Resolve data volume and config dir, falling back to Claude defaults.
-        volume_name = spec.data_volume if spec.data_volume else SANDBOX_DATA_VOLUME
+        volume_name = spec.data_volume if spec.data_volume else _SANDBOX_DATA_VOLUME
         config_dirname = spec.config_dir if spec.config_dir else ".claude"
 
         cmd: list[str] = [
@@ -336,7 +339,7 @@ class OciSandboxRuntime:
         if spec.agent_argv:
             cmd.extend(list(spec.agent_argv))
         else:
-            cmd.extend([AGENT_NAME, "--dangerously-skip-permissions"])
+            cmd.extend([_AGENT_NAME, "--dangerously-skip-permissions"])
 
         if spec.continue_session:
             cmd.append("-c")

@@ -12,11 +12,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.adapters.oci_sandbox_runtime import (
+    _AGENT_NAME as AGENT_NAME,
+)
+from scc_cli.adapters.oci_sandbox_runtime import (
     _OCI_LABEL,
     OciSandboxRuntime,
     _container_name,
 )
-from scc_cli.core.constants import AGENT_NAME, SANDBOX_DATA_VOLUME
+from scc_cli.adapters.oci_sandbox_runtime import (
+    _SANDBOX_DATA_VOLUME as SANDBOX_DATA_VOLUME,
+)
 from scc_cli.core.contracts import RuntimeInfo
 from scc_cli.core.errors import (
     DockerDaemonNotRunningError,
