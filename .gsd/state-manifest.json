@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T14:50:54.867Z",
+  "exported_at": "2026-04-05T14:55:19.278Z",
   "milestones": [
     {
       "id": "M001",
@@ -6429,19 +6429,24 @@
       "milestone_id": "M007-cqttot",
       "slice_id": "S05",
       "id": "T05",
-      "title": "Implement D040: file-based Codex auth in containers",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "CodexAgentRunner now always injects cli_auth_credentials_store='file' into Codex config for reliable container auth persistence",
+      "status": "complete",
+      "one_liner": "CodexAgentRunner now always injects cli_auth_credentials_store='file' into Codex config for reliable container auth persistence",
+      "narrative": "Implemented D040 by adding _SCC_MANAGED_DEFAULTS class attribute to CodexAgentRunner containing cli_auth_credentials_store='file'. In build_settings(), these defaults merge under caller config so SCC keys are always present but governed config can override. Auth.json persists in the docker-codex-sandbox-data volume at /home/agent/.codex/auth.json. Added 4 tests in TestD040FileBasedAuth covering empty config, caller preservation, explicit override precedence, and volume path verification.",
+      "verification_result": "uv run pytest tests/test_codex_agent_runner.py -v — 11 passed. uv run ruff check — zero errors. uv run mypy src/scc_cli — 0 issues. uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v — 41 passed. uv run pytest -q — 4745 passed, 0 failed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-05T14:55:19.199Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/adapters/codex_agent_runner.py",
+        "tests/test_codex_agent_runner.py"
+      ],
+      "key_decisions": [
+        "D040 implemented in CodexAgentRunner.build_settings() via _SCC_MANAGED_DEFAULTS dict merged under caller config"
+      ],
+      "full_summary_md": "---\nid: T05\nparent: S05\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/adapters/codex_agent_runner.py\n  - tests/test_codex_agent_runner.py\nkey_decisions:\n  - D040 implemented in CodexAgentRunner.build_settings() via _SCC_MANAGED_DEFAULTS dict merged under caller config\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T14:55:19.198Z\nblocker_discovered: false\n---\n\n# T05: CodexAgentRunner now always injects cli_auth_credentials_store='file' into Codex config for reliable container auth persistence\n\n**CodexAgentRunner now always injects cli_auth_credentials_store='file' into Codex config for reliable container auth persistence**\n\n## What Happened\n\nImplemented D040 by adding _SCC_MANAGED_DEFAULTS class attribute to CodexAgentRunner containing cli_auth_credentials_store='file'. In build_settings(), these defaults merge under caller config so SCC keys are always present but governed config can override. Auth.json persists in the docker-codex-sandbox-data volume at /home/agent/.codex/auth.json. Added 4 tests in TestD040FileBasedAuth covering empty config, caller preservation, explicit override precedence, and volume path verification.\n\n## Verification\n\nuv run pytest tests/test_codex_agent_runner.py -v — 11 passed. uv run ruff check — zero errors. uv run mypy src/scc_cli — 0 issues. uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v — 41 passed. uv run pytest -q — 4745 passed, 0 failed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_codex_agent_runner.py -v` | 0 | ✅ pass | 5600ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 5600ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 5600ms |\n| 4 | `uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v` | 0 | ✅ pass | 5800ms |\n| 5 | `uv run pytest -q` | 0 | ✅ pass | 52700ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/adapters/codex_agent_runner.py`\n- `tests/test_codex_agent_runner.py`\n",
       "description": "Force cli_auth_credentials_store='file' in the SCC-managed Codex config layer. Ensure auth writes back to the persistent provider volume. Add tests.\n\nSteps:\n1. Read current Codex settings construction in CodexAgentRunner or start_session\n2. Ensure cli_auth_credentials_store='file' is always set in the Codex config\n3. Verify auth.json path is in the persistent volume mount\n4. Add tests: presence of file-based auth config, auth persistence path in volume\n5. Run full test suite",
       "estimate": "30m",
       "files": [
@@ -11019,6 +11024,61 @@
       "verdict": "✅ pass",
       "duration_ms": 5600,
       "created_at": "2026-04-05T14:50:54.797Z"
+    },
+    {
+      "id": 345,
+      "task_id": "T05",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_codex_agent_runner.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5600,
+      "created_at": "2026-04-05T14:55:19.199Z"
+    },
+    {
+      "id": 346,
+      "task_id": "T05",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5600,
+      "created_at": "2026-04-05T14:55:19.199Z"
+    },
+    {
+      "id": 347,
+      "task_id": "T05",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5600,
+      "created_at": "2026-04-05T14:55:19.199Z"
+    },
+    {
+      "id": 348,
+      "task_id": "T05",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_docs_truthfulness.py tests/test_provider_branding.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5800,
+      "created_at": "2026-04-05T14:55:19.199Z"
+    },
+    {
+      "id": 349,
+      "task_id": "T05",
+      "slice_id": "S05",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 52700,
+      "created_at": "2026-04-05T14:55:19.199Z"
     }
   ]
 }

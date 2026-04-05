@@ -47,10 +47,21 @@ def _toml_kv(key: str, val: Any) -> str:
 class CodexAgentRunner(AgentRunner):
     """AgentRunner implementation for OpenAI Codex CLI."""
 
+    # Keys that SCC always injects into the Codex config layer.
+    # D040: force file-based auth caching so auth.json persists in the
+    # provider volume (/home/agent/.codex/) across container restarts.
+    _SCC_MANAGED_DEFAULTS: dict[str, Any] = {
+        "cli_auth_credentials_store": "file",
+    }
+
     def build_settings(
         self, config: dict[str, Any], *, path: Path = DEFAULT_SETTINGS_PATH
     ) -> AgentSettings:
-        rendered = _serialize_toml(config)
+        # D040: merge SCC-managed defaults *under* caller-supplied values
+        # so that governed config can override if needed, but the file-based
+        # auth store is always present when no explicit override exists.
+        merged = {**self._SCC_MANAGED_DEFAULTS, **config}
+        rendered = _serialize_toml(merged)
         return AgentSettings(rendered_bytes=rendered, path=path, suffix=".toml")
 
     def build_command(self, settings: AgentSettings) -> AgentCommand:

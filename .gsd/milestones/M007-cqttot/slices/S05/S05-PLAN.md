@@ -71,7 +71,7 @@ Steps:
   - Estimate: 20m
   - Files: src/scc_cli/adapters/codex_agent_runner.py, tests/adapters/test_codex_agent_runner.py
   - Verify: uv run pytest tests/adapters/test_codex_agent_runner.py -v && uv run ruff check && uv run mypy src/scc_cli
-- [ ] **T05: Implement D040: file-based Codex auth in containers** — Force cli_auth_credentials_store='file' in the SCC-managed Codex config layer. Ensure auth writes back to the persistent provider volume. Add tests.
+- [x] **T05: CodexAgentRunner now always injects cli_auth_credentials_store='file' into Codex config for reliable container auth persistence** — Force cli_auth_credentials_store='file' in the SCC-managed Codex config layer. Ensure auth writes back to the persistent provider volume. Add tests.
 
 Steps:
 1. Read current Codex settings construction in CodexAgentRunner or start_session

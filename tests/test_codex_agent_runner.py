@@ -70,3 +70,48 @@ class TestCodexAgentRunner:
         command = runner.build_command(settings)
         assert command.env == {}
         assert isinstance(command.env, dict)
+
+
+class TestD040FileBasedAuth:
+    """D040: SCC always injects cli_auth_credentials_store='file' for Codex."""
+
+    def test_empty_config_gets_file_auth_store(self) -> None:
+        """Even with no caller config, file-based auth is present."""
+        runner = CodexAgentRunner()
+        settings = runner.build_settings({}, path=DEFAULT_SETTINGS_PATH)
+        parsed = tomllib.loads(settings.rendered_bytes.decode())
+        assert parsed["cli_auth_credentials_store"] == "file"
+
+    def test_caller_config_preserved_alongside_auth_store(self) -> None:
+        """Caller-supplied keys merge with SCC-managed defaults."""
+        runner = CodexAgentRunner()
+        config = {"model": "o3", "history": True}
+        settings = runner.build_settings(config, path=DEFAULT_SETTINGS_PATH)
+        parsed = tomllib.loads(settings.rendered_bytes.decode())
+        assert parsed["cli_auth_credentials_store"] == "file"
+        assert parsed["model"] == "o3"
+        assert parsed["history"] is True
+
+    def test_explicit_override_takes_precedence(self) -> None:
+        """If governed config explicitly sets a different store, it wins."""
+        runner = CodexAgentRunner()
+        config = {"cli_auth_credentials_store": "keyring"}
+        settings = runner.build_settings(config, path=DEFAULT_SETTINGS_PATH)
+        parsed = tomllib.loads(settings.rendered_bytes.decode())
+        # Caller-supplied value overrides the SCC default
+        assert parsed["cli_auth_credentials_store"] == "keyring"
+
+    def test_auth_json_path_in_persistent_volume(self) -> None:
+        """Auth.json lives in the persistent provider volume at /home/agent/.codex/.
+
+        The data_volume (docker-codex-sandbox-data) is mounted to
+        /home/agent/.codex, so auth.json persists across container restarts.
+        """
+        from scc_cli.core.provider_registry import get_runtime_spec
+
+        spec = get_runtime_spec("codex")
+        # The data volume mounts to /home/agent/<config_dir> → /home/agent/.codex
+        auth_path = Path("/home/agent") / spec.config_dir / "auth.json"
+        assert auth_path == Path("/home/agent/.codex/auth.json")
+        # The volume name is stable across launches
+        assert spec.data_volume == "docker-codex-sandbox-data"
