@@ -1,4 +1,4 @@
-# Sandboxed Coding CLI (SCC)
+# Sandboxed Code CLI (SCC)
 
 ## What the project is
 SCC is a governed runtime for coding agents. It lets organizations run approved agents inside portable sandboxes with explicit policy, team-level configuration, safer defaults, and runtime-enforced controls that are explainable to security reviewers.
@@ -42,12 +42,8 @@ Delivered comprehensive architecture quality: module decomposition (15 files spl
 ### M006 — Provider Selection UX and End-to-End Codex Launch ✅
 SCC became a genuine multi-provider runtime. Users choose Claude or Codex via config or CLI flag (`scc provider show/set`, `scc start --provider codex`), validated against org/team policy. Provider identity flows through container naming, volume naming, session identity, machine-readable outputs (dry-run JSON, support bundle, session list). CodexAgentRunner adapter with Codex-specific image, settings, and argv. Provider-aware branding ("Sandboxed Code CLI"), doctor image check with exact build commands, and 16 coexistence proofs. 153 new tests, 4643 total, zero regressions.
 
-### M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup (active)
-S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. Settings path bug fixed (Codex no longer gets Claude's settings.json). Unknown providers fail closed with InvalidProviderError. +11 new tests, 4654 total.
-S02 complete: Three Claude-named helpers renamed to provider-parameterized versions using registry. WorkContext carries provider_id with backward-compat serialization. Session list CLI shows Provider column. Sandbox records explicit provider_id='claude'. +21 new tests, 4675 total.
-S03 complete: Doctor is provider-aware with --provider flag, categorized output (backend/provider/config/worktree/general), check_provider_auth() for auth readiness, and two typed provider errors (ProviderNotReadyError, ProviderImageMissingError). +43 new tests, 4718 total.
-S04 complete: 9 Claude-specific constants localized from core/constants.py into 5 consumer modules. core/constants.py now holds only product-level values. profile.py documented as Claude-only. Guardrail test prevents re-introduction. +2 new tests, 4720 total.
-S05 in progress: Expanded from docs-only to full architecture reconciliation (D044). Implements D033 (Codex launch argv), D035 (provider-owned settings serialization), D037 (adapter-owned auth readiness), D038/D042 (config freshness), D039 (runtime permissions), D040 (file-based Codex auth), D041 (config ownership layering), removes active-launch Claude fallbacks (D032), hardens images, and validates truthfulness against code.
+### M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup ✅
+Eliminated Claude assumptions from shared/core/operator paths. ProviderRuntimeSpec replaces 5 scattered dicts. Settings serialization is provider-owned (rendered_bytes, not dict). Config layering is provider-native (Claude home-scoped, Codex workspace-scoped). Unknown providers fail closed. Auth readiness is adapter-owned via auth_check() on AgentProvider. Runtime permission normalization. Config freshness guarantee on every fresh launch. Doctor is provider-aware with --provider flag and categorized output. Core constants stripped to product-level only. 32 truthfulness guardrail tests. 166 net new tests, 4820 total.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -56,7 +52,7 @@ S05 in progress: Expanded from docs-only to full architecture reconciliation (D0
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
-7. **M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup** ← active (S01–S04 done, S05 remaining)
+7. ~~M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup~~ ✅
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all seven milestones.
@@ -64,19 +60,21 @@ S05 in progress: Expanded from docs-only to full architecture reconciliation (D0
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4720 passed, 23 skipped, 2 xfailed)
+- `uv run pytest -q` ✅ (4820 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
 ## Known deferred items
 - Wizard cast cleanup (23 casts in wizard.py/flow_interactive.py) — deferred per D018
-- Legacy module coverage (docker_sandbox_runtime 30%, overall 73%) — deprioritized per D017/D021 user overrides
+- Legacy module coverage (docker_sandbox_runtime 30%, overall 74%) — deprioritized per D017/D021 user overrides
 - Portable MCP stdio transport support — requires additional source metadata
 - Live bundle registry integration — renderers write metadata references only
 - Dashboard provider switching TUI feature (dashboard 'a' key)
 - Container labels (scc.provider=<id>) for external tooling discovery
 - Image build/push pipeline for scc-agent-codex
 - Podman support on the same SandboxRuntime contracts
+- `scc auth login/status/logout` commands — model supports them via auth_check()
+- Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -101,18 +99,18 @@ S05 in progress: Expanded from docs-only to full architecture reconciliation (D0
 - .scc-managed/ subdirectories avoid collisions with user-authored files.
 - Bundle pipeline in launch flow uses fail_closed=True for resolution; errors captured on StartSessionPlan, not raised.
 - Doctor checks report governed-artifact health: team context, bundle resolution, and catalog health.
-- 18 truthfulness guardrail tests enforce accurate docs claims about provider capabilities and architecture.
 - File/function size guardrails pass without xfail — all functions under 300 lines, all files under 1100 lines.
 - Portable artifacts (skills, MCP servers) without provider bindings are renderable via PortableArtifact metadata in ArtifactRenderPlan (D023).
 - Only SKILL and MCP_SERVER kinds qualify as portable — NATIVE_INTEGRATION always requires provider-specific bindings.
 - Provider dispatch is request-scoped in `build_start_session_dependencies()`, not baked into the lru_cached DefaultAdapters singleton (D028). Shared infra stays cached; provider-specific adapters are selected per invocation.
-- **ProviderRuntimeSpec** (frozen dataclass in `core/contracts.py`) is the single source of truth for provider runtime details (image ref, config dir, settings path, data volume, display name). **PROVIDER_REGISTRY** in `core/provider_registry.py` maps provider_id → spec. `get_runtime_spec()` is the fail-closed lookup — unknown providers raise `InvalidProviderError`. Replaces the 5 scattered dicts that existed in M006 (D029, D031, D034, D043).
+- **ProviderRuntimeSpec** (frozen dataclass in `core/contracts.py`) is the single source of truth for provider runtime details (image ref, config dir, settings path, data volume, display name, settings_scope). **PROVIDER_REGISTRY** in `core/provider_registry.py` maps provider_id → spec. `get_runtime_spec()` is the fail-closed lookup — unknown providers raise `InvalidProviderError`. Replaces the 5 scattered dicts that existed in M006 (D029, D031, D034, D043).
 - Unknown, forbidden, or unavailable providers fail closed in active launch logic — never silently fall back to Claude. Legacy Claude defaults are permitted only at migration/read boundaries (D032).
-- AgentRunner owns settings serialization format: build_settings() produces rendered_bytes, not dict. OCI runtime writes bytes verbatim — no format assumption (D035).
+- **AgentRunner owns settings serialization format**: `build_settings()` produces `rendered_bytes: bytes` + `path` + `suffix`, not dict. OCI runtime writes bytes verbatim — no format assumption (D035). Claude renders JSON, Codex renders TOML.
 - Launch argv is runner-owned via build_command(), not guessed by infrastructure. SandboxSpec.agent_argv must be populated; OCI runtime fails on empty argv (no Claude fallback).
 - SCC launches Codex with --dangerously-bypass-approvals-and-sandbox inside the hardened SCC container; Codex's OS-level sandbox is redundant under SCC's container isolation (D033).
 - V1 persistence model: one named volume per provider mapped to full config dir. Auth, config, and history persist between containers. SCC-managed launch config is ephemeral *in effect* because SCC deterministically writes it on every fresh launch, even when empty (D038). Auth files require strict permissions (dir 0700, files 0600, uid 1000) enforced both at image build time and at runtime via normalization (D039). Codex forces file-based auth in containers (D040). Fine-grained volume splitting deferred (D036).
-- Auth readiness checking is adapter-owned via AgentProvider.auth_check() → AuthReadiness. Core never hardcodes auth file names. Future scc auth commands compose on this model (D037).
+- **Config ownership layering**: SCC uses provider-native config layering — Claude settings.json is SCC-owned, Codex project-scoped .codex/config.toml (workspace mount) is SCC-owned, user-level config in persistent volume is never touched (D041). Codex settings_scope='workspace' routes config to the workspace mount; Claude settings_scope='home' routes to provider volume.
+- Auth readiness checking is adapter-owned via AgentProvider.auth_check() → AuthReadiness. Core never hardcodes auth file names. Future scc auth commands compose on this model (D037). Auth checks do file existence + non-empty + parseable JSON validation.
 - `get_provider_display_name()` is the single source for provider-to-human-name mapping — all UI surfaces use it instead of raw provider IDs.
 - Guardrail test `TestNoCloudeCodeInNonAdapterModules` prevents regression of hardcoded provider references in non-adapter code.
 - provider_id is threaded through session recording, dry-run JSON, support bundle manifest, session list JSON, and container naming hash — all machine-readable outputs carry provider identity.
@@ -123,3 +121,7 @@ S05 in progress: Expanded from docs-only to full architecture reconciliation (D0
 - Doctor checks are categorized (backend/provider/config/worktree/general) and rendered with section headers. `--provider` flag scopes checks to a specific provider's readiness.
 - **core/constants.py holds only product-level values** (CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX). All Claude-specific runtime constants live in the adapter/consumer modules that use them. Guardrail test `test_no_claude_constants_in_core.py` prevents re-introduction via tokenize-based definition scanning and codebase-wide import scanning.
 - **commands/profile.py is Claude provider only** — the module docstring documents intentional hardcoded `.claude/settings.local.json` references. Future provider generalization tracked separately.
+- **Product name is 'SCC — Sandboxed Code CLI'** consistently across README, pyproject.toml, CLI branding, D-001, and all user-facing surfaces (D030).
+- **32 truthfulness guardrail tests** (test_docs_truthfulness.py) cover M007 deliverables: ProviderRuntimeSpec, fail-closed dispatch, doctor provider-auth, README title, core constants cleanliness, D033 bypass flag, D035 rendered_bytes, D037 auth_check, D040 file auth store, D041 settings scope, and D-001/D030 product identity consistency.
+- **scc-base Dockerfile** pre-creates both .claude and .codex dirs with 0700/uid1000. scc-agent-codex pins Codex CLI version via ARG. 25 structural tests cover all image Dockerfiles without requiring Docker.
+- **Resume preserves session context**: `_build_agent_settings(is_resume=True)` returns None, so OCI runtime skips config injection on resume. Fresh launch always writes config deterministically — even when logically empty — to clear stale state (D038/D042).
