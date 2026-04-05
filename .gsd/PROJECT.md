@@ -78,13 +78,21 @@ Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files 
 - Infrastructure layer stays provider-agnostic — never inspects provider_id
 - 38 net new tests (4568 total), mypy/ruff clean
 
+**S03 complete.** Provider-aware branding, panels, diagnostics, and string cleanup:
+- `get_provider_display_name()` helper maps provider IDs to human-readable names
+- Branding header updated to "Sandboxed Code CLI" (provider-neutral product identity)
+- Launch panels, doctor summary, and all CLI help text parameterized by provider
+- 27+ files swept of hardcoded "Claude Code" references
+- Guardrail test prevents regressions of provider-specific references in non-adapter code
+- 18 branding tests, 4586 total tests passing, mypy/ruff clean
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
 3. ~~M003 — Portable Runtime And Enforced Web Egress~~ ✅
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
-6. **M006 — Provider Selection UX and End-to-End Codex Launch** (S01 ✅, S02 ✅, S03–S04 pending)
+6. **M006 — Provider Selection UX and End-to-End Codex Launch** (S01 ✅, S02 ✅, S03 ✅, S04 pending)
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all five milestones. M005 final state: zero files >1100 lines (from 3), one justified file in 800–1100 zone, all import boundaries enforced (31 tests), typed config models adopted, governed-artifact pipeline at 99-100% coverage, file/function size guardrails passing without xfail, 18 truthfulness tests, D023 portable artifact rendering implemented, 4486 total tests.
@@ -92,7 +100,7 @@ Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (Success: no issues found in 291 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4568 passed, 23 skipped, 2 xfailed)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4586 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
@@ -131,3 +139,5 @@ Final state: 4486 tests passing, ruff clean, mypy clean (289 files), zero files 
 - Only SKILL and MCP_SERVER kinds qualify as portable — NATIVE_INTEGRATION always requires provider-specific bindings.
 - Provider dispatch is request-scoped in `build_start_session_dependencies()`, not baked into the lru_cached DefaultAdapters singleton (D028). Shared infra stays cached; provider-specific adapters are selected per invocation.
 - SandboxSpec field-forwarding pattern: application layer resolves provider_id → concrete values (image, volume, config_dir, argv) via dict lookups; infrastructure adapter consumes spec fields with empty-string/empty-tuple fallbacks to existing constants. Infrastructure never inspects provider_id.
+- `get_provider_display_name()` is the single source for provider-to-human-name mapping — all UI surfaces use it instead of raw provider IDs.
+- Guardrail test `TestNoCloudeCodeInNonAdapterModules` prevents regression of hardcoded provider references in non-adapter code.

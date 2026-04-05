@@ -32,7 +32,8 @@ class SessionRecord:
     branch: str | None = None
     last_used: str | None = None
     created_at: str | None = None
-    schema_version: int = 1
+    provider_id: str | None = None
+    schema_version: int = 2
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the record for JSON storage.
@@ -60,6 +61,7 @@ class SessionRecord:
             branch=data.get("branch"),
             last_used=data.get("last_used"),
             created_at=data.get("created_at"),
+            provider_id=data.get("provider_id"),
             schema_version=data.get("schema_version", 1),
         )
 
@@ -78,6 +80,7 @@ class SessionSummary:
         last_used: ISO 8601 timestamp string (format at edges).
         container_name: Linked container name.
         branch: Git branch name for the session.
+        provider_id: Provider identifier (e.g. 'claude', 'codex') or None.
     """
 
     name: str
@@ -86,6 +89,7 @@ class SessionSummary:
     last_used: str | None
     container_name: str | None
     branch: str | None
+    provider_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -99,11 +103,13 @@ class SessionFilter:
         limit: Maximum number of sessions to return.
         team: Optional team filter.
         include_all: Whether to ignore team filtering.
+        provider_id: Optional provider filter (e.g. 'claude', 'codex').
     """
 
     limit: int = 10
     team: str | None = None
     include_all: bool = False
+    provider_id: str | None = None
 
 
 @dataclass(frozen=True)

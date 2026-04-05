@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T00:28:34.937Z",
+  "exported_at": "2026-04-05T01:00:40.428Z",
   "milestones": [
     {
       "id": "M001",
@@ -881,16 +881,16 @@
       "milestone_id": "M006-d622bc",
       "id": "S03",
       "title": "Provider-aware branding, panels, diagnostics, and string cleanup",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [
         "S01"
       ],
       "demo": "All user-facing strings (branding header, launch panel, doctor output, setup wizard) adapt to the active provider. No hardcoded 'Claude Code' in runtime paths.",
       "created_at": "2026-04-04T22:05:29.069Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-05T00:33:12.614Z",
+      "full_summary_md": "---\nid: S03\nparent: M006-d622bc\nmilestone: M006-d622bc\nprovides:\n  - get_provider_display_name() helper for any UI surface that needs to show the active provider\n  - Provider-neutral branding across all CLI commands, help text, and prompts\n  - Guardrail test preventing regression of hardcoded provider references\nrequires:\n  - slice: S01\n    provides: Provider resolution infrastructure (resolve_provider(), provider_id on StartSessionRequest)\naffects:\n  - S04\nkey_files:\n  - src/scc_cli/core/provider_resolution.py\n  - src/scc_cli/ui/branding.py\n  - src/scc_cli/theme.py\n  - src/scc_cli/commands/launch/render.py\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/sandbox.py\n  - src/scc_cli/doctor/render.py\n  - tests/test_provider_branding.py\nkey_decisions:\n  - Branding header uses provider-neutral 'Sandboxed Code CLI' — the product is SCC, not a Claude wrapper\n  - Display name is passed as a string to launch render functions rather than provider_id — keeps render layer decoupled from provider_resolution\n  - Guardrail test excludes docker/, adapters/, marketplace/, and provider_resolution.py lookup table as legitimate Claude Code references\npatterns_established:\n  - get_provider_display_name() as the single source for provider-to-human-name mapping — all UI surfaces should use this instead of raw provider IDs\n  - Guardrail test pattern: scan source tree for deprecated references with explicit exclusion list for legitimate adapter-specific usage\n  - Backward-compatible display_name defaults on render functions — callers without provider context get Claude Code (existing behavior), callers with context pass the resolved name\nobservability_surfaces:\n  - none\ndrill_down_paths:\n  - .gsd/milestones/M006-d622bc/slices/S03/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M006-d622bc/slices/S03/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M006-d622bc/slices/S03/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-05T00:33:12.615Z\nblocker_discovered: false\n---\n\n# S03: Provider-aware branding, panels, diagnostics, and string cleanup\n\n**All user-facing strings now adapt to the active provider; a guardrail test prevents regressions of hardcoded 'Claude Code' references outside adapter modules.**\n\n## What Happened\n\nS03 systematically eliminated hardcoded \"Claude Code\" and \"Sandboxed Claude\" references from all non-adapter runtime code, replacing them with provider-neutral language or parameterized display names.\n\n**T01** established the foundation: `get_provider_display_name()` in `core/provider_resolution.py` maps provider IDs to human-readable names (\"Claude Code\", \"Codex\"), with title-cased fallback for unknown providers. The branding header was updated from \"Sandboxed Claude CLI\" to \"Sandboxed Code CLI\" in both `ui/branding.py` and `theme.py` ASCII art. `get_brand_tagline()` was parameterized to optionally include the provider name. 10 tests cover display name lookups, header neutrality, and tagline parameterization.\n\n**T02** threaded the display name through the launch UI layer: `show_launch_panel()`, `show_launch_context_panel()`, and `render_doctor_results()` all accept a display name / provider ID parameter with backward-compatible defaults. All three launch flow call sites (flow.py, flow_interactive.py, sandbox.py) resolve the provider and pass the correct display name. 7 new tests verify panel titles and doctor summary adapt correctly.\n\n**T03** was the sweep-and-guard pass. It updated 27+ source files across commands, UI, core, sessions, setup, and doctor modules — Typer help strings, runtime prompts, CLI epilog, module docstrings, and dashboard labels. The guardrail test (`TestNoCloudeCodeInNonAdapterModules`) scans all `.py` files under `src/scc_cli/` and fails if any \"Claude Code\" or \"Sandboxed Claude\" references appear outside docker/, adapters/, marketplace/, or the provider_resolution.py lookup table. The test found additional files beyond the original plan (setup_ui.py, models/plugin_audit.py, audit modules) which were also cleaned.\n\nFinal state: 18 branding tests, 4586 total tests passing, ruff clean, zero \"Claude Code\" in non-adapter user-facing code.\n\n## Verification\n\nAll slice-level verification checks pass:\n1. `uv run pytest tests/test_provider_branding.py -v --no-cov` — 18/18 passed (including guardrail)\n2. `uv run pytest --rootdir \"$PWD\" -q --no-cov` — 4586 passed, 23 skipped, 2 xfailed, 0 failures\n3. `uv run ruff check` — All checks passed\n4. `grep -rn 'Claude Code' src/scc_cli/ --include='*.py' | grep -v claude_ | grep -v marketplace/ | grep -v __pycache__ | grep -v docker/ | grep -v adapters/` — only 4 allowed references: provider_resolution.py lookup table and display_name default parameters in render.py/sandbox.py\n\n## Requirements Advanced\n\nNone.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nT03 scope expanded beyond the original plan to include setup_ui.py, models/plugin_audit.py, audit/__init__.py, audit/reader.py, and application/sync_marketplace.py — these files contained references the guardrail test would flag. This is a scope increase, not a deviation in intent.\n\n## Known Limitations\n\nDoctor render call sites in admin.py and settings.py were not threaded with the resolved provider — they fall back to the \"Claude Code\" default. This is acceptable because those call sites don't have the resolved provider in scope without plumbing it through additional layers. The default preserves existing behavior.\n\n## Follow-ups\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/provider_resolution.py` — Added get_provider_display_name() with _PROVIDER_DISPLAY_NAMES lookup table\n- `src/scc_cli/ui/branding.py` — Changed header to Sandboxed Code CLI, parameterized get_brand_tagline() with optional provider_id\n- `src/scc_cli/theme.py` — Updated ASCII art strings from Sandboxed Claude CLI to Sandboxed Code CLI\n- `src/scc_cli/commands/launch/render.py` — Added display_name parameter to show_launch_panel() and show_launch_context_panel()\n- `src/scc_cli/commands/launch/flow.py` — Threaded resolved provider display name to show_launch_panel()\n- `src/scc_cli/commands/launch/flow_interactive.py` — Threaded resolved provider display name to show_launch_context_panel()\n- `src/scc_cli/commands/launch/sandbox.py` — Threaded display_name to show_launch_panel()\n- `src/scc_cli/doctor/render.py` — Parameterized render_doctor_results() with provider_id for summary line\n- `src/scc_cli/cli.py` — Neutralized CLI help text and epilog from Claude Code to AI coding agents\n- `src/scc_cli/commands/launch/app.py` — Neutralized Typer help string\n- `src/scc_cli/commands/admin.py` — Neutralized help strings and runtime prompts\n- `src/scc_cli/commands/worktree/container_commands.py` — Neutralized help strings and runtime messages\n- `src/scc_cli/commands/worktree/session_commands.py` — Neutralized help strings and docstrings\n- `src/scc_cli/commands/worktree/worktree_commands.py` — Neutralized help strings and runtime prompts\n- `src/scc_cli/setup.py` — Neutralized setup wizard strings and docstrings\n- `src/scc_cli/sessions.py` — Neutralized module and function docstrings\n- `src/scc_cli/core/errors.py` — Updated module docstring\n- `src/scc_cli/core/constants.py` — Updated module docstring\n- `src/scc_cli/ui/git_interactive.py` — Neutralized branch guidance message and docstring\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py` — Neutralized launch description and docstrings\n- `tests/test_provider_branding.py` — 18 tests: display name lookups, header/tagline parameterization, panel titles, doctor summary, guardrail scan\n",
+      "full_uat_md": "# S03: Provider-aware branding, panels, diagnostics, and string cleanup — UAT\n\n**Milestone:** M006-d622bc\n**Written:** 2026-04-05T00:33:12.615Z\n\n## UAT: Provider-Aware Branding, Panels, Diagnostics, and String Cleanup\n\n### Preconditions\n- SCC installed and buildable (`uv sync`)\n- Provider resolution from S01 functional (`scc provider show` works)\n\n### Test Case 1: Provider Display Name Helper\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.provider_resolution import get_provider_display_name; print(get_provider_display_name('claude'))\"`\n2. Run same with `'codex'`\n3. Run same with `'gemini'`\n\n**Expected:**\n1. Prints `Claude Code`\n2. Prints `Codex`\n3. Prints `Gemini` (title-cased fallback)\n\n### Test Case 2: Branding Header Is Provider-Neutral\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.ui.branding import get_version_header; print(get_version_header())\"`\n2. Inspect output for product name\n\n**Expected:**\n- Contains \"Sandboxed Code CLI\"\n- Does NOT contain \"Sandboxed Claude\"\n\n### Test Case 3: CLI Help Text Is Provider-Neutral\n**Steps:**\n1. Run `uv run scc --help`\n2. Run `uv run scc start --help`\n3. Run `uv run scc sessions --help`\n4. Run `uv run scc containers stop --help`\n\n**Expected:**\n- No output contains \"Claude Code\"\n- Help text uses \"agent\", \"AI coding agents\", or \"sandboxes\" as appropriate\n\n### Test Case 4: Launch Panel Adapts to Provider\n**Steps:**\n1. In Python: `from scc_cli.commands.launch.render import show_launch_panel`\n2. Call with `display_name=\"Codex\"` — inspect Rich Panel title\n3. Call with default — inspect Rich Panel title\n\n**Expected:**\n- Codex call renders panel titled \"Launching Codex\"\n- Default call renders panel titled \"Launching Claude Code\"\n\n### Test Case 5: Doctor Summary Adapts to Provider\n**Steps:**\n1. In Python: `from scc_cli.doctor.render import render_doctor_results`\n2. Call with a passing result and `provider_id=\"codex\"`\n3. Call with default\n\n**Expected:**\n- Codex call summary says \"Ready to run Codex\"\n- Default call summary says \"Ready to run Claude Code\"\n\n### Test Case 6: Guardrail Test Catches Regressions\n**Steps:**\n1. Run `uv run pytest tests/test_provider_branding.py::TestNoCloudeCodeInNonAdapterModules -v`\n2. Temporarily add `# Claude Code test` to any non-adapter .py file\n3. Run the test again\n4. Revert the change\n\n**Expected:**\n- Step 1: Test passes\n- Step 3: Test fails, reporting the file with the new reference\n- Step 4: Test passes again\n\n### Test Case 7: Theme ASCII Art Is Neutral\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.theme import HEADER_ART_UNICODE, HEADER_ART_ASCII; print(HEADER_ART_UNICODE); print(HEADER_ART_ASCII)\"`\n\n**Expected:**\n- Both strings contain \"Sandboxed Code CLI\"\n- Neither contains \"Sandboxed Claude\"\n\n### Edge Case: Unknown Provider Display Name\n**Steps:**\n1. Run `uv run python -c \"from scc_cli.core.provider_resolution import get_provider_display_name; print(get_provider_display_name('some-new-provider'))\"`\n\n**Expected:**\n- Prints `Some-New-Provider` (title-cased, graceful fallback)\n",
       "goal": "All user-facing strings (branding header, launch panel, doctor output, setup wizard, help text, dashboard) adapt to the active provider. No hardcoded \"Claude Code\" in runtime paths outside adapter modules. A guardrail test prevents regressions.",
       "success_criteria": "- `get_provider_display_name()` returns correct display name for each known provider\n- `get_version_header()` and brand tagline use provider-neutral \"SCC — Sandboxed Code CLI\" branding\n- `show_launch_panel()` and `show_launch_context_panel()` accept `display_name` and render the active provider\n- `render_doctor_results()` summary line says \"Ready to run {display_name}\"\n- All Typer `help=` strings and static prompts use provider-neutral language (\"agent\", \"sandbox\")\n- Guardrail test scans non-adapter source files for \"Claude Code\" and fails if any remain outside allowed locations\n- `uv run pytest --rootdir \"$PWD\" -q` — zero regressions\n- `uv run ruff check` — clean\n- `uv run mypy` on touched files — clean",
       "proof_level": "contract — tests exercise the helper, parameterized functions, and guardrail scan without needing a running Docker environment",
@@ -915,11 +915,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "Prove coexistence, harden all error paths, verify both providers end-to-end through the full launch path, and confirm zero regression against M005 baseline.",
-      "success_criteria": "1. Coexistence test: same workspace, both providers → different container names (scc-oci-claude-{hash} vs scc-oci-codex-{hash}), different volumes ({provider}-sandbox-data), different SessionRecords (both present, each with correct provider_id), Quick Resume returns only same-provider entries.\n2. Typed errors with user_message, suggested_action, and exit_code: UnsupportedProviderError, ProviderNotReadyError, ProviderImageMissingError, ProviderMismatchError, ProviderNotAllowedError, ProviderFeatureUnavailableError.\n3. Error tests cover: unsupported provider name, provider not ready (no image), provider mismatch on resume, policy-disallowed provider, Claude-only feature invoked under Codex, image missing at launch.\n4. End-to-end test: Claude launch path produces correct SandboxSpec (image, binary, volume, container name, settings path) + correct OCI exec args.\n5. End-to-end test: Codex launch path produces correct SandboxSpec + correct OCI exec args.\n6. End-to-end test: provider switch round-trip (set codex, verify spec, set claude, verify spec — both correct, per-invocation).\n7. Full test suite passes (zero regression from M005 baseline of 4486+ tests).\n8. ruff check, mypy, pytest all clean.\n9. All M006 success criteria verified with evidence.",
-      "proof_level": "Coexistence test, error construction tests, end-to-end launch path tests for both providers, full regression gate.",
-      "integration_closure": "Coexistence proven. All provider error scenarios covered. Both providers verified through the complete launch path. Zero regression.",
-      "observability_impact": "Provider errors include actionable next-step guidance. Error category and exit code follow SCCError conventions.",
+      "goal": "All error paths produce typed, user-facing errors. provider_id appears in all machine-readable outputs. Provider-aware container naming prevents coexistence collisions. Doctor checks for provider image availability. Full test suite passes with zero regressions.",
+      "success_criteria": "- provider_id field present in dry-run JSON, support bundle manifest, and session list JSON envelope\n- Container names include provider_id, preventing same-workspace collisions between Claude and Codex\n- SessionRecord, SessionSummary, SessionFilter carry provider_id; record_session and list_recent thread it\n- Doctor reports missing provider image with exact `docker build` command\n- Coexistence proof test: two providers on same workspace produce distinct containers, volumes, and sessions\n- Full suite passes: `uv run pytest --rootdir \"$PWD\" -q --no-cov` — 0 failures",
+      "proof_level": "This slice proves: contract + integration. Real runtime required: no (all verification is unit-level with mocks). Human/UAT required: no.",
+      "integration_closure": "Upstream surfaces consumed: `resolve_active_provider()` from S01, `_PROVIDER_DISPATCH` from S01, `_PROVIDER_IMAGE_REF`/`_PROVIDER_DATA_VOLUME`/`_PROVIDER_CONFIG_DIR` dicts from S02, `get_provider_display_name()` from S03, `SandboxSpec` fields from S02, branding guardrail from S03. New wiring: provider_id threaded into session recording, dry-run output, support bundle, container naming, and doctor checks. What remains: nothing — this is the final slice of M006.",
+      "observability_impact": "Doctor check for provider image adds a new diagnostic surface. Support bundle manifest gains provider_id for triage. Session list gains provider_id for filtering and operator visibility.",
       "sequence": 0,
       "replan_triggered_at": null
     }
@@ -5299,6 +5299,208 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S04",
+      "id": "T01",
+      "title": "Added provider_id field to SessionRecord, SessionSummary, SessionFilter and threaded it through all session recording and listing call sites in the launch flow",
+      "status": "complete",
+      "one_liner": "Added provider_id field to SessionRecord, SessionSummary, SessionFilter and threaded it through all session recording and listing call sites in the launch flow",
+      "narrative": "Added `provider_id: str | None = None` to all three session dataclasses (SessionRecord, SessionSummary, SessionFilter). Updated from_dict() for backward compat, bumped schema_version default to 2. Threaded provider_id through SessionService.record_session(), the sessions.py facade, _record_session_and_context(), and all call sites in flow.py, flow_interactive.py, and sandbox.py. Added provider_id filtering to _filter_sessions(). Fixed a latent bug where record_session wasn't preserving schema_version from existing records on update. Created 13 new tests and updated 1 existing test.",
+      "verification_result": "All four verification checks passed: 13/13 provider_id tests pass, ruff clean on target files, mypy clean on target files, full suite 4599 passed / 0 failed / 23 skipped / 2 xfailed.",
+      "duration": "",
+      "completed_at": "2026-04-05T01:00:40.377Z",
+      "blocker_discovered": false,
+      "deviations": "Fixed latent schema_version preservation bug exposed by version bump. Updated existing test_sessions.py schema version test. Also updated update_session_container to preserve provider_id.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/ports/session_models.py",
+        "src/scc_cli/application/sessions/use_cases.py",
+        "src/scc_cli/sessions.py",
+        "src/scc_cli/commands/launch/flow_session.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/launch/sandbox.py",
+        "tests/test_session_provider_id.py",
+        "tests/test_sessions.py"
+      ],
+      "key_decisions": [
+        "schema_version bumped from 1 to 2 for new records; from_dict still defaults to 1 for legacy data",
+        "record_session preserves schema_version from existing records on update",
+        "Legacy sandbox.py path passes provider_id=None since provider is not resolved there"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S04\nmilestone: M006-d622bc\nkey_files:\n  - src/scc_cli/ports/session_models.py\n  - src/scc_cli/application/sessions/use_cases.py\n  - src/scc_cli/sessions.py\n  - src/scc_cli/commands/launch/flow_session.py\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/sandbox.py\n  - tests/test_session_provider_id.py\n  - tests/test_sessions.py\nkey_decisions:\n  - schema_version bumped from 1 to 2 for new records; from_dict still defaults to 1 for legacy data\n  - record_session preserves schema_version from existing records on update\n  - Legacy sandbox.py path passes provider_id=None since provider is not resolved there\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T01:00:40.376Z\nblocker_discovered: false\n---\n\n# T01: Added provider_id field to SessionRecord, SessionSummary, SessionFilter and threaded it through all session recording and listing call sites in the launch flow\n\n**Added provider_id field to SessionRecord, SessionSummary, SessionFilter and threaded it through all session recording and listing call sites in the launch flow**\n\n## What Happened\n\nAdded `provider_id: str | None = None` to all three session dataclasses (SessionRecord, SessionSummary, SessionFilter). Updated from_dict() for backward compat, bumped schema_version default to 2. Threaded provider_id through SessionService.record_session(), the sessions.py facade, _record_session_and_context(), and all call sites in flow.py, flow_interactive.py, and sandbox.py. Added provider_id filtering to _filter_sessions(). Fixed a latent bug where record_session wasn't preserving schema_version from existing records on update. Created 13 new tests and updated 1 existing test.\n\n## Verification\n\nAll four verification checks passed: 13/13 provider_id tests pass, ruff clean on target files, mypy clean on target files, full suite 4599 passed / 0 failed / 23 skipped / 2 xfailed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_session_provider_id.py -v --no-cov` | 0 | ✅ pass | 4100ms |\n| 2 | `uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py` | 0 | ✅ pass | 4100ms |\n| 3 | `uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py` | 0 | ✅ pass | 4100ms |\n| 4 | `uv run pytest --rootdir \"$PWD\" -q --no-cov` | 0 | ✅ pass | 62340ms |\n\n## Deviations\n\nFixed latent schema_version preservation bug exposed by version bump. Updated existing test_sessions.py schema version test. Also updated update_session_container to preserve provider_id.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/ports/session_models.py`\n- `src/scc_cli/application/sessions/use_cases.py`\n- `src/scc_cli/sessions.py`\n- `src/scc_cli/commands/launch/flow_session.py`\n- `src/scc_cli/commands/launch/flow.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/commands/launch/sandbox.py`\n- `tests/test_session_provider_id.py`\n- `tests/test_sessions.py`\n",
+      "description": "## Description\n\nAdd `provider_id: str | None = None` to SessionRecord, SessionSummary, and SessionFilter. Thread it through record_session, list_recent, _record_session_and_context, and all call sites in the launch flow. This is foundational — T02 and T04 depend on sessions carrying provider_id.\n\n## Steps\n\n1. Read `src/scc_cli/ports/session_models.py`. Add `provider_id: str | None = None` field to SessionRecord (after schema_version), SessionSummary (after branch), and SessionFilter (after include_all). Update `from_dict()` on SessionRecord to extract provider_id with default None. Bump `schema_version` default to 2 on SessionRecord.\n2. Read `src/scc_cli/application/sessions/use_cases.py`. Thread `provider_id` through `record_session()` method — pass it to the SessionRecord constructor. Thread `provider_id` through filtering in list_recent: if `SessionFilter.provider_id` is set, filter sessions where `provider_id` matches.\n3. Read `src/scc_cli/sessions.py`. Add `provider_id: str | None = None` parameter to `record_session()` and `list_recent()`. Pass through to service calls.\n4. Read `src/scc_cli/commands/launch/flow_session.py`. Add `provider_id: str | None = None` parameter to `_record_session_and_context()`. Pass to `sessions.record_session()`.\n5. Read `src/scc_cli/commands/launch/flow.py` around line 368 where `_record_session_and_context` is called. Thread `resolved_provider` (already in scope) as `provider_id=resolved_provider`.\n6. Read `src/scc_cli/commands/launch/flow_interactive.py` around line 708 where `_record_session_and_context` is called. Thread the resolved provider_id (find it in scope from the interactive flow).\n7. Read `src/scc_cli/commands/launch/sandbox.py` around line 97 where `sessions.record_session()` is called. Thread provider_id if available in scope, or pass None.\n8. Create `tests/test_session_provider_id.py` with tests:\n   - SessionRecord round-trip with provider_id set and None\n   - SessionRecord.from_dict() with and without provider_id key (backward compat)\n   - SessionSummary with provider_id field\n   - SessionFilter with provider_id filtering\n   - schema_version defaults to 2 for new records\n\n## Must-Haves\n\n- [ ] SessionRecord, SessionSummary, SessionFilter all have `provider_id: str | None = None`\n- [ ] SessionRecord.from_dict() handles missing provider_id gracefully\n- [ ] record_session() accepts and stores provider_id\n- [ ] _record_session_and_context() passes provider_id through\n- [ ] flow.py and flow_interactive.py thread resolved_provider to session recording\n- [ ] All new code passes ruff, mypy\n\n## Verification\n\n- `uv run pytest tests/test_session_provider_id.py -v --no-cov` — all tests pass\n- `uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py` — clean\n- `uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q --no-cov` — zero regressions",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/ports/session_models.py",
+        "src/scc_cli/application/sessions/use_cases.py",
+        "src/scc_cli/sessions.py",
+        "src/scc_cli/commands/launch/flow_session.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/launch/sandbox.py",
+        "tests/test_session_provider_id.py"
+      ],
+      "verify": "uv run pytest tests/test_session_provider_id.py -v --no-cov && uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py && uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py && uv run pytest --rootdir \"$PWD\" -q --no-cov",
+      "inputs": [
+        "`src/scc_cli/ports/session_models.py` — SessionRecord, SessionSummary, SessionFilter dataclasses",
+        "`src/scc_cli/application/sessions/use_cases.py` — SessionService with record_session and list_recent",
+        "`src/scc_cli/sessions.py` — facade module for session operations",
+        "`src/scc_cli/commands/launch/flow_session.py` — _record_session_and_context helper",
+        "`src/scc_cli/commands/launch/flow.py` — start() launch flow with resolved_provider in scope",
+        "`src/scc_cli/commands/launch/flow_interactive.py` — interactive flow calling _record_session_and_context",
+        "`src/scc_cli/commands/launch/sandbox.py` — sandbox launch calling sessions.record_session"
+      ],
+      "expected_output": [
+        "`src/scc_cli/ports/session_models.py` — provider_id on SessionRecord, SessionSummary, SessionFilter",
+        "`src/scc_cli/application/sessions/use_cases.py` — provider_id threading in record and filter",
+        "`src/scc_cli/sessions.py` — provider_id param on record_session and list_recent",
+        "`src/scc_cli/commands/launch/flow_session.py` — provider_id param on _record_session_and_context",
+        "`src/scc_cli/commands/launch/flow.py` — resolved_provider threaded to session recording",
+        "`src/scc_cli/commands/launch/flow_interactive.py` — provider_id threaded to session recording",
+        "`tests/test_session_provider_id.py` — session model and filtering tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S04",
+      "id": "T02",
+      "title": "Machine-readable provider_id outputs and provider-aware container naming",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nTwo related D028 deliverables: (1) add provider_id to dry-run JSON, support bundle manifest, and session list JSON envelope; (2) include provider_id in container naming for coexistence.\n\n## Steps\n\n1. Read `src/scc_cli/commands/launch/render.py` around `build_dry_run_data()` (line 49). Add `provider_id: str | None = None` parameter. Include `\"provider_id\": provider_id` in the returned dict (near other metadata fields).\n2. Read `src/scc_cli/commands/launch/flow.py` around line 339 where `build_dry_run_data()` is called. Thread `provider_id=resolved_provider` (resolved_provider is already in scope from `_resolve_provider()`).\n3. Read `src/scc_cli/application/support_bundle.py` around `build_support_bundle_manifest()` (line 204). Add provider_id to the manifest dict. The simplest approach: call `config.get_selected_provider()` inline (the bundle already reads config), or add a `provider_id` key to the dict. Use `config.get_selected_provider()` to resolve it at manifest build time.\n4. Read `src/scc_cli/presentation/json/sessions_json.py`. Add `provider_id: str | None = None` parameter to `build_session_list_data()`. Include it in the returned dict as a top-level filter indicator.\n5. Read `src/scc_cli/adapters/oci_sandbox_runtime.py` around `_container_name()` (line 49). Change signature to `_container_name(workspace: Path, provider_id: str = \"\")`. Include provider_id in the hash input: `hashlib.sha256(f\"{provider_id}:{workspace}\".encode())`. When provider_id is empty, this changes the hash from the old scheme — but the old scheme is only for unnamed containers, and existing sessions use container_id for resume, so this is safe.\n6. Find all call sites of `_container_name()` in oci_sandbox_runtime.py. The `run()` method calls it. Thread `spec.provider_id` if SandboxSpec has it, otherwise use empty string. But SandboxSpec doesn't have provider_id yet — research suggested adding it. Read `src/scc_cli/ports/models.py` SandboxSpec. Add `provider_id: str = \"\"` field. Then read `src/scc_cli/application/start_session.py` `_build_sandbox_spec()` — populate `provider_id` from the function's provider_id parameter (already present in scope via `_PROVIDER_IMAGE_REF` key).\n7. Update `_container_name()` calls in oci_sandbox_runtime.py to pass `spec.provider_id` or the provider_id from the run() method's SandboxSpec.\n8. Create `tests/test_provider_machine_readable.py` with tests:\n   - build_dry_run_data with provider_id returns it in dict\n   - build_dry_run_data without provider_id has None\n   - build_session_list_data with provider_id\n   - Container name differs for same workspace with different provider_ids\n   - Container name with empty provider_id (backward compat)\n   - SandboxSpec.provider_id populated by _build_sandbox_spec\n\n## Must-Haves\n\n- [ ] build_dry_run_data includes provider_id in output dict\n- [ ] flow.py threads resolved_provider to build_dry_run_data\n- [ ] Support bundle manifest includes provider_id\n- [ ] build_session_list_data includes provider_id\n- [ ] _container_name includes provider_id in hash, producing different names per provider\n- [ ] SandboxSpec gains provider_id field, populated in _build_sandbox_spec\n- [ ] All new code passes ruff, mypy\n\n## Verification\n\n- `uv run pytest tests/test_provider_machine_readable.py -v --no-cov` — all tests pass\n- `uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/application/support_bundle.py src/scc_cli/presentation/json/sessions_json.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` — clean\n- `uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/application/support_bundle.py src/scc_cli/presentation/json/sessions_json.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q --no-cov` — zero regressions",
+      "estimate": "1h",
+      "files": [
+        "src/scc_cli/commands/launch/render.py",
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/application/support_bundle.py",
+        "src/scc_cli/presentation/json/sessions_json.py",
+        "src/scc_cli/adapters/oci_sandbox_runtime.py",
+        "src/scc_cli/ports/models.py",
+        "src/scc_cli/application/start_session.py",
+        "tests/test_provider_machine_readable.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_machine_readable.py -v --no-cov && uv run ruff check src/scc_cli/commands/launch/render.py src/scc_cli/application/support_bundle.py src/scc_cli/presentation/json/sessions_json.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py && uv run mypy src/scc_cli/commands/launch/render.py src/scc_cli/application/support_bundle.py src/scc_cli/presentation/json/sessions_json.py src/scc_cli/adapters/oci_sandbox_runtime.py src/scc_cli/ports/models.py src/scc_cli/application/start_session.py && uv run pytest --rootdir \"$PWD\" -q --no-cov",
+      "inputs": [
+        "`src/scc_cli/commands/launch/render.py` — build_dry_run_data() function",
+        "`src/scc_cli/commands/launch/flow.py` — dry-run call site around line 339 with resolved_provider in scope",
+        "`src/scc_cli/application/support_bundle.py` — build_support_bundle_manifest() function",
+        "`src/scc_cli/presentation/json/sessions_json.py` — build_session_list_data() function",
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — _container_name() function",
+        "`src/scc_cli/ports/models.py` — SandboxSpec dataclass",
+        "`src/scc_cli/application/start_session.py` — _build_sandbox_spec() with _PROVIDER_IMAGE_REF/_PROVIDER_DATA_VOLUME/_PROVIDER_CONFIG_DIR dicts",
+        "`src/scc_cli/ports/session_models.py` — SessionRecord with provider_id from T01"
+      ],
+      "expected_output": [
+        "`src/scc_cli/commands/launch/render.py` — provider_id param on build_dry_run_data",
+        "`src/scc_cli/commands/launch/flow.py` — resolved_provider threaded to dry-run",
+        "`src/scc_cli/application/support_bundle.py` — provider_id in manifest",
+        "`src/scc_cli/presentation/json/sessions_json.py` — provider_id on session list data",
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — provider-aware _container_name",
+        "`src/scc_cli/ports/models.py` — provider_id field on SandboxSpec",
+        "`src/scc_cli/application/start_session.py` — provider_id populated on SandboxSpec",
+        "`tests/test_provider_machine_readable.py` — dry-run, session list, container naming, support bundle tests"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S04",
+      "id": "T03",
+      "title": "Doctor provider image check with build command hint",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nD028 constraint 4: for missing provider images, doctor must print the exact build command. Add a `check_provider_image()` doctor check that runs `docker image inspect` for the active provider's image ref and returns a CheckResult with fix_commands on failure.\n\n## Steps\n\n1. Read `src/scc_cli/doctor/checks/environment.py` to understand the existing check pattern (check_docker, check_docker_running, etc). Note how they use subprocess and return CheckResult.\n2. Read `src/scc_cli/core/image_contracts.py` to get the exact image ref constants: `SCC_CLAUDE_IMAGE_REF` and `SCC_CODEX_IMAGE_REF`.\n3. Read `src/scc_cli/core/provider_resolution.py` to import `get_selected_provider` for resolving the active provider.\n4. Create `check_provider_image()` in `src/scc_cli/doctor/checks/environment.py`:\n   - Import `get_selected_provider` from config, `SCC_CLAUDE_IMAGE_REF` and `SCC_CODEX_IMAGE_REF` from image_contracts\n   - Map provider_id to image_ref: `{\"claude\": SCC_CLAUDE_IMAGE_REF, \"codex\": SCC_CODEX_IMAGE_REF}`\n   - Resolve active provider via `config.get_selected_provider()`\n   - Run `docker image inspect {image_ref}` via subprocess\n   - On success: return CheckResult(name=\"provider_image\", passed=True, message=f\"{image_ref} found\")\n   - On failure: return CheckResult(name=\"provider_image\", passed=False, message=f\"{image_ref} not found\", fix_commands=[f\"docker build -t {image_ref} images/scc-agent-{provider_id}/\"], fix_hint=f\"Build the {provider} agent image\", severity=SeverityLevel.WARNING)\n   - Use WARNING severity since the image is only needed for `scc start`, not general usage\n5. Read `src/scc_cli/doctor/checks/__init__.py`. Export `check_provider_image`.\n6. Read `src/scc_cli/doctor/core.py` `run_doctor()`. Add a call to `check_provider_image()` after the Docker checks (it only makes sense to check the image if Docker is working). Wrap in try/except per the support-bundle partial-results pattern.\n7. Create `tests/test_doctor_image_check.py`:\n   - Test image found → passed=True\n   - Test image not found → passed=False with correct fix_commands containing build command\n   - Test unknown provider → falls back to claude image ref\n   - Test subprocess failure → graceful failure with appropriate message\n   - Mock subprocess.run to avoid Docker dependency\n\n## Must-Haves\n\n- [ ] check_provider_image() exists and returns CheckResult\n- [ ] On missing image, fix_commands contains exact `docker build -t scc-agent-{provider}:latest images/scc-agent-{provider}/` command\n- [ ] Doctor runs the check after Docker checks\n- [ ] All code passes ruff, mypy\n\n## Verification\n\n- `uv run pytest tests/test_doctor_image_check.py -v --no-cov` — all tests pass\n- `uv run ruff check src/scc_cli/doctor/checks/environment.py src/scc_cli/doctor/core.py` — clean\n- `uv run mypy src/scc_cli/doctor/checks/environment.py src/scc_cli/doctor/core.py` — no issues\n- `uv run pytest --rootdir \"$PWD\" -q --no-cov` — zero regressions\n\n## Negative Tests\n\n- **Malformed inputs**: unknown provider_id → falls back to claude image ref\n- **Error paths**: subprocess timeout or CalledProcessError → graceful CheckResult(passed=False)\n- **Boundary conditions**: Docker not running → check returns failed with helpful message",
+      "estimate": "30m",
+      "files": [
+        "src/scc_cli/doctor/checks/environment.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "src/scc_cli/doctor/core.py",
+        "tests/test_doctor_image_check.py"
+      ],
+      "verify": "uv run pytest tests/test_doctor_image_check.py -v --no-cov && uv run ruff check src/scc_cli/doctor/checks/environment.py src/scc_cli/doctor/core.py && uv run mypy src/scc_cli/doctor/checks/environment.py src/scc_cli/doctor/core.py && uv run pytest --rootdir \"$PWD\" -q --no-cov",
+      "inputs": [
+        "`src/scc_cli/doctor/checks/environment.py` — existing check_docker, check_docker_running patterns",
+        "`src/scc_cli/doctor/checks/__init__.py` — existing exports",
+        "`src/scc_cli/doctor/core.py` — run_doctor() function",
+        "`src/scc_cli/core/image_contracts.py` — SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF constants",
+        "`src/scc_cli/config.py` — get_selected_provider() function"
+      ],
+      "expected_output": [
+        "`src/scc_cli/doctor/checks/environment.py` — check_provider_image() function",
+        "`src/scc_cli/doctor/checks/__init__.py` — check_provider_image export",
+        "`src/scc_cli/doctor/core.py` — provider image check in run_doctor()",
+        "`tests/test_doctor_image_check.py` — image check tests with subprocess mocking"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M006-d622bc",
+      "slice_id": "S04",
+      "id": "T04",
+      "title": "Coexistence proof test and zero-regression gate",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "## Description\n\nD028 constraint 5: prove that Claude and Codex containers, volumes, sessions, and Quick Resume entries coexist for the same workspace without collision. Plus the full regression gate.\n\n## Steps\n\n1. Create `tests/test_provider_coexistence.py` with a comprehensive coexistence proof:\n   - **Container name collision test**: Import `_container_name` from `scc_cli.adapters.oci_sandbox_runtime`. Create two calls with the same workspace Path but different provider_ids (\"claude\" and \"codex\"). Assert the returned names differ.\n   - **Data volume collision test**: Import `_PROVIDER_DATA_VOLUME` from `scc_cli.application.start_session`. Assert `_PROVIDER_DATA_VOLUME[\"claude\"] != _PROVIDER_DATA_VOLUME[\"codex\"]`.\n   - **Session coexistence test**: Create two SessionRecord instances for the same workspace with different provider_ids. Assert both can exist. Create a SessionFilter with provider_id=\"claude\" and verify filtering logic returns only the Claude session (use the SessionService or test the filter manually by constructing records and applying the filter).\n   - **Session list isolation test**: Build two sessions, list with provider_id filter, assert only matching provider returned.\n   - **SandboxSpec identity test**: Build two SandboxSpec instances (or use `_build_sandbox_spec` if accessible) for the same workspace with different providers. Assert image_ref, data_volume, config_dir, and agent_argv all differ.\n2. Run the full regression gate: `uv run pytest --rootdir \"$PWD\" -q --no-cov` — must be 0 failures.\n3. Run `uv run ruff check` — must be 0 errors.\n4. Run `uv run mypy src/scc_cli` — must be 0 issues (or same as baseline).\n\n## Must-Haves\n\n- [ ] Container names for same workspace + different providers are distinct\n- [ ] Data volume names for claude and codex are distinct\n- [ ] Sessions with different provider_ids can coexist and be filtered independently\n- [ ] SandboxSpec fields (image_ref, data_volume, config_dir, agent_argv) differ per provider\n- [ ] Full test suite: 0 failures\n- [ ] ruff check: 0 errors\n- [ ] mypy: 0 issues\n\n## Verification\n\n- `uv run pytest tests/test_provider_coexistence.py -v --no-cov` — all coexistence tests pass\n- `uv run pytest --rootdir \"$PWD\" -q --no-cov` — 0 failures (4600+ tests expected)\n- `uv run ruff check` — 0 errors\n- `uv run mypy src/scc_cli` — success",
+      "estimate": "30m",
+      "files": [
+        "tests/test_provider_coexistence.py"
+      ],
+      "verify": "uv run pytest tests/test_provider_coexistence.py -v --no-cov && uv run pytest --rootdir \"$PWD\" -q --no-cov && uv run ruff check && uv run mypy src/scc_cli",
+      "inputs": [
+        "`src/scc_cli/adapters/oci_sandbox_runtime.py` — _container_name() with provider_id from T02",
+        "`src/scc_cli/application/start_session.py` — _PROVIDER_DATA_VOLUME, _PROVIDER_CONFIG_DIR, _PROVIDER_IMAGE_REF dicts from S02",
+        "`src/scc_cli/ports/session_models.py` — SessionRecord, SessionFilter with provider_id from T01",
+        "`src/scc_cli/ports/models.py` — SandboxSpec with provider_id from T02",
+        "`tests/test_provider_machine_readable.py` — T02 test file (no dependency, just co-exists)",
+        "`tests/test_session_provider_id.py` — T01 test file (no dependency, just co-exists)",
+        "`tests/test_doctor_image_check.py` — T03 test file (no dependency, just co-exists)"
+      ],
+      "expected_output": [
+        "`tests/test_provider_coexistence.py` — coexistence proof tests covering containers, volumes, sessions, specs"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -8607,6 +8809,50 @@
       "verdict": "✅ pass",
       "duration_ms": 3000,
       "created_at": "2026-04-05T00:28:34.890Z"
+    },
+    {
+      "id": 273,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest tests/test_session_provider_id.py -v --no-cov",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4100,
+      "created_at": "2026-04-05T01:00:40.377Z"
+    },
+    {
+      "id": 274,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run ruff check src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4100,
+      "created_at": "2026-04-05T01:00:40.377Z"
+    },
+    {
+      "id": 275,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run mypy src/scc_cli/ports/session_models.py src/scc_cli/sessions.py src/scc_cli/commands/launch/flow_session.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4100,
+      "created_at": "2026-04-05T01:00:40.377Z"
+    },
+    {
+      "id": 276,
+      "task_id": "T01",
+      "slice_id": "S04",
+      "milestone_id": "M006-d622bc",
+      "command": "uv run pytest --rootdir \"$PWD\" -q --no-cov",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 62340,
+      "created_at": "2026-04-05T01:00:40.377Z"
     }
   ]
 }

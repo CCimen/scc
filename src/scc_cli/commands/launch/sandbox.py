@@ -100,6 +100,7 @@ def launch_sandbox(
             session_name=session_name,
             container_name=container_name,
             branch=current_branch,
+            provider_id=None,  # Legacy sandbox path; provider_id not available
         )
         # Record context for quick resume feature
         # Determine repo root (may be same as workspace for non-worktrees)

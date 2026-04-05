@@ -710,6 +710,7 @@ def run_start_wizard_flow(
             team,
             session_name,
             current_branch,
+            provider_id=start_request.provider_id,
         )
         show_launch_panel(
             workspace=workspace_path,

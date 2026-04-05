@@ -50,6 +50,7 @@ class SessionService:
                 last_used=record.last_used,
                 container_name=record.container_name,
                 branch=record.branch,
+                provider_id=record.provider_id,
             )
             for record in sessions
         ]
@@ -64,6 +65,7 @@ class SessionService:
         session_name: str | None = None,
         container_name: str | None = None,
         branch: str | None = None,
+        provider_id: str | None = None,
     ) -> SessionRecord:
         """Record a session creation or update.
 
@@ -73,6 +75,7 @@ class SessionService:
             session_name: Optional session display name.
             container_name: Optional container name.
             branch: Optional git branch name.
+            provider_id: Provider identifier (e.g. 'claude', 'codex') or None.
 
         Returns:
             SessionRecord that was written.
@@ -82,6 +85,9 @@ class SessionService:
             sessions = self.store.load_sessions()
             existing_index = _find_session_index(sessions, workspace, branch)
             created_at = sessions[existing_index].created_at if existing_index is not None else now
+            schema_ver = (
+                sessions[existing_index].schema_version if existing_index is not None else 2
+            )
             record = SessionRecord(
                 workspace=workspace,
                 team=team,
@@ -90,6 +96,8 @@ class SessionService:
                 branch=branch,
                 last_used=now,
                 created_at=created_at,
+                provider_id=provider_id,
+                schema_version=schema_ver,
             )
             if existing_index is not None:
                 sessions[existing_index] = record
@@ -125,6 +133,7 @@ class SessionService:
                         branch=record.branch,
                         last_used=now,
                         created_at=record.created_at,
+                        provider_id=record.provider_id,
                         schema_version=record.schema_version,
                     )
                     sessions[sessions.index(record)] = updated
@@ -152,10 +161,14 @@ def _filter_sessions(
     session_filter: SessionFilter,
 ) -> list[SessionRecord]:
     if session_filter.include_all:
-        return sessions
-    if session_filter.team is None:
-        return [record for record in sessions if record.team is None]
-    return [record for record in sessions if record.team == session_filter.team]
+        result = sessions
+    elif session_filter.team is None:
+        result = [record for record in sessions if record.team is None]
+    else:
+        result = [record for record in sessions if record.team == session_filter.team]
+    if session_filter.provider_id is not None:
+        result = [record for record in result if record.provider_id == session_filter.provider_id]
+    return result
 
 
 def _generate_session_name(record: SessionRecord) -> str:

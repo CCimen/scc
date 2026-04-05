@@ -73,6 +73,7 @@ def record_session(
     session_name: str | None = None,
     container_name: str | None = None,
     branch: str | None = None,
+    provider_id: str | None = None,
     *,
     filesystem: Filesystem | None = None,
 ) -> SessionRecord:
@@ -84,6 +85,7 @@ def record_session(
         session_name=session_name,
         container_name=container_name,
         branch=branch,
+        provider_id=provider_id,
     )
 
 

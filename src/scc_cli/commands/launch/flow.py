@@ -370,6 +370,7 @@ def start(
         team,
         session_name,
         current_branch,
+        provider_id=resolved_provider,
     )
     show_launch_panel(
         workspace=workspace_path,

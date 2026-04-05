@@ -361,6 +361,7 @@ def _record_session_and_context(
     team: str | None,
     session_name: str | None,
     current_branch: str | None,
+    provider_id: str | None = None,
 ) -> None:
     """Record session metadata and quick-resume context."""
     sessions.record_session(
@@ -369,6 +370,7 @@ def _record_session_and_context(
         session_name=session_name,
         container_name=None,
         branch=current_branch,
+        provider_id=provider_id,
     )
     repo_root = git.get_worktree_main_repo(workspace_path) or workspace_path
     worktree_name = workspace_path.name
