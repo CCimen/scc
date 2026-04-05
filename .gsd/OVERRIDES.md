@@ -99,10 +99,10 @@ User-issued overrides that supersede plan document content.
   - Do not require dual team configs.
 
   Preferred execution order inside M005 for this work:
-  1. S02/T05 — split the marketplace/profile/config cluster so provider-neutral planning is separate from provider-native renderers.
-  2. S03/T01-T03 — land typed governed-artifact/team-pack models and typed config flow.
-  3. S04/T01-T05 — harden fetch/render/merge/install failure handling.
-  4. S06/T03-T04 — run the docs/diagnostics truthfulness pass and milestone validation after the renderer split is real.
+  1. S02/T05 - split the marketplace/profile/config cluster so provider-neutral planning is separate from provider-native renderers.
+  2. S03/T01-T03 - land typed governed-artifact/team-pack models and typed config flow.
+  3. S04/T01-T05 - harden fetch/render/merge/install failure handling.
+  4. S06/T03-T04 - run the docs/diagnostics truthfulness pass and milestone validation after the renderer split is real.
 
   M004 remains narrow:
   - Finish M004/S04 and M004/S05 normally.
@@ -246,7 +246,7 @@ User-issued overrides that supersede plan document content.
   - Keep this runner-owned, not runtime-spec-owned.
 
   4. Implement D040 for real: file-based Codex auth in containers.
-  - Codex auth persistence must support “login once, reuse until token expiry/refresh”.
+  - Codex auth persistence must support "login once, reuse until token expiry/refresh".
   - In the containerized Codex path, force `cli_auth_credentials_store = "file"` via the SCC-managed Codex config layer.
   - Do not rely on keyring/auto behavior inside containers.
   - Ensure refreshed auth writes back to the persistent provider volume.
@@ -260,8 +260,8 @@ User-issued overrides that supersede plan document content.
   - Move auth readiness ownership to the provider adapter boundary (for example provider.auth_check(data_volume) -> AuthReadiness or equivalent).
   - Doctor should consume the provider-owned auth readiness result.
   - Auth wording must stay truthful:
-    - say “auth cache present” if the check is local and non-networked
-    - do not imply “logged in” or “validated” unless that is actually checked
+    - say "auth cache present" if the check is local and non-networked
+    - do not imply "logged in" or "validated" unless that is actually checked
   - Improve the local readiness quality:
     - at minimum require file existence plus non-empty content
     - parseable JSON for providers that use JSON auth files if feasible
@@ -274,7 +274,7 @@ User-issued overrides that supersede plan document content.
   - Missing provider wiring should surface a typed launch error, not a Claude fallback.
 
   7. Strengthen the persistence model implementation, not just the docs.
-  - The current “one provider volume per provider” model is acceptable for v1, but config freshness must be deterministic.
+  - The current "one provider volume per provider" model is acceptable for v1, but config freshness must be deterministic.
   - Implement D038/D042 fully:
     - on every fresh launch, SCC writes or clears its own managed config layer deterministically
     - on resume, the original session config remains
@@ -317,10 +317,11 @@ User-issued overrides that supersede plan document content.
   - Codex auth cache persists across container restarts without forcing re-login each time.
   - Doctor reports truthful backend/image/auth readiness without overstating validation.
   - Active launch logic never silently falls back to Claude for unknown/missing providers.
-  - README, docs, and UI naming are consistent with “SCC — Sandboxed Code CLI”.
+  - README, docs, and UI naming are consistent with "SCC — Sandboxed Code CLI".
 
   Please update the plan and implement these reconciliation tasks before treating S05 as pure docs/validation."
-**Scope:** active
+**Scope:** resolved
 **Applied-at:** M007-cqttot/S05/T01
+**Resolution:** D044 recorded. S05 replanned from 1 task (docs/naming) to 12 tasks (T01 complete + T02-T12 reconciliation). Tasks cover all 11 override items: D041 config layering (T02), D035 settings serialization (T03), D033 Codex argv (T04), D040 file-based auth (T05), D037 adapter-owned auth readiness (T06), D032 fallback removal (T07), D038/D042 config freshness (T08), D039 runtime permissions (T09), image hardening (T10), persistence tests (T11), truthfulness validation (T12). Roadmap S05 updated to risk:high with expanded demo text. PROJECT.md updated with S05 reconciliation status.
 
 ---

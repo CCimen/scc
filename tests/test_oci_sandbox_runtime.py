@@ -578,3 +578,88 @@ class TestProviderAwareCreateCmd:
         cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
         mount_str = f"{SANDBOX_DATA_VOLUME}:/home/agent/.claude"
         assert mount_str in cmd
+
+
+# ── D041: workspace-scoped config layering ───────────────────────────────────
+
+
+class TestWorkspaceScopedConfigInjection:
+    """D041: Codex project-scoped config goes to workspace, Claude stays home-level."""
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_workspace_scoped_settings_triggers_git_exclude(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Settings path under workspace mount target triggers mkdir + git exclude."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        # Use /workspace as the mount target — must match _minimal_spec defaults
+        workspace_target = Path("/workspace")
+        settings = AgentSettings(
+            content={"sandbox": {"auto_approve": []}},
+            path=workspace_target / ".codex" / "config.toml",
+        )
+        spec = _minimal_spec(agent_settings=settings)
+        runtime.run(spec)
+
+        # Calls: create, start, mkdir (git exclude), grep||echo (git exclude), cp
+        assert mock_run_docker.call_count >= 4
+        all_calls = [call[0][0] for call in mock_run_docker.call_args_list]
+        # Find the mkdir call
+        mkdir_calls = [c for c in all_calls if "mkdir" in c]
+        assert len(mkdir_calls) == 1
+        assert f"{workspace_target}/.codex" in " ".join(mkdir_calls[0])
+
+        # Find the git exclude shell command
+        exec_calls = [c for c in all_calls if "sh" in c and "-c" in c]
+        assert len(exec_calls) == 1
+        shell_cmd = exec_calls[0][-1]  # The shell command string
+        assert ".codex" in shell_cmd
+        assert ".git/info/exclude" in shell_cmd
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_home_scoped_settings_skips_git_exclude(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """Settings path under /home/agent (Claude) does NOT trigger git exclude."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        settings = AgentSettings(
+            content={"permissions": {}},
+            path=Path("/home/agent/.claude/settings.json"),
+        )
+        spec = _minimal_spec(agent_settings=settings)
+        runtime.run(spec)
+
+        # Only 3 calls: create, start, cp (no mkdir or git exclude)
+        assert mock_run_docker.call_count == 3
+        all_calls = [call[0][0] for call in mock_run_docker.call_args_list]
+        assert all_calls[0][0] == "create"
+        assert all_calls[1] == ["start", "cid123"]
+        assert all_calls[2][0] == "cp"
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_workspace_scoped_settings_cp_targets_workspace_path(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """docker cp writes Codex config to workspace path, not /home/agent."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        workspace_target = Path("/workspace")
+        settings = AgentSettings(
+            content={"sandbox": {"auto_approve": []}},
+            path=workspace_target / ".codex" / "config.toml",
+        )
+        spec = _minimal_spec(agent_settings=settings)
+        runtime.run(spec)
+
+        # Find the cp call (last real docker command before exec)
+        cp_calls = [
+            call[0][0] for call in mock_run_docker.call_args_list
+            if call[0][0][0] == "cp"
+        ]
+        assert len(cp_calls) == 1
+        cp_target = cp_calls[0][2]  # "cid123:/workspace/.codex/config.toml"
+        assert "cid123:" in cp_target
+        assert str(workspace_target / ".codex" / "config.toml") in cp_target
+        assert "/home/agent" not in cp_target

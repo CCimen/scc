@@ -30,6 +30,7 @@ PROVIDER_REGISTRY: dict[str, ProviderRuntimeSpec] = {
         image_ref=SCC_CODEX_IMAGE_REF,
         config_dir=".codex",
         settings_path=".codex/config.toml",
+        settings_scope="workspace",
         data_volume="docker-codex-sandbox-data",
     ),
 }

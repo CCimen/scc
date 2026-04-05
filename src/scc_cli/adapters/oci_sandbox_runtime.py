@@ -96,6 +96,44 @@ def _run_docker(
         ) from exc
 
 
+def _ensure_workspace_config_excluded(
+    container_id: str,
+    workspace_path: str,
+    config_dir_name: str,
+) -> None:
+    """Create a workspace config dir and add it to .git/info/exclude.
+
+    D041: project-scoped provider config (e.g. ``.codex/``) lives in the
+    workspace bind mount.  To prevent dirtying the host repo, the config
+    directory name is appended to ``.git/info/exclude`` (a local Git
+    exclusion that is never tracked) rather than ``.gitignore`` (which
+    would itself create a tracked-file mutation).
+
+    Best-effort: failures here are non-fatal — the agent session can
+    still launch even if the exclude write fails (e.g. workspace is not
+    a git repo).
+    """
+    # Ensure the config directory exists inside the container workspace
+    config_dir = f"{workspace_path}/{config_dir_name}"
+    _run_docker(
+        ["exec", container_id, "mkdir", "-p", config_dir],
+        timeout=_DEFAULT_TIMEOUT,
+        check=False,
+    )
+
+    # Append to .git/info/exclude if not already present (best-effort)
+    exclude_path = f"{workspace_path}/.git/info/exclude"
+    shell_cmd = (
+        f"grep -qxF '{config_dir_name}' {exclude_path} 2>/dev/null "
+        f"|| echo '{config_dir_name}' >> {exclude_path}"
+    )
+    _run_docker(
+        ["exec", container_id, "sh", "-c", shell_cmd],
+        timeout=_DEFAULT_TIMEOUT,
+        check=False,
+    )
+
+
 class OciSandboxRuntime:
     """SandboxRuntime backed by plain OCI container commands.
 
@@ -348,12 +386,28 @@ class OciSandboxRuntime:
 
     @staticmethod
     def _inject_settings(container_id: str, spec: SandboxSpec) -> None:
-        """Write agent settings into the container via ``docker cp``."""
+        """Write agent settings into the container via ``docker cp``.
+
+        For workspace-scoped settings (D041, e.g. Codex project config),
+        the parent directory is created inside the container and the config
+        dir is added to ``.git/info/exclude`` so that workspace bind-mount
+        writes do not dirty the host repository.
+        """
         if spec.agent_settings is None:
             return  # pragma: no cover
 
         settings_json = json.dumps(spec.agent_settings.content)
         target_path = str(spec.agent_settings.path)
+
+        # D041: ensure workspace-scoped config dir exists and is git-excluded.
+        workspace_target = str(spec.workspace_mount.target)
+        if target_path.startswith(str(workspace_target)):
+            # Derive the top-level config dir name relative to workspace
+            rel = str(spec.agent_settings.path.relative_to(spec.workspace_mount.target))
+            config_dir_name = rel.split("/")[0]  # e.g. ".codex"
+            _ensure_workspace_config_excluded(
+                container_id, workspace_target, config_dir_name
+            )
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False

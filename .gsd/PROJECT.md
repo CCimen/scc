@@ -47,6 +47,7 @@ S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. 
 S02 complete: Three Claude-named helpers renamed to provider-parameterized versions using registry. WorkContext carries provider_id with backward-compat serialization. Session list CLI shows Provider column. Sandbox records explicit provider_id='claude'. +21 new tests, 4675 total.
 S03 complete: Doctor is provider-aware with --provider flag, categorized output (backend/provider/config/worktree/general), check_provider_auth() for auth readiness, and two typed provider errors (ProviderNotReadyError, ProviderImageMissingError). +43 new tests, 4718 total.
 S04 complete: 9 Claude-specific constants localized from core/constants.py into 5 consumer modules. core/constants.py now holds only product-level values. profile.py documented as Claude-only. Guardrail test prevents re-introduction. +2 new tests, 4720 total.
+S05 in progress: Expanded from docs-only to full architecture reconciliation (D044). Implements D033 (Codex launch argv), D035 (provider-owned settings serialization), D037 (adapter-owned auth readiness), D038/D042 (config freshness), D039 (runtime permissions), D040 (file-based Codex auth), D041 (config ownership layering), removes active-launch Claude fallbacks (D032), hardens images, and validates truthfulness against code.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅

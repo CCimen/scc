@@ -121,6 +121,7 @@ def prepare_start_session(
         dependencies.agent_runner,
         effective_config=effective_config,
         provider_id=_provider_id,
+        workspace_path=resolver_result.mount_root,
     )
 
     # ── Bundle pipeline: resolve plans → render artifacts ─────────────────
@@ -258,6 +259,7 @@ def _build_agent_settings(
     *,
     effective_config: EffectiveConfig | None,
     provider_id: str = "claude",
+    workspace_path: Path | None = None,
 ) -> AgentSettings | None:
     settings: dict[str, Any] | None = None
     if sync_result and sync_result.rendered_settings:
@@ -272,7 +274,13 @@ def _build_agent_settings(
         return None
 
     spec = get_runtime_spec(provider_id)
-    settings_path = Path("/home/agent") / spec.settings_path
+    # D041: route settings path by scope.
+    # "home" → /home/agent/<settings_path> (Claude: user-level config)
+    # "workspace" → <workspace>/<settings_path> (Codex: project-scoped config)
+    if spec.settings_scope == "workspace" and workspace_path is not None:
+        settings_path = workspace_path / spec.settings_path
+    else:
+        settings_path = Path("/home/agent") / spec.settings_path
     return agent_runner.build_settings(settings, path=settings_path)
 
 

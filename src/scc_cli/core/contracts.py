@@ -187,6 +187,9 @@ class ProviderRuntimeSpec:
         image_ref: OCI image reference string for the provider container.
         config_dir: Provider config directory name under ``/home/agent/``.
         settings_path: Relative path to the provider settings file.
+        settings_scope: Where to root settings_path: ``"home"`` uses
+            ``/home/agent/`` (user-level config); ``"workspace"`` uses the
+            container workspace mount (project-scoped config, per D041).
         data_volume: Docker named volume for credential/data persistence.
     """
 
@@ -195,7 +198,8 @@ class ProviderRuntimeSpec:
     image_ref: str
     config_dir: str
     settings_path: str
-    data_volume: str
+    settings_scope: str = "home"
+    data_volume: str = ""
 
 
 @dataclass(frozen=True)

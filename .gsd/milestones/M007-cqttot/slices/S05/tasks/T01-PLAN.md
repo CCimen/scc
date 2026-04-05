@@ -4,7 +4,7 @@ estimated_files: 3
 skills_used: []
 ---
 
-# T01: Fix product naming and add M007 truthfulness guardrail tests
+# T01: Updated README title to 'SCC - Sandboxed Code CLI', made pyproject.toml provider-neutral, added 5 M007 truthfulness guardrail tests
 
 Fix the product name in README.md and pyproject.toml per D030, then add ~5 truthfulness guardrail tests to test_docs_truthfulness.py covering M007 deliverables.
 

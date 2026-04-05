@@ -22,7 +22,32 @@ class TestClaudeSpec:
         assert spec.image_ref == SCC_CLAUDE_IMAGE_REF
         assert spec.config_dir == ".claude"
         assert spec.settings_path == ".claude/settings.json"
+        assert spec.settings_scope == "home"
         assert spec.data_volume == "docker-claude-sandbox-data"
+
+
+# ── D041: settings_scope layering ────────────────────────────────────────
+
+
+class TestSettingsScopeLayering:
+    """D041: Claude config is home-scoped, Codex config is workspace-scoped."""
+
+    def test_claude_settings_scope_is_home(self) -> None:
+        """Claude settings go under /home/agent (user-level config)."""
+        spec = get_runtime_spec("claude")
+        assert spec.settings_scope == "home"
+
+    def test_codex_settings_scope_is_workspace(self) -> None:
+        """Codex settings go to workspace mount (project-scoped, per D041)."""
+        spec = get_runtime_spec("codex")
+        assert spec.settings_scope == "workspace"
+
+    def test_all_providers_have_valid_scope(self) -> None:
+        """Every provider in the registry must declare a valid settings_scope."""
+        for pid, spec in PROVIDER_REGISTRY.items():
+            assert spec.settings_scope in ("home", "workspace"), (
+                f"{pid}: settings_scope={spec.settings_scope!r} not in (home, workspace)"
+            )
 
 
 # ── Codex spec ───────────────────────────────────────────────────────────
@@ -37,6 +62,7 @@ class TestCodexSpec:
         assert spec.image_ref == SCC_CODEX_IMAGE_REF
         assert spec.config_dir == ".codex"
         assert spec.settings_path == ".codex/config.toml"
+        assert spec.settings_scope == "workspace"
         assert spec.data_volume == "docker-codex-sandbox-data"
 
 
