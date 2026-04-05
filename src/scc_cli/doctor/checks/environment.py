@@ -293,6 +293,131 @@ def check_workspace_path(workspace: Path | None = None) -> CheckResult:
     )
 
 
+def check_provider_auth(provider_id: str | None = None) -> CheckResult:
+    """Check whether a provider's auth credentials are present in its data volume.
+
+    Probes the provider's Docker named volume for the expected auth file.
+    Claude uses ``.credentials.json``; Codex uses ``auth.json``.
+
+    Args:
+        provider_id: Provider to check.  Falls back to selected or ``claude``.
+
+    Returns:
+        CheckResult with ``category='provider'``.
+    """
+    from scc_cli.core.errors import InvalidProviderError
+    from scc_cli.core.provider_registry import get_runtime_spec
+
+    # Resolve provider
+    if provider_id is None:
+        try:
+            from scc_cli import config as config_module
+
+            provider_id = config_module.get_selected_provider() or "claude"
+        except Exception:
+            provider_id = "claude"
+
+    # Map provider → auth file name
+    auth_files: dict[str, str] = {
+        "claude": ".credentials.json",
+        "codex": "auth.json",
+    }
+
+    try:
+        spec = get_runtime_spec(provider_id)
+    except InvalidProviderError:
+        return CheckResult(
+            name="Provider Auth",
+            passed=False,
+            message=f"Unknown provider '{provider_id}' — cannot check auth",
+            severity=SeverityLevel.WARNING,
+            category="provider",
+        )
+
+    auth_file = auth_files.get(provider_id, ".credentials.json")
+    volume = spec.data_volume
+
+    # Step 1: verify the volume exists
+    try:
+        vol_result = subprocess.run(
+            ["docker", "volume", "inspect", volume],
+            capture_output=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        return CheckResult(
+            name="Provider Auth",
+            passed=False,
+            message=f"Could not inspect volume '{volume}': {exc}",
+            fix_hint="Ensure Docker is installed and reachable",
+            severity=SeverityLevel.WARNING,
+            category="provider",
+        )
+
+    if vol_result.returncode != 0:
+        return CheckResult(
+            name="Provider Auth",
+            passed=False,
+            message=f"Data volume '{volume}' does not exist (provider may not have been launched yet)",
+            fix_hint=f"Run 'scc start --provider {provider_id}' to perform initial setup",
+            severity=SeverityLevel.WARNING,
+            category="provider",
+        )
+
+    # Step 2: check whether the auth file exists inside the volume
+    try:
+        file_result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{volume}:/check",
+                "alpine",
+                "test",
+                "-f",
+                f"/check/{auth_file}",
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return CheckResult(
+            name="Provider Auth",
+            passed=False,
+            message="Timed out checking auth file in volume",
+            fix_hint="Check Docker daemon health and available resources",
+            severity=SeverityLevel.WARNING,
+            category="provider",
+        )
+    except (FileNotFoundError, OSError) as exc:
+        return CheckResult(
+            name="Provider Auth",
+            passed=False,
+            message=f"Could not run auth file check: {exc}",
+            fix_hint="Ensure Docker is installed and reachable",
+            severity=SeverityLevel.WARNING,
+            category="provider",
+        )
+
+    if file_result.returncode == 0:
+        return CheckResult(
+            name="Provider Auth",
+            passed=True,
+            message=f"{provider_id} auth ({auth_file}) present in {volume}",
+            category="provider",
+        )
+
+    return CheckResult(
+        name="Provider Auth",
+        passed=False,
+        message=f"{provider_id} auth ({auth_file}) not found in {volume}",
+        fix_hint=f"Launch the provider once to complete auth setup: scc start --provider {provider_id}",
+        severity=SeverityLevel.WARNING,
+        category="provider",
+    )
+
+
 def check_provider_image() -> CheckResult:
     """Check whether the active provider's agent image is available locally.
 

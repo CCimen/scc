@@ -360,6 +360,53 @@ class InvalidProviderError(SCCError):
 
 
 @dataclass
+class ProviderNotReadyError(PrerequisiteError):
+    """Provider is not ready for use (general readiness failure)."""
+
+    provider_id: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = (
+                f"Provider '{self.provider_id}' is not ready. "
+                "Required prerequisites are missing or misconfigured."
+            )
+        if not self.suggested_action:
+            self.suggested_action = (
+                f"Run 'scc doctor --provider {self.provider_id}' to diagnose, "
+                "then follow the suggested fixes."
+            )
+
+
+@dataclass
+class ProviderImageMissingError(PrerequisiteError):
+    """Provider container image is not available locally."""
+
+    provider_id: str = ""
+    image_ref: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            image_detail = f" ({self.image_ref})" if self.image_ref else ""
+            self.user_message = (
+                f"Container image for provider '{self.provider_id}' "
+                f"is not available locally{image_detail}."
+            )
+        if not self.suggested_action:
+            if self.provider_id:
+                self.suggested_action = (
+                    f"Build the image with: docker build -t <image> "
+                    f"images/scc-agent-{self.provider_id}/"
+                )
+            else:
+                self.suggested_action = "Build the provider image and try again."
+
+
+@dataclass
 class LaunchPreflightError(ConfigError):
     """Launch was blocked before runtime startup."""
 

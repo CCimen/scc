@@ -199,6 +199,21 @@ class ProviderRuntimeSpec:
 
 
 @dataclass(frozen=True)
+class AuthReadiness:
+    """Auth credential readiness for a provider.
+
+    Attributes:
+        status: Whether the auth credential is 'missing' or 'present'.
+        mechanism: How the provider authenticates (e.g. 'oauth_file', 'auth_json_file').
+        guidance: Actionable next step for the user if auth is missing.
+    """
+
+    status: str  # 'missing' or 'present'
+    mechanism: str  # 'oauth_file' or 'auth_json_file'
+    guidance: str  # actionable next step
+
+
+@dataclass(frozen=True)
 class ProviderCapabilityProfile:
     """Provider-neutral description of adapter capabilities and requirements.
 

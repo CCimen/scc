@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T13:00:27.638Z",
+  "exported_at": "2026-04-05T13:17:56.860Z",
   "milestones": [
     {
       "id": "M001",
@@ -1041,16 +1041,16 @@
       "milestone_id": "M007-cqttot",
       "id": "S02",
       "title": "Session, resume, and machine-readable output provider hardening",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [
         "S01"
       ],
       "demo": "sessions.get_claude_sessions_dir renamed to provider-parameterized helper. audit.py derives path from provider. sandbox.py records provider_id='claude'. Quick Resume shows provider_id. Session list CLI displays provider column.",
       "created_at": "2026-04-05T10:50:01.315Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-05T13:04:08.835Z",
+      "full_summary_md": "---\nid: S02\nparent: M007-cqttot\nmilestone: M007-cqttot\nprovides:\n  - Provider-parameterized session/audit helpers using registry\n  - WorkContext with provider_id field and backward-compat serialization\n  - Session list CLI with Provider column\n  - Explicit provider_id='claude' recording in legacy sandbox path\nrequires:\n  - slice: S01\n    provides: ProviderRuntimeSpec registry with get_runtime_spec() fail-closed lookup and InvalidProviderError\naffects:\n  - S04\n  - S05\nkey_files:\n  - src/scc_cli/sessions.py\n  - src/scc_cli/commands/audit.py\n  - src/scc_cli/commands/launch/sandbox.py\n  - src/scc_cli/contexts.py\n  - src/scc_cli/commands/worktree/session_commands.py\n  - tests/test_s02_provider_sessions.py\nkey_decisions:\n  - Default parameter value 'claude' on renamed helpers preserves backward compatibility without requiring call-site migration\n  - WorkContext.display_label appends provider info only for non-default providers to avoid visual noise on existing Claude sessions\npatterns_established:\n  - Registry-based helper pattern: shared helpers that previously hardcoded Claude paths now take provider_id and resolve via get_runtime_spec(). This pattern should be applied to any remaining Claude-named helpers in S04.\n  - WorkContext provider_id threading: provider identity is now part of session context — downstream features (Quick Resume, session picker) can filter and display by provider.\nobservability_surfaces:\n  - Session list CLI Provider column surfaces provider_id for operator visibility\n  - WorkContext.display_label shows non-default provider in parentheses for Quick Resume\ndrill_down_paths:\n  - .gsd/milestones/M007-cqttot/slices/S02/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M007-cqttot/slices/S02/tasks/T02-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-05T13:04:08.836Z\nblocker_discovered: false\n---\n\n# S02: Session, resume, and machine-readable output provider hardening\n\n**Provider-parameterized session, audit, and context surfaces — three Claude-named helpers renamed to registry-based lookups, sandbox records explicit provider_id, WorkContext carries and surfaces provider identity, session list CLI shows provider column.**\n\n## What Happened\n\nS02 eliminated three Claude-hardcoded helper functions from shared code and replaced them with provider-parameterized versions backed by the ProviderRuntimeSpec registry from S01.\n\n**T01 — Production changes (6 files):**\n- `sessions.py`: Renamed `get_claude_sessions_dir()` → `get_provider_sessions_dir(provider_id='claude')` and `get_claude_recent_sessions()` → `get_provider_recent_sessions(provider_id='claude')`. Both now resolve the sessions directory via `get_runtime_spec(provider_id).config_dir` instead of the hardcoded `AGENT_CONFIG_DIR` constant.\n- `commands/audit.py`: Renamed `get_claude_dir()` → `get_provider_config_dir(provider_id='claude')` with the same registry-based resolution.\n- `commands/launch/sandbox.py`: Changed `provider_id=None` to `provider_id='claude'` — the legacy sandbox path is always Claude, now explicitly recorded per D032.\n- `contexts.py`: Added `provider_id: str | None = None` field to WorkContext with full backward-compatible `to_dict()`/`from_dict()` serialization. Updated `display_label` to append `(codex)` suffix for non-default providers — default Claude sessions show no extra noise.\n- `session_commands.py`: Added `provider_id` to session dict output and Provider column to the responsive session list table.\n- `tests/test_sessions.py`: Updated one existing test for the new column shape.\n\n**T02 — Test coverage (21 new tests):**\nCreated `tests/test_s02_provider_sessions.py` with four test classes covering: provider registry lookups for session and audit config dirs (including unknown-provider error), WorkContext provider_id serialization round-trip and backward compatibility, display_label behavior with default and non-default providers, and session list CLI provider_id dict-building logic.\n\nAll three renamed helpers use `provider_id='claude'` as the default parameter, so every existing call site continues to work without modification. This is backward-compatible by design — no migration needed.\n\n## Verification\n\nSlice-level verification ran all three gates:\n\n1. **ruff check** on all 7 touched files (6 production + 1 test): zero errors\n2. **mypy** on all 6 production files: zero errors (Success: no issues found in 6 source files)\n3. **Full pytest suite**: 4675 passed, 23 skipped, 2 xfailed — zero failures, +21 net new tests from T02\n\nTest count progression: S01 baseline 4654 → T01 4654 (no new tests, one updated) → T02 4675 (+21 new tests).\n\n## Requirements Advanced\n\nNone.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nNone. Both tasks completed exactly as planned with zero deviations.\n\n## Known Limitations\n\n- The renamed helpers default to `provider_id='claude'` — callers that should be explicitly provider-aware (e.g. a future Codex session list) must pass the provider_id explicitly. The defaults are a migration convenience, not a permanent architecture.\n- Session list Provider column is in `wide_columns` only — narrow terminal renderings may not show it.\n\n## Follow-ups\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/sessions.py` — Renamed get_claude_sessions_dir → get_provider_sessions_dir and get_claude_recent_sessions → get_provider_recent_sessions, both using registry-based config_dir lookup\n- `src/scc_cli/commands/audit.py` — Renamed get_claude_dir → get_provider_config_dir with registry-based config_dir lookup\n- `src/scc_cli/commands/launch/sandbox.py` — Changed provider_id=None to provider_id='claude' for explicit recording\n- `src/scc_cli/contexts.py` — Added provider_id field to WorkContext with backward-compat serialization and provider-aware display_label\n- `src/scc_cli/commands/worktree/session_commands.py` — Added provider_id to session dicts and Provider column to session list table\n- `tests/test_sessions.py` — Updated one existing test for new column shape\n- `tests/test_s02_provider_sessions.py` — New: 21 tests covering all S02 production changes\n",
+      "full_uat_md": "# S02: Session, resume, and machine-readable output provider hardening — UAT\n\n**Milestone:** M007-cqttot\n**Written:** 2026-04-05T13:04:08.837Z\n\n## UAT: S02 — Session, resume, and machine-readable output provider hardening\n\n### Preconditions\n- SCC installed with `uv sync` and full test suite passing (4675 tests)\n- S01 ProviderRuntimeSpec registry available in `core/provider_registry.py`\n\n---\n\n### Test Case 1: Provider sessions directory resolution\n\n**Steps:**\n1. Import `get_provider_sessions_dir` from `scc_cli.sessions`\n2. Call `get_provider_sessions_dir()` (no args)\n3. Call `get_provider_sessions_dir('claude')`\n4. Call `get_provider_sessions_dir('codex')`\n5. Call `get_provider_sessions_dir('unknown-provider')`\n\n**Expected:**\n- Step 2 and 3 both return `Path.home() / '.claude'`\n- Step 4 returns `Path.home() / '.codex'`\n- Step 5 raises `InvalidProviderError`\n\n---\n\n### Test Case 2: Provider recent sessions helper\n\n**Steps:**\n1. Import `get_provider_recent_sessions` from `scc_cli.sessions`\n2. Call `get_provider_recent_sessions('claude')` in an env with no sessions.json\n3. Call `get_provider_recent_sessions('codex')` in an env with no sessions.json\n\n**Expected:**\n- Both return empty list without error\n- Neither references hardcoded `AGENT_CONFIG_DIR`\n\n---\n\n### Test Case 3: Audit config dir resolution\n\n**Steps:**\n1. Import `get_provider_config_dir` from `scc_cli.commands.audit`\n2. Call `get_provider_config_dir()` (no args)\n3. Call `get_provider_config_dir('codex')`\n4. Call `get_provider_config_dir('unknown')`\n\n**Expected:**\n- Step 2 returns `Path.home() / '.claude'`\n- Step 3 returns `Path.home() / '.codex'`\n- Step 4 raises `InvalidProviderError`\n\n---\n\n### Test Case 4: Sandbox provider_id recording\n\n**Steps:**\n1. Read `src/scc_cli/commands/launch/sandbox.py` line containing `provider_id=`\n2. Verify it reads `provider_id='claude'` not `provider_id=None`\n\n**Expected:**\n- Legacy sandbox path explicitly records `provider_id='claude'`\n\n---\n\n### Test Case 5: WorkContext provider_id serialization\n\n**Steps:**\n1. Create a WorkContext with `provider_id='codex'`\n2. Call `to_dict()` on it\n3. Call `WorkContext.from_dict()` with the resulting dict\n4. Verify `provider_id` round-trips to `'codex'`\n5. Call `WorkContext.from_dict()` with a dict that has no `provider_id` key\n\n**Expected:**\n- Step 4: provider_id is `'codex'`\n- Step 5: provider_id defaults to `None` (backward compat)\n\n---\n\n### Test Case 6: WorkContext display_label with provider\n\n**Steps:**\n1. Create WorkContext with `provider_id=None`, check `display_label`\n2. Create WorkContext with `provider_id='claude'`, check `display_label`\n3. Create WorkContext with `provider_id='codex'`, check `display_label`\n\n**Expected:**\n- Step 1: display_label contains no provider suffix\n- Step 2: display_label contains no provider suffix (Claude is the default, not shown)\n- Step 3: display_label ends with `(codex)` suffix\n\n---\n\n### Test Case 7: Session list CLI includes provider column\n\n**Steps:**\n1. Run `uv run pytest tests/test_s02_provider_sessions.py::TestSessionListProvider -v`\n\n**Expected:**\n- `test_session_dicts_includes_provider_id` passes — session dicts carry provider_id\n- `test_session_dicts_defaults_none_to_claude` passes — None provider defaults to 'claude' in output\n\n---\n\n### Test Case 8: Old function names no longer exist\n\n**Steps:**\n1. `grep -r \"get_claude_sessions_dir\\|get_claude_recent_sessions\\|get_claude_dir\" src/scc_cli/`\n\n**Expected:**\n- Zero matches — all Claude-named helpers have been renamed\n\n---\n\n### Test Case 9: Full regression suite\n\n**Steps:**\n1. Run `uv run pytest -q`\n\n**Expected:**\n- 4675 passed, 23 skipped, 2 xfailed\n- Zero failures, zero errors\n",
       "goal": "Session, resume, and machine-readable output surfaces are provider-parameterized. No Claude-specific function names remain in session/audit/sandbox helpers. Session list CLI shows provider column. Quick Resume surfaces provider_id. Legacy sandbox path records provider_id='claude' explicitly.",
       "success_criteria": "## Must-Haves\n\n- `get_claude_sessions_dir()` and `get_claude_recent_sessions()` renamed to provider-parameterized helpers using the registry's `config_dir`\n- `get_claude_dir()` in `commands/audit.py` renamed to use registry lookup\n- `sandbox.py` records `provider_id='claude'` instead of `provider_id=None`\n- `WorkContext` gains `provider_id: str | None = None` field with backward-compat `from_dict()`\n- Session list CLI (`session_commands.py`) includes provider_id in session_dicts and adds provider column to table\n- Quick Resume `display_label` surfaces provider info when present\n- All existing tests pass with zero regressions\n\n## Verification\n\n- `uv run pytest tests/test_s02_provider_sessions.py tests/test_sessions.py tests/test_audit_cli.py tests/test_contexts.py tests/test_session_provider_id.py -v` — all pass including new tests\n- `uv run ruff check src/scc_cli/sessions.py src/scc_cli/commands/audit.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/commands/worktree/session_commands.py src/scc_cli/contexts.py src/scc_cli/application/launch/start_wizard.py` — zero errors\n- `uv run mypy src/scc_cli/sessions.py src/scc_cli/commands/audit.py src/scc_cli/commands/launch/sandbox.py src/scc_cli/commands/worktree/session_commands.py src/scc_cli/contexts.py src/scc_cli/application/launch/start_wizard.py` — zero errors\n- `uv run pytest -q` — full suite passes, zero regressions vs S01 baseline (4654 passed)\n\n## Integration Closure\n\n- Upstream surfaces consumed: `core/provider_registry.py` (`get_runtime_spec()`, `PROVIDER_REGISTRY`), `core/contracts.py` (`ProviderRuntimeSpec`), `core/errors.py` (`InvalidProviderError`) — all provided by S01\n- New wiring introduced in this slice: session/audit/sandbox/context helpers wire to registry instead of hardcoded AGENT_CONFIG_DIR constant\n- What remains before the milestone is truly usable end-to-end: S03 (doctor provider-awareness), S04 (legacy Claude isolation), S05 (naming/docs)\n\n## Tasks\n\n- [ ] **T01: Rename Claude-hardcoded helpers, parameterize paths, fix sandbox, add provider to session list and Quick Resume** `est:45m`\n  - Why: All production code changes in this slice — rename/parameterize helpers, fix sandbox provider_id, add provider_id to WorkContext, add provider column to session list CLI, surface provider in Quick Resume display_label\n  - Files: `src/scc_cli/sessions.py`, `src/scc_cli/commands/audit.py`, `src/scc_cli/commands/launch/sandbox.py`, `src/scc_cli/commands/worktree/session_commands.py`, `src/scc_cli/contexts.py`, `src/scc_cli/application/launch/start_wizard.py`\n  - Do: (1) In sessions.py rename get_claude_sessions_dir→get_provider_sessions_dir(provider_id) using get_runtime_spec(provider_id).config_dir, rename get_claude_recent_sessions→get_provider_recent_sessions(provider_id). (2) In audit.py rename get_claude_dir→get_provider_config_dir(provider_id) using registry. (3) In sandbox.py change provider_id=None to provider_id='claude'. (4) Add provider_id field to WorkContext with backward compat. (5) Add provider_id to session_dicts and table columns in session_commands.py. (6) Surface provider in display_label.\n  - Verify: `uv run ruff check` and `uv run mypy` on all touched files pass; `uv run pytest -q` full suite passes\n  - Done when: All 6 files updated, no Claude-named functions remain in sessions/audit, sandbox records claude explicitly, session list has provider column, display_label shows provider\n\n- [ ] **T02: Add tests for provider-parameterized helpers and CLI surfaces** `est:30m`\n  - Why: Verify the renamed helpers work correctly, WorkContext round-trips provider_id, session list includes provider column, and sandbox records the right provider_id\n  - Files: `tests/test_s02_provider_sessions.py`\n  - Do: Write test file with: (1) tests for get_provider_sessions_dir with claude and codex provider_ids, (2) tests for get_provider_recent_sessions, (3) test for get_provider_config_dir, (4) test WorkContext provider_id serialization round-trip and backward compat, (5) test session list session_dicts includes provider_id, (6) test display_label includes provider when present\n  - Verify: `uv run pytest tests/test_s02_provider_sessions.py -v` all pass; `uv run pytest -q` full suite, zero regressions\n  - Done when: All new tests pass, full suite green",
       "proof_level": "contract — verifies renamed helpers use registry correctly and CLI output includes provider data. No runtime container required.",
@@ -1073,11 +1073,11 @@
       "completed_at": null,
       "full_summary_md": "",
       "full_uat_md": "",
-      "goal": "Add auth readiness checking with truthful wording ('cache present' not 'logged in'). Make doctor, sessions, audit, resume, and machine-readable outputs provider-truthful. Add typed provider errors.",
-      "success_criteria": "- AuthReadiness in core/contracts.py: status('missing'/'present'), mechanism, guidance\n- AgentProvider.auth_check(data_volume) optional, default=present\n- ClaudeProvider: checks OAuth creds. CodexProvider: checks auth.json\n- Doctor: backend→image→auth sections. Wording: 'auth cache present'\n- Doctor --provider flag\n- ProviderNotReadyError, ProviderImageMissingError\n- get_provider_sessions_dir(provider_id) replaces get_claude_sessions_dir\n- audit.py from provider. sandbox.py records 'claude'\n- Quick Resume shows provider, warns on mismatch\n- provider_id in dry-run JSON, support bundle, session list --json\n- Full regression gate",
-      "proof_level": "Auth check + doctor + session + machine-readable tests + full regression",
-      "integration_closure": "Doctor/sessions consume registry. Auth check uses config_dir from spec.",
-      "observability_impact": "Doctor auth readiness. Machine-readable provider_id.",
+      "goal": "scc doctor is provider-aware: `--provider` flag scopes checks, output groups by category (backend/provider/config/worktree), and two typed provider errors (ProviderNotReadyError, ProviderImageMissingError) exist with actionable messages.",
+      "success_criteria": "- `scc doctor --provider codex` runs provider-scoped checks (image + auth) for Codex specifically\n- Doctor output groups checks by category (Backend Health, Provider Readiness, Configuration, Worktree, General) with section headers between groups\n- ProviderNotReadyError and ProviderImageMissingError exist in core/errors.py with user_message and suggested_action\n- AuthReadiness dataclass exists in core/contracts.py\n- check_provider_auth() function probes Docker volume for auth files\n- CheckResult has a `category` field, serialization includes it\n- `--provider` with an unknown provider returns a user-friendly error, not a crash\n- All new code has tests, full suite passes with zero regressions",
+      "proof_level": "contract — all behavior is verified through unit tests mocking subprocess/Docker calls. No Docker daemon required.",
+      "integration_closure": "Upstream: consumes ProviderRuntimeSpec and get_runtime_spec() from core/provider_registry.py (S01). New wiring: `--provider` flag in admin.py → run_doctor(provider_id=...) → check_provider_image(provider_id=...) + check_provider_auth(provider_id=...). Render groups by CheckResult.category. What remains: S04 (legacy isolation) and S05 (naming/validation) before milestone is usable end-to-end.",
+      "observability_impact": "Doctor output now groups checks by category, making diagnostic output easier to scan. ProviderNotReadyError and ProviderImageMissingError carry provider_id and actionable guidance for operator troubleshooting. AuthReadiness exposes auth status/mechanism/guidance as structured data.",
       "sequence": 0,
       "replan_triggered_at": null
     },
@@ -5952,6 +5952,116 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S03",
+      "id": "T01",
+      "title": "Added ProviderNotReadyError, ProviderImageMissingError, AuthReadiness dataclass, CheckResult.category field, and check_provider_auth() with 23 passing tests",
+      "status": "complete",
+      "one_liner": "Added ProviderNotReadyError, ProviderImageMissingError, AuthReadiness dataclass, CheckResult.category field, and check_provider_auth() with 23 passing tests",
+      "narrative": "Added two typed provider errors following the InvalidProviderError pattern, AuthReadiness frozen dataclass for auth credential status, category field on CheckResult for doctor output grouping, and check_provider_auth() that probes Docker volumes for provider auth files. All 23 new tests pass, mypy and ruff clean, full suite passes with 4698 tests.",
+      "verification_result": "uv run pytest tests/test_doctor_provider_errors.py -v → 23 passed. uv run mypy on all 4 modified source files → no issues. uv run ruff check → all passed. Full test suite → 4698 passed, 0 failures.",
+      "duration": "",
+      "completed_at": "2026-04-05T13:17:56.803Z",
+      "blocker_discovered": false,
+      "deviations": "Renamed local variable _AUTH_FILES to auth_files to satisfy ruff N806. No behavioral change.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/doctor/types.py",
+        "src/scc_cli/doctor/checks/environment.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "tests/test_doctor_provider_errors.py"
+      ],
+      "key_decisions": [
+        "Auth file names mapped per provider in local dict (claude → .credentials.json, codex → auth.json) with .credentials.json as fallback",
+        "Two-step Docker probe: volume inspect then docker run alpine test -f to avoid permission issues"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S03\nmilestone: M007-cqttot\nkey_files:\n  - src/scc_cli/core/errors.py\n  - src/scc_cli/core/contracts.py\n  - src/scc_cli/doctor/types.py\n  - src/scc_cli/doctor/checks/environment.py\n  - src/scc_cli/doctor/checks/__init__.py\n  - tests/test_doctor_provider_errors.py\nkey_decisions:\n  - Auth file names mapped per provider in local dict (claude → .credentials.json, codex → auth.json) with .credentials.json as fallback\n  - Two-step Docker probe: volume inspect then docker run alpine test -f to avoid permission issues\nduration: \nverification_result: passed\ncompleted_at: 2026-04-05T13:17:56.802Z\nblocker_discovered: false\n---\n\n# T01: Added ProviderNotReadyError, ProviderImageMissingError, AuthReadiness dataclass, CheckResult.category field, and check_provider_auth() with 23 passing tests\n\n**Added ProviderNotReadyError, ProviderImageMissingError, AuthReadiness dataclass, CheckResult.category field, and check_provider_auth() with 23 passing tests**\n\n## What Happened\n\nAdded two typed provider errors following the InvalidProviderError pattern, AuthReadiness frozen dataclass for auth credential status, category field on CheckResult for doctor output grouping, and check_provider_auth() that probes Docker volumes for provider auth files. All 23 new tests pass, mypy and ruff clean, full suite passes with 4698 tests.\n\n## Verification\n\nuv run pytest tests/test_doctor_provider_errors.py -v → 23 passed. uv run mypy on all 4 modified source files → no issues. uv run ruff check → all passed. Full test suite → 4698 passed, 0 failures.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_doctor_provider_errors.py -v` | 0 | ✅ pass | 9600ms |\n| 2 | `uv run mypy src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py` | 0 | ✅ pass | 5000ms |\n| 3 | `uv run ruff check src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py` | 0 | ✅ pass | 4100ms |\n| 4 | `uv run pytest --no-header -q` | 0 | ✅ pass | 53200ms |\n\n## Deviations\n\nRenamed local variable _AUTH_FILES to auth_files to satisfy ruff N806. No behavioral change.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/core/errors.py`\n- `src/scc_cli/core/contracts.py`\n- `src/scc_cli/doctor/types.py`\n- `src/scc_cli/doctor/checks/environment.py`\n- `src/scc_cli/doctor/checks/__init__.py`\n- `tests/test_doctor_provider_errors.py`\n",
+      "description": "Pure additive task — add all new types and one new check function. No changes to existing control flow.\n\n1. Add ProviderNotReadyError(PrerequisiteError) and ProviderImageMissingError(PrerequisiteError) to core/errors.py. Both carry provider_id field and auto-populate user_message/suggested_action in __post_init__. ProviderNotReadyError is the general readiness error (exit_code=3). ProviderImageMissingError is the specific image-not-found case (exit_code=3). Follow InvalidProviderError pattern.\n\n2. Add AuthReadiness frozen dataclass to core/contracts.py with fields: status (str — 'missing' or 'present'), mechanism (str — 'oauth_file' or 'auth_json_file'), guidance (str — actionable next step).\n\n3. Add `category: str = 'general'` field to CheckResult in doctor/types.py. Default ensures backward compatibility.\n\n4. Add check_provider_auth(provider_id: str | None = None) to doctor/checks/environment.py. Logic: resolve provider via get_runtime_spec(), determine auth file name (.credentials.json for claude, auth.json for codex), run `docker volume inspect <volume>` then `docker run --rm -v <volume>:/check alpine test -f /check/<auth_file>` via subprocess.run (mocked in tests). Return CheckResult with passed=True/False and category='provider'. Export from doctor/checks/__init__.py.\n\n5. Write tests in tests/test_doctor_provider_errors.py: ProviderNotReadyError message/action/exit_code, ProviderImageMissingError message/action/exit_code, AuthReadiness field access, check_provider_auth happy path, check_provider_auth missing auth, check_provider_auth volume missing, check_provider_auth subprocess timeout, check_provider_auth unknown provider fallback, CheckResult category default.",
+      "estimate": "45m",
+      "files": [
+        "src/scc_cli/core/errors.py",
+        "src/scc_cli/core/contracts.py",
+        "src/scc_cli/doctor/types.py",
+        "src/scc_cli/doctor/checks/environment.py",
+        "src/scc_cli/doctor/checks/__init__.py",
+        "tests/test_doctor_provider_errors.py"
+      ],
+      "verify": "uv run pytest tests/test_doctor_provider_errors.py -v && uv run mypy src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py && uv run ruff check src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py",
+      "inputs": [
+        "`src/scc_cli/core/errors.py` — existing error hierarchy, follow InvalidProviderError pattern",
+        "`src/scc_cli/core/contracts.py` — add AuthReadiness alongside ProviderRuntimeSpec",
+        "`src/scc_cli/doctor/types.py` — add category field to CheckResult",
+        "`src/scc_cli/doctor/checks/environment.py` — add check_provider_auth() alongside check_provider_image()",
+        "`src/scc_cli/core/provider_registry.py` — import get_runtime_spec() for auth check"
+      ],
+      "expected_output": [
+        "`src/scc_cli/core/errors.py` — ProviderNotReadyError, ProviderImageMissingError added",
+        "`src/scc_cli/core/contracts.py` — AuthReadiness frozen dataclass added",
+        "`src/scc_cli/doctor/types.py` — category field added to CheckResult",
+        "`src/scc_cli/doctor/checks/environment.py` — check_provider_auth() function added",
+        "`src/scc_cli/doctor/checks/__init__.py` — check_provider_auth exported",
+        "`tests/test_doctor_provider_errors.py` — test file with ~12 tests covering new types and check function"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M007-cqttot",
+      "slice_id": "S03",
+      "id": "T02",
+      "title": "Wire --provider flag, category assignment, and grouped doctor output",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Wire all T01 additions into the existing doctor flow: threading provider_id, CLI flag, category assignment, and grouped rendering.\n\n1. Update run_doctor() in doctor/core.py: add `provider_id: str | None = None` parameter. Pass provider_id to check_provider_image(provider_id=provider_id). Call check_provider_auth(provider_id=provider_id) when docker_ok (same guard as check_provider_image). Assign category to each CheckResult after construction: 'backend' for Git/Docker/Docker Daemon/Sandbox Backend/Runtime Backend, 'provider' for Provider Image/Provider Auth, 'config' for Config Directory/User Config/Safety Policy, 'worktree' for Git Worktrees/Worktree Health/Branch Conflicts, 'general' for WSL2/Workspace Path and anything else.\n\n2. Update check_provider_image() in environment.py: add `provider_id: str | None = None` parameter. When provided, use it directly instead of reading from config. Set result.category = 'provider' on all return paths.\n\n3. Add `--provider` option to doctor_cmd in admin.py: `provider: str | None = typer.Option(None, '--provider', help='Check readiness for a specific provider')`. Validate against KNOWN_PROVIDERS — if invalid, print error and raise typer.Exit(2). Pass provider_id to run_doctor() and render_doctor_results().\n\n4. Update render_doctor_results() in doctor/render.py: sort checks by category order (backend → provider → config → worktree → general). Add category section header rows in the table when category changes. Category headers use bold cyan style.\n\n5. Update build_doctor_json_data() in doctor/serialization.py: add 'category' field to each check dict.\n\n6. Update exports: add check_provider_auth to doctor/__init__.py __all__.\n\n7. Write tests in tests/test_doctor_provider_wiring.py: run_doctor() with provider_id passes it to check_provider_image, run_doctor() with provider_id calls check_provider_auth, run_doctor() assigns categories correctly, doctor_cmd --provider validates against KNOWN_PROVIDERS, doctor_cmd --provider unknown exits with error, build_doctor_json_data includes category, render_doctor_results groups by category (check table row order).",
+      "estimate": "60m",
+      "files": [
+        "src/scc_cli/doctor/core.py",
+        "src/scc_cli/doctor/checks/environment.py",
+        "src/scc_cli/commands/admin.py",
+        "src/scc_cli/doctor/render.py",
+        "src/scc_cli/doctor/serialization.py",
+        "src/scc_cli/doctor/__init__.py",
+        "tests/test_doctor_provider_wiring.py"
+      ],
+      "verify": "uv run pytest tests/test_doctor_provider_wiring.py tests/test_doctor_provider_errors.py tests/test_doctor_image_check.py tests/test_doctor_checks.py -v && uv run mypy src/scc_cli/doctor/core.py src/scc_cli/doctor/render.py src/scc_cli/doctor/serialization.py src/scc_cli/commands/admin.py && uv run ruff check src/scc_cli/doctor/ src/scc_cli/commands/admin.py && uv run pytest -q",
+      "inputs": [
+        "`src/scc_cli/core/errors.py` — ProviderNotReadyError, ProviderImageMissingError from T01",
+        "`src/scc_cli/core/contracts.py` — AuthReadiness from T01",
+        "`src/scc_cli/doctor/types.py` — CheckResult.category from T01",
+        "`src/scc_cli/doctor/checks/environment.py` — check_provider_auth() from T01",
+        "`src/scc_cli/doctor/core.py` — existing run_doctor() to modify",
+        "`src/scc_cli/doctor/render.py` — existing render_doctor_results() to modify",
+        "`src/scc_cli/doctor/serialization.py` — existing build_doctor_json_data() to modify",
+        "`src/scc_cli/commands/admin.py` — existing doctor_cmd to add --provider flag",
+        "`src/scc_cli/core/provider_resolution.py` — KNOWN_PROVIDERS for CLI validation"
+      ],
+      "expected_output": [
+        "`src/scc_cli/doctor/core.py` — run_doctor() accepts provider_id, threads it, assigns categories",
+        "`src/scc_cli/doctor/checks/environment.py` — check_provider_image() accepts provider_id parameter",
+        "`src/scc_cli/commands/admin.py` — doctor_cmd has --provider option with validation",
+        "`src/scc_cli/doctor/render.py` — render_doctor_results() groups by category with section headers",
+        "`src/scc_cli/doctor/serialization.py` — build_doctor_json_data() includes category",
+        "`src/scc_cli/doctor/__init__.py` — check_provider_auth in __all__",
+        "`tests/test_doctor_provider_wiring.py` — ~10 tests covering wiring, CLI flag, grouping, and serialization"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -9825,6 +9935,50 @@
       "verdict": "✅ pass",
       "duration_ms": 52300,
       "created_at": "2026-04-05T13:00:27.578Z"
+    },
+    {
+      "id": 308,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest tests/test_doctor_provider_errors.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 9600,
+      "created_at": "2026-04-05T13:17:56.803Z"
+    },
+    {
+      "id": 309,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run mypy src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-05T13:17:56.803Z"
+    },
+    {
+      "id": 310,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run ruff check src/scc_cli/core/errors.py src/scc_cli/core/contracts.py src/scc_cli/doctor/types.py src/scc_cli/doctor/checks/environment.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 4100,
+      "created_at": "2026-04-05T13:17:56.803Z"
+    },
+    {
+      "id": 311,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M007-cqttot",
+      "command": "uv run pytest --no-header -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 53200,
+      "created_at": "2026-04-05T13:17:56.803Z"
     }
   ]
 }

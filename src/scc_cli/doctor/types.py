@@ -25,6 +25,7 @@ class CheckResult:
     severity: str = SeverityLevel.ERROR
     code_frame: str | None = None  # Optional code frame for syntax errors
     fix_commands: list[str] | None = None  # Copy-pasteable fix commands
+    category: str = "general"  # Grouping key: general, backend, provider, config, worktree
 
 
 @dataclass

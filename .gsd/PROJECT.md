@@ -44,6 +44,7 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 
 ### M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup (active)
 S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. Settings path bug fixed (Codex no longer gets Claude's settings.json). Unknown providers fail closed with InvalidProviderError. +11 new tests, 4654 total.
+S02 complete: Three Claude-named helpers renamed to provider-parameterized versions using registry. WorkContext carries provider_id with backward-compat serialization. Session list CLI shows Provider column. Sandbox records explicit provider_id='claude'. +21 new tests, 4675 total.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -52,7 +53,7 @@ S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. 
 4. ~~M004 — Cross-Agent Runtime Safety~~ ✅
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
-7. **M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup** ← active (S01 done, S02–S05 remaining)
+7. **M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup** ← active (S01–S02 done, S03–S05 remaining)
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all seven milestones.
@@ -60,7 +61,7 @@ S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (Success: no issues found in 292 source files)
-- `uv run pytest --rootdir "$PWD" -q` ✅ (4654 passed, 23 skipped, 2 xfailed)
+- `uv run pytest --rootdir "$PWD" -q` ✅ (4675 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
@@ -114,3 +115,5 @@ S01 complete: ProviderRuntimeSpec registry replaces 5 scattered provider dicts. 
 - provider_id is threaded through session recording, dry-run JSON, support bundle manifest, session list JSON, and container naming hash — all machine-readable outputs carry provider identity.
 - check_provider_image() doctor check reports missing provider agent images with exact `docker build` fix_commands for operator recovery.
 - Container naming includes provider_id in hash input to prevent Claude/Codex coexistence collisions on the same workspace.
+- Session/audit helpers are provider-parameterized via registry: `get_provider_sessions_dir(provider_id)`, `get_provider_recent_sessions(provider_id)`, `get_provider_config_dir(provider_id)`. All default to `'claude'` for backward compat.
+- WorkContext carries `provider_id` with backward-compatible serialization. `display_label` surfaces non-default providers only.
