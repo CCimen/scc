@@ -33,6 +33,11 @@ SESSIONS_FILE = CONFIG_DIR / "sessions.json"
 # Cache directory (regenerable, safe to delete)
 CACHE_DIR = Path.home() / ".cache" / "scc"
 
+# Durable local audit storage
+AUDIT_DIR = CONFIG_DIR / "audit"
+LAUNCH_AUDIT_FILE = AUDIT_DIR / "launch-events.jsonl"
+LAUNCH_AUDIT_LOCK_FILE = AUDIT_DIR / "launch-events.lock"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # User Config Defaults
@@ -42,6 +47,7 @@ USER_CONFIG_DEFAULTS = {
     "config_version": "1.0.0",
     "organization_source": None,  # Set during setup: {"url": "...", "auth": "...", "auth_header": "..."}
     "selected_profile": None,
+    "selected_provider": None,
     "standalone": False,
     "workspace_team_map": {},
     "cache": {
@@ -76,6 +82,21 @@ def get_config_file() -> Path:
 def get_cache_dir() -> Path:
     """Get the cache directory path."""
     return CACHE_DIR
+
+
+def get_audit_dir() -> Path:
+    """Get the durable audit directory path."""
+    return AUDIT_DIR
+
+
+def get_launch_audit_file() -> Path:
+    """Get the append-only launch audit file path."""
+    return LAUNCH_AUDIT_FILE
+
+
+def get_launch_audit_lock_file() -> Path:
+    """Get the launch audit lock file path."""
+    return LAUNCH_AUDIT_LOCK_FILE
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -214,6 +235,37 @@ def set_selected_profile(profile: str) -> None:
     """
     config = load_user_config()
     config["selected_profile"] = profile
+    save_user_config(config)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Provider Selection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def get_selected_provider() -> str | None:
+    """Get the persisted provider preference.
+
+    Returns:
+        ``"claude"`` or ``"codex"`` for a concrete preference,
+        ``"ask"`` for an explicit "prompt when ambiguous" preference,
+        or ``None`` when no startup preference has been configured yet.
+    """
+    config = load_user_config()
+    provider = config.get("selected_provider")
+    return provider if isinstance(provider, str) else None
+
+
+def set_selected_provider(provider: str | None) -> None:
+    """Set the persisted provider preference.
+
+    Args:
+        provider: ``"claude"`` or ``"codex"`` for a concrete preference,
+            ``"ask"`` to always prompt when multiple providers are viable,
+            or ``None`` to clear the preference entirely.
+    """
+    config = load_user_config()
+    config["selected_provider"] = provider
     save_user_config(config)
 
 

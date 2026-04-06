@@ -173,13 +173,13 @@ class TestSelectFlag:
         standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.flow.sessions.get_session_service"
             ) as mock_service_factory,
-            patch("scc_cli.commands.launch.flow.pick_session") as mock_picker,
+            patch("scc_cli.commands.launch.flow_session.pick_session") as mock_picker,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -208,13 +208,13 @@ class TestSelectFlag:
         standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.flow.sessions.get_session_service"
             ) as mock_service_factory,
-            patch("scc_cli.commands.launch.flow.pick_session") as mock_picker,
+            patch("scc_cli.commands.launch.flow_session.pick_session") as mock_picker,
             patch(
                 "scc_cli.commands.launch.flow.get_default_adapters",
                 return_value=fake_adapters,
@@ -238,7 +238,7 @@ class TestSelectFlag:
     def test_select_without_sessions_shows_message(self):
         """--select with no sessions should show appropriate message."""
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
@@ -260,13 +260,13 @@ class TestSelectFlag:
         # Sessions need team=None for standalone mode filtering
         standalone_sessions = [replace(s, team=None) for s in mock_sessions_list]
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.flow.sessions.get_session_service"
             ) as mock_service_factory,
-            patch("scc_cli.commands.launch.flow.pick_session", return_value=None),
+            patch("scc_cli.commands.launch.flow_session.pick_session", return_value=None),
         ):
             mock_service = MagicMock()
             mock_service.list_recent.return_value = SessionListResult.from_sessions(
@@ -292,7 +292,7 @@ class TestFlagMutualExclusivity:
         """Using both --resume and --select should error or pick one."""
         fake_adapters = build_fake_adapters()
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch(
                 "scc_cli.commands.launch.flow.config.load_user_config",
@@ -377,7 +377,9 @@ class TestSmartWorkspaceDetection:
                 return_value=(None, "/home/user/random"),
             ),
             # Non-TTY environment
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=False),
+            patch(
+                "scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False
+            ),
         ):
             result = runner.invoke(app, ["start"])
 
@@ -395,7 +397,7 @@ class TestSmartWorkspaceDetection:
                 return_value={"standalone": True},
             ),
             patch(
-                "scc_cli.commands.launch.flow.is_interactive_allowed", return_value=False
+                "scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False
             ) as mock_allowed,
         ):
             result = runner.invoke(app, ["start", "--non-interactive"])
@@ -406,7 +408,7 @@ class TestSmartWorkspaceDetection:
     def test_interactive_flag_bypasses_detection(self, mock_sessions_list):
         """The -i flag should force interactive mode even when workspace can be detected."""
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch(
                 "scc_cli.commands.launch.flow.config.load_user_config",
@@ -417,12 +419,20 @@ class TestSmartWorkspaceDetection:
                 "scc_cli.commands.launch.flow.git.detect_workspace_root",
                 return_value=("/home/user/project", "/home/user/project"),
             ) as mock_detect,
-            patch("scc_cli.commands.launch.flow.config.is_standalone_mode", return_value=True),
-            patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value=None),
-            patch("scc_cli.commands.launch.flow.teams.list_teams", return_value=[]),
-            patch("scc_cli.commands.launch.flow.load_recent_contexts", return_value=[]),
+            patch(
+                "scc_cli.commands.launch.flow_interactive.config.is_standalone_mode",
+                return_value=True,
+            ),
+            patch(
+                "scc_cli.commands.launch.flow_interactive.config.load_cached_org_config",
+                return_value=None,
+            ),
+            patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
+            patch("scc_cli.commands.launch.flow_interactive.load_recent_contexts", return_value=[]),
             # User selects workspace via picker
-            patch("scc_cli.commands.launch.flow.pick_workspace_source", return_value=None),
+            patch(
+                "scc_cli.commands.launch.flow_interactive.pick_workspace_source", return_value=None
+            ),
         ):
             result = runner.invoke(app, ["start", "-i"])
 
@@ -438,14 +448,14 @@ class TestSmartWorkspaceDetection:
         standalone_session = replace(mock_session, team=None)
         fake_adapters = build_fake_adapters()
         with (
-            patch("scc_cli.commands.launch.flow.is_interactive_allowed", return_value=True),
+            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=True),
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch(
                 "scc_cli.commands.launch.flow.sessions.get_session_service"
             ) as mock_service_factory,
             patch(
-                "scc_cli.commands.launch.flow.pick_session",
+                "scc_cli.commands.launch.flow_session.pick_session",
                 return_value=standalone_session,
             ),
             patch(

@@ -123,7 +123,7 @@ class TestWorktreeCreate:
                     workspace=str(tmp_path),
                     name="feature",
                     base_branch=None,
-                    start_claude=False,
+                    start_agent=False,
                     install_deps=False,
                 )
             except click.exceptions.Exit:
@@ -158,7 +158,7 @@ class TestWorktreeCreate:
                     workspace=str(tmp_path),
                     name="feature",
                     base_branch="develop",
-                    start_claude=False,
+                    start_agent=False,
                     install_deps=False,
                 )
             except click.exceptions.Exit:
@@ -183,7 +183,7 @@ class TestWorktreeCreate:
                     workspace=str(tmp_path),
                     name="feature",
                     base_branch=None,
-                    start_claude=False,
+                    start_agent=False,
                     install_deps=False,
                 )
             assert exc_info.value.exit_code == 4
@@ -1337,7 +1337,7 @@ class TestWorktreeCreateInteractiveInit:
                 dependencies_installed=True,
             )
             try:
-                worktree_create_cmd(workspace=str(tmp_path), name="feature-x", start_claude=False)
+                worktree_create_cmd(workspace=str(tmp_path), name="feature-x", start_agent=False)
             except (click.exceptions.Exit, SystemExit):
                 pass  # May exit after creation
 

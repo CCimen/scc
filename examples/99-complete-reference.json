@@ -82,7 +82,7 @@
             "sandboxed-code-official"
         ],
         "cache_ttl_hours": 24,
-        "network_policy": "unrestricted",
+        "network_policy": "open",
         "session": {
             "timeout_hours": 12,
             "auto_resume": true
@@ -128,7 +128,7 @@
                     "url": "https://www.shadcn.io/api/mcp"
                 }
             ],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "session": {
                 "timeout_hours": 8,
                 "auto_resume": false
@@ -169,7 +169,7 @@
                     }
                 }
             ],
-            "network_policy": "isolated"
+            "network_policy": "locked-down-web"
         },
         "federated-team": {
             "description": "Federated team with external config source (team manages own config)",

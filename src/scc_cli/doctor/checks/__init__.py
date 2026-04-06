@@ -15,6 +15,14 @@ from __future__ import annotations
 
 from ..types import CheckResult
 
+# Governed-artifact checks
+from .artifacts import (
+    build_artifact_diagnostics_summary,
+    check_bundle_resolution,
+    check_catalog_health,
+    check_team_context,
+)
+
 # Cache & State checks
 from .cache import (
     check_cache_readable,
@@ -36,6 +44,9 @@ from .environment import (
     check_docker_running,
     check_docker_sandbox,
     check_git,
+    check_provider_auth,
+    check_provider_image,
+    check_runtime_backend,
     check_workspace_path,
     check_wsl2,
 )
@@ -55,6 +66,9 @@ from .organization import (
     check_org_config_reachable,
     load_cached_org_config,
 )
+
+# Safety policy check
+from .safety import check_safety_policy
 
 # Worktree checks
 from .worktree import (
@@ -83,6 +97,13 @@ def run_all_checks() -> list[CheckResult]:
 
     wsl2_result, _ = check_wsl2()
     results.append(wsl2_result)
+
+    results.append(check_runtime_backend())
+
+    try:
+        results.append(check_provider_image())
+    except Exception:
+        pass  # partial-results pattern — don't block other checks
 
     results.append(check_config_directory())
 
@@ -125,6 +146,22 @@ def run_all_checks() -> list[CheckResult]:
     # Exception stores check
     results.append(check_exception_stores())
 
+    # Safety policy check
+    results.append(check_safety_policy())
+
+    # Governed-artifact checks
+    team_ctx = check_team_context()
+    if team_ctx is not None:
+        results.append(team_ctx)
+
+    catalog_check = check_catalog_health()
+    if catalog_check is not None:
+        results.append(catalog_check)
+
+    bundle_res = check_bundle_resolution()
+    if bundle_res is not None:
+        results.append(bundle_res)
+
     return results
 
 
@@ -141,6 +178,9 @@ __all__ = [
     "check_docker_sandbox",
     "check_docker_running",
     "check_wsl2",
+    "check_provider_auth",
+    "check_provider_image",
+    "check_runtime_backend",
     "check_workspace_path",
     # Worktree checks
     "check_worktree_health",
@@ -159,6 +199,13 @@ __all__ = [
     "check_cache_ttl_status",
     "check_exception_stores",
     "check_proxy_environment",
+    # Safety policy check
+    "check_safety_policy",
+    # Governed-artifact checks
+    "check_team_context",
+    "check_bundle_resolution",
+    "check_catalog_health",
+    "build_artifact_diagnostics_summary",
     # Orchestration
     "run_all_checks",
 ]

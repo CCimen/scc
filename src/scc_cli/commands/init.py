@@ -70,7 +70,7 @@ def generate_template_content() -> str:
     return """\
 # SCC Project Configuration
 # ─────────────────────────────────────────────────────────────────────────────
-# This file configures SCC (Sandboxed Claude CLI) for this project.
+# This file configures SCC (Sandboxed Coding CLI) for this project.
 # Place this file in your repository root.
 #
 # For full documentation, see: https://scc-cli.dev/reference/configuration/project-schema/

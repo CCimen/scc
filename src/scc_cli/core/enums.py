@@ -92,11 +92,17 @@ class MarketplaceSourceType(str, Enum):
 
 
 class NetworkPolicy(str, Enum):
-    """Network policy options."""
+    """Network policy options.
 
-    CORP_PROXY_ONLY = "corp-proxy-only"
-    UNRESTRICTED = "unrestricted"
-    ISOLATED = "isolated"
+    Truthful vocabulary introduced in M001 — names reflect observable behavior:
+    - OPEN: no egress enforcement; agent has unrestricted network access.
+    - WEB_EGRESS_ENFORCED: egress is gated through a proxy with an ACL.
+    - LOCKED_DOWN_WEB: no external network access at all.
+    """
+
+    OPEN = "open"
+    WEB_EGRESS_ENFORCED = "web-egress-enforced"
+    LOCKED_DOWN_WEB = "locked-down-web"
 
 
 class DecisionResult(str, Enum):
@@ -105,3 +111,10 @@ class DecisionResult(str, Enum):
     ALLOWED = "allowed"
     BLOCKED = "blocked"
     DENIED = "denied"
+
+
+class CommandFamily(str, Enum):
+    """High-level command family for safety classification."""
+
+    DESTRUCTIVE_GIT = "destructive-git"
+    NETWORK_TOOL = "network-tool"

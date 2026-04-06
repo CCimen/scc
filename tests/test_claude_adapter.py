@@ -12,9 +12,9 @@ from unittest import mock
 
 import pytest
 
-from scc_cli import claude_adapter
+from scc_cli.adapters import claude_settings as claude_adapter
+from scc_cli.adapters.claude_settings import AuthResult
 from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
-from scc_cli.claude_adapter import AuthResult
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Fixtures

@@ -17,7 +17,7 @@
     },
     "defaults": {
         "allowed_plugins": ["*"],
-        "network_policy": "unrestricted"
+        "network_policy": "open"
     },
     "delegation": {
         "teams": {

@@ -17,6 +17,7 @@ def build_doctor_json_data(result: DoctorResult) -> dict[str, Any]:
             "passed": check.passed,
             "message": check.message,
             "severity": check.severity,
+            "category": check.category,
         }
         if check.version:
             check_dict["version"] = check.version

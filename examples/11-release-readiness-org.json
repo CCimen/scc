@@ -68,7 +68,7 @@
             "sandboxed-code-official"
         ],
         "cache_ttl_hours": 24,
-        "network_policy": "corp-proxy-only",
+        "network_policy": "web-egress-enforced",
         "session": {
             "timeout_hours": 12,
             "auto_resume": true
@@ -104,7 +104,7 @@
                     }
                 }
             ],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "delegation": {
                 "allow_project_overrides": false
             }
@@ -127,7 +127,7 @@
                     "url": "https://mcp.mermaid.ai/sse"
                 }
             ],
-            "network_policy": "unrestricted",
+            "network_policy": "open",
             "delegation": {
                 "allow_project_overrides": true
             }
@@ -147,7 +147,7 @@
                     }
                 }
             ],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "session": {
                 "timeout_hours": 10,
                 "auto_resume": false
@@ -169,7 +169,7 @@
                     "url": "https://mcp.internal.example.com/data"
                 }
             ],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "session": {
                 "timeout_hours": 24,
                 "auto_resume": true
@@ -196,7 +196,7 @@
                     }
                 }
             ],
-            "network_policy": "isolated",
+            "network_policy": "locked-down-web",
             "delegation": {
                 "allow_project_overrides": false
             }
@@ -213,7 +213,7 @@
                     "url": "https://mcp.internal.example.com/security"
                 }
             ],
-            "network_policy": "isolated",
+            "network_policy": "locked-down-web",
             "delegation": {
                 "allow_project_overrides": false
             }

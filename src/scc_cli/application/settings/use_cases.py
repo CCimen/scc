@@ -6,6 +6,11 @@ from importlib.metadata import version as get_version
 from pathlib import Path
 
 from scc_cli import config
+from scc_cli.application.support_bundle import (
+    SupportBundleRequest,
+    build_default_support_bundle_dependencies,
+    create_support_bundle,
+)
 from scc_cli.core.personal_profiles import (
     compute_fingerprints,
     compute_structured_diff,
@@ -39,7 +44,7 @@ from scc_cli.maintenance import (
     reset_config,
     reset_exceptions,
 )
-from scc_cli.support_bundle import create_bundle
+from scc_cli.marketplace.managed import load_managed_state
 
 from .models import (
     ConfirmationKind,
@@ -495,7 +500,9 @@ def _apply_profile_apply(workspace: Path) -> SettingsActionResult:
     current_mcp = load_workspace_mcp(workspace) or {}
 
     if profile.settings:
-        merged_settings = merge_personal_settings(workspace, current_settings, profile.settings)
+        merged_settings = merge_personal_settings(
+            workspace, current_settings, profile.settings, managed_state_loader=load_managed_state
+        )
         write_workspace_settings(workspace, merged_settings)
 
     if profile.mcp:
@@ -685,7 +692,15 @@ def _apply_support_bundle(request: SettingsChangeRequest) -> SettingsActionResul
             error="missing payload",
         )
 
-    create_bundle(output_path=payload.output_path, redact_paths_flag=payload.redact_paths)
+    support_request = SupportBundleRequest(
+        output_path=payload.output_path,
+        redact_paths=payload.redact_paths,
+        workspace_path=None,
+    )
+    create_support_bundle(
+        support_request,
+        dependencies=build_default_support_bundle_dependencies(),
+    )
     info = SupportBundleInfo(output_path=payload.output_path)
 
     return SettingsActionResult(

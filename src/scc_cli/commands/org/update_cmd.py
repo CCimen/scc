@@ -18,6 +18,140 @@ from ...remote import load_org_config
 from ._builders import _parse_config_source, build_update_data
 
 
+def _update_single_team(
+    team: str,
+    profiles: dict[str, Any],
+    org_config: dict[str, Any],
+    json_output: bool,
+) -> list[dict[str, Any]]:
+    """Fetch and update a single federated team config."""
+    if team not in profiles:
+        if json_output:
+            with json_output_mode():
+                envelope = build_envelope(
+                    Kind.ORG_UPDATE,
+                    data=build_update_data(org_config),
+                    ok=False,
+                    errors=[f"Team '{team}' not found in organization config"],
+                )
+                print_json(envelope)
+            raise typer.Exit(EXIT_CONFIG)
+        console.print(
+            create_error_panel(
+                "Team Not Found",
+                f"Team '{team}' not found in organization config.",
+                hint=f"Available teams: {', '.join(profiles.keys())}",
+            )
+        )
+        raise typer.Exit(EXIT_CONFIG)
+
+    profile = profiles[team]
+    config_source_dict = profile.get("config_source")
+
+    if config_source_dict is None:
+        team_results = [{"team": team, "success": True, "inline": True}]
+        if json_output:
+            with json_output_mode():
+                data = build_update_data(org_config, team_results)
+                envelope = build_envelope(Kind.ORG_UPDATE, data=data)
+                print_json(envelope)
+            raise typer.Exit(0)
+        console.print(
+            create_warning_panel(
+                "Inline Team",
+                f"Team '{team}' is not federated (inline config).",
+                hint="Inline teams don't have external configs to refresh.",
+            )
+        )
+        raise typer.Exit(0)
+
+    try:
+        config_source = _parse_config_source(config_source_dict)
+        result = fetch_team_config(config_source, team)
+        if result.success:
+            return [{"team": team, "success": True, "commit_sha": result.commit_sha}]
+        team_results = [{"team": team, "success": False, "error": result.error}]
+        if json_output:
+            with json_output_mode():
+                data = build_update_data(org_config, team_results)
+                envelope = build_envelope(
+                    Kind.ORG_UPDATE,
+                    data=data,
+                    ok=False,
+                    errors=[f"Failed to fetch team config: {result.error}"],
+                )
+                print_json(envelope)
+            raise typer.Exit(EXIT_CONFIG)
+        console.print(
+            create_error_panel(
+                "Team Update Failed",
+                f"Failed to fetch config for team '{team}'.",
+                hint=str(result.error),
+            )
+        )
+        raise typer.Exit(EXIT_CONFIG)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        if json_output:
+            with json_output_mode():
+                envelope = build_envelope(
+                    Kind.ORG_UPDATE,
+                    data=build_update_data(org_config),
+                    ok=False,
+                    errors=[f"Error parsing config source: {e}"],
+                )
+                print_json(envelope)
+            raise typer.Exit(EXIT_CONFIG)
+        console.print(create_error_panel("Config Error", f"Error parsing config source: {e}"))
+        raise typer.Exit(EXIT_CONFIG)
+
+
+def _update_all_teams(
+    profiles: dict[str, Any],
+    org_config: dict[str, Any],
+    json_output: bool,
+) -> list[dict[str, Any]]:
+    """Fetch and update all federated team configs."""
+    federated_teams = [
+        (name, profile)
+        for name, profile in profiles.items()
+        if profile.get("config_source") is not None
+    ]
+
+    if not federated_teams:
+        if json_output:
+            with json_output_mode():
+                data = build_update_data(org_config, [])
+                envelope = build_envelope(Kind.ORG_UPDATE, data=data)
+                print_json(envelope)
+            raise typer.Exit(0)
+        console.print(
+            create_warning_panel(
+                "No Federated Teams",
+                "No federated teams found in organization config.",
+                hint="All teams use inline configuration.",
+            )
+        )
+        raise typer.Exit(0)
+
+    team_results: list[dict[str, Any]] = []
+    for team_name, profile in federated_teams:
+        config_source_dict = profile["config_source"]
+        try:
+            config_source = _parse_config_source(config_source_dict)
+            result = fetch_team_config(config_source, team_name)
+            if result.success:
+                team_results.append(
+                    {"team": team_name, "success": True, "commit_sha": result.commit_sha}
+                )
+            else:
+                team_results.append({"team": team_name, "success": False, "error": result.error})
+        except Exception as e:
+            team_results.append({"team": team_name, "success": False, "error": str(e)})
+    return team_results
+
+
 @handle_errors
 def org_update_cmd(
     team: str | None = typer.Option(
@@ -116,160 +250,13 @@ def org_update_cmd(
     # Get profiles from org config
     profiles = org_config.get("profiles", {})
 
-    # Handle --team option (single team update)
+    # Handle --team or --all-teams options
     team_results: list[dict[str, Any]] | None = None
     if team is not None:
-        # Validate team exists
-        if team not in profiles:
-            if json_output:
-                with json_output_mode():
-                    envelope = build_envelope(
-                        Kind.ORG_UPDATE,
-                        data=build_update_data(org_config),
-                        ok=False,
-                        errors=[f"Team '{team}' not found in organization config"],
-                    )
-                    print_json(envelope)
-                raise typer.Exit(EXIT_CONFIG)
-            console.print(
-                create_error_panel(
-                    "Team Not Found",
-                    f"Team '{team}' not found in organization config.",
-                    hint=f"Available teams: {', '.join(profiles.keys())}",
-                )
-            )
-            raise typer.Exit(EXIT_CONFIG)
+        team_results = _update_single_team(team, profiles, org_config, json_output)
 
-        profile = profiles[team]
-        config_source_dict = profile.get("config_source")
-
-        # Check if team is federated
-        if config_source_dict is None:
-            team_results = [{"team": team, "success": True, "inline": True}]
-            if json_output:
-                with json_output_mode():
-                    data = build_update_data(org_config, team_results)
-                    envelope = build_envelope(Kind.ORG_UPDATE, data=data)
-                    print_json(envelope)
-                raise typer.Exit(0)
-            console.print(
-                create_warning_panel(
-                    "Inline Team",
-                    f"Team '{team}' is not federated (inline config).",
-                    hint="Inline teams don't have external configs to refresh.",
-                )
-            )
-            raise typer.Exit(0)
-
-        # Fetch team config
-        try:
-            config_source = _parse_config_source(config_source_dict)
-            result = fetch_team_config(config_source, team)
-            if result.success:
-                team_results = [
-                    {
-                        "team": team,
-                        "success": True,
-                        "commit_sha": result.commit_sha,
-                    }
-                ]
-            else:
-                team_results = [
-                    {
-                        "team": team,
-                        "success": False,
-                        "error": result.error,
-                    }
-                ]
-                if json_output:
-                    with json_output_mode():
-                        data = build_update_data(org_config, team_results)
-                        envelope = build_envelope(
-                            Kind.ORG_UPDATE,
-                            data=data,
-                            ok=False,
-                            errors=[f"Failed to fetch team config: {result.error}"],
-                        )
-                        print_json(envelope)
-                    raise typer.Exit(EXIT_CONFIG)
-                console.print(
-                    create_error_panel(
-                        "Team Update Failed",
-                        f"Failed to fetch config for team '{team}'.",
-                        hint=str(result.error),
-                    )
-                )
-                raise typer.Exit(EXIT_CONFIG)
-        except Exception as e:
-            if json_output:
-                with json_output_mode():
-                    envelope = build_envelope(
-                        Kind.ORG_UPDATE,
-                        data=build_update_data(org_config),
-                        ok=False,
-                        errors=[f"Error parsing config source: {e}"],
-                    )
-                    print_json(envelope)
-                raise typer.Exit(EXIT_CONFIG)
-            console.print(create_error_panel("Config Error", f"Error parsing config source: {e}"))
-            raise typer.Exit(EXIT_CONFIG)
-
-    # Handle --all-teams option
     elif all_teams:
-        team_results = []
-        federated_teams = [
-            (name, profile)
-            for name, profile in profiles.items()
-            if profile.get("config_source") is not None
-        ]
-
-        if not federated_teams:
-            team_results = []
-            if json_output:
-                with json_output_mode():
-                    data = build_update_data(org_config, team_results)
-                    envelope = build_envelope(Kind.ORG_UPDATE, data=data)
-                    print_json(envelope)
-                raise typer.Exit(0)
-            console.print(
-                create_warning_panel(
-                    "No Federated Teams",
-                    "No federated teams found in organization config.",
-                    hint="All teams use inline configuration.",
-                )
-            )
-            raise typer.Exit(0)
-
-        # Fetch all federated team configs
-        for team_name, profile in federated_teams:
-            config_source_dict = profile["config_source"]
-            try:
-                config_source = _parse_config_source(config_source_dict)
-                result = fetch_team_config(config_source, team_name)
-                if result.success:
-                    team_results.append(
-                        {
-                            "team": team_name,
-                            "success": True,
-                            "commit_sha": result.commit_sha,
-                        }
-                    )
-                else:
-                    team_results.append(
-                        {
-                            "team": team_name,
-                            "success": False,
-                            "error": result.error,
-                        }
-                    )
-            except Exception as e:
-                team_results.append(
-                    {
-                        "team": team_name,
-                        "success": False,
-                        "error": str(e),
-                    }
-                )
+        team_results = _update_all_teams(profiles, org_config, json_output)
 
     # Build output data
     data = build_update_data(org_config, team_results)

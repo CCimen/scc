@@ -1,4 +1,4 @@
-"""Marketplace sync use case for Claude Code integration."""
+"""Marketplace sync use case for agent integration."""
 
 from __future__ import annotations
 

@@ -134,8 +134,8 @@ def list_cmd(
         ],
     )
 
-    console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")
-    console.print("[dim]Or use: scc list -i for interactive mode[/dim]")
+    console.print("[dim]Resume work with: scc sessions --select or scc[/dim]")
+    console.print("[dim]Or use: scc list -i for interactive container actions[/dim]")
 
 
 @handle_errors
@@ -144,9 +144,7 @@ def stop_cmd(
         None,
         help="Container name or ID to stop (omit for interactive picker)",
     ),
-    all_containers: bool = typer.Option(
-        False, "--all", "-a", help="Stop all running Claude Code sandboxes"
-    ),
+    all_containers: bool = typer.Option(False, "--all", "-a", help="Stop all running sandboxes"),
     interactive: bool = typer.Option(
         False, "-i", "--interactive", help="Use multi-select picker to choose containers"
     ),
@@ -164,15 +162,14 @@ def stop_cmd(
         scc stop --yes                   # Stop all without confirmation
     """
     with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner=Spinners.DOCKER):
-        # List Docker Desktop sandbox containers (image: docker/sandbox-templates:claude-code)
-        running = docker.list_running_sandboxes()
+        running = docker.list_running_scc_containers()
 
     if not running:
         console.print(
             create_info_panel(
-                "No Running Sandboxes",
-                "No Claude Code sandboxes are currently running.",
-                "Start one with: scc -w /path/to/project",
+                "No Running Containers",
+                "No SCC-managed containers are currently running.",
+                "Start one with: scc start ~/project",
             )
         )
         return
@@ -302,7 +299,7 @@ def prune_cmd(
     with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner=Spinners.DOCKER):
         # Use _list_all_sandbox_containers to find ALL sandbox containers (by image)
         # This matches how stop_cmd uses list_running_sandboxes (also by image)
-        # Containers created by Docker Desktop directly don't have SCC labels
+        # Containers not created by SCC don't have SCC labels
         all_containers = docker._list_all_sandbox_containers()
 
     # Filter to only stopped containers

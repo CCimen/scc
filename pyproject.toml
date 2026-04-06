@@ -5,13 +5,25 @@ build-backend = "hatchling.build"
 [project]
 name = "scc-cli"
 version = "1.7.3"
-description = "Run Claude Code in Docker sandboxes with team configs and git worktree support"
+description = "Governed runtime for AI coding agents with container sandboxes, network controls, and team-managed configuration"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Cagri Cimen", email = "cagricimeenn@gmail.com" }
 ]
-keywords = ["claude", "ai", "cli", "docker", "git", "worktree"]
+keywords = [
+    "ai",
+    "coding-agent",
+    "claude-code",
+    "codex",
+    "sandbox",
+    "cli",
+    "container",
+    "security",
+    "governance",
+    "developer-tools",
+    "worktree",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -47,8 +59,8 @@ dev = [
 scc = "scc_cli.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/CCimen/scc"
-Documentation = "https://github.com/CCimen/scc#readme"
+Homepage = "https://scc-cli.dev"
+Documentation = "https://scc-cli.dev"
 Repository = "https://github.com/CCimen/scc"
 Issues = "https://github.com/CCimen/scc/issues"
 
@@ -78,6 +90,7 @@ ignore = ["E501"]
 "src/scc_cli/cli_org.py" = ["T201"]      # Schema output for piping
 "src/scc_cli/cli_worktree.py" = ["T201"] # Path output for scripting: cd $(scc worktree list -i)
 "tests/**/*.py" = ["T201"]               # Tests may use print() freely
+"images/**/scc_safety_eval/*.py" = ["T201"]  # Standalone CLI uses print() for stderr output
 # UP037: Explicit string annotation kept as defensive measure (guards against __future__ removal)
 "src/scc_cli/theme.py" = ["UP037"]
 

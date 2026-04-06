@@ -12,15 +12,17 @@ def build_session_list_data(
     sessions: list[dict[str, Any]],
     *,
     team: str | None = None,
+    provider_id: str | None = None,
 ) -> dict[str, Any]:
     """Build JSON-ready session list data.
 
     Invariants:
-        - Preserve keys: `sessions`, `count`, and `team`.
+        - Preserve keys: `sessions`, `count`, `team`, and `provider_id`.
 
     Args:
         sessions: Serialized session dictionaries.
         team: Optional team filter label.
+        provider_id: Optional provider filter label.
 
     Returns:
         Dictionary payload for session list output.
@@ -29,6 +31,7 @@ def build_session_list_data(
         "sessions": sessions,
         "count": len(sessions),
         "team": team,
+        "provider_id": provider_id,
     }
 
 

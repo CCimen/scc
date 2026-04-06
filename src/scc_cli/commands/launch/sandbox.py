@@ -31,6 +31,7 @@ def launch_sandbox(
     should_continue_session: bool,
     fresh: bool,
     plugin_settings: dict[str, Any] | None = None,
+    display_name: str = "Claude Code",
 ) -> None:
     """
     Execute the Docker sandbox with all configurations applied.
@@ -48,6 +49,7 @@ def launch_sandbox(
         current_branch: Git branch name.
         should_continue_session: Whether to continue existing session.
         fresh: Force new container.
+        display_name: Provider display name for the launch panel title.
         plugin_settings: Plugin settings dict to inject into container HOME.
             Contains extraKnownMarketplaces and enabledPlugins with absolute
             paths pointing to the bind-mounted workspace.
@@ -58,18 +60,20 @@ def launch_sandbox(
     env_vars = None
 
     if org_config and team:
+        from scc_cli.bootstrap import merge_mcp_servers
+
         from ...application.compute_effective_config import compute_effective_config
-        from ...claude_adapter import merge_mcp_servers
         from ...core.enums import NetworkPolicy
         from ...core.network_policy import collect_proxy_env
+        from ...ports.config_models import NormalizedOrgConfig
 
         effective_config = compute_effective_config(
-            org_config=org_config,
+            org_config=NormalizedOrgConfig.from_dict(org_config),
             team_name=team,
             workspace_path=workspace_path or mount_path,
         )
         plugin_settings = merge_mcp_servers(plugin_settings, effective_config)
-        if effective_config.network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+        if effective_config.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
             env_vars = collect_proxy_env()
 
     # Prepare sandbox volume for credential persistence
@@ -96,6 +100,7 @@ def launch_sandbox(
             session_name=session_name,
             container_name=container_name,
             branch=current_branch,
+            provider_id="claude",  # Legacy sandbox path is always Claude
         )
         # Record context for quick resume feature
         # Determine repo root (may be same as workspace for non-worktrees)
@@ -143,6 +148,7 @@ def launch_sandbox(
         session_name=session_name,
         branch=current_branch,
         is_resume=is_resume,
+        display_name=display_name,
     )
 
     # Pass org_config for safety-net policy injection (mounted read-only)

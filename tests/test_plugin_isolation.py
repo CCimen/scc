@@ -44,8 +44,8 @@ class TestResetGlobalSettings:
                 "scc_cli.docker.launch.write_safety_net_policy_to_host",
                 return_value="/tmp/policy.json",
             ),
-            patch("scc_cli.docker.launch.build_command", return_value=["docker", "run"]),
-            patch("scc_cli.docker.launch.subprocess.run") as mock_subprocess,
+            patch("scc_cli.docker.sandbox.build_command", return_value=["docker", "run"]),
+            patch("scc_cli.docker.sandbox.subprocess.run") as mock_subprocess,
             patch("os.name", "nt"),  # Skip credential flow on Windows path
         ):
             mock_subprocess.return_value.returncode = 0

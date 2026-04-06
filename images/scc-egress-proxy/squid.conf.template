@@ -1,0 +1,24 @@
+# scc-egress-proxy: Squid forward-proxy configuration template.
+# This file is processed by entrypoint.sh at container start.
+
+# --- Port configuration ---
+http_port 0.0.0.0:3128
+
+# --- Safe port ACLs ---
+acl SSL_ports port 443
+acl Safe_ports port 80 443
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+
+# --- SCC egress ACL rules (injected at runtime) ---
+# SCC_ACL_RULES_START
+# SCC_ACL_RULES_END
+
+# --- Terminal deny ---
+http_access deny all
+
+# --- Logging to stdout ---
+access_log stdio:/dev/stdout
+
+# --- Cache disabled ---
+cache deny all

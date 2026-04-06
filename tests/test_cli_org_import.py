@@ -42,7 +42,7 @@ def valid_org_config() -> dict:
         },
         "defaults": {
             "allowed_plugins": ["code-review", "linter"],
-            "network_policy": "unrestricted",
+            "network_policy": "open",
         },
         "profiles": {
             "base": {"description": "Default profile"},

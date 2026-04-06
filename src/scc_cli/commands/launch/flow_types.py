@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 from ...application.launch import (
     StartWizardContext,
@@ -13,29 +13,29 @@ from ...application.launch import (
     WorkspaceSource,
 )
 from ...contexts import WorkContext
+from ...ui.keys import _BackSentinel
 
-UserConfig: TypeAlias = dict[str, Any]
+StartWizardResult: TypeAlias = tuple[
+    str | _BackSentinel | None,
+    str | None,
+    str | None,
+    str | None,
+]
+QuickResumeResolution: TypeAlias = StartWizardState | StartWizardResult
+WorkspaceResumeResolution: TypeAlias = StartWizardState | StartWizardResult | None
 
 
-@dataclass
-class WizardRenderContext:
-    """Shared context for wizard rendering helpers.
-
-    Holds configuration that would otherwise be captured as closure variables
-    in nested functions. Passing this explicitly makes the helpers testable
-    and allows them to live at module level.
-    """
+@dataclass(frozen=True)
+class WizardResumeContext:
+    """Explicit inputs for quick-resume helper flows."""
 
     standalone_mode: bool
+    allow_back: bool
     effective_team: str | None
     team_override: str | None
     active_team_label: str
     active_team_context: str
     current_branch: str | None
-    workspace_base: str
-    allow_back: bool
-    available_teams: list[dict[str, Any]]
-    selected_profile: str | None
 
 
 def set_team_context(state: StartWizardState, team: str | None) -> StartWizardState:

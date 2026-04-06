@@ -29,9 +29,6 @@ from scc_cli.application.settings import (
     DoctorInfo,
     PathsInfo,
     ProfileDiffInfo,
-    ProfileSyncMode,
-    ProfileSyncPathPayload,
-    ProfileSyncPayload,
     ProfileSyncPreview,
     ProfileSyncResult,
     SettingsAction,
@@ -476,7 +473,7 @@ class SettingsScreen:
 
     def _generate_support_bundle(self) -> str | None:
         """Generate a support bundle for troubleshooting."""
-        from scc_cli.support_bundle import get_default_bundle_path
+        from scc_cli.application.support_bundle import get_default_support_bundle_path
 
         self._console.print()
         self._console.print("[bold]Generate Support Bundle[/bold]")
@@ -487,7 +484,7 @@ class SettingsScreen:
         )
         self._console.print()
 
-        default_path = get_default_bundle_path()
+        default_path = get_default_support_bundle_path()
         path_str = Prompt.ask("Save bundle to", default=str(default_path))
 
         if not path_str:
@@ -518,314 +515,28 @@ class SettingsScreen:
 
     def _profile_diff(self, diff_info: ProfileDiffInfo) -> None:
         """Show diff between profile and workspace settings with visual overlay."""
-        from rich import box
+        from .settings_profile import profile_diff
 
-        diff = diff_info.diff
-        if diff.is_empty:
-            self._console.print()
-            self._console.print("[green]✓ Profile is in sync with workspace[/green]")
-            return None
-
-        lines: list[str] = []
-        current_section = ""
-        rendered_lines = 0
-        max_lines = 12
-        truncated = False
-
-        indicators = {
-            "added": "[green]+[/green]",
-            "removed": "[red]−[/red]",
-            "modified": "[yellow]~[/yellow]",
-        }
-
-        section_names = {
-            "plugins": "plugins",
-            "mcp_servers": "mcp_servers",
-            "marketplaces": "marketplaces",
-        }
-
-        for item in diff.items:
-            if rendered_lines >= max_lines and not truncated:
-                truncated = True
-                break
-
-            if item.section != current_section:
-                if current_section:
-                    lines.append("")
-                    rendered_lines += 1
-                lines.append(f"  [bold]{section_names.get(item.section, item.section)}[/bold]")
-                rendered_lines += 1
-                current_section = item.section
-
-            indicator = indicators.get(item.status, " ")
-            modifier = "(modified)" if item.status == "modified" else ""
-            if modifier:
-                lines.append(f"    {indicator} {item.name}  [dim]{modifier}[/dim]")
-            else:
-                lines.append(f"    {indicator} {item.name}")
-            rendered_lines += 1
-
-        if truncated:
-            remaining = diff.total_count - (
-                rendered_lines - len(set(i.section for i in diff.items))
-            )
-            lines.append("")
-            lines.append(f"  [dim]+ {remaining} more items...[/dim]")
-
-        lines.append("")
-        lines.append(f"  [dim]{diff.total_count} difference(s) · Esc close[/dim]")
-
-        content = "\n".join(lines)
-
-        self._console.print()
-        self._console.print(
-            Panel(
-                content,
-                title="[bold]Profile Diff[/bold]",
-                border_style="bright_black",
-                box=box.ROUNDED,
-                padding=(1, 2),
-            )
-        )
-
-        return None
+        profile_diff(self._console, diff_info)
 
     def _profile_sync(self) -> str | None:
         """Sync profiles with a repository using overlay picker."""
-        from pathlib import Path
-
-        from .list_screen import ListItem, ListScreen
+        from .settings_profile import profile_sync
 
         self._refresh_view_model()
-        default_path = self._view_model.sync_repo_path
-
-        items: list[ListItem[str]] = [
-            ListItem(
-                value="change_path",
-                label=f"📁 {default_path}",
-                description="Change path",
-            ),
-            ListItem(
-                value="export",
-                label="Export",
-                description="Save profiles to folder",
-            ),
-            ListItem(
-                value="import",
-                label="Import",
-                description="Load profiles from folder",
-            ),
-            ListItem(
-                value="full_sync",
-                label="Full sync",
-                description="Load then save  (advanced)",
-            ),
-        ]
-
-        # Show picker with styled title (matching dashboard pattern)
-        screen = ListScreen(items, title="[cyan]Sync[/cyan] Profiles")
-        selected = screen.run()
-
-        if not selected:
-            return None
-
-        repo_path = Path(default_path).expanduser()
-
-        # Handle path change
-        if selected == "change_path":
-            return self._sync_change_path(default_path)
-
-        # Handle export
-        if selected == "export":
-            return self._sync_export(repo_path)
-
-        # Handle import
-        if selected == "import":
-            return self._sync_import(repo_path)
-
-        # Handle full sync
-        if selected == "full_sync":
-            return self._sync_full(repo_path)
-
-        return None
-
-    def _sync_change_path(self, current_path: str) -> str | None:
-        """Handle path editing for sync."""
-        from rich import box
-
-        self._console.print()
-        panel = Panel(
-            f"[dim]Current:[/dim] {current_path}\n\n"
-            "[dim]Enter new path or press Enter to keep current[/dim]",
-            title="[cyan]Edit[/cyan] Repository Path",
-            border_style="cyan",
-            box=box.ROUNDED,
-            padding=(1, 2),
+        return profile_sync(
+            self._console,
+            self._context,
+            self._view_model,
+            refresh_view_model=self._refresh_view_model,
+            handle_action_result=self._handle_action_result,
+            render_profile_sync_preview=self._render_profile_sync_preview,
         )
-        self._console.print(panel)
-        new_path = Prompt.ask("[cyan]Path[/cyan]", default=current_path)
-
-        if new_path and new_path != current_path:
-            result = app_settings.apply_settings_change(
-                SettingsChangeRequest(
-                    action_id="profile_sync",
-                    workspace=self._context.workspace,
-                    payload=ProfileSyncPathPayload(new_path=new_path),
-                )
-            )
-            self._handle_action_result(result)
-            self._refresh_view_model()
-
-        return self._profile_sync()
-
-    def _sync_export(self, repo_path: Path) -> str | None:
-        """Export profiles to repository."""
-        payload = ProfileSyncPayload(mode=ProfileSyncMode.EXPORT, repo_path=repo_path)
-        validation = app_settings.validate_settings(
-            SettingsValidationRequest(
-                action_id="profile_sync",
-                workspace=self._context.workspace,
-                payload=payload,
-            )
-        )
-        if validation and validation.error:
-            self._console.print(f"[yellow]{validation.error}[/yellow]")
-            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
-            return None
-
-        create_dir = False
-        if (
-            validation
-            and validation.confirmation == ConfirmationKind.CONFIRM
-            and validation.message
-        ):
-            create_dir = self._confirm_create_directory(validation.message)
-            if not create_dir:
-                return None
-
-        self._console.print(f"[dim]Exporting to {repo_path}...[/dim]")
-        payload = ProfileSyncPayload(
-            mode=ProfileSyncMode.EXPORT,
-            repo_path=repo_path,
-            create_dir=create_dir,
-        )
-        result = app_settings.apply_settings_change(
-            SettingsChangeRequest(
-                action_id="profile_sync",
-                workspace=self._context.workspace,
-                payload=payload,
-            )
-        )
-        message = self._handle_action_result(result)
-        self._refresh_view_model()
-        return message
-
-    def _sync_import(self, repo_path: Path) -> str | None:
-        """Import profiles from repository with preview."""
-        from rich import box
-
-        self._console.print(f"[dim]Checking {repo_path}...[/dim]")
-        payload = ProfileSyncPayload(mode=ProfileSyncMode.IMPORT, repo_path=repo_path)
-        validation = app_settings.validate_settings(
-            SettingsValidationRequest(
-                action_id="profile_sync",
-                workspace=self._context.workspace,
-                payload=payload,
-            )
-        )
-
-        if validation and validation.error:
-            self._console.print(
-                Panel(
-                    f"[yellow]✗ {validation.error}[/yellow]",
-                    title="[cyan]Sync[/cyan] Profiles",
-                    border_style="bright_black",
-                    box=box.ROUNDED,
-                    padding=(1, 2),
-                )
-            )
-            Prompt.ask("[dim]Press Enter to continue[/dim]", default="")
-            return None
-
-        confirmed = True
-        if validation and isinstance(validation.detail, ProfileSyncPreview):
-            self._render_profile_sync_preview(validation.detail)
-            confirmed = Confirm.ask("Import now?", default=True)
-            if not confirmed:
-                return None
-
-        result = app_settings.apply_settings_change(
-            SettingsChangeRequest(
-                action_id="profile_sync",
-                workspace=self._context.workspace,
-                payload=payload,
-                confirmed=confirmed,
-            )
-        )
-        message = self._handle_action_result(result)
-        self._refresh_view_model()
-        return message
-
-    def _sync_full(self, repo_path: Path) -> str | None:
-        """Full sync: import then export."""
-        self._console.print(f"[dim]Full sync with {repo_path}...[/dim]")
-        payload = ProfileSyncPayload(mode=ProfileSyncMode.FULL_SYNC, repo_path=repo_path)
-        result = app_settings.apply_settings_change(
-            SettingsChangeRequest(
-                action_id="profile_sync",
-                workspace=self._context.workspace,
-                payload=payload,
-            )
-        )
-        message = self._handle_action_result(result)
-        self._refresh_view_model()
-        return message
 
     def _render_profile_sync_result(self, result: ProfileSyncResult) -> None:
-        from rich import box
+        from .settings_profile import render_profile_sync_result
 
-        lines: list[str] = []
-        if result.mode == ProfileSyncMode.EXPORT:
-            lines.append(f"[green]✓ Exported {result.exported} profile(s)[/green]")
-            for profile_id in result.profile_ids:
-                lines.append(f"  [green]+[/green] {profile_id}")
-            if result.warnings:
-                lines.append("")
-                for warning in result.warnings:
-                    lines.append(f"  [yellow]![/yellow] {warning}")
-            lines.append("")
-            lines.append("[dim]Files written locally · no git commit/push[/dim]")
-            lines.append("[dim]For git: scc profile export --repo PATH --commit --push[/dim]")
-
-        if result.mode == ProfileSyncMode.IMPORT:
-            lines.append(f"[green]✓ Imported {result.imported} profile(s)[/green]")
-            if result.warnings:
-                lines.append("")
-                for warning in result.warnings:
-                    lines.append(f"  [yellow]![/yellow] {warning}")
-            lines.append("")
-            lines.append("[dim]Profiles copied locally · no git pull[/dim]")
-            lines.append("[dim]For git: scc profile import --repo PATH --pull[/dim]")
-
-        if result.mode == ProfileSyncMode.FULL_SYNC:
-            lines.append("[green]✓ Sync complete[/green]")
-            lines.append("")
-            lines.append(f"  Imported: {result.imported} profile(s)")
-            lines.append(f"  Exported: {result.exported} profile(s)")
-            lines.append("")
-            lines.append("[dim]Files synced locally · no git operations[/dim]")
-            lines.append("[dim]For git: scc profile sync --repo PATH --pull --commit --push[/dim]")
-
-        self._console.print()
-        self._console.print(
-            Panel(
-                "\n".join(lines),
-                title="[cyan]Sync[/cyan] Profiles",
-                border_style="bright_black",
-                box=box.ROUNDED,
-                padding=(1, 2),
-            )
-        )
+        render_profile_sync_result(self._console, result)
 
     def _render_support_bundle_result(self, info: SupportBundleInfo) -> None:
         self._console.print()

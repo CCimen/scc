@@ -1,0 +1,17 @@
+#!/bin/bash
+set -euo pipefail
+
+# Absolute path to the real binary — prevents self-recursion
+REAL_BIN=/usr/bin/rsync
+
+# Evaluate the command against safety policy
+# PYTHONPATH is set by the Dockerfile to /usr/local/lib/scc
+verdict=$(python3 -m scc_safety_eval "$(basename "$0")" "$@" 2>&1) || {
+  rc=$?
+  if [ "$rc" -eq 2 ]; then
+    echo "$verdict" >&2
+    exit 2
+  fi
+}
+
+exec "$REAL_BIN" "$@"

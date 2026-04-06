@@ -20,7 +20,8 @@ from typer.testing import CliRunner
 from scc_cli.cli import app
 from scc_cli.ports.dependency_installer import DependencyInstallResult
 from scc_cli.ports.session_models import SessionSummary
-from tests.fakes import build_fake_adapters
+from tests.fakes import FakeAuditEventSink, build_fake_adapters
+from tests.fakes.fake_agent_provider import FakeAgentProvider
 
 runner = CliRunner()
 
@@ -72,7 +73,7 @@ def sample_org_config():
         },
         "defaults": {
             "allowed_plugins": ["*"],
-            "network_policy": "unrestricted",
+            "network_policy": "open",
             "session": {
                 "timeout_hours": 10,
                 "auto_resume": True,
@@ -221,8 +222,16 @@ class TestStartWorkflow:
                 return_value=fake_adapters,
             ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
+            patch(
+                "scc_cli.commands.launch.flow.resolve_launch_provider",
+                return_value=("claude", "cli_flag"),
+            ),
+            patch(
+                "scc_cli.commands.launch.flow.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
         ):
-            runner.invoke(app, ["start", str(git_workspace)])
+            runner.invoke(app, ["start", str(git_workspace), "--provider", "claude"])
 
         # Sandbox runtime should be invoked
         assert fake_adapters.sandbox_runtime.list_running()
@@ -470,6 +479,144 @@ class TestWorktreeWorkflow:
 
         dependencies.dependency_installer.install.assert_called_once_with(worktree_path)
 
+    def test_worktree_auto_start_appends_shared_audit_events(
+        self, full_config_environment, git_workspace
+    ):
+        """Worktree auto-start should reuse the shared preflight and audit path."""
+        from scc_cli.application.worktree import WorktreeCreateResult, WorktreeDependencies
+
+        worktree_path = git_workspace.parent / "claude" / "feature-auto"
+        worktree_path.mkdir(parents=True)
+        git_client = MagicMock()
+        git_client.is_git_repo.return_value = True
+        git_client.has_commits.return_value = True
+        dependencies = WorktreeDependencies(
+            git_client=git_client,
+            dependency_installer=MagicMock(),
+        )
+        fake_adapters = build_fake_adapters()
+
+        with (
+            patch(
+                "scc_cli.commands.worktree.worktree_commands._build_worktree_dependencies",
+                return_value=(dependencies, fake_adapters),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.worktree_use_cases.create_worktree",
+                return_value=WorktreeCreateResult(
+                    worktree_path=worktree_path,
+                    worktree_name="feature-auto",
+                    branch_name="scc/feature-auto",
+                    base_branch="main",
+                    dependencies_installed=True,
+                ),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode",
+                return_value=True,
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.load_user_config",
+                return_value={},
+            ),
+            patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=True),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.resolve_launch_provider",
+                return_value=("claude", None),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
+        ):
+            result = runner.invoke(
+                app, ["worktree", ".", "create", str(git_workspace), "feature-auto"]
+            )
+
+        assert result.exit_code == 0
+        assert isinstance(fake_adapters.audit_event_sink, FakeAuditEventSink)
+        sink = fake_adapters.audit_event_sink
+        assert [event.event_type for event in sink.events] == [
+            "launch.preflight.passed",
+            "launch.started",
+        ]
+        assert sink.events[0].metadata["workspace_path"] == str(worktree_path)
+
+    def test_worktree_auto_start_blocks_before_runtime_when_preflight_fails(
+        self, full_config_environment, git_workspace
+    ):
+        """Worktree auto-start should fail before runtime start on blocked preflight."""
+        from scc_cli.application.compute_effective_config import EffectiveConfig
+        from scc_cli.application.worktree import WorktreeCreateResult, WorktreeDependencies
+
+        worktree_path = git_workspace.parent / "claude" / "feature-blocked"
+        worktree_path.mkdir(parents=True)
+        git_client = MagicMock()
+        git_client.is_git_repo.return_value = True
+        git_client.has_commits.return_value = True
+        dependencies = WorktreeDependencies(
+            git_client=git_client,
+            dependency_installer=MagicMock(),
+        )
+        fake_adapters = build_fake_adapters()
+
+        with (
+            patch(
+                "scc_cli.commands.worktree.worktree_commands._build_worktree_dependencies",
+                return_value=(dependencies, fake_adapters),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.worktree_use_cases.create_worktree",
+                return_value=WorktreeCreateResult(
+                    worktree_path=worktree_path,
+                    worktree_name="feature-blocked",
+                    branch_name="scc/feature-blocked",
+                    base_branch="main",
+                    dependencies_installed=True,
+                ),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode",
+                return_value=False,
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.load_user_config",
+                return_value={"selected_profile": "platform"},
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.load_cached_org_config",
+                return_value={},
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.resolve_launch_provider",
+                return_value=("claude", None),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
+            patch(
+                "scc_cli.application.start_session.compute_effective_config",
+                return_value=EffectiveConfig(network_policy="locked-down-web"),
+            ),
+            patch(
+                "scc_cli.application.start_session.sync_marketplace_settings_for_start",
+                return_value=(None, None),
+            ),
+            patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=True),
+        ):
+            result = runner.invoke(
+                app,
+                ["worktree", ".", "create", str(git_workspace), "feature-blocked"],
+            )
+
+        assert result.exit_code != 0
+        assert fake_adapters.sandbox_runtime.list_running() == []
+        assert isinstance(fake_adapters.audit_event_sink, FakeAuditEventSink)
+        assert [event.event_type for event in fake_adapters.audit_event_sink.events] == [
+            "launch.preflight.failed"
+        ]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Workflow 8: Offline Mode
@@ -579,11 +726,14 @@ class TestDepsWorkflow:
             remote_fetcher=base_adapters.remote_fetcher,
             clock=base_adapters.clock,
             agent_runner=base_adapters.agent_runner,
+            agent_provider=base_adapters.agent_provider,
             sandbox_runtime=base_adapters.sandbox_runtime,
             personal_profile_service=base_adapters.personal_profile_service,
             doctor_runner=base_adapters.doctor_runner,
             archive_writer=base_adapters.archive_writer,
             config_store=base_adapters.config_store,
+            audit_event_sink=base_adapters.audit_event_sink,
+            codex_agent_provider=FakeAgentProvider(),
         )
 
         with (

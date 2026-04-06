@@ -1,12 +1,12 @@
 """
-Manage Claude Code sessions.
+Manage agent sessions.
 
 Track recent sessions, workspaces, containers, and enable resuming.
 
 Container Linking:
 - Sessions are linked to their Docker container names
 - Container names are deterministic: scc-<workspace>-<hash>
-- This enables seamless resume of Claude Code conversations
+- This enables seamless resume of agent conversations
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from scc_cli.ports.session_models import SessionFilter, SessionRecord, SessionSu
 from scc_cli.ports.session_store import SessionStore
 from scc_cli.ui.time_format import format_relative_time_from_datetime
 
-from .core.constants import AGENT_CONFIG_DIR
+from .core.provider_registry import get_runtime_spec
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Store Wiring
@@ -73,6 +73,7 @@ def record_session(
     session_name: str | None = None,
     container_name: str | None = None,
     branch: str | None = None,
+    provider_id: str | None = None,
     *,
     filesystem: Filesystem | None = None,
 ) -> SessionRecord:
@@ -84,6 +85,7 @@ def record_session(
         session_name=session_name,
         container_name=container_name,
         branch=branch,
+        provider_id=provider_id,
     )
 
 
@@ -189,18 +191,18 @@ def prune_orphaned_sessions(filesystem: Filesystem | None = None) -> int:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Claude Code Integration
+# Agent Integration
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def get_claude_sessions_dir() -> Path:
-    """Return the Claude Code sessions directory."""
-    return Path.home() / AGENT_CONFIG_DIR
+def get_provider_sessions_dir(provider_id: str = "claude") -> Path:
+    """Return the agent sessions directory for a provider."""
+    return Path.home() / get_runtime_spec(provider_id).config_dir
 
 
-def get_claude_recent_sessions() -> list[dict[Any, Any]]:
-    """Return recent sessions from Claude Code's own storage."""
-    claude_dir = get_claude_sessions_dir()
+def get_provider_recent_sessions(provider_id: str = "claude") -> list[dict[Any, Any]]:
+    """Return recent sessions from the agent's own storage."""
+    claude_dir = get_provider_sessions_dir(provider_id)
     sessions_file = claude_dir / "sessions.json"
 
     if sessions_file.exists():

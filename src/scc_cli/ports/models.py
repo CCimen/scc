@@ -6,7 +6,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from scc_cli.core.contracts import DestinationSet
 
 
 @dataclass(frozen=True)
@@ -30,10 +33,15 @@ class SandboxSpec:
     user: str | None = None
     group: str | None = None
     extra_mounts: list[MountSpec] = field(default_factory=list)
+    destination_sets: tuple[DestinationSet, ...] = ()
     continue_session: bool = False
     force_new: bool = False
     agent_settings: AgentSettings | None = None
     org_config: dict[str, Any] | None = None
+    agent_argv: list[str] = field(default_factory=list)
+    data_volume: str = ""
+    config_dir: str = ""
+    provider_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -64,6 +72,21 @@ class SandboxStatus:
 
 
 @dataclass(frozen=True)
+class SandboxConflict:
+    """Describe a launch conflict with an already-existing sandbox.
+
+    This is intentionally runtime-neutral: callers only learn that a sandbox
+    already exists for the requested launch spec, plus enough metadata to
+    render operator-facing guidance.  Callers do not infer provider-specific
+    behavior from this model.
+    """
+
+    handle: SandboxHandle
+    state: SandboxState
+    process_summary: str | None = None
+
+
+@dataclass(frozen=True)
 class AgentCommand:
     """Command specification for launching an agent."""
 
@@ -74,7 +97,20 @@ class AgentCommand:
 
 @dataclass(frozen=True)
 class AgentSettings:
-    """Settings payload and target location for an agent."""
+    """Pre-rendered settings payload and target location for an agent.
 
-    content: dict[str, Any]
+    The runner (``AgentRunner.build_settings``) is responsible for
+    serialising the config dict into the correct wire format (JSON for
+    Claude, TOML for Codex, etc.) and returning ``rendered_bytes``.
+    The OCI runtime writes these bytes verbatim — it never assumes a
+    particular serialisation format.  See D035.
+
+    Attributes:
+        rendered_bytes: Serialised config content ready to write to disk.
+        path: Absolute target path inside the container.
+        suffix: File extension hint (e.g. ``".json"``, ``".toml"``).
+    """
+
+    rendered_bytes: bytes
     path: Path
+    suffix: str = ".json"

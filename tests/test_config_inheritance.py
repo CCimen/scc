@@ -30,7 +30,7 @@ def valid_org_config():
             "enabled_plugins": ["github-copilot", "internal-docs"],
             "allowed_plugins": ["*"],
             "allowed_mcp_servers": ["*.sundsvall.se"],
-            "network_policy": "corp-proxy-only",
+            "network_policy": "web-egress-enforced",
             "session": {
                 "timeout_hours": 8,
                 "auto_resume": True,
@@ -374,7 +374,7 @@ class TestComputeEffectiveConfigBasicMerge:
         # Should have org defaults
         assert "github-copilot" in result.plugins
         assert "internal-docs" in result.plugins
-        assert result.network_policy == "corp-proxy-only"
+        assert result.network_policy == "web-egress-enforced"
         assert result.session_config.timeout_hours == 8
         assert result.session_config.auto_resume is True
 
@@ -466,35 +466,35 @@ class TestComputeEffectiveConfigNetworkPolicy:
         """Team can tighten org network policy."""
         from scc_cli.application.compute_effective_config import compute_effective_config
 
-        valid_org_config["defaults"]["network_policy"] = "unrestricted"
-        valid_org_config["profiles"]["urban-planning"]["network_policy"] = "isolated"
+        valid_org_config["defaults"]["network_policy"] = "open"
+        valid_org_config["profiles"]["urban-planning"]["network_policy"] = "locked-down-web"
 
         result = compute_effective_config(
             org_config=valid_org_config,
             team_name="urban-planning",
         )
 
-        assert result.network_policy == "isolated"
+        assert result.network_policy == "locked-down-web"
 
     def test_team_network_policy_less_restrictive(self, valid_org_config):
         """Team cannot loosen org network policy."""
         from scc_cli.application.compute_effective_config import compute_effective_config
 
-        valid_org_config["defaults"]["network_policy"] = "isolated"
-        valid_org_config["profiles"]["urban-planning"]["network_policy"] = "unrestricted"
+        valid_org_config["defaults"]["network_policy"] = "locked-down-web"
+        valid_org_config["profiles"]["urban-planning"]["network_policy"] = "open"
 
         result = compute_effective_config(
             org_config=valid_org_config,
             team_name="urban-planning",
         )
 
-        assert result.network_policy == "isolated"
+        assert result.network_policy == "locked-down-web"
 
     def test_isolated_blocks_network_mcp(self, valid_org_config):
         """Isolated policy blocks HTTP/SSE MCP servers."""
         from scc_cli.application.compute_effective_config import compute_effective_config
 
-        valid_org_config["defaults"]["network_policy"] = "isolated"
+        valid_org_config["defaults"]["network_policy"] = "locked-down-web"
         valid_org_config["profiles"]["urban-planning"]["additional_mcp_servers"] = [
             {
                 "name": "http-mcp",
@@ -1297,8 +1297,8 @@ class TestClaudeAdapterWithEffectiveConfig:
 
     def test_build_settings_from_effective_config_plugins(self, valid_org_config):
         """build_settings_from_effective_config should include effective plugins."""
+        from scc_cli.adapters.claude_settings import build_settings_from_effective_config
         from scc_cli.application.compute_effective_config import compute_effective_config
-        from scc_cli.claude_adapter import build_settings_from_effective_config
 
         # Compute effective config
         effective = compute_effective_config(
@@ -1322,8 +1322,8 @@ class TestClaudeAdapterWithEffectiveConfig:
 
     def test_build_settings_from_effective_config_mcp_servers(self, valid_org_config):
         """build_settings_from_effective_config should include MCP servers."""
+        from scc_cli.adapters.claude_settings import build_settings_from_effective_config
         from scc_cli.application.compute_effective_config import compute_effective_config
-        from scc_cli.claude_adapter import build_settings_from_effective_config
 
         effective = compute_effective_config(
             org_config=valid_org_config,
@@ -1343,8 +1343,8 @@ class TestClaudeAdapterWithEffectiveConfig:
 
     def test_build_settings_blocked_plugins_not_included(self, valid_org_config):
         """Blocked plugins should not appear in Claude settings."""
+        from scc_cli.adapters.claude_settings import build_settings_from_effective_config
         from scc_cli.application.compute_effective_config import compute_effective_config
-        from scc_cli.claude_adapter import build_settings_from_effective_config
 
         # Block gis-tools
         valid_org_config["security"]["blocked_plugins"].append("gis-tools")

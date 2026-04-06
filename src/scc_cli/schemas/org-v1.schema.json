@@ -394,7 +394,7 @@
                 },
                 "network_policy": {
                     "type": "string",
-                    "enum": ["corp-proxy-only", "unrestricted", "isolated"],
+                    "enum": ["open", "web-egress-enforced", "locked-down-web"],
                     "description": "Network access policy"
                 },
                 "session": {
@@ -513,7 +513,7 @@
                     },
                     "network_policy": {
                         "type": "string",
-                        "enum": ["corp-proxy-only", "unrestricted", "isolated"],
+                        "enum": ["open", "web-egress-enforced", "locked-down-web"],
                         "description": "Override network policy for this team"
                     },
                     "session": {
@@ -542,10 +542,132 @@
                     "trust": {
                         "$ref": "#/$defs/TrustGrant",
                         "description": "Trust delegation controls for federated teams"
+                    },
+                    "enabled_bundles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Bundle names from governed_artifacts.bundles to enable for this team. Bundles are resolved by the bundle pipeline into provider-native surfaces."
                     }
                 },
                 "additionalProperties": false
             }
+        },
+        "governed_artifacts": {
+            "type": "object",
+            "description": "Governed artifact catalog — approved reusable units (skills, MCP servers, native integrations) and their provider bindings. Bundles group artifacts for team selection. Provider surfaces are intentionally asymmetric: Claude and Codex each have their own native integration shapes.",
+            "properties": {
+                "artifacts": {
+                    "type": "object",
+                    "description": "Approved artifact definitions (key = artifact name)",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["skill", "mcp_server", "native_integration"],
+                                "description": "Artifact category: skill (portable), mcp_server (portable), or native_integration (requires provider-specific binding)"
+                            },
+                            "version": {
+                                "type": "string",
+                                "description": "Pinned version or source ref"
+                            },
+                            "publisher": {
+                                "type": "string",
+                                "description": "Owner or publisher metadata for audit"
+                            },
+                            "pinned": {
+                                "type": "boolean",
+                                "default": false,
+                                "description": "Whether the artifact version is locked"
+                            },
+                            "source_type": {
+                                "type": "string",
+                                "enum": ["git", "url", "local"],
+                                "description": "Origin kind"
+                            },
+                            "source_url": {
+                                "type": "string",
+                                "description": "Remote location of the artifact source"
+                            },
+                            "source_path": {
+                                "type": "string",
+                                "description": "Path within the source tree"
+                            },
+                            "source_ref": {
+                                "type": "string",
+                                "description": "Git ref, tag, or commit for pinning"
+                            },
+                            "install_intent": {
+                                "type": "string",
+                                "enum": ["required", "available", "disabled", "request-only"],
+                                "default": "available",
+                                "description": "Operator expectation for this artifact"
+                            }
+                        },
+                        "required": ["kind"],
+                        "additionalProperties": false
+                    }
+                },
+                "bindings": {
+                    "type": "object",
+                    "description": "Provider-specific bindings per artifact (key = artifact name). Skills and MCP servers are portable and may have no bindings; native_integration artifacts require at least one.",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "provider": {
+                                    "type": "string",
+                                    "description": "Target provider identifier (e.g. 'claude', 'codex')"
+                                },
+                                "native_ref": {
+                                    "type": "string",
+                                    "description": "Primary native reference for the binding"
+                                },
+                                "native_config": {
+                                    "type": "object",
+                                    "additionalProperties": {"type": "string"},
+                                    "description": "Provider-specific config (hooks, rules, plugin_bundle, instructions, etc.)"
+                                },
+                                "transport_type": {
+                                    "type": "string",
+                                    "enum": ["sse", "stdio", "http"],
+                                    "description": "Transport hint for MCP bindings"
+                                }
+                            },
+                            "required": ["provider"],
+                            "additionalProperties": false
+                        }
+                    }
+                },
+                "bundles": {
+                    "type": "object",
+                    "description": "Approved artifact bundles — team-facing selection units (key = bundle name)",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "description": {
+                                "type": "string",
+                                "description": "Human-readable bundle description"
+                            },
+                            "artifacts": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Ordered artifact names that compose this bundle"
+                            },
+                            "install_intent": {
+                                "type": "string",
+                                "enum": ["required", "available", "disabled", "request-only"],
+                                "default": "available",
+                                "description": "Operator expectation for the bundle as a whole"
+                            }
+                        },
+                        "required": ["artifacts"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "additionalProperties": false
         },
         "stats": {
             "type": "object",

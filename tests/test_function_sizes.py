@@ -167,12 +167,6 @@ def format_failure(function_info: FunctionInfo) -> str:
 class TestFunctionSizes:
     """Test class for function size guardrails."""
 
-    @pytest.mark.xfail(
-        reason=(
-            "Known large functions exceed guardrail (launch flow and org/reset commands). "
-            "Tracked in maintainability refactor."
-        )
-    )
     def test_function_size_limits(self) -> None:
         """Verify all functions in src/scc_cli/ are within size limits."""
         functions = get_function_sizes(SRC_DIR)

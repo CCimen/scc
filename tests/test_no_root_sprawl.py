@@ -64,7 +64,6 @@ ALLOWED_LEGACY = {
     "utils",
     # Legacy standalone modules (candidates for refactoring)
     "auth.py",
-    "claude_adapter.py",
     "cli_common.py",
     "cli_helpers.py",
     "config.py",
@@ -85,14 +84,16 @@ ALLOWED_LEGACY = {
     "remote.py",
     "sessions.py",
     "setup.py",
+    "setup_config.py",  # Extracted from setup.py (S02/T06 decomposition)
+    "setup_ui.py",  # Extracted from setup.py (S02/T06 decomposition)
     "source_resolver.py",
     "stats.py",
-    "support_bundle.py",  # legacy top-level support bundle helper
     "subprocess_utils.py",
     "teams.py",
     "theme.py",
     "update.py",
     "validate.py",
+    "workspace_local_config.py",  # workspace provider-preference store, candidate for services/
 }
 
 # System files to ignore

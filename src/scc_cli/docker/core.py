@@ -3,6 +3,11 @@ Provide Docker core operations: checks, commands, container lifecycle, and queri
 
 Contain stateless Docker primitives that don't manage persistent state.
 For credential persistence, see credentials.py.
+
+**Legacy Docker Desktop sandbox path.** This module supports the Docker Desktop
+``docker sandbox run`` command (available in Docker Desktop >= 4.50). It is NOT
+used by the OCI-based launch path (see ``adapters/oci_sandbox_runtime.py``).
+Retained for users whose Docker Desktop includes the sandbox feature.
 """
 
 import datetime
@@ -14,7 +19,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.constants import SANDBOX_IMAGE
 from ..core.errors import (
     ContainerNotFoundError,
     DockerDaemonNotRunningError,
@@ -26,6 +30,10 @@ from ..subprocess_utils import run_command, run_command_bool
 
 # Minimum Docker Desktop version required for sandbox feature
 MIN_DOCKER_VERSION = "4.50.0"
+
+# Claude-specific Docker Desktop sandbox constants (local to this adapter)
+_SANDBOX_IMAGE = "docker/sandbox-templates:claude-code"
+_SANDBOX_DATA_MOUNT = "/mnt/claude-data"
 
 # Label prefix for SCC containers
 LABEL_PREFIX = "scc"
@@ -248,8 +256,6 @@ def build_command(
         - Agent `claude` is ALWAYS included, even in detached mode
         - Session flags passed via docker exec in detached mode (see run_sandbox)
     """
-    from ..core.constants import SANDBOX_DATA_MOUNT
-
     cmd = ["docker", "sandbox", "run"]
 
     # Detached mode: create container without running Claude interactively
@@ -269,7 +275,7 @@ def build_command(
         # Mount the parent directory containing the policy file
         policy_dir = policy_host_path.parent
         policy_filename = policy_host_path.name
-        container_policy_dir = f"{SANDBOX_DATA_MOUNT}/policy"
+        container_policy_dir = f"{_SANDBOX_DATA_MOUNT}/policy"
         container_policy_path = f"{container_policy_dir}/{policy_filename}"
         # -v host_dir:container_dir:ro  ← Kernel-enforced read-only
         # Even sudo inside container cannot bypass `:ro` - requires CAP_SYS_ADMIN
@@ -433,7 +439,7 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
                 "ps",
                 "-a",
                 "--filter",
-                f"ancestor={SANDBOX_IMAGE}",
+                f"ancestor={_SANDBOX_IMAGE}",
                 "--format",
                 "{{.ID}}\t{{.Names}}\t{{.Status}}",
             ],
@@ -464,10 +470,7 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
 
 
 def list_scc_containers() -> list[ContainerInfo]:
-    """Return all SCC-managed containers (running and stopped).
-
-    Includes Docker Desktop Claude sandboxes which do not support SCC labels.
-    """
+    """Return all SCC-managed containers (running and stopped)."""
     try:
         result = subprocess.run(
             [
@@ -503,17 +506,18 @@ def list_scc_containers() -> list[ContainerInfo]:
                         )
                     )
 
-        # Merge in Docker sandbox containers (dedupe by ID)
-        sandbox_containers = _list_all_sandbox_containers()
-        if sandbox_containers:
-            existing_ids = {c.id for c in containers}
-            for container in sandbox_containers:
-                if container.id not in existing_ids:
-                    containers.append(container)
-
         return containers
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return _list_all_sandbox_containers()
+        return []
+
+
+def list_running_scc_containers() -> list[ContainerInfo]:
+    """Return only running SCC-managed containers."""
+    return [
+        container
+        for container in list_scc_containers()
+        if container.status.lower().startswith("up")
+    ]
 
 
 def list_running_sandboxes() -> list[ContainerInfo]:
@@ -530,7 +534,7 @@ def list_running_sandboxes() -> list[ContainerInfo]:
                 "docker",
                 "ps",
                 "--filter",
-                f"ancestor={SANDBOX_IMAGE}",
+                f"ancestor={_SANDBOX_IMAGE}",
                 "--format",
                 "{{.ID}}\t{{.Names}}\t{{.Status}}",
             ],

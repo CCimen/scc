@@ -1,6 +1,6 @@
 """Provide plugin audit module for SCC.
 
-Expose functionality for auditing Claude Code plugins,
+Expose functionality for auditing plugins,
 including manifest parsing, file reading, and plugin discovery.
 """
 

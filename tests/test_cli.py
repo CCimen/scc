@@ -26,7 +26,8 @@ from scc_cli.core.errors import (
 from scc_cli.core.exit_codes import EXIT_USAGE
 from scc_cli.ports.dependency_installer import DependencyInstallResult
 from scc_cli.ports.session_models import SessionSummary
-from tests.fakes import build_fake_adapters
+from tests.fakes import FakeAuditEventSink, build_fake_adapters
+from tests.fakes.fake_agent_provider import FakeAgentProvider
 
 runner = CliRunner()
 
@@ -148,11 +149,14 @@ class TestStartCommand:
             remote_fetcher=base_adapters.remote_fetcher,
             clock=base_adapters.clock,
             agent_runner=base_adapters.agent_runner,
+            agent_provider=base_adapters.agent_provider,
             sandbox_runtime=base_adapters.sandbox_runtime,
             personal_profile_service=base_adapters.personal_profile_service,
             doctor_runner=base_adapters.doctor_runner,
             archive_writer=base_adapters.archive_writer,
             config_store=base_adapters.config_store,
+            audit_event_sink=base_adapters.audit_event_sink,
+            codex_agent_provider=FakeAgentProvider(),
         )
 
         with (
@@ -209,6 +213,78 @@ class TestStartCommand:
             runner.invoke(app, ["start", str(tmp_path), "--standalone"])
         # Should NOT have called load_org_config
         mock_remote.assert_not_called()
+
+    def test_start_appends_canonical_launch_audit_events(self, tmp_path):
+        """Direct start should emit shared preflight and launch events."""
+        fake_adapters = build_fake_adapters()
+
+        with (
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+            patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
+            patch(
+                "scc_cli.commands.launch.flow.resolve_launch_provider",
+                return_value=("claude", "explicit"),
+            ),
+            patch(
+                "scc_cli.commands.launch.flow.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
+        ):
+            result = runner.invoke(app, ["start", str(tmp_path), "--standalone"])
+
+        assert result.exit_code == 0
+        assert isinstance(fake_adapters.audit_event_sink, FakeAuditEventSink)
+        sink = fake_adapters.audit_event_sink
+        assert [event.event_type for event in sink.events] == [
+            "launch.preflight.passed",
+            "launch.started",
+        ]
+        assert sink.events[0].metadata["provider_id"] == "fake"
+        assert sink.events[0].metadata["network_policy"] == "open"
+        assert sink.events[1].metadata["sandbox_id"] == "sandbox-1"
+
+    def test_start_returns_json_error_when_preflight_blocks_runtime(self, tmp_path):
+        """Direct start should fail before runtime start and keep JSON error rendering."""
+        from scc_cli.application.compute_effective_config import EffectiveConfig
+
+        fake_adapters = build_fake_adapters()
+
+        with (
+            patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+            patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+            patch("scc_cli.commands.launch.flow._configure_team_settings"),
+            patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
+            patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
+            patch(
+                "scc_cli.commands.launch.flow.resolve_launch_provider",
+                return_value=("claude", "explicit"),
+            ),
+            patch(
+                "scc_cli.commands.launch.flow.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
+            patch("scc_cli.commands.launch.workspace.check_branch_safety"),
+            patch(
+                "scc_cli.application.start_session.compute_effective_config",
+                return_value=EffectiveConfig(network_policy="locked-down-web"),
+            ),
+            patch(
+                "scc_cli.application.start_session.sync_marketplace_settings_for_start",
+                return_value=(None, None),
+            ),
+        ):
+            result = runner.invoke(app, ["start", str(tmp_path), "--team", "platform", "--json"])
+
+        assert result.exit_code != 0
+        assert fake_adapters.sandbox_runtime.list_running() == []
+        assert isinstance(fake_adapters.audit_event_sink, FakeAuditEventSink)
+        assert [event.event_type for event in fake_adapters.audit_event_sink.events] == [
+            "launch.preflight.failed"
+        ]
+        assert "Launch blocked before startup" in result.output
+        assert "locked-down-web" in result.output
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -566,7 +642,7 @@ class TestStopCommand:
 
         with (
             patch(
-                "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+                "scc_cli.commands.worktree.container_commands.docker.list_running_scc_containers",
                 return_value=[mock_container],
             ),
             patch(
@@ -587,7 +663,7 @@ class TestStopCommand:
         mock_container.id = "other123"
 
         with patch(
-            "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+            "scc_cli.commands.worktree.container_commands.docker.list_running_scc_containers",
             return_value=[mock_container],
         ):
             result = runner.invoke(app, ["stop", "nonexistent"])
@@ -598,7 +674,7 @@ class TestStopCommand:
     def test_stop_all_when_no_containers(self):
         """Stop should show message when no containers running."""
         with patch(
-            "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+            "scc_cli.commands.worktree.container_commands.docker.list_running_scc_containers",
             return_value=[],
         ):
             result = runner.invoke(app, ["stop"])

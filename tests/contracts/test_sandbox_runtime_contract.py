@@ -17,6 +17,8 @@ def test_sandbox_runtime_lifecycle(tmp_path: Path) -> None:
     runtime = FakeSandboxRuntime()
     spec = _make_spec(tmp_path)
 
+    assert runtime.detect_launch_conflict(spec) is None
+
     handle = runtime.run(spec)
 
     assert runtime.status(handle).state == SandboxState.RUNNING

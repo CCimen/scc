@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,16 +17,27 @@ from scc_cli.application.sync_marketplace import (
     sync_marketplace_settings,
 )
 from scc_cli.application.workspace import ResolveWorkspaceRequest, resolve_workspace
-from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
-from scc_cli.core.errors import WorkspaceNotFoundError
+from scc_cli.core.bundle_resolver import BundleResolutionResult, resolve_render_plan
+from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
+from scc_cli.core.destination_registry import resolve_destination_sets
+from scc_cli.core.errors import RendererError, WorkspaceNotFoundError
+from scc_cli.core.provider_registry import get_runtime_spec
 from scc_cli.core.workspace import ResolverResult
+from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
+from scc_cli.ports.audit_event_sink import AuditEventSink
 from scc_cli.ports.clock import Clock
+from scc_cli.ports.config_models import NormalizedOrgConfig
 from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.models import AgentSettings, MountSpec, SandboxHandle, SandboxSpec
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
+
+logger = logging.getLogger(__name__)
+
+# Claude-specific fallback image (used when no RuntimeInfo is available)
+_DOCKER_DESKTOP_CLAUDE_IMAGE = "docker/sandbox-templates:claude-code"
 
 
 @dataclass(frozen=True)
@@ -40,6 +52,9 @@ class StartSessionDependencies:
     sandbox_runtime: SandboxRuntime
     resolve_effective_config: EffectiveConfigResolver
     materialize_marketplace: MarketplaceMaterializer
+    agent_provider: AgentProvider | None = None
+    audit_event_sink: AuditEventSink | None = None
+    runtime_info: RuntimeInfo | None = None
 
 
 @dataclass(frozen=True)
@@ -57,8 +72,10 @@ class StartSessionRequest:
     standalone: bool
     dry_run: bool
     allow_suspicious: bool
-    org_config: dict[str, Any] | None
+    org_config: NormalizedOrgConfig | None
+    raw_org_config: dict[str, Any] | None = None
     org_config_url: str | None = None
+    provider_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +94,9 @@ class StartSessionPlan:
     sync_error_message: str | None
     agent_settings: AgentSettings | None
     sandbox_spec: SandboxSpec | None
+    agent_launch_spec: AgentLaunchSpec | None = None
+    bundle_render_results: tuple[RenderArtifactsResult, ...] = ()
+    bundle_render_error: str | None = None
 
 
 def prepare_start_session(
@@ -87,22 +107,60 @@ def prepare_start_session(
     """Prepare launch data and settings for a session.
 
     This resolves workspace context, computes config, syncs marketplace settings,
-    and builds the sandbox specification.
+    resolves bundle render plans, renders provider-native artifacts, and builds
+    the sandbox specification.
     """
     resolver_result = _resolve_workspace_context(request)
     effective_config = _compute_effective_config(request)
     sync_result, sync_error_message = sync_marketplace_settings_for_start(request, dependencies)
+    # Resolve provider_id for settings path routing.
+    # D032: fail-closed — active launch must not silently default to Claude.
+    # Prefer request.provider_id; fall back to the wired provider's identity.
+    if request.provider_id:
+        _provider_id = request.provider_id
+    elif dependencies.agent_provider is not None:
+        _provider_id = dependencies.agent_provider.capability_profile().provider_id
+    else:
+        from scc_cli.core.errors import InvalidProviderError
+        from scc_cli.core.provider_registry import PROVIDER_REGISTRY
+
+        raise InvalidProviderError(
+            provider_id="(none)",
+            known_providers=tuple(PROVIDER_REGISTRY.keys()),
+        )
     agent_settings = _build_agent_settings(
         sync_result,
         dependencies.agent_runner,
         effective_config=effective_config,
+        provider_id=_provider_id,
+        workspace_path=request.workspace_path,
+        is_resume=request.resume,
     )
+
+    # ── Bundle pipeline: resolve plans → render artifacts ─────────────────
+    bundle_render_results, bundle_render_error = _render_bundle_artifacts(
+        request=request,
+        workspace=request.workspace_path,
+        dependencies=dependencies,
+    )
+
     current_branch = _resolve_current_branch(request.workspace_path, dependencies.git_client)
+
+    # Build agent_launch_spec first so its argv can flow into sandbox_spec.
+    agent_launch_spec = _build_agent_launch_spec(
+        request=request,
+        agent_settings=agent_settings,
+        dependencies=dependencies,
+    )
+    agent_argv = list(agent_launch_spec.argv) if agent_launch_spec is not None else None
     sandbox_spec = _build_sandbox_spec(
         request=request,
         resolver_result=resolver_result,
         effective_config=effective_config,
         agent_settings=agent_settings,
+        runtime_info=dependencies.runtime_info,
+        agent_provider=dependencies.agent_provider,
+        agent_argv=agent_argv,
     )
     return StartSessionPlan(
         resolver_result=resolver_result,
@@ -117,6 +175,9 @@ def prepare_start_session(
         sync_error_message=sync_error_message,
         agent_settings=agent_settings,
         sandbox_spec=sandbox_spec,
+        agent_launch_spec=agent_launch_spec,
+        bundle_render_results=bundle_render_results,
+        bundle_render_error=bundle_render_error,
     )
 
 
@@ -160,6 +221,14 @@ def sync_marketplace_settings_for_start(
 ) -> tuple[SyncResult | None, str | None]:
     """Sync marketplace settings for a start session.
 
+    **Transitional:** This function predates the governed-artifact bundle
+    pipeline (M005).  It syncs legacy marketplace plugin/MCP definitions
+    that are not yet expressed as governed artifacts.  Once all team
+    config surfaces are migrated to the bundle pipeline
+    (``_render_bundle_artifacts``), this function and its call sites can
+    be removed.  Until then, both paths run: marketplace sync first,
+    then bundle rendering, with the bundle pipeline as the canonical path.
+
     Invariants:
         - Skips syncing in dry-run, offline, or standalone modes.
         - Uses the same sync path as start session preparation.
@@ -173,7 +242,7 @@ def sync_marketplace_settings_for_start(
     """
     if request.dry_run or request.offline or request.standalone:
         return None, None
-    if request.org_config is None or request.team is None:
+    if request.raw_org_config is None or request.team is None:
         return None, None
     sync_dependencies = SyncMarketplaceDependencies(
         filesystem=dependencies.filesystem,
@@ -185,7 +254,7 @@ def sync_marketplace_settings_for_start(
     try:
         result = sync_marketplace_settings(
             project_dir=request.workspace_path,
-            org_config_data=request.org_config,
+            org_config_data=request.raw_org_config,
             team_id=request.team,
             org_config_url=request.org_config_url,
             write_to_workspace=False,
@@ -202,20 +271,46 @@ def _build_agent_settings(
     agent_runner: AgentRunner,
     *,
     effective_config: EffectiveConfig | None,
+    provider_id: str,
+    workspace_path: Path | None = None,
+    is_resume: bool = False,
 ) -> AgentSettings | None:
+    """Build agent settings for injection into the container.
+
+    D038/D042: On every fresh launch (not resume), SCC deterministically
+    writes the SCC-managed config layer — even when logically empty.  This
+    ensures no stale team/workspace config persists from a prior launch.
+    On resume, the existing config is left in place (belongs to the session
+    being resumed), so we return None to skip injection.
+    """
+    # D038: on resume, leave existing container config untouched.
+    if is_resume:
+        return None
+
     settings: dict[str, Any] | None = None
     if sync_result and sync_result.rendered_settings:
         settings = dict(sync_result.rendered_settings)
 
     if effective_config:
-        from scc_cli.claude_adapter import merge_mcp_servers
+        from scc_cli.bootstrap import merge_mcp_servers
 
         settings = merge_mcp_servers(settings, effective_config)
 
-    if not settings:
-        return None
+    # D038/D042: on fresh launch, always produce a settings file — even if
+    # the dict is empty.  This overwrites any stale config left in the
+    # persistent volume from a prior launch (e.g. governed→standalone,
+    # teamA→teamB transitions).
+    if settings is None:
+        settings = {}
 
-    settings_path = Path("/home/agent") / AGENT_CONFIG_DIR / "settings.json"
+    spec = get_runtime_spec(provider_id)
+    # D041: route settings path by scope.
+    # "home" → /home/agent/<settings_path> (Claude: user-level config)
+    # "workspace" → <workspace>/<settings_path> (Codex: project-scoped config)
+    if spec.settings_scope == "workspace" and workspace_path is not None:
+        settings_path = workspace_path / spec.settings_path
+    else:
+        settings_path = Path("/home/agent") / spec.settings_path
     return agent_runner.build_settings(settings, path=settings_path)
 
 
@@ -234,19 +329,178 @@ def _build_sandbox_spec(
     resolver_result: ResolverResult,
     effective_config: EffectiveConfig | None,
     agent_settings: AgentSettings | None,
+    runtime_info: RuntimeInfo | None = None,
+    agent_provider: AgentProvider | None = None,
+    agent_argv: list[str] | None = None,
 ) -> SandboxSpec | None:
     if request.dry_run:
         return None
+
+    # Route image, data volume, and config dir by provider_id on OCI backend.
+    # D032: fail-closed — missing provider wiring raises, never falls back to Claude.
+    if runtime_info is not None and runtime_info.preferred_backend == "oci":
+        if agent_provider is None:
+            from scc_cli.core.errors import ProviderNotReadyError
+
+            raise ProviderNotReadyError(
+                provider_id="(none)",
+                user_message="No agent provider wired for OCI launch.",
+                suggested_action="Ensure a provider is selected via --provider or config.",
+            )
+        resolved_pid = agent_provider.capability_profile().provider_id
+        spec = get_runtime_spec(resolved_pid)
+        image = spec.image_ref
+        data_volume = spec.data_volume
+        config_dir = spec.config_dir
+    else:
+        if agent_provider is not None:
+            resolved_pid = agent_provider.capability_profile().provider_id
+        else:
+            resolved_pid = ""
+        image = _DOCKER_DESKTOP_CLAUDE_IMAGE
+        data_volume = ""
+        config_dir = ""
+
+    # Resolve provider destination sets for OCI backend.
+    from scc_cli.core.contracts import DestinationSet
+
+    destination_sets: tuple[DestinationSet, ...] = ()
+    if (
+        agent_provider is not None
+        and runtime_info is not None
+        and runtime_info.preferred_backend == "oci"
+    ):
+        profile = agent_provider.capability_profile()
+        if profile.required_destination_set:
+            destination_sets = resolve_destination_sets((profile.required_destination_set,))
+
     return SandboxSpec(
-        image=SANDBOX_IMAGE,
+        image=image,
         workspace_mount=MountSpec(
             source=resolver_result.mount_root,
             target=resolver_result.mount_root,
         ),
         workdir=Path(resolver_result.container_workdir),
         network_policy=effective_config.network_policy if effective_config else None,
+        destination_sets=destination_sets,
         continue_session=request.resume,
         force_new=request.fresh,
         agent_settings=agent_settings,
-        org_config=request.org_config,
+        org_config=request.raw_org_config,
+        agent_argv=agent_argv or [],
+        data_volume=data_volume,
+        config_dir=config_dir,
+        provider_id=resolved_pid,
+    )
+
+
+def _render_bundle_artifacts(
+    *,
+    request: StartSessionRequest,
+    workspace: Path,
+    dependencies: StartSessionDependencies,
+) -> tuple[tuple[RenderArtifactsResult, ...], str | None]:
+    """Resolve bundle render plans and render provider-native artifacts.
+
+    Skips bundle resolution when preconditions aren't met (no org config,
+    no team, no provider, or dry-run/offline/standalone modes).
+
+    In fail-closed mode, RendererError propagates as a captured error message
+    on the StartSessionPlan so the presentation layer can display diagnostics.
+
+    Returns:
+        Tuple of (render_results, error_message).  On success error_message
+        is None.  On failure render_results is empty.
+    """
+    # Gate: skip bundle pipeline when prerequisites are absent
+    if request.dry_run or request.offline or request.standalone:
+        return (), None
+    if request.org_config is None or request.team is None:
+        return (), None
+    provider = dependencies.agent_provider
+    if provider is None:
+        return (), None
+
+    provider_id = provider.capability_profile().provider_id
+
+    # 1. Resolve render plans from org config + team + provider
+    try:
+        resolution: BundleResolutionResult = resolve_render_plan(
+            org_config=request.org_config,
+            team_name=request.team,
+            provider=provider_id,
+            fail_closed=True,
+        )
+    except (ValueError, RendererError) as exc:
+        logger.warning("Bundle resolution failed: %s", exc)
+        return (), str(exc)
+
+    if not resolution.plans:
+        if resolution.diagnostics:
+            diag_msgs = [d.reason for d in resolution.diagnostics]
+            logger.info("Bundle resolution produced no plans: %s", diag_msgs)
+        return (), None
+
+    # Log diagnostics from resolution
+    for diag in resolution.diagnostics:
+        logger.info("Bundle resolution diagnostic: %s — %s", diag.artifact_name, diag.reason)
+
+    # 2. Render each plan through the provider adapter
+    all_results: list[RenderArtifactsResult] = []
+    for plan in resolution.plans:
+        if not plan.effective_artifacts and not plan.bindings:
+            logger.info(
+                "Skipping empty render plan for bundle '%s' (no effective artifacts)",
+                plan.bundle_id,
+            )
+            continue
+        try:
+            result = provider.render_artifacts(plan, workspace)
+        except RendererError as exc:
+            # Fail-closed: capture and return the error
+            logger.error(
+                "Artifact rendering failed for bundle '%s': %s",
+                plan.bundle_id,
+                exc,
+            )
+            return (), str(exc)
+
+        all_results.append(result)
+
+        # 3. Log/audit rendered artifacts
+        for path in result.rendered_paths:
+            logger.info("Rendered artifact: %s", path)
+        for warning in result.warnings:
+            logger.warning("Renderer warning: %s", warning)
+        for skipped in result.skipped_artifacts:
+            logger.info("Skipped artifact: %s", skipped)
+
+    return tuple(all_results), None
+
+
+def _build_agent_launch_spec(
+    *,
+    request: StartSessionRequest,
+    agent_settings: AgentSettings | None,
+    dependencies: StartSessionDependencies,
+) -> AgentLaunchSpec | None:
+    """Delegate launch spec construction to the provider adapter.
+
+    Returns None when no provider is wired (backward compat) or in dry-run mode.
+    The provider resolves its own argv, env, and artifact paths from the settings
+    artifact already built by the sync/build_agent_settings path.
+    """
+    if request.dry_run:
+        return None
+    provider = dependencies.agent_provider
+    if provider is None:
+        return None
+    settings_path = agent_settings.path if agent_settings is not None else None
+    # D035: config content is already serialised inside agent_settings.rendered_bytes.
+    # Providers do not consume the config dict — they use settings_path for
+    # artifact_paths only.  Pass an empty dict to satisfy the protocol signature.
+    return provider.prepare_launch(
+        config={},
+        workspace=request.workspace_path,
+        settings_path=settings_path,
     )

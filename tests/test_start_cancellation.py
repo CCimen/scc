@@ -20,7 +20,7 @@ def test_start_cancelled_exits_130_and_message():
         patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
         patch(
             "scc_cli.commands.launch.flow._resolve_session_selection",
-            return_value=(None, None, None, None, True, False),
+            return_value=(None, None, None, None, True, False, None),
         ),
     ):
         result = runner.invoke(app, ["start"])

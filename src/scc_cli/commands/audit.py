@@ -1,6 +1,6 @@
 """Provide CLI commands for plugin audit functionality.
 
-Audit installed Claude Code plugins via the `scc audit plugins` command,
+Audit installed plugins via the `scc audit plugins` command,
 including manifest validation and MCP server/hooks discovery.
 """
 
@@ -17,7 +17,7 @@ from rich.table import Table
 from rich.text import Text
 
 from scc_cli.audit.reader import audit_all_plugins
-from scc_cli.core.constants import AGENT_CONFIG_DIR
+from scc_cli.core.provider_registry import get_runtime_spec
 from scc_cli.models.plugin_audit import (
     AuditOutput,
     ManifestStatus,
@@ -35,9 +35,9 @@ audit_app = typer.Typer(
 )
 
 
-def get_claude_dir() -> Path:
-    """Get the Claude Code directory path."""
-    return Path.home() / AGENT_CONFIG_DIR
+def get_provider_config_dir(provider_id: str = "claude") -> Path:
+    """Get the agent config directory path for a provider."""
+    return Path.home() / get_runtime_spec(provider_id).config_dir
 
 
 def format_status(status: str) -> str:
@@ -226,7 +226,7 @@ def audit_plugins_cmd(
         help="Output as JSON with schemaVersion for CI integration.",
     ),
 ) -> None:
-    """Audit installed Claude Code plugins.
+    """Audit installed plugins.
 
     Shows manifest status, MCP servers, and hooks for all installed plugins.
 
@@ -234,7 +234,7 @@ def audit_plugins_cmd(
     - 0: All plugins parsed successfully (or no plugins installed)
     - 1: One or more plugins have malformed or unreadable manifests
     """
-    claude_dir = get_claude_dir()
+    claude_dir = get_provider_config_dir()
     output = audit_all_plugins(claude_dir)
 
     if as_json:

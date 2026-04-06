@@ -1,472 +1,62 @@
 """
-Setup wizard for SCC - Sandboxed Claude CLI.
+Setup wizard for SCC - Sandboxed Coding CLI.
 
 Remote organization config workflow:
 - Prompt for org config URL (or standalone mode)
 - Handle authentication (env:VAR, command:CMD)
 - Team/profile selection from remote config
 - Git hooks enablement option
-
-Philosophy: "Get started in under 60 seconds"
-- Minimal questions
-- Smart defaults
-- Clear guidance
 """
 
 from typing import Any, cast
 
-import readchar
 from rich import box
-from rich.columns import Columns
-from rich.console import Console, RenderableType
-from rich.live import Live
+from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 from . import config
+from .bootstrap import get_default_adapters
+from .commands.launch.dependencies import get_agent_provider
+from .commands.launch.provider_choice import collect_provider_readiness
+from .core.errors import ProviderNotReadyError
+from .core.provider_resolution import get_provider_display_name
+from .panels import create_info_panel
 from .remote import (
     fetch_org_config,
     looks_like_github_url,
     looks_like_gitlab_url,
     save_to_cache,
 )
-from .theme import Borders, Indicators, Spinners
-from .ui.chrome import LayoutMetrics, apply_layout, get_layout_metrics, print_with_layout
-from .ui.prompts import confirm_with_layout, prompt_with_layout
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Arrow-Key Selection Component
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def _layout_metrics(console: Console) -> LayoutMetrics:
-    """Return layout metrics for setup rendering."""
-    return get_layout_metrics(console, max_width=104)
-
-
-def _print_padded(console: Console, renderable: RenderableType, metrics: LayoutMetrics) -> None:
-    """Print with layout padding when applicable."""
-    print_with_layout(console, renderable, metrics=metrics, constrain=True)
-
-
-def _build_hint_text(hints: list[tuple[str, str]]) -> Text:
-    """Build a compact hint line with middot separators."""
-    text = Text()
-    for index, (key, action) in enumerate(hints):
-        if index > 0:
-            text.append(" · ", style="dim")
-        text.append(key, style="cyan bold")
-        text.append(" ", style="dim")
-        text.append(action, style="dim")
-    return text
-
-
-def _select_option(
-    console: Console,
-    options: list[tuple[str, str, str]],
-    *,
-    default: int = 0,
-) -> int | None:
-    """Interactive arrow-key selection for setup options.
-
-    Args:
-        console: Rich console for output.
-        options: List of (label, tag, description) tuples.
-        default: Default selected index.
-
-    Returns:
-        Selected index (0-based), or None if cancelled.
-    """
-    cursor = default
-    cursor_symbol = Indicators.get("CURSOR")
-
-    def _render_options() -> RenderableType:
-        """Render options for the live picker."""
-        metrics = _layout_metrics(console)
-        content_width = metrics.content_width
-        min_label_width = min(36, max(24, content_width // 3))
-        label_width = max(min_label_width, max((len(label) for label, _, _ in options), default=0))
-        tag_width = max((len(tag) for _, tag, _ in options), default=0)
-
-        body = Text()
-        if not metrics.tight_height:
-            body.append("\n")
-
-        for i, (label, tag, desc) in enumerate(options):
-            is_selected = i == cursor
-            line = Text()
-            line.append("  ")
-            line.append(cursor_symbol if is_selected else " ", style="cyan" if is_selected else "")
-            line.append(" ")
-            line.append(label, style="bold white" if is_selected else "dim")
-            if tag:
-                padding = label_width - len(label) + (3 if tag_width else 2)
-                line.append(" " * max(2, padding))
-                line.append(tag, style="cyan" if is_selected else "dim")
-            body.append_text(line)
-            body.append("\n")
-            if desc:
-                body.append(f"    {desc}\n", style="dim")
-
-            if i < len(options) - 1 and not metrics.tight_height:
-                body.append("\n")
-
-        if not metrics.tight_height:
-            body.append("\n")
-
-        hints = _build_hint_text(
-            [
-                ("↑↓", "navigate"),
-                ("Enter", "confirm"),
-                ("Esc", "cancel"),
-            ]
-        )
-        inner_width = (
-            metrics.inner_width(padding_x=1, border=2)
-            if metrics.should_center and metrics.apply
-            else content_width
-        )
-        separator_len = max(len(hints.plain), inner_width)
-        body.append(Borders.FOOTER_SEPARATOR * separator_len, style="dim")
-        body.append("\n")
-        body.append_text(hints)
-
-        renderable: RenderableType = body
-        if metrics.apply and metrics.should_center:
-            renderable = Panel(
-                body,
-                border_style="bright_black",
-                box=box.ROUNDED,
-                padding=(0, 1),
-                width=metrics.content_width,
-            )
-
-        if metrics.apply:
-            renderable = apply_layout(renderable, metrics)
-
-        return renderable
-
-    with Live(_render_options(), console=console, auto_refresh=False, transient=True) as live:
-        while True:
-            key = readchar.readkey()
-
-            if key in (readchar.key.UP, "k"):
-                cursor = (cursor - 1) % len(options)
-                live.update(_render_options(), refresh=True)
-            elif key in (readchar.key.DOWN, "j"):
-                cursor = (cursor + 1) % len(options)
-                live.update(_render_options(), refresh=True)
-            elif key in (readchar.key.ENTER, "\r", "\n"):
-                return cursor
-            elif key in (readchar.key.ESC, "q"):
-                return None
-            else:
-                continue
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Welcome Screen
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-WELCOME_BANNER = """
-[cyan]╔═══════════════════════════════════════════════════════════╗[/cyan]
-[cyan]║[/cyan]                                                           [cyan]║[/cyan]
-[cyan]║[/cyan]   [bold white]Welcome to SCC - Sandboxed Claude CLI[/bold white]                [cyan]║[/cyan]
-[cyan]║[/cyan]                                                           [cyan]║[/cyan]
-[cyan]║[/cyan]   [dim]Safe development environment for AI-assisted coding[/dim]   [cyan]║[/cyan]
-[cyan]║[/cyan]                                                           [cyan]║[/cyan]
-[cyan]╚═══════════════════════════════════════════════════════════╝[/cyan]
-"""
-
-
-def show_welcome(console: Console) -> None:
-    """Display the welcome banner on the console."""
-    console.print()
-    console.print(WELCOME_BANNER)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Setup Header (TUI-style)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-SETUP_STEPS = ("Mode", "Org", "Auth", "Team", "Hooks", "Confirm")
-
-
-def _append_dot_leader(
-    text: Text,
-    label: str,
-    value: str,
-    *,
-    width: int = 40,
-    label_style: str = "dim",
-    value_style: str = "white",
-) -> None:
-    """Append a middle-dot leader line to a Text block."""
-    label = label.strip()
-    value = value.strip()
-    gap = width - len(label) - len(value)
-    # Use middle dot · for cleaner aesthetic
-    dots = "·" * max(2, gap)
-    text.append(label, style=label_style)
-    text.append(f" {dots} ", style="dim")
-    text.append(value, style=value_style)
-    text.append("\n")
-
-
-def _format_preview_value(value: str | None) -> str:
-    """Format preview value, using em-dash for unset."""
-    if value is None or value == "":
-        return "—"  # Em-dash for unset
-    return value
-
-
-def _build_config_preview(
-    *,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None,
-    profile: str | None,
-    hooks_enabled: bool | None,
-    standalone: bool | None,
-) -> Text:
-    """Build a dot-leader preview of the config that will be written."""
-    preview = Text()
-    preview.append(str(config.CONFIG_FILE), style="dim")
-    preview.append("\n\n")
-
-    mode_value = "standalone" if standalone else "organization"
-    _append_dot_leader(preview, "mode", mode_value, value_style="cyan")
-
-    if not standalone:
-        _append_dot_leader(
-            preview,
-            "org.url",
-            _format_preview_value(org_url),
-        )
-        _append_dot_leader(
-            preview,
-            "org.auth",
-            _format_preview_value(auth),
-        )
-        if auth_header:
-            _append_dot_leader(
-                preview,
-                "org.auth_header",
-                _format_preview_value(auth_header),
-            )
-        _append_dot_leader(
-            preview,
-            "profile",
-            _format_preview_value(profile),
-        )
-
-    if hooks_enabled is None:
-        hooks_display = "unset"
-    else:
-        hooks_display = "true" if hooks_enabled else "false"
-    _append_dot_leader(preview, "hooks.enabled", hooks_display)
-    _append_dot_leader(
-        preview,
-        "standalone",
-        "true" if standalone else "false",
-    )
-
-    return preview
-
-
-def _build_proposed_config(
-    *,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None,
-    profile: str | None,
-    hooks_enabled: bool,
-    standalone: bool,
-) -> dict[str, Any]:
-    """Build the config dict that will be written."""
-    user_config: dict[str, Any] = {
-        "config_version": "1.0.0",
-        "hooks": {"enabled": hooks_enabled},
-    }
-
-    if standalone:
-        user_config["standalone"] = True
-        user_config["organization_source"] = None
-    elif org_url:
-        org_source: dict[str, Any] = {
-            "url": org_url,
-            "auth": auth,
-        }
-        if auth_header:
-            org_source["auth_header"] = auth_header
-        user_config["organization_source"] = org_source
-        user_config["selected_profile"] = profile
-    return user_config
-
-
-def _get_config_value(cfg: dict[str, Any], key: str) -> str | None:
-    """Get a dotted-path value from config dict."""
-    parts = key.split(".")
-    current: Any = cfg
-    for part in parts:
-        if not isinstance(current, dict) or part not in current:
-            return None
-        current = current[part]
-    if current is None:
-        return None
-    return str(current)
-
-
-def _build_config_changes(before: dict[str, Any], after: dict[str, Any]) -> Text:
-    """Build a diff-style preview for config changes."""
-    changes = Text()
-    keys = [
-        "organization_source.url",
-        "organization_source.auth",
-        "organization_source.auth_header",
-        "selected_profile",
-        "hooks.enabled",
-        "standalone",
-    ]
-
-    any_changes = False
-    for key in keys:
-        old = _get_config_value(before, key)
-        new = _get_config_value(after, key)
-        if old != new:
-            any_changes = True
-            changes.append(f"{key}\n", style="bold")
-            changes.append(f"  - {old or 'unset'}\n", style="red")
-            changes.append(f"  + {new or 'unset'}\n\n", style="green")
-
-    if not any_changes:
-        changes.append("No changes detected.\n", style="dim")
-    return changes
-
-
-def _render_setup_header(console: Console, *, step_index: int, subtitle: str | None = None) -> None:
-    """Render the setup step header with underline-style tabs."""
-    console.clear()
-
-    metrics = _layout_metrics(console)
-    content_width = metrics.content_width
-
-    console.print()
-    _print_padded(console, Text("SCC Setup", style="bold white"), metrics)
-    if not metrics.tight_height:
-        console.print()
-
-    tabs = Text()
-    underline = Text()
-    separator = "   "
-
-    for idx, step in enumerate(SETUP_STEPS):
-        if idx > 0:
-            tabs.append(separator)
-            underline.append(" " * len(separator))
-
-        is_active = idx == step_index
-        is_complete = idx < step_index
-        if is_active:
-            tab_style = "bold cyan"
-        elif is_complete:
-            tab_style = "green"
-        else:
-            tab_style = "dim"
-
-        tabs.append(step, style=tab_style)
-        underline_segment = (
-            Indicators.get("HORIZONTAL_LINE") * len(step) if is_active else " " * len(step)
-        )
-        underline.append(underline_segment, style="cyan" if is_active else "dim")
-
-    _print_padded(console, tabs, metrics)
-    _print_padded(console, underline, metrics)
-
-    if not metrics.should_center:
-        separator_len = max(len(tabs.plain), content_width)
-        _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
-
-    if subtitle:
-        if not metrics.tight_height:
-            console.print()
-        _print_padded(console, f"  {subtitle}", metrics)
-        console.print()
-    else:
-        console.print()
-
-
-def _render_setup_layout(
-    console: Console,
-    *,
-    step_index: int,
-    subtitle: str | None,
-    left_title: str,
-    left_body: "Text | Table",
-    right_title: str,
-    right_body: "Text | Table",
-    footer_hint: str | None = None,
-) -> None:
-    """Render a two-pane setup layout with a shared header."""
-    _render_setup_header(console, step_index=step_index, subtitle=subtitle)
-
-    metrics = _layout_metrics(console)
-    content_width = metrics.content_width
-    width = console.size.width
-    stacked_width = content_width
-    column_width = max(32, (content_width - 4) // 2)
-
-    expand_panels = width >= 100
-
-    left_panel = Panel(
-        left_body,
-        title=f"[dim]{left_title}[/dim]",
-        border_style="bright_black",
-        padding=(0, 1),
-        box=box.ROUNDED,
-        width=stacked_width if width < 100 else column_width,
-        expand=expand_panels,
-    )
-    right_panel = Panel(
-        right_body,
-        title=f"[dim]{right_title}[/dim]",
-        border_style="bright_black",
-        padding=(0, 1),
-        box=box.ROUNDED,
-        width=stacked_width if width < 100 else column_width,
-        expand=expand_panels,
-    )
-
-    if width < 100:
-        _print_padded(console, left_panel, metrics)
-        if not metrics.tight_height:
-            console.print()
-        _print_padded(console, right_panel, metrics)
-    else:
-        columns = Columns([left_panel, right_panel], expand=False, equal=True)
-        _print_padded(console, columns, metrics)
-
-    console.print()
-    if footer_hint:
-        separator_len = max(len(footer_hint), content_width)
-        _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
-        _print_padded(console, f"  [dim]{footer_hint}[/dim]", metrics)
-        return
-
-    hints = _build_hint_text(
-        [
-            ("↑↓", "navigate"),
-            ("Enter", "confirm"),
-            ("Esc", "cancel"),
-        ]
-    )
-    separator_len = max(len(hints.plain), content_width)
-    _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
-    _print_padded(console, hints, metrics)
-
+# ── Re-exports from setup_config.py (preserve test-patch targets) ───────────
+from .setup_config import (  # noqa: F401
+    _append_dot_leader,
+    _build_config_changes,
+    _build_config_preview,
+    _build_proposed_config,
+    _build_setup_summary,
+    _confirm_setup,
+    _format_preview_value,
+    _get_config_value,
+    save_setup_config,
+)
+
+# ── Re-exports from setup_ui.py (preserve test-patch targets) ──────────────
+from .setup_ui import (  # noqa: F401
+    SETUP_STEPS,
+    WELCOME_BANNER,
+    _build_hint_text,
+    _layout_metrics,
+    _print_padded,
+    _render_setup_header,
+    _render_setup_layout,
+    _select_option,
+    show_welcome,
+)
+from .theme import Spinners
+from .ui.prompts import confirm_with_layout, prompt_with_layout  # noqa: F401
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Organization Config URL
@@ -540,7 +130,7 @@ def prompt_auth_method(console: Console, *, rendered: bool = False) -> str | Non
         console.print()
         console.print("[dim]This is only used to fetch your organization config URL.[/dim]")
         console.print("[dim]If your config is private, SCC needs a token to download it.[/dim]")
-        console.print("[dim]This does not affect Claude auth inside the container.[/dim]")
+        console.print("[dim]This does not affect agent auth inside the container.[/dim]")
         console.print()
         console.print("[dim]How would you like to provide the token?[/dim]")
         console.print()
@@ -729,59 +319,30 @@ def prompt_hooks_enablement(console: Console, *, rendered: bool = False) -> bool
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Save Configuration
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def save_setup_config(
-    console: Console,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None,
-    profile: str | None,
-    hooks_enabled: bool,
-    standalone: bool = False,
-) -> None:
-    """Save the setup configuration to the user config file.
-
-    Args:
-        console: Rich console for output
-        org_url: Organization config URL or None
-        auth: Auth spec or None
-        auth_header: Optional auth header for org fetch
-        profile: Selected profile name or None
-        hooks_enabled: Whether git hooks are enabled
-        standalone: Whether running in standalone mode
-    """
-    # Ensure config directory exists
-    config.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Build configuration
-    user_config: dict[str, Any] = {
-        "config_version": "1.0.0",
-        "hooks": {"enabled": hooks_enabled},
-    }
-
-    if standalone:
-        user_config["standalone"] = True
-        user_config["organization_source"] = None
-    elif org_url:
-        org_source: dict[str, Any] = {
-            "url": org_url,
-            "auth": auth,
-        }
-        if auth_header:
-            org_source["auth_header"] = auth_header
-        user_config["organization_source"] = org_source
-        user_config["selected_profile"] = profile
-
-    # Save to config file
-    config.save_user_config(user_config)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Setup Complete Display
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _three_tier_status(provider_id: str, auth_readiness: Any) -> str:
+    """Return three-tier readiness label for a provider.
+
+    Three-tier vocabulary: 'launch-ready' (image + auth), 'auth cache present'
+    (auth ok, image missing), 'image available' (image ok, auth missing),
+    'sign-in needed' (no auth, image status unknown).
+    """
+    from .commands.launch.preflight import ImageStatus, _check_image_available
+
+    has_auth = auth_readiness is not None and auth_readiness.status == "present"
+    image_status = _check_image_available(provider_id)
+    has_image = image_status == ImageStatus.AVAILABLE
+
+    if has_auth and has_image:
+        return "launch-ready"
+    if has_auth and not has_image:
+        return "auth cache present"
+    if not has_auth and has_image:
+        return "image available"
+    return "sign-in needed"
 
 
 def show_setup_complete(
@@ -789,6 +350,8 @@ def show_setup_complete(
     org_name: str | None = None,
     profile: str | None = None,
     standalone: bool = False,
+    provider_readiness: dict[str, Any] | None = None,
+    provider_preference: str | None = None,
 ) -> None:
     """Display the setup completion message.
 
@@ -818,6 +381,28 @@ def show_setup_complete(
         _append_dot_leader(content, "profile", profile or "none", value_style="white")
 
     _append_dot_leader(content, "config", str(config.CONFIG_DIR), value_style="cyan")
+    if provider_readiness is not None:
+        claude_ready = provider_readiness.get("claude")
+        codex_ready = provider_readiness.get("codex")
+        _append_dot_leader(
+            content,
+            "claude",
+            _three_tier_status("claude", claude_ready),
+            value_style="white",
+        )
+        _append_dot_leader(
+            content,
+            "codex",
+            _three_tier_status("codex", codex_ready),
+            value_style="white",
+        )
+    if provider_preference is not None:
+        preference_label = {
+            "ask": "ask every time",
+            "claude": "prefer Claude Code",
+            "codex": "prefer Codex",
+        }.get(provider_preference, provider_preference)
+        _append_dot_leader(content, "startup", preference_label, value_style="white")
 
     # Main panel
     main_panel = Panel(
@@ -837,7 +422,7 @@ def show_setup_complete(
         console.print()
     _print_padded(
         console,
-        "  [cyan]scc start ~/project[/cyan]   [dim]Launch Claude in a workspace[/dim]",
+        "  [cyan]scc start ~/project[/cyan]   [dim]Launch agent in a workspace[/dim]",
         metrics,
     )
     _print_padded(
@@ -850,82 +435,175 @@ def show_setup_complete(
         "  [cyan]scc doctor[/cyan]            [dim]Check system health[/dim]",
         metrics,
     )
+    _print_padded(
+        console,
+        "  [cyan]scc provider show[/cyan]     [dim]Show current provider preference[/dim]",
+        metrics,
+    )
+    _print_padded(
+        console,
+        "  [cyan]scc provider set[/cyan]      [dim]Set preference (ask|claude|codex)[/dim]",
+        metrics,
+    )
     console.print()
 
 
-def _build_setup_summary(
-    *,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None,
-    profile: str | None,
-    hooks_enabled: bool,
-    standalone: bool,
-    org_name: str | None = None,
-) -> Text:
-    """Build a summary text block for setup confirmation."""
-    summary = Text()
+def _render_provider_status(readiness: dict[str, Any]) -> Table:
+    """Build a provider connection status table."""
+    table = Table.grid(padding=(0, 2))
+    table.add_column(style="cyan", no_wrap=True)
+    table.add_column(style="white", no_wrap=True)
+    table.add_column(style="dim")
 
-    def _line(label: str, value: str) -> None:
-        summary.append(f"{label}: ", style="cyan")
-        summary.append(value, style="white")
-        summary.append("\n")
-
-    if standalone:
-        _line("Mode", "Standalone")
-    else:
-        _line("Mode", "Organization")
-        if org_name:
-            _line("Organization", org_name)
-        if org_url:
-            _line("Org URL", org_url)
-        _line("Profile", profile or "none")
-        _line("Auth", auth or "none")
-        if auth_header:
-            _line("Auth Header", auth_header)
-
-    _line("Hooks", "enabled" if hooks_enabled else "disabled")
-    _line("Config dir", str(config.CONFIG_DIR))
-    return summary
+    for provider_id in ("claude", "codex"):
+        state = readiness.get(provider_id)
+        status = _three_tier_status(provider_id, state)
+        guidance = state.guidance if state is not None else "unavailable"
+        table.add_row(get_provider_display_name(provider_id), status, guidance)
+    return table
 
 
-def _confirm_setup(
-    console: Console,
-    *,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None = None,
-    profile: str | None,
-    hooks_enabled: bool,
-    standalone: bool,
-    org_name: str | None = None,
-    rendered: bool = False,
-) -> bool:
-    """Show a configuration summary and ask for confirmation."""
-    summary = _build_setup_summary(
-        org_url=org_url,
-        auth=auth,
-        auth_header=auth_header,
-        profile=profile,
-        hooks_enabled=hooks_enabled,
-        standalone=standalone,
-        org_name=org_name,
+def _prompt_provider_connections(console: Console, readiness: dict[str, Any]) -> tuple[str, ...]:
+    """Prompt for provider onboarding choices during setup."""
+    missing = tuple(
+        provider_id
+        for provider_id in ("claude", "codex")
+        if readiness.get(provider_id) is None or readiness[provider_id].status != "present"
     )
+    if not missing:
+        return ()
 
-    if not rendered:
-        metrics = _layout_metrics(console)
-        panel = Panel(
-            summary,
-            title="[bold cyan]Review & Confirm[/bold cyan]",
+    options: list[tuple[str, str, str]] = []
+    if len(missing) == 2:
+        options.append(
+            (
+                "Connect both",
+                "recommended",
+                "Authenticate Claude first, then Codex, and reuse both later.",
+            )
+        )
+    for provider_id in missing:
+        options.append(
+            (
+                f"Connect {get_provider_display_name(provider_id)}",
+                "browser",
+                f"Authenticate {get_provider_display_name(provider_id)} now.",
+            )
+        )
+    options.append(("Skip for now", "", "You can connect a provider later during start."))
+
+    console.print()
+    _print_padded(
+        console,
+        Panel(
+            _render_provider_status(readiness),
+            title="[bold cyan]Connect Coding Agents[/bold cyan]",
+            subtitle=(
+                "Connect Claude, Codex, or both now so future starts reuse the saved auth cache."
+            ),
             border_style="bright_black",
             box=box.ROUNDED,
-            padding=(1, 2),
-            width=min(metrics.content_width, 80),
-        )
-        _print_padded(console, panel, metrics)
-        console.print()
+            padding=(0, 1),
+        ),
+        _layout_metrics(console),
+    )
+    console.print()
 
-    return confirm_with_layout(console, "[cyan]Apply these settings?[/cyan]", default=True)
+    selected = _select_option(console, options, default=0)
+    if selected is None:
+        return ()
+
+    label = options[selected][0]
+    if label == "Skip for now":
+        return ()
+    if label == "Connect both":
+        return ("claude", "codex")
+    if "Claude" in label:
+        return ("claude",)
+    return ("codex",)
+
+
+def _prompt_provider_preference(console: Console, current: str | None) -> str | None:
+    """Prompt for how SCC should behave when both providers are connected."""
+    options = [
+        ("Ask me when both are available", "default", "Choose at start time when needed."),
+        ("Prefer Claude Code", "", "Use Claude automatically unless you override it."),
+        ("Prefer Codex", "", "Use Codex automatically unless you override it."),
+    ]
+    default_index = 0
+    if current == "claude":
+        default_index = 1
+    elif current == "codex":
+        default_index = 2
+
+    console.print()
+    selected = _select_option(console, options, default=default_index)
+    if selected is None:
+        return current
+    if selected == 0:
+        return "ask"
+    if selected == 1:
+        return "claude"
+    return "codex"
+
+
+def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, str | None]:
+    """Offer one-time provider sign-in during setup."""
+    adapters = get_default_adapters()
+    try:
+        adapters.sandbox_runtime.ensure_available()
+    except Exception:
+        console.print()
+        console.print(
+            "[dim]Provider sign-in skipped during setup because Docker is not available yet.[/dim]"
+        )
+        return None, config.get_selected_provider()
+
+    readiness = collect_provider_readiness(adapters)
+    sequence = _prompt_provider_connections(console, readiness)
+
+    for provider_id in sequence:
+        display_name = get_provider_display_name(provider_id)
+        console.print()
+        _print_padded(
+            console,
+            create_info_panel(
+                f"Connecting {display_name}",
+                f"SCC will open the normal {display_name} sign-in flow now.",
+                "When sign-in completes, the auth cache will be reused on future starts.",
+            ),
+            _layout_metrics(console),
+        )
+        console.print()
+        provider_adapter = get_agent_provider(adapters, provider_id)
+        if provider_adapter is None:
+            continue
+        try:
+            provider_adapter.bootstrap_auth()
+        except ProviderNotReadyError as exc:
+            console.print()
+            _print_padded(
+                console,
+                create_info_panel(
+                    f"{display_name} sign-in incomplete",
+                    exc.user_message,
+                    exc.suggested_action
+                    or "You can retry the provider sign-in later during start.",
+                ),
+                _layout_metrics(console),
+            )
+            console.print()
+
+    refreshed = collect_provider_readiness(adapters)
+    selected_preference = config.get_selected_provider()
+    if all(
+        refreshed.get(provider_id) is not None and refreshed[provider_id].status == "present"
+        for provider_id in ("claude", "codex")
+    ):
+        preference = _prompt_provider_preference(console, config.get_selected_provider())
+        config.set_selected_provider(preference)
+        selected_preference = preference
+    return refreshed, selected_preference
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1185,11 +863,24 @@ def run_setup_wizard(console: Console) -> bool:
         standalone=standalone,
     )
 
+    provider_readiness, provider_preference = _run_provider_onboarding(console)
+
     # Complete
     if standalone:
-        show_setup_complete(console, standalone=True)
+        show_setup_complete(
+            console,
+            standalone=True,
+            provider_readiness=provider_readiness,
+            provider_preference=provider_preference,
+        )
     else:
-        show_setup_complete(console, org_name=org_name, profile=profile)
+        show_setup_complete(
+            console,
+            org_name=org_name,
+            profile=profile,
+            provider_readiness=provider_readiness,
+            provider_preference=provider_preference,
+        )
 
     return True
 
@@ -1268,8 +959,16 @@ def run_non_interactive_setup(
         hooks_enabled=True,  # Default to enabled for non-interactive
     )
 
+    provider_readiness, provider_preference = _run_provider_onboarding(console)
+
     org_name = org_config.get("organization", {}).get("name")
-    show_setup_complete(console, org_name=org_name, profile=team)
+    show_setup_complete(
+        console,
+        org_name=org_name,
+        profile=team,
+        provider_readiness=provider_readiness,
+        provider_preference=provider_preference,
+    )
 
     return True
 

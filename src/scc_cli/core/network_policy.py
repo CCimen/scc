@@ -7,9 +7,9 @@ from collections.abc import Mapping
 from .enums import NetworkPolicy
 
 _NETWORK_POLICY_ORDER = {
-    NetworkPolicy.UNRESTRICTED.value: 0,
-    NetworkPolicy.CORP_PROXY_ONLY.value: 1,
-    NetworkPolicy.ISOLATED.value: 2,
+    NetworkPolicy.OPEN.value: 0,
+    NetworkPolicy.WEB_EGRESS_ENFORCED.value: 1,
+    NetworkPolicy.LOCKED_DOWN_WEB.value: 2,
 }
 
 

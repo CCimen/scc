@@ -1,11 +1,34 @@
-"""Docker sandbox runtime adapter for SandboxRuntime port."""
+"""Docker sandbox runtime adapter for SandboxRuntime port.
+
+**Legacy Docker Desktop sandbox path.** This adapter wraps the Docker Desktop
+``docker sandbox run`` command (Docker Desktop >= 4.50) behind the
+``SandboxRuntime`` port interface. It is NOT used by the OCI-based launch path
+(see ``adapters/oci_sandbox_runtime.py``). Retained for users whose Docker
+Desktop includes the sandbox feature.
+"""
 
 from __future__ import annotations
 
+from typing import Any
+
 from scc_cli import docker
 from scc_cli.core.enums import NetworkPolicy
+from scc_cli.core.errors import (
+    DockerDaemonNotRunningError,
+    DockerNotFoundError,
+    DockerVersionError,
+    SandboxNotAvailableError,
+)
 from scc_cli.core.network_policy import collect_proxy_env
-from scc_cli.ports.models import SandboxHandle, SandboxSpec, SandboxState, SandboxStatus
+from scc_cli.docker.core import MIN_DOCKER_VERSION, _parse_version
+from scc_cli.ports.models import (
+    SandboxConflict,
+    SandboxHandle,
+    SandboxSpec,
+    SandboxState,
+    SandboxStatus,
+)
+from scc_cli.ports.runtime_probe import RuntimeProbe
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
 
@@ -23,13 +46,42 @@ def _extract_container_name(cmd: list[str]) -> str | None:
 class DockerSandboxRuntime(SandboxRuntime):
     """SandboxRuntime backed by Docker sandbox CLI."""
 
+    def __init__(self, probe: RuntimeProbe) -> None:
+        self._probe = probe
+
     def ensure_available(self) -> None:
-        docker.check_docker_available()
+        """Ensure the Docker runtime is available and ready for sandbox use.
+
+        Uses RuntimeProbe to detect capabilities, then raises the same
+        exception types as the old docker.check_docker_available() path.
+        """
+        info = self._probe.probe()
+
+        # Docker not installed: no CLI found, no version info
+        if not info.daemon_reachable and not info.cli_name:
+            raise DockerNotFoundError()
+        if not info.daemon_reachable and info.version is None:
+            raise DockerNotFoundError()
+
+        # Docker installed but daemon not running
+        if not info.daemon_reachable:
+            raise DockerDaemonNotRunningError()
+
+        # Desktop version too old
+        if info.desktop_version:
+            current = _parse_version(info.desktop_version)
+            required = _parse_version(MIN_DOCKER_VERSION)
+            if current < required:
+                raise DockerVersionError(current_version=info.desktop_version)
+
+        # Sandbox feature not available
+        if not info.sandbox_available:
+            raise SandboxNotAvailableError()
 
     def run(self, spec: SandboxSpec) -> SandboxHandle:
         docker.prepare_sandbox_volume_for_credentials()
         env_vars = dict(spec.env) if spec.env else {}
-        if spec.network_policy == NetworkPolicy.CORP_PROXY_ONLY.value:
+        if spec.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
             for key, value in collect_proxy_env().items():
                 env_vars.setdefault(key, value)
         runtime_env = env_vars or None
@@ -42,7 +94,13 @@ class DockerSandboxRuntime(SandboxRuntime):
             env_vars=runtime_env,
         )
         container_name = _extract_container_name(docker_cmd)
-        plugin_settings = spec.agent_settings.content if spec.agent_settings else None
+        # Legacy Desktop sandbox path: expects a dict (Claude JSON only).
+        # Deserialize rendered_bytes back to dict for backward compat.
+        plugin_settings: dict[str, Any] | None = None
+        if spec.agent_settings is not None:
+            import json as _json
+
+            plugin_settings = _json.loads(spec.agent_settings.rendered_bytes)
         docker.run(
             docker_cmd,
             org_config=spec.org_config,
@@ -54,6 +112,12 @@ class DockerSandboxRuntime(SandboxRuntime):
             sandbox_id=container_name or "sandbox",
             name=container_name,
         )
+
+    def detect_launch_conflict(self, spec: SandboxSpec) -> SandboxConflict | None:
+        # Legacy Docker Desktop sandboxes already encapsulate their own
+        # container reuse semantics.  M008 can add richer conflict inspection
+        # here if the Desktop path remains active.
+        return None
 
     def resume(self, handle: SandboxHandle) -> None:
         docker.resume_container(handle.sandbox_id)

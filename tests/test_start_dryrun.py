@@ -49,6 +49,7 @@ class TestDryRunBasicBehavior:
                                 install_deps=False,
                                 offline=False,
                                 standalone=False,
+                                provider="claude",
                                 dry_run=True,
                             )
                         except click.exceptions.Exit:
@@ -81,6 +82,7 @@ class TestDryRunBasicBehavior:
                             install_deps=False,
                             offline=False,
                             standalone=False,
+                            provider="claude",
                             dry_run=True,
                         )
                     except click.exceptions.Exit:
@@ -117,7 +119,7 @@ class TestDryRunTeamConfig:
                     return_value=mock_org,
                 ):
                     with patch(
-                        "scc_cli.commands.launch.flow.teams.validate_team_profile",
+                        "scc_cli.commands.launch.team_settings.teams.validate_team_profile",
                         return_value={"valid": True},
                     ):
                         try:
@@ -132,6 +134,7 @@ class TestDryRunTeamConfig:
                                 install_deps=False,
                                 offline=False,
                                 standalone=False,
+                                provider="claude",
                                 dry_run=True,
                             )
                         except click.exceptions.Exit:
@@ -173,6 +176,7 @@ class TestDryRunJsonOutput:
                             install_deps=False,
                             offline=False,
                             standalone=False,
+                            provider="claude",
                             dry_run=True,
                             json_output=True,
                             pretty=False,
@@ -208,6 +212,7 @@ class TestDryRunJsonOutput:
                             install_deps=False,
                             offline=False,
                             standalone=False,
+                            provider="claude",
                             dry_run=True,
                             json_output=True,
                             pretty=False,
@@ -285,7 +290,7 @@ class TestBuildDryRunData:
         from scc_cli.commands.launch import build_dry_run_data
 
         mock_org = {
-            "defaults": {"network_policy": "isolated"},
+            "defaults": {"network_policy": "locked-down-web"},
             "profiles": {"platform": {"description": "Platform team"}},
         }
 
@@ -296,7 +301,7 @@ class TestBuildDryRunData:
             project_config=None,
         )
 
-        assert result["network_policy"] == "isolated"
+        assert result["network_policy"] == "locked-down-web"
 
     def test_build_dry_run_data_ready_to_start(self, tmp_path):
         """build_dry_run_data should indicate ready state when no blockers."""
@@ -347,6 +352,7 @@ class TestDryRunExitCodes:
                             install_deps=False,
                             offline=False,
                             standalone=False,
+                            provider="claude",
                             dry_run=True,
                         )
                         exit_code = 0  # If no exit raised, exit code is 0

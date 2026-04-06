@@ -10,12 +10,8 @@ from rich.status import Status
 
 from ... import config
 from ...application import worktree as worktree_use_cases
-from ...application.start_session import (
-    StartSessionDependencies,
-    StartSessionRequest,
-    prepare_start_session,
-    start_session,
-)
+from ...application.launch import finalize_launch
+from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console, handle_errors
 from ...confirm import Confirm
@@ -25,14 +21,19 @@ from ...core.exit_codes import EXIT_CANCELLED
 from ...git import WorktreeInfo
 from ...json_command import json_command
 from ...kinds import Kind
-from ...marketplace.materialize import materialize_marketplace
-from ...marketplace.resolve import resolve_effective_config
 from ...output_mode import is_json_mode
 from ...panels import create_success_panel, create_warning_panel
+from ...ports.config_models import NormalizedOrgConfig
 from ...theme import Indicators, Spinners
 from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
 from ...ui.picker import TeamSwitchRequested, pick_worktree
+from ..launch.dependencies import prepare_live_start_plan
+from ..launch.preflight import (
+    collect_launch_readiness,
+    ensure_launch_ready,
+    resolve_launch_provider,
+)
 from ._helpers import build_worktree_list_data
 
 if TYPE_CHECKING:
@@ -136,9 +137,7 @@ def worktree_create_cmd(
     base_branch: str | None = typer.Option(
         None, "-b", "--base", help="Base branch (default: current)"
     ),
-    start_claude: bool = typer.Option(
-        True, "--start/--no-start", help="Start Claude after creating"
-    ),
+    start_agent: bool = typer.Option(True, "--start/--no-start", help="Start agent after creating"),
     install_deps: bool = typer.Option(
         False, "--install-deps", help="Install dependencies after creating worktree"
     ),
@@ -236,36 +235,67 @@ def worktree_create_cmd(
         else:
             console.print("[yellow]! Could not detect package manager or install failed[/yellow]")
 
-    if start_claude:
+    if start_agent:
         console.print()
-        if Confirm.ask("[cyan]Start Claude Code in this worktree?[/cyan]", default=True):
+        if Confirm.ask("[cyan]Start agent in this worktree?[/cyan]", default=True):
             adapters.sandbox_runtime.ensure_available()
-            start_dependencies = StartSessionDependencies(
-                filesystem=adapters.filesystem,
-                remote_fetcher=adapters.remote_fetcher,
-                clock=adapters.clock,
-                git_client=adapters.git_client,
-                agent_runner=adapters.agent_runner,
-                sandbox_runtime=adapters.sandbox_runtime,
-                resolve_effective_config=resolve_effective_config,
-                materialize_marketplace=materialize_marketplace,
+            user_config = config.load_user_config()
+            standalone_mode = config.is_standalone_mode()
+            team = None if standalone_mode else user_config.get("selected_profile")
+            raw_org_config = None if standalone_mode else config.load_cached_org_config()
+            normalized_org = (
+                NormalizedOrgConfig.from_dict(raw_org_config)
+                if raw_org_config is not None
+                else None
             )
+            # Shared preflight: resolve → readiness → ensure ready
+            resolved_provider, _source = resolve_launch_provider(
+                cli_flag=None,
+                resume_provider=None,
+                workspace_path=result.worktree_path,
+                config_provider=user_config.get("selected_provider"),
+                normalized_org=normalized_org,
+                team=team,
+                adapters=adapters,
+                non_interactive=False,
+            )
+            if resolved_provider is None:
+                console.print("[dim]Cancelled.[/dim]")
+                raise typer.Exit(EXIT_CANCELLED)
+            readiness = collect_launch_readiness(resolved_provider, _source, adapters)
+            if not readiness.launch_ready:
+                ensure_launch_ready(
+                    readiness,
+                    adapters=adapters,
+                    console=console,
+                    non_interactive=False,
+                    show_notice=lambda title, content, subtitle: console.print(
+                        create_warning_panel(title, content, subtitle)
+                    ),
+                )
             start_request = StartSessionRequest(
                 workspace_path=result.worktree_path,
                 workspace_arg=str(result.worktree_path),
                 entry_dir=result.worktree_path,
-                team=None,
+                team=team,
                 session_name=None,
                 resume=False,
                 fresh=False,
                 offline=False,
-                standalone=config.is_standalone_mode(),
+                standalone=standalone_mode,
                 dry_run=False,
                 allow_suspicious=False,
-                org_config=config.load_cached_org_config(),
+                org_config=normalized_org,
+                raw_org_config=raw_org_config,
+                provider_id=resolved_provider,
             )
-            start_plan = prepare_start_session(start_request, dependencies=start_dependencies)
-            start_session(start_plan, dependencies=start_dependencies)
+            start_dependencies, start_plan = prepare_live_start_plan(
+                start_request,
+                adapters=adapters,
+                console=console,
+                provider_id=resolved_provider,
+            )
+            finalize_launch(start_plan, dependencies=start_dependencies)
 
 
 @json_command(Kind.WORKTREE_LIST)

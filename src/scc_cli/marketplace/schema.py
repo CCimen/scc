@@ -293,7 +293,7 @@ class DefaultsConfig(StrictModel):
         ge=1,
         le=168,
     )
-    network_policy: Literal["corp-proxy-only", "unrestricted", "isolated"] | None = Field(
+    network_policy: Literal["open", "web-egress-enforced", "locked-down-web"] | None = Field(
         default=None,
         description="Network access policy",
     )
@@ -342,7 +342,7 @@ class TeamProfile(StrictModel):
         default_factory=list,
         description="Additional MCP servers for this team",
     )
-    network_policy: Literal["corp-proxy-only", "unrestricted", "isolated"] | None = Field(
+    network_policy: Literal["open", "web-egress-enforced", "locked-down-web"] | None = Field(
         default=None,
         description="Override network policy for this team",
     )

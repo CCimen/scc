@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer
+from scc_cli.application.start_session import _DOCKER_DESKTOP_CLAUDE_IMAGE as SANDBOX_IMAGE
 from scc_cli.application.start_session import (
     StartSessionDependencies,
     StartSessionPlan,
@@ -13,9 +17,22 @@ from scc_cli.application.start_session import (
 )
 from scc_cli.application.sync_marketplace import SyncError, SyncResult
 from scc_cli.application.workspace import WorkspaceContext
-from scc_cli.core.constants import AGENT_CONFIG_DIR, SANDBOX_IMAGE
+from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, RuntimeInfo
+from scc_cli.core.errors import InvalidProviderError, MaterializationError
+from scc_cli.core.governed_artifacts import (
+    ArtifactBundle,
+    ArtifactInstallIntent,
+    ArtifactKind,
+    ArtifactRenderPlan,
+    GovernedArtifact,
+    ProviderArtifactBinding,
+)
+from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_REF
 from scc_cli.core.workspace import ResolverResult
+from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
 from scc_cli.ports.models import MountSpec, SandboxSpec
+from scc_cli.services.git.worktree import WorktreeInfo
+from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
 from tests.fakes.fake_sandbox_runtime import FakeSandboxRuntime
 
@@ -49,6 +66,52 @@ class FakeGitClient:
     def get_current_branch(self, path: Path) -> str | None:
         return self._branch
 
+    def has_commits(self, path: Path) -> bool:
+        return True
+
+    def has_remote(self, path: Path) -> bool:
+        return True
+
+    def get_default_branch(self, path: Path) -> str:
+        return "main"
+
+    def list_worktrees(self, path: Path) -> list[WorktreeInfo]:
+        return []
+
+    def get_worktree_status(self, path: Path) -> tuple[int, int, int, bool]:
+        return (0, 0, 0, False)
+
+    def find_worktree_by_query(
+        self,
+        path: Path,
+        query: str,
+    ) -> tuple[WorktreeInfo | None, list[WorktreeInfo]]:
+        return None, []
+
+    def find_main_worktree(self, path: Path) -> WorktreeInfo | None:
+        return None
+
+    def list_branches_without_worktrees(self, path: Path) -> list[str]:
+        return []
+
+    def fetch_branch(self, path: Path, branch: str) -> None:
+        return None
+
+    def add_worktree(
+        self,
+        repo_path: Path,
+        worktree_path: Path,
+        branch_name: str,
+        base_branch: str,
+    ) -> None:
+        return None
+
+    def remove_worktree(self, repo_path: Path, worktree_path: Path, *, force: bool) -> None:
+        return None
+
+    def prune_worktrees(self, repo_path: Path) -> None:
+        return None
+
 
 def _build_resolver_result(workspace_path: Path) -> ResolverResult:
     resolved = workspace_path.resolve()
@@ -70,6 +133,7 @@ def _build_dependencies(git_client: FakeGitClient) -> StartSessionDependencies:
         clock=MagicMock(),
         git_client=git_client,
         agent_runner=FakeAgentRunner(),
+        agent_provider=FakeAgentProvider(),
         sandbox_runtime=FakeSandboxRuntime(),
         resolve_effective_config=MagicMock(),
         materialize_marketplace=MagicMock(),
@@ -91,10 +155,17 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config={
+        org_config=NormalizedOrgConfig.from_dict(
+            {
+                "defaults": {"network_policy": "restricted"},
+                "profiles": {"alpha": {}},
+            }
+        ),
+        raw_org_config={
             "defaults": {"network_policy": "restricted"},
             "profiles": {"alpha": {}},
         },
+        provider_id="claude",
     )
     sync_result = SyncResult(success=True, rendered_settings={"plugins": []})
     resolver_result = _build_resolver_result(workspace_path)
@@ -119,8 +190,11 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
     assert plan.sync_error_message is None
     assert plan.current_branch == "main"
     assert plan.agent_settings is not None
-    assert plan.agent_settings.content == {"plugins": []}
-    assert plan.agent_settings.path == Path("/home/agent") / AGENT_CONFIG_DIR / "settings.json"
+    import json as _json
+
+    parsed = _json.loads(plan.agent_settings.rendered_bytes)
+    assert parsed == {"plugins": []}
+    assert plan.agent_settings.path == Path("/home/agent") / ".claude" / "settings.json"
     assert plan.sandbox_spec is not None
     assert plan.sandbox_spec.image == SANDBOX_IMAGE
     assert plan.sandbox_spec.network_policy == "restricted"
@@ -129,6 +203,10 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
 def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
+    _raw = {
+        "defaults": {},
+        "profiles": {"alpha": {}},
+    }
     request = StartSessionRequest(
         workspace_path=workspace_path,
         workspace_arg=str(workspace_path),
@@ -141,10 +219,9 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config={
-            "defaults": {},
-            "profiles": {"alpha": {}},
-        },
+        org_config=NormalizedOrgConfig.from_dict(_raw),
+        raw_org_config=_raw,
+        provider_id="claude",
     )
     resolver_result = _build_resolver_result(workspace_path)
     dependencies = _build_dependencies(FakeGitClient())
@@ -163,13 +240,23 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
 
     assert plan.sync_result is None
     assert plan.sync_error_message == "sync failed"
-    assert plan.agent_settings is None
+    # D038: fresh launch (resume=False) always produces agent_settings,
+    # even when sync fails — an empty config overwrites stale volume state.
+    assert plan.agent_settings is not None
+    import json as _json
+
+    parsed = _json.loads(plan.agent_settings.rendered_bytes)
+    assert parsed == {}
     assert plan.sandbox_spec is not None
 
 
 def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
+    _raw = {
+        "defaults": {},
+        "profiles": {"alpha": {}},
+    }
     request = StartSessionRequest(
         workspace_path=workspace_path,
         workspace_arg=str(workspace_path),
@@ -182,10 +269,9 @@ def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config={
-            "defaults": {},
-            "profiles": {"alpha": {}},
-        },
+        org_config=NormalizedOrgConfig.from_dict(_raw),
+        raw_org_config=_raw,
+        provider_id="claude",
     )
     sync_result = SyncResult(
         success=True,
@@ -214,8 +300,11 @@ def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
         plan = prepare_start_session(request, dependencies=dependencies)
 
     assert plan.agent_settings is not None
-    assert "mcpServers" in plan.agent_settings.content
-    assert "gis-internal" in plan.agent_settings.content["mcpServers"]
+    import json as _json
+
+    parsed = _json.loads(plan.agent_settings.rendered_bytes)
+    assert "mcpServers" in parsed
+    assert "gis-internal" in parsed["mcpServers"]
 
 
 def test_start_session_runs_sandbox_runtime(tmp_path: Path) -> None:
@@ -256,3 +345,1347 @@ def test_start_session_runs_sandbox_runtime(tmp_path: Path) -> None:
     handle = start_session(plan, dependencies=dependencies)
 
     assert handle.sandbox_id == "sandbox-1"
+
+
+# ---------------------------------------------------------------------------
+# S01 seam boundary — characterize target shape for T02/T03
+#
+# These tests describe the intended state after T02/T03 rewire the launch path:
+# - StartSessionPlan should carry a typed AgentLaunchSpec from the provider.
+# - StartSessionDependencies should include an AgentProvider, not just AgentRunner.
+# The xfail tests will be promoted to passing in T02/T03.
+# ---------------------------------------------------------------------------
+
+
+def test_prepared_plan_carries_typed_agent_launch_spec(tmp_path: Path) -> None:
+    """After T02, StartSessionPlan should include an AgentLaunchSpec field.
+
+    The prepared plan carries a typed provider-owned spec so the runtime layer
+    can consume it without knowing about Claude-specific settings internals.
+    """
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    request = StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=str(workspace_path),
+        entry_dir=workspace_path,
+        team=None,
+        session_name=None,
+        resume=False,
+        fresh=False,
+        offline=True,
+        standalone=True,
+        dry_run=False,
+        allow_suspicious=False,
+        org_config=None,
+        provider_id="claude",
+    )
+    resolver_result = _build_resolver_result(workspace_path)
+    dependencies = _build_dependencies(FakeGitClient())
+
+    with patch(
+        "scc_cli.application.start_session.resolve_workspace",
+        return_value=WorkspaceContext(resolver_result),
+    ):
+        plan = prepare_start_session(request, dependencies=dependencies)
+
+    spec = plan.agent_launch_spec
+    assert isinstance(spec, AgentLaunchSpec)
+    assert spec.provider_id != ""
+
+
+def test_start_session_dependencies_accept_agent_provider(tmp_path: Path) -> None:
+    """After T02, StartSessionDependencies should accept an AgentProvider.
+
+    This characterizes the wiring target: the dependency container must carry a
+    provider so prepare_start_session can call prepare_launch without falling back
+    to AgentRunner internals.
+    """
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+
+    deps = StartSessionDependencies(
+        filesystem=MagicMock(),
+        remote_fetcher=MagicMock(),
+        clock=MagicMock(),
+        git_client=FakeGitClient(),
+        agent_runner=FakeAgentRunner(),
+        agent_provider=FakeAgentProvider(),
+        sandbox_runtime=FakeSandboxRuntime(),
+        resolve_effective_config=MagicMock(),
+        materialize_marketplace=MagicMock(),
+    )
+
+    assert deps.agent_provider is not None
+
+
+# ---------------------------------------------------------------------------
+# S04/T05 — Bundle pipeline wiring through AgentProvider.render_artifacts
+# ---------------------------------------------------------------------------
+
+
+def _build_org_config_with_bundles(
+    team_name: str = "alpha",
+    bundle_id: str = "security-pack",
+    *,
+    provider: str = "fake",
+) -> NormalizedOrgConfig:
+    """Build a NormalizedOrgConfig with governed artifacts and bundles."""
+    catalog = GovernedArtifactsCatalog(
+        artifacts={
+            "safety-net": GovernedArtifact(
+                kind=ArtifactKind.SKILL,
+                name="safety-net",
+                install_intent=ArtifactInstallIntent.REQUIRED,
+            ),
+        },
+        bindings={
+            "safety-net": (
+                ProviderArtifactBinding(
+                    provider=provider,
+                    native_ref="safety-net-skill",
+                ),
+            ),
+        },
+        bundles={
+            bundle_id: ArtifactBundle(
+                name=bundle_id,
+                description="Security bundle",
+                artifacts=("safety-net",),
+                install_intent=ArtifactInstallIntent.REQUIRED,
+            ),
+        },
+    )
+    from scc_cli.ports.config_models import NormalizedTeamConfig
+
+    return NormalizedOrgConfig(
+        organization=MagicMock(name="test-org"),
+        profiles={
+            team_name: NormalizedTeamConfig(
+                name=team_name,
+                enabled_bundles=(bundle_id,),
+            ),
+        },
+        governed_artifacts=catalog,
+    )
+
+
+def _build_bundle_request(
+    workspace_path: Path,
+    *,
+    team: str = "alpha",
+    org_config: NormalizedOrgConfig | None = None,
+    dry_run: bool = False,
+    offline: bool = False,
+    standalone: bool = False,
+) -> StartSessionRequest:
+    """Build a StartSessionRequest suitable for bundle pipeline tests."""
+    if org_config is None:
+        org_config = _build_org_config_with_bundles(team)
+    return StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=str(workspace_path),
+        entry_dir=workspace_path,
+        team=team,
+        session_name=None,
+        resume=False,
+        fresh=False,
+        offline=offline,
+        standalone=standalone,
+        dry_run=dry_run,
+        allow_suspicious=False,
+        org_config=org_config,
+        raw_org_config=None,  # Prevents marketplace sync (intentional),
+        provider_id="claude",
+    )
+
+
+class TestBundlePipelineWiring:
+    """Tests for the bundle render pipeline wired through prepare_start_session."""
+
+    def test_bundle_pipeline_renders_artifacts_into_plan(self, tmp_path: Path) -> None:
+        """When org config has bundles, the plan carries render results."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_error is None
+        assert len(plan.bundle_render_results) == 1
+        result = plan.bundle_render_results[0]
+        assert isinstance(result, RenderArtifactsResult)
+
+    def test_bundle_pipeline_skipped_when_no_team(self, tmp_path: Path) -> None:
+        """When no team is set, the bundle pipeline is skipped."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, team=None)  # type: ignore[arg-type]
+        # Need a valid request without team
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_dry_run(self, tmp_path: Path) -> None:
+        """Dry-run mode skips bundle rendering."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, dry_run=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_offline(self, tmp_path: Path) -> None:
+        """Offline mode skips bundle rendering."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, offline=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_skipped_when_standalone(self, tmp_path: Path) -> None:
+        """Standalone mode skips bundle rendering."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = _build_bundle_request(workspace_path, standalone=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_bundle_pipeline_no_provider_raises_d032(self, tmp_path: Path) -> None:
+        """D032: no agent_provider wired + no provider_id raises InvalidProviderError."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        # Deliberately omit provider_id to trigger fail-closed behavior
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team="alpha",
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=_build_org_config_with_bundles("alpha"),
+            raw_org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=FakeAgentRunner(),
+            agent_provider=None,  # No provider
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            pytest.raises(InvalidProviderError),
+        ):
+            prepare_start_session(request, dependencies=dependencies)
+
+    def test_bundle_pipeline_captures_resolution_error(self, tmp_path: Path) -> None:
+        """When bundle resolution fails (missing bundle), error is captured fail-closed."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        # Reference a bundle that doesn't exist in the catalog
+        org_config = _build_org_config_with_bundles(bundle_id="nonexistent")
+        # But the team references a different bundle
+        from scc_cli.ports.config_models import NormalizedTeamConfig
+
+        org_config = NormalizedOrgConfig(
+            organization=MagicMock(name="test-org"),
+            profiles={
+                "alpha": NormalizedTeamConfig(
+                    name="alpha",
+                    enabled_bundles=("missing-bundle",),
+                ),
+            },
+            governed_artifacts=GovernedArtifactsCatalog(
+                bundles={
+                    "existing": ArtifactBundle(
+                        name="existing",
+                        artifacts=(),
+                    ),
+                },
+            ),
+        )
+        request = _build_bundle_request(workspace_path, org_config=org_config)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Fail-closed: error is captured, not raised
+        assert plan.bundle_render_error is not None
+        assert "missing-bundle" in plan.bundle_render_error
+        assert plan.bundle_render_results == ()
+
+    def test_bundle_pipeline_captures_renderer_error(self, tmp_path: Path) -> None:
+        """When renderer raises MaterializationError, error is captured fail-closed."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        org_config = _build_org_config_with_bundles()
+        request = _build_bundle_request(workspace_path, org_config=org_config)
+        resolver_result = _build_resolver_result(workspace_path)
+
+        # Create a provider that raises on render_artifacts
+        provider = FakeAgentProvider()
+
+        def _exploding_render(plan: ArtifactRenderPlan, workspace: Path) -> RenderArtifactsResult:
+            raise MaterializationError(
+                bundle_id="security-pack",
+                artifact_name="safety-net",
+                target_path="/tmp/boom",
+                reason="disk full",
+            )
+
+        provider.render_artifacts = _exploding_render  # type: ignore[assignment]
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=FakeAgentRunner(),
+            agent_provider=provider,
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_error is not None
+        assert "disk full" in plan.bundle_render_error
+        assert plan.bundle_render_results == ()
+
+    def test_bundle_pipeline_empty_bundles_no_error(self, tmp_path: Path) -> None:
+        """When team has no enabled bundles, pipeline succeeds with empty results."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        from scc_cli.ports.config_models import NormalizedTeamConfig
+
+        org_config = NormalizedOrgConfig(
+            organization=MagicMock(name="test-org"),
+            profiles={
+                "alpha": NormalizedTeamConfig(
+                    name="alpha",
+                    enabled_bundles=(),  # No bundles
+                ),
+            },
+        )
+        request = _build_bundle_request(workspace_path, org_config=org_config)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.bundle_render_results == ()
+        assert plan.bundle_render_error is None
+
+    def test_fake_provider_records_render_calls(self, tmp_path: Path) -> None:
+        """FakeAgentProvider.render_artifacts records calls for test assertions."""
+        provider = FakeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test-bundle",
+            provider="fake",
+            bindings=(ProviderArtifactBinding(provider="fake", native_ref="test-skill"),),
+            effective_artifacts=("test-artifact",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert len(provider.render_artifacts_calls) == 1
+        assert provider.render_artifacts_calls[0] == (plan, tmp_path)
+        assert isinstance(result, RenderArtifactsResult)
+
+
+class TestAgentProviderRenderArtifacts:
+    """Tests for the render_artifacts method on concrete provider adapters."""
+
+    def test_claude_provider_render_artifacts(self, tmp_path: Path) -> None:
+        """ClaudeAgentProvider.render_artifacts delegates to claude_renderer."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test-bundle",
+            provider="claude",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="safety-net-skill",
+                ),
+            ),
+            effective_artifacts=("safety-net",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        # Skill binding should produce a rendered path
+        assert len(result.rendered_paths) == 1
+        assert result.rendered_paths[0].name == "skill.json"
+
+    def test_codex_provider_render_artifacts(self, tmp_path: Path) -> None:
+        """CodexAgentProvider.render_artifacts delegates to codex_renderer."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        provider = CodexAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test-bundle",
+            provider="codex",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="safety-net-skill",
+                ),
+            ),
+            effective_artifacts=("safety-net",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        # Skill binding should produce a rendered path
+        assert len(result.rendered_paths) == 1
+        assert result.rendered_paths[0].name == "skill.json"
+
+    def test_claude_provider_returns_settings_fragment(self, tmp_path: Path) -> None:
+        """Claude renderer's settings_fragment is propagated through the provider."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="mcp-bundle",
+            provider="claude",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="claude",
+                    native_ref="gis-server",
+                    transport_type="sse",
+                    native_config={"url": "https://gis.example.com/mcp"},
+                ),
+            ),
+            effective_artifacts=("gis-mcp",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        assert "mcpServers" in result.settings_fragment
+        assert "gis-server" in result.settings_fragment["mcpServers"]
+
+    def test_codex_provider_maps_mcp_fragment_to_settings_fragment(self, tmp_path: Path) -> None:
+        """Codex renderer's mcp_fragment is mapped to settings_fragment in the unified result."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        provider = CodexAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="mcp-bundle",
+            provider="codex",
+            bindings=(
+                ProviderArtifactBinding(
+                    provider="codex",
+                    native_ref="gis-server",
+                    transport_type="sse",
+                    native_config={"url": "https://gis.example.com/mcp"},
+                ),
+            ),
+            effective_artifacts=("gis-mcp",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert isinstance(result, RenderArtifactsResult)
+        # Codex mcp_fragment mapped to settings_fragment
+        assert "mcpServers" in result.settings_fragment
+        assert "gis-server" in result.settings_fragment["mcpServers"]
+
+    def test_claude_provider_wrong_provider_returns_warnings(self, tmp_path: Path) -> None:
+        """Claude renderer skips plans targeting a different provider."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider()
+        plan = ArtifactRenderPlan(
+            bundle_id="test",
+            provider="codex",  # Wrong provider
+            effective_artifacts=("something",),
+        )
+        result = provider.render_artifacts(plan, tmp_path)
+
+        assert len(result.warnings) > 0
+        assert "codex" in result.warnings[0]
+
+
+# ---------------------------------------------------------------------------
+# S02/T02 — Provider-aware image selection and agent_argv propagation
+# ---------------------------------------------------------------------------
+
+_OCI_RUNTIME_INFO = RuntimeInfo(
+    runtime_id="docker",
+    display_name="Docker (OCI)",
+    cli_name="docker",
+    supports_oci=True,
+    supports_internal_networks=True,
+    supports_host_network=True,
+    version="Docker version 27.5.1, build abc1234",
+    daemon_reachable=True,
+    sandbox_available=True,
+    preferred_backend="oci",
+)
+
+
+def _build_dependencies_with_runtime(
+    *,
+    provider: FakeAgentProvider | None = None,
+    runtime_info: RuntimeInfo | None = None,
+) -> StartSessionDependencies:
+    return StartSessionDependencies(
+        filesystem=MagicMock(),
+        remote_fetcher=MagicMock(),
+        clock=MagicMock(),
+        git_client=FakeGitClient(),
+        agent_runner=FakeAgentRunner(),
+        agent_provider=provider or FakeAgentProvider(),
+        sandbox_runtime=FakeSandboxRuntime(),
+        resolve_effective_config=MagicMock(),
+        materialize_marketplace=MagicMock(),
+        runtime_info=runtime_info,
+    )
+
+
+class TestProviderAwareImageSelection:
+    """_build_sandbox_spec selects image by provider_id on OCI backend."""
+
+    def test_codex_image_for_oci_backend(self, tmp_path: Path) -> None:
+        """Codex provider on OCI backend gets SCC_CODEX_IMAGE_REF."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SCC_CODEX_IMAGE_REF
+
+    def test_claude_image_for_oci_backend(self, tmp_path: Path) -> None:
+        """Claude provider on OCI backend gets SCC_CLAUDE_IMAGE_REF."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        claude_provider = ClaudeAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=claude_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SCC_CLAUDE_IMAGE_REF
+
+    def test_docker_sandbox_backend_uses_sandbox_image(self, tmp_path: Path) -> None:
+        """Non-OCI backend (docker-sandbox) falls back to SANDBOX_IMAGE."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        docker_sandbox_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="Docker version 27.5.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="docker-sandbox",
+        )
+        dependencies = _build_dependencies_with_runtime(runtime_info=docker_sandbox_info)
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.image == SANDBOX_IMAGE
+
+    def test_unknown_provider_raises_invalid_provider_error(self, tmp_path: Path) -> None:
+        """Unknown provider_id on OCI backend raises InvalidProviderError."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        # FakeAgentProvider has provider_id="fake" which is not in the registry
+        dependencies = _build_dependencies_with_runtime(runtime_info=_OCI_RUNTIME_INFO)
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            patch(
+                "scc_cli.application.start_session.resolve_destination_sets",
+                return_value=(),
+            ),
+            pytest.raises(InvalidProviderError),
+        ):
+            prepare_start_session(request, dependencies=dependencies)
+
+
+class TestAgentArgvPropagation:
+    """agent_argv from AgentLaunchSpec flows into SandboxSpec."""
+
+    def test_agent_argv_from_launch_spec(self, tmp_path: Path) -> None:
+        """agent_argv populated from provider's prepare_launch argv."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies_with_runtime()
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # FakeAgentProvider.prepare_launch returns argv=("fake-agent",)
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.agent_argv == ["fake-agent"]
+
+    def test_no_provider_no_provider_id_raises(self, tmp_path: Path) -> None:
+        """D032: no provider wired + no provider_id raises InvalidProviderError."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        # Deliberately omit provider_id to trigger fail-closed behavior
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=FakeAgentRunner(),
+            agent_provider=None,
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            pytest.raises(InvalidProviderError),
+        ):
+            prepare_start_session(request, dependencies=dependencies)
+
+    def test_codex_agent_argv_is_codex(self, tmp_path: Path) -> None:
+        """Codex provider produces the wrapper argv in agent_argv."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+        from scc_cli.adapters.codex_launch import build_codex_container_argv
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.agent_argv == list(build_codex_container_argv())
+
+
+# ---------------------------------------------------------------------------
+# S02/T03 — Provider-aware data_volume and config_dir population
+# ---------------------------------------------------------------------------
+
+
+class TestProviderAwareDataVolumeAndConfigDir:
+    """_build_sandbox_spec populates data_volume and config_dir by provider_id."""
+
+    def test_codex_data_volume(self, tmp_path: Path) -> None:
+        """Codex provider on OCI backend gets codex data volume."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.data_volume == "docker-codex-sandbox-data"
+
+    def test_codex_config_dir(self, tmp_path: Path) -> None:
+        """Codex provider on OCI backend gets .codex config dir."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        codex_provider = CodexAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=codex_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.config_dir == ".codex"
+
+    def test_claude_data_volume(self, tmp_path: Path) -> None:
+        """Claude provider on OCI backend gets claude data volume."""
+        from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        claude_provider = ClaudeAgentProvider()
+        dependencies = _build_dependencies_with_runtime(
+            provider=claude_provider,  # type: ignore[arg-type]
+            runtime_info=_OCI_RUNTIME_INFO,
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.data_volume == "docker-claude-sandbox-data"
+        assert plan.sandbox_spec.config_dir == ".claude"
+
+    def test_non_oci_backend_empty_volume_and_config(self, tmp_path: Path) -> None:
+        """Non-OCI backend leaves data_volume and config_dir empty."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        docker_sandbox_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="Docker version 27.5.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="docker-sandbox",
+        )
+        dependencies = _build_dependencies_with_runtime(runtime_info=docker_sandbox_info)
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.data_volume == ""
+        assert plan.sandbox_spec.config_dir == ""
+
+
+# ---------------------------------------------------------------------------
+# D038/D042 — Config freshness on every fresh launch
+# ---------------------------------------------------------------------------
+
+
+class TestConfigFreshness:
+    """D038/D042: fresh launch always writes SCC-managed config; resume skips."""
+
+    def _make_request(
+        self,
+        workspace_path: Path,
+        *,
+        resume: bool = False,
+        team: str | None = None,
+        org_config: NormalizedOrgConfig | None = None,
+        raw_org_config: dict[str, Any] | None = None,
+    ) -> StartSessionRequest:
+        return StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=team,
+            session_name=None,
+            resume=resume,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=org_config,
+            raw_org_config=raw_org_config,
+            provider_id="claude",
+        )
+
+    def test_fresh_launch_no_settings_produces_empty_config(self, tmp_path: Path) -> None:
+        """D038: fresh launch with no sync/effective config still writes empty settings."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = self._make_request(workspace_path, resume=False)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {}
+
+    def test_resume_skips_settings_injection(self, tmp_path: Path) -> None:
+        """D038: resume leaves existing container config untouched (returns None)."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = self._make_request(workspace_path, resume=True)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Resume returns None — OCI runtime skips injection
+        assert plan.agent_settings is None
+
+    def test_governed_to_standalone_transition(self, tmp_path: Path) -> None:
+        """D038: governed→standalone fresh launch overwrites with empty config.
+
+        Simulates: team A config was injected on a prior launch.  A new
+        fresh launch with no team/no org config still writes an empty
+        settings file, clearing stale team-specific config from the volume.
+        """
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        # Standalone: no team, no org config
+        request = self._make_request(workspace_path, resume=False, team=None)
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Fresh launch always writes settings, even standalone
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {}
+
+    def test_team_a_to_team_b_transition(self, tmp_path: Path) -> None:
+        """D038: teamA→teamB fresh launch writes new team config.
+
+        Simulates: team A settings were injected on a prior launch.
+        A new fresh launch with team B writes team B's settings,
+        replacing whatever was in the volume.
+        """
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        _raw = {
+            "defaults": {},
+            "profiles": {"beta": {"network_policy": "open"}},
+        }
+        # Not standalone/offline — so sync runs and produces team B settings
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team="beta",
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=False,
+            standalone=False,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=NormalizedOrgConfig.from_dict(_raw),
+            raw_org_config=_raw,
+            provider_id="claude",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        sync_result = SyncResult(
+            success=True,
+            rendered_settings={"plugins": ["team-b-plugin"]},
+        )
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            patch(
+                "scc_cli.application.start_session.sync_marketplace_settings",
+                return_value=sync_result,
+            ),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Fresh launch with team B config written
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {"plugins": ["team-b-plugin"]}
+
+    def test_settings_to_no_settings_transition(self, tmp_path: Path) -> None:
+        """D038: prior launch had settings, new fresh launch has no settings content.
+
+        The empty config write clears the stale governed config from
+        the persistent volume.
+        """
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        _raw = {
+            "defaults": {},
+            "profiles": {"alpha": {}},
+        }
+        request = self._make_request(
+            workspace_path,
+            resume=False,
+            team="alpha",
+            org_config=NormalizedOrgConfig.from_dict(_raw),
+            raw_org_config=_raw,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with (
+            patch(
+                "scc_cli.application.start_session.resolve_workspace",
+                return_value=WorkspaceContext(resolver_result),
+            ),
+            patch(
+                "scc_cli.application.start_session.sync_marketplace_settings",
+                return_value=SyncResult(success=True, rendered_settings=None),
+            ),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        # Even with no rendered settings, fresh launch writes empty config
+        assert plan.agent_settings is not None
+        import json as _json
+
+        parsed = _json.loads(plan.agent_settings.rendered_bytes)
+        assert parsed == {}
+
+    def test_resume_with_team_still_skips_settings(self, tmp_path: Path) -> None:
+        """D038: resume with team config available still skips injection."""
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        _raw = {
+            "defaults": {},
+            "profiles": {"alpha": {}},
+        }
+        request = self._make_request(
+            workspace_path,
+            resume=True,
+            team="alpha",
+            org_config=NormalizedOrgConfig.from_dict(_raw),
+            raw_org_config=_raw,
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        dependencies = _build_dependencies(FakeGitClient())
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is None
+
+    def test_codex_fresh_launch_empty_config_includes_scc_defaults(self, tmp_path: Path) -> None:
+        """D038+D040: Codex fresh launch with no content still gets SCC-managed defaults.
+
+        The CodexAgentRunner.build_settings merges _SCC_MANAGED_DEFAULTS
+        (cli_auth_credentials_store='file') even into an empty config dict.
+        """
+        from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
+
+        workspace_path = tmp_path / "workspace"
+        workspace_path.mkdir()
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="codex",
+        )
+        resolver_result = _build_resolver_result(workspace_path)
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=CodexAgentRunner(),
+            agent_provider=CodexAgentProvider(),
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is not None
+        content = plan.agent_settings.rendered_bytes.decode()
+        assert "cli_auth_credentials_store" in content
+        assert "file" in content
+        assert plan.agent_settings.suffix == ".toml"
+
+    def test_codex_worktree_launch_scopes_settings_to_workspace_not_mount_root(
+        self, tmp_path: Path
+    ) -> None:
+        """D041: worktree launches must write Codex config into the workspace root."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+        from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
+
+        mount_root = tmp_path / "repo-parent"
+        workspace_path = mount_root / "worktree-a"
+        workspace_path.mkdir(parents=True)
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="codex",
+        )
+        resolver_result = ResolverResult(
+            workspace_root=workspace_path,
+            entry_dir=workspace_path,
+            mount_root=mount_root,
+            container_workdir=str(workspace_path),
+            is_auto_detected=False,
+            is_suspicious=False,
+            reason="test-worktree",
+        )
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=CodexAgentRunner(),
+            agent_provider=CodexAgentProvider(),
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is not None
+        assert plan.agent_settings.path == workspace_path / ".codex" / "config.toml"

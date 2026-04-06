@@ -62,3 +62,41 @@ safetypluginclone/.claude/.state/
 
 # Local refactor checklist
 refactor-plan.md
+
+# GSD runtime/state noise (keep curated project docs + milestone docs committed)
+.gsd/STATE.md
+.gsd/activity/
+.gsd/auto.lock
+.gsd/completed-units.json
+.gsd/completed-units-*.json
+.gsd/event-log.jsonl
+.gsd/gsd.db
+.gsd/gsd.db-*
+.gsd/journal/
+.gsd/metrics.json
+.gsd/OVERRIDES.md
+.gsd/PREFERENCES.md
+.gsd/recovery/
+.gsd/reports/
+.gsd/runtime/
+.gsd/state-manifest.json
+.gsd/worktrees/
+.bg-shell/
+coverage.json
+READMEGSD.md
+
+# ── GSD baseline (auto-generated) ──
+.gsd-id
+*.code-workspace
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+*.pyc
+target/
+vendor/
+*.log
+coverage/
+.cache/
+tmp/

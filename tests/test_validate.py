@@ -39,7 +39,7 @@ def valid_org_config():
         },
         "defaults": {
             "allowed_plugins": ["core-*"],
-            "network_policy": "unrestricted",
+            "network_policy": "open",
         },
     }
 

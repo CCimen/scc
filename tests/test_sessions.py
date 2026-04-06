@@ -504,7 +504,7 @@ class TestSchemaVersion:
     """Tests for schema_version field in SessionRecord."""
 
     def test_new_session_has_schema_version(self, sessions_file):
-        """New sessions should have schema_version=1."""
+        """New sessions should have schema_version=2."""
         sessions_file.write_text(json.dumps({"sessions": []}))
 
         record = sessions.record_session(
@@ -512,11 +512,11 @@ class TestSchemaVersion:
             team="dev",
         )
 
-        assert record.schema_version == 1
+        assert record.schema_version == 2
 
         # Verify saved
         saved = json.loads(sessions_file.read_text())
-        assert saved["sessions"][0].get("schema_version") == 1
+        assert saved["sessions"][0].get("schema_version") == 2
 
     def test_legacy_session_without_schema_version_defaults_to_1(self, sessions_file):
         """Sessions without schema_version should default to 1 when loaded."""
@@ -783,8 +783,14 @@ class TestSessionsCommandOutput:
         call_kwargs = mock_table.call_args.kwargs
         assert call_kwargs["title"] == "Recent Sessions (platform)"
         assert call_kwargs["columns"] == [("Session", "cyan"), ("Workspace", "white")]
-        assert call_kwargs["wide_columns"] == [("Last Used", "yellow"), ("Team", "green")]
-        assert call_kwargs["rows"] == [["session-1", "..." + "a" * 37, "2h ago", "platform"]]
+        assert call_kwargs["wide_columns"] == [
+            ("Last Used", "yellow"),
+            ("Team", "green"),
+            ("Provider", "magenta"),
+        ]
+        assert call_kwargs["rows"] == [
+            ["session-1", "..." + "a" * 37, "2h ago", "platform", "claude"]
+        ]
 
     def test_sessions_cmd_json_output(self, capsys) -> None:
         from scc_cli.commands.worktree.session_commands import sessions_cmd

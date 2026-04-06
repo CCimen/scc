@@ -1,4 +1,4 @@
-"""Session commands for Claude Code session management."""
+"""Session commands for agent session management."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def sessions_cmd(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> dict[str, Any]:
-    """List recent Claude Code sessions."""
+    """List recent sessions."""
     cfg = config.load_user_config()
     active_team = cfg.get("selected_profile")
     standalone_mode = config.is_standalone_mode()
@@ -90,6 +90,7 @@ def sessions_cmd(
             "last_used": session.last_used,
             "container_name": session.container_name,
             "branch": session.branch,
+            "provider_id": session.provider_id or "claude",
         }
         for session in recent
     ]
@@ -139,6 +140,7 @@ def sessions_cmd(
                 ws,
                 _format_last_used(session.last_used),
                 session.team or "-",
+                session.provider_id or "claude",
             ]
         )
 
@@ -158,6 +160,7 @@ def sessions_cmd(
         wide_columns=[
             ("Last Used", "yellow"),
             ("Team", "green"),
+            ("Provider", "magenta"),
         ],
     )
 
@@ -179,7 +182,7 @@ def session_list_cmd(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> None:
-    """List recent Claude Code sessions.
+    """List recent sessions.
 
     Alias for 'scc sessions'. Provides symmetric command structure.
 

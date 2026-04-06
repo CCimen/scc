@@ -37,7 +37,7 @@
         "enabled_plugins": [
             "scc-safety-net@sandboxed-code-official"
         ],
-        "network_policy": "unrestricted",
+        "network_policy": "open",
         "session": {
             "timeout_hours": 12,
             "auto_resume": true

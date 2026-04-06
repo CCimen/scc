@@ -194,7 +194,7 @@ def status_cmd(
     org_config = config.load_cached_org_config()
 
     # Get running containers
-    running_containers = docker.list_running_sandboxes()
+    running_containers = docker.list_running_scc_containers()
 
     # Get current workspace
     workspace_path = Path.cwd()
@@ -289,8 +289,22 @@ def doctor_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick status only"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
+    provider: str | None = typer.Option(
+        None, "--provider", help="Check readiness for a specific provider"
+    ),
 ) -> None:
     """Check prerequisites and system health."""
+    # Validate --provider against KNOWN_PROVIDERS
+    if provider is not None:
+        from scc_cli.core.provider_resolution import KNOWN_PROVIDERS
+
+        if provider not in KNOWN_PROVIDERS:
+            console.print(
+                f"[bold red]Error:[/bold red] Unknown provider '{provider}'. "
+                f"Known providers: {', '.join(KNOWN_PROVIDERS)}"
+            )
+            raise typer.Exit(2)
+
     workspace_path = Path(workspace).expanduser().resolve() if workspace else None
 
     # --pretty implies --json
@@ -300,7 +314,7 @@ def doctor_cmd(
 
     if json_output:
         with json_output_mode():
-            result = doctor.run_doctor(workspace_path)
+            result = doctor.run_doctor(workspace_path, provider_id=provider)
             data = doctor.build_doctor_json_data(result)
             envelope = build_envelope(Kind.DOCTOR_REPORT, data=data, ok=result.all_ok)
             print_json(envelope)
@@ -309,12 +323,12 @@ def doctor_cmd(
             raise typer.Exit(0)
 
     with Status("[cyan]Running health checks...[/cyan]", console=console, spinner=Spinners.DEFAULT):
-        result = doctor.run_doctor(workspace_path)
+        result = doctor.run_doctor(workspace_path, provider_id=provider)
 
     if quick:
         doctor.render_quick_status(console, result)
     else:
-        doctor.render_doctor_results(console, result)
+        doctor.render_doctor_results(console, result, provider_id=provider)
 
     # Return proper exit code
     if not result.all_ok:
@@ -357,7 +371,7 @@ def statusline_cmd(
     ),
     show: bool = typer.Option(False, "--show", "-s", help="Show current status line config"),
 ) -> None:
-    """Configure Claude Code status line to show git worktree info.
+    """Configure status line to show git worktree info.
 
     The status line displays: Model | Git branch/worktree | Context usage | Cost
 
@@ -459,13 +473,13 @@ def statusline_cmd(
                 "[bold]Model[/bold] | [cyan]🌿 branch[/cyan] or [magenta]⎇ worktree[/magenta]:branch | "
                 "[green]Ctx %[/green] | [yellow]$cost[/yellow][/dim]"
             )
-            console.print("[dim]Restart Claude Code sandbox to see the changes.[/dim]")
+            console.print("[dim]Restart sandbox to see the changes.[/dim]")
         else:
             console.print(
                 create_warning_panel(
                     "Installation Failed",
                     "Could not inject statusline into Docker sandbox volume.",
-                    "Ensure Docker Desktop is running",
+                    "Ensure Docker is running",
                 )
             )
             raise typer.Exit(1)
@@ -475,7 +489,7 @@ def statusline_cmd(
     console.print(
         create_info_panel(
             "Status Line",
-            "Configure a custom status line for Claude Code.",
+            "Configure a custom status line.",
             "Use --install to set up, --show to view, --uninstall to remove",
         )
     )

@@ -12,6 +12,11 @@ from scc_cli.adapters.config_normalizer import (
     normalize_project_config,
     normalize_user_config,
 )
+from scc_cli.ports.config_models import (
+    NormalizedOrgConfig,
+    SafetyNetConfig,
+    StatsConfig,
+)
 
 
 class TestNormalizeUserConfig:
@@ -286,6 +291,208 @@ class TestNormalizeProjectConfig:
 
         assert result is not None
         assert result.session.timeout_hours == 16
+
+
+class TestSafetyNetNormalization:
+    """Test security.safety_net normalization."""
+
+    def test_missing_safety_net_returns_defaults(self) -> None:
+        """Missing safety_net section should return default SafetyNetConfig."""
+        result = normalize_org_config({"organization": {"name": "Test"}})
+
+        assert result.security.safety_net.action == "block"
+        assert result.security.safety_net.rules == {}
+
+    def test_safety_net_with_action(self) -> None:
+        """Custom action should be preserved."""
+        raw = {
+            "organization": {"name": "Test"},
+            "security": {"safety_net": {"action": "warn"}},
+        }
+        result = normalize_org_config(raw)
+
+        assert result.security.safety_net.action == "warn"
+
+    def test_safety_net_with_rules(self) -> None:
+        """Rules dict should be preserved (D016: stays dict[str, Any])."""
+        raw = {
+            "organization": {"name": "Test"},
+            "security": {
+                "safety_net": {
+                    "action": "block",
+                    "rules": {"no_rm_rf": True, "max_file_size": 1024},
+                }
+            },
+        }
+        result = normalize_org_config(raw)
+
+        assert result.security.safety_net.rules == {"no_rm_rf": True, "max_file_size": 1024}
+
+    def test_safety_net_invalid_type_returns_defaults(self) -> None:
+        """Non-dict safety_net should return defaults."""
+        raw = {
+            "organization": {"name": "Test"},
+            "security": {"safety_net": "invalid"},
+        }
+        result = normalize_org_config(raw)
+
+        assert result.security.safety_net.action == "block"
+        assert result.security.safety_net.rules == {}
+
+    def test_safety_net_invalid_rules_returns_empty(self) -> None:
+        """Non-dict rules should normalize to empty dict."""
+        raw = {
+            "organization": {"name": "Test"},
+            "security": {"safety_net": {"action": "block", "rules": "not-a-dict"}},
+        }
+        result = normalize_org_config(raw)
+
+        assert result.security.safety_net.rules == {}
+
+    def test_safety_net_config_is_frozen(self) -> None:
+        """SafetyNetConfig should be immutable."""
+        config = SafetyNetConfig(action="warn", rules={"a": True})
+
+        with pytest.raises(AttributeError):
+            config.action = "block"  # type: ignore[misc]
+
+    def test_security_with_both_safety_net_and_blocklists(self) -> None:
+        """Safety_net should coexist with existing security fields."""
+        raw = {
+            "organization": {"name": "Test"},
+            "security": {
+                "blocked_plugins": ["bad-plugin"],
+                "safety_net": {"action": "warn", "rules": {"shell": False}},
+            },
+        }
+        result = normalize_org_config(raw)
+
+        assert result.security.blocked_plugins == ("bad-plugin",)
+        assert result.security.safety_net.action == "warn"
+        assert result.security.safety_net.rules == {"shell": False}
+
+
+class TestStatsNormalization:
+    """Test stats normalization."""
+
+    def test_missing_stats_returns_defaults(self) -> None:
+        """Missing stats section should return default StatsConfig."""
+        result = normalize_org_config({"organization": {"name": "Test"}})
+
+        assert result.stats.enabled is False
+        assert result.stats.endpoint is None
+
+    def test_stats_enabled(self) -> None:
+        """Stats enabled flag should be normalized."""
+        raw = {
+            "organization": {"name": "Test"},
+            "stats": {"enabled": True, "endpoint": "https://telemetry.example.com"},
+        }
+        result = normalize_org_config(raw)
+
+        assert result.stats.enabled is True
+        assert result.stats.endpoint == "https://telemetry.example.com"
+
+    def test_stats_invalid_type_returns_defaults(self) -> None:
+        """Non-dict stats should return defaults."""
+        raw = {
+            "organization": {"name": "Test"},
+            "stats": "invalid",
+        }
+        result = normalize_org_config(raw)
+
+        assert result.stats.enabled is False
+        assert result.stats.endpoint is None
+
+    def test_stats_config_is_frozen(self) -> None:
+        """StatsConfig should be immutable."""
+        config = StatsConfig(enabled=True, endpoint="https://example.com")
+
+        with pytest.raises(AttributeError):
+            config.enabled = False  # type: ignore[misc]
+
+
+class TestConfigSource:
+    """Test config_source passthrough."""
+
+    def test_missing_config_source_is_none(self) -> None:
+        """Missing config_source should default to None."""
+        result = normalize_org_config({"organization": {"name": "Test"}})
+
+        assert result.config_source is None
+
+    def test_config_source_string_preserved(self) -> None:
+        """String config_source should be preserved."""
+        raw = {
+            "organization": {"name": "Test"},
+            "config_source": "https://example.com/org.json",
+        }
+        result = normalize_org_config(raw)
+
+        assert result.config_source == "https://example.com/org.json"
+
+    def test_config_source_non_string_coerced(self) -> None:
+        """Non-string config_source should be coerced to string."""
+        raw = {
+            "organization": {"name": "Test"},
+            "config_source": 42,
+        }
+        result = normalize_org_config(raw)
+
+        assert result.config_source == "42"
+
+
+class TestNormalizedOrgConfigFromDict:
+    """Test NormalizedOrgConfig.from_dict() convenience method."""
+
+    def test_from_dict_returns_normalized_config(self) -> None:
+        """from_dict should return a properly normalized config."""
+        raw = {
+            "organization": {"name": "FromDict"},
+            "security": {"blocked_plugins": ["bad"]},
+        }
+        result = NormalizedOrgConfig.from_dict(raw)
+
+        assert isinstance(result, NormalizedOrgConfig)
+        assert result.organization.name == "FromDict"
+        assert result.security.blocked_plugins == ("bad",)
+
+    def test_from_dict_preserves_all_sections(self) -> None:
+        """from_dict should normalize all sections including new fields."""
+        raw = {
+            "organization": {"name": "Full"},
+            "security": {"safety_net": {"action": "warn"}},
+            "stats": {"enabled": True},
+            "config_source": "test-source",
+            "profiles": {"team1": {"description": "Team 1"}},
+        }
+        result = NormalizedOrgConfig.from_dict(raw)
+
+        assert result.security.safety_net.action == "warn"
+        assert result.stats.enabled is True
+        assert result.config_source == "test-source"
+        assert "team1" in result.profiles
+
+    def test_from_dict_empty_gives_defaults(self) -> None:
+        """from_dict with minimal input should give safe defaults."""
+        result = NormalizedOrgConfig.from_dict({"organization": {"name": "Min"}})
+
+        assert result.security.safety_net.action == "block"
+        assert result.stats.enabled is False
+        assert result.config_source is None
+
+    def test_from_dict_matches_normalize_org_config(self) -> None:
+        """from_dict should produce identical results to normalize_org_config."""
+        raw = {
+            "organization": {"name": "Compare"},
+            "security": {"safety_net": {"action": "warn", "rules": {"x": True}}},
+            "stats": {"enabled": True, "endpoint": "https://example.com"},
+            "config_source": "test",
+        }
+        from_dict_result = NormalizedOrgConfig.from_dict(raw)
+        direct_result = normalize_org_config(raw)
+
+        assert from_dict_result == direct_result
 
 
 class TestConfigModelImmutability:

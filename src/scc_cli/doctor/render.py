@@ -19,16 +19,37 @@ from rich.text import Text
 
 from scc_cli import __version__
 from scc_cli.core.enums import SeverityLevel
+from scc_cli.core.provider_resolution import get_provider_display_name
 
 from .core import run_doctor
-from .types import DoctorResult
+from .types import CheckResult, DoctorResult
+
+# Category display order and labels for grouped rendering
+_CATEGORY_ORDER: list[str] = ["backend", "provider", "config", "worktree", "general"]
+_CATEGORY_LABELS: dict[str, str] = {
+    "backend": "Backend",
+    "provider": "Provider",
+    "config": "Configuration",
+    "worktree": "Worktree",
+    "general": "General",
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Rich Terminal UI Rendering
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def render_doctor_results(console: Console, result: DoctorResult) -> None:
+def _sort_checks_by_category(checks: list[CheckResult]) -> list[CheckResult]:
+    """Sort checks by category order, preserving insertion order within each category."""
+    order_map = {cat: idx for idx, cat in enumerate(_CATEGORY_ORDER)}
+    return sorted(checks, key=lambda c: order_map.get(c.category, len(_CATEGORY_ORDER)))
+
+
+def render_doctor_results(
+    console: Console,
+    result: DoctorResult,
+    provider_id: str | None = None,
+) -> None:
     """Render doctor results with beautiful Rich formatting.
 
     Uses consistent styling with the rest of the CLI:
@@ -36,6 +57,13 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
     - Green for success
     - Yellow for warnings
     - Red for errors
+
+    Checks are grouped by category with section headers.
+
+    Args:
+        console: Rich console for output.
+        result: Doctor check results.
+        provider_id: Active provider identifier for branding. Defaults to "claude".
     """
     # Header
     console.print()
@@ -53,14 +81,27 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
     table.add_column("Check", min_width=20)
     table.add_column("Details", min_width=30)
 
-    for check in result.checks:
+    sorted_checks = _sort_checks_by_category(result.checks)
+    current_category: str | None = None
+
+    for check in sorted_checks:
+        # Insert category header when category changes
+        if check.category != current_category:
+            current_category = check.category
+            label = _CATEGORY_LABELS.get(current_category, current_category.title())
+            table.add_row(
+                Text(""),
+                Text(f"── {label} ──", style="bold cyan"),
+                Text(""),
+            )
+
         # Status icon with color
         if check.passed:
-            status = Text("  ", style="bold green")
+            status = Text("  ✓", style="bold green")
         elif check.severity == SeverityLevel.WARNING:
-            status = Text("  ", style="bold yellow")
+            status = Text("  ⚠", style="bold yellow")
         else:
-            status = Text("  ", style="bold red")
+            status = Text("  ✗", style="bold red")
 
         # Check name
         name = Text(check.name, style="white")
@@ -77,18 +118,29 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
         table.add_row(status, name, details)
 
     # Wrap table in panel
-    title_style = "bold green" if result.all_ok else "bold red"
+    has_failed_checks = any(not check.passed for check in result.checks)
+    title_style = (
+        "bold green"
+        if result.all_ok and not has_failed_checks
+        else "bold yellow"
+        if result.all_ok
+        else "bold red"
+    )
     version_suffix = f" (scc-cli v{__version__})"
     title_text = (
         f"System Health Check{version_suffix}"
-        if result.all_ok
+        if result.all_ok and not has_failed_checks
         else f"System Health Check - Issues Found{version_suffix}"
     )
 
     panel = Panel(
         table,
         title=f"[{title_style}]{title_text}[/{title_style}]",
-        border_style="green" if result.all_ok else "red",
+        border_style="green"
+        if result.all_ok and not has_failed_checks
+        else "yellow"
+        if result.all_ok
+        else "red",
         padding=(1, 1),
     )
 
@@ -109,11 +161,45 @@ def render_doctor_results(console: Console, result: DoctorResult) -> None:
             console.print(code_panel)
 
     # Summary line
-    if result.all_ok:
+    if result.all_ok and not has_failed_checks:
+        if provider_id is None:
+            _display = " and ".join(
+                get_provider_display_name(current_provider_id)
+                for current_provider_id in ("claude", "codex")
+            )
+        else:
+            _display = get_provider_display_name(provider_id)
         console.print()
         console.print(
-            "  [bold green]All prerequisites met![/bold green] [dim]Ready to run Claude Code.[/dim]"
+            f"  [bold green]All prerequisites met![/bold green] [dim]Ready to run {_display}.[/dim]"
         )
+    elif result.all_ok:
+        console.print()
+        summary_parts = []
+        if result.warning_count > 0:
+            summary_parts.append(f"[bold yellow]{result.warning_count} warning(s)[/bold yellow]")
+        if result.error_count > 0:
+            summary_parts.append(f"[bold red]{result.error_count} error(s)[/bold red]")
+        console.print(
+            f"  [bold green]Core prerequisites met.[/bold green] "
+            f"[dim]Provider setup still needs attention: {' and '.join(summary_parts)}.[/dim]"
+        )
+
+        checks_with_commands = [c for c in result.checks if not c.passed and c.fix_commands]
+        if checks_with_commands:
+            console.print()
+            console.print("  [bold cyan]Next Steps[/bold cyan]")
+            console.print("  [dim]────────────────────────────────────────────────────[/dim]")
+            console.print()
+
+            for check in checks_with_commands:
+                console.print(f"  [bold white]{check.name}:[/bold white]")
+                if check.fix_hint:
+                    console.print(f"    [dim]{check.fix_hint}[/dim]")
+                if check.fix_commands:
+                    for i, cmd in enumerate(check.fix_commands, 1):
+                        console.print(f"    [cyan]{i}.[/cyan] [white]{cmd}[/white]")
+                console.print()
     else:
         console.print()
         summary_parts = []

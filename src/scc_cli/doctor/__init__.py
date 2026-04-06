@@ -1,7 +1,7 @@
 """Provide system diagnostics and health checks for SCC-CLI.
 
 Offer comprehensive health checks for all prerequisites needed to run
-Claude Code in Docker sandboxes.
+AI coding agents in Docker sandboxes.
 
 Philosophy: "Fast feedback, clear guidance"
 - Check all prerequisites quickly
@@ -30,7 +30,9 @@ from scc_cli.doctor.checks import (
     check_git_version_for_worktrees,
     check_marketplace_auth_available,
     check_org_config_reachable,
+    check_provider_auth,
     check_proxy_environment,
+    check_runtime_backend,
     check_user_config_valid,
     check_workspace_path,
     check_worktree_branch_conflicts,
@@ -74,6 +76,7 @@ __all__ = [
     "check_docker_desktop",
     "check_docker_sandbox",
     "check_docker_running",
+    "check_runtime_backend",
     "check_wsl2",
     "check_workspace_path",
     "check_worktree_health",
@@ -87,6 +90,7 @@ __all__ = [
     "check_cache_readable",
     "check_cache_ttl_status",
     "check_exception_stores",
+    "check_provider_auth",
     "check_proxy_environment",
     "run_all_checks",
     # Orchestration and rendering

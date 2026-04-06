@@ -1,6 +1,8 @@
 """
 Claude Code Settings Adapter.
 
+Canonical location: scc_cli.adapters.claude_settings
+
 This module is the ONLY place that knows about Claude Code's settings format.
 If Claude Code changes its format, update ONLY this file + test_claude_adapter.py.
 
@@ -9,7 +11,7 @@ Current known format (may change):
 - enabledPlugins: list of "plugin@marketplace" strings
 
 MAINTENANCE RULE: If Claude Code changes format, update ONLY:
-1. claude_adapter.py - this file
+1. adapters/claude_settings.py - this file
 2. test_claude_adapter.py - adapter output shape tests
 
 No other module should import or reference extraKnownMarketplaces or enabledPlugins.

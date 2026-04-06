@@ -391,14 +391,14 @@ class TestTeamProfile:
                     url="https://mcp.example.com",
                 )
             ],
-            network_policy="isolated",
+            network_policy="locked-down-web",
             session=SessionConfig(timeout_hours=4, auto_resume=False),
             delegation=TeamDelegationConfig(allow_project_overrides=True),
         )
         assert profile.description == "High-security environment"
         assert profile.additional_plugins == ["security-scanner@internal"]
         assert profile.additional_mcp_servers[0].name == "audit"
-        assert profile.network_policy == "isolated"
+        assert profile.network_policy == "locked-down-web"
         assert profile.session.timeout_hours == 4
         assert profile.delegation is not None
         assert profile.delegation.allow_project_overrides is True

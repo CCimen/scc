@@ -1,6 +1,6 @@
 """Define data models for plugin audit feature.
 
-Provide models for auditing Claude Code plugins, including manifest
+Provide models for auditing plugins, including manifest
 parsing results and status reporting.
 
 The audit feature gives visibility into plugin components (MCP servers,

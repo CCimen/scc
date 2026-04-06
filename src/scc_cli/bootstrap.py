@@ -5,20 +5,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
+from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
 from scc_cli.adapters.claude_agent_runner import ClaudeAgentRunner
+from scc_cli.adapters.claude_safety_adapter import ClaudeSafetyAdapter
+from scc_cli.adapters.claude_settings import (
+    merge_mcp_servers,  # noqa: F401 — re-exported public API
+)
+from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
+from scc_cli.adapters.codex_safety_adapter import CodexSafetyAdapter
+from scc_cli.adapters.docker_runtime_probe import DockerRuntimeProbe
 from scc_cli.adapters.docker_sandbox_runtime import DockerSandboxRuntime
+from scc_cli.adapters.local_audit_event_sink import LocalAuditEventSink
 from scc_cli.adapters.local_config_store import LocalConfigStore
 from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_doctor_runner import LocalDoctorRunner
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
+from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
 from scc_cli.adapters.personal_profile_service_local import LocalPersonalProfileService
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.session_store_json import JsonSessionStore
 from scc_cli.adapters.system_clock import SystemClock
 from scc_cli.adapters.zip_archive_writer import ZipArchiveWriter
+from scc_cli.core.safety_engine import DefaultSafetyEngine
+from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
 from scc_cli.ports.archive_writer import ArchiveWriter
+from scc_cli.ports.audit_event_sink import AuditEventSink
 from scc_cli.ports.clock import Clock
 from scc_cli.ports.config_store import ConfigStore
 from scc_cli.ports.dependency_installer import DependencyInstaller
@@ -27,6 +41,9 @@ from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.personal_profile_service import PersonalProfileService
 from scc_cli.ports.remote_fetcher import RemoteFetcher
+from scc_cli.ports.runtime_probe import RuntimeProbe
+from scc_cli.ports.safety_adapter import SafetyAdapter
+from scc_cli.ports.safety_engine import SafetyEngine
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 from scc_cli.ports.session_store import SessionStore
 
@@ -41,16 +58,38 @@ class DefaultAdapters:
     remote_fetcher: RemoteFetcher
     clock: Clock
     agent_runner: AgentRunner
+    agent_provider: AgentProvider
     sandbox_runtime: SandboxRuntime
     personal_profile_service: PersonalProfileService
     doctor_runner: DoctorRunner
     archive_writer: ArchiveWriter
     config_store: ConfigStore
+    audit_event_sink: AuditEventSink | None = None
+    codex_agent_provider: AgentProvider | None = None
+    runtime_probe: RuntimeProbe | None = None
+    safety_engine: SafetyEngine | None = None
+    codex_agent_runner: AgentRunner | None = None
+    claude_safety_adapter: SafetyAdapter | None = None
+    codex_safety_adapter: SafetyAdapter | None = None
 
 
 @lru_cache(maxsize=1)
 def get_default_adapters() -> DefaultAdapters:
     """Return the default adapter wiring for SCC."""
+
+    probe = DockerRuntimeProbe()
+    info = probe.probe()
+
+    # Select sandbox runtime based on probe result.
+    sandbox_runtime: SandboxRuntime
+    if info.preferred_backend == "oci":
+        sandbox_runtime = OciSandboxRuntime(probe=probe)
+    else:
+        sandbox_runtime = DockerSandboxRuntime(probe=probe)
+
+    # Shared engine and sink — reused by safety_engine field and both adapters.
+    engine = DefaultSafetyEngine()
+    sink = LocalAuditEventSink()
 
     return DefaultAdapters(
         filesystem=LocalFilesystem(),
@@ -59,11 +98,19 @@ def get_default_adapters() -> DefaultAdapters:
         remote_fetcher=RequestsFetcher(),
         clock=SystemClock(),
         agent_runner=ClaudeAgentRunner(),
-        sandbox_runtime=DockerSandboxRuntime(),
+        agent_provider=ClaudeAgentProvider(),
+        codex_agent_runner=CodexAgentRunner(),
+        sandbox_runtime=sandbox_runtime,
         personal_profile_service=LocalPersonalProfileService(),
         doctor_runner=LocalDoctorRunner(),
         archive_writer=ZipArchiveWriter(),
         config_store=LocalConfigStore(),
+        audit_event_sink=sink,
+        codex_agent_provider=CodexAgentProvider(),
+        runtime_probe=probe,
+        safety_engine=engine,
+        claude_safety_adapter=ClaudeSafetyAdapter(engine=engine, audit_sink=sink),
+        codex_safety_adapter=CodexSafetyAdapter(engine=engine, audit_sink=sink),
     )
 
 

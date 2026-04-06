@@ -1,5 +1,5 @@
 """
-Typed exceptions for SCC - Sandboxed Claude CLI.
+Typed exceptions for SCC - Sandboxed Coding CLI.
 
 Error handling philosophy: "One message, one action"
 - Each error has a clear user_message (what went wrong)
@@ -246,6 +246,34 @@ class ContainerNotFoundError(ToolError):
 
 
 @dataclass
+class ExistingSandboxConflictError(ToolError):
+    """A live sandbox already exists for this workspace/provider."""
+
+    container_name: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.user_message:
+            if self.container_name:
+                self.user_message = (
+                    f"An SCC sandbox is already running for this workspace: {self.container_name}"
+                )
+            else:
+                self.user_message = "An SCC sandbox is already running for this workspace"
+        if not self.suggested_action:
+            if self.container_name:
+                self.suggested_action = (
+                    "Use 'scc start --fresh' to replace it, "
+                    f"'scc stop {shlex.quote(self.container_name)}' to stop it, "
+                    "or remove it manually first."
+                )
+            else:
+                self.suggested_action = "Use 'scc start --fresh' to replace it, or stop/remove the existing container first"
+
+
+@dataclass
 class InternalError(SCCError):
     """Internal error (bug in the CLI)."""
 
@@ -314,3 +342,314 @@ class PolicyViolationError(ConfigError):
                 f'{flag} {quoted_item} --ttl 8h --reason "..."'
             )
             self.suggested_action = f"To request a policy exception (requires PR approval): {cmd}"
+
+
+@dataclass
+class ProviderNotAllowedError(PolicyViolationError):
+    """Resolved provider is not in the team's allowed_providers list."""
+
+    provider_id: str = ""
+    allowed_providers: tuple[str, ...] = ()
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message and self.provider_id:
+            allowed = ", ".join(self.allowed_providers) if self.allowed_providers else "none"
+            self.user_message = (
+                f"Provider '{self.provider_id}' is not allowed by team policy. "
+                f"Allowed providers: [{allowed}]"
+            )
+        if not self.suggested_action:
+            self.suggested_action = (
+                "Use one of the allowed providers, or ask your team admin "
+                "to update the allowed_providers list."
+            )
+
+
+@dataclass
+class InvalidProviderError(SCCError):
+    """Provider ID is not recognised by the runtime registry."""
+
+    provider_id: str = ""
+    known_providers: tuple[str, ...] = ()
+    exit_code: int = field(default=2, init=False)
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = (
+                f"Unknown provider '{self.provider_id}'. "
+                f"Known providers: {', '.join(self.known_providers)}"
+            )
+        if not self.suggested_action:
+            self.suggested_action = f"Use one of: {', '.join(self.known_providers)}"
+
+
+@dataclass
+class ProviderNotReadyError(PrerequisiteError):
+    """Provider is not ready for use (general readiness failure)."""
+
+    provider_id: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = (
+                f"Provider '{self.provider_id}' is not ready. "
+                "Required prerequisites are missing or misconfigured."
+            )
+        if not self.suggested_action:
+            self.suggested_action = (
+                f"Run 'scc doctor --provider {self.provider_id}' to diagnose, "
+                "then follow the suggested fixes."
+            )
+
+
+@dataclass
+class ProviderImageMissingError(PrerequisiteError):
+    """Provider container image is not available locally."""
+
+    provider_id: str = ""
+    image_ref: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            image_detail = f" ({self.image_ref})" if self.image_ref else ""
+            self.user_message = (
+                f"Container image for provider '{self.provider_id}' "
+                f"is not available locally{image_detail}."
+            )
+        if not self.suggested_action:
+            if self.provider_id:
+                self.suggested_action = (
+                    f"Build the image with: docker build -t <image> "
+                    f"images/scc-agent-{self.provider_id}/"
+                )
+            else:
+                self.suggested_action = "Build the provider image and try again."
+
+
+@dataclass
+class ProviderImageBuildError(ToolError):
+    """Provider container image build failed."""
+
+    provider_id: str = ""
+    image_ref: str = ""
+    build_command: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.user_message:
+            image_detail = f" ({self.image_ref})" if self.image_ref else ""
+            self.user_message = (
+                f"Failed to build the container image for provider '{self.provider_id}'"
+                f"{image_detail}."
+            )
+        if not self.suggested_action:
+            if self.build_command:
+                self.suggested_action = (
+                    f"Review the Docker build output and retry:\n  {self.build_command}"
+                )
+            else:
+                self.suggested_action = "Review the Docker build output and try again."
+
+
+@dataclass
+class LaunchPreflightError(ConfigError):
+    """Launch was blocked before runtime startup."""
+
+    provider_id: str = ""
+    network_policy: str = ""
+    required_destination_sets: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass
+class InvalidLaunchPlanError(LaunchPreflightError):
+    """Prepared launch metadata is missing or malformed."""
+
+    reason: str = "Launch plan is invalid."
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Repair the provider launch wiring and try the command again."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = self.reason
+
+
+@dataclass
+class LaunchPolicyBlockedError(LaunchPreflightError):
+    """Launch cannot proceed under the current network policy."""
+
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default=(
+            "Choose a less restrictive network policy or use a provider whose "
+            "required destination sets are allowed."
+        )
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            required = ", ".join(self.required_destination_sets) or "none"
+            provider = self.provider_id or "unknown"
+            policy = self.network_policy or "unknown"
+            self.user_message = (
+                f"Launch blocked before startup: provider '{provider}' requires "
+                f"destination sets [{required}] but the current network policy is '{policy}'."
+            )
+
+
+@dataclass
+class LaunchAuditWriteError(ConfigError):
+    """Launch audit event could not be persisted."""
+
+    audit_destination: str = ""
+    event_type: str = ""
+    reason: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check that SCC's local audit path exists and is writable, then retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            destination = self.audit_destination or "the configured audit sink"
+            self.user_message = f"Failed to write launch audit event to {destination}."
+        if not self.debug_context:
+            details = []
+            if self.event_type:
+                details.append(f"event_type={self.event_type}")
+            if self.reason:
+                details.append(f"error={self.reason}")
+            if details:
+                self.debug_context = "\n".join(details)
+
+
+@dataclass
+class LaunchAuditUnavailableError(ConfigError):
+    """Launch auditing is required but the sink is not wired."""
+
+    user_message: str = field(default="Launch audit sink is not configured.")
+    suggested_action: str = field(
+        default="Use the SCC-wired launch dependency builder so preflight can audit before startup."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Renderer / artifact pipeline errors  (fail-closed)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RendererError(SCCError):
+    """Base error for artifact rendering pipeline failures.
+
+    All renderer errors are fail-closed — if an artifact cannot be safely
+    rendered, the pipeline blocks rather than silently skipping.  Error
+    payloads are structured for support bundles and ``scc doctor`` checks.
+    """
+
+    bundle_id: str = ""
+    artifact_name: str = ""
+    exit_code: int = field(default=4, init=False)
+
+
+@dataclass
+class BundleResolutionError(RendererError):
+    """A bundle referenced by the team config could not be resolved.
+
+    Raised for missing bundle IDs or invalid artifact references that
+    cannot be silently skipped under fail-closed policy.
+    """
+
+    available_bundles: tuple[str, ...] = ()
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check the team's enabled_bundles list against the governed_artifacts catalog."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            available = ", ".join(self.available_bundles) if self.available_bundles else "none"
+            self.user_message = (
+                f"Bundle '{self.bundle_id}' not found in the governed artifacts catalog. "
+                f"Available bundles: [{available}]"
+            )
+
+
+@dataclass
+class InvalidArtifactReferenceError(RendererError):
+    """An artifact reference inside a bundle is invalid or malformed.
+
+    Fail-closed: the entire bundle is blocked if any artifact reference
+    cannot be validated.
+    """
+
+    reason: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Fix the artifact reference in the governed_artifacts catalog and retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            self.user_message = (
+                f"Invalid artifact reference '{self.artifact_name}' "
+                f"in bundle '{self.bundle_id}': {self.reason}"
+            )
+
+
+@dataclass
+class MaterializationError(RendererError):
+    """Artifact content could not be materialized to disk.
+
+    Covers file-write failures, directory creation errors, and
+    serialization problems during rendering.
+    """
+
+    target_path: str = ""
+    reason: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check filesystem permissions and disk space, then retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            where = f" at '{self.target_path}'" if self.target_path else ""
+            self.user_message = (
+                f"Failed to materialize artifact '{self.artifact_name}'"
+                f"{where} for bundle '{self.bundle_id}': {self.reason}"
+            )
+
+
+@dataclass
+class MergeConflictError(RendererError):
+    """A merge conflict was detected on a single-file surface.
+
+    Covers hooks.json merge conflicts, .mcp.json merge conflicts,
+    and settings.local.json merge conflicts.
+    """
+
+    target_path: str = ""
+    conflict_detail: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Resolve the conflict manually or remove the conflicting file and retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            where = f" in '{self.target_path}'" if self.target_path else ""
+            self.user_message = (
+                f"Merge conflict{where} for bundle '{self.bundle_id}': {self.conflict_detail}"
+            )

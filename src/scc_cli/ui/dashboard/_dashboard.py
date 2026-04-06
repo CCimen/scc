@@ -33,7 +33,6 @@ from scc_cli.application.dashboard import (
     StatusAction,
     StatusItem,
     WorktreeItem,
-    placeholder_start_reason,
     placeholder_tip,
 )
 
@@ -43,26 +42,7 @@ from ...theme import Indicators
 from ..chrome import Chrome, ChromeConfig, FooterHint, get_layout_metrics
 from ..keys import (
     Action,
-    ActionType,
-    ContainerActionMenuRequested,
-    ContainerRemoveRequested,
-    ContainerResumeRequested,
-    ContainerStopRequested,
-    CreateWorktreeRequested,
-    GitInitRequested,
     KeyReader,
-    ProfileMenuRequested,
-    RecentWorkspacesRequested,
-    RefreshRequested,
-    SandboxImportRequested,
-    SessionActionMenuRequested,
-    SessionResumeRequested,
-    SettingsRequested,
-    StartRequested,
-    StatuslineInstallRequested,
-    TeamSwitchRequested,
-    VerboseToggleRequested,
-    WorktreeActionMenuRequested,
 )
 from ..list_screen import ListItem
 from ..time_format import format_relative_time_from_datetime
@@ -337,6 +317,7 @@ class Dashboard:
 
     def _render_container_details(self, item: ListItem[Any]) -> RenderableType:
         """Render details for a container item using structured key/value table."""
+        from ...application.dashboard_models import ContainerSummary
         from ...docker.core import ContainerInfo
         from ..formatters import _shorten_docker_status
 
@@ -349,7 +330,7 @@ class Dashboard:
 
         table.add_row("Name", Text(item.label, style="bold"))
 
-        container: ContainerInfo | None = None
+        container: ContainerInfo | ContainerSummary | None = None
         if isinstance(item.value, ContainerItem):
             container = item.value.container
         elif isinstance(item.value, ContainerInfo):
@@ -612,355 +593,19 @@ class Dashboard:
     def _handle_action(self, action: Action[None]) -> bool | None:
         """Handle an action and update state.
 
+        Delegates to handle_dashboard_action in _dashboard_actions.py.
+
         Returns:
             True to force refresh (state changed by us, not action).
             False to exit dashboard.
             None to continue (refresh only if action.state_changed).
         """
-        # Selective status clearing: only clear on navigation/filter/tab actions
-        # This preserves toast messages during non-state-changing actions (e.g., help)
-        status_clearing_actions = {
-            ActionType.NAVIGATE_UP,
-            ActionType.NAVIGATE_DOWN,
-            ActionType.TAB_NEXT,
-            ActionType.TAB_PREV,
-            ActionType.FILTER_CHAR,
-            ActionType.FILTER_DELETE,
-        }
-        # Also clear status on 'r' (refresh), which is a CUSTOM action in dashboard
-        is_refresh_action = action.action_type == ActionType.CUSTOM and action.custom_key == "r"
-        if self.state.status_message and (
-            action.action_type in status_clearing_actions or is_refresh_action
-        ):
-            self.state.status_message = None
+        from ._dashboard_actions import handle_dashboard_action
 
-        match action.action_type:
-            case ActionType.NAVIGATE_UP:
-                self.state.list_state.move_cursor(-1)
-
-            case ActionType.NAVIGATE_DOWN:
-                self.state.list_state.move_cursor(1)
-
-            case ActionType.TAB_NEXT:
-                self.state = self.state.next_tab()
-
-            case ActionType.TAB_PREV:
-                self.state = self.state.prev_tab()
-
-            case ActionType.FILTER_CHAR:
-                if action.filter_char and self.state.filter_mode:
-                    self.state.list_state.add_filter_char(action.filter_char)
-
-            case ActionType.FILTER_DELETE:
-                if self.state.filter_mode or self.state.list_state.filter_query:
-                    self.state.list_state.delete_filter_char()
-
-            case ActionType.CANCEL:
-                # ESC precedence: details → filter → no-op
-                if self.state.details_open:
-                    self.state.details_open = False
-                    return True
-                if self.state.filter_mode or self.state.list_state.filter_query:
-                    self.state.list_state.clear_filter()
-                    self.state.filter_mode = False
-                    return True
-                return None
-
-            case ActionType.QUIT:
-                return False
-
-            case ActionType.TOGGLE:
-                # Space toggles details pane
-                current = self.state.list_state.current_item
-                if not current:
-                    return None
-                if self.state.active_tab == DashboardTab.STATUS:
-                    self.state.status_message = "Details not available in Status tab"
-                    return True
-                if self.state.is_placeholder_selected():
-                    if isinstance(current.value, PlaceholderItem):
-                        self.state.status_message = self._get_placeholder_tip(current.value)
-                    else:
-                        self.state.status_message = "No details available for this item"
-                    return True
-                self.state.details_open = not self.state.details_open
-                return True
-
-            case ActionType.SELECT:
-                # On Status tab, Enter triggers different actions based on item
-                if self.state.active_tab == DashboardTab.STATUS:
-                    current = self.state.list_state.current_item
-                    if current and isinstance(current.value, StatusItem):
-                        status_action = current.value.action
-                        if status_action is StatusAction.RESUME_SESSION and current.value.session:
-                            raise SessionResumeRequested(
-                                session=current.value.session,
-                                return_to=self.state.active_tab.name,
-                            )
-
-                        if status_action is StatusAction.START_SESSION:
-                            raise StartRequested(
-                                return_to=self.state.active_tab.name,
-                                reason="dashboard_start",
-                            )
-
-                        if status_action is StatusAction.SWITCH_TEAM:
-                            if scc_config.is_standalone_mode():
-                                self.state.status_message = (
-                                    "Teams require org mode. Run `scc setup` to configure."
-                                )
-                                return True
-                            raise TeamSwitchRequested()
-
-                        if status_action is StatusAction.OPEN_TAB and current.value.action_tab:
-                            self.state.list_state.clear_filter()
-                            self.state = self.state.switch_tab(current.value.action_tab)
-                            return True
-
-                        if status_action is StatusAction.INSTALL_STATUSLINE:
-                            raise StatuslineInstallRequested(return_to=self.state.active_tab.name)
-
-                        if status_action is StatusAction.OPEN_PROFILE:
-                            raise ProfileMenuRequested(return_to=self.state.active_tab.name)
-
-                        if status_action is StatusAction.OPEN_SETTINGS:
-                            raise SettingsRequested(return_to=self.state.active_tab.name)
-                else:
-                    # Resource tabs handling (Containers, Worktrees, Sessions)
-                    current = self.state.list_state.current_item
-                    if not current:
-                        return None
-
-                    if self.state.is_placeholder_selected():
-                        if isinstance(current.value, PlaceholderItem):
-                            if current.value.startable:
-                                raise StartRequested(
-                                    return_to=self.state.active_tab.name,
-                                    reason=placeholder_start_reason(current.value),
-                                )
-                            self.state.status_message = self._get_placeholder_tip(current.value)
-                            return True
-                        self.state.status_message = "No details available for this item"
-                        return True
-
-                    if self.state.active_tab == DashboardTab.SESSIONS and isinstance(
-                        current.value, SessionItem
-                    ):
-                        raise SessionResumeRequested(
-                            session=current.value.session,
-                            return_to=self.state.active_tab.name,
-                        )
-
-                    if self.state.active_tab == DashboardTab.WORKTREES and isinstance(
-                        current.value, WorktreeItem
-                    ):
-                        raise StartRequested(
-                            return_to=self.state.active_tab.name,
-                            reason=f"worktree:{current.value.path}",
-                        )
-
-                    if self.state.active_tab == DashboardTab.CONTAINERS and isinstance(
-                        current.value, ContainerItem
-                    ):
-                        raise ContainerActionMenuRequested(
-                            container_id=current.value.container.id,
-                            container_name=current.value.container.name,
-                            return_to=self.state.active_tab.name,
-                        )
-
-                    if self.state.active_tab == DashboardTab.SESSIONS and isinstance(
-                        current.value, SessionItem
-                    ):
-                        raise SessionActionMenuRequested(
-                            session=current.value.session,
-                            return_to=self.state.active_tab.name,
-                        )
-
-                    if self.state.active_tab == DashboardTab.WORKTREES and isinstance(
-                        current.value, WorktreeItem
-                    ):
-                        raise WorktreeActionMenuRequested(
-                            worktree_path=current.value.path,
-                            return_to=self.state.active_tab.name,
-                        )
-
-                    return None
-
-            case ActionType.TOGGLE_ALL:
-                # 'a' actions menu
-                current = self.state.list_state.current_item
-                if not current or self.state.is_placeholder_selected():
-                    self.state.status_message = "No item selected"
-                    return True
-
-                if self.state.active_tab == DashboardTab.CONTAINERS and isinstance(
-                    current.value, ContainerItem
-                ):
-                    raise ContainerActionMenuRequested(
-                        container_id=current.value.container.id,
-                        container_name=current.value.container.name,
-                        return_to=self.state.active_tab.name,
-                    )
-
-                if self.state.active_tab == DashboardTab.SESSIONS and isinstance(
-                    current.value, SessionItem
-                ):
-                    raise SessionActionMenuRequested(
-                        session=current.value.session,
-                        return_to=self.state.active_tab.name,
-                    )
-
-                if self.state.active_tab == DashboardTab.WORKTREES and isinstance(
-                    current.value, WorktreeItem
-                ):
-                    raise WorktreeActionMenuRequested(
-                        worktree_path=current.value.path,
-                        return_to=self.state.active_tab.name,
-                    )
-
-                return None
-
-            case ActionType.TEAM_SWITCH:
-                # In standalone mode, show guidance instead of switching
-                if scc_config.is_standalone_mode():
-                    self.state.status_message = (
-                        "Teams require org mode. Run `scc setup` to configure."
-                    )
-                    return True  # Refresh to show message
-                # Bubble up to orchestrator for consistent team switching
-                raise TeamSwitchRequested()
-
-            case ActionType.HELP:
-                # Show help overlay INSIDE the Live context (avoids scroll artifacts)
-                # The overlay is rendered in _render() and dismissed on next keypress
-                self.state.help_visible = True
-                return True  # Refresh to show help overlay
-
-            case ActionType.CUSTOM:
-                # Handle dashboard-specific custom keys (not in DEFAULT_KEY_MAP)
-                if action.custom_key == "/":
-                    self.state.filter_mode = True
-                    return True
-                if action.custom_key == "r":
-                    # User pressed 'r' - signal orchestrator to reload tab data
-                    # Uses .name (stable identifier) not .value (display string)
-                    raise RefreshRequested(return_to=self.state.active_tab.name)
-                elif action.custom_key == "n":
-                    # User pressed 'n' - start new session (skip any resume prompts)
-                    raise StartRequested(
-                        return_to=self.state.active_tab.name,
-                        reason="dashboard_new_session",
-                    )
-                elif action.custom_key == "s":
-                    # User pressed 's' - open settings and maintenance screen
-                    raise SettingsRequested(return_to=self.state.active_tab.name)
-                elif action.custom_key == "p":
-                    # User pressed 'p' - open profile menu
-                    # Only works when filter is empty to avoid conflict with type-to-filter
-                    if not self.state.list_state.filter_query:
-                        raise ProfileMenuRequested(return_to=self.state.active_tab.name)
-                    # When filter is active, 'p' is treated as filter char (handled by KeyReader)
-                elif action.custom_key == "w":
-                    # User pressed 'w' - show recent workspaces picker
-                    # Only active on Worktrees tab
-                    if self.state.active_tab == DashboardTab.WORKTREES:
-                        raise RecentWorkspacesRequested(return_to=self.state.active_tab.name)
-                elif action.custom_key == "i":
-                    # User pressed 'i' - context-aware action
-                    # Status tab: import sandbox plugins (only when filter is empty)
-                    if self.state.active_tab == DashboardTab.STATUS:
-                        if not self.state.list_state.filter_query:
-                            raise SandboxImportRequested(return_to=self.state.active_tab.name)
-                    elif self.state.active_tab == DashboardTab.WORKTREES:
-                        current = self.state.list_state.current_item
-                        # Only show when placeholder indicates no git repo
-                        is_non_git = (
-                            current
-                            and isinstance(current.value, PlaceholderItem)
-                            and current.value.kind
-                            in {
-                                PlaceholderKind.NO_GIT,
-                                PlaceholderKind.NO_WORKTREES,
-                            }
-                        )
-                        if is_non_git:
-                            raise GitInitRequested(return_to=self.state.active_tab.name)
-                        self.state.status_message = "Already in a git repository"
-                        return True
-                elif action.custom_key == "c":
-                    # User pressed 'c' - create worktree (or clone if not git)
-                    # Only active on Worktrees tab
-                    if self.state.active_tab == DashboardTab.WORKTREES:
-                        current = self.state.list_state.current_item
-                        # Check if we're in a git repo
-                        is_git_repo = True
-                        if current and isinstance(current.value, PlaceholderItem):
-                            is_git_repo = current.value.kind not in {
-                                PlaceholderKind.NO_GIT,
-                                PlaceholderKind.NO_WORKTREES,
-                            }
-                        raise CreateWorktreeRequested(
-                            return_to=self.state.active_tab.name,
-                            is_git_repo=is_git_repo,
-                        )
-                elif action.custom_key == "verbose_toggle":
-                    # User pressed 'v' - toggle verbose status display
-                    # Only active on Worktrees tab
-                    if self.state.active_tab == DashboardTab.WORKTREES:
-                        new_verbose = not self.state.verbose_worktrees
-                        raise VerboseToggleRequested(
-                            return_to=self.state.active_tab.name,
-                            verbose=new_verbose,
-                        )
-                elif action.custom_key in {"K", "R", "D"}:
-                    # Container actions: stop/resume/delete
-                    if self.state.active_tab == DashboardTab.CONTAINERS:
-                        current = self.state.list_state.current_item
-                        if not current or self.state.is_placeholder_selected():
-                            self.state.status_message = "No container selected"
-                            return True
-
-                        from ...docker.core import ContainerInfo
-
-                        key_container: ContainerInfo | None = None
-                        if isinstance(current.value, ContainerItem):
-                            key_container = current.value.container
-                        elif isinstance(current.value, ContainerInfo):
-                            key_container = current.value
-                        elif isinstance(current.value, str):
-                            # Legacy fallback when value is container ID
-                            status = None
-                            if current.description:
-                                parts = current.description.split("  ")
-                                if len(parts) >= 3:
-                                    status = parts[2]
-                            key_container = ContainerInfo(
-                                id=current.value,
-                                name=current.label,
-                                status=status or "",
-                            )
-
-                        if not key_container:
-                            self.state.status_message = "Unable to read container metadata"
-                            return True
-
-                        if action.custom_key == "K":
-                            raise ContainerStopRequested(
-                                container_id=key_container.id,
-                                container_name=key_container.name,
-                                return_to=self.state.active_tab.name,
-                            )
-                        if action.custom_key == "R":
-                            raise ContainerResumeRequested(
-                                container_id=key_container.id,
-                                container_name=key_container.name,
-                                return_to=self.state.active_tab.name,
-                            )
-                        if action.custom_key == "D":
-                            raise ContainerRemoveRequested(
-                                container_id=key_container.id,
-                                container_name=key_container.name,
-                                return_to=self.state.active_tab.name,
-                            )
-
-        return None
+        self.state, result = handle_dashboard_action(
+            self.state,
+            action,
+            is_standalone=scc_config.is_standalone_mode(),
+            get_placeholder_tip=self._get_placeholder_tip,
+        )
+        return result

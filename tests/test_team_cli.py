@@ -608,9 +608,14 @@ class TestTeamValidate:
                 "scc_cli.commands.team.config.load_cached_org_config",
                 return_value={"profiles": {"platform": {}}},
             ),
-            patch("scc_cli.commands.team.normalize_org_config_data", return_value={}),
-            patch("scc_cli.commands.team.OrganizationConfig.model_validate", return_value=object()),
-            patch("scc_cli.commands.team.resolve_effective_config", side_effect=fake_resolve),
+            patch("scc_cli.commands.team_validate.normalize_org_config_data", return_value={}),
+            patch(
+                "scc_cli.commands.team_validate.OrganizationConfig.model_validate",
+                return_value=object(),
+            ),
+            patch(
+                "scc_cli.commands.team_validate.resolve_effective_config", side_effect=fake_resolve
+            ),
         ):
             result = runner.invoke(app, ["team", "validate", "--json"])
             assert result.exit_code == 0
