@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T12:42:34.754Z",
+  "exported_at": "2026-04-06T12:48:59.486Z",
   "milestones": [
     {
       "id": "M001",
@@ -7111,19 +7111,24 @@
       "milestone_id": "M008-g7jk8d",
       "slice_id": "S01",
       "id": "T05",
-      "title": "Structural guardrail test, provider metadata source verification, and full suite gate",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created structural guardrail tests preventing inline provider resolution drift and verifying single-source provider metadata",
+      "status": "complete",
+      "one_liner": "Created structural guardrail tests preventing inline provider resolution drift and verifying single-source provider metadata",
+      "narrative": "Built tests/test_launch_preflight_guardrail.py with 7 structural tests in three classes: (1) TestProviderResolutionAntiDrift — tokenize-based scanning of flow.py and flow_interactive.py to prevent choose_start_provider/resolve_active_provider from reappearing after T03 migration, plus verification that preflight.py is the sole wrapper within commands/launch/. (2) TestProviderMetadataSingleSource — AST-based string literal extraction to verify image refs and display names only exist in canonical locations (image_contracts.py, provider_registry.py, provider_resolution.py, plus adapter allowlist). Also cross-checks PROVIDER_REGISTRY keys match _PROVIDER_DISPATCH keys. (3) TestPreflightArchitectureGuard — AST top-level import scanning to enforce D046 (only types/errors from core/ at module level).",
+      "verification_result": "ruff check: 0 errors. mypy src/scc_cli: 0 errors in 303 files. All 7 guardrail tests pass. Full suite: 4993 passed, 23 skipped, 2 xfailed, 0 failures.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T12:48:59.450Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Guardrail anti-drift scope covers only the two migrated files (flow.py, flow_interactive.py) per T03 decision, not all five entry points. orchestrator_handlers.py and worktree_commands.py still use choose_start_provider directly — the _MIGRATED_FILES tuple should be extended when those are migrated.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_launch_preflight_guardrail.py"
+      ],
+      "key_decisions": [
+        "Guardrail scoped to migrated files only (flow.py, flow_interactive.py) per T03 decision",
+        "Display name allowlist includes adapter modules and legacy render/sandbox defaults as tracked debt"
+      ],
+      "full_summary_md": "---\nid: T05\nparent: S01\nmilestone: M008-g7jk8d\nkey_files:\n  - tests/test_launch_preflight_guardrail.py\nkey_decisions:\n  - Guardrail scoped to migrated files only (flow.py, flow_interactive.py) per T03 decision\n  - Display name allowlist includes adapter modules and legacy render/sandbox defaults as tracked debt\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T12:48:59.449Z\nblocker_discovered: false\n---\n\n# T05: Created structural guardrail tests preventing inline provider resolution drift and verifying single-source provider metadata\n\n**Created structural guardrail tests preventing inline provider resolution drift and verifying single-source provider metadata**\n\n## What Happened\n\nBuilt tests/test_launch_preflight_guardrail.py with 7 structural tests in three classes: (1) TestProviderResolutionAntiDrift — tokenize-based scanning of flow.py and flow_interactive.py to prevent choose_start_provider/resolve_active_provider from reappearing after T03 migration, plus verification that preflight.py is the sole wrapper within commands/launch/. (2) TestProviderMetadataSingleSource — AST-based string literal extraction to verify image refs and display names only exist in canonical locations (image_contracts.py, provider_registry.py, provider_resolution.py, plus adapter allowlist). Also cross-checks PROVIDER_REGISTRY keys match _PROVIDER_DISPATCH keys. (3) TestPreflightArchitectureGuard — AST top-level import scanning to enforce D046 (only types/errors from core/ at module level).\n\n## Verification\n\nruff check: 0 errors. mypy src/scc_cli: 0 errors in 303 files. All 7 guardrail tests pass. Full suite: 4993 passed, 23 skipped, 2 xfailed, 0 failures.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 2600ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 2600ms |\n| 3 | `uv run pytest tests/test_launch_preflight_guardrail.py -v` | 0 | ✅ pass | 1570ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 60870ms |\n\n## Deviations\n\nGuardrail anti-drift scope covers only the two migrated files (flow.py, flow_interactive.py) per T03 decision, not all five entry points. orchestrator_handlers.py and worktree_commands.py still use choose_start_provider directly — the _MIGRATED_FILES tuple should be extended when those are migrated.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_launch_preflight_guardrail.py`\n",
       "description": "**Structural anti-drift guardrail (main maintainability guard of M008):**\n\nCreate tests/test_launch_preflight_guardrail.py with a structural test that scans the five launch entry-point files for inline preflight orchestration. The test should:\n1. Parse each of the five files (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py ×2 functions) using tokenize or AST\n2. Assert that none of them contain direct calls to `ensure_provider_image()`, `ensure_provider_auth()`, `choose_start_provider()`, or `resolve_active_provider()` — all of which should now flow through preflight.py\n3. Assert that each file imports from `commands.launch.preflight`\n4. This is a mechanical guardrail — if someone adds inline preflight back to one of the five sites, this test fails immediately.\n\nPattern: similar to test_no_claude_constants_in_core.py and test_import_boundaries.py — structural scanning, not behavioral mocking.\n\n**Single provider metadata source verification:**\n5. Add a guardrail test (in the same file or test_docs_truthfulness.py) verifying that image refs, display names, and adapter lookup all resolve from one source — the ProviderRuntimeSpec registry (core/provider_registry.py) and _PROVIDER_DISPATCH (dependencies.py). The test scans for hardcoded image refs or display name strings outside of those two canonical locations plus the adapter modules that own them.\n6. This catches the exact consistency bug M008 is cleaning: scattered provider constants that drift.\n\n**Full verification gate:**\n7. ruff check on all touched files\n8. mypy on all touched source files\n9. Focused pytest on characterization, preflight, and guardrail tests\n10. Full pytest suite (must be >= 4820 with zero regressions)\n11. Verify via rg that start_claude no longer appears in the codebase\n12. Verify preflight.py has no imports from core/ except types/errors (D046 architecture guard)",
       "estimate": "25min",
       "files": [
@@ -12313,6 +12318,50 @@
       "verdict": "✅ pass",
       "duration_ms": 1000,
       "created_at": "2026-04-06T12:42:34.691Z"
+    },
+    {
+      "id": 397,
+      "task_id": "T05",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2600,
+      "created_at": "2026-04-06T12:48:59.450Z"
+    },
+    {
+      "id": 398,
+      "task_id": "T05",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2600,
+      "created_at": "2026-04-06T12:48:59.450Z"
+    },
+    {
+      "id": 399,
+      "task_id": "T05",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_launch_preflight_guardrail.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1570,
+      "created_at": "2026-04-06T12:48:59.450Z"
+    },
+    {
+      "id": 400,
+      "task_id": "T05",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 60870,
+      "created_at": "2026-04-06T12:48:59.450Z"
     }
   ]
 }

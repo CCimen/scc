@@ -107,7 +107,7 @@ Verify characterization tests still pass. The worktree create tests should now s
   - Estimate: 45min
   - Files: src/scc_cli/ui/dashboard/orchestrator_handlers.py, src/scc_cli/commands/worktree/worktree_commands.py, src/scc_cli/commands/launch/flow_session.py, tests/test_launch_preflight_characterization.py
   - Verify: uv run pytest tests/test_launch_preflight_characterization.py tests/test_launch_preflight.py -v && uv run ruff check src/scc_cli/ui/dashboard/orchestrator_handlers.py src/scc_cli/commands/worktree/worktree_commands.py src/scc_cli/commands/launch/flow_session.py && uv run mypy src/scc_cli/ui/dashboard/orchestrator_handlers.py src/scc_cli/commands/worktree/worktree_commands.py src/scc_cli/commands/launch/flow_session.py
-- [ ] **T05: Structural guardrail test, provider metadata source verification, and full suite gate** — **Structural anti-drift guardrail (main maintainability guard of M008):**
+- [x] **T05: Created structural guardrail tests preventing inline provider resolution drift and verifying single-source provider metadata** — **Structural anti-drift guardrail (main maintainability guard of M008):**
 
 Create tests/test_launch_preflight_guardrail.py with a structural test that scans the five launch entry-point files for inline preflight orchestration. The test should:
 1. Parse each of the five files (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py ×2 functions) using tokenize or AST
