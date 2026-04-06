@@ -7,5 +7,5 @@ Every user-facing flow (setup, start, dashboard resume, dashboard worktree start
 | ID | Slice | Risk | Depends | Done | After this |
 |----|-------|------|---------|------|------------|
 | S01 | Provider resolution consistency across worktree create and wizard flow | high | — | ✅ | worktree create --start uses choose_start_provider() with full precedence. run_start_wizard_flow() reuses shared resolution. WorkContext records provider_id. start_claude renamed. |
-| S02 | Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation | medium | S01 | ⬜ | Doctor, setup summary, and choose-provider screen use consistent auth vocabulary. No 'Docker Desktop' in active error paths. Provider adapter dispatch uses shared lookup. |
+| S02 | Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation | medium | S01 | ✅ | Doctor, setup summary, and choose-provider screen use consistent auth vocabulary. No 'Docker Desktop' in active error paths. Provider adapter dispatch uses shared lookup. |
 | S03 | Error quality, edge case hardening, and final verification | low | S01, S02 | ⬜ | Error messages give actionable SCC guidance. Edge cases (both providers connected, none connected, explicit --provider with missing auth, failed launch doesn't write workspace preference) handled correctly. |

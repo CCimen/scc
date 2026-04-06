@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T13:19:32.708Z",
+  "exported_at": "2026-04-06T13:31:29.641Z",
   "milestones": [
     {
       "id": "M001",
@@ -1233,16 +1233,16 @@
       "milestone_id": "M008-g7jk8d",
       "id": "S02",
       "title": "Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation",
-      "status": "pending",
+      "status": "complete",
       "risk": "medium",
       "depends": [
         "S01"
       ],
       "demo": "Doctor, setup summary, and choose-provider screen use consistent auth vocabulary. No 'Docker Desktop' in active error paths. Provider adapter dispatch uses shared lookup.",
       "created_at": "2026-04-06T11:03:03.701Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-06T13:24:36.485Z",
+      "full_summary_md": "---\nid: S02\nparent: M008-g7jk8d\nmilestone: M008-g7jk8d\nprovides:\n  - Three-tier auth vocabulary used consistently across all provider-facing surfaces\n  - Docker Desktop confined to infrastructure layers — no active user-facing references\n  - Shared get_agent_provider() dispatch helper available for any module needing provider→adapter lookup\n  - 15 new guardrail tests preventing auth vocabulary, Docker Desktop, and dispatch consolidation regression\nrequires:\n  - slice: S01\n    provides: Shared preflight module (commands/launch/preflight.py) with provider resolution and LaunchReadiness model\naffects:\n  - S03\nkey_files:\n  - src/scc_cli/commands/launch/provider_choice.py\n  - src/scc_cli/commands/launch/dependencies.py\n  - src/scc_cli/setup.py\n  - src/scc_cli/doctor/checks/environment.py\n  - src/scc_cli/commands/admin.py\n  - src/scc_cli/commands/worktree/container_commands.py\n  - tests/test_auth_vocabulary_guardrail.py\n  - tests/test_lifecycle_inventory_consistency.py\n  - tests/test_docs_truthfulness.py\n  - tests/test_doctor_provider_errors.py\nkey_decisions:\n  - Three-tier auth vocabulary: 'auth cache present' (file exists), 'image available' (image present), 'launch-ready' (both) — enforced by tokenize-based guardrail tests\n  - Docker Desktop references confined to docker/, adapters/, core/errors.py, doctor/ layers only — active commands/ paths use 'Docker' or 'container runtime'\n  - Shared get_agent_provider(adapters, provider_id) in dependencies.py replaces hardcoded dispatch dicts in provider_choice.py and setup.py\n  - prune_cmd intentionally keeps broader image-based inventory (not label-based) for orphan cleanup\npatterns_established:\n  - Tokenize-based vocabulary guardrail: scan source files for banned terms using Python's tokenize module (not regex) to avoid false positives from comments and strings. See test_auth_vocabulary_guardrail.py.\n  - Lifecycle inventory consistency guardrail: test that verifies all command surfaces (list, stop, prune, status, dashboard) use the same inventory source function. See test_lifecycle_inventory_consistency.py.\n  - Docker Desktop boundary guardrail: scanning test that prevents Docker Desktop references from leaking into active user-facing paths. See test_docs_truthfulness.py.\nobservability_surfaces:\n  - none\ndrill_down_paths:\n  - .gsd/milestones/M008-g7jk8d/slices/S02/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M008-g7jk8d/slices/S02/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M008-g7jk8d/slices/S02/tasks/T03-SUMMARY.md\n  - .gsd/milestones/M008-g7jk8d/slices/S02/tasks/T04-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-06T13:24:36.486Z\nblocker_discovered: false\n---\n\n# S02: Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation\n\n**Fixed 6 misleading auth-status strings with three-tier vocabulary, removed Docker Desktop from active user-facing paths, consolidated provider adapter dispatch into shared get_agent_provider() helper, and added 15 new guardrail tests (5008 total).**\n\n## What Happened\n\nS02 delivered three complementary improvements to cross-flow consistency and truthfulness.\n\n**Auth vocabulary truthfulness (T01):** Audited four user-facing modules (provider_choice.py, setup.py, doctor/checks/environment.py, auth_bootstrap.py) for misleading auth/readiness vocabulary. Fixed 6 strings: 'connected' → 'auth cache present' and 'sign-in required' → 'sign-in needed' in provider choice; 'ready' → 'auth cache present' and 'not connected' → 'sign-in needed' in setup summary; 'not connected' → 'sign-in incomplete' in setup error panel; 'auth cache not ready' → 'auth cache missing' in doctor checks. The canonical three-tier vocabulary is now: 'auth cache present' (file exists), 'image available' (container image present), 'launch-ready' (both). Created tests/test_auth_vocabulary_guardrail.py with 5 tokenize-based scanning tests preventing vocabulary regression.\n\n**Docker Desktop cleanup (T02):** Fixed 2 Docker Desktop references in active commands/ paths: admin.py error message ('Ensure Docker Desktop is running' → 'Ensure Docker is running') and container_commands.py comment ('Docker Desktop' → 'containers not created by SCC'). Docker Desktop references are now confined to docker/, adapters/, core/errors.py, and doctor/ layers only. Added boundary guardrail in test_docs_truthfulness.py. Created tests/test_lifecycle_inventory_consistency.py with 7 tests verifying scc list/stop/prune/status and dashboard actions all use the same SCC-managed inventory source. Also fixed 2 stale test assertions in test_doctor_provider_errors.py that T01 broke.\n\n**Adapter dispatch consolidation (T03):** Extracted get_agent_provider(adapters, provider_id) in dependencies.py as a shared dispatch surface using the existing _PROVIDER_DISPATCH table. Replaced hardcoded adapters_by_provider dict in provider_choice.py:collect_provider_readiness() and provider_map dict in setup.py:_run_provider_onboarding(). Verified init.py template uses 'Sandboxed Coding CLI' per D045. Added 3 guardrail tests preventing re-introduction of hardcoded dispatch dicts and verifying branding.\n\n**Full verification (T04):** All 6 exit gate checks passed: ruff clean, mypy clean (303 files), 5008 tests (0 failures, 23 skipped, 2 xfailed), no Docker Desktop in commands/, branding consistent ('Sandboxed Coding CLI' only).\n\n## Verification\n\nSlice-level verification rerun confirmed all gates:\n1. `uv run ruff check` — clean\n2. `uv run mypy src/scc_cli` — 303 files, 0 issues\n3. `uv run pytest tests/test_auth_vocabulary_guardrail.py tests/test_docs_truthfulness.py tests/test_lifecycle_inventory_consistency.py tests/test_start_provider_choice.py -v` — 56 pass\n4. `uv run pytest -q` — 5008 passed, 23 skipped, 2 xfailed (62s)\n5. `rg 'Docker Desktop' src/scc_cli/commands/` — no matches\n6. `rg 'Sandboxed Cod' src/scc_cli/ | grep -v 'Sandboxed Coding CLI'` — no non-conforming variants\n\n## Requirements Advanced\n\n- R001 — 15 new guardrail tests (auth vocabulary, Docker Desktop boundary, lifecycle inventory consistency, dispatch consolidation, branding) bring total guardrail tests to 40+. Adapter dispatch consolidated from 3 sites to 1 shared helper.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nT01 fixed two additional strings not in original plan: 'auth cache not ready' → 'auth cache missing' in doctor checks, and 'not connected' → 'sign-in incomplete' in setup error panel (discovered during audit). T02 fixed 2 stale test assertions in test_doctor_provider_errors.py that were broken by T01's wording changes.\n\n## Known Limitations\n\nNone.\n\n## Follow-ups\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/provider_choice.py` — Auth vocabulary: 'connected' → 'auth cache present', 'sign-in required' → 'sign-in needed'. Replaced hardcoded adapters_by_provider dict with get_agent_provider() call.\n- `src/scc_cli/setup.py` — Auth vocabulary: 'ready' → 'auth cache present', 'not connected' → 'sign-in needed/incomplete'. Replaced hardcoded provider_map dict with get_agent_provider() call.\n- `src/scc_cli/doctor/checks/environment.py` — Auth vocabulary: 'auth cache not ready' → 'auth cache missing'.\n- `src/scc_cli/commands/admin.py` — Docker Desktop: 'Ensure Docker Desktop is running' → 'Ensure Docker is running'.\n- `src/scc_cli/commands/worktree/container_commands.py` — Docker Desktop: removed 'Docker Desktop' from prune_cmd comment.\n- `src/scc_cli/commands/launch/dependencies.py` — Added get_agent_provider(adapters, provider_id) shared dispatch helper.\n- `tests/test_auth_vocabulary_guardrail.py` — New: 5 tokenize-based tests scanning for banned auth vocabulary terms.\n- `tests/test_lifecycle_inventory_consistency.py` — New: 7 tests verifying command surfaces use consistent SCC-managed inventory.\n- `tests/test_docs_truthfulness.py` — Added Docker Desktop boundary guardrail + 3 dispatch/branding guardrail tests.\n- `tests/test_doctor_provider_errors.py` — Fixed 2 stale assertions broken by T01 vocabulary changes.\n",
+      "full_uat_md": "# S02: Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation — UAT\n\n**Milestone:** M008-g7jk8d\n**Written:** 2026-04-06T13:24:36.486Z\n\n## UAT: S02 — Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation\n\n### Preconditions\n- scc-sync-1.7.3 repo checked out\n- `uv sync` completed\n- Python 3.10+ with uv available\n\n### Test Case 1: Auth vocabulary consistency in provider choice\n**Steps:**\n1. Open `src/scc_cli/commands/launch/provider_choice.py`\n2. Search for 'connected' (as standalone auth descriptor) — should not appear\n3. Search for 'sign-in required' — should not appear\n4. Verify 'auth cache present' appears for positive auth state\n5. Verify 'sign-in needed' appears for negative auth state\n\n**Expected:** No banned vocabulary. Three-tier terms used consistently.\n\n### Test Case 2: Auth vocabulary consistency in setup summary\n**Steps:**\n1. Open `src/scc_cli/setup.py`\n2. Search for standalone 'ready' meaning auth cache — should not appear\n3. Search for 'not connected' — should not appear\n4. Verify 'auth cache present' and 'sign-in needed'/'sign-in incomplete' appear\n\n**Expected:** Setup summary uses three-tier vocabulary without implying full connectivity.\n\n### Test Case 3: Auth vocabulary in doctor checks\n**Steps:**\n1. Open `src/scc_cli/doctor/checks/environment.py`\n2. Search for 'auth cache not ready' — should not appear\n3. Verify 'auth cache missing' is used for negative case\n\n**Expected:** Doctor uses 'auth cache missing', not 'not ready'.\n\n### Test Case 4: Docker Desktop removed from active commands\n**Steps:**\n1. Run: `rg 'Docker Desktop' src/scc_cli/commands/`\n2. Should return no matches (exit code 1)\n\n**Expected:** Zero Docker Desktop references in commands/ directory.\n\n### Test Case 5: Docker Desktop confined to infrastructure layers\n**Steps:**\n1. Run: `rg -l 'Docker Desktop' src/scc_cli/`\n2. Verify matches are only in: docker/core.py, docker/launch.py, docker/sandbox.py, adapters/docker_sandbox_runtime.py, adapters/docker_runtime_probe.py, core/errors.py, doctor/\n\n**Expected:** Docker Desktop references exist only in infrastructure/adapter layers.\n\n### Test Case 6: Branding consistency\n**Steps:**\n1. Run: `rg 'Sandboxed Cod' src/scc_cli/`\n2. Every match should contain 'Sandboxed Coding CLI' (not 'Code CLI' or other variants)\n3. Check init.py template content for 'Sandboxed Coding CLI'\n\n**Expected:** Only 'Sandboxed Coding CLI' appears across all surfaces.\n\n### Test Case 7: Shared adapter dispatch\n**Steps:**\n1. Open `src/scc_cli/commands/launch/dependencies.py`\n2. Verify `get_agent_provider(adapters, provider_id)` function exists\n3. Open `src/scc_cli/commands/launch/provider_choice.py` — verify no local adapters_by_provider dict\n4. Open `src/scc_cli/setup.py` — verify no local provider_map dict\n5. Both should call `get_agent_provider()` from dependencies\n\n**Expected:** Single dispatch surface, no hardcoded per-site dicts.\n\n### Test Case 8: Guardrail test suite\n**Steps:**\n1. Run: `uv run pytest tests/test_auth_vocabulary_guardrail.py tests/test_docs_truthfulness.py tests/test_lifecycle_inventory_consistency.py -v`\n2. All tests should pass\n\n**Expected:** 5 auth vocab + ~39 truthfulness + 7 lifecycle = ~51 guardrail tests, all green.\n\n### Test Case 9: Full regression\n**Steps:**\n1. Run: `uv run pytest -q`\n2. Should report >= 5008 passed, 0 failures\n\n**Expected:** No regressions from S02 changes.\n\n### Edge Cases\n- **Test Case 10:** Verify `ruff check` passes (no lint issues from vocabulary/dispatch changes)\n- **Test Case 11:** Verify `mypy src/scc_cli` passes (type safety maintained after dispatch refactor)\n- **Test Case 12:** Verify prune_cmd uses image-based inventory (broader than label-based) for orphan cleanup — this is intentional per T02 decision\n",
       "goal": "Auth wording is truthful with three-tier distinction. Stale Docker Desktop references removed from active paths. Container lifecycle commands are consistent. Provider adapter dispatch consolidated.",
       "success_criteria": "Auth vocabulary consistent and three-tier across doctor, setup, provider choice. Docker Desktop removed from active user-facing messages. list/stop/status/resume use same inventory. Adapter dispatch consolidated. Branding preserved per D045. Guardrail tests for vocabulary and branding.",
       "proof_level": "targeted tests + guardrail test scanning auth status strings + lifecycle consistency tests",
@@ -7310,19 +7310,24 @@
       "milestone_id": "M008-g7jk8d",
       "slice_id": "S03",
       "id": "T01",
-      "title": "Guard workspace preference and conflict-path consistency, test ask+last-used preselection",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 17 tests verifying workspace provider persistence edge cases: failed launch guard, KEEP_EXISTING consistency, and ask+last-used preselection",
+      "status": "complete",
+      "one_liner": "Added 17 tests verifying workspace provider persistence edge cases: failed launch guard, KEEP_EXISTING consistency, and ask+last-used preselection",
+      "narrative": "Verified all four active launch sites (flow.py start, flow_interactive.py run_start_wizard_flow, orchestrator_handlers _handle_worktree_start, orchestrator_handlers _handle_session_resume) by code inspection — all place set_workspace_last_used_provider AFTER finalize_launch, so the guard is correct by construction. Created tests/test_workspace_provider_persistence.py with 17 tests across 5 classes covering: successful launch writes preference (with call ordering verification), failed launch skips preference write, cancelled launch skips preference, KEEP_EXISTING path writes preference without finalize_launch, and _resolve_prompt_default preselection behavior for ask+workspace_last_used scenarios.",
+      "verification_result": "Task-level: uv run pytest tests/test_workspace_provider_persistence.py tests/test_start_provider_choice.py -v → 26 passed. Slice-level: uv run ruff check → clean, uv run mypy src/scc_cli → clean, uv run pytest -q → 5025 passed, 23 skipped, 2 xfailed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T13:31:29.593Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Initial test assumed prompt would fire with single connected provider; auto-single logic correctly bypasses prompt. Fixed test and added separate test for multi-candidate None-default scenario.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_workspace_provider_persistence.py"
+      ],
+      "key_decisions": [
+        "Verified all launch sites have correct finalize_launch guard by construction — no code changes needed",
+        "Worktree launch path intentionally does not persist workspace preference"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S03\nmilestone: M008-g7jk8d\nkey_files:\n  - tests/test_workspace_provider_persistence.py\nkey_decisions:\n  - Verified all launch sites have correct finalize_launch guard by construction — no code changes needed\n  - Worktree launch path intentionally does not persist workspace preference\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T13:31:29.592Z\nblocker_discovered: false\n---\n\n# T01: Added 17 tests verifying workspace provider persistence edge cases: failed launch guard, KEEP_EXISTING consistency, and ask+last-used preselection\n\n**Added 17 tests verifying workspace provider persistence edge cases: failed launch guard, KEEP_EXISTING consistency, and ask+last-used preselection**\n\n## What Happened\n\nVerified all four active launch sites (flow.py start, flow_interactive.py run_start_wizard_flow, orchestrator_handlers _handle_worktree_start, orchestrator_handlers _handle_session_resume) by code inspection — all place set_workspace_last_used_provider AFTER finalize_launch, so the guard is correct by construction. Created tests/test_workspace_provider_persistence.py with 17 tests across 5 classes covering: successful launch writes preference (with call ordering verification), failed launch skips preference write, cancelled launch skips preference, KEEP_EXISTING path writes preference without finalize_launch, and _resolve_prompt_default preselection behavior for ask+workspace_last_used scenarios.\n\n## Verification\n\nTask-level: uv run pytest tests/test_workspace_provider_persistence.py tests/test_start_provider_choice.py -v → 26 passed. Slice-level: uv run ruff check → clean, uv run mypy src/scc_cli → clean, uv run pytest -q → 5025 passed, 23 skipped, 2 xfailed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_workspace_provider_persistence.py tests/test_start_provider_choice.py -v` | 0 | ✅ pass | 1000ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 2900ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 2900ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 61400ms |\n\n## Deviations\n\nInitial test assumed prompt would fire with single connected provider; auto-single logic correctly bypasses prompt. Fixed test and added separate test for multi-candidate None-default scenario.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_workspace_provider_persistence.py`\n",
       "description": "**Failed launch guard:**\n1. Verify set_workspace_last_used_provider() is called ONLY after finalize_launch() succeeds in all five sites (via preflight module from S01). If finalize_launch raises, the preference must NOT be written.\n2. Verify the KEEP_EXISTING conflict path also writes workspace preference consistently across flow.py start(), run_start_wizard_flow(), dashboard _handle_worktree_start(), and dashboard _handle_session_resume(). All four should behave the same.\n\n**Ask + workspace_last_used preselection:**\n3. Test: global preference='ask', workspace_last_used='codex' → chooser appears (ask suppresses auto-select), BUT codex is preselected as default.\n4. Verify _resolve_prompt_default() in provider_choice.py correctly returns workspace_last_used when it's in connected_allowed and candidates.\n5. Test: global preference='ask', workspace_last_used='codex', codex NOT connected → chooser appears, no preselection.\n6. Test: global preference='ask', no workspace_last_used → chooser appears with no preselection.\n\n**Write edge case tests:**\n- Failed launch (finalize_launch raises) → workspace preference NOT updated\n- Cancelled launch → workspace preference NOT updated\n- Successful launch → workspace preference written\n- KEEP_EXISTING via start → preference written\n- KEEP_EXISTING via dashboard resume → preference written (same behavior)",
       "estimate": "30min",
       "files": [
@@ -12566,6 +12571,50 @@
       "verdict": "✅ pass (no variants)",
       "duration_ms": 100,
       "created_at": "2026-04-06T13:19:32.669Z"
+    },
+    {
+      "id": 416,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_workspace_provider_persistence.py tests/test_start_provider_choice.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-06T13:31:29.594Z"
+    },
+    {
+      "id": 417,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2900,
+      "created_at": "2026-04-06T13:31:29.594Z"
+    },
+    {
+      "id": 418,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2900,
+      "created_at": "2026-04-06T13:31:29.594Z"
+    },
+    {
+      "id": 419,
+      "task_id": "T01",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 61400,
+      "created_at": "2026-04-06T13:31:29.594Z"
     }
   ]
 }

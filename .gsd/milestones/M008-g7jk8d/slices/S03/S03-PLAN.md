@@ -4,7 +4,7 @@
 **Demo:** After this: Error messages give actionable SCC guidance. Edge cases (both providers connected, none connected, explicit --provider with missing auth, failed launch doesn't write workspace preference) handled correctly.
 
 ## Tasks
-- [ ] **T01: Guard workspace preference and conflict-path consistency, test ask+last-used preselection** — **Failed launch guard:**
+- [x] **T01: Added 17 tests verifying workspace provider persistence edge cases: failed launch guard, KEEP_EXISTING consistency, and ask+last-used preselection** — **Failed launch guard:**
 1. Verify set_workspace_last_used_provider() is called ONLY after finalize_launch() succeeds in all five sites (via preflight module from S01). If finalize_launch raises, the preference must NOT be written.
 2. Verify the KEEP_EXISTING conflict path also writes workspace preference consistently across flow.py start(), run_start_wizard_flow(), dashboard _handle_worktree_start(), and dashboard _handle_session_resume(). All four should behave the same.
 
