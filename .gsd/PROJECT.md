@@ -45,8 +45,8 @@ SCC became a genuine multi-provider runtime. Users choose Claude or Codex via co
 ### M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup ✅
 Eliminated Claude assumptions from shared/core/operator paths. ProviderRuntimeSpec replaces 5 scattered dicts. Settings serialization is provider-owned (rendered_bytes, not dict). Config layering is provider-native (Claude home-scoped, Codex workspace-scoped). Unknown providers fail closed. Auth readiness is adapter-owned via auth_check() on AgentProvider. Runtime permission normalization. Config freshness guarantee on every fresh launch. Doctor is provider-aware with --provider flag and categorized output. Core constants stripped to product-level only. 32 truthfulness guardrail tests. 166 net new tests, 4820 total.
 
-### M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening (in progress)
-Consolidating five duplicated launch preflight sequences into one shared module. S01 complete: shared preflight module with typed LaunchReadiness model, flow.py and flow_interactive.py migrated, 7 structural guardrail tests. S02 complete: auth vocabulary truthfulness (three-tier distinction), Docker Desktop removed from active paths, provider adapter dispatch consolidated via shared get_agent_provider() helper, 15 new guardrail tests. S03 remains.
+### M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening ✅
+Consolidated five duplicated launch preflight sequences into one shared module. S01: shared preflight module with typed LaunchReadiness model, flow.py and flow_interactive.py migrated, 7 structural guardrail tests. S02: auth vocabulary truthfulness (three-tier distinction), Docker Desktop removed from active paths, provider adapter dispatch consolidated via shared get_agent_provider() helper, 15 new guardrail tests. S03: 106 edge-case and regression-guard tests covering workspace persistence, resume-after-drift, setup idempotency, and error message quality. Auth bootstrap exception wrapping. Legacy Docker Desktop module documentation. 294 net new tests (5114 total), zero regressions.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -56,7 +56,7 @@ Consolidating five duplicated launch preflight sequences into one shared module.
 5. ~~M005 — Architecture Quality, Strictness, And Hardening~~ ✅
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
 7. ~~M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup~~ ✅
-8. **M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening** ← active (S02 complete)
+8. ~~M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening~~ ✅
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all eight milestones.
@@ -64,7 +64,7 @@ Consolidating five duplicated launch preflight sequences into one shared module.
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (303 files, 0 issues)
-- `uv run pytest -q` ✅ (5008 passed, 23 skipped, 2 xfailed)
+- `uv run pytest -q` ✅ (5114 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
@@ -81,7 +81,7 @@ Consolidating five duplicated launch preflight sequences into one shared module.
 - Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 - start_claude parameter rename to start_agent in worktree_commands.py (deferred from M008/S01)
 - WorkContext.provider_id threading through _record_session_and_context (deferred from M008/S01)
-- orchestrator_handlers.py and worktree_commands.py full migration to shared preflight ensure_launch_ready() (M008/S03 scope)
+- orchestrator_handlers.py and worktree_commands.py full migration to shared preflight ensure_launch_ready()
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -107,3 +107,4 @@ Consolidating five duplicated launch preflight sequences into one shared module.
 - **Docker Desktop references** are confined to docker/, adapters/, core/errors.py, and doctor/ layers only. Active user-facing commands/ paths use 'Docker' or 'container runtime'.
 - **Provider adapter dispatch** uses a shared `get_agent_provider(adapters, provider_id)` helper in dependencies.py — no hardcoded per-site dispatch dicts.
 - **40+ guardrail tests** across test_docs_truthfulness.py, test_auth_vocabulary_guardrail.py, test_lifecycle_inventory_consistency.py, and test_launch_preflight_guardrail.py mechanically prevent regression.
+- **Auth bootstrap exception wrapping** in ensure_provider_auth: raw exceptions from bootstrap_auth() become ProviderNotReadyError with actionable guidance; already-typed ProviderNotReadyError passes through unchanged.
