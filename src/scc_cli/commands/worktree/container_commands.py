@@ -301,7 +301,7 @@ def prune_cmd(
     with Status("[cyan]Fetching containers...[/cyan]", console=console, spinner=Spinners.DOCKER):
         # Use _list_all_sandbox_containers to find ALL sandbox containers (by image)
         # This matches how stop_cmd uses list_running_sandboxes (also by image)
-        # Containers created by Docker Desktop directly don't have SCC labels
+        # Containers not created by SCC don't have SCC labels
         all_containers = docker._list_all_sandbox_containers()
 
     # Filter to only stopped containers

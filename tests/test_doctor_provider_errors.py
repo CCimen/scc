@@ -207,7 +207,7 @@ class TestCheckProviderAuth:
         result = check_provider_auth(provider_id="claude")
         assert result.passed is False
         assert result.category == "provider"
-        assert "not ready" in result.message
+        assert "auth cache missing" in result.message
 
     @patch("scc_cli.bootstrap.get_default_adapters")
     def test_codex_auth_present(self, mock_adapters: MagicMock) -> None:
@@ -266,12 +266,12 @@ class TestCheckProviderAuth:
 
     @patch("scc_cli.bootstrap.get_default_adapters")
     def test_truthful_wording_missing(self, mock_adapters: MagicMock) -> None:
-        """D037: wording says 'not ready', not 'not logged in'."""
+        """D037: wording says 'auth cache missing', not 'not logged in'."""
         mock_adapters.return_value = _make_fake_adapters(
             claude_readiness=AuthReadiness(
                 status="missing", mechanism="oauth_file", guidance="Authenticate first"
             )
         )
         result = check_provider_auth(provider_id="claude")
-        assert "not ready" in result.message
+        assert "auth cache missing" in result.message
         assert "logged in" not in result.message.lower()

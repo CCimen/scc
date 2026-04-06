@@ -148,6 +148,53 @@ def test_readme_no_docker_desktop_hard_requirement() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Test c2: Docker Desktop references must not appear in active user-facing paths
+# ---------------------------------------------------------------------------
+
+# Directories/files where Docker Desktop references are allowed (infrastructure,
+# adapter, and error layers that legitimately mention Desktop as one backend).
+_DOCKER_DESKTOP_ALLOWED_DIRS = {
+    "docker",               # docker/ module (core, launch, sandbox, credentials)
+    "adapters",             # docker_sandbox_runtime, docker_runtime_probe, oci_*
+    "core",                 # errors.py (typed Desktop-specific failure)
+    "doctor",               # checks that list Desktop as one option among several
+}
+
+
+def test_no_docker_desktop_in_active_user_paths() -> None:
+    """Docker Desktop must not appear in commands/, ui/, application/, setup*.
+
+    Active user-facing modules should say 'Docker' or 'container runtime',
+    not 'Docker Desktop'. Docker Desktop references are allowed only in
+    infrastructure/adapter layers listed in _DOCKER_DESKTOP_ALLOWED_DIRS.
+    """
+    violations: list[str] = []
+    for py_file in sorted(SRC.rglob("*.py")):
+        rel = py_file.relative_to(SRC)
+        # Skip allowed directories
+        if rel.parts[0] in _DOCKER_DESKTOP_ALLOWED_DIRS:
+            continue
+        # Skip __pycache__
+        if "__pycache__" in str(rel):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for i, line in enumerate(text.splitlines(), 1):
+            if "Docker Desktop" in line:
+                violations.append(f"{rel}:{i}: {line.strip()}")
+
+    if violations:
+        raise AssertionError(
+            "'Docker Desktop' found in active user-facing paths.\n"
+            "Use 'Docker' or 'container runtime' instead.\n"
+            "Allowed only in: docker/, adapters/, core/errors.py, doctor/\n\n"
+            "Violations:\n" + "\n".join(violations)
+        )
+
+
+# ---------------------------------------------------------------------------
 # Test d: README must not contain stale network mode names as values
 # ---------------------------------------------------------------------------
 

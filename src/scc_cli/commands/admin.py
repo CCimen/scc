@@ -477,7 +477,7 @@ def statusline_cmd(
                 create_warning_panel(
                     "Installation Failed",
                     "Could not inject statusline into Docker sandbox volume.",
-                    "Ensure Docker Desktop is running",
+                    "Ensure Docker is running",
                 )
             )
             raise typer.Exit(1)

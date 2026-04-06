@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T13:01:25.679Z",
+  "exported_at": "2026-04-06T13:10:36.602Z",
   "milestones": [
     {
       "id": "M001",
@@ -7196,19 +7196,28 @@
       "milestone_id": "M008-g7jk8d",
       "slice_id": "S02",
       "id": "T02",
-      "title": "Remove Docker Desktop references from active user-facing paths and verify lifecycle inventory consistency",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Removed Docker Desktop from active user-facing paths; added lifecycle inventory consistency and Docker Desktop boundary guardrails",
+      "status": "complete",
+      "one_liner": "Removed Docker Desktop from active user-facing paths; added lifecycle inventory consistency and Docker Desktop boundary guardrails",
+      "narrative": "Fixed 2 Docker Desktop references in commands/ (admin.py error message and container_commands.py comment). Fixed 2 stale test assertions in test_doctor_provider_errors.py that T01 broke by changing wording without updating tests. Added Docker Desktop boundary guardrail to test_docs_truthfulness.py. Created 7-test lifecycle inventory consistency guardrail verifying command surfaces use correct inventory functions.",
+      "verification_result": "All 5005 tests pass (0 failures, 23 skipped, 2 xfailed). Ruff check clean. Task-specific tests (39 in test_docs_truthfulness.py + test_lifecycle_inventory_consistency.py) all pass.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T13:10:36.551Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Fixed 2 broken test assertions in test_doctor_provider_errors.py that were left stale by T01's wording change.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/admin.py",
+        "src/scc_cli/commands/worktree/container_commands.py",
+        "tests/test_doctor_provider_errors.py",
+        "tests/test_docs_truthfulness.py",
+        "tests/test_lifecycle_inventory_consistency.py"
+      ],
+      "key_decisions": [
+        "Docker Desktop references allowed only in docker/, adapters/, core/errors.py, doctor/",
+        "prune_cmd intentionally keeps broader image-based inventory for orphan cleanup"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S02\nmilestone: M008-g7jk8d\nkey_files:\n  - src/scc_cli/commands/admin.py\n  - src/scc_cli/commands/worktree/container_commands.py\n  - tests/test_doctor_provider_errors.py\n  - tests/test_docs_truthfulness.py\n  - tests/test_lifecycle_inventory_consistency.py\nkey_decisions:\n  - Docker Desktop references allowed only in docker/, adapters/, core/errors.py, doctor/\n  - prune_cmd intentionally keeps broader image-based inventory for orphan cleanup\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T13:10:36.551Z\nblocker_discovered: false\n---\n\n# T02: Removed Docker Desktop from active user-facing paths; added lifecycle inventory consistency and Docker Desktop boundary guardrails\n\n**Removed Docker Desktop from active user-facing paths; added lifecycle inventory consistency and Docker Desktop boundary guardrails**\n\n## What Happened\n\nFixed 2 Docker Desktop references in commands/ (admin.py error message and container_commands.py comment). Fixed 2 stale test assertions in test_doctor_provider_errors.py that T01 broke by changing wording without updating tests. Added Docker Desktop boundary guardrail to test_docs_truthfulness.py. Created 7-test lifecycle inventory consistency guardrail verifying command surfaces use correct inventory functions.\n\n## Verification\n\nAll 5005 tests pass (0 failures, 23 skipped, 2 xfailed). Ruff check clean. Task-specific tests (39 in test_docs_truthfulness.py + test_lifecycle_inventory_consistency.py) all pass.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_docs_truthfulness.py tests/test_lifecycle_inventory_consistency.py -v` | 0 | ✅ pass | 6600ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 15100ms |\n| 3 | `uv run pytest --tb=short` | 0 | ✅ pass | 60900ms |\n\n## Deviations\n\nFixed 2 broken test assertions in test_doctor_provider_errors.py that were left stale by T01's wording change.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/admin.py`\n- `src/scc_cli/commands/worktree/container_commands.py`\n- `tests/test_doctor_provider_errors.py`\n- `tests/test_docs_truthfulness.py`\n- `tests/test_lifecycle_inventory_consistency.py`\n",
       "description": "Docker Desktop cleanup:\n1. admin.py:480 — change 'Ensure Docker Desktop is running' to 'Ensure Docker is running'\n2. container_commands.py:304 prune_cmd comment — reword to mention 'containers not created by SCC' rather than 'Docker Desktop'\n3. Scan all remaining user-facing strings in commands/ for 'Docker Desktop' via rg — fix to 'Docker' or 'container runtime'\n4. Keep Docker Desktop references ONLY in: docker/core.py, docker/launch.py, docker/sandbox.py, adapters/docker_sandbox_runtime.py, adapters/docker_runtime_probe.py, core/errors.py (typed error for Desktop-specific failures)\n\nLifecycle inventory consistency:\n5. Verify scc list, scc stop, scc prune, scc status, dashboard container actions, and session resume all use docker.list_scc_containers() or its running variant as the SCC-managed inventory source\n6. Check that stale/non-SCC containers (no scc labels) don't pollute the active inventory\n7. Write a focused test verifying inventory consistency across command surfaces\n\nUpdate test_docs_truthfulness.py with Docker Desktop boundary guardrail.",
       "estimate": "30min",
       "files": [
@@ -12415,6 +12424,39 @@
       "verdict": "✅ pass",
       "duration_ms": 6100,
       "created_at": "2026-04-06T13:01:25.632Z"
+    },
+    {
+      "id": 404,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_docs_truthfulness.py tests/test_lifecycle_inventory_consistency.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 6600,
+      "created_at": "2026-04-06T13:10:36.552Z"
+    },
+    {
+      "id": 405,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 15100,
+      "created_at": "2026-04-06T13:10:36.552Z"
+    },
+    {
+      "id": 406,
+      "task_id": "T02",
+      "slice_id": "S02",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest --tb=short",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 60900,
+      "created_at": "2026-04-06T13:10:36.552Z"
     }
   ]
 }

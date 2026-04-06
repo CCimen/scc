@@ -25,7 +25,7 @@ Add guardrail test scanning for banned terms ('connected' meaning auth cache, st
   - Estimate: 35min
   - Files: src/scc_cli/commands/launch/provider_choice.py, src/scc_cli/setup.py, src/scc_cli/doctor/checks/environment.py, tests/test_auth_vocabulary_guardrail.py
   - Verify: uv run pytest tests/test_auth_vocabulary_guardrail.py -v && uv run ruff check
-- [ ] **T02: Remove Docker Desktop references from active user-facing paths and verify lifecycle inventory consistency** — Docker Desktop cleanup:
+- [x] **T02: Removed Docker Desktop from active user-facing paths; added lifecycle inventory consistency and Docker Desktop boundary guardrails** — Docker Desktop cleanup:
 1. admin.py:480 — change 'Ensure Docker Desktop is running' to 'Ensure Docker is running'
 2. container_commands.py:304 prune_cmd comment — reword to mention 'containers not created by SCC' rather than 'Docker Desktop'
 3. Scan all remaining user-facing strings in commands/ for 'Docker Desktop' via rg — fix to 'Docker' or 'container runtime'
