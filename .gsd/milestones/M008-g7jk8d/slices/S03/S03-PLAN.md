@@ -39,7 +39,7 @@ All tests go through the shared preflight module from S01.
   - Estimate: 35min
   - Files: tests/test_resume_after_drift.py, src/scc_cli/commands/launch/auth_bootstrap.py
   - Verify: uv run pytest tests/test_resume_after_drift.py -v
-- [ ] **T03: Setup idempotency and error message quality audit** — **Setup idempotency:**
+- [x] **T03: Added 67 tests verifying setup idempotency and error message quality across all provider error surfaces** — **Setup idempotency:**
 1. Test: re-run scc setup when Claude is already connected but Codex is not → setup should detect Claude is present and only offer Codex sign-in, not start from scratch.
 2. Verify _run_provider_onboarding() in setup.py checks collect_provider_readiness() and only shows connection prompts for providers whose status is not 'present'.
 3. If the current code re-asks all questions, fix _prompt_provider_connections() to skip already-connected providers.

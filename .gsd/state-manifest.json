@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T13:42:08.946Z",
+  "exported_at": "2026-04-06T13:50:31.031Z",
   "milestones": [
     {
       "id": "M001",
@@ -7392,19 +7392,25 @@
       "milestone_id": "M008-g7jk8d",
       "slice_id": "S03",
       "id": "T03",
-      "title": "Setup idempotency and error message quality audit",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Added 67 tests verifying setup idempotency and error message quality across all provider error surfaces",
+      "status": "complete",
+      "one_liner": "Added 67 tests verifying setup idempotency and error message quality across all provider error surfaces",
+      "narrative": "Audited setup idempotency and error message quality. Setup was already correct by construction — _prompt_provider_connections filters by auth status. Error messages across all typed error classes already include actionable guidance. Created tests/test_setup_idempotency.py (16 tests) and tests/test_error_message_quality.py (51 tests) as regression guards covering: setup skip logic for connected providers, preference prompt gating, ProviderNotReadyError/InvalidProviderError/ProviderImageMissingError/SandboxLaunchError/ExistingSandboxConflictError message quality, ensure_provider_auth exception wrapping, doctor check error wrapping, and error hierarchy exit code consistency.",
+      "verification_result": "uv run pytest tests/test_error_message_quality.py tests/test_setup_idempotency.py -v → 67 passed. uv run ruff check → clean. uv run mypy src/scc_cli → clean. uv run pytest -q → 5114 passed, 23 skipped, 2 xfailed.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T13:50:30.981Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None. Setup idempotency and error messages were already correct — no code changes needed, only test coverage.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_setup_idempotency.py",
+        "tests/test_error_message_quality.py"
+      ],
+      "key_decisions": [
+        "Setup idempotency correct by construction — no code changes needed",
+        "Error messages already actionable across all error classes — tests serve as regression guards"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S03\nmilestone: M008-g7jk8d\nkey_files:\n  - tests/test_setup_idempotency.py\n  - tests/test_error_message_quality.py\nkey_decisions:\n  - Setup idempotency correct by construction — no code changes needed\n  - Error messages already actionable across all error classes — tests serve as regression guards\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T13:50:30.980Z\nblocker_discovered: false\n---\n\n# T03: Added 67 tests verifying setup idempotency and error message quality across all provider error surfaces\n\n**Added 67 tests verifying setup idempotency and error message quality across all provider error surfaces**\n\n## What Happened\n\nAudited setup idempotency and error message quality. Setup was already correct by construction — _prompt_provider_connections filters by auth status. Error messages across all typed error classes already include actionable guidance. Created tests/test_setup_idempotency.py (16 tests) and tests/test_error_message_quality.py (51 tests) as regression guards covering: setup skip logic for connected providers, preference prompt gating, ProviderNotReadyError/InvalidProviderError/ProviderImageMissingError/SandboxLaunchError/ExistingSandboxConflictError message quality, ensure_provider_auth exception wrapping, doctor check error wrapping, and error hierarchy exit code consistency.\n\n## Verification\n\nuv run pytest tests/test_error_message_quality.py tests/test_setup_idempotency.py -v → 67 passed. uv run ruff check → clean. uv run mypy src/scc_cli → clean. uv run pytest -q → 5114 passed, 23 skipped, 2 xfailed.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_error_message_quality.py tests/test_setup_idempotency.py -v` | 0 | ✅ pass | 1020ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 5000ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 2400ms |\n| 4 | `uv run pytest -q` | 0 | ✅ pass | 61970ms |\n\n## Deviations\n\nNone. Setup idempotency and error messages were already correct — no code changes needed, only test coverage.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_setup_idempotency.py`\n- `tests/test_error_message_quality.py`\n",
       "description": "**Setup idempotency:**\n1. Test: re-run scc setup when Claude is already connected but Codex is not → setup should detect Claude is present and only offer Codex sign-in, not start from scratch.\n2. Verify _run_provider_onboarding() in setup.py checks collect_provider_readiness() and only shows connection prompts for providers whose status is not 'present'.\n3. If the current code re-asks all questions, fix _prompt_provider_connections() to skip already-connected providers.\n4. Test: re-run scc setup when both providers are connected → setup should skip provider connections entirely and only show preference prompt if needed.\n\n**Error message quality audit:**\n5. Review and improve error messages for:\n   - ProviderNotReadyError (Docker missing, image missing, auth missing) — actionable?\n   - InvalidProviderError (unknown provider) — lists valid options?\n   - Non-interactive launch failures — tells user exact command to fix?\n   - Doctor check failures — wraps Docker errors with SCC context?\n6. For each weak message: fix the text, add a test asserting the improved message.\n7. Ensure no raw Docker error leaks through when SCC can explain better.",
       "estimate": "30min",
       "files": [
@@ -12665,6 +12671,50 @@
       "verdict": "✅ pass",
       "duration_ms": 64300,
       "created_at": "2026-04-06T13:42:08.892Z"
+    },
+    {
+      "id": 424,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_error_message_quality.py tests/test_setup_idempotency.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1020,
+      "created_at": "2026-04-06T13:50:30.981Z"
+    },
+    {
+      "id": 425,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-06T13:50:30.981Z"
+    },
+    {
+      "id": 426,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2400,
+      "created_at": "2026-04-06T13:50:30.981Z"
+    },
+    {
+      "id": 427,
+      "task_id": "T03",
+      "slice_id": "S03",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 61970,
+      "created_at": "2026-04-06T13:50:30.981Z"
     }
   ]
 }
