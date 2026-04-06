@@ -3,6 +3,11 @@ Provide high-level Docker sandbox launch functions and settings injection.
 
 Orchestrate the Docker sandbox lifecycle, combining primitives from
 core.py and credential management from credentials.py.
+
+**Legacy Docker Desktop sandbox path.** This module orchestrates launches via
+``docker sandbox run`` (Docker Desktop >= 4.50). It is NOT used by the
+OCI-based launch path (see ``adapters/oci_sandbox_runtime.py``). Retained for
+users whose Docker Desktop includes the sandbox feature.
 """
 
 import json

@@ -1,4 +1,11 @@
-"""Docker sandbox runtime adapter for SandboxRuntime port."""
+"""Docker sandbox runtime adapter for SandboxRuntime port.
+
+**Legacy Docker Desktop sandbox path.** This adapter wraps the Docker Desktop
+``docker sandbox run`` command (Docker Desktop >= 4.50) behind the
+``SandboxRuntime`` port interface. It is NOT used by the OCI-based launch path
+(see ``adapters/oci_sandbox_runtime.py``). Retained for users whose Docker
+Desktop includes the sandbox feature.
+"""
 
 from __future__ import annotations
 

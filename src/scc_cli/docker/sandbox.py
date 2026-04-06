@@ -3,6 +3,11 @@ Docker sandbox runtime: container launch, plugin injection, and marketplace seed
 
 Extracted from launch.py to keep modules under 800 lines.
 Contains run_sandbox() and the helpers it calls during container startup.
+
+**Legacy Docker Desktop sandbox path.** This module implements the ``docker
+sandbox run`` container launch flow (Docker Desktop >= 4.50). It is NOT used by
+the OCI-based launch path (see ``adapters/oci_sandbox_runtime.py``). Retained
+for users whose Docker Desktop includes the sandbox feature.
 """
 
 import json

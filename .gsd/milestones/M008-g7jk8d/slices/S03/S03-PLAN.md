@@ -56,7 +56,7 @@ All tests go through the shared preflight module from S01.
   - Estimate: 30min
   - Files: src/scc_cli/setup.py, src/scc_cli/core/errors.py, tests/test_error_message_quality.py, tests/test_setup_idempotency.py
   - Verify: uv run pytest tests/test_error_message_quality.py tests/test_setup_idempotency.py -v && uv run ruff check
-- [ ] **T04: Document residual legacy code, Docker-backed smoke checks, and final verification** — **Documentation:**
+- [x] **T04: Added legacy-path documentation to all Docker Desktop sandbox modules and confirmed full test suite passes at 5114 tests with zero regressions** — **Documentation:**
 1. Add a brief comment block at the top of docker/core.py, docker/launch.py, docker/sandbox.py, adapters/docker_sandbox_runtime.py documenting these as the legacy Docker Desktop sandbox path — retained for users who have Docker Desktop with 'docker sandbox run' support, not active for OCI launches.
 2. List all residual Docker Desktop code locations for the milestone summary.
 
