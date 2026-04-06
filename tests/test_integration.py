@@ -226,6 +226,10 @@ class TestStartWorkflow:
                 "scc_cli.commands.launch.flow.resolve_launch_provider",
                 return_value=("claude", "cli_flag"),
             ),
+            patch(
+                "scc_cli.commands.launch.flow.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
         ):
             runner.invoke(app, ["start", str(git_workspace), "--provider", "claude"])
 

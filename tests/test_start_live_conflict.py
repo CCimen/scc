@@ -102,6 +102,10 @@ def _invoke_start(tmp_path: Path) -> None:
 @patch("scc_cli.commands.launch.flow.render_launch_output")
 @patch("scc_cli.commands.launch.flow.build_sync_output_view_model")
 @patch("scc_cli.commands.launch.flow.prepare_live_start_plan")
+@patch(
+    "scc_cli.commands.launch.flow.collect_launch_readiness",
+    return_value=MagicMock(launch_ready=True),
+)
 @patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("codex", "explicit"))
 @patch("scc_cli.commands.launch.flow.resolve_workspace_team", return_value=None)
 @patch("scc_cli.commands.launch.flow.prepare_workspace")
@@ -119,6 +123,7 @@ def test_start_keep_existing_exits_cleanly_without_recording_or_launching(
     mock_prepare_workspace: MagicMock,
     mock_resolve_team: MagicMock,
     mock_resolve_provider: MagicMock,
+    mock_collect_readiness: MagicMock,
     mock_prepare_live_start_plan: MagicMock,
     mock_build_output: MagicMock,
     mock_render_output: MagicMock,
@@ -157,6 +162,10 @@ def test_start_keep_existing_exits_cleanly_without_recording_or_launching(
 @patch("scc_cli.commands.launch.flow.render_launch_output")
 @patch("scc_cli.commands.launch.flow.build_sync_output_view_model")
 @patch("scc_cli.commands.launch.flow.prepare_live_start_plan")
+@patch(
+    "scc_cli.commands.launch.flow.collect_launch_readiness",
+    return_value=MagicMock(launch_ready=True),
+)
 @patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("codex", "explicit"))
 @patch("scc_cli.commands.launch.flow.resolve_workspace_team", return_value=None)
 @patch("scc_cli.commands.launch.flow.prepare_workspace")
@@ -174,6 +183,7 @@ def test_start_cancel_conflict_exits_130_without_recording_or_launching(
     mock_prepare_workspace: MagicMock,
     mock_resolve_team: MagicMock,
     mock_resolve_provider: MagicMock,
+    mock_collect_readiness: MagicMock,
     mock_prepare_live_start_plan: MagicMock,
     mock_build_output: MagicMock,
     mock_render_output: MagicMock,
@@ -212,6 +222,10 @@ def test_start_cancel_conflict_exits_130_without_recording_or_launching(
 @patch("scc_cli.commands.launch.flow.render_launch_output")
 @patch("scc_cli.commands.launch.flow.build_sync_output_view_model")
 @patch("scc_cli.commands.launch.flow.prepare_live_start_plan")
+@patch(
+    "scc_cli.commands.launch.flow.collect_launch_readiness",
+    return_value=MagicMock(launch_ready=True),
+)
 @patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("codex", "explicit"))
 @patch("scc_cli.commands.launch.flow.resolve_workspace_team", return_value=None)
 @patch("scc_cli.commands.launch.flow.prepare_workspace")
@@ -229,6 +243,7 @@ def test_start_replace_conflict_records_then_launches_with_updated_plan(
     mock_prepare_workspace: MagicMock,
     mock_resolve_team: MagicMock,
     mock_resolve_provider: MagicMock,
+    mock_collect_readiness: MagicMock,
     mock_prepare_live_start_plan: MagicMock,
     mock_build_output: MagicMock,
     mock_render_output: MagicMock,
