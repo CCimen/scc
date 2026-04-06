@@ -40,7 +40,7 @@ Update test_docs_truthfulness.py with Docker Desktop boundary guardrail.
   - Estimate: 30min
   - Files: src/scc_cli/commands/admin.py, src/scc_cli/commands/worktree/container_commands.py, tests/test_docs_truthfulness.py, tests/test_lifecycle_inventory_consistency.py
   - Verify: uv run pytest tests/test_docs_truthfulness.py tests/test_lifecycle_inventory_consistency.py -v && uv run ruff check
-- [ ] **T03: Consolidate provider adapter dispatch, preserve branding, and verify init template** — Provider adapter dispatch:
+- [x] **T03: Consolidated provider adapter dispatch into shared get_agent_provider() helper; verified init template branding and added 3 guardrail tests** — Provider adapter dispatch:
 1. In provider_choice.py collect_provider_readiness(): the hardcoded adapters_by_provider dict maps provider_id to adapter fields. Extract into a shared helper or reuse the _PROVIDER_DISPATCH pattern from dependencies.py.
 2. In setup.py _run_provider_onboarding(): same hardcoded provider_map. Use the shared helper.
 3. The goal: one dispatch surface for 'which adapter field is the AgentProvider for provider X' — consumed by dependencies.py, provider_choice.py, and setup.py.

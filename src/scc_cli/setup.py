@@ -18,6 +18,7 @@ from rich.text import Text
 
 from . import config
 from .bootstrap import get_default_adapters
+from .commands.launch.dependencies import get_agent_provider
 from .commands.launch.provider_choice import collect_provider_readiness
 from .core.errors import ProviderNotReadyError
 from .core.provider_resolution import get_provider_display_name
@@ -529,10 +530,6 @@ def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, s
     readiness = collect_provider_readiness(adapters)
     sequence = _prompt_provider_connections(console, readiness)
 
-    provider_map = {
-        "claude": adapters.agent_provider,
-        "codex": adapters.codex_agent_provider,
-    }
     for provider_id in sequence:
         display_name = get_provider_display_name(provider_id)
         console.print()
@@ -546,7 +543,7 @@ def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, s
             _layout_metrics(console),
         )
         console.print()
-        provider_adapter = provider_map.get(provider_id)
+        provider_adapter = get_agent_provider(adapters, provider_id)
         if provider_adapter is None:
             continue
         try:

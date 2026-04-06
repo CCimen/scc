@@ -35,6 +35,21 @@ _PROVIDER_DISPATCH: dict[str, dict[str, str]] = {
     },
 }
 
+
+def get_agent_provider(
+    adapters: DefaultAdapters,
+    provider_id: str,
+) -> AgentProvider | None:
+    """Look up the AgentProvider adapter for a given provider_id.
+
+    Returns None if provider_id is unknown or the adapter field is not wired.
+    Single dispatch surface consumed by dependencies, provider_choice, and setup.
+    """
+    dispatch = _PROVIDER_DISPATCH.get(provider_id)
+    if dispatch is None:
+        return None
+    return getattr(adapters, dispatch["agent_provider"], None)
+
 def build_start_session_dependencies(
     adapters: DefaultAdapters,
     provider_id: str,

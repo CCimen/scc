@@ -948,3 +948,75 @@ def test_d001_product_identity_consistent() -> None:
         "pyproject.toml still contains 'Sandboxed Claude CLI'. "
         "Product metadata must stay provider-neutral."
     )
+
+
+# ---------------------------------------------------------------------------
+# Test: init.py .scc.yaml template uses D045 product name
+# ---------------------------------------------------------------------------
+
+
+def test_init_template_uses_d045_product_name() -> None:
+    """init.py .scc.yaml template must say 'Sandboxed Coding CLI' (D045).
+
+    The generate_template_content() output is the first SCC artifact a new
+    user sees. It must use the canonical product name from D045 — not the
+    older 'Sandboxed Code CLI' (D030, superseded) and not the provider-
+    specific 'Sandboxed Claude CLI'.
+    """
+    from scc_cli.commands.init import generate_template_content
+
+    template = generate_template_content()
+    assert "Sandboxed Coding CLI" in template, (
+        "init.py .scc.yaml template does not contain 'Sandboxed Coding CLI'. "
+        "D045 requires the canonical product name in all user-visible surfaces."
+    )
+    assert "Sandboxed Code CLI" not in template, (
+        "init.py .scc.yaml template still says 'Sandboxed Code CLI'. "
+        "D030 was superseded by D045; use 'Sandboxed Coding CLI'."
+    )
+    assert "Sandboxed Claude CLI" not in template, (
+        "init.py .scc.yaml template says 'Sandboxed Claude CLI'. "
+        "The product name must be provider-neutral per D045."
+    )
+
+
+# ===========================================================================
+# M008 adapter dispatch consolidation guardrails
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test: provider_choice and setup use shared dispatch, not hardcoded dicts
+# ---------------------------------------------------------------------------
+
+
+def test_provider_choice_uses_shared_dispatch() -> None:
+    """provider_choice.py must not contain a hardcoded provider-to-adapter dict.
+
+    After M008/S02/T03, collect_provider_readiness uses the shared
+    get_agent_provider helper from dependencies.py. No local
+    adapters_by_provider or provider_map dict should exist.
+    """
+    choice_path = SRC / "commands" / "launch" / "provider_choice.py"
+    source = choice_path.read_text(encoding="utf-8")
+
+    assert "adapters_by_provider" not in source, (
+        "provider_choice.py still contains a hardcoded 'adapters_by_provider' dict. "
+        "Use the shared get_agent_provider() from dependencies.py instead."
+    )
+
+
+def test_setup_uses_shared_dispatch() -> None:
+    """setup.py must not contain a hardcoded provider_map dict.
+
+    After M008/S02/T03, _run_provider_onboarding uses the shared
+    get_agent_provider helper from dependencies.py. No local
+    provider_map dict should exist.
+    """
+    setup_path = SRC / "setup.py"
+    source = setup_path.read_text(encoding="utf-8")
+
+    assert "provider_map" not in source, (
+        "setup.py still contains a hardcoded 'provider_map' dict. "
+        "Use the shared get_agent_provider() from dependencies.py instead."
+    )

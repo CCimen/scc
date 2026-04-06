@@ -10,6 +10,7 @@ from rich.table import Table
 
 from scc_cli.application.provider_selection import resolve_provider_preference
 from scc_cli.cli_common import console
+from scc_cli.commands.launch.dependencies import get_agent_provider
 from scc_cli.core.contracts import AuthReadiness
 from scc_cli.core.errors import ProviderNotReadyError
 from scc_cli.core.provider_resolution import KNOWN_PROVIDERS, get_provider_display_name
@@ -80,14 +81,10 @@ def collect_provider_readiness(
     allowed_providers: tuple[str, ...] = (),
 ) -> dict[str, AuthReadiness]:
     """Return provider auth readiness for all allowed providers."""
-    adapters_by_provider = {
-        "claude": adapters.agent_provider,
-        "codex": adapters.codex_agent_provider,
-    }
     candidates = allowed_providers or KNOWN_PROVIDERS
     result: dict[str, AuthReadiness] = {}
     for provider_id in candidates:
-        adapter = adapters_by_provider.get(provider_id)
+        adapter = get_agent_provider(adapters, provider_id)
         if adapter is None:
             continue
         result[provider_id] = adapter.auth_check()
