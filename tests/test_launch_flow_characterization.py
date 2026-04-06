@@ -251,9 +251,7 @@ class TestResolveSessionSelection:
 
         mock_session_svc = MagicMock()
 
-        with patch(
-            "scc_cli.application.workspace.resolve_workspace"
-        ) as mock_resolve:
+        with patch("scc_cli.application.workspace.resolve_workspace") as mock_resolve:
             mock_resolve.return_value = MagicMock(workspace_root=Path("/auto/detected"))
 
             result = _resolve_session_selection(
@@ -268,7 +266,9 @@ class TestResolveSessionSelection:
                 dry_run=True,
                 session_service=mock_session_svc,
             )
-            workspace, team, session_name, worktree_name, cancelled, was_auto, session_provider = result
+            workspace, team, session_name, worktree_name, cancelled, was_auto, session_provider = (
+                result
+            )
             assert workspace == "/auto/detected"
             assert was_auto is True
             assert cancelled is False

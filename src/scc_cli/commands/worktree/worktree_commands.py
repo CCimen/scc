@@ -137,9 +137,7 @@ def worktree_create_cmd(
     base_branch: str | None = typer.Option(
         None, "-b", "--base", help="Base branch (default: current)"
     ),
-    start_agent: bool = typer.Option(
-        True, "--start/--no-start", help="Start agent after creating"
-    ),
+    start_agent: bool = typer.Option(True, "--start/--no-start", help="Start agent after creating"),
     install_deps: bool = typer.Option(
         False, "--install-deps", help="Install dependencies after creating worktree"
     ),
@@ -264,9 +262,7 @@ def worktree_create_cmd(
             if resolved_provider is None:
                 console.print("[dim]Cancelled.[/dim]")
                 raise typer.Exit(EXIT_CANCELLED)
-            readiness = collect_launch_readiness(
-                resolved_provider, _source, adapters
-            )
+            readiness = collect_launch_readiness(resolved_provider, _source, adapters)
             if not readiness.launch_ready:
                 ensure_launch_ready(
                     readiness,

@@ -55,7 +55,9 @@ def test_merge_personal_settings_respects_managed(tmp_path: Path) -> None:
     existing = {"enabledPlugins": {"team@market": True, "user@market": True}}
     personal = {"enabledPlugins": {"team@market": False, "new@market": True}}
 
-    merged = personal_profiles.merge_personal_settings(tmp_path, existing, personal, managed_state_loader=load_managed_state)
+    merged = personal_profiles.merge_personal_settings(
+        tmp_path, existing, personal, managed_state_loader=load_managed_state
+    )
 
     assert merged["enabledPlugins"]["team@market"] is False
     assert merged["enabledPlugins"]["user@market"] is True

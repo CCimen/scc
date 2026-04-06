@@ -155,10 +155,12 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config=NormalizedOrgConfig.from_dict({
-            "defaults": {"network_policy": "restricted"},
-            "profiles": {"alpha": {}},
-        }),
+        org_config=NormalizedOrgConfig.from_dict(
+            {
+                "defaults": {"network_policy": "restricted"},
+                "profiles": {"alpha": {}},
+            }
+        ),
         raw_org_config={
             "defaults": {"network_policy": "restricted"},
             "profiles": {"alpha": {}},
@@ -698,9 +700,7 @@ class TestBundlePipelineWiring:
         # Create a provider that raises on render_artifacts
         provider = FakeAgentProvider()
 
-        def _exploding_render(
-            plan: ArtifactRenderPlan, workspace: Path
-        ) -> RenderArtifactsResult:
+        def _exploding_render(plan: ArtifactRenderPlan, workspace: Path) -> RenderArtifactsResult:
             raise MaterializationError(
                 bundle_id="security-pack",
                 artifact_name="safety-net",
@@ -765,9 +765,7 @@ class TestBundlePipelineWiring:
         plan = ArtifactRenderPlan(
             bundle_id="test-bundle",
             provider="fake",
-            bindings=(
-                ProviderArtifactBinding(provider="fake", native_ref="test-skill"),
-            ),
+            bindings=(ProviderArtifactBinding(provider="fake", native_ref="test-skill"),),
             effective_artifacts=("test-artifact",),
         )
         result = provider.render_artifacts(plan, tmp_path)
@@ -1585,9 +1583,7 @@ class TestConfigFreshness:
 
         assert plan.agent_settings is None
 
-    def test_codex_fresh_launch_empty_config_includes_scc_defaults(
-        self, tmp_path: Path
-    ) -> None:
+    def test_codex_fresh_launch_empty_config_includes_scc_defaults(self, tmp_path: Path) -> None:
         """D038+D040: Codex fresh launch with no content still gets SCC-managed defaults.
 
         The CodexAgentRunner.build_settings merges _SCC_MANAGED_DEFAULTS

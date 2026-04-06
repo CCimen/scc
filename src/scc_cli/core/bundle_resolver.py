@@ -245,8 +245,7 @@ def resolve_render_plan(
     if team is None:
         available = org_config.list_profile_names()
         raise ValueError(
-            f"Team profile '{team_name}' not found in org config; "
-            f"available profiles: {available}"
+            f"Team profile '{team_name}' not found in org config; available profiles: {available}"
         )
 
     catalog = org_config.governed_artifacts
@@ -258,9 +257,7 @@ def resolve_render_plan(
     all_diagnostics: list[BundleResolutionDiagnostic] = []
 
     for bundle_id in team.enabled_bundles:
-        plan, diags = _resolve_single_bundle(
-            bundle_id, provider, catalog, fail_closed=fail_closed
-        )
+        plan, diags = _resolve_single_bundle(bundle_id, provider, catalog, fail_closed=fail_closed)
         all_plans.append(plan)
         all_diagnostics.extend(diags)
 

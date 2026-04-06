@@ -513,7 +513,11 @@ def list_scc_containers() -> list[ContainerInfo]:
 
 def list_running_scc_containers() -> list[ContainerInfo]:
     """Return only running SCC-managed containers."""
-    return [container for container in list_scc_containers() if container.status.lower().startswith("up")]
+    return [
+        container
+        for container in list_scc_containers()
+        if container.status.lower().startswith("up")
+    ]
 
 
 def list_running_sandboxes() -> list[ContainerInfo]:

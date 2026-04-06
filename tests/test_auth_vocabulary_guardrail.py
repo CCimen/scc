@@ -100,7 +100,7 @@ def _extract_string_tokens(path: Path) -> list[tuple[int, str]]:
 # display values. Does NOT match variable names or longer phrases.
 _CONNECTED_STATUS = re.compile(
     r'^"?(not )?connected"?$'
-    r'|'
+    r"|"
     r'(?:status|label|value)\s*[:=]\s*["\'](?:not )?connected["\']',
     re.IGNORECASE,
 )
@@ -130,13 +130,11 @@ def test_no_connected_as_auth_status() -> None:
             stripped = value.strip()
             if stripped in ("connected", "not connected"):
                 violations.append(
-                    f"  {path.relative_to(ROOT)}:{lineno} — "
-                    f"banned auth status string: {stripped!r}"
+                    f"  {path.relative_to(ROOT)}:{lineno} — banned auth status string: {stripped!r}"
                 )
     assert not violations, (
         "Found 'connected'/'not connected' used as auth-cache status labels.\n"
-        "Use 'auth cache present' / 'sign-in needed' instead.\n"
-        + "\n".join(violations)
+        "Use 'auth cache present' / 'sign-in needed' instead.\n" + "\n".join(violations)
     )
 
 
@@ -149,13 +147,11 @@ def test_no_sign_in_required() -> None:
         for lineno, value in _extract_string_tokens(path):
             if _SIGN_IN_REQUIRED.search(value):
                 violations.append(
-                    f"  {path.relative_to(ROOT)}:{lineno} — "
-                    f"contains 'sign-in required': {value!r}"
+                    f"  {path.relative_to(ROOT)}:{lineno} — contains 'sign-in required': {value!r}"
                 )
     assert not violations, (
         "Found 'sign-in required' in user-facing strings.\n"
-        "Use 'sign-in needed' instead.\n"
-        + "\n".join(violations)
+        "Use 'sign-in needed' instead.\n" + "\n".join(violations)
     )
 
 
@@ -190,7 +186,11 @@ def test_no_standalone_ready_for_auth_only() -> None:
                     continue
                 # Allow the pattern in comments/docstrings
                 stripped = line.strip()
-                if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
+                if (
+                    stripped.startswith("#")
+                    or stripped.startswith('"""')
+                    or stripped.startswith("'''")
+                ):
                     continue
                 violations.append(
                     f"  {path.relative_to(ROOT)}:{i} — "
@@ -200,8 +200,7 @@ def test_no_standalone_ready_for_auth_only() -> None:
     assert not violations, (
         "Found standalone 'ready' used as auth-only readiness status.\n"
         "Use 'auth cache present' for auth-only, 'image available' for image-only, "
-        "'launch-ready' for both.\n"
-        + "\n".join(violations)
+        "'launch-ready' for both.\n" + "\n".join(violations)
     )
 
 
@@ -251,9 +250,7 @@ def test_auth_bootstrap_uses_truthful_vocabulary() -> None:
 
     # auth_bootstrap.py still exists as a deprecated redirect
     bootstrap_path = SRC / "commands" / "launch" / "auth_bootstrap.py"
-    assert bootstrap_path.exists(), (
-        "auth_bootstrap.py should exist as a deprecated redirect"
-    )
+    assert bootstrap_path.exists(), "auth_bootstrap.py should exist as a deprecated redirect"
     bootstrap_content = bootstrap_path.read_text()
     assert "deprecated" in bootstrap_content.lower(), (
         "auth_bootstrap.py should be marked as deprecated"

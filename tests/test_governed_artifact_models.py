@@ -115,7 +115,10 @@ class TestProviderArtifactBinding:
         binding = ProviderArtifactBinding(
             provider="claude",
             native_ref="./claude/github-hooks.json",
-            native_config={"hooks": "./claude/github-hooks.json", "marketplace_bundle": "./claude/github-marketplace"},
+            native_config={
+                "hooks": "./claude/github-hooks.json",
+                "marketplace_bundle": "./claude/github-marketplace",
+            },
             transport_type="stdio",
         )
         assert binding.provider == "claude"
@@ -263,11 +266,17 @@ class TestCrossModelIntegration:
 
         claude_binding = ProviderArtifactBinding(
             provider="claude",
-            native_config={"hooks": "./claude/github-hooks.json", "marketplace_bundle": "./claude/github-marketplace"},
+            native_config={
+                "hooks": "./claude/github-hooks.json",
+                "marketplace_bundle": "./claude/github-marketplace",
+            },
         )
         codex_binding = ProviderArtifactBinding(
             provider="codex",
-            native_config={"plugin_bundle": "./codex/github-plugin", "rules": "./codex/rules/github.rules"},
+            native_config={
+                "plugin_bundle": "./codex/github-plugin",
+                "rules": "./codex/rules/github.rules",
+            },
         )
 
         bundle = ArtifactBundle(

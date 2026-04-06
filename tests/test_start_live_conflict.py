@@ -259,4 +259,6 @@ def test_start_replace_conflict_records_then_launches_with_updated_plan(
     _invoke_start(tmp_path)
 
     mock_record_session.assert_called_once()
-    mock_finalize_launch.assert_called_once_with(updated_plan, dependencies=mock_prepare_live_start_plan.return_value[0])
+    mock_finalize_launch.assert_called_once_with(
+        updated_plan, dependencies=mock_prepare_live_start_plan.return_value[0]
+    )

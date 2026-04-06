@@ -406,8 +406,12 @@ def team_switch(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Wrap with decorators and register
-_team_list_cmd = team_app.command("list")(json_command(Kind.TEAM_LIST)(handle_errors(_team_list_fn)))
-_team_info_cmd = team_app.command("info")(json_command(Kind.TEAM_INFO)(handle_errors(_team_info_fn)))
+_team_list_cmd = team_app.command("list")(
+    json_command(Kind.TEAM_LIST)(handle_errors(_team_list_fn))
+)
+_team_info_cmd = team_app.command("info")(
+    json_command(Kind.TEAM_INFO)(handle_errors(_team_info_fn))
+)
 _team_validate_cmd = team_app.command("validate")(
     json_command(Kind.TEAM_VALIDATE)(handle_errors(_team_validate_fn))
 )

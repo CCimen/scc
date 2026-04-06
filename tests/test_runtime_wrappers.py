@@ -90,16 +90,12 @@ class TestWrapperScripts:
     def test_wrapper_uses_basename(self, tool: str) -> None:
         """Wrapper passes basename of $0 as tool name — prevents path prefix issues."""
         content = (_BIN_DIR / tool).read_text()
-        assert 'basename "$0"' in content, (
-            f"Wrapper for {tool} does not use basename for tool name"
-        )
+        assert 'basename "$0"' in content, f"Wrapper for {tool} does not use basename for tool name"
 
     @pytest.mark.parametrize("tool", _TOOLS)
     def test_wrapper_has_bash_shebang(self, tool: str) -> None:
         content = (_BIN_DIR / tool).read_text()
-        assert content.startswith("#!/bin/bash"), (
-            f"Wrapper for {tool} missing bash shebang"
-        )
+        assert content.startswith("#!/bin/bash"), f"Wrapper for {tool} missing bash shebang"
 
 
 # ── Evaluator CLI tests (blocked/allowed/fail-closed) ─────────────────────
@@ -207,19 +203,13 @@ class TestEvaluatorPolicyOverrides:
 
     def test_disabled_rule_permits_specific_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            path = _write_policy(
-                tmp, {"action": "block", "rules": {"block_force_push": False}}
-            )
-            result = _run_evaluator(
-                ["git", "push", "--force", "origin", "main"], policy_path=path
-            )
+            path = _write_policy(tmp, {"action": "block", "rules": {"block_force_push": False}})
+            result = _run_evaluator(["git", "push", "--force", "origin", "main"], policy_path=path)
             assert result.returncode == 0
 
     def test_disabled_git_rule_does_not_affect_network(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            path = _write_policy(
-                tmp, {"action": "block", "rules": {"block_force_push": False}}
-            )
+            path = _write_policy(tmp, {"action": "block", "rules": {"block_force_push": False}})
             result = _run_evaluator(["curl", "https://example.com"], policy_path=path)
             assert result.returncode == 2
 

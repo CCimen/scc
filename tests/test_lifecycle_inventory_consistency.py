@@ -78,9 +78,7 @@ class TestStopCmdUsesLabelInventory:
                 assert names & LABEL_INVENTORY, (
                     "stop_cmd should call list_scc_containers or list_running_scc_containers"
                 )
-                assert not (names & IMAGE_INVENTORY), (
-                    "stop_cmd must not use image-based inventory"
-                )
+                assert not (names & IMAGE_INVENTORY), "stop_cmd must not use image-based inventory"
                 return
         raise AssertionError("stop_cmd function not found in container_commands.py")
 
@@ -91,12 +89,8 @@ class TestDashboardUsesLabelInventory:
     def test_dashboard_status_loader(self) -> None:
         source = (SRC / "application" / "dashboard_loaders.py").read_text()
         names = _collect_called_names(source)
-        assert "list_scc_containers" in names, (
-            "dashboard_loaders must call list_scc_containers"
-        )
-        assert not (names & IMAGE_INVENTORY), (
-            "dashboard_loaders must not use image-based inventory"
-        )
+        assert "list_scc_containers" in names, "dashboard_loaders must call list_scc_containers"
+        assert not (names & IMAGE_INVENTORY), "dashboard_loaders must not use image-based inventory"
 
 
 class TestPickerUsesLabelInventory:
@@ -108,9 +102,7 @@ class TestPickerUsesLabelInventory:
         assert "list_scc_containers" in names, (
             "picker.py must call list_scc_containers for container selection"
         )
-        assert not (names & IMAGE_INVENTORY), (
-            "picker.py must not use image-based inventory"
-        )
+        assert not (names & IMAGE_INVENTORY), "picker.py must not use image-based inventory"
 
 
 class TestPruneCmdUsesImageInventory:

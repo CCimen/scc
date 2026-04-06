@@ -587,7 +587,8 @@ def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, s
                 create_info_panel(
                     f"{display_name} sign-in incomplete",
                     exc.user_message,
-                    exc.suggested_action or "You can retry the provider sign-in later during start.",
+                    exc.suggested_action
+                    or "You can retry the provider sign-in later during start.",
                 ),
                 _layout_metrics(console),
             )

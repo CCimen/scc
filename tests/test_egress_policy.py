@@ -65,9 +65,7 @@ class TestBuildEgressPlanRules:
             EgressRule(target=".anthropic.com", allow=True, reason="provider API"),
             EgressRule(target=".github.com", allow=True, reason="code host"),
         )
-        plan = build_egress_plan(
-            NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom
-        )
+        plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom)
 
         # Custom allow rules appear after the default deny set.
         allow_targets = [r.target for r in plan.egress_rules if r.allow]
@@ -75,9 +73,7 @@ class TestBuildEgressPlanRules:
         assert ".github.com" in allow_targets
 
         # Deny rules should still be first.
-        first_allow_idx = next(
-            i for i, r in enumerate(plan.egress_rules) if r.allow
-        )
+        first_allow_idx = next(i for i, r in enumerate(plan.egress_rules) if r.allow)
         for r in plan.egress_rules[:first_allow_idx]:
             assert r.allow is False
 
@@ -89,9 +85,7 @@ class TestBuildEgressPlanRules:
                 required=True,
             ),
         )
-        plan = build_egress_plan(
-            NetworkPolicy.WEB_EGRESS_ENFORCED, destination_sets=ds
-        )
+        plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED, destination_sets=ds)
 
         assert plan.destination_sets == ds
         assert plan.destination_sets[0].name == "claude-api"
@@ -111,9 +105,7 @@ class TestBuildEgressPlanEdgeCases:
 
     def test_egress_rule_with_empty_target(self) -> None:
         custom = (EgressRule(target="", allow=True, reason="empty target"),)
-        plan = build_egress_plan(
-            NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom
-        )
+        plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom)
         # Empty target is accepted; compile_squid_acl will treat it as dstdomain.
         allow_targets = [r.target for r in plan.egress_rules if r.allow]
         assert "" in allow_targets
@@ -150,43 +142,30 @@ class TestCompileSquidAcl:
         assert "dst 169.254.169.254" in acl
 
     def test_compile_acl_allow_specific_hosts(self) -> None:
-        custom = (
-            EgressRule(target=".anthropic.com", allow=True, reason="provider API"),
-        )
-        plan = build_egress_plan(
-            NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom
-        )
+        custom = (EgressRule(target=".anthropic.com", allow=True, reason="provider API"),)
+        plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom)
         acl = compile_squid_acl(plan)
 
         assert "dstdomain .anthropic.com" in acl
 
     def test_compile_acl_deny_before_allow_ordering(self) -> None:
-        custom = (
-            EgressRule(target=".anthropic.com", allow=True, reason="provider API"),
-        )
-        plan = build_egress_plan(
-            NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom
-        )
+        custom = (EgressRule(target=".anthropic.com", allow=True, reason="provider API"),)
+        plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED, egress_rules=custom)
         acl = compile_squid_acl(plan)
 
         lines = acl.strip().splitlines()
-        access_lines = [
-            line for line in lines if line.startswith("http_access")
-        ]
+        access_lines = [line for line in lines if line.startswith("http_access")]
 
         # Find last deny and first allow in access lines (excluding terminal).
         deny_indices = [
-            idx for idx, line in enumerate(access_lines)
+            idx
+            for idx, line in enumerate(access_lines)
             if "deny" in line and line != "http_access deny all"
         ]
-        allow_indices = [
-            idx for idx, line in enumerate(access_lines) if "allow" in line
-        ]
+        allow_indices = [idx for idx, line in enumerate(access_lines) if "allow" in line]
 
         if deny_indices and allow_indices:
-            assert max(deny_indices) < min(allow_indices), (
-                "all deny rules must precede allow rules"
-            )
+            assert max(deny_indices) < min(allow_indices), "all deny rules must precede allow rules"
 
     def test_compile_acl_ends_with_deny_all(self) -> None:
         plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED)
@@ -242,9 +221,6 @@ class TestCompileSquidAclEdgeCases:
         plan = build_egress_plan(NetworkPolicy.WEB_EGRESS_ENFORCED)
         acl = compile_squid_acl(plan)
 
-        access_lines = [
-            line for line in acl.strip().splitlines()
-            if line.startswith("http_access")
-        ]
+        access_lines = [line for line in acl.strip().splitlines() if line.startswith("http_access")]
         allow_lines = [line for line in access_lines if "allow" in line]
         assert allow_lines == [], "no allow lines expected with zero allow rules"

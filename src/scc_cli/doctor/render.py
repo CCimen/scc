@@ -122,7 +122,9 @@ def render_doctor_results(
     title_style = (
         "bold green"
         if result.all_ok and not has_failed_checks
-        else "bold yellow" if result.all_ok else "bold red"
+        else "bold yellow"
+        if result.all_ok
+        else "bold red"
     )
     version_suffix = f" (scc-cli v{__version__})"
     title_text = (
@@ -134,7 +136,11 @@ def render_doctor_results(
     panel = Panel(
         table,
         title=f"[{title_style}]{title_text}[/{title_style}]",
-        border_style="green" if result.all_ok and not has_failed_checks else "yellow" if result.all_ok else "red",
+        border_style="green"
+        if result.all_ok and not has_failed_checks
+        else "yellow"
+        if result.all_ok
+        else "red",
         padding=(1, 1),
     )
 

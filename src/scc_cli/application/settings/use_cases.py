@@ -500,7 +500,9 @@ def _apply_profile_apply(workspace: Path) -> SettingsActionResult:
     current_mcp = load_workspace_mcp(workspace) or {}
 
     if profile.settings:
-        merged_settings = merge_personal_settings(workspace, current_settings, profile.settings, managed_state_loader=load_managed_state)
+        merged_settings = merge_personal_settings(
+            workspace, current_settings, profile.settings, managed_state_loader=load_managed_state
+        )
         write_workspace_settings(workspace, merged_settings)
 
     if profile.mcp:

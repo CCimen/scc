@@ -271,8 +271,7 @@ def run_sandbox(
         # Called once per scc start flow, before container exec.
         if not reset_global_settings():
             logger.warning(
-                "Failed to reset global settings. "
-                "Plugin mixing may occur if switching teams."
+                "Failed to reset global settings. Plugin mixing may occur if switching teams."
             )
 
         # ALWAYS write policy file and get host path (even without org config)

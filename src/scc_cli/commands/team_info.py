@@ -24,13 +24,9 @@ from ..panels import create_warning_panel
 
 def team_list(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full descriptions"),
-    sync: bool = typer.Option(
-        False, "--sync", "-s", help="Sync team configs from organization"
-    ),
+    sync: bool = typer.Option(False, "--sync", "-s", help="Sync team configs from organization"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
-    pretty: bool = typer.Option(
-        False, "--pretty", help="Pretty-print JSON (implies --json)"
-    ),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> dict[str, Any]:
     """List available team profiles.
 
@@ -130,8 +126,7 @@ def team_list(
 
         console.print()
         console.print(
-            "[dim]Use: scc team switch <name> to switch, "
-            "scc team info <name> for details[/dim]"
+            "[dim]Use: scc team switch <name> to switch, scc team info <name> for details[/dim]"
         )
 
     return {"teams": team_data, "current": current}
@@ -140,9 +135,7 @@ def team_list(
 def team_info(
     team_name: str = typer.Argument(..., help="Team name to show details for"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
-    pretty: bool = typer.Option(
-        False, "--pretty", help="Pretty-print JSON (implies --json)"
-    ),
+    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> dict[str, Any]:
     """Show detailed information for a specific team profile.
 

@@ -98,7 +98,9 @@ def run_doctor(
             try:
                 image_check = check_provider_image(provider_id=current_provider_id)
                 result.checks.append(
-                    _label_provider_check(image_check, current_provider_id, requested_provider_id=provider_id)
+                    _label_provider_check(
+                        image_check, current_provider_id, requested_provider_id=provider_id
+                    )
                 )
             except Exception:
                 pass  # partial-results — don't block other checks
@@ -107,7 +109,9 @@ def run_doctor(
             try:
                 auth_check = check_provider_auth(provider_id=current_provider_id)
                 result.checks.append(
-                    _label_provider_check(auth_check, current_provider_id, requested_provider_id=provider_id)
+                    _label_provider_check(
+                        auth_check, current_provider_id, requested_provider_id=provider_id
+                    )
                 )
             except Exception:
                 pass  # partial-results — don't block other checks

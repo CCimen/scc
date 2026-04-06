@@ -137,7 +137,9 @@ class TestClaudeAuthCheck:
     """auth_check() validates Claude OAuth credential presence (D037)."""
 
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
-    def test_auth_present_valid_json(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
+    def test_auth_present_valid_json(
+        self, mock_run: MagicMock, provider: ClaudeAgentProvider
+    ) -> None:
         mock_run.side_effect = _mock_docker_run_claude(
             oauth_cat_stdout=json.dumps({"accessToken": "tok"}).encode()
         ).side_effect
@@ -178,7 +180,9 @@ class TestClaudeAuthCheck:
         assert ".claude.json" in result.guidance or ".credentials.json" in result.guidance
 
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
-    def test_auth_file_invalid_json(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
+    def test_auth_file_invalid_json(
+        self, mock_run: MagicMock, provider: ClaudeAgentProvider
+    ) -> None:
         mock_run.side_effect = _mock_docker_run_claude(
             oauth_cat_stdout=b"not-json{{{",
         ).side_effect

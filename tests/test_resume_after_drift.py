@@ -136,9 +136,7 @@ class TestResumeWithDeletedAuthVolume:
         mock_image.return_value = ImageStatus.AVAILABLE
         adapters = _mock_adapters(connected_providers=("claude",))  # codex auth missing
 
-        readiness = collect_launch_readiness(
-            "codex", ProviderResolutionSource.RESUME, adapters
-        )
+        readiness = collect_launch_readiness("codex", ProviderResolutionSource.RESUME, adapters)
         assert readiness.provider_id == "codex"
         assert readiness.auth_status == AuthStatus.MISSING
         assert readiness.requires_auth_bootstrap is True
@@ -181,17 +179,13 @@ class TestResumeWithImageRemoved:
         mock_image.return_value = ImageStatus.MISSING
         adapters = _mock_adapters(connected_providers=("claude", "codex"))
 
-        readiness = collect_launch_readiness(
-            "codex", ProviderResolutionSource.RESUME, adapters
-        )
+        readiness = collect_launch_readiness("codex", ProviderResolutionSource.RESUME, adapters)
         assert readiness.image_status == ImageStatus.MISSING
         assert readiness.requires_image_bootstrap is True
         assert readiness.launch_ready is False
 
     @patch("scc_cli.commands.launch.provider_image.ensure_provider_image")
-    def test_ensure_ready_triggers_image_build_interactive(
-        self, mock_build: MagicMock
-    ) -> None:
+    def test_ensure_ready_triggers_image_build_interactive(self, mock_build: MagicMock) -> None:
         """Interactive mode triggers auto-build when image is missing."""
         readiness = LaunchReadiness(
             provider_id="codex",

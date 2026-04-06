@@ -527,9 +527,7 @@ class TestAnalyzeGit:
 
     def test_reflog_expire_now(self) -> None:
         assert analyze_git(["git", "reflog", "expire", "--expire-unreachable=now"]) is not None
-        assert (
-            analyze_git(["git", "reflog", "expire", "--expire-unreachable", "now"]) is not None
-        )
+        assert analyze_git(["git", "reflog", "expire", "--expire-unreachable", "now"]) is not None
 
     def test_reflog_show_allowed(self) -> None:
         assert analyze_git(["git", "reflog"]) is None

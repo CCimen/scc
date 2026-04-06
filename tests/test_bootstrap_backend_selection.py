@@ -46,9 +46,7 @@ class TestBootstrapBackendSelection:
         assert isinstance(adapters.sandbox_runtime, OciSandboxRuntime)
 
     @patch("scc_cli.bootstrap.DockerRuntimeProbe")
-    def test_docker_sandbox_backend_produces_docker_runtime(
-        self, mock_probe_cls: object
-    ) -> None:
+    def test_docker_sandbox_backend_produces_docker_runtime(self, mock_probe_cls: object) -> None:
         """When probe returns preferred_backend='docker-sandbox', bootstrap wires DockerSandboxRuntime."""
         info = _make_runtime_info("docker-sandbox", sandbox_available=True)
         mock_probe_cls.return_value.probe.return_value = info  # type: ignore[union-attr]

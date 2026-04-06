@@ -377,7 +377,9 @@ class TestSmartWorkspaceDetection:
                 return_value=(None, "/home/user/random"),
             ),
             # Non-TTY environment
-            patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False),
+            patch(
+                "scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False
+            ),
         ):
             result = runner.invoke(app, ["start"])
 
@@ -417,12 +419,20 @@ class TestSmartWorkspaceDetection:
                 "scc_cli.commands.launch.flow.git.detect_workspace_root",
                 return_value=("/home/user/project", "/home/user/project"),
             ) as mock_detect,
-            patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=True),
-            patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value=None),
+            patch(
+                "scc_cli.commands.launch.flow_interactive.config.is_standalone_mode",
+                return_value=True,
+            ),
+            patch(
+                "scc_cli.commands.launch.flow_interactive.config.load_cached_org_config",
+                return_value=None,
+            ),
             patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
             patch("scc_cli.commands.launch.flow_interactive.load_recent_contexts", return_value=[]),
             # User selects workspace via picker
-            patch("scc_cli.commands.launch.flow_interactive.pick_workspace_source", return_value=None),
+            patch(
+                "scc_cli.commands.launch.flow_interactive.pick_workspace_source", return_value=None
+            ),
         ):
             result = runner.invoke(app, ["start", "-i"])
 

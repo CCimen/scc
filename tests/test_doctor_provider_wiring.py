@@ -119,7 +119,9 @@ class TestRunDoctorProviderThreading:
         """run_doctor(provider_id='codex') threads it to check_provider_image."""
         ok = CheckResult(name="ok", passed=True, message="ok")
         mock_git.return_value = ok
-        mock_docker.return_value = CheckResult(name="Docker", passed=True, message="ok", version="24.0")
+        mock_docker.return_value = CheckResult(
+            name="Docker", passed=True, message="ok", version="24.0"
+        )
         mock_docker_running.return_value = ok
         mock_sandbox.return_value = CheckResult(name="Sandbox", passed=True, message="ok")
         mock_runtime.return_value = ok
@@ -162,7 +164,9 @@ class TestRunDoctorProviderThreading:
         """run_doctor(provider_id='codex') threads it to check_provider_auth."""
         ok = CheckResult(name="ok", passed=True, message="ok")
         mock_git.return_value = ok
-        mock_docker.return_value = CheckResult(name="Docker", passed=True, message="ok", version="24.0")
+        mock_docker.return_value = CheckResult(
+            name="Docker", passed=True, message="ok", version="24.0"
+        )
         mock_docker_running.return_value = ok
         mock_sandbox.return_value = CheckResult(name="Sandbox", passed=True, message="ok")
         mock_runtime.return_value = ok
@@ -204,14 +208,20 @@ class TestRunDoctorProviderThreading:
     ) -> None:
         """All checks have categories assigned after run_doctor completes."""
         mock_git.return_value = CheckResult(name="Git", passed=True, message="ok")
-        mock_docker.return_value = CheckResult(name="Docker", passed=True, message="ok", version="24.0")
-        mock_docker_running.return_value = CheckResult(name="Docker Daemon", passed=True, message="ok")
+        mock_docker.return_value = CheckResult(
+            name="Docker", passed=True, message="ok", version="24.0"
+        )
+        mock_docker_running.return_value = CheckResult(
+            name="Docker Daemon", passed=True, message="ok"
+        )
         mock_sandbox.return_value = CheckResult(name="Sandbox Backend", passed=True, message="ok")
         mock_runtime.return_value = CheckResult(name="Runtime Backend", passed=True, message="ok")
         mock_image.return_value = CheckResult(name="Provider Image", passed=True, message="ok")
         mock_auth.return_value = CheckResult(name="Provider Auth", passed=True, message="ok")
         mock_wsl2.return_value = (CheckResult(name="WSL2", passed=True, message="ok"), False)
-        mock_config_dir.return_value = CheckResult(name="Config Directory", passed=True, message="ok")
+        mock_config_dir.return_value = CheckResult(
+            name="Config Directory", passed=True, message="ok"
+        )
         mock_user_config.return_value = CheckResult(name="User Config", passed=True, message="ok")
         mock_safety.return_value = CheckResult(name="Safety Policy", passed=True, message="ok")
 
@@ -250,7 +260,9 @@ class TestRunDoctorProviderThreading:
     ) -> None:
         ok = CheckResult(name="ok", passed=True, message="ok")
         mock_git.return_value = ok
-        mock_docker.return_value = CheckResult(name="Docker", passed=True, message="ok", version="24.0")
+        mock_docker.return_value = CheckResult(
+            name="Docker", passed=True, message="ok", version="24.0"
+        )
         mock_docker_running.return_value = ok
         mock_sandbox.return_value = ok
         mock_runtime.return_value = ok
@@ -407,7 +419,13 @@ class TestRenderGrouping:
         result.docker_ok = False
         result.sandbox_ok = False
         result.checks = [
-            CheckResult(name="Git", passed=False, message="not found", category="backend", severity=SeverityLevel.ERROR),
+            CheckResult(
+                name="Git",
+                passed=False,
+                message="not found",
+                category="backend",
+                severity=SeverityLevel.ERROR,
+            ),
             CheckResult(
                 name="Provider Image",
                 passed=False,

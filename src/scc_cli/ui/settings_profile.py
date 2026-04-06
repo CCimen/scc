@@ -79,9 +79,7 @@ def profile_diff(console: Console, diff_info: ProfileDiffInfo) -> None:
         rendered_lines += 1
 
     if truncated:
-        remaining = diff.total_count - (
-            rendered_lines - len(set(i.section for i in diff.items))
-        )
+        remaining = diff.total_count - (rendered_lines - len(set(i.section for i in diff.items)))
         lines.append("")
         lines.append(f"  [dim]+ {remaining} more items...[/dim]")
 
@@ -150,30 +148,42 @@ def profile_sync(
 
     if selected == "change_path":
         return _sync_change_path(
-            console, context, default_path,
+            console,
+            context,
+            default_path,
             refresh_view_model=refresh_view_model,
             handle_action_result=handle_action_result,
             profile_sync_fn=lambda: profile_sync(
-                console, context, view_model,
-                refresh_view_model, handle_action_result, render_profile_sync_preview,
+                console,
+                context,
+                view_model,
+                refresh_view_model,
+                handle_action_result,
+                render_profile_sync_preview,
             ),
         )
     if selected == "export":
         return _sync_export(
-            console, context, repo_path,
+            console,
+            context,
+            repo_path,
             handle_action_result=handle_action_result,
             refresh_view_model=refresh_view_model,
         )
     if selected == "import":
         return _sync_import(
-            console, context, repo_path,
+            console,
+            context,
+            repo_path,
             handle_action_result=handle_action_result,
             refresh_view_model=refresh_view_model,
             render_profile_sync_preview=render_profile_sync_preview,
         )
     if selected == "full_sync":
         return _sync_full(
-            console, context, repo_path,
+            console,
+            context,
+            repo_path,
             handle_action_result=handle_action_result,
             refresh_view_model=refresh_view_model,
         )
@@ -255,11 +265,7 @@ def _sync_export(
         return None
 
     create_dir = False
-    if (
-        validation
-        and validation.confirmation == ConfirmationKind.CONFIRM
-        and validation.message
-    ):
+    if validation and validation.confirmation == ConfirmationKind.CONFIRM and validation.message:
         create_dir = _confirm_create_directory(console, validation.message)
         if not create_dir:
             return None

@@ -9,6 +9,7 @@ from scc_cli.ports.safety_engine import SafetyEngine
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _engine() -> DefaultSafetyEngine:
     return DefaultSafetyEngine()
 
@@ -27,6 +28,7 @@ def _allow_policy() -> SafetyPolicy:
 
 # ── Protocol conformance ────────────────────────────────────────────────────
 
+
 def test_default_engine_satisfies_protocol() -> None:
     """DefaultSafetyEngine is recognized as a SafetyEngine."""
     engine: SafetyEngine = DefaultSafetyEngine()
@@ -34,6 +36,7 @@ def test_default_engine_satisfies_protocol() -> None:
 
 
 # ── Empty / whitespace commands ─────────────────────────────────────────────
+
 
 def test_empty_command_returns_allowed() -> None:
     v = _engine().evaluate("", _block_policy())
@@ -48,6 +51,7 @@ def test_whitespace_command_returns_allowed() -> None:
 
 # ── Policy action=allow bypasses all rules ──────────────────────────────────
 
+
 def test_allow_policy_bypasses_destructive_git() -> None:
     v = _engine().evaluate("git push --force", _allow_policy())
     assert v.allowed is True
@@ -60,6 +64,7 @@ def test_allow_policy_bypasses_network_tool() -> None:
 
 
 # ── Destructive git — block mode ────────────────────────────────────────────
+
 
 def test_force_push_blocked() -> None:
     v = _engine().evaluate("git push --force", _block_policy())
@@ -82,6 +87,7 @@ def test_branch_force_delete_blocked() -> None:
 
 # ── Destructive git — rule disabled in policy ───────────────────────────────
 
+
 def test_force_push_allowed_when_rule_disabled() -> None:
     policy = SafetyPolicy(action="block", rules={"block_force_push": False})
     v = _engine().evaluate("git push --force", policy)
@@ -96,6 +102,7 @@ def test_reset_hard_allowed_when_rule_disabled() -> None:
 
 
 # ── Warn mode ───────────────────────────────────────────────────────────────
+
 
 def test_warn_mode_allows_but_prefixes_reason() -> None:
     v = _engine().evaluate("git push --force", _warn_policy())
@@ -112,6 +119,7 @@ def test_warn_mode_network_tool() -> None:
 
 # ── Network tool detection ──────────────────────────────────────────────────
 
+
 def test_curl_blocked() -> None:
     v = _engine().evaluate("curl http://example.com", _block_policy())
     assert v.allowed is False
@@ -126,6 +134,7 @@ def test_ssh_blocked() -> None:
 
 
 # ── Nested / compound commands ──────────────────────────────────────────────
+
 
 def test_bash_c_nesting_detected() -> None:
     v = _engine().evaluate("bash -c 'git push --force'", _block_policy())
@@ -147,6 +156,7 @@ def test_pipe_with_network_tool() -> None:
 
 # ── Safe commands ───────────────────────────────────────────────────────────
 
+
 def test_safe_git_push() -> None:
     v = _engine().evaluate("git push", _block_policy())
     assert v.allowed is True
@@ -164,6 +174,7 @@ def test_git_status() -> None:
 
 
 # ── Fail-closed: unknown rule key defaults to enabled ───────────────────────
+
 
 def test_missing_policy_key_defaults_to_enabled() -> None:
     """When policy.rules doesn't contain the key, the rule stays enabled (fail-closed)."""

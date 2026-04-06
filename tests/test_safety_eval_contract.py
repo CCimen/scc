@@ -23,6 +23,7 @@ from scc_cli.core.safety_engine import DefaultSafetyEngine as HostEngine  # noqa
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
+
 def _make_policies(
     action: str = "block",
     rules: dict | None = None,
@@ -52,6 +53,7 @@ def _assert_verdicts_match(command: str, host_policy, standalone_policy) -> None
 
 
 # ── Contract tests ─────────────────────────────────────────────────────────
+
 
 class TestSafetyEvalContract:
     """Verdict equivalence between host and standalone engines."""

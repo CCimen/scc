@@ -372,9 +372,7 @@ def _build_sandbox_spec(
     ):
         profile = agent_provider.capability_profile()
         if profile.required_destination_set:
-            destination_sets = resolve_destination_sets(
-                (profile.required_destination_set,)
-            )
+            destination_sets = resolve_destination_sets((profile.required_destination_set,))
 
     return SandboxSpec(
         image=image,

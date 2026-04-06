@@ -86,9 +86,7 @@ SCC_SECTION_START = "# --- SCC-MANAGED START (do not edit) ---"
 SCC_SECTION_END = "# --- SCC-MANAGED END ---"
 
 # Known native_config keys for Codex native integrations.
-_INTEGRATION_KEYS = frozenset(
-    {"plugin_bundle", "rules", "hooks", "instructions"}
-)
+_INTEGRATION_KEYS = frozenset({"plugin_bundle", "rules", "hooks", "instructions"})
 
 
 # ---------------------------------------------------------------------------
@@ -312,9 +310,7 @@ def _render_native_integration_binding(
                 try:
                     existing_hooks = json.loads(hooks_path.read_text())
                 except json.JSONDecodeError:
-                    warnings.append(
-                        f"Could not parse existing {hooks_path}; overwriting"
-                    )
+                    warnings.append(f"Could not parse existing {hooks_path}; overwriting")
 
             existing_hooks.setdefault("scc_managed", {})[bundle_id] = hooks_metadata
             codex_dir.mkdir(parents=True, exist_ok=True)
@@ -518,10 +514,7 @@ def render_codex_artifacts(
     """
     if plan.provider != "codex":
         return RendererResult(
-            warnings=(
-                f"Plan targets provider '{plan.provider}', not 'codex'; "
-                "nothing rendered",
-            ),
+            warnings=(f"Plan targets provider '{plan.provider}', not 'codex'; nothing rendered",),
             skipped_artifacts=plan.effective_artifacts,
         )
 
@@ -540,9 +533,7 @@ def render_codex_artifacts(
         kind = _classify_binding(binding)
 
         if kind == "native":
-            paths, warnings = _render_native_integration_binding(
-                binding, workspace, plan.bundle_id
-            )
+            paths, warnings = _render_native_integration_binding(binding, workspace, plan.bundle_id)
             all_rendered.extend(paths)
             all_warnings.extend(warnings)
 
@@ -552,9 +543,7 @@ def render_codex_artifacts(
             merged_mcp.setdefault("mcpServers", {}).update(mcp_config)
 
         elif kind == "skill":
-            paths, warnings = _render_skill_binding(
-                binding, workspace, plan.bundle_id
-            )
+            paths, warnings = _render_skill_binding(binding, workspace, plan.bundle_id)
             all_rendered.extend(paths)
             all_warnings.extend(warnings)
 
@@ -567,16 +556,12 @@ def render_codex_artifacts(
     # Render portable artifacts that have no provider-specific binding (D023)
     for portable in plan.portable_artifacts:
         if portable.kind == ArtifactKind.SKILL:
-            paths, warnings = _render_portable_skill(
-                portable, workspace, plan.bundle_id
-            )
+            paths, warnings = _render_portable_skill(portable, workspace, plan.bundle_id)
             all_rendered.extend(paths)
             all_warnings.extend(warnings)
 
         elif portable.kind == ArtifactKind.MCP_SERVER:
-            mcp_config, warnings = _render_portable_mcp(
-                portable, plan.bundle_id
-            )
+            mcp_config, warnings = _render_portable_mcp(portable, plan.bundle_id)
             all_warnings.extend(warnings)
             merged_mcp.setdefault("mcpServers", {}).update(mcp_config)
 

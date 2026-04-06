@@ -45,7 +45,10 @@ class TestCheckProviderImage:
         assert result.passed is False
         assert result.fix_commands is not None
         assert len(result.fix_commands) == 1
-        assert result.fix_commands[0] == "docker build -t scc-agent-claude:latest images/scc-agent-claude/"
+        assert (
+            result.fix_commands[0]
+            == "docker build -t scc-agent-claude:latest images/scc-agent-claude/"
+        )
         assert result.fix_hint == "Build the claude agent image"
         assert result.severity == "warning"
 
@@ -59,7 +62,10 @@ class TestCheckProviderImage:
 
         assert result.passed is False
         assert result.fix_commands is not None
-        assert result.fix_commands[0] == "docker build -t scc-agent-codex:latest images/scc-agent-codex/"
+        assert (
+            result.fix_commands[0]
+            == "docker build -t scc-agent-codex:latest images/scc-agent-codex/"
+        )
         assert result.fix_hint == "Build the codex agent image"
 
     @patch("scc_cli.doctor.checks.environment.subprocess.run")
@@ -164,9 +170,7 @@ class TestCheckProviderImageInDoctor:
             mock_docker.return_value = CheckResult(
                 name="Docker", passed=True, message="ok", version="24.0"
             )
-            mock_daemon.return_value = CheckResult(
-                name="Docker Daemon", passed=True, message="ok"
-            )
+            mock_daemon.return_value = CheckResult(name="Docker Daemon", passed=True, message="ok")
             mock_sandbox.return_value = CheckResult(
                 name="Sandbox Backend", passed=True, message="ok"
             )

@@ -189,9 +189,7 @@ def _render_blocked_items_inline(blocked_items: list[dict[str, Any]]) -> None:
     """Render blocked items from validation results (dict form)."""
     console.print("[bold red]Blocked Items[/bold red]")
     for item in blocked_items:
-        console.print(
-            f"  [red]✗[/red] {item['item']} [dim](blocked by {item['blocked_by']})[/dim]"
-        )
+        console.print(f"  [red]✗[/red] {item['item']} [dim](blocked by {item['blocked_by']})[/dim]")
     console.print()
 
 

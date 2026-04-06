@@ -138,16 +138,16 @@ def handle_dashboard_action(
             return state, True
 
         case ActionType.SELECT:
-            return _handle_select(state, is_standalone=is_standalone, get_placeholder_tip=get_placeholder_tip)
+            return _handle_select(
+                state, is_standalone=is_standalone, get_placeholder_tip=get_placeholder_tip
+            )
 
         case ActionType.TOGGLE_ALL:
             return _handle_toggle_all(state)
 
         case ActionType.TEAM_SWITCH:
             if is_standalone:
-                state.status_message = (
-                    "Teams require org mode. Run `scc setup` to configure."
-                )
+                state.status_message = "Teams require org mode. Run `scc setup` to configure."
                 return state, True
             raise TeamSwitchRequested()
 
@@ -184,9 +184,7 @@ def _handle_select(
                 )
             if status_action is StatusAction.SWITCH_TEAM:
                 if is_standalone:
-                    state.status_message = (
-                        "Teams require org mode. Run `scc setup` to configure."
-                    )
+                    state.status_message = "Teams require org mode. Run `scc setup` to configure."
                     return state, True
                 raise TeamSwitchRequested()
             if status_action is StatusAction.OPEN_TAB and current.value.action_tab:
@@ -216,38 +214,28 @@ def _handle_select(
             state.status_message = "No details available for this item"
             return state, True
 
-        if state.active_tab == DashboardTab.SESSIONS and isinstance(
-            current.value, SessionItem
-        ):
+        if state.active_tab == DashboardTab.SESSIONS and isinstance(current.value, SessionItem):
             raise SessionResumeRequested(
                 session=current.value.session,
                 return_to=state.active_tab.name,
             )
-        if state.active_tab == DashboardTab.WORKTREES and isinstance(
-            current.value, WorktreeItem
-        ):
+        if state.active_tab == DashboardTab.WORKTREES and isinstance(current.value, WorktreeItem):
             raise StartRequested(
                 return_to=state.active_tab.name,
                 reason=f"worktree:{current.value.path}",
             )
-        if state.active_tab == DashboardTab.CONTAINERS and isinstance(
-            current.value, ContainerItem
-        ):
+        if state.active_tab == DashboardTab.CONTAINERS and isinstance(current.value, ContainerItem):
             raise ContainerActionMenuRequested(
                 container_id=current.value.container.id,
                 container_name=current.value.container.name,
                 return_to=state.active_tab.name,
             )
-        if state.active_tab == DashboardTab.SESSIONS and isinstance(
-            current.value, SessionItem
-        ):
+        if state.active_tab == DashboardTab.SESSIONS and isinstance(current.value, SessionItem):
             raise SessionActionMenuRequested(
                 session=current.value.session,
                 return_to=state.active_tab.name,
             )
-        if state.active_tab == DashboardTab.WORKTREES and isinstance(
-            current.value, WorktreeItem
-        ):
+        if state.active_tab == DashboardTab.WORKTREES and isinstance(current.value, WorktreeItem):
             raise WorktreeActionMenuRequested(
                 worktree_path=current.value.path,
                 return_to=state.active_tab.name,
@@ -264,24 +252,18 @@ def _handle_toggle_all(state: DashboardState) -> tuple[DashboardState, bool | No
         state.status_message = "No item selected"
         return state, True
 
-    if state.active_tab == DashboardTab.CONTAINERS and isinstance(
-        current.value, ContainerItem
-    ):
+    if state.active_tab == DashboardTab.CONTAINERS and isinstance(current.value, ContainerItem):
         raise ContainerActionMenuRequested(
             container_id=current.value.container.id,
             container_name=current.value.container.name,
             return_to=state.active_tab.name,
         )
-    if state.active_tab == DashboardTab.SESSIONS and isinstance(
-        current.value, SessionItem
-    ):
+    if state.active_tab == DashboardTab.SESSIONS and isinstance(current.value, SessionItem):
         raise SessionActionMenuRequested(
             session=current.value.session,
             return_to=state.active_tab.name,
         )
-    if state.active_tab == DashboardTab.WORKTREES and isinstance(
-        current.value, WorktreeItem
-    ):
+    if state.active_tab == DashboardTab.WORKTREES and isinstance(current.value, WorktreeItem):
         raise WorktreeActionMenuRequested(
             worktree_path=current.value.path,
             return_to=state.active_tab.name,

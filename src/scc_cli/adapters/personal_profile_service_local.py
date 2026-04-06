@@ -39,7 +39,9 @@ class LocalPersonalProfileService(PersonalProfileService):
         existing: dict[str, Any],
         personal: dict[str, Any],
     ) -> dict[str, Any]:
-        return personal_profiles.merge_personal_settings(workspace, existing, personal, managed_state_loader=load_managed_state)
+        return personal_profiles.merge_personal_settings(
+            workspace, existing, personal, managed_state_loader=load_managed_state
+        )
 
     def merge_personal_mcp(
         self, existing: dict[str, Any], personal: dict[str, Any]

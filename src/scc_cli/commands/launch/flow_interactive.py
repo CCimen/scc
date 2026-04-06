@@ -128,9 +128,7 @@ def _handle_workspace_source(
     if state.context.team:
         team_context_label = f"Team: {state.context.team}"
 
-    team_config = (
-        cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
-    )
+    team_config = cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
     team_repos = team_config.get("repositories", [])
 
     cwd = Path.cwd()
@@ -183,9 +181,7 @@ def _handle_workspace_source(
     if source is WorkspaceSource.CURRENT_DIR:
         from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
 
-        context = resolve_workspace(
-            ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None)
-        )
+        context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
         if context is not None:
             workspace = str(context.workspace_root)
         else:
@@ -239,9 +235,7 @@ def _handle_workspace_picker(
     if state.context.team:
         team_context_label = f"Team: {state.context.team}"
 
-    team_config = (
-        cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
-    )
+    team_config = cfg.get("profiles", {}).get(state.context.team, {}) if state.context.team else {}
     team_repos = team_config.get("repositories", [])
     workspace_source = state.context.workspace_source
 
@@ -699,7 +693,9 @@ def run_start_wizard_flow(
             raw_org_config = config.load_cached_org_config()
 
         # D032: resolve provider explicitly — never silent-default to Claude.
-        normalized_org = NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
+        normalized_org = (
+            NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
+        )
         resolved_provider, _resolution_source = resolve_launch_provider(
             cli_flag=None,
             resume_provider=None,
@@ -718,9 +714,7 @@ def run_start_wizard_flow(
             )
 
         # Shared preflight: readiness check before plan construction
-        readiness = collect_launch_readiness(
-            resolved_provider, _resolution_source, adapters
-        )
+        readiness = collect_launch_readiness(resolved_provider, _resolution_source, adapters)
         if not readiness.launch_ready:
             ensure_launch_ready(
                 readiness,

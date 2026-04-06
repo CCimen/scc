@@ -507,8 +507,14 @@ class TestWorktreeWorkflow:
                     dependencies_installed=True,
                 ),
             ),
-            patch("scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode", return_value=True),
-            patch("scc_cli.commands.worktree.worktree_commands.config.load_user_config", return_value={}),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode",
+                return_value=True,
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.load_user_config",
+                return_value={},
+            ),
             patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=True),
             patch(
                 "scc_cli.commands.worktree.worktree_commands.resolve_launch_provider",
@@ -519,7 +525,9 @@ class TestWorktreeWorkflow:
                 return_value=MagicMock(launch_ready=True),
             ),
         ):
-            result = runner.invoke(app, ["worktree", ".", "create", str(git_workspace), "feature-auto"])
+            result = runner.invoke(
+                app, ["worktree", ".", "create", str(git_workspace), "feature-auto"]
+            )
 
         assert result.exit_code == 0
         assert isinstance(fake_adapters.audit_event_sink, FakeAuditEventSink)
@@ -563,12 +571,18 @@ class TestWorktreeWorkflow:
                     dependencies_installed=True,
                 ),
             ),
-            patch("scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode", return_value=False),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode",
+                return_value=False,
+            ),
             patch(
                 "scc_cli.commands.worktree.worktree_commands.config.load_user_config",
                 return_value={"selected_profile": "platform"},
             ),
-            patch("scc_cli.commands.worktree.worktree_commands.config.load_cached_org_config", return_value={}),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.config.load_cached_org_config",
+                return_value={},
+            ),
             patch(
                 "scc_cli.commands.worktree.worktree_commands.resolve_launch_provider",
                 return_value=("claude", None),

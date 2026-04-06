@@ -88,9 +88,7 @@ class DefaultSafetyEngine:
 
         return SafetyVerdict(allowed=True, reason="No safety rules matched")
 
-    def _apply_policy(
-        self, verdict: SafetyVerdict, policy: SafetyPolicy
-    ) -> SafetyVerdict:
+    def _apply_policy(self, verdict: SafetyVerdict, policy: SafetyPolicy) -> SafetyVerdict:
         """Apply policy overrides to a block verdict.
 
         Checks if the rule is disabled in policy.rules. If the policy

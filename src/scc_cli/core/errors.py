@@ -270,9 +270,7 @@ class ExistingSandboxConflictError(ToolError):
                     "or remove it manually first."
                 )
             else:
-                self.suggested_action = (
-                    "Use 'scc start --fresh' to replace it, or stop/remove the existing container first"
-                )
+                self.suggested_action = "Use 'scc start --fresh' to replace it, or stop/remove the existing container first"
 
 
 @dataclass
@@ -457,8 +455,7 @@ class ProviderImageBuildError(ToolError):
         if not self.suggested_action:
             if self.build_command:
                 self.suggested_action = (
-                    "Review the Docker build output and retry:\n"
-                    f"  {self.build_command}"
+                    f"Review the Docker build output and retry:\n  {self.build_command}"
                 )
             else:
                 self.suggested_action = "Review the Docker build output and try again."
@@ -654,6 +651,5 @@ class MergeConflictError(RendererError):
         if not self.user_message:
             where = f" in '{self.target_path}'" if self.target_path else ""
             self.user_message = (
-                f"Merge conflict{where} for bundle '{self.bundle_id}': "
-                f"{self.conflict_detail}"
+                f"Merge conflict{where} for bundle '{self.bundle_id}': {self.conflict_detail}"
             )

@@ -252,9 +252,7 @@ def _normalize_provider_bindings(
     for provider_name, binding_raw in raw_bindings.items():
         if not isinstance(binding_raw, dict):
             continue
-        native_config = {
-            k: str(v) for k, v in binding_raw.items() if k not in ("transport_type",)
-        }
+        native_config = {k: str(v) for k, v in binding_raw.items() if k not in ("transport_type",)}
         result.append(
             ProviderArtifactBinding(
                 provider=provider_name,
@@ -345,9 +343,7 @@ def normalize_org_config(raw: dict[str, Any]) -> NormalizedOrgConfig:
         profiles=profiles,
         marketplaces=marketplaces,
         stats=_normalize_stats(raw.get("stats")),
-        governed_artifacts=_normalize_governed_artifacts_catalog(
-            raw.get("governed_artifacts")
-        ),
+        governed_artifacts=_normalize_governed_artifacts_catalog(raw.get("governed_artifacts")),
         config_source=str(config_source) if config_source is not None else None,
     )
 

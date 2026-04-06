@@ -33,10 +33,7 @@ def evaluate_launch_preflight(plan: StartSessionPlan) -> LaunchPreflightDecision
     required_destination_sets = _validated_required_destination_sets(spec.required_destination_sets)
     network_policy = _effective_network_policy(plan)
 
-    if (
-        network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value
-        and len(required_destination_sets) > 0
-    ):
+    if network_policy == NetworkPolicy.LOCKED_DOWN_WEB.value and len(required_destination_sets) > 0:
         raise LaunchPolicyBlockedError(
             provider_id=provider_id,
             network_policy=network_policy,
@@ -97,9 +94,7 @@ def build_preflight_failure_event(
     metadata["failure_reason"] = error.user_message
     return AuditEvent(
         event_type="launch.preflight.failed",
-        message=(
-            f"Launch preflight failed for provider '{provider_id or 'unknown'}'."
-        ),
+        message=(f"Launch preflight failed for provider '{provider_id or 'unknown'}'."),
         severity=SeverityLevel.ERROR,
         subject=provider_id or None,
         metadata=metadata,
@@ -148,7 +143,9 @@ def _validated_provider_id(provider_id: str) -> str:
     return normalized
 
 
-def _validated_required_destination_sets(required_destination_sets: tuple[str, ...]) -> tuple[str, ...]:
+def _validated_required_destination_sets(
+    required_destination_sets: tuple[str, ...],
+) -> tuple[str, ...]:
     normalized: list[str] = []
     for destination_set in required_destination_sets:
         cleaned = destination_set.strip()

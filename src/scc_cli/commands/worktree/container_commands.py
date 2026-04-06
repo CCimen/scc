@@ -144,9 +144,7 @@ def stop_cmd(
         None,
         help="Container name or ID to stop (omit for interactive picker)",
     ),
-    all_containers: bool = typer.Option(
-        False, "--all", "-a", help="Stop all running sandboxes"
-    ),
+    all_containers: bool = typer.Option(False, "--all", "-a", help="Stop all running sandboxes"),
     interactive: bool = typer.Option(
         False, "-i", "--interactive", help="Use multi-select picker to choose containers"
     ),

@@ -251,9 +251,7 @@ def collect_launch_readiness(
     image_status = _check_image_available(provider_id)
 
     # Get auth readiness for this specific provider
-    readiness_map = collect_provider_readiness(
-        adapters, allowed_providers=(provider_id,)
-    )
+    readiness_map = collect_provider_readiness(adapters, allowed_providers=(provider_id,))
     auth_readiness = readiness_map.get(provider_id)
     auth_status = _auth_readiness_to_status(auth_readiness)
 
@@ -357,10 +355,7 @@ def _ensure_auth(
             f"SCC will open the normal {display_name} browser sign-in flow now. "
             f"After sign-in completes, {display_name} will launch automatically."
         ),
-        (
-            "Future starts reuse the provider auth cache from the persistent "
-            f"{display_name} volume."
-        ),
+        (f"Future starts reuse the provider auth cache from the persistent {display_name} volume."),
     )
 
     if provider is None:
@@ -376,9 +371,7 @@ def _ensure_auth(
         except Exception as exc:
             raise ProviderNotReadyError(
                 provider_id=readiness.provider_id,
-                user_message=(
-                    f"{display_name} auth bootstrap failed: {exc}"
-                ),
+                user_message=(f"{display_name} auth bootstrap failed: {exc}"),
                 suggested_action=(
                     f"Run 'scc start --provider {readiness.provider_id}' interactively "
                     "to complete the browser sign-in. If the issue persists, "

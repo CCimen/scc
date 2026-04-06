@@ -421,7 +421,9 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         _configure_team_settings(team, cfg)
         raw_org_config_2 = config.load_cached_org_config()
         normalized_org = (
-            NormalizedOrgConfig.from_dict(raw_org_config_2) if raw_org_config_2 is not None else None
+            NormalizedOrgConfig.from_dict(raw_org_config_2)
+            if raw_org_config_2 is not None
+            else None
         )
         # Shared preflight: resolve → readiness → ensure ready
         resolved_provider, _source = resolve_launch_provider(

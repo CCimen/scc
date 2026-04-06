@@ -34,12 +34,14 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "scc_cli"
 # Functions that must NOT appear as direct calls in migrated files.
 # These must go through preflight.resolve_launch_provider() and
 # preflight.collect_launch_readiness() + ensure_launch_ready().
-_RESOLUTION_FUNCTIONS = frozenset({
-    "choose_start_provider",
-    "resolve_active_provider",
-    "ensure_provider_image",
-    "ensure_provider_auth",
-})
+_RESOLUTION_FUNCTIONS = frozenset(
+    {
+        "choose_start_provider",
+        "resolve_active_provider",
+        "ensure_provider_image",
+        "ensure_provider_auth",
+    }
+)
 
 # Files that have been migrated to use preflight for provider resolution.
 _MIGRATED_FILES = (
@@ -77,8 +79,7 @@ class TestProviderResolutionAntiDrift:
         assert not violations, (
             "Migrated files contain direct resolution/bootstrap calls. "
             "Use preflight.resolve_launch_provider() + collect_launch_readiness() "
-            "+ ensure_launch_ready() instead:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+            "+ ensure_launch_ready() instead:\n" + "\n".join(f"  - {v}" for v in violations)
         )
 
     def test_migrated_files_import_from_preflight(self) -> None:
@@ -127,40 +128,50 @@ class TestProviderResolutionAntiDrift:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Hardcoded image ref strings that should only appear in canonical locations.
-_IMAGE_REF_LITERALS = frozenset({
-    "scc-agent-claude:latest",
-    "scc-agent-codex:latest",
-    "scc-agent-claude",
-    "scc-agent-codex",
-})
+_IMAGE_REF_LITERALS = frozenset(
+    {
+        "scc-agent-claude:latest",
+        "scc-agent-codex:latest",
+        "scc-agent-claude",
+        "scc-agent-codex",
+    }
+)
 
 # Canonical locations where image ref constants may be defined.
-_IMAGE_REF_CANONICAL = frozenset({
-    "image_contracts.py",  # defines the constants
-    "provider_registry.py",  # imports and uses them in the registry
-})
+_IMAGE_REF_CANONICAL = frozenset(
+    {
+        "image_contracts.py",  # defines the constants
+        "provider_registry.py",  # imports and uses them in the registry
+    }
+)
 
 # Canonical locations where display names may be hardcoded.
-_DISPLAY_NAME_CANONICAL = frozenset({
-    "provider_resolution.py",  # _DISPLAY_NAMES dict
-    "provider_registry.py",  # ProviderRuntimeSpec entries
-})
+_DISPLAY_NAME_CANONICAL = frozenset(
+    {
+        "provider_resolution.py",  # _DISPLAY_NAMES dict
+        "provider_registry.py",  # ProviderRuntimeSpec entries
+    }
+)
 
 # Adapter modules legitimately duplicate display names (they return them
 # from capability_profile and display_name properties).
-_DISPLAY_NAME_ADAPTER_ALLOWLIST = frozenset({
-    "claude_agent_provider.py",
-    "codex_agent_provider.py",
-    "claude_agent_runner.py",
-    "codex_agent_runner.py",
-})
+_DISPLAY_NAME_ADAPTER_ALLOWLIST = frozenset(
+    {
+        "claude_agent_provider.py",
+        "codex_agent_provider.py",
+        "claude_agent_runner.py",
+        "codex_agent_runner.py",
+    }
+)
 
 # Modules that have known, documented provider-specific strings that
 # predate the registry centralization. These are tracked for future cleanup.
-_DISPLAY_NAME_LEGACY_ALLOWLIST = frozenset({
-    "render.py",  # has display_name defaults in function signatures
-    "sandbox.py",  # has display_name defaults in function signatures
-})
+_DISPLAY_NAME_LEGACY_ALLOWLIST = frozenset(
+    {
+        "render.py",  # has display_name defaults in function signatures
+        "sandbox.py",  # has display_name defaults in function signatures
+    }
+)
 
 
 def _collect_string_literals(source: str) -> list[str]:
@@ -249,10 +260,12 @@ class TestProviderMetadataSingleSource:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Allowed core/ imports at the top-level of preflight.py (types and errors only).
-_ALLOWED_CORE_TOP_LEVEL = frozenset({
-    "scc_cli.core.contracts",
-    "scc_cli.core.errors",
-})
+_ALLOWED_CORE_TOP_LEVEL = frozenset(
+    {
+        "scc_cli.core.contracts",
+        "scc_cli.core.errors",
+    }
+)
 
 
 class TestPreflightArchitectureGuard:

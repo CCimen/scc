@@ -23,9 +23,7 @@ from .enums import NetworkPolicy
 # Private constants — default deny targets
 # ---------------------------------------------------------------------------
 
-_IP_LITERAL_PATTERN: re.Pattern[str] = re.compile(
-    r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
-)
+_IP_LITERAL_PATTERN: re.Pattern[str] = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 _PRIVATE_CIDRS: tuple[str, ...] = (
     "10.0.0.0/8",

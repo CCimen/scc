@@ -265,11 +265,11 @@ def _ensure_workspace_config_excluded(
     workspace_quoted = shlex.quote(workspace_path)
     config_dir_quoted = shlex.quote(config_dir_name)
     shell_cmd = (
-        f'exclude_path=$(git -C {workspace_quoted} rev-parse --git-path info/exclude 2>/dev/null) '
+        f"exclude_path=$(git -C {workspace_quoted} rev-parse --git-path info/exclude 2>/dev/null) "
         "|| exit 0; "
         'mkdir -p "$(dirname "$exclude_path")"; '
-        f"grep -qxF {config_dir_quoted} \"$exclude_path\" 2>/dev/null "
-        f"|| echo {config_dir_quoted} >> \"$exclude_path\""
+        f'grep -qxF {config_dir_quoted} "$exclude_path" 2>/dev/null '
+        f'|| echo {config_dir_quoted} >> "$exclude_path"'
     )
     _run_docker(
         ["exec", container_id, "sh", "-c", shell_cmd],
@@ -299,8 +299,10 @@ def _normalize_provider_permissions(
     # 1. chown + chmod the provider config directory itself
     _run_docker(
         [
-            "exec", container_id,
-            "sh", "-c",
+            "exec",
+            container_id,
+            "sh",
+            "-c",
             f"chown {_AGENT_UID}:{_AGENT_UID} {config_path} && chmod 0700 {config_path}",
         ],
         timeout=_DEFAULT_TIMEOUT,
@@ -313,8 +315,10 @@ def _normalize_provider_permissions(
         auth_path = f"{config_path}/{auth_file}"
         _run_docker(
             [
-                "exec", container_id,
-                "sh", "-c",
+                "exec",
+                container_id,
+                "sh",
+                "-c",
                 (
                     f"test -f {auth_path} && "
                     f"chown {_AGENT_UID}:{_AGENT_UID} {auth_path} && "
@@ -437,7 +441,9 @@ class OciSandboxRuntime:
                 _remove_conflicting_container(container_name, existing_id)
             elif existing_state in {SandboxState.CREATED, SandboxState.STOPPED}:
                 _remove_conflicting_container(container_name, existing_id)
-            elif existing_state is SandboxState.RUNNING and _is_idle_keepalive_container(existing_id):
+            elif existing_state is SandboxState.RUNNING and _is_idle_keepalive_container(
+                existing_id
+            ):
                 _remove_conflicting_container(container_name, existing_id)
             else:
                 raise ExistingSandboxConflictError(container_name=container_name)
@@ -467,7 +473,10 @@ class OciSandboxRuntime:
 
         # -- Build docker create command ------------------------------------
         create_cmd = self._build_create_cmd(
-            spec, container_name, network_name=network_name, proxy_env=proxy_env,
+            spec,
+            container_name,
+            network_name=network_name,
+            proxy_env=proxy_env,
         )
         result = _run_docker(create_cmd, timeout=_CREATE_TIMEOUT)
         container_id = result.stdout.strip()
@@ -685,14 +694,10 @@ class OciSandboxRuntime:
             # workspace root, not the broader mount root used for worktree
             # support.
             config_dir_name = rel.parts[0]  # e.g. ".codex"
-            _ensure_workspace_config_excluded(
-                container_id, str(workspace_root), config_dir_name
-            )
+            _ensure_workspace_config_excluded(container_id, str(workspace_root), config_dir_name)
 
         suffix = spec.agent_settings.suffix or ".json"
-        with tempfile.NamedTemporaryFile(
-            mode="wb", suffix=suffix, delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False) as tmp:
             tmp.write(spec.agent_settings.rendered_bytes)
             tmp_path = tmp.name
 

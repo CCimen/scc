@@ -209,9 +209,7 @@ class NormalizedOrgConfig:
     profiles: dict[str, NormalizedTeamConfig] = field(default_factory=dict)
     marketplaces: dict[str, MarketplaceConfig] = field(default_factory=dict)
     stats: StatsConfig = field(default_factory=StatsConfig)
-    governed_artifacts: GovernedArtifactsCatalog = field(
-        default_factory=GovernedArtifactsCatalog
-    )
+    governed_artifacts: GovernedArtifactsCatalog = field(default_factory=GovernedArtifactsCatalog)
     config_source: str | None = None
 
     @classmethod

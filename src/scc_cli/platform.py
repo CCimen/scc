@@ -239,12 +239,12 @@ def supports_colors() -> bool:
 
     Check various environment indicators.
     """
+    if os.environ.get("FORCE_COLOR"):
+        return True
+
     # Rich handles this well, but we can do basic detection
     if os.environ.get("NO_COLOR"):
         return False
-
-    if os.environ.get("FORCE_COLOR"):
-        return True
 
     # Check if stdout is a TTY
     if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():

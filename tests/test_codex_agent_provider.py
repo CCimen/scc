@@ -74,9 +74,7 @@ def test_prepare_launch_with_settings_includes_artifact_path(
     fake_settings = tmp_path / "codex-settings.json"
     fake_settings.write_text("{}")
 
-    spec = provider.prepare_launch(
-        config={}, workspace=tmp_path, settings_path=fake_settings
-    )
+    spec = provider.prepare_launch(config={}, workspace=tmp_path, settings_path=fake_settings)
 
     assert fake_settings in spec.artifact_paths
     assert spec.env == {}
@@ -131,7 +129,9 @@ class TestCodexAuthCheck:
     """auth_check() validates Codex auth.json credential presence (D037)."""
 
     @patch("scc_cli.adapters.codex_agent_provider.subprocess.run")
-    def test_auth_present_valid_json(self, mock_run: MagicMock, provider: CodexAgentProvider) -> None:
+    def test_auth_present_valid_json(
+        self, mock_run: MagicMock, provider: CodexAgentProvider
+    ) -> None:
         mock_run.side_effect = _mock_docker_run_codex(
             cat_stdout=json.dumps({"api_key": "sk-abc"}).encode()
         ).side_effect
@@ -155,7 +155,9 @@ class TestCodexAuthCheck:
         assert "empty" in result.guidance
 
     @patch("scc_cli.adapters.codex_agent_provider.subprocess.run")
-    def test_auth_file_invalid_json(self, mock_run: MagicMock, provider: CodexAgentProvider) -> None:
+    def test_auth_file_invalid_json(
+        self, mock_run: MagicMock, provider: CodexAgentProvider
+    ) -> None:
         mock_run.side_effect = _mock_docker_run_codex(
             cat_stdout=b"corrupt-data!!!",
         ).side_effect

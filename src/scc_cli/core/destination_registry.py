@@ -54,9 +54,7 @@ def resolve_destination_sets(
         dest_set = PROVIDER_DESTINATION_SETS.get(name)
         if dest_set is None:
             known = ", ".join(sorted(PROVIDER_DESTINATION_SETS))
-            raise ValueError(
-                f"Unknown destination set {name!r}. Known sets: {known}"
-            )
+            raise ValueError(f"Unknown destination set {name!r}. Known sets: {known}")
         resolved.append(dest_set)
     return tuple(resolved)
 

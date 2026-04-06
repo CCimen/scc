@@ -48,6 +48,7 @@ from tests.fakes.fake_runtime_probe import FakeRuntimeProbe
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
+
 def _oci_capable_info(**overrides: object) -> RuntimeInfo:
     """Return a RuntimeInfo describing an OCI-capable engine without sandbox."""
     defaults: dict[str, object] = {
@@ -101,6 +102,7 @@ def runtime() -> OciSandboxRuntime:
 
 # ── ensure_available ─────────────────────────────────────────────────────────
 
+
 class TestEnsureAvailable:
     """Scenario coverage for ensure_available()."""
 
@@ -132,23 +134,20 @@ class TestEnsureAvailable:
             rt.ensure_available()
 
     def test_no_oci_support_raises(self) -> None:
-        probe = FakeRuntimeProbe(
-            _oci_capable_info(supports_oci=False)
-        )
+        probe = FakeRuntimeProbe(_oci_capable_info(supports_oci=False))
         rt = OciSandboxRuntime(probe)
         with pytest.raises(DockerNotFoundError, match="OCI containers"):
             rt.ensure_available()
 
     def test_sandbox_not_required(self) -> None:
         """OciSandboxRuntime should NOT check sandbox_available."""
-        probe = FakeRuntimeProbe(
-            _oci_capable_info(sandbox_available=False)
-        )
+        probe = FakeRuntimeProbe(_oci_capable_info(sandbox_available=False))
         rt = OciSandboxRuntime(probe)
         rt.ensure_available()  # should not raise
 
 
 # ── run ──────────────────────────────────────────────────────────────────────
+
 
 class TestRun:
     """Verify docker create / start / exec command construction."""
@@ -337,6 +336,7 @@ class TestRun:
 
 # ── Failure modes ────────────────────────────────────────────────────────────
 
+
 class TestFailureModes:
     """Verify error handling for subprocess failures and timeouts."""
 
@@ -462,11 +462,7 @@ class TestExistingContainerRecovery:
         mock_run_docker.side_effect = [
             MagicMock(stdout="old123\tUp 2 minutes\n"),  # ps -a lookup
             MagicMock(
-                stdout=(
-                    "Ss sleep sleep infinity\n"
-                    "Z git [git] <defunct>\n"
-                    "Z git [git] <defunct>\n"
-                )
+                stdout=("Ss sleep sleep infinity\nZ git [git] <defunct>\nZ git [git] <defunct>\n")
             ),
             MagicMock(stdout=""),  # rm -f old123
             MagicMock(stdout="new456\n"),  # docker create
@@ -559,11 +555,7 @@ class TestDetectLaunchConflict:
         mock_run_docker.side_effect = [
             MagicMock(stdout="old123\tUp 2 minutes\n"),
             MagicMock(
-                stdout=(
-                    "Ss sleep sleep infinity\n"
-                    "Z git [git] <defunct>\n"
-                    "Z git [git] <defunct>\n"
-                )
+                stdout=("Ss sleep sleep infinity\nZ git [git] <defunct>\nZ git [git] <defunct>\n")
             ),
         ]
 
@@ -584,7 +576,9 @@ class TestDetectLaunchConflict:
         conflict = runtime.detect_launch_conflict(_minimal_spec())
 
         assert conflict == SandboxConflict(
-            handle=SandboxHandle(sandbox_id="old123", name=_container_name(Path("/home/user/project"))),
+            handle=SandboxHandle(
+                sandbox_id="old123", name=_container_name(Path("/home/user/project"))
+            ),
             state=SandboxState.RUNNING,
             process_summary="codex --dangerously-bypass-approvals-and-sandbox",
         )
@@ -600,6 +594,7 @@ class TestDetectLaunchConflict:
 
 
 # ── list_running ─────────────────────────────────────────────────────────────
+
 
 class TestListRunning:
     """Verify parsing of ``docker ps`` output."""
@@ -617,9 +612,7 @@ class TestListRunning:
         assert handles[1] == SandboxHandle(sandbox_id="def456", name="scc-oci-bbb")
 
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
-    def test_empty_output(
-        self, mock_run_docker: MagicMock, runtime: OciSandboxRuntime
-    ) -> None:
+    def test_empty_output(self, mock_run_docker: MagicMock, runtime: OciSandboxRuntime) -> None:
         mock_run_docker.return_value = MagicMock(stdout="")
         assert runtime.list_running() == []
 
@@ -635,6 +628,7 @@ class TestListRunning:
 
 
 # ── status ───────────────────────────────────────────────────────────────────
+
 
 class TestStatus:
     """Verify docker inspect → SandboxState mapping."""
@@ -659,9 +653,7 @@ class TestStatus:
         expected_state: SandboxState,
         runtime: OciSandboxRuntime,
     ) -> None:
-        mock_subprocess.return_value = MagicMock(
-            returncode=0, stdout=f"{raw_status}\n"
-        )
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=f"{raw_status}\n")
         handle = SandboxHandle(sandbox_id="abc123")
         result = runtime.status(handle)
         assert result.state == expected_state
@@ -685,6 +677,7 @@ class TestStatus:
 
 # ── resume / stop / remove ───────────────────────────────────────────────────
 
+
 class TestLifecycle:
     """Verify resume, stop, and remove delegate correctly."""
 
@@ -706,6 +699,7 @@ class TestLifecycle:
 
 # ── Network enforcement ──────────────────────────────────────────────────────
 
+
 class TestNetworkEnforcement:
     """Verify _build_create_cmd produces correct --network flags for all modes."""
 
@@ -713,7 +707,9 @@ class TestNetworkEnforcement:
         """web-egress-enforced with a network name → --network <name> in command."""
         spec = _minimal_spec(network_policy="web-egress-enforced")
         cmd = OciSandboxRuntime._build_create_cmd(
-            spec, "scc-oci-test", network_name="scc-egress-scc-oci-test",
+            spec,
+            "scc-oci-test",
+            network_name="scc-egress-scc-oci-test",
         )
         assert "--network" in cmd
         idx = cmd.index("--network")
@@ -748,7 +744,8 @@ class TestNetworkEnforcement:
             "NO_PROXY": "",
         }
         cmd = OciSandboxRuntime._build_create_cmd(
-            spec, "scc-oci-test",
+            spec,
+            "scc-oci-test",
             network_name="scc-egress-scc-oci-test",
             proxy_env=proxy_env,
         )
@@ -758,6 +755,7 @@ class TestNetworkEnforcement:
 
 
 # ── Container naming ────────────────────────────────────────────────────────
+
 
 class TestContainerName:
     """Verify deterministic container naming."""
@@ -773,6 +771,7 @@ class TestContainerName:
 
 
 # ── S02/T03 — Provider-aware exec command and credential volume mounting ─────
+
 
 class TestProviderAwareExecCmd:
     """Verify _build_exec_cmd uses spec.agent_argv when present."""
@@ -834,9 +833,7 @@ class TestProviderAwareCreateCmd:
         """With config_dir set, mount target uses it instead of .claude."""
         spec = _minimal_spec(config_dir=".codex")
         cmd = OciSandboxRuntime._build_create_cmd(spec, "scc-oci-test")
-        mount_found = any(
-            "/home/agent/.codex" in arg for arg in cmd
-        )
+        mount_found = any("/home/agent/.codex" in arg for arg in cmd)
         assert mount_found
 
     def test_build_create_cmd_both_volume_and_config_dir(self) -> None:
@@ -880,7 +877,7 @@ class TestWorkspaceScopedConfigInjection:
         # Use /workspace as the mount target — must match _minimal_spec defaults
         workspace_target = Path("/workspace")
         settings = AgentSettings(
-            rendered_bytes=b'[sandbox]\nauto_approve = []\n',
+            rendered_bytes=b"[sandbox]\nauto_approve = []\n",
             path=workspace_target / ".codex" / "config.toml",
             suffix=".toml",
         )
@@ -897,8 +894,7 @@ class TestWorkspaceScopedConfigInjection:
 
         # Find the git exclude shell command (filter out D039 normalization)
         git_exclude_calls = [
-            c for c in all_calls
-            if "sh" in c and "-c" in c and "exclude_path=" in c[-1]
+            c for c in all_calls if "sh" in c and "-c" in c and "exclude_path=" in c[-1]
         ]
         assert len(git_exclude_calls) == 1
         shell_cmd = git_exclude_calls[0][-1]
@@ -943,7 +939,7 @@ class TestWorkspaceScopedConfigInjection:
         mock_run_docker.return_value = MagicMock(stdout="cid123\n")
         workspace_target = Path("/workspace")
         settings = AgentSettings(
-            rendered_bytes=b'[sandbox]\nauto_approve = []\n',
+            rendered_bytes=b"[sandbox]\nauto_approve = []\n",
             path=workspace_target / ".codex" / "config.toml",
             suffix=".toml",
         )
@@ -951,10 +947,7 @@ class TestWorkspaceScopedConfigInjection:
         runtime.run(spec)
 
         # Find the cp call (last real docker command before exec)
-        cp_calls = [
-            call[0][0] for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls = [call[0][0] for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls) == 1
         cp_target = cp_calls[0][2]  # "cid123:/workspace/.codex/config.toml"
         assert "cid123:" in cp_target
@@ -992,9 +985,7 @@ class TestWorkspaceScopedConfigInjection:
         assert f"{workspace_root}/.codex" in " ".join(mkdir_calls[0])
         assert str(mount_root / ".codex") not in " ".join(mkdir_calls[0])
 
-        git_exclude_calls = [
-            c for c in all_calls if "sh" in c and "-c" in c and "git -C" in c[-1]
-        ]
+        git_exclude_calls = [c for c in all_calls if "sh" in c and "-c" in c and "git -C" in c[-1]]
         assert len(git_exclude_calls) == 1
         shell_cmd = git_exclude_calls[0][-1]
         assert f"git -C {workspace_root}" in shell_cmd
@@ -1172,10 +1163,7 @@ class TestNormalizePermissionsIntegration:
         all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
         # Find positions: cp must come after normalization exec calls
         cp_indices = [i for i, c in enumerate(all_cmds) if c[0] == "cp"]
-        norm_indices = [
-            i for i, c in enumerate(all_cmds)
-            if c[0] == "exec" and "chmod" in str(c)
-        ]
+        norm_indices = [i for i, c in enumerate(all_cmds) if c[0] == "exec" and "chmod" in str(c)]
         assert len(cp_indices) >= 1
         assert len(norm_indices) >= 1
         assert all(ni < cp_indices[0] for ni in norm_indices)
@@ -1217,10 +1205,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_governed)
 
         # Verify first launch wrote team config
-        cp_calls_1 = [
-            call for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls_1 = [call for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls_1) == 1
 
         # ── Reset mocks for second launch ──
@@ -1238,10 +1223,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_standalone)
 
         # Verify second launch wrote empty config via docker cp
-        cp_calls_2 = [
-            call for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls_2 = [call for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls_2) == 1
         # The cp target is the settings path inside the container
         cp_target = cp_calls_2[0][0][0][2]
@@ -1270,10 +1252,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_a)
 
         # Verify team A config was injected
-        cp_calls_a = [
-            call for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls_a = [call for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls_a) == 1
 
         # ── Reset mocks for second launch ──
@@ -1291,10 +1270,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_b)
 
         # Verify team B config was injected (not team A)
-        cp_calls_b = [
-            call for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls_b = [call for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls_b) == 1
         cp_target_b = cp_calls_b[0][0][0][2]
         assert "cid-team-b:" in cp_target_b
@@ -1355,10 +1331,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_empty)
 
         # docker cp was still called
-        cp_cmds = [
-            call[0][0] for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_cmds = [call[0][0] for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_cmds) == 1
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
@@ -1397,10 +1370,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_cx_b)
 
         # Verify the cp command targets the workspace-scoped Codex path
-        cp_calls = [
-            call[0][0] for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls = [call[0][0] for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls) == 1
         cp_target = cp_calls[0][2]
         assert "cid-cx-b:" in cp_target
@@ -1444,10 +1414,7 @@ class TestConfigPersistenceTransitions:
         runtime.run(spec_codex)
 
         # Verify Codex config targets workspace, not /home/agent
-        cp_calls = [
-            call[0][0] for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        ]
+        cp_calls = [call[0][0] for call in mock_run_docker.call_args_list if call[0][0][0] == "cp"]
         assert len(cp_calls) == 1
         cp_target = cp_calls[0][2]
         assert "cid-codex:" in cp_target
@@ -1475,10 +1442,7 @@ class TestConfigPersistenceTransitions:
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
 
-        cp_count_1 = sum(
-            1 for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        )
+        cp_count_1 = sum(1 for call in mock_run_docker.call_args_list if call[0][0][0] == "cp")
         assert cp_count_1 == 1
 
         mock_run_docker.reset_mock()
@@ -1487,8 +1451,5 @@ class TestConfigPersistenceTransitions:
 
         # Same settings, second launch
         runtime.run(spec)
-        cp_count_2 = sum(
-            1 for call in mock_run_docker.call_args_list
-            if call[0][0][0] == "cp"
-        )
+        cp_count_2 = sum(1 for call in mock_run_docker.call_args_list if call[0][0][0] == "cp")
         assert cp_count_2 == 1

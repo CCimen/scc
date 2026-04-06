@@ -140,11 +140,16 @@ class NetworkTopologyManager:
             # 3. Start proxy container on the internal network
             _run_docker(
                 [
-                    "run", "-d",
-                    "--name", self._proxy_name,
-                    "--network", self._network_name,
-                    "--label", _PROXY_LABEL,
-                    "-v", f"{acl_file}:/etc/squid/acl-rules.conf:ro",
+                    "run",
+                    "-d",
+                    "--name",
+                    self._proxy_name,
+                    "--network",
+                    self._network_name,
+                    "--label",
+                    _PROXY_LABEL,
+                    "-v",
+                    f"{acl_file}:/etc/squid/acl-rules.conf:ro",
                     _PROXY_IMAGE,
                 ],
                 timeout=_RUN_TIMEOUT,
@@ -214,6 +219,7 @@ class NetworkTopologyManager:
         finally:
             # Close the OS-level file descriptor (write_text opens its own)
             import os
+
             os.close(fd)
         self._acl_tmpfile = path
         return path

@@ -50,6 +50,7 @@ def get_agent_provider(
         return None
     return getattr(adapters, dispatch["agent_provider"], None)
 
+
 def build_start_session_dependencies(
     adapters: DefaultAdapters,
     provider_id: str,

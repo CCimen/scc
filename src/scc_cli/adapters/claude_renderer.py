@@ -73,9 +73,7 @@ HOOKS_SUBDIR = "hooks"
 INSTRUCTIONS_SUBDIR = "instructions"
 
 # Known native_config keys for Claude native integrations.
-_INTEGRATION_KEYS = frozenset(
-    {"hooks", "marketplace_bundle", "plugin_bundle", "instructions"}
-)
+_INTEGRATION_KEYS = frozenset({"hooks", "marketplace_bundle", "plugin_bundle", "instructions"})
 
 
 # ---------------------------------------------------------------------------
@@ -475,10 +473,7 @@ def render_claude_artifacts(
     """
     if plan.provider != "claude":
         return RendererResult(
-            warnings=(
-                f"Plan targets provider '{plan.provider}', not 'claude'; "
-                "nothing rendered",
-            ),
+            warnings=(f"Plan targets provider '{plan.provider}', not 'claude'; nothing rendered",),
             skipped_artifacts=plan.effective_artifacts,
         )
 
@@ -510,9 +505,7 @@ def render_claude_artifacts(
             merged_settings.setdefault("mcpServers", {}).update(mcp_config)
 
         elif kind == "skill":
-            paths, warnings = _render_skill_binding(
-                binding, workspace, plan.bundle_id
-            )
+            paths, warnings = _render_skill_binding(binding, workspace, plan.bundle_id)
             all_rendered.extend(paths)
             all_warnings.extend(warnings)
 
@@ -525,16 +518,12 @@ def render_claude_artifacts(
     # Render portable artifacts that have no provider-specific binding (D023)
     for portable in plan.portable_artifacts:
         if portable.kind == ArtifactKind.SKILL:
-            paths, warnings = _render_portable_skill(
-                portable, workspace, plan.bundle_id
-            )
+            paths, warnings = _render_portable_skill(portable, workspace, plan.bundle_id)
             all_rendered.extend(paths)
             all_warnings.extend(warnings)
 
         elif portable.kind == ArtifactKind.MCP_SERVER:
-            mcp_config, warnings = _render_portable_mcp(
-                portable, plan.bundle_id
-            )
+            mcp_config, warnings = _render_portable_mcp(portable, plan.bundle_id)
             all_warnings.extend(warnings)
             merged_settings.setdefault("mcpServers", {}).update(mcp_config)
 

@@ -81,10 +81,14 @@ class CodexAgentProvider:
         try:
             file_result = subprocess.run(
                 [
-                    "docker", "run", "--rm",
-                    "-v", f"{volume}:/check",
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{volume}:/check",
                     "alpine",
-                    "cat", f"/check/{auth_file}",
+                    "cat",
+                    f"/check/{auth_file}",
                 ],
                 capture_output=True,
                 timeout=30,
@@ -145,9 +149,7 @@ class CodexAgentProvider:
         if return_code != 0:
             raise ProviderNotReadyError(
                 provider_id="codex",
-                user_message=(
-                    "Codex browser sign-in did not complete successfully."
-                ),
+                user_message=("Codex browser sign-in did not complete successfully."),
                 suggested_action=(
                     "Retry the sign-in flow. If browser login is unavailable, use the "
                     "device-code fallback instead."

@@ -75,7 +75,9 @@ def _update_single_team(
             with json_output_mode():
                 data = build_update_data(org_config, team_results)
                 envelope = build_envelope(
-                    Kind.ORG_UPDATE, data=data, ok=False,
+                    Kind.ORG_UPDATE,
+                    data=data,
+                    ok=False,
                     errors=[f"Failed to fetch team config: {result.error}"],
                 )
                 print_json(envelope)
@@ -94,7 +96,9 @@ def _update_single_team(
         if json_output:
             with json_output_mode():
                 envelope = build_envelope(
-                    Kind.ORG_UPDATE, data=build_update_data(org_config), ok=False,
+                    Kind.ORG_UPDATE,
+                    data=build_update_data(org_config),
+                    ok=False,
                     errors=[f"Error parsing config source: {e}"],
                 )
                 print_json(envelope)
@@ -142,9 +146,7 @@ def _update_all_teams(
                     {"team": team_name, "success": True, "commit_sha": result.commit_sha}
                 )
             else:
-                team_results.append(
-                    {"team": team_name, "success": False, "error": result.error}
-                )
+                team_results.append({"team": team_name, "success": False, "error": result.error})
         except Exception as e:
             team_results.append({"team": team_name, "success": False, "error": str(e)})
     return team_results

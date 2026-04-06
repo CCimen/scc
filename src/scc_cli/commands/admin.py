@@ -289,7 +289,9 @@ def doctor_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick status only"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
-    provider: str | None = typer.Option(None, "--provider", help="Check readiness for a specific provider"),
+    provider: str | None = typer.Option(
+        None, "--provider", help="Check readiness for a specific provider"
+    ),
 ) -> None:
     """Check prerequisites and system health."""
     # Validate --provider against KNOWN_PROVIDERS

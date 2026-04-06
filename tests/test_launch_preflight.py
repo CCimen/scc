@@ -581,9 +581,7 @@ class TestCollectLaunchReadiness:
         )
         adapters.agent_provider = provider
 
-        readiness = collect_launch_readiness(
-            "claude", ProviderResolutionSource.EXPLICIT, adapters
-        )
+        readiness = collect_launch_readiness("claude", ProviderResolutionSource.EXPLICIT, adapters)
         assert readiness.launch_ready is True
         assert readiness.image_status == ImageStatus.AVAILABLE
         assert readiness.auth_status == AuthStatus.PRESENT
@@ -599,9 +597,7 @@ class TestCollectLaunchReadiness:
         )
         adapters.agent_provider = provider
 
-        readiness = collect_launch_readiness(
-            "claude", ProviderResolutionSource.EXPLICIT, adapters
-        )
+        readiness = collect_launch_readiness("claude", ProviderResolutionSource.EXPLICIT, adapters)
         assert readiness.launch_ready is False
         assert readiness.requires_image_bootstrap is True
         assert readiness.requires_auth_bootstrap is False
@@ -617,9 +613,7 @@ class TestCollectLaunchReadiness:
         )
         adapters.agent_provider = provider
 
-        readiness = collect_launch_readiness(
-            "claude", ProviderResolutionSource.EXPLICIT, adapters
-        )
+        readiness = collect_launch_readiness("claude", ProviderResolutionSource.EXPLICIT, adapters)
         assert readiness.launch_ready is False
         assert readiness.requires_auth_bootstrap is True
 
@@ -634,9 +628,7 @@ class TestCollectLaunchReadiness:
         )
         adapters.agent_provider = provider
 
-        readiness = collect_launch_readiness(
-            "claude", ProviderResolutionSource.EXPLICIT, adapters
-        )
+        readiness = collect_launch_readiness("claude", ProviderResolutionSource.EXPLICIT, adapters)
         assert readiness.requires_auth_bootstrap is True
         assert readiness.auth_status == AuthStatus.EXPIRED
 

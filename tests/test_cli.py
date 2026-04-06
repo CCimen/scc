@@ -222,8 +222,14 @@ class TestStartCommand:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
-            patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("claude", "explicit")),
-            patch("scc_cli.commands.launch.flow.collect_launch_readiness", return_value=MagicMock(launch_ready=True)),
+            patch(
+                "scc_cli.commands.launch.flow.resolve_launch_provider",
+                return_value=("claude", "explicit"),
+            ),
+            patch(
+                "scc_cli.commands.launch.flow.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             result = runner.invoke(app, ["start", str(tmp_path), "--standalone"])
@@ -251,8 +257,14 @@ class TestStartCommand:
             patch("scc_cli.commands.launch.flow._configure_team_settings"),
             patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
             patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
-            patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("claude", "explicit")),
-            patch("scc_cli.commands.launch.flow.collect_launch_readiness", return_value=MagicMock(launch_ready=True)),
+            patch(
+                "scc_cli.commands.launch.flow.resolve_launch_provider",
+                return_value=("claude", "explicit"),
+            ),
+            patch(
+                "scc_cli.commands.launch.flow.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
             patch(
                 "scc_cli.application.start_session.compute_effective_config",

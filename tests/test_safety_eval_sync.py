@@ -17,11 +17,21 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _SYNC_PAIRS: list[tuple[Path, Path]] = [
     (
         _PROJECT_ROOT / "src" / "scc_cli" / "core" / "shell_tokenizer.py",
-        _PROJECT_ROOT / "images" / "scc-base" / "wrappers" / "scc_safety_eval" / "shell_tokenizer.py",
+        _PROJECT_ROOT
+        / "images"
+        / "scc-base"
+        / "wrappers"
+        / "scc_safety_eval"
+        / "shell_tokenizer.py",
     ),
     (
         _PROJECT_ROOT / "src" / "scc_cli" / "core" / "git_safety_rules.py",
-        _PROJECT_ROOT / "images" / "scc-base" / "wrappers" / "scc_safety_eval" / "git_safety_rules.py",
+        _PROJECT_ROOT
+        / "images"
+        / "scc-base"
+        / "wrappers"
+        / "scc_safety_eval"
+        / "git_safety_rules.py",
     ),
     (
         _PROJECT_ROOT / "src" / "scc_cli" / "core" / "network_tool_rules.py",

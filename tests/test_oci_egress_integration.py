@@ -280,15 +280,15 @@ class TestGuardrail:
         """
         spec = SandboxSpec(
             image="scc-agent-claude:latest",
-            workspace_mount=MountSpec(
-                source=Path("/home/user/project"), target=Path("/workspace")
-            ),
+            workspace_mount=MountSpec(source=Path("/home/user/project"), target=Path("/workspace")),
             workdir=Path("/workspace"),
             network_policy="web-egress-enforced",
         )
         # When topology provides a network name, --network is present
         cmd_with_net = OciSandboxRuntime._build_create_cmd(
-            spec, "scc-oci-test", network_name="scc-egress-scc-oci-test",
+            spec,
+            "scc-oci-test",
+            network_name="scc-egress-scc-oci-test",
         )
         assert "--network" in cmd_with_net
 
@@ -297,7 +297,9 @@ class TestGuardrail:
         # responsibility to ensure topology.setup() is called first.
         # The guardrail is that run() always calls setup() before create().
         cmd_no_net = OciSandboxRuntime._build_create_cmd(
-            spec, "scc-oci-test", network_name=None,
+            spec,
+            "scc-oci-test",
+            network_name=None,
         )
         # Without a network_name and not locked-down, no --network is added.
         # The contract is enforced at the run() level, not _build_create_cmd.
@@ -385,7 +387,8 @@ class TestDestinationSetEgressIntegration:
         from scc_cli.core.enums import NetworkPolicy
 
         mock_build_plan.return_value = NetworkPolicyPlan(
-            mode=NetworkPolicy.WEB_EGRESS_ENFORCED, enforced_by_runtime=True,
+            mode=NetworkPolicy.WEB_EGRESS_ENFORCED,
+            enforced_by_runtime=True,
         )
         mock_compile_acl.return_value = "http_access deny all\n"
         mock_topo = MagicMock()
@@ -453,7 +456,8 @@ class TestDestinationSetEgressIntegration:
         from scc_cli.core.enums import NetworkPolicy
 
         mock_build_plan.return_value = NetworkPolicyPlan(
-            mode=NetworkPolicy.WEB_EGRESS_ENFORCED, enforced_by_runtime=True,
+            mode=NetworkPolicy.WEB_EGRESS_ENFORCED,
+            enforced_by_runtime=True,
         )
         mock_compile_acl.return_value = "http_access deny all\n"
         mock_topo = MagicMock()

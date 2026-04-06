@@ -370,7 +370,12 @@ def apply_cmd(
                 diff_settings = build_diff_text(
                     f"settings.local.json ({profile.repo_id})",
                     existing_settings,
-                    merge_personal_settings(ws_path, existing_settings, profile_settings, managed_state_loader=load_managed_state),
+                    merge_personal_settings(
+                        ws_path,
+                        existing_settings,
+                        profile_settings,
+                        managed_state_loader=load_managed_state,
+                    ),
                 )
                 if diff_settings:
                     console.print(diff_settings)
@@ -390,7 +395,9 @@ def apply_cmd(
             )
             raise typer.Exit(EXIT_USAGE)
 
-    merged_settings = merge_personal_settings(ws_path, existing_settings, profile_settings, managed_state_loader=load_managed_state)
+    merged_settings = merge_personal_settings(
+        ws_path, existing_settings, profile_settings, managed_state_loader=load_managed_state
+    )
     merged_mcp = merge_personal_mcp(existing_mcp, profile_mcp)
 
     if merged_settings == existing_settings and merged_mcp == existing_mcp:

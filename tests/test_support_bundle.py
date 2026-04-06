@@ -261,9 +261,7 @@ class TestEffectiveEgressSection:
             "scc_cli.bootstrap.get_default_adapters",
             return_value=mock_adapters,
         ):
-            manifest = build_support_bundle_manifest(
-                request, dependencies=_make_dependencies()
-            )
+            manifest = build_support_bundle_manifest(request, dependencies=_make_dependencies())
 
         assert "effective_egress" in manifest
         egress = manifest["effective_egress"]
@@ -283,9 +281,7 @@ class TestEffectiveEgressSection:
             "scc_cli.bootstrap.get_default_adapters",
             side_effect=RuntimeError("no docker"),
         ):
-            manifest = build_support_bundle_manifest(
-                request, dependencies=_make_dependencies()
-            )
+            manifest = build_support_bundle_manifest(request, dependencies=_make_dependencies())
 
         assert "effective_egress" in manifest
         egress = manifest["effective_egress"]
@@ -405,7 +401,10 @@ class TestSupportBundleImportBoundaries:
     def test_ui_settings_uses_application_default_path_helper(self) -> None:
         source = Path("src/scc_cli/ui/settings.py").read_text(encoding="utf-8")
 
-        assert "from scc_cli.application.support_bundle import get_default_support_bundle_path" in source
+        assert (
+            "from scc_cli.application.support_bundle import get_default_support_bundle_path"
+            in source
+        )
         assert "from scc_cli.support_bundle import get_default_bundle_path" not in source
 
     def test_production_code_does_not_import_removed_support_bundle_module(self) -> None:

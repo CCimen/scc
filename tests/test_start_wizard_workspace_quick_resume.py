@@ -20,8 +20,13 @@ def test_workspace_quick_resume_returns_selected_context() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=False),
-        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch(
+            "scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=False
+        ),
+        patch(
+            "scc_cli.commands.launch.flow_interactive.config.load_cached_org_config",
+            return_value={},
+        ),
         patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
         patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),
@@ -61,8 +66,13 @@ def test_workspace_quick_resume_new_session_keeps_workspace() -> None:
     )
 
     with (
-        patch("scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=False),
-        patch("scc_cli.commands.launch.flow_interactive.config.load_cached_org_config", return_value={}),
+        patch(
+            "scc_cli.commands.launch.flow_interactive.config.is_standalone_mode", return_value=False
+        ),
+        patch(
+            "scc_cli.commands.launch.flow_interactive.config.load_cached_org_config",
+            return_value={},
+        ),
         patch("scc_cli.commands.launch.flow_interactive.config.load_user_config", return_value={}),
         patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
         patch("scc_cli.commands.launch.wizard_resume.load_recent_contexts", return_value=[context]),

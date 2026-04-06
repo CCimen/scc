@@ -23,9 +23,7 @@ class TestSessionRecordProviderIdField:
         assert "provider_id" not in data
 
     def test_from_dict_with_provider_id(self) -> None:
-        record = SessionRecord.from_dict(
-            {"workspace": "/tmp/ws", "provider_id": "claude"}
-        )
+        record = SessionRecord.from_dict({"workspace": "/tmp/ws", "provider_id": "claude"})
         assert record.provider_id == "claude"
 
     def test_from_dict_without_provider_id_defaults_none(self) -> None:
@@ -44,9 +42,7 @@ class TestSessionRecordProviderIdField:
         assert record.schema_version == 2
 
     def test_from_dict_preserves_legacy_schema_version(self) -> None:
-        record = SessionRecord.from_dict(
-            {"workspace": "/tmp/ws", "schema_version": 1}
-        )
+        record = SessionRecord.from_dict({"workspace": "/tmp/ws", "schema_version": 1})
         assert record.schema_version == 1
 
 
@@ -114,9 +110,7 @@ class TestSessionFilterProviderIdFiltering:
         store = MagicMock()
         store.load_sessions.return_value = [claude_record, codex_record, none_record]
         service = SessionService(store=store)
-        result = service.list_recent(
-            SessionFilter(include_all=True, provider_id="codex")
-        )
+        result = service.list_recent(SessionFilter(include_all=True, provider_id="codex"))
         assert len(result.sessions) == 1
         assert result.sessions[0].provider_id == "codex"
 

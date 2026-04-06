@@ -88,9 +88,7 @@ def _apply_profile_and_show_stack(
         if personal_profile_id and not personal_applied:
             personal_label = "skipped"
         workspace_label = (
-            "overrides"
-            if profile_service.workspace_has_overrides(workspace_path)
-            else "none"
+            "overrides" if profile_service.workspace_has_overrides(workspace_path) else "none"
         )
         print_with_layout(
             console,
@@ -335,9 +333,7 @@ def start(
     # Dry-run skips this entirely (no image/auth needed for preview).
     # Resume paths skip auth bootstrap since the original session authenticated.
     if not dry_run and not resume:
-        readiness = collect_launch_readiness(
-            resolved_provider, _resolution_source, adapters
-        )
+        readiness = collect_launch_readiness(resolved_provider, _resolution_source, adapters)
         if not readiness.launch_ready:
             ensure_launch_ready(
                 readiness,

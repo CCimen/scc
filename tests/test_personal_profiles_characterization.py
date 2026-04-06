@@ -31,10 +31,14 @@ def _write_json(path: Path, data: dict) -> None:
 class TestSavePersonalProfile:
     """Characterize save_personal_profile behavior."""
 
-    def test_save_creates_profile_file(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_save_creates_profile_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Saving a profile creates a JSON file in the personal projects dir."""
         monkeypatch.setattr(personal_profiles, "_get_remote_url", lambda _: None)
-        monkeypatch.setattr(personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal")
+        monkeypatch.setattr(
+            personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal"
+        )
 
         profile = personal_profiles.save_personal_profile(
             tmp_path / "workspace",
@@ -52,7 +56,9 @@ class TestSavePersonalProfile:
     ) -> None:
         """Saving with None settings and mcp still stores empty dicts (not None)."""
         monkeypatch.setattr(personal_profiles, "_get_remote_url", lambda _: None)
-        monkeypatch.setattr(personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal")
+        monkeypatch.setattr(
+            personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal"
+        )
 
         profile = personal_profiles.save_personal_profile(tmp_path / "ws", None, None)
         data = json.loads(profile.path.read_text())
@@ -64,7 +70,9 @@ class TestSavePersonalProfile:
     ) -> None:
         """Saving a profile for the same workspace overwrites the previous one."""
         monkeypatch.setattr(personal_profiles, "_get_remote_url", lambda _: None)
-        monkeypatch.setattr(personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal")
+        monkeypatch.setattr(
+            personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal"
+        )
 
         ws = tmp_path / "workspace"
         personal_profiles.save_personal_profile(ws, {"old": True}, None)
@@ -86,7 +94,9 @@ class TestLoadPersonalProfile:
     ) -> None:
         """Loading a profile for a workspace with no saved profile returns None."""
         monkeypatch.setattr(personal_profiles, "_get_remote_url", lambda _: None)
-        monkeypatch.setattr(personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal")
+        monkeypatch.setattr(
+            personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal"
+        )
 
         result = personal_profiles.load_personal_profile(tmp_path / "no-such-workspace")
         assert result is None
@@ -113,7 +123,9 @@ class TestLoadPersonalProfile:
     ) -> None:
         """A save followed by load returns the same data."""
         monkeypatch.setattr(personal_profiles, "_get_remote_url", lambda _: None)
-        monkeypatch.setattr(personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal")
+        monkeypatch.setattr(
+            personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "personal"
+        )
 
         ws = tmp_path / "workspace"
         settings = {"enabledPlugins": {"a@b": True, "c@d": False}}
@@ -138,7 +150,9 @@ class TestListPersonalProfiles:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Returns empty list when the personal projects directory doesn't exist."""
-        monkeypatch.setattr(personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "empty")
+        monkeypatch.setattr(
+            personal_profiles, "get_personal_projects_dir", lambda: tmp_path / "empty"
+        )
         result = personal_profiles.list_personal_profiles()
         assert result == []
 

@@ -118,9 +118,7 @@ class TestWrongProvider:
 
     def test_non_codex_binding_in_codex_plan(self, workspace: Path) -> None:
         plan = _plan(
-            bindings=(
-                ProviderArtifactBinding(provider="claude", native_ref="skills/foo"),
-            ),
+            bindings=(ProviderArtifactBinding(provider="claude", native_ref="skills/foo"),),
         )
         result = render_codex_artifacts(plan, workspace)
         assert len(result.warnings) == 1
@@ -177,16 +175,11 @@ class TestSkillBinding:
 
     def test_skill_no_native_ref_produces_warning(self, workspace: Path) -> None:
         plan = _plan(
-            bindings=(
-                ProviderArtifactBinding(provider="codex"),
-            ),
+            bindings=(ProviderArtifactBinding(provider="codex"),),
         )
         result = render_codex_artifacts(plan, workspace)
         assert len(result.warnings) >= 1
-        assert any(
-            "no native_ref" in w or "no recognised" in w.lower()
-            for w in result.warnings
-        )
+        assert any("no native_ref" in w or "no recognised" in w.lower() for w in result.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -516,9 +509,7 @@ class TestMixedBundle:
         result = render_codex_artifacts(plan, workspace)
 
         # Skill file under .agents/skills/
-        skill_path = (
-            workspace / SKILLS_DIR / "skills_code-review" / "skill.json"
-        )
+        skill_path = workspace / SKILLS_DIR / "skills_code-review" / "skill.json"
         assert skill_path.exists()
 
         # MCP server in fragment
@@ -679,9 +670,7 @@ class TestReturnType:
 
 
 class TestSkillMaterializationFailure:
-    def test_read_only_workspace_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_read_only_workspace_raises_materialization_error(self, workspace: Path) -> None:
         """Skill write to read-only dir raises MaterializationError."""
         skills = workspace / SKILLS_DIR
         skills.mkdir(parents=True, exist_ok=True)
@@ -705,9 +694,7 @@ class TestSkillMaterializationFailure:
 
 
 class TestPluginCreationFailure:
-    def test_plugin_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_plugin_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """Plugin file write to read-only dir → MaterializationError."""
         plugin_dir = workspace / CODEX_PLUGIN_DIR
         plugin_dir.mkdir(parents=True, exist_ok=True)
@@ -728,9 +715,7 @@ class TestPluginCreationFailure:
 
 
 class TestRulesWriteFailure:
-    def test_rules_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_rules_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """Rules file write to read-only dir → MaterializationError."""
         rules_dir = workspace / CODEX_RULES_DIR
         rules_dir.mkdir(parents=True, exist_ok=True)
@@ -751,9 +736,7 @@ class TestRulesWriteFailure:
 
 
 class TestHooksWriteFailure:
-    def test_hooks_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_hooks_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """hooks.json write to read-only dir → MaterializationError."""
         codex_dir = workspace / CODEX_CONFIG_DIR
         codex_dir.mkdir(parents=True, exist_ok=True)
@@ -772,9 +755,7 @@ class TestHooksWriteFailure:
 
         codex_dir.chmod(0o755)
 
-    def test_hooks_read_os_error_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_hooks_read_os_error_raises_materialization_error(self, workspace: Path) -> None:
         """OSError reading existing hooks.json → MaterializationError (not warning)."""
         codex_dir = workspace / CODEX_CONFIG_DIR
         codex_dir.mkdir(parents=True, exist_ok=True)
@@ -797,9 +778,7 @@ class TestHooksWriteFailure:
 
 
 class TestInstructionsWriteFailure:
-    def test_instructions_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_instructions_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """instructions write to read-only dir → MaterializationError."""
         instr_dir = workspace / SCC_MANAGED_DIR / "instructions"
         instr_dir.mkdir(parents=True, exist_ok=True)
@@ -847,6 +826,7 @@ class TestMCPAuditWriteFailure:
 class TestRendererErrorHierarchy:
     def test_materialization_error_is_renderer_error(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = MaterializationError(
             user_message="test",
             bundle_id="b",
@@ -859,6 +839,7 @@ class TestRendererErrorHierarchy:
 
     def test_merge_conflict_error_is_renderer_error(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = MergeConflictError(
             user_message="test",
             bundle_id="b",
@@ -896,9 +877,7 @@ class TestRenderSkillBindingDirect:
 
     def test_normal_ref_creates_file(self, workspace: Path) -> None:
         """Sanity: valid ref through the helper produces a metadata file."""
-        binding = ProviderArtifactBinding(
-            provider="codex", native_ref="skills/test"
-        )
+        binding = ProviderArtifactBinding(provider="codex", native_ref="skills/test")
         rendered, warnings = _render_skill_binding(binding, workspace, "b3")
         assert len(rendered) == 1
         assert rendered[0].name == "skill.json"
@@ -906,9 +885,7 @@ class TestRenderSkillBindingDirect:
 
     def test_path_sanitisation_dotdot(self, workspace: Path) -> None:
         """Path traversal chars replaced in skill directory name."""
-        binding = ProviderArtifactBinding(
-            provider="codex", native_ref="../../etc/passwd"
-        )
+        binding = ProviderArtifactBinding(provider="codex", native_ref="../../etc/passwd")
         rendered, warnings = _render_skill_binding(binding, workspace, "b4")
         assert len(rendered) == 1
         # '..' replaced with '_', '/' replaced with '_'
@@ -918,9 +895,7 @@ class TestRenderSkillBindingDirect:
 
     def test_path_sanitisation_backslash(self, workspace: Path) -> None:
         """Backslash in native_ref is sanitised."""
-        binding = ProviderArtifactBinding(
-            provider="codex", native_ref="skills\\code-review"
-        )
+        binding = ProviderArtifactBinding(provider="codex", native_ref="skills\\code-review")
         rendered, warnings = _render_skill_binding(binding, workspace, "b5")
         assert len(rendered) == 1
         dir_name = rendered[0].parent.name
@@ -1236,9 +1211,7 @@ class TestAGENTSMdRendering:
     """Plan item 6: native_integration with Codex instructions binding
     → AGENTS.md section (via .codex/.scc-managed/instructions/)."""
 
-    def test_instructions_creates_metadata_under_scc_managed(
-        self, workspace: Path
-    ) -> None:
+    def test_instructions_creates_metadata_under_scc_managed(self, workspace: Path) -> None:
         """Instructions binding writes to .codex/.scc-managed/instructions/."""
         plan = _plan(
             bindings=(
@@ -1305,9 +1278,7 @@ class TestMergeStrategy:
     """Plan item 8: SCC-managed sections are clearly marked and non-SCC
     content is preserved during merge."""
 
-    def test_hooks_scc_managed_key_isolates_scc_content(
-        self, workspace: Path
-    ) -> None:
+    def test_hooks_scc_managed_key_isolates_scc_content(self, workspace: Path) -> None:
         """SCC content goes under 'scc_managed' key, not at top level."""
         plan = _plan(
             bindings=(
@@ -1319,9 +1290,7 @@ class TestMergeStrategy:
         )
         render_codex_artifacts(plan, workspace)
 
-        hooks = json.loads(
-            (workspace / CODEX_CONFIG_DIR / "hooks.json").read_text()
-        )
+        hooks = json.loads((workspace / CODEX_CONFIG_DIR / "hooks.json").read_text())
         # SCC content is inside 'scc_managed', not scattered at root
         assert "scc_managed" in hooks
         # Only 'scc_managed' key exists (nothing else at top level)
@@ -1350,17 +1319,13 @@ class TestMergeStrategy:
         render_codex_artifacts(plan1, workspace)
         render_codex_artifacts(plan2, workspace)
 
-        hooks = json.loads(
-            (workspace / CODEX_CONFIG_DIR / "hooks.json").read_text()
-        )
+        hooks = json.loads((workspace / CODEX_CONFIG_DIR / "hooks.json").read_text())
         assert "bundle-a" in hooks["scc_managed"]
         assert "bundle-b" in hooks["scc_managed"]
         assert hooks["scc_managed"]["bundle-a"]["source"] == "./hooks-a.json"
         assert hooks["scc_managed"]["bundle-b"]["source"] == "./hooks-b.json"
 
-    def test_hooks_preserves_user_content_after_multi_bundle(
-        self, workspace: Path
-    ) -> None:
+    def test_hooks_preserves_user_content_after_multi_bundle(self, workspace: Path) -> None:
         """User content persists through multiple SCC-managed writes."""
         codex_dir = workspace / CODEX_CONFIG_DIR
         codex_dir.mkdir(parents=True, exist_ok=True)
@@ -1393,9 +1358,7 @@ class TestMergeStrategy:
         )
         render_codex_artifacts(plan, workspace)
 
-        plugin = json.loads(
-            (workspace / CODEX_PLUGIN_DIR / "plugin.json").read_text()
-        )
+        plugin = json.loads((workspace / CODEX_PLUGIN_DIR / "plugin.json").read_text())
         assert plugin["managed_by"] == "scc"
 
     def test_rules_metadata_has_managed_by_scc(self, workspace: Path) -> None:
@@ -1410,9 +1373,7 @@ class TestMergeStrategy:
         )
         render_codex_artifacts(plan, workspace)
 
-        rules = json.loads(
-            (workspace / CODEX_RULES_DIR / "safety.rules.json").read_text()
-        )
+        rules = json.loads((workspace / CODEX_RULES_DIR / "safety.rules.json").read_text())
         assert rules["managed_by"] == "scc"
 
     def test_instructions_metadata_has_managed_by_scc(self, workspace: Path) -> None:
@@ -1444,9 +1405,7 @@ class TestMergeStrategy:
         )
         render_codex_artifacts(plan, workspace)
 
-        skill = json.loads(
-            (workspace / SKILLS_DIR / "skills_test" / "skill.json").read_text()
-        )
+        skill = json.loads((workspace / SKILLS_DIR / "skills_test" / "skill.json").read_text())
         assert skill["managed_by"] == "scc"
 
 
@@ -1484,9 +1443,7 @@ class TestRenderNativeIntegrationDirect:
             provider="codex",
             native_config={},
         )
-        rendered, warnings = _render_native_integration_binding(
-            binding, workspace, "empty-bundle"
-        )
+        rendered, warnings = _render_native_integration_binding(binding, workspace, "empty-bundle")
         assert rendered == []
         assert warnings == []
 
@@ -1515,9 +1472,7 @@ class TestRenderNativeIntegrationDirect:
         _render_native_integration_binding(binding1, workspace, "alpha")
         _render_native_integration_binding(binding2, workspace, "beta")
 
-        hooks = json.loads(
-            (workspace / CODEX_CONFIG_DIR / "hooks.json").read_text()
-        )
+        hooks = json.loads((workspace / CODEX_CONFIG_DIR / "hooks.json").read_text())
         assert hooks["scc_managed"]["alpha"]["source"] == "./a.json"
         assert hooks["scc_managed"]["beta"]["source"] == "./b.json"
 
@@ -1540,14 +1495,10 @@ class TestIdempotentByteLevel:
             ),
         )
         render_codex_artifacts(plan, workspace)
-        first_bytes = (
-            workspace / SKILLS_DIR / "skills_review" / "skill.json"
-        ).read_bytes()
+        first_bytes = (workspace / SKILLS_DIR / "skills_review" / "skill.json").read_bytes()
 
         render_codex_artifacts(plan, workspace)
-        second_bytes = (
-            workspace / SKILLS_DIR / "skills_review" / "skill.json"
-        ).read_bytes()
+        second_bytes = (workspace / SKILLS_DIR / "skills_review" / "skill.json").read_bytes()
 
         assert first_bytes == second_bytes
 
@@ -1672,9 +1623,7 @@ class TestPortableSkillRendering:
     def test_portable_skill_minimal_metadata(self, workspace: Path) -> None:
         """Portable skill with no source metadata still writes file."""
         plan = _plan(
-            portable_artifacts=(
-                PortableArtifact(name="minimal-skill", kind=ArtifactKind.SKILL),
-            ),
+            portable_artifacts=(PortableArtifact(name="minimal-skill", kind=ArtifactKind.SKILL),),
         )
         result = render_codex_artifacts(plan, workspace)
         assert len(result.rendered_paths) == 1
@@ -1686,9 +1635,7 @@ class TestPortableSkillRendering:
     def test_portable_skill_name_sanitized(self, workspace: Path) -> None:
         """Skill name with slashes is sanitized for filesystem."""
         plan = _plan(
-            portable_artifacts=(
-                PortableArtifact(name="org/team/skill", kind=ArtifactKind.SKILL),
-            ),
+            portable_artifacts=(PortableArtifact(name="org/team/skill", kind=ArtifactKind.SKILL),),
         )
         result = render_codex_artifacts(plan, workspace)
         assert len(result.rendered_paths) == 1
@@ -1701,9 +1648,7 @@ class TestPortableSkillRendering:
         block.write_text("not-a-dir")
 
         plan = _plan(
-            portable_artifacts=(
-                PortableArtifact(name="blocked-skill", kind=ArtifactKind.SKILL),
-            ),
+            portable_artifacts=(PortableArtifact(name="blocked-skill", kind=ArtifactKind.SKILL),),
         )
         with pytest.raises(MaterializationError):
             render_codex_artifacts(plan, workspace)

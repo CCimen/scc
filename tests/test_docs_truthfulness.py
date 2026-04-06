@@ -67,7 +67,9 @@ def test_no_stale_network_modes_in_blocked_by_strings() -> None:
                 if re.search(rf"(?:network_policy|policy)\s*[=:]\s*{re.escape(stale)}\b", value):
                     lineno = source[: match.start()].count("\n") + 1
                     rel = py_file.relative_to(SRC)
-                    violations.append(f"  {rel}:{lineno}: blocked_by contains stale '{stale}' → {value!r}")
+                    violations.append(
+                        f"  {rel}:{lineno}: blocked_by contains stale '{stale}' → {value!r}"
+                    )
 
     if violations:
         raise AssertionError(
@@ -97,7 +99,9 @@ def test_no_stale_network_modes_in_user_warnings() -> None:
         lines = source.splitlines()
         for i, line in enumerate(lines, start=1):
             # Only inspect lines that look like they contain warning/error strings
-            if not re.search(r"(?:warn|error|message|msg|print|log|click\.echo)", line, re.IGNORECASE):
+            if not re.search(
+                r"(?:warn|error|message|msg|print|log|click\.echo)", line, re.IGNORECASE
+            ):
                 continue
             # Check if the line has a stale name in network context
             for stale in STALE_NAMES:
@@ -136,8 +140,7 @@ def test_readme_no_docker_desktop_hard_requirement() -> None:
             # Check current line and next two for alternatives
             context = " ".join(lines[i : i + 3])
             has_alternatives = all(
-                alt.lower() in context.lower()
-                for alt in ("Engine", "OrbStack", "Colima")
+                alt.lower() in context.lower() for alt in ("Engine", "OrbStack", "Colima")
             )
             if not has_alternatives:
                 raise AssertionError(
@@ -154,10 +157,10 @@ def test_readme_no_docker_desktop_hard_requirement() -> None:
 # Directories/files where Docker Desktop references are allowed (infrastructure,
 # adapter, and error layers that legitimately mention Desktop as one backend).
 _DOCKER_DESKTOP_ALLOWED_DIRS = {
-    "docker",               # docker/ module (core, launch, sandbox, credentials)
-    "adapters",             # docker_sandbox_runtime, docker_runtime_probe, oci_*
-    "core",                 # errors.py (typed Desktop-specific failure)
-    "doctor",               # checks that list Desktop as one option among several
+    "docker",  # docker/ module (core, launch, sandbox, credentials)
+    "adapters",  # docker_sandbox_runtime, docker_runtime_probe, oci_*
+    "core",  # errors.py (typed Desktop-specific failure)
+    "doctor",  # checks that list Desktop as one option among several
 }
 
 
@@ -213,17 +216,19 @@ def test_readme_no_stale_network_mode_names() -> None:
         for stale in STALE_NAMES:
             # Match in backtick context: `isolated`, `unrestricted`
             if re.search(rf"`{re.escape(stale)}`", line):
-                violations.append(f"  README.md:{i}: stale '{stale}' in backticks → {line.strip()!r}")
+                violations.append(
+                    f"  README.md:{i}: stale '{stale}' in backticks → {line.strip()!r}"
+                )
                 continue
             # Match in JSON-like context: "isolated", "unrestricted"
             if re.search(rf'"{re.escape(stale)}"', line):
                 violations.append(f"  README.md:{i}: stale '{stale}' in quotes → {line.strip()!r}")
                 continue
             # Match adjacent to network_policy keyword
-            if re.search(
-                rf"network_policy.*\b{re.escape(stale)}\b", line, re.IGNORECASE
-            ):
-                violations.append(f"  README.md:{i}: stale '{stale}' near network_policy → {line.strip()!r}")
+            if re.search(rf"network_policy.*\b{re.escape(stale)}\b", line, re.IGNORECASE):
+                violations.append(
+                    f"  README.md:{i}: stale '{stale}' near network_policy → {line.strip()!r}"
+                )
 
     if violations:
         raise AssertionError(
@@ -390,8 +395,7 @@ def test_safety_engine_core_files_exist() -> None:
     ]
     missing = [str(p.relative_to(ROOT)) for p in expected if not p.exists()]
     assert not missing, (
-        f"Core safety module files missing: {missing}. "
-        "These are required M004 deliverables."
+        f"Core safety module files missing: {missing}. These are required M004 deliverables."
     )
 
 
@@ -412,8 +416,7 @@ def test_safety_adapter_files_exist() -> None:
     ]
     missing = [str(p.relative_to(ROOT)) for p in expected if not p.exists()]
     assert not missing, (
-        f"Safety adapter files missing: {missing}. "
-        "These are required M004/S03 deliverables."
+        f"Safety adapter files missing: {missing}. These are required M004/S03 deliverables."
     )
 
 

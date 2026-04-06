@@ -204,9 +204,7 @@ class TestBasicResolution:
                 ),
             },
             bindings={
-                "my-skill": (
-                    ProviderArtifactBinding(provider="claude", native_ref="skills/my"),
-                ),
+                "my-skill": (ProviderArtifactBinding(provider="claude", native_ref="skills/my"),),
                 "github-mcp": (
                     ProviderArtifactBinding(provider="claude", native_ref="mcp/github"),
                 ),
@@ -753,13 +751,15 @@ class TestFailClosedInvalidArtifact:
         catalog = GovernedArtifactsCatalog(
             artifacts={
                 "s": GovernedArtifact(
-                    kind=ArtifactKind.SKILL, name="s",
+                    kind=ArtifactKind.SKILL,
+                    name="s",
                     install_intent=ArtifactInstallIntent.REQUIRED,
                 ),
             },
             bundles={
                 "dis": ArtifactBundle(
-                    name="dis", artifacts=("s",),
+                    name="dis",
+                    artifacts=("s",),
                     install_intent=ArtifactInstallIntent.DISABLED,
                 ),
             },
@@ -782,16 +782,19 @@ class TestFailClosedInvalidArtifact:
 class TestErrorHierarchy:
     def test_bundle_resolution_error_is_renderer_error(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = BundleResolutionError(bundle_id="b")
         assert isinstance(err, RendererError)
 
     def test_invalid_artifact_error_is_renderer_error(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = InvalidArtifactReferenceError(bundle_id="b", artifact_name="a", reason="bad")
         assert isinstance(err, RendererError)
 
     def test_renderer_error_has_exit_code_4(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = RendererError(user_message="test")
         assert err.exit_code == 4
 

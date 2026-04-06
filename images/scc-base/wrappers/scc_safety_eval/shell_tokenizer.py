@@ -48,9 +48,7 @@ def split_commands(command: str) -> list[str]:
 
     # Filter out operators and empty strings
     return [
-        seg.strip()
-        for seg in segments
-        if seg.strip() and seg.strip() not in (";", "&&", "||", "|")
+        seg.strip() for seg in segments if seg.strip() and seg.strip() not in (";", "&&", "||", "|")
     ]
 
 

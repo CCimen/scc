@@ -74,9 +74,7 @@ def _launch_event(*, provider_id: str = "claude", message: str = "preflight pass
 class TestSafetyAuditReader:
     def test_empty_sink_returns_empty_state(self, tmp_path: Path) -> None:
         """No file exists → state 'unavailable'."""
-        diag = read_safety_audit_diagnostics(
-            audit_path=tmp_path / "missing.jsonl", limit=5
-        )
+        diag = read_safety_audit_diagnostics(audit_path=tmp_path / "missing.jsonl", limit=5)
         assert diag.state == "unavailable"
         assert diag.recent_events == ()
         assert diag.last_blocked is None
@@ -206,9 +204,7 @@ class TestSafetyAuditReader:
             ],
         )
 
-        diag = read_safety_audit_diagnostics(
-            audit_path=audit_path, limit=10, redact_paths=False
-        )
+        diag = read_safety_audit_diagnostics(audit_path=audit_path, limit=10, redact_paths=False)
 
         assert diag.recent_events[0].command is not None
         assert home in diag.recent_events[0].command
@@ -302,9 +298,7 @@ class TestSupportBundleSafetySection:
 
         class _PassingDoctor:
             def run(self, workspace: str | None = None) -> DoctorResult:
-                return DoctorResult(
-                    checks=[CheckResult(name="Docker", passed=True, message="OK")]
-                )
+                return DoctorResult(checks=[CheckResult(name="Docker", passed=True, message="OK")])
 
         class _FakeArchive:
             def write_manifest(self, path: str, content: str) -> None:

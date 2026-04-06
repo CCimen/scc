@@ -9,6 +9,7 @@ Covers:
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import Any
 from unittest.mock import patch
 
@@ -504,33 +505,80 @@ class TestRunAllChecksIntegration:
     def test_artifact_checks_are_registered(self) -> None:
         """Confirm the check names appear in run_all_checks output."""
         from scc_cli.doctor.checks import run_all_checks
+        from scc_cli.doctor.types import CheckResult
 
         # Patch everything to isolate from real environment
-        with (
-            patch("scc_cli.doctor.checks.environment.check_git") as mock_git,
-            patch("scc_cli.doctor.checks.environment.check_docker") as mock_docker,
-            patch("scc_cli.doctor.checks.environment.check_docker_desktop") as mock_dd,
-            patch("scc_cli.doctor.checks.environment.check_docker_sandbox") as mock_ds,
-            patch("scc_cli.doctor.checks.environment.check_docker_running") as mock_dr,
-            patch("scc_cli.doctor.checks.environment.check_wsl2") as mock_wsl,
-            patch("scc_cli.doctor.checks.environment.check_runtime_backend") as mock_rb,
-            patch("scc_cli.doctor.checks.config.check_config_directory") as mock_cd,
-            patch("scc_cli.doctor.checks.config.check_user_config_valid") as mock_ucv,
-            patch("scc_cli.doctor.checks.worktree.check_git_version_for_worktrees", return_value=None),
-            patch("scc_cli.doctor.checks.worktree.check_worktree_health", return_value=None),
-            patch("scc_cli.doctor.checks.worktree.check_worktree_branch_conflicts", return_value=None),
-            patch("scc_cli.doctor.checks.organization.check_org_config_reachable", return_value=None),
-            patch("scc_cli.doctor.checks.organization.check_marketplace_auth_available", return_value=None),
-            patch("scc_cli.doctor.checks.organization.check_credential_injection", return_value=None),
-            patch("scc_cli.doctor.checks.cache.check_cache_readable") as mock_cache,
-            patch("scc_cli.doctor.checks.cache.check_cache_ttl_status", return_value=None),
-            patch("scc_cli.doctor.checks.cache.check_exception_stores") as mock_exc,
-            patch("scc_cli.doctor.checks.safety.check_safety_policy") as mock_sp,
-            patch(_PATCH_RAW, return_value={"organization": {"name": "Test"}, "profiles": {}}),
-            patch(_PATCH_PROFILE, return_value="dev-team"),
-        ):
-            from scc_cli.doctor.types import CheckResult
-
+        with ExitStack() as stack:
+            mock_git = stack.enter_context(patch("scc_cli.doctor.checks.environment.check_git"))
+            mock_docker = stack.enter_context(
+                patch("scc_cli.doctor.checks.environment.check_docker")
+            )
+            mock_dd = stack.enter_context(
+                patch("scc_cli.doctor.checks.environment.check_docker_desktop")
+            )
+            mock_ds = stack.enter_context(
+                patch("scc_cli.doctor.checks.environment.check_docker_sandbox")
+            )
+            mock_dr = stack.enter_context(
+                patch("scc_cli.doctor.checks.environment.check_docker_running")
+            )
+            mock_wsl = stack.enter_context(patch("scc_cli.doctor.checks.environment.check_wsl2"))
+            mock_rb = stack.enter_context(
+                patch("scc_cli.doctor.checks.environment.check_runtime_backend")
+            )
+            mock_cd = stack.enter_context(
+                patch("scc_cli.doctor.checks.config.check_config_directory")
+            )
+            mock_ucv = stack.enter_context(
+                patch("scc_cli.doctor.checks.config.check_user_config_valid")
+            )
+            stack.enter_context(
+                patch(
+                    "scc_cli.doctor.checks.worktree.check_git_version_for_worktrees",
+                    return_value=None,
+                )
+            )
+            stack.enter_context(
+                patch("scc_cli.doctor.checks.worktree.check_worktree_health", return_value=None)
+            )
+            stack.enter_context(
+                patch(
+                    "scc_cli.doctor.checks.worktree.check_worktree_branch_conflicts",
+                    return_value=None,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "scc_cli.doctor.checks.organization.check_org_config_reachable",
+                    return_value=None,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "scc_cli.doctor.checks.organization.check_marketplace_auth_available",
+                    return_value=None,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "scc_cli.doctor.checks.organization.check_credential_injection",
+                    return_value=None,
+                )
+            )
+            mock_cache = stack.enter_context(
+                patch("scc_cli.doctor.checks.cache.check_cache_readable")
+            )
+            stack.enter_context(
+                patch("scc_cli.doctor.checks.cache.check_cache_ttl_status", return_value=None)
+            )
+            mock_exc = stack.enter_context(
+                patch("scc_cli.doctor.checks.cache.check_exception_stores")
+            )
+            mock_sp = stack.enter_context(patch("scc_cli.doctor.checks.safety.check_safety_policy"))
+            stack.enter_context(
+                patch(_PATCH_RAW, return_value={"organization": {"name": "Test"}, "profiles": {}})
+            )
+            stack.enter_context(patch(_PATCH_PROFILE, return_value="dev-team"))
             stub = CheckResult(name="stub", passed=True, message="ok")
             mock_git.return_value = stub
             mock_docker.return_value = stub

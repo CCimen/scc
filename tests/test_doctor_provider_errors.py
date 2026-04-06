@@ -63,9 +63,7 @@ class TestProviderImageMissingError:
     """ProviderImageMissingError carries provider_id and optional image_ref."""
 
     def test_message_includes_provider_and_image(self) -> None:
-        err = ProviderImageMissingError(
-            provider_id="codex", image_ref="scc-agent-codex:latest"
-        )
+        err = ProviderImageMissingError(provider_id="codex", image_ref="scc-agent-codex:latest")
         assert "codex" in err.user_message
         assert "scc-agent-codex:latest" in err.user_message
 

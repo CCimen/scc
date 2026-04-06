@@ -48,7 +48,8 @@ class TestDryRunBasicBehavior:
                                 fresh=False,
                                 install_deps=False,
                                 offline=False,
-                                standalone=False, provider="claude",
+                                standalone=False,
+                                provider="claude",
                                 dry_run=True,
                             )
                         except click.exceptions.Exit:
@@ -80,7 +81,8 @@ class TestDryRunBasicBehavior:
                             fresh=False,
                             install_deps=False,
                             offline=False,
-                            standalone=False, provider="claude",
+                            standalone=False,
+                            provider="claude",
                             dry_run=True,
                         )
                     except click.exceptions.Exit:
@@ -131,7 +133,8 @@ class TestDryRunTeamConfig:
                                 fresh=False,
                                 install_deps=False,
                                 offline=False,
-                                standalone=False, provider="claude",
+                                standalone=False,
+                                provider="claude",
                                 dry_run=True,
                             )
                         except click.exceptions.Exit:
@@ -172,7 +175,8 @@ class TestDryRunJsonOutput:
                             fresh=False,
                             install_deps=False,
                             offline=False,
-                            standalone=False, provider="claude",
+                            standalone=False,
+                            provider="claude",
                             dry_run=True,
                             json_output=True,
                             pretty=False,
@@ -207,7 +211,8 @@ class TestDryRunJsonOutput:
                             fresh=False,
                             install_deps=False,
                             offline=False,
-                            standalone=False, provider="claude",
+                            standalone=False,
+                            provider="claude",
                             dry_run=True,
                             json_output=True,
                             pretty=False,
@@ -346,7 +351,8 @@ class TestDryRunExitCodes:
                             fresh=False,
                             install_deps=False,
                             offline=False,
-                            standalone=False, provider="claude",
+                            standalone=False,
+                            provider="claude",
                             dry_run=True,
                         )
                         exit_code = 0  # If no exit raised, exit code is 0

@@ -14,12 +14,14 @@ from scc_cli.core.safety_policy_loader import load_safety_policy
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _org(safety_net: dict[str, Any]) -> dict[str, Any]:
     """Build a minimal org config dict with the given safety_net section."""
     return {"security": {"safety_net": safety_net}}
 
 
 # ── None / empty / malformed org config ──────────────────────────────────────
+
 
 class TestDefaultBlockFallback:
     """All parse failures must produce SafetyPolicy(action='block')."""
@@ -58,6 +60,7 @@ class TestDefaultBlockFallback:
 
 # ── Valid action passthrough ─────────────────────────────────────────────────
 
+
 class TestValidActions:
     """Valid action strings must be returned unchanged."""
 
@@ -76,6 +79,7 @@ class TestValidActions:
 
 
 # ── Rules extraction ─────────────────────────────────────────────────────────
+
 
 class TestRulesExtraction:
     """Non-action keys must land in the rules dict."""
@@ -97,6 +101,7 @@ class TestRulesExtraction:
 
 
 # ── Return-type invariant ────────────────────────────────────────────────────
+
 
 class TestReturnTypeInvariant:
     """load_safety_policy must always return SafetyPolicy — never None, never raw dict."""
@@ -120,6 +125,7 @@ class TestReturnTypeInvariant:
 
 
 # ── Import guardrail ────────────────────────────────────────────────────────
+
 
 class TestNoDockerImport:
     """safety_policy_loader.py must never import from scc_cli.docker."""

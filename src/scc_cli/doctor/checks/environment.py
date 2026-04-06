@@ -90,7 +90,9 @@ def check_docker_desktop() -> CheckResult:
             name="Docker Desktop",
             passed=False,
             message="Docker Desktop CLI not detected (optional unless using Docker sandbox backend)",
-            fix_hint=("Install or update Docker Desktop 4.50+ only if you want the Docker sandbox backend"),
+            fix_hint=(
+                "Install or update Docker Desktop 4.50+ only if you want the Docker sandbox backend"
+            ),
             fix_url="https://docker.com/products/docker-desktop",
             severity=SeverityLevel.WARNING,
         )
@@ -257,10 +259,7 @@ def check_runtime_backend() -> CheckResult:
     return CheckResult(
         name="Runtime Backend",
         passed=True,
-        message=(
-            f"Runtime backend: {backend_label} "
-            f"({info.display_name}, version {version_str})"
-        ),
+        message=(f"Runtime backend: {backend_label} ({info.display_name}, version {version_str})"),
         version=version_str,
     )
 
@@ -315,7 +314,9 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
             from scc_cli import config as config_module
 
             configured_provider = config_module.get_selected_provider()
-            provider_id = configured_provider if configured_provider in {"claude", "codex"} else "claude"
+            provider_id = (
+                configured_provider if configured_provider in {"claude", "codex"} else "claude"
+            )
         except Exception:
             provider_id = "claude"
 
@@ -399,7 +400,9 @@ def check_provider_image(provider_id: str | None = None) -> CheckResult:
             from scc_cli import config as config_module
 
             configured_provider = config_module.get_selected_provider()
-            provider_id = configured_provider if configured_provider in {"claude", "codex"} else "claude"
+            provider_id = (
+                configured_provider if configured_provider in {"claude", "codex"} else "claude"
+            )
         except Exception:
             provider_id = "claude"
 

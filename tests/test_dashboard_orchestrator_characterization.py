@@ -299,7 +299,5 @@ class TestPlaceholderHelpers:
 
     def test_start_reason_unknown_kind(self) -> None:
         """Unrecognized placeholder kind → 'unknown' reason."""
-        item = PlaceholderItem(
-            label="", description="", kind=PlaceholderKind.ERROR, startable=True
-        )
+        item = PlaceholderItem(label="", description="", kind=PlaceholderKind.ERROR, startable=True)
         assert placeholder_start_reason(item) == "unknown"

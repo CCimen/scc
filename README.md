@@ -108,6 +108,8 @@ SCC separates sandboxing from egress control on purpose.
 
 The built-in safety engine is provider-neutral. It uses shell wrappers inside the image to evaluate commands before forwarding them to the real binary. In v1, the hard safety baseline focuses on destructive git commands and explicit network tools such as `curl`, `wget`, `ssh`, `scp`, `sftp`, and `rsync`.
 
+Those runtime wrappers are defense-in-depth. They intercept risky commands inside the container, but the hard network boundary remains the runtime topology and proxy policy.
+
 ## Common Commands
 
 ```bash
@@ -138,6 +140,7 @@ scc worktree . enter feature-auth
 # Diagnostics
 scc doctor
 scc config explain
+scc support safety-audit
 ```
 
 ## Architecture at a Glance

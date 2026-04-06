@@ -52,7 +52,11 @@ def load_safety_policy(org_config: dict[str, Any] | None) -> SafetyPolicy:
             return _DEFAULT_POLICY
 
         raw_action = safety_net.get("action")
-        action: str = raw_action if isinstance(raw_action, str) and raw_action in VALID_SAFETY_NET_ACTIONS else "block"
+        action: str = (
+            raw_action
+            if isinstance(raw_action, str) and raw_action in VALID_SAFETY_NET_ACTIONS
+            else "block"
+        )
 
         # Everything except "action" is treated as a rule setting.
         rules: dict[str, Any] = {k: v for k, v in safety_net.items() if k != "action"}

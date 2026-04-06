@@ -88,9 +88,7 @@ def _native(
     name: str,
     intent: ArtifactInstallIntent = ArtifactInstallIntent.AVAILABLE,
 ) -> GovernedArtifact:
-    return GovernedArtifact(
-        kind=ArtifactKind.NATIVE_INTEGRATION, name=name, install_intent=intent
-    )
+    return GovernedArtifact(kind=ArtifactKind.NATIVE_INTEGRATION, name=name, install_intent=intent)
 
 
 # ---------------------------------------------------------------------------
@@ -319,13 +317,9 @@ class TestSwitchProviderDifferentOutputs:
         codex_result = render_codex_artifacts(codex_plans[0], ws_codex)
 
         # Claude skills go under .claude/.scc-managed/skills/
-        claude_skill_paths = [
-            p for p in claude_result.rendered_paths if "skills" in str(p)
-        ]
+        claude_skill_paths = [p for p in claude_result.rendered_paths if "skills" in str(p)]
         # Codex skills go under .agents/skills/
-        codex_skill_paths = [
-            p for p in codex_result.rendered_paths if "skills" in str(p)
-        ]
+        codex_skill_paths = [p for p in codex_result.rendered_paths if "skills" in str(p)]
 
         assert len(claude_skill_paths) > 0
         assert len(codex_skill_paths) > 0
@@ -384,17 +378,13 @@ class TestSwitchProviderDifferentOutputs:
         # Claude should have rendered hooks (filter on relative path to avoid
         # tmp_path containing test name like "hooks" in the directory)
         claude_hook_paths = [
-            p
-            for p in claude_result.rendered_paths
-            if "hooks" in str(p.relative_to(ws_claude))
+            p for p in claude_result.rendered_paths if "hooks" in str(p.relative_to(ws_claude))
         ]
         assert len(claude_hook_paths) > 0
 
         # Codex should NOT have rendered hooks (claude-hooks has no codex binding)
         codex_hook_paths = [
-            p
-            for p in codex_result.rendered_paths
-            if "hooks" in str(p.relative_to(ws_codex))
+            p for p in codex_result.rendered_paths if "hooks" in str(p.relative_to(ws_codex))
         ]
         assert len(codex_hook_paths) == 0
 
@@ -417,17 +407,13 @@ class TestSwitchProviderDifferentOutputs:
 
         # Codex should have rendered rules (filter on relative path)
         codex_rule_paths = [
-            p
-            for p in codex_result.rendered_paths
-            if "rules" in str(p.relative_to(ws_codex))
+            p for p in codex_result.rendered_paths if "rules" in str(p.relative_to(ws_codex))
         ]
         assert len(codex_rule_paths) > 0
 
         # Claude should NOT have rendered rules (codex-rules has no claude binding)
         claude_rule_paths = [
-            p
-            for p in claude_result.rendered_paths
-            if "rules" in str(p.relative_to(ws_claude))
+            p for p in claude_result.rendered_paths if "rules" in str(p.relative_to(ws_claude))
         ]
         assert len(claude_rule_paths) == 0
 
@@ -449,9 +435,7 @@ class TestEndToEndPipelineClaude:
         result = render_claude_artifacts(plans[0], workspace)
 
         # Find skill metadata files
-        skill_files = list(
-            (workspace / CLAUDE_SCC_DIR / "skills").rglob("skill.json")
-        )
+        skill_files = list((workspace / CLAUDE_SCC_DIR / "skills").rglob("skill.json"))
         assert len(skill_files) == 2  # review-skill, lint-skill
 
         for sf in skill_files:
@@ -500,9 +484,7 @@ class TestEndToEndPipelineClaude:
         plans = resolve_render_plan(org, "dev", "claude").plans
         render_claude_artifacts(plans[0], workspace)
 
-        hook_files = list(
-            (workspace / CLAUDE_SCC_DIR / "hooks").rglob("*.json")
-        )
+        hook_files = list((workspace / CLAUDE_SCC_DIR / "hooks").rglob("*.json"))
         assert len(hook_files) == 1
         data = json.loads(hook_files[0].read_text())
         assert data["managed_by"] == "scc"
@@ -520,9 +502,7 @@ class TestEndToEndPipelineCodex:
         plans = resolve_render_plan(org, "dev", "codex").plans
         result = render_codex_artifacts(plans[0], workspace)
 
-        skill_files = list(
-            (workspace / CODEX_SKILLS_DIR).rglob("skill.json")
-        )
+        skill_files = list((workspace / CODEX_SKILLS_DIR).rglob("skill.json"))
         assert len(skill_files) == 2  # review-skill, lint-skill
 
         for sf in skill_files:
@@ -569,9 +549,7 @@ class TestEndToEndPipelineCodex:
         plans = resolve_render_plan(org, "dev", "codex").plans
         render_codex_artifacts(plans[0], workspace)
 
-        rule_files = list(
-            (workspace / ".codex" / "rules").rglob("*.rules.json")
-        )
+        rule_files = list((workspace / ".codex" / "rules").rglob("*.rules.json"))
         assert len(rule_files) == 1
         data = json.loads(rule_files[0].read_text())
         assert data["managed_by"] == "scc"
@@ -671,9 +649,7 @@ class TestPipelineSeamContracts:
             assert isinstance(plan.skipped, tuple)
             assert isinstance(plan.effective_artifacts, tuple)
 
-    def test_wrong_provider_plan_to_renderer_produces_warning(
-        self, workspace: Path
-    ) -> None:
+    def test_wrong_provider_plan_to_renderer_produces_warning(self, workspace: Path) -> None:
         """Feeding a Claude plan to the Codex renderer is a no-op with warning."""
         org = _org(
             profiles={"dev": _team("dev", bundles=("core-tools",))},
@@ -688,9 +664,7 @@ class TestPipelineSeamContracts:
         assert any("not 'codex'" in w for w in codex_render.warnings)
         assert codex_render.rendered_paths == ()
 
-    def test_wrong_provider_plan_to_claude_renderer_produces_warning(
-        self, workspace: Path
-    ) -> None:
+    def test_wrong_provider_plan_to_claude_renderer_produces_warning(self, workspace: Path) -> None:
         """Feeding a Codex plan to the Claude renderer is a no-op with warning."""
         org = _org(
             profiles={"dev": _team("dev", bundles=("core-tools",))},
@@ -773,9 +747,7 @@ class TestMultiBundlePipeline:
 class TestCrossProviderEquivalence:
     """Same bundle → same effective artifacts but different file trees."""
 
-    def test_same_effective_artifacts_different_file_trees(
-        self, workspace: Path
-    ) -> None:
+    def test_same_effective_artifacts_different_file_trees(self, workspace: Path) -> None:
         org = _org(
             profiles={"dev": _team("dev", bundles=("core-tools",))},
             catalog=_SHARED_CATALOG,
@@ -784,9 +756,7 @@ class TestCrossProviderEquivalence:
         codex_plans = resolve_render_plan(org, "dev", "codex").plans
 
         # Same effective artifacts
-        assert set(claude_plans[0].effective_artifacts) == set(
-            codex_plans[0].effective_artifacts
-        )
+        assert set(claude_plans[0].effective_artifacts) == set(codex_plans[0].effective_artifacts)
 
         ws_claude = workspace / "claude-ws"
         ws_codex = workspace / "codex-ws"
@@ -804,13 +774,10 @@ class TestCrossProviderEquivalence:
         claude_rel = {str(p.relative_to(ws_claude)) for p in claude_result.rendered_paths}
         codex_rel = {str(p.relative_to(ws_codex)) for p in codex_result.rendered_paths}
         assert claude_rel.isdisjoint(codex_rel), (
-            f"File paths should differ between providers: "
-            f"overlap = {claude_rel & codex_rel}"
+            f"File paths should differ between providers: overlap = {claude_rel & codex_rel}"
         )
 
-    def test_idempotent_rendering_across_double_resolve(
-        self, workspace: Path
-    ) -> None:
+    def test_idempotent_rendering_across_double_resolve(self, workspace: Path) -> None:
         """Resolving + rendering twice produces identical file content."""
         org = _org(
             profiles={"dev": _team("dev", bundles=("core-tools",))},
@@ -838,9 +805,7 @@ class TestCrossProviderEquivalence:
             [f for f in files1 if f.is_file()],
             [f for f in files2 if f.is_file()],
         ):
-            assert f1.read_bytes() == f2.read_bytes(), (
-                f"Files differ: {f1.relative_to(ws1)}"
-            )
+            assert f1.read_bytes() == f2.read_bytes(), f"Files differ: {f1.relative_to(ws1)}"
 
 
 class TestMixedBundleAsymmetry:
@@ -904,26 +869,16 @@ class TestDisabledAndFilteredArtifacts:
         catalog = GovernedArtifactsCatalog(
             artifacts={
                 "active-skill": _skill("active-skill"),
-                "dead-skill": _skill(
-                    "dead-skill", intent=ArtifactInstallIntent.DISABLED
-                ),
+                "dead-skill": _skill("dead-skill", intent=ArtifactInstallIntent.DISABLED),
             },
             bindings={
                 "active-skill": (
-                    ProviderArtifactBinding(
-                        provider="claude", native_ref="skills/active"
-                    ),
-                    ProviderArtifactBinding(
-                        provider="codex", native_ref="skills/active"
-                    ),
+                    ProviderArtifactBinding(provider="claude", native_ref="skills/active"),
+                    ProviderArtifactBinding(provider="codex", native_ref="skills/active"),
                 ),
                 "dead-skill": (
-                    ProviderArtifactBinding(
-                        provider="claude", native_ref="skills/dead"
-                    ),
-                    ProviderArtifactBinding(
-                        provider="codex", native_ref="skills/dead"
-                    ),
+                    ProviderArtifactBinding(provider="claude", native_ref="skills/dead"),
+                    ProviderArtifactBinding(provider="codex", native_ref="skills/dead"),
                 ),
             },
             bundles={
@@ -948,15 +903,11 @@ class TestDisabledAndFilteredArtifacts:
     def test_disabled_artifact_produces_no_files(self, workspace: Path) -> None:
         catalog = GovernedArtifactsCatalog(
             artifacts={
-                "dead-skill": _skill(
-                    "dead-skill", intent=ArtifactInstallIntent.DISABLED
-                ),
+                "dead-skill": _skill("dead-skill", intent=ArtifactInstallIntent.DISABLED),
             },
             bindings={
                 "dead-skill": (
-                    ProviderArtifactBinding(
-                        provider="claude", native_ref="skills/dead"
-                    ),
+                    ProviderArtifactBinding(provider="claude", native_ref="skills/dead"),
                 ),
             },
             bundles={
@@ -978,15 +929,11 @@ class TestDisabledAndFilteredArtifacts:
     def test_request_only_excluded_from_pipeline(self) -> None:
         catalog = GovernedArtifactsCatalog(
             artifacts={
-                "request-skill": _skill(
-                    "request-skill", intent=ArtifactInstallIntent.REQUEST_ONLY
-                ),
+                "request-skill": _skill("request-skill", intent=ArtifactInstallIntent.REQUEST_ONLY),
             },
             bindings={
                 "request-skill": (
-                    ProviderArtifactBinding(
-                        provider="claude", native_ref="skills/req"
-                    ),
+                    ProviderArtifactBinding(provider="claude", native_ref="skills/req"),
                 ),
             },
             bundles={
@@ -1030,9 +977,7 @@ class TestPortableArtifactPipeline:
             },
             bindings={},  # no bindings at all
             bundles={
-                "dev-bundle": ArtifactBundle(
-                    name="dev-bundle", artifacts=("portable-skill",)
-                ),
+                "dev-bundle": ArtifactBundle(name="dev-bundle", artifacts=("portable-skill",)),
             },
         )
         org = _org(
@@ -1069,9 +1014,7 @@ class TestPortableArtifactPipeline:
             },
             bindings={},
             bundles={
-                "dev-bundle": ArtifactBundle(
-                    name="dev-bundle", artifacts=("portable-skill",)
-                ),
+                "dev-bundle": ArtifactBundle(name="dev-bundle", artifacts=("portable-skill",)),
             },
         )
         org = _org(
@@ -1090,9 +1033,7 @@ class TestPortableArtifactPipeline:
         assert data["portable"] is True
         assert data["provider"] == "codex"
 
-    def test_portable_mcp_resolved_and_rendered_both_providers(
-        self, workspace: Path
-    ) -> None:
+    def test_portable_mcp_resolved_and_rendered_both_providers(self, workspace: Path) -> None:
         """MCP server with no binding → portable rendering on both providers."""
         catalog = GovernedArtifactsCatalog(
             artifacts={
@@ -1105,9 +1046,7 @@ class TestPortableArtifactPipeline:
             },
             bindings={},
             bundles={
-                "mcp-bundle": ArtifactBundle(
-                    name="mcp-bundle", artifacts=("shared-mcp",)
-                ),
+                "mcp-bundle": ArtifactBundle(name="mcp-bundle", artifacts=("shared-mcp",)),
             },
         )
         org = _org(
@@ -1157,9 +1096,7 @@ class TestPortableArtifactPipeline:
                 # portable-skill has NO binding
             },
             bundles={
-                "mixed": ArtifactBundle(
-                    name="mixed", artifacts=("bound-skill", "portable-skill")
-                ),
+                "mixed": ArtifactBundle(name="mixed", artifacts=("bound-skill", "portable-skill")),
             },
         )
         org = _org(
@@ -1191,9 +1128,7 @@ class TestPortableArtifactPipeline:
             },
             bindings={},
             bundles={
-                "native-only": ArtifactBundle(
-                    name="native-only", artifacts=("hooks-native",)
-                ),
+                "native-only": ArtifactBundle(name="native-only", artifacts=("hooks-native",)),
             },
         )
         org = _org(

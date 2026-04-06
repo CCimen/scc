@@ -65,15 +65,21 @@ def _team(name: str, bundles: tuple[str, ...] = ()) -> NormalizedTeamConfig:
     return NormalizedTeamConfig(name=name, enabled_bundles=bundles)
 
 
-def _skill(name: str, intent: ArtifactInstallIntent = ArtifactInstallIntent.REQUIRED) -> GovernedArtifact:
+def _skill(
+    name: str, intent: ArtifactInstallIntent = ArtifactInstallIntent.REQUIRED
+) -> GovernedArtifact:
     return GovernedArtifact(kind=ArtifactKind.SKILL, name=name, install_intent=intent)
 
 
-def _mcp(name: str, intent: ArtifactInstallIntent = ArtifactInstallIntent.REQUIRED) -> GovernedArtifact:
+def _mcp(
+    name: str, intent: ArtifactInstallIntent = ArtifactInstallIntent.REQUIRED
+) -> GovernedArtifact:
     return GovernedArtifact(kind=ArtifactKind.MCP_SERVER, name=name, install_intent=intent)
 
 
-def _native(name: str, intent: ArtifactInstallIntent = ArtifactInstallIntent.AVAILABLE) -> GovernedArtifact:
+def _native(
+    name: str, intent: ArtifactInstallIntent = ArtifactInstallIntent.AVAILABLE
+) -> GovernedArtifact:
     return GovernedArtifact(kind=ArtifactKind.NATIVE_INTEGRATION, name=name, install_intent=intent)
 
 
@@ -96,9 +102,7 @@ _FULL_CATALOG = GovernedArtifactsCatalog(
             ProviderArtifactBinding(provider="claude", native_ref="skills/review"),
             ProviderArtifactBinding(provider="codex", native_ref="skills/review"),
         ),
-        "github-mcp": (
-            ProviderArtifactBinding(provider="claude", native_ref="mcp/github"),
-        ),
+        "github-mcp": (ProviderArtifactBinding(provider="claude", native_ref="mcp/github"),),
         "claude-hooks": (
             ProviderArtifactBinding(
                 provider="claude",
@@ -435,9 +439,7 @@ class TestProviderSpecificContract:
             catalog=_FULL_CATALOG,
         )
         result = resolve_render_plan(org, "team", "codex")
-        claude_only_diags = [
-            d for d in result.diagnostics if d.artifact_name == "claude-hooks"
-        ]
+        claude_only_diags = [d for d in result.diagnostics if d.artifact_name == "claude-hooks"]
         assert len(claude_only_diags) == 1
         assert "codex" in claude_only_diags[0].reason
 
@@ -844,9 +846,7 @@ class TestResolveSingleBundleContract:
 
     def test_missing_bundle_fail_closed_raises(self) -> None:
         with pytest.raises(BundleResolutionError):
-            _resolve_single_bundle(
-                "nonexistent", "claude", _FULL_CATALOG, fail_closed=True
-            )
+            _resolve_single_bundle("nonexistent", "claude", _FULL_CATALOG, fail_closed=True)
 
     def test_disabled_bundle_returns_empty_plan(self) -> None:
         catalog = GovernedArtifactsCatalog(

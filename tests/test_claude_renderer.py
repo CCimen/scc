@@ -114,9 +114,7 @@ class TestWrongProvider:
 
     def test_non_claude_binding_in_claude_plan(self, workspace: Path) -> None:
         plan = _plan(
-            bindings=(
-                ProviderArtifactBinding(provider="codex", native_ref="skills/foo"),
-            ),
+            bindings=(ProviderArtifactBinding(provider="codex", native_ref="skills/foo"),),
         )
         result = render_claude_artifacts(plan, workspace)
         assert len(result.warnings) == 1
@@ -173,14 +171,14 @@ class TestSkillBinding:
 
     def test_skill_no_native_ref_produces_warning(self, workspace: Path) -> None:
         plan = _plan(
-            bindings=(
-                ProviderArtifactBinding(provider="claude"),
-            ),
+            bindings=(ProviderArtifactBinding(provider="claude"),),
         )
         result = render_claude_artifacts(plan, workspace)
         assert len(result.warnings) >= 1
-        assert any("no native_ref" in w or "no recognised" in w.lower()
-                    or "no native_ref" in w.lower() for w in result.warnings)
+        assert any(
+            "no native_ref" in w or "no recognised" in w.lower() or "no native_ref" in w.lower()
+            for w in result.warnings
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -447,9 +445,7 @@ class TestMixedBundle:
         result = render_claude_artifacts(plan, workspace)
 
         # Skill file
-        skill_path = (
-            workspace / SCC_MANAGED_DIR / "skills" / "skills_code-review" / "skill.json"
-        )
+        skill_path = workspace / SCC_MANAGED_DIR / "skills" / "skills_code-review" / "skill.json"
         assert skill_path.exists()
 
         # MCP server in settings
@@ -457,9 +453,7 @@ class TestMixedBundle:
 
         # Hooks + marketplace
         assert (workspace / SCC_MANAGED_DIR / "hooks" / "github-hooks.json").exists()
-        assert "github-marketplace" in result.settings_fragment.get(
-            "extraKnownMarketplaces", {}
-        )
+        assert "github-marketplace" in result.settings_fragment.get("extraKnownMarketplaces", {})
 
         # Audit file written
         audit_file = workspace / ".claude" / ".scc-settings-github-dev.json"
@@ -598,9 +592,7 @@ class TestReturnType:
 
 
 class TestSkillMaterializationFailure:
-    def test_read_only_workspace_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_read_only_workspace_raises_materialization_error(self, workspace: Path) -> None:
         """Skill write to read-only dir raises MaterializationError."""
         # Create the parent dir then make it read-only
         managed = workspace / SCC_MANAGED_DIR / "skills"
@@ -625,9 +617,7 @@ class TestSkillMaterializationFailure:
         # Cleanup permissions for pytest tmp_path cleanup
         managed.chmod(0o755)
 
-    def test_materialization_error_has_structured_fields(
-        self, workspace: Path
-    ) -> None:
+    def test_materialization_error_has_structured_fields(self, workspace: Path) -> None:
         err = MaterializationError(
             bundle_id="b1",
             artifact_name="my-skill",
@@ -640,9 +630,7 @@ class TestSkillMaterializationFailure:
 
 
 class TestNativeIntegrationMaterializationFailure:
-    def test_hooks_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_hooks_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """hooks file write to read-only dir → MaterializationError."""
         hooks_dir = workspace / SCC_MANAGED_DIR / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)
@@ -661,9 +649,7 @@ class TestNativeIntegrationMaterializationFailure:
 
         hooks_dir.chmod(0o755)
 
-    def test_instructions_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_instructions_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """instructions write to read-only dir → MaterializationError."""
         instr_dir = workspace / SCC_MANAGED_DIR / "instructions"
         instr_dir.mkdir(parents=True, exist_ok=True)
@@ -684,9 +670,7 @@ class TestNativeIntegrationMaterializationFailure:
 
 
 class TestSettingsFragmentWriteFailure:
-    def test_audit_file_write_failure_raises_materialization_error(
-        self, workspace: Path
-    ) -> None:
+    def test_audit_file_write_failure_raises_materialization_error(self, workspace: Path) -> None:
         """Settings audit file write to read-only .claude/ → MaterializationError."""
         claude_dir = workspace / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
@@ -723,6 +707,7 @@ class TestMergeConflictErrorStructure:
 class TestRendererErrorHierarchy:
     def test_materialization_error_is_renderer_error(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = MaterializationError(
             user_message="test",
             bundle_id="b",
@@ -735,6 +720,7 @@ class TestRendererErrorHierarchy:
 
     def test_merge_conflict_error_is_renderer_error(self) -> None:
         from scc_cli.core.errors import RendererError
+
         err = MergeConflictError(
             user_message="test",
             bundle_id="b",
@@ -786,9 +772,7 @@ class TestSkippedCodexOnlyBinding:
         result = render_claude_artifacts(plan, workspace)
 
         # Claude skill rendered
-        skill_path = (
-            workspace / SCC_MANAGED_DIR / "skills" / "skills_code-review" / "skill.json"
-        )
+        skill_path = workspace / SCC_MANAGED_DIR / "skills" / "skills_code-review" / "skill.json"
         assert skill_path.exists()
 
         # Codex binding produced a warning
@@ -1183,20 +1167,12 @@ class TestIdempotencyFileContent:
         )
         render_claude_artifacts(plan, workspace)
         first_bytes = (
-            workspace
-            / SCC_MANAGED_DIR
-            / "skills"
-            / "skills_deterministic"
-            / "skill.json"
+            workspace / SCC_MANAGED_DIR / "skills" / "skills_deterministic" / "skill.json"
         ).read_bytes()
 
         render_claude_artifacts(plan, workspace)
         second_bytes = (
-            workspace
-            / SCC_MANAGED_DIR
-            / "skills"
-            / "skills_deterministic"
-            / "skill.json"
+            workspace / SCC_MANAGED_DIR / "skills" / "skills_deterministic" / "skill.json"
         ).read_bytes()
 
         assert first_bytes == second_bytes
@@ -1359,9 +1335,7 @@ class TestPortableSkillRendering:
     def test_portable_skill_minimal_metadata(self, workspace: Path) -> None:
         """Portable skill with no source metadata still writes file."""
         plan = _plan(
-            portable_artifacts=(
-                PortableArtifact(name="minimal-skill", kind=ArtifactKind.SKILL),
-            ),
+            portable_artifacts=(PortableArtifact(name="minimal-skill", kind=ArtifactKind.SKILL),),
         )
         result = render_claude_artifacts(plan, workspace)
         assert len(result.rendered_paths) == 1
@@ -1373,9 +1347,7 @@ class TestPortableSkillRendering:
     def test_portable_skill_name_sanitized(self, workspace: Path) -> None:
         """Skill name with slashes is sanitized for filesystem."""
         plan = _plan(
-            portable_artifacts=(
-                PortableArtifact(name="org/team/skill", kind=ArtifactKind.SKILL),
-            ),
+            portable_artifacts=(PortableArtifact(name="org/team/skill", kind=ArtifactKind.SKILL),),
         )
         result = render_claude_artifacts(plan, workspace)
         assert len(result.rendered_paths) == 1
@@ -1389,9 +1361,7 @@ class TestPortableSkillRendering:
         block.write_text("not-a-dir")
 
         plan = _plan(
-            portable_artifacts=(
-                PortableArtifact(name="blocked-skill", kind=ArtifactKind.SKILL),
-            ),
+            portable_artifacts=(PortableArtifact(name="blocked-skill", kind=ArtifactKind.SKILL),),
         )
         with pytest.raises(MaterializationError):
             render_claude_artifacts(plan, workspace)

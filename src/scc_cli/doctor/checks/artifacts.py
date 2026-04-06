@@ -168,10 +168,7 @@ def _format_resolution_result(
     if diag_count > 0:
         parts.append(f"diagnostics={diag_count}")
 
-    has_errors = any(
-        "not found" in d.reason
-        for d in result.diagnostics
-    )
+    has_errors = any("not found" in d.reason for d in result.diagnostics)
 
     if has_errors:
         detail_lines: list[str] = []
@@ -232,9 +229,7 @@ def check_catalog_health() -> CheckResult | None:
         # Check that bindings reference existing artifacts
         for art_name in catalog.bindings:
             if art_name not in catalog.artifacts:
-                problems.append(
-                    f"binding exists for unknown artifact '{art_name}'"
-                )
+                problems.append(f"binding exists for unknown artifact '{art_name}'")
 
         if problems:
             summary = "; ".join(problems[:3])
@@ -318,16 +313,17 @@ def build_artifact_diagnostics_summary(
             result = resolve_render_plan(org, profile_name, provider)
             plans_data: list[dict[str, object]] = []
             for plan in result.plans:
-                plans_data.append({
-                    "bundle_id": plan.bundle_id,
-                    "provider": plan.provider,
-                    "effective_artifacts": list(plan.effective_artifacts),
-                    "skipped": list(plan.skipped),
-                    "binding_count": len(plan.bindings),
-                })
+                plans_data.append(
+                    {
+                        "bundle_id": plan.bundle_id,
+                        "provider": plan.provider,
+                        "effective_artifacts": list(plan.effective_artifacts),
+                        "skipped": list(plan.skipped),
+                        "binding_count": len(plan.bindings),
+                    }
+                )
             diagnostics_data: list[dict[str, str]] = [
-                {"artifact": d.artifact_name, "reason": d.reason}
-                for d in result.diagnostics
+                {"artifact": d.artifact_name, "reason": d.reason} for d in result.diagnostics
             ]
             summary["resolution"] = {
                 "state": "resolved",

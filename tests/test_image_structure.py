@@ -73,9 +73,7 @@ class TestSccBaseDockerfile:
     def test_codex_dir_permissions_0700(self, normalized: str) -> None:
         """scc-base sets .codex dir to 0700."""
         chmod_lines = [
-            line.strip()
-            for line in normalized.splitlines()
-            if "chmod" in line and ".codex" in line
+            line.strip() for line in normalized.splitlines() if "chmod" in line and ".codex" in line
         ]
         assert any("0700" in line for line in chmod_lines), (
             f"Expected chmod 0700 on .codex dir, found: {chmod_lines}"
@@ -99,9 +97,7 @@ class TestSccBaseDockerfile:
     def test_chown_agent_codex(self, normalized: str) -> None:
         """scc-base chowns .codex to agent:agent."""
         chown_lines = [
-            line.strip()
-            for line in normalized.splitlines()
-            if "chown" in line and ".codex" in line
+            line.strip() for line in normalized.splitlines() if "chown" in line and ".codex" in line
         ]
         assert any("agent:agent" in line for line in chown_lines), (
             f"Expected chown agent:agent on .codex, found: {chown_lines}"
@@ -110,9 +106,7 @@ class TestSccBaseDockerfile:
     def test_final_user_is_agent(self, dockerfile: str) -> None:
         """scc-base ends with USER agent (non-root)."""
         user_lines = [
-            line.strip()
-            for line in dockerfile.splitlines()
-            if line.strip().startswith("USER ")
+            line.strip() for line in dockerfile.splitlines() if line.strip().startswith("USER ")
         ]
         assert user_lines, "No USER directive found"
         assert user_lines[-1] == "USER agent"
@@ -190,9 +184,7 @@ class TestSccAgentCodexDockerfile:
     def test_final_user_is_agent(self, dockerfile: str) -> None:
         """scc-agent-codex ends with USER agent (non-root)."""
         user_lines = [
-            line.strip()
-            for line in dockerfile.splitlines()
-            if line.strip().startswith("USER ")
+            line.strip() for line in dockerfile.splitlines() if line.strip().startswith("USER ")
         ]
         assert user_lines, "No USER directive found"
         assert user_lines[-1] == "USER agent"
@@ -228,15 +220,18 @@ class TestSccAgentClaudeDockerfile:
 
     def test_nodesource_bootstrap_uses_clean_system_path(self, dockerfile: str) -> None:
         """scc-agent-claude avoids SCC wrapper PATH interception during bootstrap."""
-        assert 'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' in dockerfile
-        assert '/usr/bin/curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x"' in dockerfile
+        assert (
+            'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"'
+            in dockerfile
+        )
+        assert (
+            '/usr/bin/curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x"' in dockerfile
+        )
 
     def test_final_user_is_agent(self, dockerfile: str) -> None:
         """scc-agent-claude ends with USER agent (non-root)."""
         user_lines = [
-            line.strip()
-            for line in dockerfile.splitlines()
-            if line.strip().startswith("USER ")
+            line.strip() for line in dockerfile.splitlines() if line.strip().startswith("USER ")
         ]
         assert user_lines[-1] == "USER agent"
 

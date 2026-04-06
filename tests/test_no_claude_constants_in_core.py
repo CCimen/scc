@@ -18,16 +18,18 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "scc_cli"
 
 # Claude-specific constant names that must NOT appear in core/constants.py.
 # These were localized to consumer modules in S04/T01-T02.
-_CLAUDE_CONSTANTS = frozenset({
-    "AGENT_NAME",
-    "SANDBOX_IMAGE",
-    "AGENT_CONFIG_DIR",
-    "SANDBOX_DATA_VOLUME",
-    "SANDBOX_DATA_MOUNT",
-    "CREDENTIAL_PATHS",
-    "OAUTH_CREDENTIAL_KEY",
-    "DEFAULT_MARKETPLACE_REPO",
-})
+_CLAUDE_CONSTANTS = frozenset(
+    {
+        "AGENT_NAME",
+        "SANDBOX_IMAGE",
+        "AGENT_CONFIG_DIR",
+        "SANDBOX_DATA_VOLUME",
+        "SANDBOX_DATA_MOUNT",
+        "CREDENTIAL_PATHS",
+        "OAUTH_CREDENTIAL_KEY",
+        "DEFAULT_MARKETPLACE_REPO",
+    }
+)
 
 
 def _find_name_tokens(source: str, names: frozenset[str]) -> list[tuple[int, str]]:

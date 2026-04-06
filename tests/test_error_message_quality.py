@@ -172,7 +172,9 @@ class TestProviderImageBuildErrorMessages:
     def test_no_build_command_fallback(self) -> None:
         """Without build_command, suggested_action is still actionable."""
         err = ProviderImageBuildError(provider_id="claude")
-        assert "try again" in err.suggested_action.lower() or "retry" in err.suggested_action.lower()
+        assert (
+            "try again" in err.suggested_action.lower() or "retry" in err.suggested_action.lower()
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -198,7 +200,9 @@ class TestProviderNotAllowedErrorMessages:
             provider_id="codex",
             allowed_providers=("claude",),
         )
-        assert "admin" in err.suggested_action.lower() or "allowed_providers" in err.suggested_action
+        assert (
+            "admin" in err.suggested_action.lower() or "allowed_providers" in err.suggested_action
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -277,7 +281,9 @@ class TestLaunchPolicyBlockedErrorMessages:
             provider_id="codex",
             network_policy="enforced",
         )
-        assert "policy" in err.suggested_action.lower() or "provider" in err.suggested_action.lower()
+        assert (
+            "policy" in err.suggested_action.lower() or "provider" in err.suggested_action.lower()
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -602,6 +608,3 @@ class TestErrorHierarchySanity:
         """Exit codes match the documented scheme (2=usage, 3=prereq, 4=tool, 5=internal)."""
         err = error_cls(**kwargs)
         assert err.exit_code == expected_exit_code
-
-
-
