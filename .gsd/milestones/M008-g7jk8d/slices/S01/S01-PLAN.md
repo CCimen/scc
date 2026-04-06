@@ -20,7 +20,7 @@ These tests document current behavior as the regression baseline.
   - Estimate: 40min
   - Files: tests/test_launch_preflight_characterization.py
   - Verify: uv run pytest tests/test_launch_preflight_characterization.py -v
-- [ ] **T02: Create shared launch preflight module with typed readiness model and pure/side-effect separation** — Create src/scc_cli/commands/launch/preflight.py with clean three-function split and fully typed readiness model.
+- [x] **T02: Created commands/launch/preflight.py with typed LaunchReadiness model and three-function preflight split (resolve → collect → ensure), verified by 39 new tests** — Create src/scc_cli/commands/launch/preflight.py with clean three-function split and fully typed readiness model.
 
 **Typed readiness model (not loose booleans/strings):**
 

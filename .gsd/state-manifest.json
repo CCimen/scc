@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T12:02:15.917Z",
+  "exported_at": "2026-04-06T12:12:16.966Z",
   "milestones": [
     {
       "id": "M001",
@@ -6969,19 +6969,25 @@
       "milestone_id": "M008-g7jk8d",
       "slice_id": "S01",
       "id": "T02",
-      "title": "Create shared launch preflight module with typed readiness model and pure/side-effect separation",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Created commands/launch/preflight.py with typed LaunchReadiness model and three-function preflight split (resolve → collect → ensure), verified by 39 new tests",
+      "status": "complete",
+      "one_liner": "Created commands/launch/preflight.py with typed LaunchReadiness model and three-function preflight split (resolve → collect → ensure), verified by 39 new tests",
+      "narrative": "Built src/scc_cli/commands/launch/preflight.py with the full typed readiness model: ImageStatus, AuthStatus, ProviderResolutionSource enums and a frozen LaunchReadiness dataclass. The module implements the three-function split: (1) allowed_provider_ids() — pure team policy extraction, (2) resolve_launch_provider() — wraps choose_start_provider() with source tracking via ProviderResolutionSource, (3) collect_launch_readiness() — reads image and auth state from adapters into the typed model, (4) ensure_launch_ready() — fixes gaps using ensure_provider_image and auth bootstrap, or raises ProviderNotReadyError in non-interactive mode. Added 39 new tests across 9 test classes covering all public functions and edge cases.",
+      "verification_result": "All 51 tests in test_launch_preflight.py pass (12 existing + 39 new). ruff check clean. mypy clean. Full suite: 4960 passed with same 26 pre-existing failures — no regressions.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T12:12:16.947Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Used deferred imports inside ensure_launch_ready() and _check_image_available() for subprocess-heavy modules; patched original module paths in tests accordingly. _ensure_auth delegates via show_notice callback rather than calling provider.bootstrap_auth() directly.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/launch/preflight.py",
+        "tests/test_launch_preflight.py"
+      ],
+      "key_decisions": [
+        "Deferred imports for ensure_provider_image to keep preflight.py free of subprocess at module level",
+        "_infer_resolution_source mirrors choose_start_provider precedence rather than modifying it"
+      ],
+      "full_summary_md": "---\nid: T02\nparent: S01\nmilestone: M008-g7jk8d\nkey_files:\n  - src/scc_cli/commands/launch/preflight.py\n  - tests/test_launch_preflight.py\nkey_decisions:\n  - Deferred imports for ensure_provider_image to keep preflight.py free of subprocess at module level\n  - _infer_resolution_source mirrors choose_start_provider precedence rather than modifying it\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T12:12:16.946Z\nblocker_discovered: false\n---\n\n# T02: Created commands/launch/preflight.py with typed LaunchReadiness model and three-function preflight split (resolve → collect → ensure), verified by 39 new tests\n\n**Created commands/launch/preflight.py with typed LaunchReadiness model and three-function preflight split (resolve → collect → ensure), verified by 39 new tests**\n\n## What Happened\n\nBuilt src/scc_cli/commands/launch/preflight.py with the full typed readiness model: ImageStatus, AuthStatus, ProviderResolutionSource enums and a frozen LaunchReadiness dataclass. The module implements the three-function split: (1) allowed_provider_ids() — pure team policy extraction, (2) resolve_launch_provider() — wraps choose_start_provider() with source tracking via ProviderResolutionSource, (3) collect_launch_readiness() — reads image and auth state from adapters into the typed model, (4) ensure_launch_ready() — fixes gaps using ensure_provider_image and auth bootstrap, or raises ProviderNotReadyError in non-interactive mode. Added 39 new tests across 9 test classes covering all public functions and edge cases.\n\n## Verification\n\nAll 51 tests in test_launch_preflight.py pass (12 existing + 39 new). ruff check clean. mypy clean. Full suite: 4960 passed with same 26 pre-existing failures — no regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_launch_preflight.py -v` | 0 | ✅ pass | 1200ms |\n| 2 | `uv run ruff check src/scc_cli/commands/launch/preflight.py` | 0 | ✅ pass | 2400ms |\n| 3 | `uv run mypy src/scc_cli/commands/launch/preflight.py` | 0 | ✅ pass | 2400ms |\n| 4 | `uv run pytest` | 1 | ✅ pass (pre-existing failures only, 4960 passed) | 65000ms |\n\n## Deviations\n\nUsed deferred imports inside ensure_launch_ready() and _check_image_available() for subprocess-heavy modules; patched original module paths in tests accordingly. _ensure_auth delegates via show_notice callback rather than calling provider.bootstrap_auth() directly.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/preflight.py`\n- `tests/test_launch_preflight.py`\n",
       "description": "Create src/scc_cli/commands/launch/preflight.py with clean three-function split and fully typed readiness model.\n\n**Typed readiness model (not loose booleans/strings):**\n\n```python\nclass ImageStatus(Enum):\n    AVAILABLE = \"available\"\n    MISSING = \"missing\"\n    UNKNOWN = \"unknown\"\n\nclass AuthStatus(Enum):\n    PRESENT = \"present\"\n    MISSING = \"missing\"\n    EXPIRED = \"expired\"\n    UNKNOWN = \"unknown\"\n\nclass ProviderResolutionSource(Enum):\n    EXPLICIT = \"explicit\"         # --provider flag\n    RESUME = \"resume\"             # resumed session\n    WORKSPACE_LAST_USED = \"workspace_last_used\"\n    GLOBAL_PREFERRED = \"global_preferred\"\n    AUTO_SINGLE = \"auto_single\"   # only one provider connected/allowed\n    PROMPTED = \"prompted\"         # user chose from interactive picker\n\n@dataclass(frozen=True)\nclass LaunchReadiness:\n    provider_id: str\n    resolution_source: ProviderResolutionSource\n    image_status: ImageStatus\n    auth_status: AuthStatus\n    requires_image_bootstrap: bool   # derived: image_status is MISSING\n    requires_auth_bootstrap: bool    # derived: auth_status is MISSING\n    launch_ready: bool               # derived: both image + auth present\n```\n\nThis prevents ad hoc branching glue — callers pattern-match on enum values, not string comparisons or bool combos.\n\n**Pure decision functions (no I/O, fully testable):**\n1. `allowed_provider_ids(normalized_org, team)` — moved from flow.py, made public\n2. `resolve_launch_provider(...)` → `(provider_id, ProviderResolutionSource)` — wraps choose_start_provider() with standard parameter assembly. Returns resolved provider + source. Pure data in → data out.\n3. `collect_launch_readiness(provider_id, resolution_source, adapters)` → `LaunchReadiness` — checks image availability and auth readiness via adapter, returns fully typed readiness state. No fixing, no side effects.\n\n**Side-effect function:**\n4. `ensure_launch_ready(readiness, *, console, non_interactive, show_notice)` — calls ensure_provider_image() and ensure_provider_auth() based on LaunchReadiness gaps. In non-interactive mode: raises typed ProviderNotReadyError with actionable guidance. Uses readiness.requires_image_bootstrap / requires_auth_bootstrap to decide — no re-probing.\n\n**Architecture guards (D046):**\n- Module stays command-layer only. No imports from core/ except types and errors.\n- No provider-specific behavior — dispatches to provider_image.py and auth_bootstrap.py.\n- No UI wording beyond structured error messages (user_message, suggested_action).\n- Returns structured typed results; callers own rendering and launch orchestration.\n\n**Caller pattern:**\n```python\nprovider_id, source = resolve_launch_provider(...)\nreadiness = collect_launch_readiness(provider_id, source, adapters)\nensure_launch_ready(readiness, console=..., non_interactive=...)\ndeps, plan = prepare_live_start_plan(request, ...)\n# caller owns: conflict resolution, output rendering, finalize_launch\n```\n\nWrite unit tests for each function independently. Test the enum-based readiness model edge cases. Verify non-interactive contract: missing provider/image/auth → typed error with actionable guidance, never prompts.",
       "estimate": "50min",
       "files": [
@@ -12151,6 +12157,50 @@
       "verdict": "✅ pass (pre-existing failures only)",
       "duration_ms": 68000,
       "created_at": "2026-04-06T12:02:15.875Z"
+    },
+    {
+      "id": 385,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_launch_preflight.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1200,
+      "created_at": "2026-04-06T12:12:16.947Z"
+    },
+    {
+      "id": 386,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check src/scc_cli/commands/launch/preflight.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2400,
+      "created_at": "2026-04-06T12:12:16.947Z"
+    },
+    {
+      "id": 387,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run mypy src/scc_cli/commands/launch/preflight.py",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 2400,
+      "created_at": "2026-04-06T12:12:16.947Z"
+    },
+    {
+      "id": 388,
+      "task_id": "T02",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest",
+      "exit_code": 1,
+      "verdict": "✅ pass (pre-existing failures only, 4960 passed)",
+      "duration_ms": 65000,
+      "created_at": "2026-04-06T12:12:16.947Z"
     }
   ]
 }
