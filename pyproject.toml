@@ -5,13 +5,25 @@ build-backend = "hatchling.build"
 [project]
 name = "scc-cli"
 version = "1.7.3"
-description = "Sandboxed Coding CLI for AI coding agents in Docker sandboxes with team configs and git worktree support"
+description = "Governed runtime for AI coding agents with container sandboxes, network controls, and team-managed configuration"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Cagri Cimen", email = "cagricimeenn@gmail.com" }
 ]
-keywords = ["claude", "ai", "cli", "docker", "git", "worktree"]
+keywords = [
+    "ai",
+    "coding-agent",
+    "claude-code",
+    "codex",
+    "sandbox",
+    "cli",
+    "container",
+    "security",
+    "governance",
+    "developer-tools",
+    "worktree",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -47,8 +59,8 @@ dev = [
 scc = "scc_cli.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/CCimen/scc"
-Documentation = "https://github.com/CCimen/scc#readme"
+Homepage = "https://scc-cli.dev"
+Documentation = "https://scc-cli.dev"
 Repository = "https://github.com/CCimen/scc"
 Issues = "https://github.com/CCimen/scc/issues"
 
