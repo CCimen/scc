@@ -8,7 +8,8 @@ This module provides a clean three-function split for launch preflight:
 
 Architecture guard (D046): command-layer only. No imports from core/ except
 types and errors. No provider-specific behavior — dispatches to
-provider_image.py and auth_bootstrap.py.
+provider_image.py for image bootstrap, and handles auth bootstrap directly
+in ``_ensure_auth()`` (the canonical auth messaging location).
 """
 
 from __future__ import annotations
@@ -320,14 +321,18 @@ def _ensure_auth(
     adapters: Any,
     non_interactive: bool,
     show_notice: Any,
+    provider: Any | None = None,
 ) -> None:
     """Handle auth bootstrap for a provider with missing/expired auth.
 
     Non-interactive: raises ProviderNotReadyError with actionable guidance.
     Interactive: shows the notice, then calls provider.bootstrap_auth()
     to trigger the browser sign-in flow.
+
+    If ``provider`` is passed directly, the adapter lookup via ``adapters``
+    is skipped.  This is used by the deprecated ``auth_bootstrap.py`` redirect
+    which already has the provider in hand.
     """
-    from scc_cli.commands.launch.dependencies import get_agent_provider
     from scc_cli.core.provider_resolution import get_provider_display_name
 
     display_name = get_provider_display_name(readiness.provider_id)
@@ -358,7 +363,11 @@ def _ensure_auth(
         ),
     )
 
-    provider = get_agent_provider(adapters, readiness.provider_id)
+    if provider is None:
+        from scc_cli.commands.launch.dependencies import get_agent_provider
+
+        provider = get_agent_provider(adapters, readiness.provider_id)
+
     if provider is not None:
         try:
             provider.bootstrap_auth()

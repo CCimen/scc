@@ -229,18 +229,32 @@ def test_doctor_auth_check_uses_truthful_vocabulary() -> None:
 
 
 def test_auth_bootstrap_uses_truthful_vocabulary() -> None:
-    """Auth bootstrap messages must use 'auth cache' vocabulary."""
-    bootstrap_path = SRC / "commands" / "launch" / "auth_bootstrap.py"
-    assert bootstrap_path.exists(), f"Expected {bootstrap_path} to exist"
+    """Auth bootstrap messages must use 'auth cache' vocabulary.
 
-    content = bootstrap_path.read_text()
+    Canonical auth messaging lives in preflight.py._ensure_auth.
+    auth_bootstrap.py is a deprecated redirect with no user-facing text.
+    """
+    preflight_path = SRC / "commands" / "launch" / "preflight.py"
+    assert preflight_path.exists(), f"Expected {preflight_path} to exist"
+
+    content = preflight_path.read_text()
 
     # Should reference "auth cache" in user-facing messages
     assert "auth cache" in content, (
-        "auth_bootstrap.py should reference 'auth cache' in user-facing messages"
+        "preflight.py should reference 'auth cache' in user-facing messages"
     )
 
     # Should NOT use "connected" as auth status
     assert '"connected"' not in content and "'connected'" not in content, (
-        "auth_bootstrap.py should not use 'connected' as auth status wording"
+        "preflight.py should not use 'connected' as auth status wording"
+    )
+
+    # auth_bootstrap.py still exists as a deprecated redirect
+    bootstrap_path = SRC / "commands" / "launch" / "auth_bootstrap.py"
+    assert bootstrap_path.exists(), (
+        "auth_bootstrap.py should exist as a deprecated redirect"
+    )
+    bootstrap_content = bootstrap_path.read_text()
+    assert "deprecated" in bootstrap_content.lower(), (
+        "auth_bootstrap.py should be marked as deprecated"
     )

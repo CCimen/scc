@@ -30,7 +30,7 @@ Steps:
   - Estimate: 30min
   - Files: src/scc_cli/commands/launch/flow.py, src/scc_cli/commands/launch/flow_interactive.py, src/scc_cli/commands/launch/preflight.py, tests/test_launch_preflight_guardrail.py, tests/test_start_dryrun.py, tests/test_integration.py
   - Verify: uv run pytest tests/test_launch_preflight_guardrail.py tests/test_start_dryrun.py tests/test_integration.py -v && grep -rn ensure_provider_image src/scc_cli/commands/launch/flow.py && grep -rn ensure_provider_auth src/scc_cli/commands/launch/flow.py
-- [ ] **T03: Centralize auth messaging and eliminate auth_bootstrap.py duplication** — After T01 and T02, auth_bootstrap.py's ensure_provider_auth is no longer called by any launch site. The auth messaging (non-interactive error text, interactive notice text) is duplicated between auth_bootstrap.py and preflight.py._ensure_auth.
+- [x] **T03: Reduced auth_bootstrap.py to a deprecated redirect delegating to preflight._ensure_auth, making _ensure_auth the single canonical location for all auth messaging** — After T01 and T02, auth_bootstrap.py's ensure_provider_auth is no longer called by any launch site. The auth messaging (non-interactive error text, interactive notice text) is duplicated between auth_bootstrap.py and preflight.py._ensure_auth.
 
 Steps:
 1. Verify no callers of ensure_provider_auth remain outside tests: grep -rn 'ensure_provider_auth' src/scc_cli/ should return only the definition and test imports.
