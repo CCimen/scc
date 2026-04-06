@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T17:05:13.037Z",
+  "exported_at": "2026-04-06T17:15:57.921Z",
   "milestones": [
     {
       "id": "M001",
@@ -412,10 +412,10 @@
     {
       "id": "M009-xwi4bt",
       "title": "Preflight Convergence and Auth Bootstrap Unification",
-      "status": "queued",
+      "status": "complete",
       "depends_on": [],
       "created_at": "2026-04-06T16:14:15.213Z",
-      "completed_at": null,
+      "completed_at": "2026-04-06T17:15:57.874Z",
       "vision": "Every launch path (start, wizard, worktree, dashboard) uses the same three-function preflight sequence with no structural asymmetry. Auth bootstrap messaging lives in one place. Setup shows three-tier readiness consistently in both the status panel and completion summary.",
       "success_criteria": [
         "flow.py and flow_interactive.py use collect_launch_readiness() + ensure_launch_ready() — no direct ensure_provider_image/ensure_provider_auth calls remain in any launch site",
@@ -1352,16 +1352,16 @@
       "milestone_id": "M009-xwi4bt",
       "id": "S02",
       "title": "Setup three-tier consistency and final verification",
-      "status": "pending",
+      "status": "complete",
       "risk": "low",
       "depends": [
         "S01"
       ],
       "demo": "setup.py _render_provider_status shows launch-ready/auth cache present/image available/sign-in needed. Same as show_setup_complete.",
       "created_at": "2026-04-06T16:14:59.678Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-06T17:08:40.987Z",
+      "full_summary_md": "---\nid: S02\nparent: M009-xwi4bt\nmilestone: M009-xwi4bt\nprovides:\n  - Consistent three-tier readiness vocabulary across all setup surfaces\n  - Provider preference hints in setup completion next-steps\nrequires:\n  - slice: S01\n    provides: Unified preflight path with consistent auth vocabulary\naffects:\n  []\nkey_files:\n  - src/scc_cli/setup.py\nkey_decisions:\n  - Reused existing _three_tier_status() helper in _render_provider_status rather than duplicating logic\npatterns_established:\n  - All setup readiness surfaces (onboarding panel and completion summary) use the single _three_tier_status() helper — no inline status logic\nobservability_surfaces:\n  - none\ndrill_down_paths:\n  - .gsd/milestones/M009-xwi4bt/slices/S02/tasks/T01-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-06T17:08:40.988Z\nblocker_discovered: false\n---\n\n# S02: Setup three-tier consistency and final verification\n\n**_render_provider_status now uses _three_tier_status() so both the onboarding status panel and the completion summary show identical four-state readiness vocabulary, plus provider preference hints in setup next-steps.**\n\n## What Happened\n\nThis was a small, focused slice with a single task. The setup wizard's _render_provider_status() had inline two-tier logic (\"auth cache present\" / \"sign-in needed\") while show_setup_complete() already used the shared _three_tier_status() helper for four-state readiness display (launch-ready / auth cache present / image available / sign-in needed). T01 replaced the inline logic with a call to _three_tier_status(provider_id, state), making both surfaces consistent.\n\nAdditionally, the setup completion next-steps block now includes `scc provider show` and `scc provider set` hints so users know how to manage provider preferences immediately after setup.\n\n## Verification\n\nExit gate fully green: `uv run ruff check` (0 issues), `uv run mypy src/scc_cli` (303 files, 0 issues), `uv run pytest -q` (5117 passed, 23 skipped, 2 xfailed). grep confirms _render_provider_status calls _three_tier_status at line 460, matching the same helper used by show_setup_complete at lines 390 and 396.\n\n## Requirements Advanced\n\n- R001 — Eliminated duplicated inline status logic in setup.py; both readiness surfaces now share one helper, reducing maintenance surface and inconsistency risk.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nNone.\n\n## Known Limitations\n\nNone.\n\n## Follow-ups\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/setup.py` — Replaced inline two-tier status logic in _render_provider_status with _three_tier_status() call; added scc provider show/set hints to setup completion next-steps\n",
+      "full_uat_md": "# S02: Setup three-tier consistency and final verification — UAT\n\n**Milestone:** M009-xwi4bt\n**Written:** 2026-04-06T17:08:40.988Z\n\n## UAT: Setup Three-Tier Consistency\n\n### Preconditions\n- SCC installed and configured with at least one provider (Claude or Codex)\n- Docker/OCI runtime available for image-present checks\n\n### Test 1: Onboarding status panel shows four-state readiness\n1. Run `scc setup` (or trigger the onboarding status panel)\n2. Observe the provider status table\n3. **Expected:** Each provider shows one of: ✅ launch-ready, 🔑 auth cache present, 📦 image available, ❌ sign-in needed\n4. **Expected:** No provider shows the old two-tier wording (\"Docker available\" / \"not configured\")\n\n### Test 2: Setup completion summary matches onboarding panel vocabulary\n1. Complete setup successfully\n2. Observe the completion summary's provider readiness section\n3. **Expected:** Uses the same four-state vocabulary as the onboarding status panel (launch-ready / auth cache present / image available / sign-in needed)\n4. **Expected:** Both surfaces produce identical status text for the same provider state\n\n### Test 3: Provider preference hints in next-steps\n1. Complete setup successfully\n2. Observe the \"Get started\" next-steps section\n3. **Expected:** Shows `scc provider show` with description \"Show current provider preference\"\n4. **Expected:** Shows `scc provider set` with description \"Set preference (ask|claude|codex)\"\n\n### Test 4: Provider with auth but no image\n1. Configure a provider with auth credentials cached but container image not pulled\n2. Run setup and observe status\n3. **Expected:** Shows \"auth cache present\" (not \"launch-ready\" and not \"sign-in needed\")\n\n### Test 5: Provider with image but no auth\n1. Pull provider image but remove auth credentials\n2. Run setup and observe status\n3. **Expected:** Shows \"image available\" (not \"launch-ready\" and not \"sign-in needed\")\n\n### Edge Cases\n- **No providers configured:** Both panels show ❌ sign-in needed for all providers\n- **Both providers launch-ready:** Both panels show ✅ launch-ready for both\n",
       "goal": "Make _render_provider_status use _three_tier_status() so setup shows consistent three-tier readiness in both the onboarding status panel and the completion summary.",
       "success_criteria": "setup.py _render_provider_status calls _three_tier_status(). No 'auth cache present' / 'sign-in needed' two-tier pattern remains in _render_provider_status. Full suite 5114+ passed. Ruff clean, mypy clean.",
       "proof_level": "automated — targeted pytest + full suite",

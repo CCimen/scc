@@ -48,8 +48,8 @@ Eliminated Claude assumptions from shared/core/operator paths. ProviderRuntimeSp
 ### M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening ✅
 Consolidated five duplicated launch preflight sequences into one shared module. S01: shared preflight module with typed LaunchReadiness model, flow.py and flow_interactive.py migrated, 7 structural guardrail tests. S02: auth vocabulary truthfulness (three-tier distinction), Docker Desktop removed from active paths, provider adapter dispatch consolidated via shared get_agent_provider() helper, 15 new guardrail tests. S03: 106 edge-case and regression-guard tests covering workspace persistence, resume-after-drift, setup idempotency, and error message quality. Auth bootstrap exception wrapping. Legacy Docker Desktop module documentation. 294 net new tests (5114 total), zero regressions.
 
-### M009 — Preflight Convergence and Auth Bootstrap Unification (in progress)
-S01 ✅: All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py, and the start command) now use collect_launch_readiness() + ensure_launch_ready() through the shared preflight module. ensure_launch_ready() actually calls bootstrap_auth() when auth is missing (silent gap closed). auth_bootstrap.py reduced to deprecated redirect. Auth messaging centralized in preflight._ensure_auth(). D048 superseded by D049. 3 net new tests (5117 total).
+### M009 — Preflight Convergence and Auth Bootstrap Unification ✅
+All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py, and the start command) now use collect_launch_readiness() + ensure_launch_ready() through the shared preflight module. ensure_launch_ready() actually calls bootstrap_auth() when auth is missing (silent gap closed). auth_bootstrap.py reduced to deprecated redirect. Auth messaging centralized in preflight._ensure_auth(). Setup's _render_provider_status uses _three_tier_status() so both onboarding panel and completion summary show identical four-state readiness vocabulary. D048 superseded by D049. 3 net new tests (5117 total).
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -60,7 +60,7 @@ S01 ✅: All five launch sites (flow.py, flow_interactive.py, worktree_commands.
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
 7. ~~M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup~~ ✅
 8. ~~M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening~~ ✅
-9. **M009 — Preflight Convergence and Auth Bootstrap Unification** (S01 ✅, S02 pending)
+9. ~~M009 — Preflight Convergence and Auth Bootstrap Unification~~ ✅
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all nine milestones.
@@ -107,7 +107,7 @@ S01 ✅: All five launch sites (flow.py, flow_interactive.py, worktree_commands.
 - Unknown, forbidden, or unavailable providers fail closed in active launch logic — never silently fall back to Claude.
 - **AgentRunner owns settings serialization format**: `build_settings()` produces `rendered_bytes: bytes` + `path` + `suffix`, not dict.
 - **Product name is 'SCC — Sandboxed Coding CLI'** consistently across README, pyproject.toml, CLI branding, D045, and all user-facing surfaces.
-- **Auth vocabulary is three-tier truthful**: 'auth cache present' (file exists), 'image available' (container image present), 'launch-ready' (both). No surface uses 'connected' or standalone 'ready' to describe partial state.
+- **Auth vocabulary is three-tier truthful**: 'auth cache present' (file exists), 'image available' (container image present), 'launch-ready' (both). No surface uses 'connected' or standalone 'ready' to describe partial state. All setup surfaces (onboarding panel and completion summary) use the single _three_tier_status() helper.
 - **Docker Desktop references** are confined to docker/, adapters/, core/errors.py, and doctor/ layers only. Active user-facing commands/ paths use 'Docker' or 'container runtime'.
 - **Provider adapter dispatch** uses a shared `get_agent_provider(adapters, provider_id)` helper in dependencies.py — no hardcoded per-site dispatch dicts.
 - **40+ guardrail tests** across test_docs_truthfulness.py, test_auth_vocabulary_guardrail.py, test_lifecycle_inventory_consistency.py, and test_launch_preflight_guardrail.py mechanically prevent regression.
