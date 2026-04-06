@@ -9,7 +9,6 @@ Re-exports public names for backward compatibility.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import typer
@@ -30,10 +29,7 @@ from ...presentation.json.launch_json import build_start_dry_run_envelope
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
-from ...workspace_local_config import (
-    get_workspace_last_used_provider,
-    set_workspace_last_used_provider,
-)
+from ...workspace_local_config import set_workspace_last_used_provider
 from .auth_bootstrap import ensure_provider_auth
 from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
@@ -43,11 +39,7 @@ from .flow_session import (
     _record_session_and_context,
     _resolve_session_selection,
 )
-from .provider_choice import (
-    choose_start_provider,
-    connected_provider_ids,
-    prompt_for_provider_choice,
-)
+from .preflight import resolve_launch_provider
 from .provider_image import ensure_provider_image
 from .render import (
     build_dry_run_data,
@@ -68,52 +60,6 @@ __all__ = [
     "_apply_personal_profile",
     "_record_session_and_context",
 ]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Provider resolution helper
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def _allowed_provider_ids(
-    normalized_org: NormalizedOrgConfig | None,
-    team: str | None,
-) -> tuple[str, ...]:
-    """Return the allowed providers for the active team, or all when unrestricted."""
-    allowed_providers: tuple[str, ...] = ()
-    if normalized_org is not None and team:
-        team_profile = normalized_org.get_profile(team)
-        if team_profile is not None:
-            allowed_providers = team_profile.allowed_providers
-
-    return allowed_providers
-
-
-def _resolve_provider(
-    cli_flag: str | None,
-    normalized_org: NormalizedOrgConfig | None,
-    team: str | None,
-    *,
-    workspace_path: Path,
-    adapters: Any,
-    non_interactive: bool,
-    resume_provider: str | None,
-) -> str | None:
-    """Resolve the provider for this start request."""
-    allowed_provider_ids = _allowed_provider_ids(normalized_org, team)
-    return choose_start_provider(
-        cli_flag=cli_flag,
-        resume_provider=resume_provider,
-        workspace_last_used=get_workspace_last_used_provider(workspace_path),
-        config_provider=config.get_selected_provider(),
-        connected_provider_ids=connected_provider_ids(
-            adapters,
-            allowed_providers=allowed_provider_ids,
-        ),
-        allowed_providers=allowed_provider_ids,
-        non_interactive=non_interactive,
-        prompt_choice=prompt_for_provider_choice,
-    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -293,14 +239,15 @@ def start(
     normalized_org = NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None
     # Normalize typer default: direct calls pass OptionInfo, not None.
     cli_provider = provider if isinstance(provider, str) else None
-    resolved_provider = _resolve_provider(
-        cli_provider,
-        normalized_org,
-        team,
+    resolved_provider, _resolution_source = resolve_launch_provider(
+        cli_flag=cli_provider,
+        resume_provider=session_provider,
         workspace_path=workspace_path,
+        config_provider=config.get_selected_provider(),
+        normalized_org=normalized_org,
+        team=team,
         adapters=adapters,
         non_interactive=non_interactive,
-        resume_provider=session_provider,
     )
     if resolved_provider is None:
         if not (json_output or pretty):

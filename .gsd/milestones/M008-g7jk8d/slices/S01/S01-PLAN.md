@@ -84,7 +84,7 @@ Write unit tests for each function independently. Test the enum-based readiness 
   - Estimate: 50min
   - Files: src/scc_cli/commands/launch/preflight.py, tests/test_launch_preflight.py
   - Verify: uv run pytest tests/test_launch_preflight.py -v && uv run ruff check src/scc_cli/commands/launch/preflight.py && uv run mypy src/scc_cli/commands/launch/preflight.py
-- [ ] **T03: Refactor flow.py start() and flow_interactive.py run_start_wizard_flow() to use shared preflight** — Refactor the two CLI launch paths:
+- [x] **T03: Replaced inline _resolve_provider() and _allowed_provider_ids() in flow.py and flow_interactive.py with shared preflight.resolve_launch_provider(), eliminating provider resolution duplication across both launch paths** — Refactor the two CLI launch paths:
 
 1. flow.py start(): Replace the inline _resolve_provider() + ensure_provider_image() + ensure_provider_auth() + prepare_live_start_plan() sequence with calls to resolve_launch_provider(), collect_launch_readiness(), ensure_launch_ready(). Keep prepare_live_start_plan(), conflict resolution, dry-run, personal profile, and output rendering as flow.py-specific caller-owned concerns.
 2. flow_interactive.py run_start_wizard_flow(): Replace the inline allowed_provider_ids + choose_start_provider + ensure_provider_image + ensure_provider_auth + prepare_live_start_plan sequence with the same three-function calls.

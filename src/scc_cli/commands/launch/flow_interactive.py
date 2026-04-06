@@ -73,10 +73,7 @@ from ...ui.wizard import (
     _normalize_path,
     render_start_wizard_prompt,
 )
-from ...workspace_local_config import (
-    get_workspace_last_used_provider,
-    set_workspace_last_used_provider,
-)
+from ...workspace_local_config import set_workspace_last_used_provider
 from .auth_bootstrap import ensure_provider_auth
 from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
@@ -86,11 +83,7 @@ from .flow_types import (
     reset_for_team_switch,
     set_team_context,
 )
-from .provider_choice import (
-    choose_start_provider,
-    connected_provider_ids,
-    prompt_for_provider_choice,
-)
+from .preflight import resolve_launch_provider
 from .provider_image import ensure_provider_image
 from .render import show_auth_bootstrap_panel, show_launch_panel
 from .team_settings import _configure_team_settings
@@ -708,25 +701,16 @@ def run_start_wizard_flow(
             raw_org_config = config.load_cached_org_config()
 
         # D032: resolve provider explicitly — never silent-default to Claude.
-        allowed_provider_ids: tuple[str, ...] = ()
-        if raw_org_config is not None and team:
-            normalized_org = NormalizedOrgConfig.from_dict(raw_org_config)
-            team_profile = normalized_org.get_profile(team)
-            if team_profile is not None:
-                allowed_provider_ids = team_profile.allowed_providers
-
-        resolved_provider = choose_start_provider(
+        normalized_org = NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
+        resolved_provider, _resolution_source = resolve_launch_provider(
             cli_flag=None,
             resume_provider=None,
-            workspace_last_used=get_workspace_last_used_provider(workspace_path),
+            workspace_path=workspace_path,
             config_provider=config.get_selected_provider(),
-            connected_provider_ids=connected_provider_ids(
-                adapters,
-                allowed_providers=allowed_provider_ids,
-            ),
-            allowed_providers=allowed_provider_ids,
+            normalized_org=normalized_org,
+            team=team,
+            adapters=adapters,
             non_interactive=False,
-            prompt_choice=prompt_for_provider_choice,
         )
         if resolved_provider is None:
             console.print("[dim]Cancelled.[/dim]")
@@ -747,7 +731,7 @@ def run_start_wizard_flow(
             standalone=standalone_mode,
             dry_run=False,
             allow_suspicious=False,
-            org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
+            org_config=normalized_org,
             raw_org_config=raw_org_config,
             provider_id=resolved_provider,
         )

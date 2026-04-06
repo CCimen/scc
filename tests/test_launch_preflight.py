@@ -2,14 +2,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from scc_cli.application.launch.finalize_launch import finalize_launch
 from scc_cli.application.launch.preflight import evaluate_launch_preflight
 from scc_cli.application.start_session import StartSessionDependencies, StartSessionPlan
+from scc_cli.commands.launch.preflight import (
+    AuthStatus,
+    ImageStatus,
+    LaunchReadiness,
+    ProviderResolutionSource,
+    _auth_readiness_to_status,
+    _infer_resolution_source,
+    allowed_provider_ids,
+    collect_launch_readiness,
+    ensure_launch_ready,
+    resolve_launch_provider,
+)
 from scc_cli.core.contracts import AgentLaunchSpec, AuditEvent
+from scc_cli.core.contracts import AuthReadiness as AuthReadinessContract
 from scc_cli.core.errors import (
     InvalidLaunchPlanError,
     LaunchAuditUnavailableError,
@@ -305,23 +318,6 @@ def test_evaluate_launch_preflight_enforced_mixed_known_unknown_blocks(
 # ═══════════════════════════════════════════════════════════════════════════════
 # Commands-layer preflight: typed readiness model and pure/side-effect split
 # ═══════════════════════════════════════════════════════════════════════════════
-
-from unittest.mock import patch
-
-from scc_cli.commands.launch.preflight import (
-    AuthStatus,
-    ImageStatus,
-    LaunchReadiness,
-    ProviderResolutionSource,
-    _auth_readiness_to_status,
-    _infer_resolution_source,
-    allowed_provider_ids,
-    collect_launch_readiness,
-    ensure_launch_ready,
-    resolve_launch_provider,
-)
-from scc_cli.core.contracts import AuthReadiness as AuthReadinessContract
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Enum and model tests

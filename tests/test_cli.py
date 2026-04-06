@@ -222,7 +222,7 @@ class TestStartCommand:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
-            patch("scc_cli.commands.launch.flow._resolve_provider", return_value="claude"),
+            patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("claude", "explicit")),
             patch("scc_cli.commands.launch.flow.ensure_provider_image"),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
@@ -251,7 +251,7 @@ class TestStartCommand:
             patch("scc_cli.commands.launch.flow._configure_team_settings"),
             patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
             patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
-            patch("scc_cli.commands.launch.flow._resolve_provider", return_value="claude"),
+            patch("scc_cli.commands.launch.flow.resolve_launch_provider", return_value=("claude", "explicit")),
             patch("scc_cli.commands.launch.flow.ensure_provider_image"),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
             patch(

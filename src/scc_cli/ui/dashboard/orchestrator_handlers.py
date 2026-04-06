@@ -180,7 +180,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         resolve_launch_conflict,
     )
     from ...commands.launch.dependencies import prepare_live_start_plan
-    from ...commands.launch.flow import _allowed_provider_ids
+    from ...commands.launch.preflight import allowed_provider_ids
     from ...commands.launch.provider_choice import (
         choose_start_provider,
         connected_provider_ids,
@@ -242,9 +242,9 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
             config_provider=config.get_selected_provider(),
             connected_provider_ids=connected_provider_ids(
                 adapters,
-                allowed_providers=_allowed_provider_ids(normalized_org, team),
+                allowed_providers=allowed_provider_ids(normalized_org, team),
             ),
-            allowed_providers=_allowed_provider_ids(normalized_org, team),
+            allowed_providers=allowed_provider_ids(normalized_org, team),
             non_interactive=False,
             prompt_choice=prompt_for_provider_choice,
         )
@@ -372,7 +372,7 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         resolve_launch_conflict,
     )
     from ...commands.launch.dependencies import prepare_live_start_plan
-    from ...commands.launch.flow import _allowed_provider_ids
+    from ...commands.launch.preflight import allowed_provider_ids
     from ...commands.launch.provider_choice import (
         choose_start_provider,
         connected_provider_ids,
@@ -440,9 +440,9 @@ def _handle_session_resume(session: SessionSummary) -> bool:
             config_provider=config.get_selected_provider(),
             connected_provider_ids=connected_provider_ids(
                 adapters,
-                allowed_providers=_allowed_provider_ids(normalized_org, team),
+                allowed_providers=allowed_provider_ids(normalized_org, team),
             ),
-            allowed_providers=_allowed_provider_ids(normalized_org, team),
+            allowed_providers=allowed_provider_ids(normalized_org, team),
             non_interactive=False,
             prompt_choice=prompt_for_provider_choice,
         )

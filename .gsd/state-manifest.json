@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T12:12:16.966Z",
+  "exported_at": "2026-04-06T12:25:51.720Z",
   "milestones": [
     {
       "id": "M001",
@@ -7013,19 +7013,29 @@
       "milestone_id": "M008-g7jk8d",
       "slice_id": "S01",
       "id": "T03",
-      "title": "Refactor flow.py start() and flow_interactive.py run_start_wizard_flow() to use shared preflight",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Replaced inline _resolve_provider() and _allowed_provider_ids() in flow.py and flow_interactive.py with shared preflight.resolve_launch_provider(), eliminating provider resolution duplication across both launch paths",
+      "status": "complete",
+      "one_liner": "Replaced inline _resolve_provider() and _allowed_provider_ids() in flow.py and flow_interactive.py with shared preflight.resolve_launch_provider(), eliminating provider resolution duplication across both launch paths",
+      "narrative": "Removed `_resolve_provider()` and `_allowed_provider_ids()` from flow.py and replaced the call site with `resolve_launch_provider()` from `commands/launch/preflight.py`. In flow_interactive.py, replaced the 15-line inline provider resolution block with the same shared call. Updated `orchestrator_handlers.py` (two deferred import sites) to use `preflight.allowed_provider_ids`. Updated five test mocking sites across three test files to target the new function name and tuple return signature. Fixed ruff E402/I001 import ordering violations in test_launch_preflight.py from T02. Cleaned up unused imports in both flow files.",
+      "verification_result": "ruff check: all checks passed. mypy src/scc_cli: 303 files, 0 errors. pytest characterization + preflight tests: 94 passed. Full suite excluding 2 pre-existing failures: 4957 passed, 0 regressions.",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T12:25:51.667Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "Kept ensure_provider_image/ensure_provider_auth inline in flow.py rather than replacing with collect_launch_readiness + ensure_launch_ready — the auth bootstrap path needs StartSessionPlan context not available to the preflight module.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "tests/test_cli.py",
+        "tests/test_start_live_conflict.py",
+        "tests/test_start_codex_auth_bootstrap.py",
+        "tests/test_launch_preflight.py"
+      ],
+      "key_decisions": [
+        "Kept ensure_provider_image/ensure_provider_auth calls inline in flow.py since ensure_launch_ready lacks StartSessionPlan context needed for post-plan auth bootstrap"
+      ],
+      "full_summary_md": "---\nid: T03\nparent: S01\nmilestone: M008-g7jk8d\nkey_files:\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/ui/dashboard/orchestrator_handlers.py\n  - tests/test_cli.py\n  - tests/test_start_live_conflict.py\n  - tests/test_start_codex_auth_bootstrap.py\n  - tests/test_launch_preflight.py\nkey_decisions:\n  - Kept ensure_provider_image/ensure_provider_auth calls inline in flow.py since ensure_launch_ready lacks StartSessionPlan context needed for post-plan auth bootstrap\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T12:25:51.666Z\nblocker_discovered: false\n---\n\n# T03: Replaced inline _resolve_provider() and _allowed_provider_ids() in flow.py and flow_interactive.py with shared preflight.resolve_launch_provider(), eliminating provider resolution duplication across both launch paths\n\n**Replaced inline _resolve_provider() and _allowed_provider_ids() in flow.py and flow_interactive.py with shared preflight.resolve_launch_provider(), eliminating provider resolution duplication across both launch paths**\n\n## What Happened\n\nRemoved `_resolve_provider()` and `_allowed_provider_ids()` from flow.py and replaced the call site with `resolve_launch_provider()` from `commands/launch/preflight.py`. In flow_interactive.py, replaced the 15-line inline provider resolution block with the same shared call. Updated `orchestrator_handlers.py` (two deferred import sites) to use `preflight.allowed_provider_ids`. Updated five test mocking sites across three test files to target the new function name and tuple return signature. Fixed ruff E402/I001 import ordering violations in test_launch_preflight.py from T02. Cleaned up unused imports in both flow files.\n\n## Verification\n\nruff check: all checks passed. mypy src/scc_cli: 303 files, 0 errors. pytest characterization + preflight tests: 94 passed. Full suite excluding 2 pre-existing failures: 4957 passed, 0 regressions.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 5000ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 10000ms |\n| 3 | `uv run pytest tests/test_launch_preflight_characterization.py tests/test_launch_preflight.py -v` | 0 | ✅ pass | 1000ms |\n| 4 | `uv run pytest --ignore=tests/test_cli_setup.py -k 'not test_d033_codex_bypass' --tb=short` | 0 | ✅ pass | 60000ms |\n\n## Deviations\n\nKept ensure_provider_image/ensure_provider_auth inline in flow.py rather than replacing with collect_launch_readiness + ensure_launch_ready — the auth bootstrap path needs StartSessionPlan context not available to the preflight module.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/flow.py`\n- `src/scc_cli/commands/launch/flow_interactive.py`\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py`\n- `tests/test_cli.py`\n- `tests/test_start_live_conflict.py`\n- `tests/test_start_codex_auth_bootstrap.py`\n- `tests/test_launch_preflight.py`\n",
       "description": "Refactor the two CLI launch paths:\n\n1. flow.py start(): Replace the inline _resolve_provider() + ensure_provider_image() + ensure_provider_auth() + prepare_live_start_plan() sequence with calls to resolve_launch_provider(), collect_launch_readiness(), ensure_launch_ready(). Keep prepare_live_start_plan(), conflict resolution, dry-run, personal profile, and output rendering as flow.py-specific caller-owned concerns.\n2. flow_interactive.py run_start_wizard_flow(): Replace the inline allowed_provider_ids + choose_start_provider + ensure_provider_image + ensure_provider_auth + prepare_live_start_plan sequence with the same three-function calls.\n3. Remove _resolve_provider() from flow.py (now resolve_launch_provider in preflight.py). Remove _allowed_provider_ids() from flow.py (now allowed_provider_ids in preflight.py).\n4. Update imports in both files. Ensure re-exports in __init__.py stay clean.\n\nVerify characterization tests still pass. Verify non-interactive contract holds.",
       "estimate": "35min",
       "files": [
@@ -12201,6 +12211,50 @@
       "verdict": "✅ pass (pre-existing failures only, 4960 passed)",
       "duration_ms": 65000,
       "created_at": "2026-04-06T12:12:16.947Z"
+    },
+    {
+      "id": 389,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 5000,
+      "created_at": "2026-04-06T12:25:51.667Z"
+    },
+    {
+      "id": 390,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 10000,
+      "created_at": "2026-04-06T12:25:51.667Z"
+    },
+    {
+      "id": 391,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_launch_preflight_characterization.py tests/test_launch_preflight.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-06T12:25:51.667Z"
+    },
+    {
+      "id": 392,
+      "task_id": "T03",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest --ignore=tests/test_cli_setup.py -k 'not test_d033_codex_bypass' --tb=short",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 60000,
+      "created_at": "2026-04-06T12:25:51.667Z"
     }
   ]
 }
