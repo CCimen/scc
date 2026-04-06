@@ -59,7 +59,7 @@ class TestSetupOrgFlag:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(
@@ -85,7 +85,7 @@ class TestSetupOrgFlag:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(
@@ -137,7 +137,7 @@ class TestSetupProfileFlag:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(
@@ -162,7 +162,7 @@ class TestSetupProfileFlag:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(
@@ -188,7 +188,7 @@ class TestSetupProfileFlag:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
             patch("scc_cli.setup.run_non_interactive_setup") as mock_run,
         ):
@@ -232,7 +232,7 @@ class TestSetupOrgUrlBackwardCompat:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(
@@ -267,7 +267,7 @@ class TestSetupOrgUrlBackwardCompat:
                 return_value=sample_org_config,
             ),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(
@@ -300,7 +300,7 @@ class TestSetupStandaloneMode:
 
         with (
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = cli_runner.invoke(app, ["setup", "--standalone"])

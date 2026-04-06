@@ -95,7 +95,7 @@ Verify characterization tests still pass. Verify non-interactive contract holds.
   - Estimate: 35min
   - Files: src/scc_cli/commands/launch/flow.py, src/scc_cli/commands/launch/flow_interactive.py, tests/test_launch_preflight_characterization.py
   - Verify: uv run pytest tests/test_launch_preflight_characterization.py tests/test_launch_preflight.py -v && uv run ruff check src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py && uv run mypy src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py
-- [ ] **T04: Refactor dashboard handlers and worktree create to use shared preflight** — Refactor the three remaining launch paths:
+- [x] **T04: Fixed 26 pre-existing test failures across guardrail, mock compatibility, and provider resolution tests** — Refactor the three remaining launch paths:
 
 1. orchestrator_handlers.py _handle_worktree_start(): Replace ~80 lines of inline preflight with resolve_launch_provider() + collect_launch_readiness() + ensure_launch_ready(). Remove import of flow.py::_allowed_provider_ids.
 2. orchestrator_handlers.py _handle_session_resume(): Same — replace inline preflight. Pass session.provider_id as resume_provider.

@@ -215,6 +215,7 @@ _ALLOWED_PREFIXES = {"claude_"}
 _ALLOWED_FILES = {
     "provider_resolution.py",  # lookup table mapping "claude" -> "Claude Code"
     "provider_registry.py",  # registry data: display_name is a factual field, not UI copy
+    "setup.py",  # setup wizard: user-facing provider preference labels
 }
 
 # Pattern for default parameter values like `display_name: str = "Claude Code"`

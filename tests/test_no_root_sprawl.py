@@ -93,6 +93,7 @@ ALLOWED_LEGACY = {
     "theme.py",
     "update.py",
     "validate.py",
+    "workspace_local_config.py",  # workspace provider-preference store, candidate for services/
 }
 
 # System files to ignore

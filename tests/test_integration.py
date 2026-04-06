@@ -222,8 +222,12 @@ class TestStartWorkflow:
                 return_value=fake_adapters,
             ),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
+            patch(
+                "scc_cli.commands.launch.flow.resolve_launch_provider",
+                return_value=("claude", "cli_flag"),
+            ),
         ):
-            runner.invoke(app, ["start", str(git_workspace)])
+            runner.invoke(app, ["start", str(git_workspace), "--provider", "claude"])
 
         # Sandbox runtime should be invoked
         assert fake_adapters.sandbox_runtime.list_running()

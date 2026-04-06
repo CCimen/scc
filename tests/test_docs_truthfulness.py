@@ -714,15 +714,23 @@ def test_d033_codex_bypass_flag_in_runner() -> None:
 
     SCC's container isolation is the hard boundary; Codex's built-in
     OS-level sandbox is redundant inside Docker. The flag must appear
-    in the runner's default argv, not in ProviderRuntimeSpec.
+    in the Codex launch module that builds the container argv.
     """
-    runner_path = ADAPTERS_DIR / "codex_agent_runner.py"
-    assert runner_path.exists(), "codex_agent_runner.py missing"
-    source = runner_path.read_text(encoding="utf-8")
+    launch_path = ADAPTERS_DIR / "codex_launch.py"
+    assert launch_path.exists(), "codex_launch.py missing"
+    source = launch_path.read_text(encoding="utf-8")
 
     assert "--dangerously-bypass-approvals-and-sandbox" in source, (
-        "codex_agent_runner.py does not contain '--dangerously-bypass-approvals-and-sandbox'. "
+        "codex_launch.py does not contain '--dangerously-bypass-approvals-and-sandbox'. "
         "D033 requires this flag for Codex launch inside SCC containers."
+    )
+
+    # Verify the runner imports from the launch module
+    runner_path = ADAPTERS_DIR / "codex_agent_runner.py"
+    assert runner_path.exists(), "codex_agent_runner.py missing"
+    runner_source = runner_path.read_text(encoding="utf-8")
+    assert "build_codex_container_argv" in runner_source, (
+        "codex_agent_runner.py must import build_codex_container_argv from codex_launch"
     )
 
 

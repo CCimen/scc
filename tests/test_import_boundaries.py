@@ -532,6 +532,7 @@ class TestNoTestFileDuplicates:
         "test_config_commands_characterization.py",
         "test_wizard_characterization.py",
         "test_app_dashboard_characterization.py",
+        "test_launch_preflight_characterization.py",  # M008/S01 — preflight refactor safety net
     }
 
     def test_no_new_suffix_test_files(self) -> None:

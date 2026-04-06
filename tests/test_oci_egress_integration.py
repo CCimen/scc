@@ -85,8 +85,10 @@ class TestEnforcedModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
     @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_sets_up_topology_before_create(
         self,
+        mock_find: MagicMock,
         mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
@@ -113,8 +115,10 @@ class TestEnforcedModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
     @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_passes_network_to_create(
         self,
+        mock_find: MagicMock,
         mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
@@ -138,8 +142,10 @@ class TestEnforcedModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
     @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_injects_proxy_env(
         self,
+        mock_find: MagicMock,
         mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
@@ -166,8 +172,10 @@ class TestLockedDownModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_locked_down_skips_topology(
         self,
+        mock_find: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -193,8 +201,10 @@ class TestOpenModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_open_mode_unchanged(
         self,
+        mock_find: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -298,8 +308,10 @@ class TestGuardrail:
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
     @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_always_passes_network_name(
         self,
+        mock_find: MagicMock,
         mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,

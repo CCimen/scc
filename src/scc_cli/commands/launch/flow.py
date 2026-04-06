@@ -63,6 +63,90 @@ __all__ = [
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Dry-run helper (extracted to keep start() under 300 lines)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _apply_profile_and_show_stack(
+    *,
+    workspace_path: Any,
+    org_config: dict[str, Any] | None,
+    team: str | None,
+    json_mode: bool,
+    non_interactive: bool,
+    profile_service: Any,
+) -> None:
+    """Apply personal profile overlay and print the active stack summary."""
+    personal_profile_id, personal_applied = _apply_personal_profile(
+        workspace_path,
+        org_config=org_config,
+        json_mode=json_mode,
+        non_interactive=non_interactive,
+        profile_service=profile_service,
+    )
+
+    if not json_mode:
+        personal_label = "project" if personal_profile_id else "none"
+        if personal_profile_id and not personal_applied:
+            personal_label = "skipped"
+        workspace_label = (
+            "overrides"
+            if profile_service.workspace_has_overrides(workspace_path)
+            else "none"
+        )
+        print_with_layout(
+            console,
+            "[dim]Active stack:[/dim] "
+            f"Team: {team or 'standalone'} | "
+            f"Personal: {personal_label} | "
+            f"Workspace: {workspace_label}",
+        )
+
+
+def _handle_dry_run(
+    *,
+    start_plan: Any,
+    workspace_path: Any,
+    team: str | None,
+    resolved_provider: str,
+    json_output: bool,
+    pretty: bool,
+) -> None:
+    """Render dry-run output and exit.  Never returns normally."""
+    result = start_plan.resolver_result
+    org_config_for_dry_run = config.load_cached_org_config()
+    dry_run_data = build_dry_run_data(
+        workspace_path=workspace_path,
+        team=team,
+        org_config=org_config_for_dry_run,
+        project_config=None,
+        entry_dir=result.entry_dir,
+        mount_root=result.mount_root,
+        container_workdir=result.container_workdir,
+        resolution_reason=result.reason,
+        provider_id=resolved_provider,
+    )
+
+    if pretty:
+        json_output = True
+
+    if json_output:
+        with json_output_mode():
+            if pretty:
+                set_pretty_mode(True)
+            try:
+                envelope = build_start_dry_run_envelope(dry_run_data)
+                print_json(envelope)
+            finally:
+                if pretty:
+                    set_pretty_mode(False)
+    else:
+        show_dry_run_panel(dry_run_data)
+
+    raise typer.Exit(0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Start Command Flow
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -114,14 +198,8 @@ def start(
 
     if isinstance(debug, bool) and debug:
         err_console.print(
-            "[red]Error:[/red] --debug is a global flag and must be placed before the command.",
-            highlight=False,
-        )
-        err_console.print(
-            "[dim]Use: scc --debug start <workspace>[/dim]",
-            highlight=False,
-        )
-        err_console.print(
+            "[red]Error:[/red] --debug is a global flag and must be placed before the command.\n"
+            "[dim]Use: scc --debug start <workspace>[/dim]\n"
             "[dim]With uv: uv run scc --debug start <workspace>[/dim]",
             highlight=False,
         )
@@ -280,34 +358,15 @@ def start(
     output_view_model = build_sync_output_view_model(start_plan)
     render_launch_output(output_view_model, console=console, json_mode=(json_output or pretty))
 
-    # ── Step 6.55: Apply personal profile (local overlay) ─────────────────────
-    personal_profile_id = None
-    personal_applied = False
+    # ── Step 6.55–6.6: Personal profile + active stack summary ──────────────
     if not dry_run and workspace_path is not None:
-        personal_profile_id, personal_applied = _apply_personal_profile(
-            workspace_path,
+        _apply_profile_and_show_stack(
+            workspace_path=workspace_path,
             org_config=org_config,
+            team=team,
             json_mode=(json_output or pretty),
             non_interactive=non_interactive,
             profile_service=adapters.personal_profile_service,
-        )
-
-    # ── Step 6.6: Active stack summary ───────────────────────────────────────
-    if not (json_output or pretty) and workspace_path is not None:
-        personal_label = "project" if personal_profile_id else "none"
-        if personal_profile_id and not personal_applied:
-            personal_label = "skipped"
-        workspace_label = (
-            "overrides"
-            if adapters.personal_profile_service.workspace_has_overrides(workspace_path)
-            else "none"
-        )
-        print_with_layout(
-            console,
-            "[dim]Active stack:[/dim] "
-            f"Team: {team or 'standalone'} | "
-            f"Personal: {personal_label} | "
-            f"Workspace: {workspace_label}",
         )
 
     # ── Step 6.7: Resolve mount path for worktrees (needed for dry-run too) ────
@@ -329,37 +388,14 @@ def start(
 
     # ── Step 6.8: Handle --dry-run (preview without launching) ────────────────
     if dry_run:
-        result = start_plan.resolver_result
-        org_config_for_dry_run = config.load_cached_org_config()
-        dry_run_data = build_dry_run_data(
+        _handle_dry_run(
+            start_plan=start_plan,
             workspace_path=workspace_path,
             team=team,
-            org_config=org_config_for_dry_run,
-            project_config=None,
-            entry_dir=result.entry_dir,
-            mount_root=result.mount_root,
-            container_workdir=result.container_workdir,
-            resolution_reason=result.reason,
-            provider_id=resolved_provider,
+            resolved_provider=resolved_provider,
+            json_output=json_output,
+            pretty=pretty,
         )
-
-        if pretty:
-            json_output = True
-
-        if json_output:
-            with json_output_mode():
-                if pretty:
-                    set_pretty_mode(True)
-                try:
-                    envelope = build_start_dry_run_envelope(dry_run_data)
-                    print_json(envelope)
-                finally:
-                    if pretty:
-                        set_pretty_mode(False)
-        else:
-            show_dry_run_panel(dry_run_data)
-
-        raise typer.Exit(0)
 
     warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 

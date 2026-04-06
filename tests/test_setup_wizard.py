@@ -294,7 +294,7 @@ class TestRunSetupWizard:
             patch("scc_cli.setup.fetch_and_validate_org_config", return_value=sample_config),
             patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = setup.run_setup_wizard(mock_console)
@@ -310,7 +310,7 @@ class TestRunSetupWizard:
             patch("scc_cli.setup._select_option", side_effect=[1, 0, 0]),
             patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = setup.run_setup_wizard(mock_console)
@@ -337,7 +337,7 @@ class TestRunSetupWizard:
             patch("scc_cli.setup.prompt_with_layout", return_value="MY_TOKEN"),  # Env var name
             patch("scc_cli.setup.config.load_user_config", return_value={}),
             patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = setup.run_setup_wizard(mock_console)
@@ -363,7 +363,7 @@ class TestNonInteractiveSetup:
         with (
             patch("scc_cli.setup.fetch_and_validate_org_config", return_value=sample_config),
             patch("scc_cli.setup.save_setup_config") as mock_save,
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = setup.run_non_interactive_setup(
@@ -380,7 +380,7 @@ class TestNonInteractiveSetup:
         mock_console = MagicMock()
         with (
             patch("scc_cli.setup.save_setup_config") as mock_save,
-            patch("scc_cli.setup._run_provider_onboarding"),
+            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
             patch("scc_cli.setup.show_setup_complete"),
         ):
             result = setup.run_non_interactive_setup(
