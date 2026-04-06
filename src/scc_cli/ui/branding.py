@@ -28,13 +28,13 @@ def get_version_header(version: str) -> str:
     if supports_unicode():
         return (
             "╭───────────────────────────────────────╮\n"
-            f"│  [cyan bold]SCC[/cyan bold]  Sandboxed Code CLI   [dim]{v_padded}[/dim] │\n"
+            f"│  [cyan bold]SCC[/cyan bold]  Sandboxed Coding CLI [dim]{v_padded}[/dim] │\n"
             "╰───────────────────────────────────────╯"
         )
     else:
         return (
             "+---------------------------------------+\n"
-            f"|  [cyan bold]SCC[/cyan bold]  Sandboxed Code CLI   [dim]{v_padded}[/dim] |\n"
+            f"|  [cyan bold]SCC[/cyan bold]  Sandboxed Coding CLI [dim]{v_padded}[/dim] |\n"
             "+---------------------------------------+"
         )
 

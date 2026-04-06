@@ -37,6 +37,9 @@ class FakeAgentProvider:
             guidance="Fake auth always present",
         )
 
+    def bootstrap_auth(self) -> None:
+        return None
+
     def prepare_launch(
         self,
         *,

@@ -14,7 +14,13 @@ from scc_cli.core.errors import (
 )
 from scc_cli.core.network_policy import collect_proxy_env
 from scc_cli.docker.core import MIN_DOCKER_VERSION, _parse_version
-from scc_cli.ports.models import SandboxHandle, SandboxSpec, SandboxState, SandboxStatus
+from scc_cli.ports.models import (
+    SandboxConflict,
+    SandboxHandle,
+    SandboxSpec,
+    SandboxState,
+    SandboxStatus,
+)
 from scc_cli.ports.runtime_probe import RuntimeProbe
 from scc_cli.ports.sandbox_runtime import SandboxRuntime
 
@@ -99,6 +105,12 @@ class DockerSandboxRuntime(SandboxRuntime):
             sandbox_id=container_name or "sandbox",
             name=container_name,
         )
+
+    def detect_launch_conflict(self, spec: SandboxSpec) -> SandboxConflict | None:
+        # Legacy Docker Desktop sandboxes already encapsulate their own
+        # container reuse semantics.  M008 can add richer conflict inspection
+        # here if the Desktop path remains active.
+        return None
 
     def resume(self, handle: SandboxHandle) -> None:
         docker.resume_container(handle.sandbox_id)

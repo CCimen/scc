@@ -20,6 +20,8 @@ from .checks import (
 )
 from .types import CheckResult, DoctorResult
 
+_DEFAULT_PROVIDER_IDS: tuple[str, ...] = ("claude", "codex")
+
 # Category assignment rules: check name → category
 _CATEGORY_MAP: dict[str, str] = {
     "Git": "backend",
@@ -89,21 +91,26 @@ def run_doctor(
     runtime_check = check_runtime_backend()
     result.checks.append(runtime_check)
 
-    # Provider image check — only meaningful when Docker is reachable
-    if result.docker_ok:
-        try:
-            image_check = check_provider_image(provider_id=provider_id)
-            result.checks.append(image_check)
-        except Exception:
-            pass  # partial-results — don't block other checks
+    provider_ids = (provider_id,) if provider_id is not None else _DEFAULT_PROVIDER_IDS
 
-    # Provider auth check — only meaningful when Docker is reachable
     if result.docker_ok:
-        try:
-            auth_check = check_provider_auth(provider_id=provider_id)
-            result.checks.append(auth_check)
-        except Exception:
-            pass  # partial-results — don't block other checks
+        for current_provider_id in provider_ids:
+            try:
+                image_check = check_provider_image(provider_id=current_provider_id)
+                result.checks.append(
+                    _label_provider_check(image_check, current_provider_id, requested_provider_id=provider_id)
+                )
+            except Exception:
+                pass  # partial-results — don't block other checks
+
+        for current_provider_id in provider_ids:
+            try:
+                auth_check = check_provider_auth(provider_id=current_provider_id)
+                result.checks.append(
+                    _label_provider_check(auth_check, current_provider_id, requested_provider_id=provider_id)
+                )
+            except Exception:
+                pass  # partial-results — don't block other checks
 
     wsl2_check, is_wsl2 = check_wsl2()
     result.checks.append(wsl2_check)
@@ -148,3 +155,19 @@ def run_doctor(
         _assign_category(check)
 
     return result
+
+
+def _label_provider_check(
+    check: CheckResult,
+    current_provider_id: str,
+    *,
+    requested_provider_id: str | None,
+) -> CheckResult:
+    """Disambiguate provider checks when doctor is showing multiple providers."""
+    if requested_provider_id is not None:
+        return check
+
+    from scc_cli.core.provider_resolution import get_provider_display_name
+
+    check.name = f"{check.name} ({get_provider_display_name(current_provider_id)})"
+    return check

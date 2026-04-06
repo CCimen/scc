@@ -59,7 +59,8 @@ def resolve_active_provider(
     """
     from scc_cli.core.errors import ProviderNotAllowedError
 
-    provider = cli_flag or config_provider or _DEFAULT_PROVIDER
+    effective_config_provider = None if config_provider == "ask" else config_provider
+    provider = cli_flag or effective_config_provider or _DEFAULT_PROVIDER
 
     if provider not in KNOWN_PROVIDERS:
         raise ValueError(

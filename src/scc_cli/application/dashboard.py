@@ -260,7 +260,7 @@ def apply_dashboard_effect_result(
             return DashboardFlowOutcome(state=state, exit_dashboard=True)
         if result.decision is StartFlowDecision.LAUNCHED:
             return DashboardFlowOutcome(state=state, exit_dashboard=True)
-        next_state = replace(state, toast_message="Start cancelled")
+        next_state = replace(state, toast_message=result.message or "Start cancelled")
         return DashboardFlowOutcome(state=next_state)
 
     if isinstance(effect, SessionResumeEvent):

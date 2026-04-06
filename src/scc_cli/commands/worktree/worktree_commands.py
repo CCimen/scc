@@ -29,6 +29,7 @@ from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
 from ...ui.picker import TeamSwitchRequested, pick_worktree
 from ..launch.dependencies import prepare_live_start_plan
+from ..launch.provider_image import ensure_provider_image
 from ._helpers import build_worktree_list_data
 
 if TYPE_CHECKING:
@@ -246,6 +247,14 @@ def worktree_create_cmd(
             resolved_provider = resolve_active_provider(
                 cli_flag=None,
                 config_provider=user_config.get("selected_provider"),
+            )
+            ensure_provider_image(
+                resolved_provider,
+                console=console,
+                non_interactive=False,
+                show_notice=lambda title, content, subtitle: console.print(
+                    create_warning_panel(title, content, subtitle)
+                ),
             )
             start_request = StartSessionRequest(
                 workspace_path=result.worktree_path,

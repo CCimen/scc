@@ -179,6 +179,7 @@ class StartFlowResult:
     """Result from executing the start flow."""
 
     decision: StartFlowDecision
+    message: str | None = None
 
     @classmethod
     def from_legacy(cls, result: bool | None) -> StartFlowResult:

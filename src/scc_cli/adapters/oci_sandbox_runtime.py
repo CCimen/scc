@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shlex
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from scc_cli.adapters.egress_topology import NetworkTopologyManager
@@ -20,10 +22,12 @@ from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.errors import (
     DockerDaemonNotRunningError,
     DockerNotFoundError,
+    ExistingSandboxConflictError,
     SandboxLaunchError,
 )
 from scc_cli.core.network_policy import collect_proxy_env
 from scc_cli.ports.models import (
+    SandboxConflict,
     SandboxHandle,
     SandboxSpec,
     SandboxState,
@@ -52,9 +56,22 @@ _AGENT_UID = 1000
 
 # Known auth file names per provider config dir (D039 permission targets)
 _AUTH_FILES: dict[str, tuple[str, ...]] = {
-    ".claude": (".credentials.json",),
+    ".claude": (".credentials.json", ".claude.json"),
     ".codex": ("auth.json",),
 }
+
+_HOME_LEVEL_AUTH_LINKS: dict[str, tuple[tuple[str, str], ...]] = {
+    ".claude": ((".claude.json", f"{_AGENT_HOME}/.claude.json"),),
+}
+
+
+@dataclass(frozen=True)
+class _ContainerProcess:
+    """One process observed inside a sandbox container."""
+
+    stat: str
+    command: str
+    args: str
 
 
 def _container_name(workspace: Path, provider_id: str = "") -> str:
@@ -104,6 +121,119 @@ def _run_docker(
         ) from exc
 
 
+def _find_existing_container(container_name: str) -> tuple[str, SandboxState] | None:
+    """Return existing container id + state for an exact name match, if any."""
+    result = _run_docker(
+        [
+            "ps",
+            "-a",
+            "--filter",
+            f"name=^{container_name}$",
+            "--format",
+            "{{.ID}}\t{{.Status}}",
+        ],
+        timeout=_DEFAULT_TIMEOUT,
+        check=False,
+    )
+    line = next((raw.strip() for raw in result.stdout.splitlines() if raw.strip()), "")
+    if "\t" not in line:
+        return None
+
+    container_id, raw_status = line.split("\t", 1)
+    status = raw_status.strip().lower()
+    if status.startswith("up") or status.startswith("restarting") or status.startswith("paused"):
+        state = SandboxState.RUNNING
+    elif status.startswith("created"):
+        state = SandboxState.CREATED
+    elif status.startswith("exited") or status.startswith("dead"):
+        state = SandboxState.STOPPED
+    else:
+        state = SandboxState.UNKNOWN
+    return (container_id.strip(), state)
+
+
+def _is_idle_keepalive_container(container_id: str) -> bool:
+    """Return True when the container only runs the keepalive ``sleep`` process."""
+    processes = _list_container_processes(container_id)
+    if not processes:
+        return False
+
+    saw_keepalive = False
+    for process in processes:
+        if _is_ignorable_process(process):
+            if _is_keepalive_process(process):
+                saw_keepalive = True
+            continue
+        if not _is_keepalive_process(process):
+            return False
+        saw_keepalive = True
+    return saw_keepalive
+
+
+def _list_container_processes(container_id: str) -> list[_ContainerProcess]:
+    """Return parsed container processes from ``ps -eo stat=,comm=,args=``."""
+    result = _run_docker(
+        ["exec", container_id, "ps", "-eo", "stat=,comm=,args="],
+        timeout=_INSPECT_TIMEOUT,
+        check=False,
+    )
+    processes: list[_ContainerProcess] = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 2)
+        if len(parts) < 2:
+            continue
+        stat = parts[0]
+        command = parts[1]
+        args = parts[2] if len(parts) > 2 else command
+        processes.append(
+            _ContainerProcess(
+                stat=stat,
+                command=command,
+                args=args,
+            )
+        )
+    return processes
+
+
+def _active_process_summary(container_id: str) -> str | None:
+    """Return the first non-keepalive process summary, if any."""
+    for process in _list_container_processes(container_id):
+        if _is_ignorable_process(process):
+            continue
+        return process.args
+    return None
+
+
+def _is_keepalive_process(process: _ContainerProcess) -> bool:
+    """Return True for the container keepalive command."""
+    command = process.command.lower()
+    args = process.args.lower()
+    return command == "sleep" or args.startswith("sleep ")
+
+
+def _is_ignorable_process(process: _ContainerProcess) -> bool:
+    """Return True for processes that should not count as active agent work."""
+    if process.command.lower() == "ps":
+        return True
+    if _is_keepalive_process(process):
+        return True
+
+    stat = process.stat.upper()
+    args = process.args.lower()
+    return stat.startswith("Z") or "<defunct>" in args
+
+
+def _remove_conflicting_container(container_name: str, container_id: str) -> None:
+    """Best-effort cleanup for a conflicting deterministic OCI sandbox."""
+    # If an older enforced-egress run left sidecar/network state behind,
+    # tear it down before recreating the sandbox with the same session id.
+    NetworkTopologyManager(session_id=container_name).teardown()
+    _run_docker(["rm", "-f", container_id], timeout=_DEFAULT_TIMEOUT, check=False)
+
+
 def _ensure_workspace_config_excluded(
     container_id: str,
     workspace_path: str,
@@ -129,11 +259,17 @@ def _ensure_workspace_config_excluded(
         check=False,
     )
 
-    # Append to .git/info/exclude if not already present (best-effort)
-    exclude_path = f"{workspace_path}/.git/info/exclude"
+    # Append to the effective Git exclude file if not already present.
+    # Use Git's own path resolution so regular repos and linked worktrees
+    # both write to the exclude file Git actually consults.
+    workspace_quoted = shlex.quote(workspace_path)
+    config_dir_quoted = shlex.quote(config_dir_name)
     shell_cmd = (
-        f"grep -qxF '{config_dir_name}' {exclude_path} 2>/dev/null "
-        f"|| echo '{config_dir_name}' >> {exclude_path}"
+        f'exclude_path=$(git -C {workspace_quoted} rev-parse --git-path info/exclude 2>/dev/null) '
+        "|| exit 0; "
+        'mkdir -p "$(dirname "$exclude_path")"; '
+        f"grep -qxF {config_dir_quoted} \"$exclude_path\" 2>/dev/null "
+        f"|| echo {config_dir_quoted} >> \"$exclude_path\""
     )
     _run_docker(
         ["exec", container_id, "sh", "-c", shell_cmd],
@@ -190,6 +326,32 @@ def _normalize_provider_permissions(
         )
 
 
+def _project_home_level_auth_files(
+    container_id: str,
+    config_dir: str,
+) -> None:
+    """Project auth files from mounted provider state into the expected HOME path."""
+    config_dirname = config_dir if config_dir else ".claude"
+    projections = _HOME_LEVEL_AUTH_LINKS.get(config_dirname, ())
+    for source_name, target_path in projections:
+        source_path = f"{_AGENT_HOME}/{config_dirname}/{source_name}"
+        _run_docker(
+            [
+                "exec",
+                container_id,
+                "sh",
+                "-c",
+                (
+                    f"test -f {source_path} && "
+                    f"ln -sfn {source_path} {target_path} && "
+                    f"chown -h {_AGENT_UID}:{_AGENT_UID} {target_path}"
+                ),
+            ],
+            timeout=_DEFAULT_TIMEOUT,
+            check=False,
+        )
+
+
 class OciSandboxRuntime:
     """SandboxRuntime backed by plain OCI container commands.
 
@@ -226,6 +388,38 @@ class OciSandboxRuntime:
                 ),
             )
 
+    def detect_launch_conflict(self, spec: SandboxSpec) -> SandboxConflict | None:
+        """Report a live conflict that needs an explicit operator decision.
+
+        Stopped, created, and idle keepalive containers are intentionally
+        excluded: ``run()`` already self-heals them without prompting.
+        """
+        if spec.force_new:
+            return None
+
+        container_name = _container_name(spec.workspace_mount.source, spec.provider_id)
+        existing = _find_existing_container(container_name)
+        if existing is None:
+            return None
+
+        existing_id, existing_state = existing
+        if existing_state in {SandboxState.CREATED, SandboxState.STOPPED}:
+            return None
+        if existing_state is SandboxState.RUNNING:
+            if _is_idle_keepalive_container(existing_id):
+                return None
+            return SandboxConflict(
+                handle=SandboxHandle(sandbox_id=existing_id, name=container_name),
+                state=existing_state,
+                process_summary=_active_process_summary(existing_id),
+            )
+
+        return SandboxConflict(
+            handle=SandboxHandle(sandbox_id=existing_id, name=container_name),
+            state=existing_state,
+            process_summary=None,
+        )
+
     def run(self, spec: SandboxSpec) -> SandboxHandle:
         """Create, start, and exec into an OCI container.
 
@@ -235,6 +429,18 @@ class OciSandboxRuntime:
         protocol signature and for testing with a mocked ``os.execvp``.
         """
         container_name = _container_name(spec.workspace_mount.source, spec.provider_id)
+
+        existing = _find_existing_container(container_name)
+        if existing is not None:
+            existing_id, existing_state = existing
+            if spec.force_new:
+                _remove_conflicting_container(container_name, existing_id)
+            elif existing_state in {SandboxState.CREATED, SandboxState.STOPPED}:
+                _remove_conflicting_container(container_name, existing_id)
+            elif existing_state is SandboxState.RUNNING and _is_idle_keepalive_container(existing_id):
+                _remove_conflicting_container(container_name, existing_id)
+            else:
+                raise ExistingSandboxConflictError(container_name=container_name)
 
         # -- Set up egress topology for enforced mode ----------------------
         network_name: str | None = None
@@ -271,6 +477,7 @@ class OciSandboxRuntime:
 
         # -- D039: normalise provider state permissions --------------------
         _normalize_provider_permissions(container_id, spec.config_dir)
+        _project_home_level_auth_files(container_id, spec.config_dir)
 
         # -- Inject agent settings via docker cp if needed -----------------
         if spec.agent_settings is not None:
@@ -372,6 +579,10 @@ class OciSandboxRuntime:
             "create",
             "--name",
             container_name,
+            # Override image entrypoint so the keepalive command is stable
+            # regardless of what the image declares as ENTRYPOINT.
+            "--entrypoint",
+            "/bin/bash",
             # Workspace mount
             "-v",
             f"{spec.workspace_mount.source}:{spec.workspace_mount.target}",
@@ -411,8 +622,9 @@ class OciSandboxRuntime:
         # Image — this is the key difference from DockerSandboxRuntime
         cmd.append(spec.image)
 
-        # Keep container alive with a blocking entrypoint
-        cmd.extend(["/bin/bash", "-c", "sleep infinity"])
+        # Keep container alive with a blocking shell command. The entrypoint
+        # is already overridden above, so only pass the shell arguments here.
+        cmd.extend(["-c", "sleep infinity"])
 
         return cmd
 
@@ -462,13 +674,19 @@ class OciSandboxRuntime:
         target_path = str(spec.agent_settings.path)
 
         # D041: ensure workspace-scoped config dir exists and is git-excluded.
-        workspace_target = str(spec.workspace_mount.target)
-        if target_path.startswith(str(workspace_target)):
-            # Derive the top-level config dir name relative to workspace
-            rel = str(spec.agent_settings.path.relative_to(spec.workspace_mount.target))
-            config_dir_name = rel.split("/")[0]  # e.g. ".codex"
+        workspace_root = Path(spec.workdir)
+        try:
+            rel = spec.agent_settings.path.relative_to(workspace_root)
+        except ValueError:
+            rel = None
+
+        if rel is not None and rel.parts:
+            # Derive the top-level config dir name relative to the logical
+            # workspace root, not the broader mount root used for worktree
+            # support.
+            config_dir_name = rel.parts[0]  # e.g. ".codex"
             _ensure_workspace_config_excluded(
-                container_id, workspace_target, config_dir_name
+                container_id, str(workspace_root), config_dir_name
             )
 
         suffix = spec.agent_settings.suffix or ".json"

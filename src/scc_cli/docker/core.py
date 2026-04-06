@@ -465,10 +465,7 @@ def _list_all_sandbox_containers() -> list[ContainerInfo]:
 
 
 def list_scc_containers() -> list[ContainerInfo]:
-    """Return all SCC-managed containers (running and stopped).
-
-    Includes Docker Desktop Claude sandboxes which do not support SCC labels.
-    """
+    """Return all SCC-managed containers (running and stopped)."""
     try:
         result = subprocess.run(
             [
@@ -504,17 +501,14 @@ def list_scc_containers() -> list[ContainerInfo]:
                         )
                     )
 
-        # Merge in Docker sandbox containers (dedupe by ID)
-        sandbox_containers = _list_all_sandbox_containers()
-        if sandbox_containers:
-            existing_ids = {c.id for c in containers}
-            for container in sandbox_containers:
-                if container.id not in existing_ids:
-                    containers.append(container)
-
         return containers
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return _list_all_sandbox_containers()
+        return []
+
+
+def list_running_scc_containers() -> list[ContainerInfo]:
+    """Return only running SCC-managed containers."""
+    return [container for container in list_scc_containers() if container.status.lower().startswith("up")]
 
 
 def list_running_sandboxes() -> list[ContainerInfo]:

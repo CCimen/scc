@@ -19,6 +19,7 @@ from rich.text import Text
 
 from scc_cli import __version__
 from scc_cli.core.enums import SeverityLevel
+from scc_cli.core.provider_resolution import get_provider_display_name
 
 from .core import run_doctor
 from .types import CheckResult, DoctorResult
@@ -117,18 +118,23 @@ def render_doctor_results(
         table.add_row(status, name, details)
 
     # Wrap table in panel
-    title_style = "bold green" if result.all_ok else "bold red"
+    has_failed_checks = any(not check.passed for check in result.checks)
+    title_style = (
+        "bold green"
+        if result.all_ok and not has_failed_checks
+        else "bold yellow" if result.all_ok else "bold red"
+    )
     version_suffix = f" (scc-cli v{__version__})"
     title_text = (
         f"System Health Check{version_suffix}"
-        if result.all_ok
+        if result.all_ok and not has_failed_checks
         else f"System Health Check - Issues Found{version_suffix}"
     )
 
     panel = Panel(
         table,
         title=f"[{title_style}]{title_text}[/{title_style}]",
-        border_style="green" if result.all_ok else "red",
+        border_style="green" if result.all_ok and not has_failed_checks else "yellow" if result.all_ok else "red",
         padding=(1, 1),
     )
 
@@ -149,14 +155,45 @@ def render_doctor_results(
             console.print(code_panel)
 
     # Summary line
-    if result.all_ok:
-        from scc_cli.core.provider_resolution import get_provider_display_name
-
-        _display = get_provider_display_name(provider_id or "claude")
+    if result.all_ok and not has_failed_checks:
+        if provider_id is None:
+            _display = " and ".join(
+                get_provider_display_name(current_provider_id)
+                for current_provider_id in ("claude", "codex")
+            )
+        else:
+            _display = get_provider_display_name(provider_id)
         console.print()
         console.print(
             f"  [bold green]All prerequisites met![/bold green] [dim]Ready to run {_display}.[/dim]"
         )
+    elif result.all_ok:
+        console.print()
+        summary_parts = []
+        if result.warning_count > 0:
+            summary_parts.append(f"[bold yellow]{result.warning_count} warning(s)[/bold yellow]")
+        if result.error_count > 0:
+            summary_parts.append(f"[bold red]{result.error_count} error(s)[/bold red]")
+        console.print(
+            f"  [bold green]Core prerequisites met.[/bold green] "
+            f"[dim]Provider setup still needs attention: {' and '.join(summary_parts)}.[/dim]"
+        )
+
+        checks_with_commands = [c for c in result.checks if not c.passed and c.fix_commands]
+        if checks_with_commands:
+            console.print()
+            console.print("  [bold cyan]Next Steps[/bold cyan]")
+            console.print("  [dim]────────────────────────────────────────────────────[/dim]")
+            console.print()
+
+            for check in checks_with_commands:
+                console.print(f"  [bold white]{check.name}:[/bold white]")
+                if check.fix_hint:
+                    console.print(f"    [dim]{check.fix_hint}[/dim]")
+                if check.fix_commands:
+                    for i, cmd in enumerate(check.fix_commands, 1):
+                        console.print(f"    [cyan]{i}.[/cyan] [white]{cmd}[/white]")
+                console.print()
     else:
         console.print()
         summary_parts = []

@@ -49,6 +49,10 @@ class AgentProvider(Protocol):
         """
         ...
 
+    def bootstrap_auth(self) -> None:
+        """Perform provider-owned interactive auth bootstrap when needed."""
+        ...
+
     def render_artifacts(
         self,
         plan: ArtifactRenderPlan,

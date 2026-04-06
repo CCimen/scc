@@ -31,6 +31,7 @@ from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_R
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
 from scc_cli.ports.models import MountSpec, SandboxSpec
+from scc_cli.services.git.worktree import WorktreeInfo
 from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
 from tests.fakes.fake_sandbox_runtime import FakeSandboxRuntime
@@ -64,6 +65,52 @@ class FakeGitClient:
 
     def get_current_branch(self, path: Path) -> str | None:
         return self._branch
+
+    def has_commits(self, path: Path) -> bool:
+        return True
+
+    def has_remote(self, path: Path) -> bool:
+        return True
+
+    def get_default_branch(self, path: Path) -> str:
+        return "main"
+
+    def list_worktrees(self, path: Path) -> list[WorktreeInfo]:
+        return []
+
+    def get_worktree_status(self, path: Path) -> tuple[int, int, int, bool]:
+        return (0, 0, 0, False)
+
+    def find_worktree_by_query(
+        self,
+        path: Path,
+        query: str,
+    ) -> tuple[WorktreeInfo | None, list[WorktreeInfo]]:
+        return None, []
+
+    def find_main_worktree(self, path: Path) -> WorktreeInfo | None:
+        return None
+
+    def list_branches_without_worktrees(self, path: Path) -> list[str]:
+        return []
+
+    def fetch_branch(self, path: Path, branch: str) -> None:
+        return None
+
+    def add_worktree(
+        self,
+        repo_path: Path,
+        worktree_path: Path,
+        branch_name: str,
+        base_branch: str,
+    ) -> None:
+        return None
+
+    def remove_worktree(self, repo_path: Path, worktree_path: Path, *, force: bool) -> None:
+        return None
+
+    def prune_worktrees(self, repo_path: Path) -> None:
+        return None
 
 
 def _build_resolver_result(workspace_path: Path) -> ResolverResult:
@@ -1115,8 +1162,9 @@ class TestAgentArgvPropagation:
             prepare_start_session(request, dependencies=dependencies)
 
     def test_codex_agent_argv_is_codex(self, tmp_path: Path) -> None:
-        """Codex provider produces 'codex' in agent_argv."""
+        """Codex provider produces the wrapper argv in agent_argv."""
         from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+        from scc_cli.adapters.codex_launch import build_codex_container_argv
 
         workspace_path = tmp_path / "workspace"
         workspace_path.mkdir()
@@ -1148,7 +1196,7 @@ class TestAgentArgvPropagation:
             plan = prepare_start_session(request, dependencies=dependencies)
 
         assert plan.sandbox_spec is not None
-        assert plan.sandbox_spec.agent_argv == ["codex"]
+        assert plan.sandbox_spec.agent_argv == list(build_codex_container_argv())
 
 
 # ---------------------------------------------------------------------------
@@ -1590,3 +1638,58 @@ class TestConfigFreshness:
         assert "cli_auth_credentials_store" in content
         assert "file" in content
         assert plan.agent_settings.suffix == ".toml"
+
+    def test_codex_worktree_launch_scopes_settings_to_workspace_not_mount_root(
+        self, tmp_path: Path
+    ) -> None:
+        """D041: worktree launches must write Codex config into the workspace root."""
+        from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+        from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
+
+        mount_root = tmp_path / "repo-parent"
+        workspace_path = mount_root / "worktree-a"
+        workspace_path.mkdir(parents=True)
+        request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=None,
+            session_name=None,
+            resume=False,
+            fresh=False,
+            offline=True,
+            standalone=True,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=None,
+            provider_id="codex",
+        )
+        resolver_result = ResolverResult(
+            workspace_root=workspace_path,
+            entry_dir=workspace_path,
+            mount_root=mount_root,
+            container_workdir=str(workspace_path),
+            is_auto_detected=False,
+            is_suspicious=False,
+            reason="test-worktree",
+        )
+        dependencies = StartSessionDependencies(
+            filesystem=MagicMock(),
+            remote_fetcher=MagicMock(),
+            clock=MagicMock(),
+            git_client=FakeGitClient(),
+            agent_runner=CodexAgentRunner(),
+            agent_provider=CodexAgentProvider(),
+            sandbox_runtime=FakeSandboxRuntime(),
+            resolve_effective_config=MagicMock(),
+            materialize_marketplace=MagicMock(),
+        )
+
+        with patch(
+            "scc_cli.application.start_session.resolve_workspace",
+            return_value=WorkspaceContext(resolver_result),
+        ):
+            plan = prepare_start_session(request, dependencies=dependencies)
+
+        assert plan.agent_settings is not None
+        assert plan.agent_settings.path == workspace_path / ".codex" / "config.toml"

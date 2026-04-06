@@ -21,11 +21,11 @@ class TestProviderShow:
     """Tests for 'scc provider show' command."""
 
     def test_show_default_provider(self) -> None:
-        """When no provider is configured, show prints 'claude'."""
+        """When no provider is configured, show prints 'ask'."""
         with patch("scc_cli.commands.provider.config.get_selected_provider", return_value=None):
             result = runner.invoke(app, ["provider", "show"])
         assert result.exit_code == 0
-        assert "claude" in result.output
+        assert "ask" in result.output
 
     def test_show_configured_provider(self) -> None:
         """When a provider is configured, show prints it."""
@@ -69,6 +69,14 @@ class TestProviderSet:
         result = runner.invoke(app, ["provider", "set", "foobar"])
         for p in KNOWN_PROVIDERS:
             assert p in result.output
+        assert "ask" in result.output
+
+    def test_set_ask_clears_global_preference(self) -> None:
+        with patch("scc_cli.commands.provider.config.set_selected_provider") as mock_set:
+            result = runner.invoke(app, ["provider", "set", "ask"])
+        assert result.exit_code == 0
+        mock_set.assert_called_once_with("ask")
+        assert "ask" in result.output
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "scc-cli"
 version = "1.7.3"
-description = "Run AI coding agents in Docker sandboxes with team configs and git worktree support"
+description = "Sandboxed Coding CLI for AI coding agents in Docker sandboxes with team configs and git worktree support"
 readme = "README.md"
 license = "MIT"
 authors = [

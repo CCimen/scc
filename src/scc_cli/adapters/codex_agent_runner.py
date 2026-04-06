@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from scc_cli.adapters.codex_launch import build_codex_container_argv
 from scc_cli.ports.agent_runner import AgentRunner
 from scc_cli.ports.models import AgentCommand, AgentSettings
 
@@ -65,12 +66,11 @@ class CodexAgentRunner(AgentRunner):
         return AgentSettings(rendered_bytes=rendered, path=path, suffix=".toml")
 
     def build_command(self, settings: AgentSettings) -> AgentCommand:
-        # D033: SCC's container-level isolation is the hard enforcement
-        # boundary.  Codex's built-in OS-level sandbox (Seatbelt/Landlock)
-        # is redundant inside Docker and can interfere with legitimate
-        # agent operations.  Bypass it explicitly.
+        # SCC's container isolation is the hard enforcement boundary.
+        # Interactive auth bootstrap happens before launch; the steady-state
+        # container command is the real Codex TUI plus SCC's bypass flag.
         return AgentCommand(
-            argv=["codex", "--dangerously-bypass-approvals-and-sandbox"],
+            argv=list(build_codex_container_argv()),
             env={},
             workdir=settings.path.parent,
         )

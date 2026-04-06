@@ -14,6 +14,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.adapters.claude_agent_provider import ClaudeAgentProvider
+from scc_cli.core.contracts import AuthReadiness
+from scc_cli.core.errors import ProviderNotReadyError
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -103,10 +105,13 @@ def test_prepare_launch_env_is_clean_str_to_str(
 def _mock_docker_run_claude(
     *,
     volume_rc: int = 0,
-    cat_rc: int = 0,
-    cat_stdout: bytes = b'{"token":"abc"}',
+    oauth_cat_rc: int = 0,
+    oauth_cat_stdout: bytes = b'{"token":"abc"}',
+    host_cat_rc: int = 1,
+    host_cat_stdout: bytes = b"",
     volume_exc: Exception | None = None,
-    cat_exc: Exception | None = None,
+    oauth_cat_exc: Exception | None = None,
+    host_cat_exc: Exception | None = None,
 ) -> MagicMock:
     """Route subprocess.run by Docker subcommand for Claude auth checks."""
 
@@ -115,10 +120,14 @@ def _mock_docker_run_claude(
             if volume_exc is not None:
                 raise volume_exc
             return subprocess.CompletedProcess(cmd, volume_rc, b"", b"")
-        if "cat" in cmd:
-            if cat_exc is not None:
-                raise cat_exc
-            return subprocess.CompletedProcess(cmd, cat_rc, cat_stdout, b"")
+        if cmd[-1].endswith("/.credentials.json"):
+            if oauth_cat_exc is not None:
+                raise oauth_cat_exc
+            return subprocess.CompletedProcess(cmd, oauth_cat_rc, oauth_cat_stdout, b"")
+        if cmd[-1].endswith("/.claude.json"):
+            if host_cat_exc is not None:
+                raise host_cat_exc
+            return subprocess.CompletedProcess(cmd, host_cat_rc, host_cat_stdout, b"")
         return subprocess.CompletedProcess(cmd, 0, b"", b"")
 
     return MagicMock(side_effect=_side_effect)
@@ -130,7 +139,7 @@ class TestClaudeAuthCheck:
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
     def test_auth_present_valid_json(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
         mock_run.side_effect = _mock_docker_run_claude(
-            cat_stdout=json.dumps({"accessToken": "tok"}).encode()
+            oauth_cat_stdout=json.dumps({"accessToken": "tok"}).encode()
         ).side_effect
         result = provider.auth_check()
         assert result.status == "present"
@@ -138,23 +147,40 @@ class TestClaudeAuthCheck:
         assert "auth cache present" in result.guidance
 
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
+    def test_auth_present_from_host_claude_json(
+        self, mock_run: MagicMock, provider: ClaudeAgentProvider
+    ) -> None:
+        mock_run.side_effect = _mock_docker_run_claude(
+            oauth_cat_rc=1,
+            host_cat_rc=0,
+            host_cat_stdout=json.dumps({"oauthAccount": {"email": "user@example.com"}}).encode(),
+        ).side_effect
+        result = provider.auth_check()
+        assert result.status == "present"
+        assert "auth cache present" in result.guidance
+
+    @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
     def test_auth_file_missing(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
-        mock_run.side_effect = _mock_docker_run_claude(cat_rc=1).side_effect
+        mock_run.side_effect = _mock_docker_run_claude(oauth_cat_rc=1, host_cat_rc=1).side_effect
         result = provider.auth_check()
         assert result.status == "missing"
         assert ".credentials.json" in result.guidance
+        assert ".claude.json" in result.guidance
 
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
     def test_auth_file_empty(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
-        mock_run.side_effect = _mock_docker_run_claude(cat_stdout=b"").side_effect
+        mock_run.side_effect = _mock_docker_run_claude(
+            oauth_cat_stdout=b"",
+            host_cat_rc=1,
+        ).side_effect
         result = provider.auth_check()
         assert result.status == "missing"
-        assert "empty" in result.guidance
+        assert ".claude.json" in result.guidance or ".credentials.json" in result.guidance
 
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
     def test_auth_file_invalid_json(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
         mock_run.side_effect = _mock_docker_run_claude(
-            cat_stdout=b"not-json{{{",
+            oauth_cat_stdout=b"not-json{{{",
         ).side_effect
         result = provider.auth_check()
         assert result.status == "missing"
@@ -179,8 +205,53 @@ class TestClaudeAuthCheck:
     @patch("scc_cli.adapters.claude_agent_provider.subprocess.run")
     def test_cat_timeout(self, mock_run: MagicMock, provider: ClaudeAgentProvider) -> None:
         mock_run.side_effect = _mock_docker_run_claude(
-            cat_exc=subprocess.TimeoutExpired(cmd=["docker"], timeout=30)
+            oauth_cat_exc=subprocess.TimeoutExpired(cmd=["docker"], timeout=30)
         ).side_effect
         result = provider.auth_check()
         assert result.status == "missing"
-        assert "Timed out" in result.guidance
+        assert ".credentials.json" in result.guidance or ".claude.json" in result.guidance
+
+
+class TestClaudeBootstrapAuth:
+    """bootstrap_auth() uses browser auth and confirms cache presence afterwards."""
+
+    @patch("scc_cli.adapters.claude_agent_provider.run_claude_browser_auth")
+    def test_bootstrap_auth_succeeds_when_auth_cache_becomes_present(
+        self,
+        mock_browser_auth: MagicMock,
+        provider: ClaudeAgentProvider,
+    ) -> None:
+        mock_browser_auth.return_value = 0
+        with patch.object(
+            provider,
+            "auth_check",
+            return_value=AuthReadiness(
+                status="present",
+                mechanism="oauth_file",
+                guidance="Claude auth cache present — no action needed",
+            ),
+        ):
+            provider.bootstrap_auth()
+
+        mock_browser_auth.assert_called_once()
+
+    @patch("scc_cli.adapters.claude_agent_provider.run_claude_browser_auth")
+    def test_bootstrap_auth_raises_when_cache_still_missing(
+        self,
+        mock_browser_auth: MagicMock,
+        provider: ClaudeAgentProvider,
+    ) -> None:
+        mock_browser_auth.return_value = 1
+        with patch.object(
+            provider,
+            "auth_check",
+            return_value=AuthReadiness(
+                status="missing",
+                mechanism="oauth_file",
+                guidance="Auth cache still missing",
+            ),
+        ):
+            with pytest.raises(ProviderNotReadyError):
+                provider.bootstrap_auth()
+
+        mock_browser_auth.assert_called_once()

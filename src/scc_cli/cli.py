@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SCC - Sandboxed Code CLI
+SCC - Sandboxed Coding CLI
 
 A command-line tool for safely running AI coding agents in Docker sandboxes
 with team-specific configurations and worktree management.
@@ -94,7 +94,7 @@ def main_callback(
     ),
 ) -> None:
     """
-    [bold cyan]SCC[/bold cyan] - Sandboxed Code CLI
+    [bold cyan]SCC[/bold cyan] - Sandboxed Coding CLI
 
     Safely run AI coding agents in Docker sandboxes with team configurations.
     """

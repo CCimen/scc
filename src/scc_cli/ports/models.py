@@ -72,6 +72,21 @@ class SandboxStatus:
 
 
 @dataclass(frozen=True)
+class SandboxConflict:
+    """Describe a launch conflict with an already-existing sandbox.
+
+    This is intentionally runtime-neutral: callers only learn that a sandbox
+    already exists for the requested launch spec, plus enough metadata to
+    render operator-facing guidance.  Callers do not infer provider-specific
+    behavior from this model.
+    """
+
+    handle: SandboxHandle
+    state: SandboxState
+    process_summary: str | None = None
+
+
+@dataclass(frozen=True)
 class AgentCommand:
     """Command specification for launching an agent."""
 

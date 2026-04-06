@@ -314,7 +314,8 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
         try:
             from scc_cli import config as config_module
 
-            provider_id = config_module.get_selected_provider() or "claude"
+            configured_provider = config_module.get_selected_provider()
+            provider_id = configured_provider if configured_provider in {"claude", "codex"} else "claude"
         except Exception:
             provider_id = "claude"
 
@@ -397,7 +398,8 @@ def check_provider_image(provider_id: str | None = None) -> CheckResult:
         try:
             from scc_cli import config as config_module
 
-            provider_id = config_module.get_selected_provider() or "claude"
+            configured_provider = config_module.get_selected_provider()
+            provider_id = configured_provider if configured_provider in {"claude", "codex"} else "claude"
         except Exception:
             provider_id = "claude"
 

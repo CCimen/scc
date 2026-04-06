@@ -194,7 +194,7 @@ def status_cmd(
     org_config = config.load_cached_org_config()
 
     # Get running containers
-    running_containers = docker.list_running_sandboxes()
+    running_containers = docker.list_running_scc_containers()
 
     # Get current workspace
     workspace_path = Path.cwd()

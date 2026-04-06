@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
-import tomllib
-
 from scc_cli.adapters.codex_agent_runner import DEFAULT_SETTINGS_PATH, CodexAgentRunner
+from scc_cli.adapters.codex_launch import build_codex_container_argv
+
+tomllib = importlib.import_module("tomllib")
 
 
 class TestCodexAgentRunner:
@@ -44,7 +46,7 @@ class TestCodexAgentRunner:
         command = runner.build_command(settings)
         assert command.argv[0] == "codex"
         # D033: must include bypass flag for container-level sandbox deferral
-        assert "--dangerously-bypass-approvals-and-sandbox" in command.argv
+        assert "--dangerously-bypass-approvals-and-sandbox" in " ".join(command.argv)
         # Claude-style flag must NOT appear
         assert "--dangerously-skip-permissions" not in command.argv
 
@@ -57,7 +59,7 @@ class TestCodexAgentRunner:
         runner = CodexAgentRunner()
         settings = runner.build_settings({}, path=DEFAULT_SETTINGS_PATH)
         command = runner.build_command(settings)
-        assert command.argv == ["codex", "--dangerously-bypass-approvals-and-sandbox"]
+        assert command.argv == list(build_codex_container_argv())
 
     def test_describe_returns_codex(self) -> None:
         runner = CodexAgentRunner()

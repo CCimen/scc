@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-05T16:13:06.462Z",
+  "exported_at": "2026-04-06T12:02:15.917Z",
   "milestones": [
     {
       "id": "M001",
@@ -327,6 +327,87 @@
       ],
       "requirement_coverage": "R001 (maintainability): typed registry, provider-owned serialization, provider-native config layering, fail-closed resolution, constant isolation.",
       "boundary_map_markdown": "```\\nSCC config ownership:\\n  Claude: SCC writes .claude/settings.json (container)\\n         User owns .claude/settings.local.json (volume)\\n  Codex:  SCC writes /workspace/.codex/config.toml (workspace mount)\\n         User owns ~/.codex/config.toml (volume)\\n\\nprovider_registry.py: PROVIDER_REGISTRY, get_runtime_spec() [fail-closed]\\ncore/contracts.py: ProviderRuntimeSpec, AgentSettings(rendered_bytes), AuthReadiness\\nadapters/: Runners own serialization + command. Providers own auth_check.\\nOCI runtime: format-agnostic, config freshness, permission normalization.\\ndocker/: Claude-only, docker/constants.py.\\nconstants.py: shared-only.\\n```"
+    },
+    {
+      "id": "M008-g7jk8d",
+      "title": "Cross-Flow Consistency, Reliability, and Maintainability Hardening",
+      "status": "queued",
+      "depends_on": [],
+      "created_at": "2026-04-06T11:02:00.606Z",
+      "completed_at": null,
+      "vision": "Every user-facing flow (setup, start, dashboard resume, dashboard worktree start, worktree create, doctor) uses the same launch preflight orchestration: resolve provider → collect readiness → ensure image → ensure auth → launch. Stale Docker Desktop assumptions are removed from active paths. Auth/readiness wording is truthful and consistent across all surfaces (distinguishing auth cache present, image present, and launch-ready). Error messages give actionable SCC guidance. Session recording threads provider_id through all context objects. The five current copies of the launch preflight sequence collapse into one shared module. SCC list/stop/status/resume all operate on the same SCC-managed inventory. Product branding stays 'Sandboxed Coding CLI' per D045.",
+      "success_criteria": [
+        "All five launch sites (flow.py start, run_start_wizard_flow, worktree_create_cmd, dashboard _handle_worktree_start, dashboard _handle_session_resume) call the same shared launch preflight module — no inline resolution/image/auth duplication",
+        "Shared preflight module lives in commands/launch/preflight.py (or similar neutral module) — not a private helper imported across command boundaries",
+        "worktree_commands.py worktree create --start uses the shared preflight instead of resolve_active_provider() directly",
+        "WorkContext.provider_id is populated in _record_session_and_context()",
+        "No active-path user-facing error message references 'Docker Desktop' — only 'Docker' or 'container runtime'",
+        "'start_claude' variable/parameter renamed to provider-neutral name",
+        "Auth-status vocabulary is consistent across doctor, setup summary, and choose-provider screen — 'auth cache present' not 'connected' where only cache presence is checked",
+        "Setup summary and doctor distinguish auth cache present vs image present vs launch-ready — not a single 'ready' label",
+        "scc list, scc stop, scc status, dashboard resume, and session resume all operate on the same SCC-managed container inventory with SCC-first guidance",
+        "Product name stays 'Sandboxed Coding CLI' per D045 — no branding regression",
+        "Failed launches do not write workspace last_used_provider",
+        "Edge cases tested: ask + workspace_last_used, resume after auth volume deleted, resume after image removed",
+        "All changes backed by targeted tests — no behavior change without a test",
+        "Full suite passes: ruff clean, mypy clean, pytest green with zero regressions from 4820 baseline",
+        "One Docker-backed smoke check per provider (image-missing auto-build, auth-missing bootstrap) where practical"
+      ],
+      "key_risks": [
+        {
+          "risk": "Five-site preflight consolidation could break subtle behavioral differences between flows",
+          "whyItMatters": "Each flow has slightly different context (CLI flags, resume state, non-interactive mode, dashboard console) — the shared module must handle all variants without regression"
+        },
+        {
+          "risk": "Dashboard handlers import private helpers from flow.py (_allowed_provider_ids) — extracting to a shared module may break import chains",
+          "whyItMatters": "The dashboard handler imports are deferred (inside function bodies) to avoid circular imports; moving them to a new module must preserve this pattern"
+        },
+        {
+          "risk": "Wording changes in doctor/setup could break existing test assertions on exact strings",
+          "whyItMatters": "Multiple test files assert on exact string output from doctor and setup summary"
+        },
+        {
+          "risk": "Container lifecycle audit may reveal deeper architectural issues in docker/ module",
+          "whyItMatters": "Lifecycle commands delegate to docker.list_scc_containers() which uses both label-based and image-based filtering — inconsistency here affects all inventory surfaces"
+        }
+      ],
+      "proof_strategy": [
+        {
+          "riskOrUnknown": "Five-site preflight consolidation regression",
+          "retireIn": "S01",
+          "whatWillBeProven": "Characterization tests capture each site's behavior before consolidation. After: same tests pass with shared module."
+        },
+        {
+          "riskOrUnknown": "Auth wording consistency",
+          "retireIn": "S02",
+          "whatWillBeProven": "Guardrail test scans user-facing auth status strings for consistent vocabulary. Setup/doctor readiness tests verify three-tier distinction."
+        },
+        {
+          "riskOrUnknown": "Resume after drift",
+          "retireIn": "S03",
+          "whatWillBeProven": "Edge case tests prove resume handles missing auth, missing image, and unlaunched provider gracefully"
+        },
+        {
+          "riskOrUnknown": "Container inventory consistency",
+          "retireIn": "S02",
+          "whatWillBeProven": "Test verifies list/stop/status/resume all use same SCC-managed inventory source"
+        }
+      ],
+      "verification_contract": "ruff check, mypy src/scc_cli, pytest -q — all green with zero regressions from M007 baseline of 4820 passed",
+      "verification_integration": "Focused pytest on touched modules: provider choice, launch preflight, workspace local config, doctor wiring, docs truthfulness, container commands",
+      "verification_operational": "Doctor output distinguishes auth/image/launch-ready. Setup summary uses three-tier readiness vocabulary. All SCC lifecycle commands give SCC-first guidance.",
+      "verification_uat": "Docker-backed smoke checks: (1) delete provider image, run scc start — auto-build + launch succeeds, (2) delete auth volume, run scc start — auth bootstrap + launch succeeds. Both for Claude and Codex where practical.",
+      "definition_of_done": [
+        "All slices complete with passing verification",
+        "Full test suite passes (≥4820, zero regressions)",
+        "ruff check clean",
+        "mypy src/scc_cli clean",
+        "No active-path 'Docker Desktop' references in user-facing strings",
+        "Launch preflight used from one shared module in all five launch sites",
+        "Product branding preserved as 'Sandboxed Coding CLI' per D045"
+      ],
+      "requirement_coverage": "R001 (maintainability) — advanced by collapsing five copies of launch preflight into one shared module, consolidating adapter dispatch, removing stale naming drift",
+      "boundary_map_markdown": "```\\nShared Launch Preflight (commands/launch/preflight.py)\\n  resolve_and_launch() / resolve_provider_for_launch()\\n    \\u251c\\u2500 choose_start_provider()  (provider_choice.py)\\n    \\u251c\\u2500 ensure_provider_image()  (provider_image.py)\\n    \\u251c\\u2500 ensure_provider_auth()   (auth_bootstrap.py)\\n    \\u251c\\u2500 prepare_live_start_plan() (dependencies.py)\\n    \\u2514\\u2500 finalize_launch()        (application/launch.py)\\n\\nConsumers (all call shared preflight):\\n  \\u251c\\u2500 flow.py start()\\n  \\u251c\\u2500 flow_interactive.py run_start_wizard_flow()\\n  \\u251c\\u2500 worktree_commands.py worktree_create_cmd()\\n  \\u251c\\u2500 orchestrator_handlers.py _handle_worktree_start()\\n  \\u2514\\u2500 orchestrator_handlers.py _handle_session_resume()\\n```"
     }
   ],
   "slices": [
@@ -1125,6 +1206,71 @@
       "proof_level": "contract — verifies naming consistency and structural truthfulness via automated guardrail tests",
       "integration_closure": "Upstream: S01 provides ProviderRuntimeSpec and registry in core/provider_registry.py and core/contracts.py. S01 provides InvalidProviderError in core/errors.py. S03 provides check_provider_auth in doctor/checks/environment.py. S04 provides cleaned core/constants.py. All are verified to exist. No new wiring — truthfulness tests are read-only structural assertions. After this slice: milestone is feature-complete.",
       "observability_impact": "none",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "id": "S01",
+      "title": "Provider resolution consistency across worktree create and wizard flow",
+      "status": "pending",
+      "risk": "high",
+      "depends": [],
+      "demo": "worktree create --start uses choose_start_provider() with full precedence. run_start_wizard_flow() reuses shared resolution. WorkContext records provider_id. start_claude renamed.",
+      "created_at": "2026-04-06T11:03:03.701Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Collapse five copies of resolve-provider/ensure-image/ensure-auth/launch into one shared preflight module with clean separation of pure decision logic from side effects. All launch paths produce identical behavior for the same inputs.",
+      "success_criteria": "Shared preflight module exists in commands/launch/preflight.py with three-function split: resolve_launch_provider() (pure), collect_launch_readiness() (pure), ensure_launch_ready() (side effects). All five sites refactored to use it. Preflight module stays command-layer only — no provider-specific behavior in core, no UI wording beyond structured results/errors. Characterization tests pass before and after. start_claude renamed. WorkContext.provider_id threaded. _allowed_provider_ids moved to shared module.",
+      "proof_level": "characterization tests + focused pytest on all five launch paths",
+      "integration_closure": "All launch paths produce identical preflight behavior. Dashboard handlers no longer import private flow.py helpers. Non-interactive mode fails with typed actionable guidance — never prompts or silently switches.",
+      "observability_impact": "WorkContext.provider_id populated in all flows — visible in Quick Resume display. Structured LaunchReadiness result surfaces auth/image state for callers.",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "id": "S02",
+      "title": "Auth/readiness wording truthfulness, Docker Desktop cleanup, and adapter dispatch consolidation",
+      "status": "pending",
+      "risk": "medium",
+      "depends": [
+        "S01"
+      ],
+      "demo": "Doctor, setup summary, and choose-provider screen use consistent auth vocabulary. No 'Docker Desktop' in active error paths. Provider adapter dispatch uses shared lookup.",
+      "created_at": "2026-04-06T11:03:03.701Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Auth wording is truthful with three-tier distinction. Stale Docker Desktop references removed from active paths. Container lifecycle commands are consistent. Provider adapter dispatch consolidated.",
+      "success_criteria": "Auth vocabulary consistent and three-tier across doctor, setup, provider choice. Docker Desktop removed from active user-facing messages. list/stop/status/resume use same inventory. Adapter dispatch consolidated. Branding preserved per D045. Guardrail tests for vocabulary and branding.",
+      "proof_level": "targeted tests + guardrail test scanning auth status strings + lifecycle consistency tests",
+      "integration_closure": "All user-facing auth and readiness surfaces render from AuthReadiness with consistent vocabulary. All lifecycle commands use one inventory source.",
+      "observability_impact": "Operators see truthful, consistent readiness info across all SCC surfaces",
+      "sequence": 0,
+      "replan_triggered_at": null
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "id": "S03",
+      "title": "Error quality, edge case hardening, and final verification",
+      "status": "pending",
+      "risk": "low",
+      "depends": [
+        "S01",
+        "S02"
+      ],
+      "demo": "Error messages give actionable SCC guidance. Edge cases (both providers connected, none connected, explicit --provider with missing auth, failed launch doesn't write workspace preference) handled correctly.",
+      "created_at": "2026-04-06T11:03:03.701Z",
+      "completed_at": null,
+      "full_summary_md": "",
+      "full_uat_md": "",
+      "goal": "Edge cases don't produce confusing behavior. Error messages are truthful and actionable. Resume-after-drift is resilient. Setup is idempotent. Residual legacy code documented. Smoke checks verify cross-flow product behavior.",
+      "success_criteria": "Edge case tests for: ask+workspace_last_used preselection, resume after auth volume deleted, resume after image removed, explicit --provider with missing auth stays on that provider, auth bootstrap callback failure produces clean SCC error. Failed launches don't write workspace preference. Conflict-path Keep-existing writes preference consistently across start/dashboard/resume. Setup re-run after one provider connected only asks missing questions. Error messages audited and improved. Residual Docker Desktop code locations documented. Full suite green. Docker-backed smoke checks for image-missing and auth-missing flows.",
+      "proof_level": "focused edge case tests + full suite + Docker smoke checks",
+      "integration_closure": "All error and edge-case paths produce actionable messages; no silent state corruption on failures; resume-after-drift handles all degradation scenarios gracefully",
+      "observability_impact": "Better error messages and graceful degradation reduce support burden",
       "sequence": 0,
       "replan_triggered_at": null
     }
@@ -6777,6 +6923,466 @@
       "observability_impact": "",
       "full_plan_md": "",
       "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S01",
+      "id": "T01",
+      "title": "43 characterization tests capture provider resolution behavior across all five launch preflight sites and the WorkContext provider_id gap",
+      "status": "complete",
+      "one_liner": "43 characterization tests capture provider resolution behavior across all five launch preflight sites and the WorkContext provider_id gap",
+      "narrative": "Wrote tests/test_launch_preflight_characterization.py with 43 tests in 8 classes. Each class maps to one launch site and documents its specific provider resolution behavior as a regression baseline. Key findings: (1) worktree_commands uses resolve_active_provider() directly with a hardcoded 'claude' default — no workspace_last_used, no connected probing, no ensure_provider_auth; (2) _record_session_and_context forwards provider_id to sessions.record_session() but not to WorkContext; (3) 'ask' config suppresses workspace_last_used entirely because the check precedes it in resolve_provider_preference.",
+      "verification_result": "All 43 characterization tests pass. ruff check clean. mypy clean. Full pytest suite shows 4921 passed with 26 pre-existing failures in unrelated test_setup_wizard.py and test_start_dryrun.py.",
+      "duration": "",
+      "completed_at": "2026-04-06T12:02:15.875Z",
+      "blocker_discovered": false,
+      "deviations": "Fixed one test assertion: initially assumed 'ask' + workspace_last_used would resolve, but actual code returns None before reaching workspace_last_used branch.",
+      "known_issues": "None.",
+      "key_files": [
+        "tests/test_launch_preflight_characterization.py"
+      ],
+      "key_decisions": [
+        "Document that 'ask' config suppresses workspace_last_used in resolve_provider_preference"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S01\nmilestone: M008-g7jk8d\nkey_files:\n  - tests/test_launch_preflight_characterization.py\nkey_decisions:\n  - Document that 'ask' config suppresses workspace_last_used in resolve_provider_preference\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T12:02:15.874Z\nblocker_discovered: false\n---\n\n# T01: 43 characterization tests capture provider resolution behavior across all five launch preflight sites and the WorkContext provider_id gap\n\n**43 characterization tests capture provider resolution behavior across all five launch preflight sites and the WorkContext provider_id gap**\n\n## What Happened\n\nWrote tests/test_launch_preflight_characterization.py with 43 tests in 8 classes. Each class maps to one launch site and documents its specific provider resolution behavior as a regression baseline. Key findings: (1) worktree_commands uses resolve_active_provider() directly with a hardcoded 'claude' default — no workspace_last_used, no connected probing, no ensure_provider_auth; (2) _record_session_and_context forwards provider_id to sessions.record_session() but not to WorkContext; (3) 'ask' config suppresses workspace_last_used entirely because the check precedes it in resolve_provider_preference.\n\n## Verification\n\nAll 43 characterization tests pass. ruff check clean. mypy clean. Full pytest suite shows 4921 passed with 26 pre-existing failures in unrelated test_setup_wizard.py and test_start_dryrun.py.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run pytest tests/test_launch_preflight_characterization.py -v` | 0 | ✅ pass | 1000ms |\n| 2 | `uv run ruff check` | 0 | ✅ pass | 1200ms |\n| 3 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 75000ms |\n| 4 | `uv run pytest` | 1 | ✅ pass (pre-existing failures only) | 68000ms |\n\n## Deviations\n\nFixed one test assertion: initially assumed 'ask' + workspace_last_used would resolve, but actual code returns None before reaching workspace_last_used branch.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `tests/test_launch_preflight_characterization.py`\n",
+      "description": "Write characterization tests capturing the current behavior of each launch preflight copy:\n\n1. flow.py start() — provider resolution with full precedence (cli_flag, resume, workspace_last_used, config, auth probing)\n2. flow_interactive.py run_start_wizard_flow() — inline provider resolution (no cli_flag, no resume_provider)\n3. worktree_commands.py worktree_create_cmd() — uses resolve_active_provider() directly (missing workspace_last_used, missing image/auth bootstrap)\n4. orchestrator_handlers.py _handle_worktree_start() — inline resolution + image + auth (imports _allowed_provider_ids from flow.py)\n5. orchestrator_handlers.py _handle_session_resume() — inline resolution with resume_provider + image + auth\n\nAlso characterize:\n- _record_session_and_context: verify WorkContext.provider_id is currently None\n- Non-interactive behavior: verify each site's behavior when non_interactive=True and provider/image/auth is missing\n\nThese tests document current behavior as the regression baseline.",
+      "estimate": "40min",
+      "files": [
+        "tests/test_launch_preflight_characterization.py"
+      ],
+      "verify": "uv run pytest tests/test_launch_preflight_characterization.py -v",
+      "inputs": [
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "src/scc_cli/commands/worktree/worktree_commands.py",
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "src/scc_cli/commands/launch/flow_session.py"
+      ],
+      "expected_output": [
+        "tests/test_launch_preflight_characterization.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S01",
+      "id": "T02",
+      "title": "Create shared launch preflight module with typed readiness model and pure/side-effect separation",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Create src/scc_cli/commands/launch/preflight.py with clean three-function split and fully typed readiness model.\n\n**Typed readiness model (not loose booleans/strings):**\n\n```python\nclass ImageStatus(Enum):\n    AVAILABLE = \"available\"\n    MISSING = \"missing\"\n    UNKNOWN = \"unknown\"\n\nclass AuthStatus(Enum):\n    PRESENT = \"present\"\n    MISSING = \"missing\"\n    EXPIRED = \"expired\"\n    UNKNOWN = \"unknown\"\n\nclass ProviderResolutionSource(Enum):\n    EXPLICIT = \"explicit\"         # --provider flag\n    RESUME = \"resume\"             # resumed session\n    WORKSPACE_LAST_USED = \"workspace_last_used\"\n    GLOBAL_PREFERRED = \"global_preferred\"\n    AUTO_SINGLE = \"auto_single\"   # only one provider connected/allowed\n    PROMPTED = \"prompted\"         # user chose from interactive picker\n\n@dataclass(frozen=True)\nclass LaunchReadiness:\n    provider_id: str\n    resolution_source: ProviderResolutionSource\n    image_status: ImageStatus\n    auth_status: AuthStatus\n    requires_image_bootstrap: bool   # derived: image_status is MISSING\n    requires_auth_bootstrap: bool    # derived: auth_status is MISSING\n    launch_ready: bool               # derived: both image + auth present\n```\n\nThis prevents ad hoc branching glue — callers pattern-match on enum values, not string comparisons or bool combos.\n\n**Pure decision functions (no I/O, fully testable):**\n1. `allowed_provider_ids(normalized_org, team)` — moved from flow.py, made public\n2. `resolve_launch_provider(...)` → `(provider_id, ProviderResolutionSource)` — wraps choose_start_provider() with standard parameter assembly. Returns resolved provider + source. Pure data in → data out.\n3. `collect_launch_readiness(provider_id, resolution_source, adapters)` → `LaunchReadiness` — checks image availability and auth readiness via adapter, returns fully typed readiness state. No fixing, no side effects.\n\n**Side-effect function:**\n4. `ensure_launch_ready(readiness, *, console, non_interactive, show_notice)` — calls ensure_provider_image() and ensure_provider_auth() based on LaunchReadiness gaps. In non-interactive mode: raises typed ProviderNotReadyError with actionable guidance. Uses readiness.requires_image_bootstrap / requires_auth_bootstrap to decide — no re-probing.\n\n**Architecture guards (D046):**\n- Module stays command-layer only. No imports from core/ except types and errors.\n- No provider-specific behavior — dispatches to provider_image.py and auth_bootstrap.py.\n- No UI wording beyond structured error messages (user_message, suggested_action).\n- Returns structured typed results; callers own rendering and launch orchestration.\n\n**Caller pattern:**\n```python\nprovider_id, source = resolve_launch_provider(...)\nreadiness = collect_launch_readiness(provider_id, source, adapters)\nensure_launch_ready(readiness, console=..., non_interactive=...)\ndeps, plan = prepare_live_start_plan(request, ...)\n# caller owns: conflict resolution, output rendering, finalize_launch\n```\n\nWrite unit tests for each function independently. Test the enum-based readiness model edge cases. Verify non-interactive contract: missing provider/image/auth → typed error with actionable guidance, never prompts.",
+      "estimate": "50min",
+      "files": [
+        "src/scc_cli/commands/launch/preflight.py",
+        "tests/test_launch_preflight.py"
+      ],
+      "verify": "uv run pytest tests/test_launch_preflight.py -v && uv run ruff check src/scc_cli/commands/launch/preflight.py && uv run mypy src/scc_cli/commands/launch/preflight.py",
+      "inputs": [
+        "src/scc_cli/commands/launch/provider_choice.py",
+        "src/scc_cli/commands/launch/provider_image.py",
+        "src/scc_cli/commands/launch/auth_bootstrap.py",
+        "src/scc_cli/commands/launch/dependencies.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/commands/launch/preflight.py",
+        "tests/test_launch_preflight.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S01",
+      "id": "T03",
+      "title": "Refactor flow.py start() and flow_interactive.py run_start_wizard_flow() to use shared preflight",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Refactor the two CLI launch paths:\n\n1. flow.py start(): Replace the inline _resolve_provider() + ensure_provider_image() + ensure_provider_auth() + prepare_live_start_plan() sequence with calls to resolve_launch_provider(), collect_launch_readiness(), ensure_launch_ready(). Keep prepare_live_start_plan(), conflict resolution, dry-run, personal profile, and output rendering as flow.py-specific caller-owned concerns.\n2. flow_interactive.py run_start_wizard_flow(): Replace the inline allowed_provider_ids + choose_start_provider + ensure_provider_image + ensure_provider_auth + prepare_live_start_plan sequence with the same three-function calls.\n3. Remove _resolve_provider() from flow.py (now resolve_launch_provider in preflight.py). Remove _allowed_provider_ids() from flow.py (now allowed_provider_ids in preflight.py).\n4. Update imports in both files. Ensure re-exports in __init__.py stay clean.\n\nVerify characterization tests still pass. Verify non-interactive contract holds.",
+      "estimate": "35min",
+      "files": [
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py",
+        "tests/test_launch_preflight_characterization.py"
+      ],
+      "verify": "uv run pytest tests/test_launch_preflight_characterization.py tests/test_launch_preflight.py -v && uv run ruff check src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py && uv run mypy src/scc_cli/commands/launch/flow.py src/scc_cli/commands/launch/flow_interactive.py",
+      "inputs": [
+        "src/scc_cli/commands/launch/preflight.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/commands/launch/flow.py",
+        "src/scc_cli/commands/launch/flow_interactive.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S01",
+      "id": "T04",
+      "title": "Refactor dashboard handlers and worktree create to use shared preflight",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Refactor the three remaining launch paths:\n\n1. orchestrator_handlers.py _handle_worktree_start(): Replace ~80 lines of inline preflight with resolve_launch_provider() + collect_launch_readiness() + ensure_launch_ready(). Remove import of flow.py::_allowed_provider_ids.\n2. orchestrator_handlers.py _handle_session_resume(): Same — replace inline preflight. Pass session.provider_id as resume_provider.\n3. worktree_commands.py worktree_create_cmd(): Replace resolve_active_provider() with resolve_launch_provider() + collect_launch_readiness() + ensure_launch_ready(). This adds image and auth bootstrap that were completely missing.\n4. Rename start_claude parameter to start_agent (keep --start/--no-start CLI flags).\n5. Thread provider_id through _record_session_and_context() → WorkContext constructor.\n\nVerify characterization tests still pass. The worktree create tests should now show enhanced behavior (image + auth bootstrap).",
+      "estimate": "45min",
+      "files": [
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "src/scc_cli/commands/worktree/worktree_commands.py",
+        "src/scc_cli/commands/launch/flow_session.py",
+        "tests/test_launch_preflight_characterization.py"
+      ],
+      "verify": "uv run pytest tests/test_launch_preflight_characterization.py tests/test_launch_preflight.py -v && uv run ruff check src/scc_cli/ui/dashboard/orchestrator_handlers.py src/scc_cli/commands/worktree/worktree_commands.py src/scc_cli/commands/launch/flow_session.py && uv run mypy src/scc_cli/ui/dashboard/orchestrator_handlers.py src/scc_cli/commands/worktree/worktree_commands.py src/scc_cli/commands/launch/flow_session.py",
+      "inputs": [
+        "src/scc_cli/commands/launch/preflight.py"
+      ],
+      "expected_output": [
+        "src/scc_cli/ui/dashboard/orchestrator_handlers.py",
+        "src/scc_cli/commands/worktree/worktree_commands.py",
+        "src/scc_cli/commands/launch/flow_session.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S01",
+      "id": "T05",
+      "title": "Structural guardrail test, provider metadata source verification, and full suite gate",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "**Structural anti-drift guardrail (main maintainability guard of M008):**\n\nCreate tests/test_launch_preflight_guardrail.py with a structural test that scans the five launch entry-point files for inline preflight orchestration. The test should:\n1. Parse each of the five files (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py ×2 functions) using tokenize or AST\n2. Assert that none of them contain direct calls to `ensure_provider_image()`, `ensure_provider_auth()`, `choose_start_provider()`, or `resolve_active_provider()` — all of which should now flow through preflight.py\n3. Assert that each file imports from `commands.launch.preflight`\n4. This is a mechanical guardrail — if someone adds inline preflight back to one of the five sites, this test fails immediately.\n\nPattern: similar to test_no_claude_constants_in_core.py and test_import_boundaries.py — structural scanning, not behavioral mocking.\n\n**Single provider metadata source verification:**\n5. Add a guardrail test (in the same file or test_docs_truthfulness.py) verifying that image refs, display names, and adapter lookup all resolve from one source — the ProviderRuntimeSpec registry (core/provider_registry.py) and _PROVIDER_DISPATCH (dependencies.py). The test scans for hardcoded image refs or display name strings outside of those two canonical locations plus the adapter modules that own them.\n6. This catches the exact consistency bug M008 is cleaning: scattered provider constants that drift.\n\n**Full verification gate:**\n7. ruff check on all touched files\n8. mypy on all touched source files\n9. Focused pytest on characterization, preflight, and guardrail tests\n10. Full pytest suite (must be >= 4820 with zero regressions)\n11. Verify via rg that start_claude no longer appears in the codebase\n12. Verify preflight.py has no imports from core/ except types/errors (D046 architecture guard)",
+      "estimate": "25min",
+      "files": [
+        "tests/test_launch_preflight_guardrail.py"
+      ],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest -q",
+      "inputs": [
+        "src/scc_cli/commands/launch/preflight.py",
+        "src/scc_cli/core/provider_registry.py",
+        "src/scc_cli/commands/launch/dependencies.py"
+      ],
+      "expected_output": [
+        "tests/test_launch_preflight_guardrail.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S02",
+      "id": "T01",
+      "title": "Audit and fix auth-status vocabulary with three-tier readiness distinction",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Audit every user-facing string that describes provider readiness:\n\n1. Doctor output (checks/environment.py, render.py) — currently uses 'auth cache present'\n2. Setup summary (setup.py _render_setup_summary, _render_provider_status) — uses what vocabulary?\n3. Provider choice prompt (provider_choice.py prompt_for_provider_choice) — uses 'connected' vs 'sign-in required'\n4. Auth bootstrap (auth_bootstrap.py) — uses 'auth cache is missing'\n\nEstablish canonical three-tier vocabulary:\n- 'auth cache present' — when we only check file existence (not 'connected')\n- 'image available' — when provider image exists locally (not 'ready')\n- 'launch-ready' — only when BOTH auth + image are present\n\nFix mismatches. In particular:\n- provider_choice.py: change 'connected' to 'auth cache present' and 'sign-in required' to 'sign-in needed'\n- setup summary: distinguish auth vs image in the completion display\n- doctor: keep current vocabulary (already truthful) but add image check alongside auth check in grouped output\n\nAdd guardrail test scanning for banned terms ('connected' meaning auth cache, standalone 'ready' meaning only one tier).",
+      "estimate": "35min",
+      "files": [
+        "src/scc_cli/commands/launch/provider_choice.py",
+        "src/scc_cli/setup.py",
+        "src/scc_cli/doctor/checks/environment.py",
+        "tests/test_auth_vocabulary_guardrail.py"
+      ],
+      "verify": "uv run pytest tests/test_auth_vocabulary_guardrail.py -v && uv run ruff check",
+      "inputs": [
+        "src/scc_cli/commands/launch/auth_bootstrap.py",
+        "src/scc_cli/doctor/render.py"
+      ],
+      "expected_output": [
+        "tests/test_auth_vocabulary_guardrail.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S02",
+      "id": "T02",
+      "title": "Remove Docker Desktop references from active user-facing paths and verify lifecycle inventory consistency",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Docker Desktop cleanup:\n1. admin.py:480 — change 'Ensure Docker Desktop is running' to 'Ensure Docker is running'\n2. container_commands.py:304 prune_cmd comment — reword to mention 'containers not created by SCC' rather than 'Docker Desktop'\n3. Scan all remaining user-facing strings in commands/ for 'Docker Desktop' via rg — fix to 'Docker' or 'container runtime'\n4. Keep Docker Desktop references ONLY in: docker/core.py, docker/launch.py, docker/sandbox.py, adapters/docker_sandbox_runtime.py, adapters/docker_runtime_probe.py, core/errors.py (typed error for Desktop-specific failures)\n\nLifecycle inventory consistency:\n5. Verify scc list, scc stop, scc prune, scc status, dashboard container actions, and session resume all use docker.list_scc_containers() or its running variant as the SCC-managed inventory source\n6. Check that stale/non-SCC containers (no scc labels) don't pollute the active inventory\n7. Write a focused test verifying inventory consistency across command surfaces\n\nUpdate test_docs_truthfulness.py with Docker Desktop boundary guardrail.",
+      "estimate": "30min",
+      "files": [
+        "src/scc_cli/commands/admin.py",
+        "src/scc_cli/commands/worktree/container_commands.py",
+        "tests/test_docs_truthfulness.py",
+        "tests/test_lifecycle_inventory_consistency.py"
+      ],
+      "verify": "uv run pytest tests/test_docs_truthfulness.py tests/test_lifecycle_inventory_consistency.py -v && uv run ruff check",
+      "inputs": [],
+      "expected_output": [
+        "tests/test_lifecycle_inventory_consistency.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S02",
+      "id": "T03",
+      "title": "Consolidate provider adapter dispatch, preserve branding, and verify init template",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Provider adapter dispatch:\n1. In provider_choice.py collect_provider_readiness(): the hardcoded adapters_by_provider dict maps provider_id to adapter fields. Extract into a shared helper or reuse the _PROVIDER_DISPATCH pattern from dependencies.py.\n2. In setup.py _run_provider_onboarding(): same hardcoded provider_map. Use the shared helper.\n3. The goal: one dispatch surface for 'which adapter field is the AgentProvider for provider X' — consumed by dependencies.py, provider_choice.py, and setup.py.\n\nBranding:\n4. Verify init.py .scc.yaml template uses 'Sandboxed Coding CLI' per D045 (NOT 'Sandboxed Code CLI'). If it says 'Sandboxed Code CLI', that is the old D030 wording and must be corrected to match D045.\n5. Add/update guardrail test verifying .scc.yaml template matches D045 product name.\n\nNote: the live codebase already shows 'Sandboxed Coding CLI' in init.py line 73 — verify it's correct and add the test.",
+      "estimate": "25min",
+      "files": [
+        "src/scc_cli/commands/launch/provider_choice.py",
+        "src/scc_cli/setup.py",
+        "src/scc_cli/commands/init.py",
+        "tests/test_docs_truthfulness.py"
+      ],
+      "verify": "uv run pytest tests/test_docs_truthfulness.py tests/test_start_provider_choice.py -v && uv run ruff check && uv run mypy src/scc_cli/commands/launch/provider_choice.py src/scc_cli/setup.py",
+      "inputs": [
+        "src/scc_cli/commands/launch/dependencies.py"
+      ],
+      "expected_output": [],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S02",
+      "id": "T04",
+      "title": "Slice verification gate",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "Run full verification:\n1. ruff check on all touched files\n2. mypy on all touched source files\n3. Focused pytest on guardrail, truthfulness, lifecycle, and provider choice tests\n4. Full pytest suite (>= 4820 with zero regressions)\n5. Verify via rg that no active user-facing string in commands/ contains 'Docker Desktop'\n6. Verify branding consistency: rg 'Sandboxed Cod' src/scc_cli/ should show only 'Sandboxed Coding CLI'",
+      "estimate": "10min",
+      "files": [],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest -q",
+      "inputs": [],
+      "expected_output": [],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S03",
+      "id": "T01",
+      "title": "Guard workspace preference and conflict-path consistency, test ask+last-used preselection",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "**Failed launch guard:**\n1. Verify set_workspace_last_used_provider() is called ONLY after finalize_launch() succeeds in all five sites (via preflight module from S01). If finalize_launch raises, the preference must NOT be written.\n2. Verify the KEEP_EXISTING conflict path also writes workspace preference consistently across flow.py start(), run_start_wizard_flow(), dashboard _handle_worktree_start(), and dashboard _handle_session_resume(). All four should behave the same.\n\n**Ask + workspace_last_used preselection:**\n3. Test: global preference='ask', workspace_last_used='codex' → chooser appears (ask suppresses auto-select), BUT codex is preselected as default.\n4. Verify _resolve_prompt_default() in provider_choice.py correctly returns workspace_last_used when it's in connected_allowed and candidates.\n5. Test: global preference='ask', workspace_last_used='codex', codex NOT connected → chooser appears, no preselection.\n6. Test: global preference='ask', no workspace_last_used → chooser appears with no preselection.\n\n**Write edge case tests:**\n- Failed launch (finalize_launch raises) → workspace preference NOT updated\n- Cancelled launch → workspace preference NOT updated\n- Successful launch → workspace preference written\n- KEEP_EXISTING via start → preference written\n- KEEP_EXISTING via dashboard resume → preference written (same behavior)",
+      "estimate": "30min",
+      "files": [
+        "tests/test_workspace_provider_persistence.py",
+        "tests/test_start_provider_choice.py"
+      ],
+      "verify": "uv run pytest tests/test_workspace_provider_persistence.py tests/test_start_provider_choice.py -v",
+      "inputs": [
+        "src/scc_cli/commands/launch/preflight.py",
+        "src/scc_cli/commands/launch/provider_choice.py",
+        "src/scc_cli/workspace_local_config.py"
+      ],
+      "expected_output": [
+        "tests/test_workspace_provider_persistence.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S03",
+      "id": "T02",
+      "title": "Resume-after-drift edge cases and auth bootstrap failure handling",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "**Resume-after-drift tests:**\n1. Session exists with provider_id='codex', but Codex auth volume was deleted → resume triggers auth bootstrap (not silent switch to Claude)\n2. Session exists with provider_id='codex', but Codex image was removed → resume triggers image auto-build in interactive mode, fails with build command in non-interactive\n3. Session exists with provider_id='codex', explicit --provider claude → CLI flag overrides resume provider (intentional switch)\n4. Session exists with provider_id='codex', codex no longer in allowed_providers → ProviderNotAllowedError\n5. Session exists with provider_id=None (legacy) → falls back to claude at read boundary per D032\n6. Explicit --provider codex with missing auth in non-interactive mode → typed error with actionable guidance, NOT a prompt or silent switch\n\n**Auth bootstrap callback failure:**\n7. Test: Codex auth bootstrap_auth() raises because browser callback port is unavailable → SCC catches and produces a clean ProviderNotReadyError with guidance ('run scc start interactively to complete browser sign-in'), not a raw socket/server error.\n8. If the current code doesn't handle this, add a try/except in ensure_provider_auth or in the Codex adapter's bootstrap_auth() to wrap the failure.\n\nAll tests go through the shared preflight module from S01.",
+      "estimate": "35min",
+      "files": [
+        "tests/test_resume_after_drift.py",
+        "src/scc_cli/commands/launch/auth_bootstrap.py"
+      ],
+      "verify": "uv run pytest tests/test_resume_after_drift.py -v",
+      "inputs": [
+        "src/scc_cli/commands/launch/preflight.py",
+        "src/scc_cli/adapters/codex_agent_provider.py"
+      ],
+      "expected_output": [
+        "tests/test_resume_after_drift.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S03",
+      "id": "T03",
+      "title": "Setup idempotency and error message quality audit",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "**Setup idempotency:**\n1. Test: re-run scc setup when Claude is already connected but Codex is not → setup should detect Claude is present and only offer Codex sign-in, not start from scratch.\n2. Verify _run_provider_onboarding() in setup.py checks collect_provider_readiness() and only shows connection prompts for providers whose status is not 'present'.\n3. If the current code re-asks all questions, fix _prompt_provider_connections() to skip already-connected providers.\n4. Test: re-run scc setup when both providers are connected → setup should skip provider connections entirely and only show preference prompt if needed.\n\n**Error message quality audit:**\n5. Review and improve error messages for:\n   - ProviderNotReadyError (Docker missing, image missing, auth missing) — actionable?\n   - InvalidProviderError (unknown provider) — lists valid options?\n   - Non-interactive launch failures — tells user exact command to fix?\n   - Doctor check failures — wraps Docker errors with SCC context?\n6. For each weak message: fix the text, add a test asserting the improved message.\n7. Ensure no raw Docker error leaks through when SCC can explain better.",
+      "estimate": "30min",
+      "files": [
+        "src/scc_cli/setup.py",
+        "src/scc_cli/core/errors.py",
+        "tests/test_error_message_quality.py",
+        "tests/test_setup_idempotency.py"
+      ],
+      "verify": "uv run pytest tests/test_error_message_quality.py tests/test_setup_idempotency.py -v && uv run ruff check",
+      "inputs": [
+        "src/scc_cli/commands/launch/provider_choice.py"
+      ],
+      "expected_output": [
+        "tests/test_error_message_quality.py",
+        "tests/test_setup_idempotency.py"
+      ],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
+    },
+    {
+      "milestone_id": "M008-g7jk8d",
+      "slice_id": "S03",
+      "id": "T04",
+      "title": "Document residual legacy code, Docker-backed smoke checks, and final verification",
+      "status": "pending",
+      "one_liner": "",
+      "narrative": "",
+      "verification_result": "",
+      "duration": "",
+      "completed_at": null,
+      "blocker_discovered": false,
+      "deviations": "",
+      "known_issues": "",
+      "key_files": [],
+      "key_decisions": [],
+      "full_summary_md": "",
+      "description": "**Documentation:**\n1. Add a brief comment block at the top of docker/core.py, docker/launch.py, docker/sandbox.py, adapters/docker_sandbox_runtime.py documenting these as the legacy Docker Desktop sandbox path — retained for users who have Docker Desktop with 'docker sandbox run' support, not active for OCI launches.\n2. List all residual Docker Desktop code locations for the milestone summary.\n\n**Docker-backed smoke checks (where Docker is available):**\n3. If Docker is available in the test environment, run one smoke flow per provider:\n   a. Delete the provider image → run through preflight → verify auto-build triggers (interactive)\n   b. Verify non-interactive mode fails with the exact build command in the error\n   c. Delete the auth volume → run through preflight → verify auth bootstrap triggers\n   These are integration-level checks. If Docker is not available, document as manual verification items.\n\n**Final verification gate:**\n4. uv run ruff check — clean\n5. uv run mypy src/scc_cli — clean\n6. uv run pytest -q — >= 4820 passed, zero regressions\n7. Summarize all findings ordered by severity, residual risks, and legacy code boundaries\n8. If no major findings remain, state that explicitly with a brief change summary",
+      "estimate": "25min",
+      "files": [
+        "src/scc_cli/docker/core.py",
+        "src/scc_cli/docker/launch.py",
+        "src/scc_cli/docker/sandbox.py",
+        "src/scc_cli/adapters/docker_sandbox_runtime.py"
+      ],
+      "verify": "uv run ruff check && uv run mypy src/scc_cli && uv run pytest -q",
+      "inputs": [],
+      "expected_output": [],
+      "observability_impact": "",
+      "full_plan_md": "",
+      "sequence": 0
     }
   ],
   "decisions": [
@@ -7282,6 +7888,42 @@
       "rationale": "User override: the final M007 architecture and the current code are still out of sync in several important places. Decisions were recorded but not all implemented. Closing M007 as docs-only would leave the codebase misrepresenting its own architecture — the exact kind of truthfulness gap M007 was supposed to eliminate. The 11 reconciliation items cover: provider-owned settings serialization (D035), Codex launch argv (D033), config ownership layering (D041), file-based Codex auth (D040), config freshness (D038/D042), runtime permission normalization (D039), adapter-owned auth readiness (D037), Claude fallback removal (D032), and image hardening.",
       "revisable": "No — user directed",
       "made_by": "human",
+      "superseded_by": null
+    },
+    {
+      "seq": 43,
+      "id": "D045",
+      "when_context": "M008-g7jk8d planning",
+      "scope": "branding",
+      "decision": "Whether M008 should change product name in .scc.yaml and other surfaces",
+      "choice": "Preserve 'Sandboxed Coding CLI' per D045. Do not revert to 'Sandboxed Code CLI' (D030 was superseded). M008 must verify and guard branding consistency, not introduce drift.",
+      "rationale": "D045 supersedes D030 and establishes 'Sandboxed Coding CLI' as canonical. The live codebase (branding.py, theme.py, cli.py, setup_ui.py, errors.py, init.py, README, pyproject.toml) already uses this consistently. Reverting would reintroduce the exact naming confusion M007 was supposed to eliminate.",
+      "revisable": "No — user directed",
+      "made_by": "human",
+      "superseded_by": null
+    },
+    {
+      "seq": 44,
+      "id": "D046",
+      "when_context": "M008-g7jk8d planning",
+      "scope": "architecture",
+      "decision": "Architecture constraints for the shared launch preflight module (commands/launch/preflight.py)",
+      "choice": "The preflight module must: (1) stay command-layer only — no placement in core/ or application/, (2) not leak provider-specific behavior into core contracts — it dispatches to existing provider_image.py and auth_bootstrap.py, (3) not own UI wording beyond structured error messages (user_message, suggested_action) — callers own rendering, (4) separate pure decision logic (resolve_launch_provider, collect_launch_readiness) from side effects (ensure_launch_ready) so the decision functions are independently testable without mocking I/O.",
+      "rationale": "The preflight module consolidates orchestration that is currently duplicated five times across command and UI layers. Keeping it command-layer prevents core from growing execution concerns. Separating pure decisions from side effects prevents it from becoming a god-function — the pure functions can be tested with plain data, the side-effect function is thin. Not owning UI wording keeps the module reusable across interactive (console) and non-interactive (JSON error) contexts.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
+      "superseded_by": null
+    },
+    {
+      "seq": 45,
+      "id": "D047",
+      "when_context": "M008-g7jk8d planning refinement",
+      "scope": "architecture",
+      "decision": "Whether LaunchReadiness should use enums or loose booleans/strings for readiness state",
+      "choice": "Use frozen dataclass with enum fields: ImageStatus, AuthStatus, ProviderResolutionSource. Derived booleans (requires_image_bootstrap, requires_auth_bootstrap, launch_ready) are computed from enum values, not independent flags. Callers pattern-match on enum values, not string comparisons or bool combos.",
+      "rationale": "The shared preflight module consolidates logic from five sites. Without typed enums, the consolidated readiness state would become ad hoc branching glue — callers comparing strings like 'present' or checking combos of loose booleans. Enums make the state space explicit and exhaustible. The derived booleans are convenience accessors for the common 'do I need to bootstrap?' check, not independent state.",
+      "revisable": "Yes",
+      "made_by": "collaborative",
       "superseded_by": null
     }
   ],
@@ -11465,6 +12107,50 @@
       "verdict": "✅ pass (4820 passed >= 4750)",
       "duration_ms": 65000,
       "created_at": "2026-04-05T15:55:14.397Z"
+    },
+    {
+      "id": 381,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest tests/test_launch_preflight_characterization.py -v",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1000,
+      "created_at": "2026-04-06T12:02:15.875Z"
+    },
+    {
+      "id": 382,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 1200,
+      "created_at": "2026-04-06T12:02:15.875Z"
+    },
+    {
+      "id": 383,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 75000,
+      "created_at": "2026-04-06T12:02:15.875Z"
+    },
+    {
+      "id": 384,
+      "task_id": "T01",
+      "slice_id": "S01",
+      "milestone_id": "M008-g7jk8d",
+      "command": "uv run pytest",
+      "exit_code": 1,
+      "verdict": "✅ pass (pre-existing failures only)",
+      "duration_ms": 68000,
+      "created_at": "2026-04-06T12:02:15.875Z"
     }
   ]
 }

@@ -34,15 +34,15 @@ class TestGetProviderDisplayName:
 
 class TestGetVersionHeader:
     @patch("scc_cli.ui.branding.supports_unicode", return_value=True)
-    def test_header_says_sandboxed_code_cli_unicode(self, _mock: object) -> None:
+    def test_header_says_sandboxed_coding_cli_unicode(self, _mock: object) -> None:
         header = get_version_header("1.7.3")
-        assert "Sandboxed Code CLI" in header
+        assert "Sandboxed Coding CLI" in header
         assert "Claude" not in header
 
     @patch("scc_cli.ui.branding.supports_unicode", return_value=False)
-    def test_header_says_sandboxed_code_cli_ascii(self, _mock: object) -> None:
+    def test_header_says_sandboxed_coding_cli_ascii(self, _mock: object) -> None:
         header = get_version_header("1.7.3")
-        assert "Sandboxed Code CLI" in header
+        assert "Sandboxed Coding CLI" in header
         assert "Claude" not in header
 
 

@@ -133,7 +133,7 @@ def prepare_start_session(
         dependencies.agent_runner,
         effective_config=effective_config,
         provider_id=_provider_id,
-        workspace_path=resolver_result.mount_root,
+        workspace_path=request.workspace_path,
         is_resume=request.resume,
     )
 

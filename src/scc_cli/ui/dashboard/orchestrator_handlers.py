@@ -133,6 +133,7 @@ def _handle_team_switch() -> None:
 def _handle_start_flow(reason: str) -> app_dashboard.StartFlowResult:
     """Handle start flow request from dashboard."""
     from ...commands.launch import run_start_wizard_flow
+    from ...commands.launch.flow_interactive import StartWizardFlowDecision
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
@@ -152,10 +153,15 @@ def _handle_start_flow(reason: str) -> app_dashboard.StartFlowResult:
         print_with_layout(console, "[dim]Starting your first session...[/dim]")
     console.print()
 
-    # Run the wizard with allow_back=True for dashboard context
-    # Returns: True (success), False (Esc/back), None (q/quit)
-    result = run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
-    return app_dashboard.StartFlowResult.from_legacy(result)
+    wizard_result = run_start_wizard_flow(skip_quick_resume=skip_quick_resume, allow_back=True)
+    if wizard_result.decision is StartWizardFlowDecision.QUIT:
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.QUIT)
+    if wizard_result.decision is StartWizardFlowDecision.LAUNCHED:
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.LAUNCHED)
+    return app_dashboard.StartFlowResult(
+        decision=app_dashboard.StartFlowDecision.CANCELLED,
+        message=wizard_result.message,
+    )
 
 
 def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
@@ -165,22 +171,33 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     from rich.status import Status
 
     from ... import config
-    from ...application.start_session import (
-        StartSessionDependencies,
-        StartSessionRequest,
-        sync_marketplace_settings_for_start,
-    )
+    from ...application.launch import finalize_launch
+    from ...application.start_session import StartSessionRequest
     from ...bootstrap import get_default_adapters
-    from ...commands.launch import (
-        _launch_sandbox,
-        _resolve_mount_and_branch,
-        _validate_and_resolve_workspace,
+    from ...commands.launch.auth_bootstrap import ensure_provider_auth
+    from ...commands.launch.conflict_resolution import (
+        LaunchConflictDecision,
+        resolve_launch_conflict,
     )
+    from ...commands.launch.dependencies import prepare_live_start_plan
+    from ...commands.launch.flow import _allowed_provider_ids
+    from ...commands.launch.provider_choice import (
+        choose_start_provider,
+        connected_provider_ids,
+        prompt_for_provider_choice,
+    )
+    from ...commands.launch.provider_image import ensure_provider_image
+    from ...commands.launch.render import show_auth_bootstrap_panel, show_launch_panel
     from ...commands.launch.team_settings import _configure_team_settings
-    from ...marketplace.materialize import materialize_marketplace
-    from ...marketplace.resolve import resolve_effective_config
+    from ...commands.launch.workspace import (
+        validate_and_resolve_workspace as _validate_and_resolve_workspace,
+    )
     from ...ports.config_models import NormalizedOrgConfig
     from ...theme import Spinners
+    from ...workspace_local_config import (
+        get_workspace_last_used_provider,
+        set_workspace_last_used_provider,
+    )
 
     console = get_err_console()
 
@@ -214,17 +231,28 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         cfg = config.load_user_config()
         team = cfg.get("selected_profile")
         _configure_team_settings(team, cfg)
-        start_dependencies = StartSessionDependencies(
-            filesystem=adapters.filesystem,
-            remote_fetcher=adapters.remote_fetcher,
-            clock=adapters.clock,
-            git_client=adapters.git_client,
-            agent_runner=adapters.agent_runner,
-            sandbox_runtime=adapters.sandbox_runtime,
-            resolve_effective_config=resolve_effective_config,
-            materialize_marketplace=materialize_marketplace,
-        )
         raw_org_config = config.load_cached_org_config()
+        normalized_org = (
+            NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
+        )
+        resolved_provider = choose_start_provider(
+            cli_flag=None,
+            resume_provider=None,
+            workspace_last_used=get_workspace_last_used_provider(workspace_path),
+            config_provider=config.get_selected_provider(),
+            connected_provider_ids=connected_provider_ids(
+                adapters,
+                allowed_providers=_allowed_provider_ids(normalized_org, team),
+            ),
+            allowed_providers=_allowed_provider_ids(normalized_org, team),
+            non_interactive=False,
+            prompt_choice=prompt_for_provider_choice,
+        )
+        if resolved_provider is None:
+            return app_dashboard.StartFlowResult(
+                decision=app_dashboard.StartFlowDecision.CANCELLED,
+                message="Start cancelled",
+            )
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -237,18 +265,25 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
             standalone=team is None,
             dry_run=False,
             allow_suspicious=False,
-            org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
+            org_config=normalized_org,
             raw_org_config=raw_org_config,
             org_config_url=None,
+            provider_id=resolved_provider,
         )
-        sync_result, _sync_error = sync_marketplace_settings_for_start(
+        start_dependencies, start_plan = prepare_live_start_plan(
             start_request,
-            start_dependencies,
+            adapters=adapters,
+            console=console,
+            provider_id=resolved_provider,
         )
-        plugin_settings = sync_result.rendered_settings if sync_result else None
-
-        # Resolve mount path and branch
-        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+        provider_adapter = start_dependencies.agent_provider
+        if provider_adapter is None:
+            console.print("[red]Provider wiring is unavailable for this start request[/red]")
+            return app_dashboard.StartFlowResult(
+                decision=app_dashboard.StartFlowDecision.CANCELLED,
+                message="Start cancelled",
+            )
+        current_branch = start_plan.current_branch
 
         # Show session info
         if team:
@@ -257,17 +292,48 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
             console.print(f"[dim]Branch: {current_branch}[/dim]")
         console.print()
 
-        # Launch sandbox
-        _launch_sandbox(
-            workspace_path=workspace_path,
-            mount_path=mount_path,
-            team=team,
-            session_name=None,  # No specific session name
-            current_branch=current_branch,
-            should_continue_session=False,
-            fresh=False,
-            plugin_settings=plugin_settings,
+        conflict_resolution = resolve_launch_conflict(
+            start_plan,
+            dependencies=start_dependencies,
+            console=console,
+            display_name=provider_adapter.capability_profile().display_name,
+            json_mode=False,
+            non_interactive=False,
         )
+        if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
+            set_workspace_last_used_provider(workspace_path, resolved_provider)
+            return app_dashboard.StartFlowResult(
+                decision=app_dashboard.StartFlowDecision.CANCELLED,
+                message="Kept existing sandbox",
+            )
+        if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
+            return app_dashboard.StartFlowResult(
+                decision=app_dashboard.StartFlowDecision.CANCELLED,
+                message="Start cancelled",
+            )
+
+        ensure_provider_image(
+            resolved_provider,
+            console=console,
+            non_interactive=False,
+            show_notice=show_auth_bootstrap_panel,
+        )
+        ensure_provider_auth(
+            conflict_resolution.plan,
+            dependencies=start_dependencies,
+            non_interactive=False,
+            show_notice=show_auth_bootstrap_panel,
+        )
+        show_launch_panel(
+            workspace=workspace_path,
+            team=team,
+            session_name=None,
+            branch=current_branch,
+            is_resume=False,
+            display_name=provider_adapter.capability_profile().display_name,
+        )
+        finalize_launch(conflict_resolution.plan, dependencies=start_dependencies)
+        set_workspace_last_used_provider(workspace_path, resolved_provider)
         return app_dashboard.StartFlowResult.from_legacy(True)
 
     except KeyboardInterrupt:
@@ -297,22 +363,33 @@ def _handle_session_resume(session: SessionSummary) -> bool:
     from rich.status import Status
 
     from ... import config
-    from ...application.start_session import (
-        StartSessionDependencies,
-        StartSessionRequest,
-        sync_marketplace_settings_for_start,
-    )
+    from ...application.launch import finalize_launch
+    from ...application.start_session import StartSessionRequest
     from ...bootstrap import get_default_adapters
-    from ...commands.launch import (
-        _launch_sandbox,
-        _resolve_mount_and_branch,
-        _validate_and_resolve_workspace,
+    from ...commands.launch.auth_bootstrap import ensure_provider_auth
+    from ...commands.launch.conflict_resolution import (
+        LaunchConflictDecision,
+        resolve_launch_conflict,
     )
+    from ...commands.launch.dependencies import prepare_live_start_plan
+    from ...commands.launch.flow import _allowed_provider_ids
+    from ...commands.launch.provider_choice import (
+        choose_start_provider,
+        connected_provider_ids,
+        prompt_for_provider_choice,
+    )
+    from ...commands.launch.provider_image import ensure_provider_image
+    from ...commands.launch.render import show_auth_bootstrap_panel, show_launch_panel
     from ...commands.launch.team_settings import _configure_team_settings
-    from ...marketplace.materialize import materialize_marketplace
-    from ...marketplace.resolve import resolve_effective_config
+    from ...commands.launch.workspace import (
+        validate_and_resolve_workspace as _validate_and_resolve_workspace,
+    )
     from ...ports.config_models import NormalizedOrgConfig
     from ...theme import Spinners
+    from ...workspace_local_config import (
+        get_workspace_last_used_provider,
+        set_workspace_last_used_provider,
+    )
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
@@ -352,17 +429,25 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         # Configure team settings
         cfg = config.load_user_config()
         _configure_team_settings(team, cfg)
-        start_dependencies = StartSessionDependencies(
-            filesystem=adapters.filesystem,
-            remote_fetcher=adapters.remote_fetcher,
-            clock=adapters.clock,
-            git_client=adapters.git_client,
-            agent_runner=adapters.agent_runner,
-            sandbox_runtime=adapters.sandbox_runtime,
-            resolve_effective_config=resolve_effective_config,
-            materialize_marketplace=materialize_marketplace,
-        )
         raw_org_config_2 = config.load_cached_org_config()
+        normalized_org = (
+            NormalizedOrgConfig.from_dict(raw_org_config_2) if raw_org_config_2 is not None else None
+        )
+        resolved_provider = choose_start_provider(
+            cli_flag=None,
+            resume_provider=session.provider_id,
+            workspace_last_used=get_workspace_last_used_provider(workspace_path),
+            config_provider=config.get_selected_provider(),
+            connected_provider_ids=connected_provider_ids(
+                adapters,
+                allowed_providers=_allowed_provider_ids(normalized_org, team),
+            ),
+            allowed_providers=_allowed_provider_ids(normalized_org, team),
+            non_interactive=False,
+            prompt_choice=prompt_for_provider_choice,
+        )
+        if resolved_provider is None:
+            return False
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -375,18 +460,22 @@ def _handle_session_resume(session: SessionSummary) -> bool:
             standalone=team is None,
             dry_run=False,
             allow_suspicious=False,
-            org_config=NormalizedOrgConfig.from_dict(raw_org_config_2) if raw_org_config_2 is not None else None,
+            org_config=normalized_org,
             raw_org_config=raw_org_config_2,
             org_config_url=None,
+            provider_id=resolved_provider,
         )
-        sync_result, _sync_error = sync_marketplace_settings_for_start(
+        start_dependencies, start_plan = prepare_live_start_plan(
             start_request,
-            start_dependencies,
+            adapters=adapters,
+            console=console,
+            provider_id=resolved_provider,
         )
-        plugin_settings = sync_result.rendered_settings if sync_result else None
-
-        # Resolve mount path and branch
-        mount_path, current_branch = _resolve_mount_and_branch(workspace_path)
+        provider_adapter = start_dependencies.agent_provider
+        if provider_adapter is None:
+            console.print("[red]Provider wiring is unavailable for this session[/red]")
+            return False
+        current_branch = start_plan.current_branch
 
         # Use session's stored branch if available (more accurate than detected)
         if branch:
@@ -401,17 +490,42 @@ def _handle_session_resume(session: SessionSummary) -> bool:
             print_with_layout(console, f"[dim]Branch: {current_branch}[/dim]")
         console.print()
 
-        # Launch sandbox with resume flag
-        _launch_sandbox(
-            workspace_path=workspace_path,
-            mount_path=mount_path,
+        conflict_resolution = resolve_launch_conflict(
+            start_plan,
+            dependencies=start_dependencies,
+            console=console,
+            display_name=provider_adapter.capability_profile().display_name,
+            json_mode=False,
+            non_interactive=False,
+        )
+        if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
+            set_workspace_last_used_provider(workspace_path, resolved_provider)
+            return True
+        if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
+            return False
+
+        ensure_provider_image(
+            resolved_provider,
+            console=console,
+            non_interactive=False,
+            show_notice=show_auth_bootstrap_panel,
+        )
+        ensure_provider_auth(
+            conflict_resolution.plan,
+            dependencies=start_dependencies,
+            non_interactive=False,
+            show_notice=show_auth_bootstrap_panel,
+        )
+        show_launch_panel(
+            workspace=workspace_path,
             team=team,
             session_name=session_name,
-            current_branch=current_branch,
-            should_continue_session=True,  # Resume existing container
-            fresh=False,
-            plugin_settings=plugin_settings,
+            branch=current_branch,
+            is_resume=True,
+            display_name=provider_adapter.capability_profile().display_name,
         )
+        finalize_launch(conflict_resolution.plan, dependencies=start_dependencies)
+        set_workspace_last_used_provider(workspace_path, resolved_provider)
         return True
 
     except Exception as e:
@@ -761,7 +875,7 @@ def _handle_worktree_action_menu(worktree_path: str) -> str | None:
             return "Cancelled"
         if result.decision is app_dashboard.StartFlowDecision.LAUNCHED:
             return "Started session"
-        return "Start cancelled"
+        return result.message or "Start cancelled"
 
     if selected == "open_shell":
         console.print(f"[cyan]cd {worktree_path}[/cyan]")

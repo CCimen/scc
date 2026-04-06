@@ -229,7 +229,7 @@ class TestStartCLIErrorPaths:
         """--standalone --dry-run without workspace tries auto-detect → exits with usage error if not in a git repo."""
         with patch(
             "scc_cli.commands.launch.flow._resolve_session_selection",
-            return_value=(None, None, None, None, False, False),
+            return_value=(None, None, None, None, False, False, None),
         ):
             result = cli_runner.invoke(app, ["start", "--standalone", "--dry-run"])
             # No workspace resolved → EXIT_USAGE or EXIT_CANCELLED
@@ -268,10 +268,11 @@ class TestResolveSessionSelection:
                 dry_run=True,
                 session_service=mock_session_svc,
             )
-            workspace, team, session_name, worktree_name, cancelled, was_auto = result
+            workspace, team, session_name, worktree_name, cancelled, was_auto, session_provider = result
             assert workspace == "/auto/detected"
             assert was_auto is True
             assert cancelled is False
+            assert session_provider is None
 
     def test_explicit_workspace_passthrough(self) -> None:
         """Explicit workspace arg passes through without session selection."""
@@ -291,11 +292,12 @@ class TestResolveSessionSelection:
             dry_run=False,
             session_service=mock_session_svc,
         )
-        workspace, team, session_name, worktree_name, cancelled, was_auto = result
+        workspace, team, session_name, worktree_name, cancelled, was_auto, session_provider = result
         assert workspace == "/my/project"
         assert team == "my-team"
         assert cancelled is False
         assert was_auto is False
+        assert session_provider is None
 
     @patch("scc_cli.commands.launch.flow_session.select_session")
     def test_resume_no_active_team_returns_none(self, mock_select: MagicMock) -> None:
@@ -316,6 +318,7 @@ class TestResolveSessionSelection:
             dry_run=False,
             session_service=mock_session_svc,
         )
-        workspace, team, session_name, worktree_name, cancelled, was_auto = result
+        workspace, team, session_name, worktree_name, cancelled, was_auto, session_provider = result
         assert workspace is None
         assert cancelled is False
+        assert session_provider is None

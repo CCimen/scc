@@ -134,13 +134,11 @@ class TestCheckProviderImageInDoctor:
     """Integration: check_provider_image wired into run_doctor."""
 
     @patch("scc_cli.doctor.checks.environment.subprocess.run")
-    @patch("scc_cli.config.get_selected_provider", return_value="claude")
     def test_doctor_includes_provider_image_check(
         self,
-        mock_provider: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
-        """run_doctor includes Provider Image when docker_ok."""
+        """run_doctor includes provider-scoped image checks when docker_ok."""
         # Make docker checks pass
         mock_subprocess.return_value = MagicMock(returncode=0)
 
@@ -173,9 +171,18 @@ class TestCheckProviderImageInDoctor:
                 name="Sandbox Backend", passed=True, message="ok"
             )
             mock_runtime.return_value = passed_result
-            mock_image.return_value = CheckResult(
-                name="Provider Image", passed=True, message="scc-agent-claude:latest found"
-            )
+            mock_image.side_effect = [
+                CheckResult(
+                    name="Provider Image",
+                    passed=True,
+                    message="scc-agent-claude:latest found",
+                ),
+                CheckResult(
+                    name="Provider Image",
+                    passed=True,
+                    message="scc-agent-codex:latest found",
+                ),
+            ]
             mock_wsl.return_value = (passed_result, False)
             mock_config.return_value = passed_result
             mock_user_cfg.return_value = passed_result
@@ -186,5 +193,8 @@ class TestCheckProviderImageInDoctor:
             doctor_result = run_doctor()
 
         check_names = [c.name for c in doctor_result.checks]
-        assert "Provider Image" in check_names
-        mock_image.assert_called_once()
+        assert "Provider Image (Claude Code)" in check_names
+        assert "Provider Image (Codex)" in check_names
+        assert mock_image.call_count == 2
+        assert mock_image.call_args_list[0].kwargs == {"provider_id": "claude"}
+        assert mock_image.call_args_list[1].kwargs == {"provider_id": "codex"}

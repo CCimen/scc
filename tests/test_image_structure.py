@@ -179,6 +179,14 @@ class TestSccAgentCodexDockerfile:
         """scc-agent-codex installs Node.js."""
         assert "nodejs" in dockerfile
 
+    def test_installs_bubblewrap(self, dockerfile: str) -> None:
+        """scc-agent-codex installs system bubblewrap for Codex sandboxing."""
+        assert "bubblewrap" in dockerfile
+
+    def test_installs_socat(self, dockerfile: str) -> None:
+        """scc-agent-codex installs socat for browser-auth callback relaying."""
+        assert "socat" in dockerfile
+
     def test_final_user_is_agent(self, dockerfile: str) -> None:
         """scc-agent-codex ends with USER agent (non-root)."""
         user_lines = [
@@ -209,6 +217,19 @@ class TestSccAgentClaudeDockerfile:
     def test_based_on_scc_base(self, dockerfile: str) -> None:
         """scc-agent-claude inherits from scc-base."""
         assert re.search(r"FROM\s+scc-base", dockerfile)
+
+    def test_node_major_arg_declared(self, dockerfile: str) -> None:
+        """scc-agent-claude declares an ARG for Node LTS selection."""
+        assert re.search(r"ARG\s+NODE_MAJOR", dockerfile)
+
+    def test_installs_nodejs(self, dockerfile: str) -> None:
+        """scc-agent-claude installs Node.js."""
+        assert "nodejs" in dockerfile
+
+    def test_nodesource_bootstrap_uses_clean_system_path(self, dockerfile: str) -> None:
+        """scc-agent-claude avoids SCC wrapper PATH interception during bootstrap."""
+        assert 'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' in dockerfile
+        assert '/usr/bin/curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x"' in dockerfile
 
     def test_final_user_is_agent(self, dockerfile: str) -> None:
         """scc-agent-claude ends with USER agent (non-root)."""

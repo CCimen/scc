@@ -9,6 +9,7 @@ Re-exports public names for backward compatibility.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -29,6 +30,12 @@ from ...presentation.json.launch_json import build_start_dry_run_envelope
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
+from ...workspace_local_config import (
+    get_workspace_last_used_provider,
+    set_workspace_last_used_provider,
+)
+from .auth_bootstrap import ensure_provider_auth
+from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
 from .flow_interactive import interactive_start, run_start_wizard_flow
 from .flow_session import (
@@ -36,7 +43,19 @@ from .flow_session import (
     _record_session_and_context,
     _resolve_session_selection,
 )
-from .render import build_dry_run_data, show_dry_run_panel, show_launch_panel, warn_if_non_worktree
+from .provider_choice import (
+    choose_start_provider,
+    connected_provider_ids,
+    prompt_for_provider_choice,
+)
+from .provider_image import ensure_provider_image
+from .render import (
+    build_dry_run_data,
+    show_auth_bootstrap_panel,
+    show_dry_run_panel,
+    show_launch_panel,
+    warn_if_non_worktree,
+)
 from .team_settings import _configure_team_settings
 from .workspace import prepare_workspace, resolve_workspace_team, validate_and_resolve_workspace
 
@@ -56,24 +75,44 @@ __all__ = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _resolve_provider(
-    cli_flag: str | None,
+def _allowed_provider_ids(
     normalized_org: NormalizedOrgConfig | None,
     team: str | None,
-) -> str:
-    """Resolve the active provider from CLI flag, user config, and team policy."""
-    from scc_cli.core.provider_resolution import resolve_active_provider
-
+) -> tuple[str, ...]:
+    """Return the allowed providers for the active team, or all when unrestricted."""
     allowed_providers: tuple[str, ...] = ()
     if normalized_org is not None and team:
         team_profile = normalized_org.get_profile(team)
         if team_profile is not None:
             allowed_providers = team_profile.allowed_providers
 
-    return resolve_active_provider(
+    return allowed_providers
+
+
+def _resolve_provider(
+    cli_flag: str | None,
+    normalized_org: NormalizedOrgConfig | None,
+    team: str | None,
+    *,
+    workspace_path: Path,
+    adapters: Any,
+    non_interactive: bool,
+    resume_provider: str | None,
+) -> str | None:
+    """Resolve the provider for this start request."""
+    allowed_provider_ids = _allowed_provider_ids(normalized_org, team)
+    return choose_start_provider(
         cli_flag=cli_flag,
+        resume_provider=resume_provider,
+        workspace_last_used=get_workspace_last_used_provider(workspace_path),
         config_provider=config.get_selected_provider(),
-        allowed_providers=allowed_providers,
+        connected_provider_ids=connected_provider_ids(
+            adapters,
+            allowed_providers=allowed_provider_ids,
+        ),
+        allowed_providers=allowed_provider_ids,
+        non_interactive=non_interactive,
+        prompt_choice=prompt_for_provider_choice,
     )
 
 
@@ -181,7 +220,7 @@ def start(
     session_service = sessions.get_session_service(adapters.filesystem)
 
     # ── Step 2: Session selection (interactive, --select, --resume) ──────────
-    workspace, team, session_name, worktree_name, cancelled, was_auto_detected = (
+    workspace, team, session_name, worktree_name, cancelled, was_auto_detected, session_provider = (
         _resolve_session_selection(
             workspace=workspace,
             team=team,
@@ -254,7 +293,19 @@ def start(
     normalized_org = NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None
     # Normalize typer default: direct calls pass OptionInfo, not None.
     cli_provider = provider if isinstance(provider, str) else None
-    resolved_provider = _resolve_provider(cli_provider, normalized_org, team)
+    resolved_provider = _resolve_provider(
+        cli_provider,
+        normalized_org,
+        team,
+        workspace_path=workspace_path,
+        adapters=adapters,
+        non_interactive=non_interactive,
+        resume_provider=session_provider,
+    )
+    if resolved_provider is None:
+        if not (json_output or pretty):
+            console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(EXIT_CANCELLED)
 
     start_request = StartSessionRequest(
         workspace_path=workspace_path,
@@ -365,6 +416,35 @@ def start(
 
     warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 
+    conflict_resolution = resolve_launch_conflict(
+        start_plan,
+        dependencies=start_dependencies,
+        console=console,
+        display_name=get_provider_display_name(resolved_provider),
+        json_mode=(json_output or pretty),
+        non_interactive=non_interactive,
+    )
+    if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
+        set_workspace_last_used_provider(workspace_path, resolved_provider)
+        raise typer.Exit(0)
+    if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
+        console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(EXIT_CANCELLED)
+    start_plan = conflict_resolution.plan
+
+    ensure_provider_image(
+        resolved_provider,
+        console=console,
+        non_interactive=non_interactive,
+        show_notice=show_auth_bootstrap_panel,
+    )
+    ensure_provider_auth(
+        start_plan,
+        dependencies=start_dependencies,
+        non_interactive=non_interactive,
+        show_notice=show_auth_bootstrap_panel,
+    )
+
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
     _record_session_and_context(
         workspace_path,
@@ -382,3 +462,4 @@ def start(
         display_name=get_provider_display_name(resolved_provider),
     )
     finalize_launch(start_plan, dependencies=start_dependencies)
+    set_workspace_last_used_provider(workspace_path, resolved_provider)

@@ -58,15 +58,24 @@ def _resolve_session_selection(
     no_interactive: bool = False,
     dry_run: bool = False,
     session_service: SessionService,
-) -> tuple[str | None, str | None, str | None, str | None, bool, bool]:
+) -> tuple[str | None, str | None, str | None, str | None, bool, bool, str | None]:
     """Handle session selection logic for --select, --resume, and interactive modes.
 
     Returns:
-        Tuple of (workspace, team, session_name, worktree_name, cancelled, was_auto_detected)
+        Tuple of (
+            workspace,
+            team,
+            session_name,
+            worktree_name,
+            cancelled,
+            was_auto_detected,
+            session_provider_id,
+        )
     """
     session_name = None
     worktree_name = None
     cancelled = False
+    session_provider_id: str | None = None
 
     select_dependencies = SelectSessionDependencies(session_service=session_service)
 
@@ -80,7 +89,15 @@ def _resolve_session_selection(
 
             context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
             if context is not None:
-                return str(context.workspace_root), team, None, None, False, True  # auto-detected
+                return (
+                    str(context.workspace_root),
+                    team,
+                    None,
+                    None,
+                    False,
+                    True,
+                    None,
+                )  # auto-detected
             # No auto-detect possible, fall through to error
             err_console.print(
                 "[red]Error:[/red] No workspace could be auto-detected.\n"
@@ -101,7 +118,15 @@ def _resolve_session_selection(
 
             context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
             if context is not None:
-                return str(context.workspace_root), team, None, None, False, True  # auto-detected
+                return (
+                    str(context.workspace_root),
+                    team,
+                    None,
+                    None,
+                    False,
+                    True,
+                    None,
+                )  # auto-detected
 
             err_console.print(
                 "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
@@ -124,7 +149,7 @@ def _resolve_session_selection(
             ),
         )
         if workspace_result is None:
-            return None, team, None, None, True, False
+            return None, team, None, None, True, False, None
         return (
             workspace_result,
             team,
@@ -132,6 +157,7 @@ def _resolve_session_selection(
             worktree_name,
             False,
             False,
+            None,
         )
 
     # Handle --select: interactive session picker
@@ -160,7 +186,7 @@ def _resolve_session_selection(
                     "[yellow]No active team selected.[/yellow] "
                     "Run 'scc team switch' or pass --team to select."
                 )
-            return None, team, None, None, False, False
+            return None, team, None, None, False, False, None
 
         outcome = select_session(
             SelectSessionRequest(
@@ -175,12 +201,12 @@ def _resolve_session_selection(
         if isinstance(outcome, SessionSelectionWarningOutcome):
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None, False, False
+            return None, team, None, None, False, False, None
 
         if isinstance(outcome, SessionSelectionPrompt):
             selected_item = _prompt_for_session_selection(outcome)
             if selected_item is None:
-                return None, team, None, None, True, False
+                return None, team, None, None, True, False, None
             outcome = select_session(
                 SelectSessionRequest(
                     mode=SessionSelectionMode.SELECT,
@@ -197,6 +223,7 @@ def _resolve_session_selection(
             workspace = selected.workspace
             if not team:
                 team = selected.team
+            session_provider_id = selected.provider_id
             # --standalone overrides any team from session (standalone means no team)
             if standalone_override:
                 team = None
@@ -217,7 +244,7 @@ def _resolve_session_selection(
                     "[yellow]No active team selected.[/yellow] "
                     "Run 'scc team switch' or pass --team to resume."
                 )
-            return None, team, None, None, False, False
+            return None, team, None, None, False, False, None
 
         outcome = select_session(
             SelectSessionRequest(
@@ -232,20 +259,29 @@ def _resolve_session_selection(
         if isinstance(outcome, SessionSelectionWarningOutcome):
             if not json_mode:
                 console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None, False, False
+            return None, team, None, None, False, False, None
 
         if isinstance(outcome, SelectSessionResult):
             recent_session = outcome.session
             workspace = recent_session.workspace
             if not team:
                 team = recent_session.team
+            session_provider_id = recent_session.provider_id
             # --standalone overrides any team from session (standalone means no team)
             if standalone_override:
                 team = None
             if not json_mode:
                 print_with_layout(console, f"[dim]Resuming: {workspace}[/dim]")
 
-    return workspace, team, session_name, worktree_name, cancelled, False  # explicit workspace
+    return (
+        workspace,
+        team,
+        session_name,
+        worktree_name,
+        cancelled,
+        False,
+        session_provider_id,
+    )  # explicit workspace
 
 
 def _apply_personal_profile(

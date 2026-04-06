@@ -7,6 +7,8 @@ Extracted from flow.py to reduce module size. Contains:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 from typing import Any, cast
 
@@ -71,6 +73,12 @@ from ...ui.wizard import (
     _normalize_path,
     render_start_wizard_prompt,
 )
+from ...workspace_local_config import (
+    get_workspace_last_used_provider,
+    set_workspace_last_used_provider,
+)
+from .auth_bootstrap import ensure_provider_auth
+from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
 from .flow_session import _record_session_and_context
 from .flow_types import (
@@ -78,12 +86,37 @@ from .flow_types import (
     reset_for_team_switch,
     set_team_context,
 )
-from .render import show_launch_panel
+from .provider_choice import (
+    choose_start_provider,
+    connected_provider_ids,
+    prompt_for_provider_choice,
+)
+from .provider_image import ensure_provider_image
+from .render import show_auth_bootstrap_panel, show_launch_panel
 from .team_settings import _configure_team_settings
 from .workspace import prepare_workspace, validate_and_resolve_workspace
 
 _PickerContinue = tuple[StartWizardState, bool]
 _PickerExit = tuple[str | _BackSentinel | None, str | None, str | None, str | None]
+
+
+class StartWizardFlowDecision(Enum):
+    """Structured outcomes from the interactive start wizard."""
+
+    LAUNCHED = auto()
+    BACK = auto()
+    QUIT = auto()
+    CANCELLED = auto()
+    KEPT_EXISTING = auto()
+    FAILED = auto()
+
+
+@dataclass(frozen=True)
+class StartWizardFlowResult:
+    """Result returned from ``run_start_wizard_flow``."""
+
+    decision: StartWizardFlowDecision
+    message: str | None = None
 
 
 def _handle_workspace_source(
@@ -617,7 +650,7 @@ def interactive_start(
 
 def run_start_wizard_flow(
     *, skip_quick_resume: bool = False, allow_back: bool = False
-) -> bool | None:
+) -> StartWizardFlowResult:
     """Run the interactive start wizard and launch sandbox.
 
     This is the shared entrypoint for starting sessions from both the CLI
@@ -628,14 +661,16 @@ def run_start_wizard_flow(
         allow_back: If True, Esc returns BACK sentinel (for dashboard context).
 
     Returns:
-        True if sandbox was launched successfully.
-        False if user pressed Esc to go back (only when allow_back=True).
-        None if user pressed q to quit or an error occurred.
+        Structured outcome describing whether launch succeeded, was cancelled,
+        kept an existing sandbox, returned to the dashboard, or failed.
     """
     # Step 1: First-run detection
     if setup.is_setup_needed():
         if not setup.maybe_run_setup(console):
-            return None  # Error during setup
+            return StartWizardFlowResult(
+                decision=StartWizardFlowDecision.FAILED,
+                message="Start failed",
+            )
 
     cfg = config.load_user_config()
     adapters = get_default_adapters()
@@ -650,9 +685,12 @@ def run_start_wizard_flow(
 
     # Three-state return handling:
     if workspace is BACK:
-        return False  # Go back to dashboard
+        return StartWizardFlowResult(
+            decision=StartWizardFlowDecision.BACK,
+            message="Start cancelled",
+        )
     if workspace is None:
-        return None  # Quit app
+        return StartWizardFlowResult(decision=StartWizardFlowDecision.QUIT)
 
     workspace_value = cast(str, workspace)
 
@@ -670,12 +708,32 @@ def run_start_wizard_flow(
             raw_org_config = config.load_cached_org_config()
 
         # D032: resolve provider explicitly — never silent-default to Claude.
-        from ...core.provider_resolution import resolve_active_provider
+        allowed_provider_ids: tuple[str, ...] = ()
+        if raw_org_config is not None and team:
+            normalized_org = NormalizedOrgConfig.from_dict(raw_org_config)
+            team_profile = normalized_org.get_profile(team)
+            if team_profile is not None:
+                allowed_provider_ids = team_profile.allowed_providers
 
-        resolved_provider = resolve_active_provider(
+        resolved_provider = choose_start_provider(
             cli_flag=None,
+            resume_provider=None,
+            workspace_last_used=get_workspace_last_used_provider(workspace_path),
             config_provider=config.get_selected_provider(),
+            connected_provider_ids=connected_provider_ids(
+                adapters,
+                allowed_providers=allowed_provider_ids,
+            ),
+            allowed_providers=allowed_provider_ids,
+            non_interactive=False,
+            prompt_choice=prompt_for_provider_choice,
         )
+        if resolved_provider is None:
+            console.print("[dim]Cancelled.[/dim]")
+            return StartWizardFlowResult(
+                decision=StartWizardFlowDecision.CANCELLED,
+                message="Start cancelled",
+            )
 
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
@@ -715,6 +773,42 @@ def run_start_wizard_flow(
             )
             console.print()
         current_branch = start_plan.current_branch
+
+        conflict_resolution = resolve_launch_conflict(
+            start_plan,
+            dependencies=start_dependencies,
+            console=console,
+            display_name=get_provider_display_name(resolved_provider),
+            json_mode=False,
+            non_interactive=False,
+        )
+        if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
+            set_workspace_last_used_provider(workspace_path, resolved_provider)
+            return StartWizardFlowResult(
+                decision=StartWizardFlowDecision.KEPT_EXISTING,
+                message="Kept existing sandbox",
+            )
+        if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
+            console.print("[dim]Cancelled.[/dim]")
+            return StartWizardFlowResult(
+                decision=StartWizardFlowDecision.CANCELLED,
+                message="Start cancelled",
+            )
+        start_plan = conflict_resolution.plan
+
+        ensure_provider_image(
+            resolved_provider,
+            console=console,
+            non_interactive=False,
+            show_notice=show_auth_bootstrap_panel,
+        )
+        ensure_provider_auth(
+            start_plan,
+            dependencies=start_dependencies,
+            non_interactive=False,
+            show_notice=show_auth_bootstrap_panel,
+        )
+
         _record_session_and_context(
             workspace_path,
             team,
@@ -731,7 +825,11 @@ def run_start_wizard_flow(
             display_name=get_provider_display_name(resolved_provider),
         )
         finalize_launch(start_plan, dependencies=start_dependencies)
-        return True
+        set_workspace_last_used_provider(workspace_path, resolved_provider)
+        return StartWizardFlowResult(decision=StartWizardFlowDecision.LAUNCHED)
     except Exception as e:
         err_console.print(f"[red]Error launching sandbox: {e}[/red]")
-        return False
+        return StartWizardFlowResult(
+            decision=StartWizardFlowDecision.FAILED,
+            message="Start failed",
+        )

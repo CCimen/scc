@@ -223,6 +223,62 @@ class TestRunDoctorProviderThreading:
             if check.name in _CATEGORY_MAP:
                 assert check.category == _CATEGORY_MAP[check.name]
 
+    @patch("scc_cli.doctor.core.check_safety_policy")
+    @patch("scc_cli.doctor.core.check_user_config_valid")
+    @patch("scc_cli.doctor.core.check_config_directory")
+    @patch("scc_cli.doctor.core.check_wsl2")
+    @patch("scc_cli.doctor.core.check_provider_auth")
+    @patch("scc_cli.doctor.core.check_provider_image")
+    @patch("scc_cli.doctor.core.check_runtime_backend")
+    @patch("scc_cli.doctor.core.check_docker_sandbox")
+    @patch("scc_cli.doctor.core.check_docker_running")
+    @patch("scc_cli.doctor.core.check_docker")
+    @patch("scc_cli.doctor.core.check_git")
+    def test_run_doctor_without_provider_checks_both_known_providers(
+        self,
+        mock_git: MagicMock,
+        mock_docker: MagicMock,
+        mock_docker_running: MagicMock,
+        mock_sandbox: MagicMock,
+        mock_runtime: MagicMock,
+        mock_image: MagicMock,
+        mock_auth: MagicMock,
+        mock_wsl2: MagicMock,
+        mock_config_dir: MagicMock,
+        mock_user_config: MagicMock,
+        mock_safety: MagicMock,
+    ) -> None:
+        ok = CheckResult(name="ok", passed=True, message="ok")
+        mock_git.return_value = ok
+        mock_docker.return_value = CheckResult(name="Docker", passed=True, message="ok", version="24.0")
+        mock_docker_running.return_value = ok
+        mock_sandbox.return_value = ok
+        mock_runtime.return_value = ok
+        mock_image.side_effect = [
+            CheckResult(name="Provider Image", passed=True, message="ok", category="provider"),
+            CheckResult(name="Provider Image", passed=True, message="ok", category="provider"),
+        ]
+        mock_auth.side_effect = [
+            CheckResult(name="Provider Auth", passed=True, message="ok", category="provider"),
+            CheckResult(name="Provider Auth", passed=True, message="ok", category="provider"),
+        ]
+        mock_wsl2.return_value = (ok, False)
+        mock_config_dir.return_value = ok
+        mock_user_config.return_value = ok
+        mock_safety.return_value = ok
+
+        result = run_doctor()
+
+        assert mock_image.call_args_list[0].kwargs == {"provider_id": "claude"}
+        assert mock_image.call_args_list[1].kwargs == {"provider_id": "codex"}
+        assert mock_auth.call_args_list[0].kwargs == {"provider_id": "claude"}
+        assert mock_auth.call_args_list[1].kwargs == {"provider_id": "codex"}
+        provider_names = [check.name for check in result.checks if check.category == "provider"]
+        assert "Provider Image (Claude Code)" in provider_names
+        assert "Provider Image (Codex)" in provider_names
+        assert "Provider Auth (Claude Code)" in provider_names
+        assert "Provider Auth (Codex)" in provider_names
+
 
 # ---------------------------------------------------------------------------
 # doctor_cmd --provider validation
@@ -364,3 +420,18 @@ class TestRenderGrouping:
         console = Console(file=MagicMock(), width=120, force_terminal=True)
         # Should not raise
         render_doctor_results(console, result)
+
+    def test_render_success_summary_lists_both_providers_when_unscoped(self) -> None:
+        result = DoctorResult()
+        result.git_ok = True
+        result.docker_ok = True
+        result.sandbox_ok = True
+        result.checks = [
+            CheckResult(name="Git", passed=True, message="ok", category="backend"),
+            CheckResult(name="Docker", passed=True, message="ok", category="backend"),
+        ]
+        console = Console(record=True, width=120, force_terminal=True)
+
+        render_doctor_results(console, result)
+
+        assert "Ready to run Claude Code and Codex." in console.export_text()

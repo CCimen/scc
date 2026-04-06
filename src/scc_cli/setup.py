@@ -1,5 +1,5 @@
 """
-Setup wizard for SCC - Sandboxed Code CLI.
+Setup wizard for SCC - Sandboxed Coding CLI.
 
 Remote organization config workflow:
 - Prompt for org config URL (or standalone mode)
@@ -17,6 +17,11 @@ from rich.table import Table
 from rich.text import Text
 
 from . import config
+from .bootstrap import get_default_adapters
+from .commands.launch.provider_choice import collect_provider_readiness
+from .core.errors import ProviderNotReadyError
+from .core.provider_resolution import get_provider_display_name
+from .panels import create_info_panel
 from .remote import (
     fetch_org_config,
     looks_like_github_url,
@@ -322,6 +327,8 @@ def show_setup_complete(
     org_name: str | None = None,
     profile: str | None = None,
     standalone: bool = False,
+    provider_readiness: dict[str, Any] | None = None,
+    provider_preference: str | None = None,
 ) -> None:
     """Display the setup completion message.
 
@@ -351,6 +358,28 @@ def show_setup_complete(
         _append_dot_leader(content, "profile", profile or "none", value_style="white")
 
     _append_dot_leader(content, "config", str(config.CONFIG_DIR), value_style="cyan")
+    if provider_readiness is not None:
+        claude_ready = provider_readiness.get("claude")
+        codex_ready = provider_readiness.get("codex")
+        _append_dot_leader(
+            content,
+            "claude",
+            "ready" if claude_ready and claude_ready.status == "present" else "not connected",
+            value_style="white",
+        )
+        _append_dot_leader(
+            content,
+            "codex",
+            "ready" if codex_ready and codex_ready.status == "present" else "not connected",
+            value_style="white",
+        )
+    if provider_preference is not None:
+        preference_label = {
+            "ask": "ask every time",
+            "claude": "prefer Claude Code",
+            "codex": "prefer Codex",
+        }.get(provider_preference, provider_preference)
+        _append_dot_leader(content, "startup", preference_label, value_style="white")
 
     # Main panel
     main_panel = Panel(
@@ -384,6 +413,167 @@ def show_setup_complete(
         metrics,
     )
     console.print()
+
+
+def _render_provider_status(readiness: dict[str, Any]) -> Table:
+    """Build a provider connection status table."""
+    table = Table.grid(padding=(0, 2))
+    table.add_column(style="cyan", no_wrap=True)
+    table.add_column(style="white", no_wrap=True)
+    table.add_column(style="dim")
+
+    for provider_id in ("claude", "codex"):
+        state = readiness.get(provider_id)
+        status = "connected" if state and state.status == "present" else "not connected"
+        guidance = state.guidance if state is not None else "unavailable"
+        table.add_row(get_provider_display_name(provider_id), status, guidance)
+    return table
+
+
+def _prompt_provider_connections(console: Console, readiness: dict[str, Any]) -> tuple[str, ...]:
+    """Prompt for provider onboarding choices during setup."""
+    missing = tuple(
+        provider_id
+        for provider_id in ("claude", "codex")
+        if readiness.get(provider_id) is None or readiness[provider_id].status != "present"
+    )
+    if not missing:
+        return ()
+
+    options: list[tuple[str, str, str]] = []
+    if len(missing) == 2:
+        options.append(
+            (
+                "Connect both",
+                "recommended",
+                "Authenticate Claude first, then Codex, and reuse both later.",
+            )
+        )
+    for provider_id in missing:
+        options.append(
+            (
+                f"Connect {get_provider_display_name(provider_id)}",
+                "browser",
+                f"Authenticate {get_provider_display_name(provider_id)} now.",
+            )
+        )
+    options.append(("Skip for now", "", "You can connect a provider later during start."))
+
+    console.print()
+    _print_padded(
+        console,
+        Panel(
+            _render_provider_status(readiness),
+            title="[bold cyan]Connect Coding Agents[/bold cyan]",
+            subtitle=(
+                "Connect Claude, Codex, or both now so future starts reuse the saved auth cache."
+            ),
+            border_style="bright_black",
+            box=box.ROUNDED,
+            padding=(0, 1),
+        ),
+        _layout_metrics(console),
+    )
+    console.print()
+
+    selected = _select_option(console, options, default=0)
+    if selected is None:
+        return ()
+
+    label = options[selected][0]
+    if label == "Skip for now":
+        return ()
+    if label == "Connect both":
+        return ("claude", "codex")
+    if "Claude" in label:
+        return ("claude",)
+    return ("codex",)
+
+
+def _prompt_provider_preference(console: Console, current: str | None) -> str | None:
+    """Prompt for how SCC should behave when both providers are connected."""
+    options = [
+        ("Ask me when both are available", "default", "Choose at start time when needed."),
+        ("Prefer Claude Code", "", "Use Claude automatically unless you override it."),
+        ("Prefer Codex", "", "Use Codex automatically unless you override it."),
+    ]
+    default_index = 0
+    if current == "claude":
+        default_index = 1
+    elif current == "codex":
+        default_index = 2
+
+    console.print()
+    selected = _select_option(console, options, default=default_index)
+    if selected is None:
+        return current
+    if selected == 0:
+        return "ask"
+    if selected == 1:
+        return "claude"
+    return "codex"
+
+
+def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, str | None]:
+    """Offer one-time provider sign-in during setup."""
+    adapters = get_default_adapters()
+    try:
+        adapters.sandbox_runtime.ensure_available()
+    except Exception:
+        console.print()
+        console.print(
+            "[dim]Provider sign-in skipped during setup because Docker is not available yet.[/dim]"
+        )
+        return None, config.get_selected_provider()
+
+    readiness = collect_provider_readiness(adapters)
+    sequence = _prompt_provider_connections(console, readiness)
+
+    provider_map = {
+        "claude": adapters.agent_provider,
+        "codex": adapters.codex_agent_provider,
+    }
+    for provider_id in sequence:
+        display_name = get_provider_display_name(provider_id)
+        console.print()
+        _print_padded(
+            console,
+            create_info_panel(
+                f"Connecting {display_name}",
+                f"SCC will open the normal {display_name} sign-in flow now.",
+                "When sign-in completes, the auth cache will be reused on future starts.",
+            ),
+            _layout_metrics(console),
+        )
+        console.print()
+        provider_adapter = provider_map.get(provider_id)
+        if provider_adapter is None:
+            continue
+        try:
+            provider_adapter.bootstrap_auth()
+        except ProviderNotReadyError as exc:
+            console.print()
+            _print_padded(
+                console,
+                create_info_panel(
+                    f"{display_name} not connected",
+                    exc.user_message,
+                    exc.suggested_action or "You can retry the provider sign-in later during start.",
+                ),
+                _layout_metrics(console),
+            )
+            console.print()
+
+    refreshed = collect_provider_readiness(adapters)
+    selected_preference = config.get_selected_provider()
+    if all(
+        refreshed.get(provider_id) is not None and refreshed[provider_id].status == "present"
+        for provider_id in ("claude", "codex")
+    ):
+        preference = _prompt_provider_preference(console, config.get_selected_provider())
+        config.set_selected_provider(preference)
+        selected_preference = preference
+    return refreshed, selected_preference
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -643,11 +833,24 @@ def run_setup_wizard(console: Console) -> bool:
         standalone=standalone,
     )
 
+    provider_readiness, provider_preference = _run_provider_onboarding(console)
+
     # Complete
     if standalone:
-        show_setup_complete(console, standalone=True)
+        show_setup_complete(
+            console,
+            standalone=True,
+            provider_readiness=provider_readiness,
+            provider_preference=provider_preference,
+        )
     else:
-        show_setup_complete(console, org_name=org_name, profile=profile)
+        show_setup_complete(
+            console,
+            org_name=org_name,
+            profile=profile,
+            provider_readiness=provider_readiness,
+            provider_preference=provider_preference,
+        )
 
     return True
 
@@ -726,8 +929,16 @@ def run_non_interactive_setup(
         hooks_enabled=True,  # Default to enabled for non-interactive
     )
 
+    provider_readiness, provider_preference = _run_provider_onboarding(console)
+
     org_name = org_config.get("organization", {}).get("name")
-    show_setup_complete(console, org_name=org_name, profile=team)
+    show_setup_complete(
+        console,
+        org_name=org_name,
+        profile=team,
+        provider_readiness=provider_readiness,
+        provider_preference=provider_preference,
+    )
 
     return True
 

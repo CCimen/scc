@@ -9,6 +9,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from scc_cli.adapters.codex_auth import run_codex_browser_auth
+from scc_cli.adapters.codex_launch import build_codex_container_argv
 from scc_cli.adapters.codex_renderer import render_codex_artifacts
 from scc_cli.core.contracts import (
     AgentLaunchSpec,
@@ -16,6 +18,7 @@ from scc_cli.core.contracts import (
     ProviderCapabilityProfile,
     RenderArtifactsResult,
 )
+from scc_cli.core.errors import ProviderNotReadyError
 from scc_cli.core.governed_artifacts import ArtifactRenderPlan
 
 logger = logging.getLogger(__name__)
@@ -133,6 +136,32 @@ class CodexAgentProvider:
             guidance="Codex auth cache present — no action needed",
         )
 
+    def bootstrap_auth(self) -> None:
+        """Establish Codex auth using the normal browser flow on the host."""
+        return_code = run_codex_browser_auth()
+        readiness = self.auth_check()
+        if readiness.status == "present":
+            return
+        if return_code != 0:
+            raise ProviderNotReadyError(
+                provider_id="codex",
+                user_message=(
+                    "Codex browser sign-in did not complete successfully."
+                ),
+                suggested_action=(
+                    "Retry the sign-in flow. If browser login is unavailable, use the "
+                    "device-code fallback instead."
+                ),
+            )
+        raise ProviderNotReadyError(
+            provider_id="codex",
+            user_message="Codex sign-in finished, but no reusable auth cache was written.",
+            suggested_action=(
+                "Retry the sign-in flow. If browser login is unavailable, use the "
+                "device-code fallback instead."
+            ),
+        )
+
     def prepare_launch(
         self,
         *,
@@ -155,7 +184,7 @@ class CodexAgentProvider:
         artifact_paths: tuple[Path, ...] = (settings_path,) if settings_path is not None else ()
         return AgentLaunchSpec(
             provider_id="codex",
-            argv=("codex",),
+            argv=build_codex_container_argv(),
             env={},
             workdir=workspace,
             artifact_paths=artifact_paths,

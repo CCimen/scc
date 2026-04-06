@@ -15,10 +15,12 @@ from scc_cli.adapters.oci_sandbox_runtime import (
     _AGENT_HOME,
     _AGENT_UID,
     _AUTH_FILES,
+    _HOME_LEVEL_AUTH_LINKS,
     _OCI_LABEL,
     OciSandboxRuntime,
     _container_name,
     _normalize_provider_permissions,
+    _project_home_level_auth_files,
 )
 from scc_cli.adapters.oci_sandbox_runtime import (
     _CLAUDE_AGENT_NAME as AGENT_NAME,
@@ -30,11 +32,13 @@ from scc_cli.core.contracts import RuntimeInfo
 from scc_cli.core.errors import (
     DockerDaemonNotRunningError,
     DockerNotFoundError,
+    ExistingSandboxConflictError,
     SandboxLaunchError,
 )
 from scc_cli.ports.models import (
     AgentSettings,
     MountSpec,
+    SandboxConflict,
     SandboxHandle,
     SandboxSpec,
     SandboxState,
@@ -74,6 +78,19 @@ def _minimal_spec(**overrides: object) -> SandboxSpec:
     }
     defaults.update(overrides)
     return SandboxSpec(**defaults)  # type: ignore[arg-type]
+
+
+def _docker_calls(mock_run_docker: MagicMock) -> list[list[str]]:
+    """Return the raw docker arg lists issued via _run_docker."""
+    return [call[0][0] for call in mock_run_docker.call_args_list]
+
+
+def _first_call(mock_run_docker: MagicMock, subcommand: str) -> list[str]:
+    """Return the first docker call whose subcommand matches *subcommand*."""
+    for cmd in _docker_calls(mock_run_docker):
+        if cmd and cmd[0] == subcommand:
+            return cmd
+    raise AssertionError(f"No docker {subcommand!r} call found")
 
 
 @pytest.fixture()
@@ -147,17 +164,15 @@ class TestRun:
         spec = _minimal_spec()
         handle = runtime.run(spec)
 
-        # Calls: create, start, normalize-dir, normalize-auth
-        assert mock_run_docker.call_count == 4
+        # Calls: ps lookup, create, start, normalize-dir, normalize-auth x2, project-home-auth
+        assert mock_run_docker.call_count == 7
 
-        create_args = mock_run_docker.call_args_list[0]
-        create_cmd: list[str] = create_args[0][0]
+        create_cmd = _first_call(mock_run_docker, "create")
         assert create_cmd[0] == "create"
         assert "--name" in create_cmd
         assert spec.image in create_cmd
 
-        start_args = mock_run_docker.call_args_list[1]
-        start_cmd: list[str] = start_args[0][0]
+        start_cmd = _first_call(mock_run_docker, "start")
         assert start_cmd == ["start", container_id]
 
         # execvp called with docker exec
@@ -180,7 +195,7 @@ class TestRun:
         spec = _minimal_spec()
         runtime.run(spec)
 
-        create_cmd: list[str] = mock_run_docker.call_args_list[0][0][0]
+        create_cmd = _first_call(mock_run_docker, "create")
         mount_str = f"{spec.workspace_mount.source}:{spec.workspace_mount.target}"
         assert mount_str in create_cmd
 
@@ -193,7 +208,7 @@ class TestRun:
         spec = _minimal_spec()
         runtime.run(spec)
 
-        create_cmd: list[str] = mock_run_docker.call_args_list[0][0][0]
+        create_cmd = _first_call(mock_run_docker, "create")
         cred_mount = f"{SANDBOX_DATA_VOLUME}:/home/agent/.claude"
         assert cred_mount in create_cmd
 
@@ -206,7 +221,7 @@ class TestRun:
         spec = _minimal_spec(env={"MY_KEY": "my_val", "OTHER": "123"})
         runtime.run(spec)
 
-        create_cmd: list[str] = mock_run_docker.call_args_list[0][0][0]
+        create_cmd = _first_call(mock_run_docker, "create")
         assert "-e" in create_cmd
         assert "MY_KEY=my_val" in create_cmd
         assert "OTHER=123" in create_cmd
@@ -220,7 +235,7 @@ class TestRun:
         spec = _minimal_spec()
         runtime.run(spec)
 
-        create_cmd: list[str] = mock_run_docker.call_args_list[0][0][0]
+        create_cmd = _first_call(mock_run_docker, "create")
         assert "--label" in create_cmd
         label_idx = create_cmd.index("--label")
         assert create_cmd[label_idx + 1] == _OCI_LABEL
@@ -235,8 +250,23 @@ class TestRun:
         spec = _minimal_spec(image=custom_image)
         runtime.run(spec)
 
-        create_cmd: list[str] = mock_run_docker.call_args_list[0][0][0]
+        create_cmd = _first_call(mock_run_docker, "create")
         assert custom_image in create_cmd
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_create_overrides_entrypoint_and_uses_shell_args_once(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        spec = _minimal_spec()
+        runtime.run(spec)
+
+        create_cmd = _first_call(mock_run_docker, "create")
+        entrypoint_idx = create_cmd.index("--entrypoint")
+        assert create_cmd[entrypoint_idx + 1] == "/bin/bash"
+        assert create_cmd[-2:] == ["-c", "sleep infinity"]
+        assert "/bin/bash" not in create_cmd[entrypoint_idx + 2 :]
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
@@ -264,9 +294,9 @@ class TestRun:
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
 
-        # 5 calls: create, start, normalize-dir, normalize-auth, cp
-        assert mock_run_docker.call_count == 5
-        cp_cmd: list[str] = mock_run_docker.call_args_list[4][0][0]
+        # Calls: ps lookup, create, start, normalize-dir, normalize-auth x2, project-home-auth, cp
+        assert mock_run_docker.call_count == 8
+        cp_cmd = _first_call(mock_run_docker, "cp")
         assert cp_cmd[0] == "cp"
         assert "cid123:" in cp_cmd[2]
 
@@ -287,7 +317,7 @@ class TestRun:
         runtime.run(spec)
 
         # The cp call should use a .toml suffix temp file (after normalization)
-        cp_cmd: list[str] = mock_run_docker.call_args_list[4][0][0]
+        cp_cmd = _first_call(mock_run_docker, "cp")
         assert cp_cmd[0] == "cp"
         assert cp_cmd[1].endswith(".toml")  # temp file suffix
 
@@ -339,6 +369,234 @@ class TestFailureModes:
         )
         with pytest.raises(SandboxLaunchError):
             runtime.run(_minimal_spec())
+
+
+class TestExistingContainerRecovery:
+    """Verify deterministic-name conflicts are handled intentionally."""
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager.teardown")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_stopped_container_is_removed_before_recreate(
+        self,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        mock_teardown: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tExited (0) 1 minute ago\n"),  # ps -a lookup
+            MagicMock(stdout=""),  # rm -f old123
+            MagicMock(stdout="new456\n"),  # docker create
+            MagicMock(stdout=""),  # docker start
+            MagicMock(stdout=""),  # normalize dir
+            MagicMock(stdout=""),  # normalize auth (.credentials.json)
+            MagicMock(stdout=""),  # normalize auth (.claude.json)
+            MagicMock(stdout=""),  # project home auth
+        ]
+
+        runtime.run(_minimal_spec())
+
+        assert mock_run_docker.call_args_list[1][0][0] == ["rm", "-f", "old123"]
+        assert mock_run_docker.call_args_list[2][0][0][0] == "create"
+        mock_teardown.assert_called_once()
+        assert mock_execvp.called
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager.teardown")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_idle_keepalive_container_is_replaced_automatically(
+        self,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        mock_teardown: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),  # ps -a lookup
+            MagicMock(stdout="Ss sleep sleep infinity\n"),  # docker top
+            MagicMock(stdout=""),  # rm -f old123
+            MagicMock(stdout="new456\n"),  # docker create
+            MagicMock(stdout=""),  # docker start
+            MagicMock(stdout=""),  # normalize dir
+            MagicMock(stdout=""),  # normalize auth (.credentials.json)
+            MagicMock(stdout=""),  # normalize auth (.claude.json)
+            MagicMock(stdout=""),  # project home auth
+        ]
+
+        runtime.run(_minimal_spec())
+
+        assert mock_run_docker.call_args_list[2][0][0] == ["rm", "-f", "old123"]
+        assert mock_run_docker.call_args_list[3][0][0][0] == "create"
+        mock_teardown.assert_called_once()
+        assert mock_execvp.called
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager.teardown")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_running_live_container_raises_specific_conflict(
+        self,
+        mock_run_docker: MagicMock,
+        mock_teardown: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),  # ps -a lookup
+            MagicMock(stdout="COMMAND COMMAND\npython python -m codex\n"),  # docker top
+        ]
+
+        with pytest.raises(ExistingSandboxConflictError, match="already running"):
+            runtime.run(_minimal_spec())
+
+        mock_teardown.assert_not_called()
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager.teardown")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_keepalive_with_only_defunct_children_is_replaced_automatically(
+        self,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        mock_teardown: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),  # ps -a lookup
+            MagicMock(
+                stdout=(
+                    "Ss sleep sleep infinity\n"
+                    "Z git [git] <defunct>\n"
+                    "Z git [git] <defunct>\n"
+                )
+            ),
+            MagicMock(stdout=""),  # rm -f old123
+            MagicMock(stdout="new456\n"),  # docker create
+            MagicMock(stdout=""),  # docker start
+            MagicMock(stdout=""),  # normalize dir
+            MagicMock(stdout=""),  # normalize auth (.credentials.json)
+            MagicMock(stdout=""),  # normalize auth (.claude.json)
+            MagicMock(stdout=""),  # project home auth
+        ]
+
+        runtime.run(_minimal_spec())
+
+        assert mock_run_docker.call_args_list[2][0][0] == ["rm", "-f", "old123"]
+        assert mock_run_docker.call_args_list[3][0][0][0] == "create"
+        mock_teardown.assert_called_once()
+        assert mock_execvp.called
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager.teardown")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_force_new_replaces_running_container_without_idle_check(
+        self,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        mock_teardown: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),  # ps -a lookup
+            MagicMock(stdout=""),  # rm -f old123
+            MagicMock(stdout="new456\n"),  # docker create
+            MagicMock(stdout=""),  # docker start
+            MagicMock(stdout=""),  # normalize dir
+            MagicMock(stdout=""),  # normalize auth (.credentials.json)
+            MagicMock(stdout=""),  # normalize auth (.claude.json)
+            MagicMock(stdout=""),  # project home auth
+        ]
+
+        runtime.run(_minimal_spec(force_new=True))
+
+        # No docker top call in the force-new path; remove happens immediately.
+        assert mock_run_docker.call_args_list[1][0][0] == ["rm", "-f", "old123"]
+        assert mock_run_docker.call_args_list[2][0][0][0] == "create"
+        mock_teardown.assert_called_once()
+        assert mock_execvp.called
+
+
+class TestDetectLaunchConflict:
+    """Verify launch-conflict detection only reports live user-visible conflicts."""
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_returns_none_when_no_existing_container(
+        self,
+        mock_run_docker: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.return_value = MagicMock(stdout="")
+
+        assert runtime.detect_launch_conflict(_minimal_spec()) is None
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_returns_none_for_stopped_container(
+        self,
+        mock_run_docker: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.return_value = MagicMock(stdout="old123\tExited (0) 1 minute ago\n")
+
+        assert runtime.detect_launch_conflict(_minimal_spec()) is None
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_returns_none_for_idle_keepalive_container(
+        self,
+        mock_run_docker: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),
+            MagicMock(stdout="Ss sleep sleep infinity\n"),
+        ]
+
+        assert runtime.detect_launch_conflict(_minimal_spec()) is None
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_returns_none_for_keepalive_with_only_defunct_children(
+        self,
+        mock_run_docker: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),
+            MagicMock(
+                stdout=(
+                    "Ss sleep sleep infinity\n"
+                    "Z git [git] <defunct>\n"
+                    "Z git [git] <defunct>\n"
+                )
+            ),
+        ]
+
+        assert runtime.detect_launch_conflict(_minimal_spec()) is None
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_returns_conflict_for_running_agent_process(
+        self,
+        mock_run_docker: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        mock_run_docker.side_effect = [
+            MagicMock(stdout="old123\tUp 2 minutes\n"),
+            MagicMock(stdout="Ss codex codex --dangerously-bypass-approvals-and-sandbox\n"),
+            MagicMock(stdout="Ss codex codex --dangerously-bypass-approvals-and-sandbox\n"),
+        ]
+
+        conflict = runtime.detect_launch_conflict(_minimal_spec())
+
+        assert conflict == SandboxConflict(
+            handle=SandboxHandle(sandbox_id="old123", name=_container_name(Path("/home/user/project"))),
+            state=SandboxState.RUNNING,
+            process_summary="codex --dangerously-bypass-approvals-and-sandbox",
+        )
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_force_new_skips_conflict_detection(
+        self,
+        mock_run_docker: MagicMock,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        assert runtime.detect_launch_conflict(_minimal_spec(force_new=True)) is None
+        mock_run_docker.assert_not_called()
 
 
 # ── list_running ─────────────────────────────────────────────────────────────
@@ -640,12 +898,13 @@ class TestWorkspaceScopedConfigInjection:
         # Find the git exclude shell command (filter out D039 normalization)
         git_exclude_calls = [
             c for c in all_calls
-            if "sh" in c and "-c" in c and ".git/info/exclude" in c[-1]
+            if "sh" in c and "-c" in c and "exclude_path=" in c[-1]
         ]
         assert len(git_exclude_calls) == 1
         shell_cmd = git_exclude_calls[0][-1]
         assert ".codex" in shell_cmd
-        assert ".git/info/exclude" in shell_cmd
+        assert "git -C" in shell_cmd
+        assert "info/exclude" in shell_cmd
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
@@ -662,15 +921,15 @@ class TestWorkspaceScopedConfigInjection:
         spec = _minimal_spec(agent_settings=settings)
         runtime.run(spec)
 
-        # 5 calls: create, start, normalize-dir, normalize-auth, cp (no mkdir or git exclude)
-        assert mock_run_docker.call_count == 5
-        all_calls = [call[0][0] for call in mock_run_docker.call_args_list]
-        assert all_calls[0][0] == "create"
-        assert all_calls[1] == ["start", "cid123"]
-        # Normalization exec calls at 2 and 3
-        assert all_calls[2][0] == "exec"
-        assert all_calls[3][0] == "exec"
-        assert all_calls[4][0] == "cp"
+        # 8 calls: ps lookup, create, start, normalize-dir, normalize-auth x2,
+        # home projection, cp
+        assert mock_run_docker.call_count == 8
+        all_calls = _docker_calls(mock_run_docker)
+        assert _first_call(mock_run_docker, "create")[0] == "create"
+        assert _first_call(mock_run_docker, "start") == ["start", "cid123"]
+        exec_calls = [c for c in all_calls if c[0] == "exec"]
+        assert len(exec_calls) == 4
+        assert _first_call(mock_run_docker, "cp")[0] == "cp"
         # No git-exclude calls
         git_exclude_calls = [c for c in all_calls if "-c" in c and ".git/info/exclude" in str(c)]
         assert len(git_exclude_calls) == 0
@@ -702,6 +961,46 @@ class TestWorkspaceScopedConfigInjection:
         assert str(workspace_target / ".codex" / "config.toml") in cp_target
         assert "/home/agent" not in cp_target
 
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_worktree_workspace_scoped_settings_use_workdir_not_mount_root(
+        self, mock_run_docker: MagicMock, mock_execvp: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        """D041: worktree launches target the logical workspace, not the bind-mount root."""
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+        mount_root = Path("/repo-parent")
+        workspace_root = mount_root / "worktree-a"
+        settings = AgentSettings(
+            rendered_bytes=b'cli_auth_credentials_store = "file"\n',
+            path=workspace_root / ".codex" / "config.toml",
+            suffix=".toml",
+        )
+        spec = SandboxSpec(
+            image="scc-agent-codex:latest",
+            workspace_mount=MountSpec(
+                source=Path("/host/repo-parent"),
+                target=mount_root,
+            ),
+            workdir=workspace_root,
+            agent_settings=settings,
+        )
+        runtime.run(spec)
+
+        all_calls = [call[0][0] for call in mock_run_docker.call_args_list]
+        mkdir_calls = [c for c in all_calls if "mkdir" in c]
+        assert len(mkdir_calls) == 1
+        assert f"{workspace_root}/.codex" in " ".join(mkdir_calls[0])
+        assert str(mount_root / ".codex") not in " ".join(mkdir_calls[0])
+
+        git_exclude_calls = [
+            c for c in all_calls if "sh" in c and "-c" in c and "git -C" in c[-1]
+        ]
+        assert len(git_exclude_calls) == 1
+        shell_cmd = git_exclude_calls[0][-1]
+        assert f"git -C {workspace_root}" in shell_cmd
+        assert str(mount_root / ".git") not in shell_cmd
+        assert ".codex" in shell_cmd
+
 
 # ── D039: Runtime permission normalization ───────────────────────────────────
 
@@ -727,8 +1026,8 @@ class TestNormalizeProviderPermissions:
         """Claude auth file (.credentials.json) gets 0600 if it exists."""
         _normalize_provider_permissions("cid123", ".claude")
 
-        # Second call: auth file chmod
-        assert mock_run.call_count == 2
+        # Second call: first Claude auth file chmod
+        assert mock_run.call_count == 3
         auth_call = mock_run.call_args_list[1]
         auth_cmd: list[str] = auth_call[0][0]
         shell_str = auth_cmd[-1]
@@ -776,8 +1075,8 @@ class TestNormalizeProviderPermissions:
         dir_call = mock_run.call_args_list[0]
         shell_str = dir_call[0][0][-1]
         assert f"{_AGENT_HOME}/.claude" in shell_str
-        # Should also check .credentials.json
-        assert mock_run.call_count == 2
+        # Should also check both Claude auth files
+        assert mock_run.call_count == 3
 
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     def test_check_false_on_all_calls(self, mock_run: MagicMock) -> None:
@@ -793,7 +1092,22 @@ class TestNormalizeProviderPermissions:
         assert ".claude" in _AUTH_FILES
         assert ".codex" in _AUTH_FILES
         assert ".credentials.json" in _AUTH_FILES[".claude"]
+        assert ".claude.json" in _AUTH_FILES[".claude"]
         assert "auth.json" in _AUTH_FILES[".codex"]
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    def test_claude_home_level_auth_projection(self, mock_run: MagicMock) -> None:
+        """Claude auth cache is projected into HOME as /home/agent/.claude.json."""
+        _project_home_level_auth_files("cid123", ".claude")
+
+        assert mock_run.call_count == 1
+        shell_str = mock_run.call_args_list[0][0][0][-1]
+        assert f"{_AGENT_HOME}/.claude/.claude.json" in shell_str
+        assert f"{_AGENT_HOME}/.claude.json" in shell_str
+        assert "ln -sfn" in shell_str
+
+    def test_home_level_auth_links_registry_consistency(self) -> None:
+        assert ".claude" in _HOME_LEVEL_AUTH_LINKS
 
 
 class TestNormalizePermissionsIntegration:
@@ -809,15 +1123,16 @@ class TestNormalizePermissionsIntegration:
         spec = _minimal_spec()  # defaults to Claude (empty config_dir)
         runtime.run(spec)
 
-        # Calls: create, start, dir-chmod, auth-chmod, exec(via execvp)
-        all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
-        assert all_cmds[0][0] == "create"
-        assert all_cmds[1] == ["start", "cid123"]
-        # Normalization calls (check=False) at positions 2 and 3
-        assert all_cmds[2][0] == "exec"  # dir chmod
-        assert "chmod 0700" in all_cmds[2][-1]
-        assert all_cmds[3][0] == "exec"  # auth file chmod
-        assert "chmod 0600" in all_cmds[3][-1]
+        # Calls: create, start, dir-chmod, auth-chmod x2, home projection, exec(via execvp)
+        all_cmds = _docker_calls(mock_run_docker)
+        assert _first_call(mock_run_docker, "create")[0] == "create"
+        assert _first_call(mock_run_docker, "start") == ["start", "cid123"]
+        exec_calls = [c for c in all_cmds if c[0] == "exec"]
+        assert len(exec_calls) == 4
+        assert "chmod 0700" in exec_calls[0][-1]
+        assert "chmod 0600" in exec_calls[1][-1]
+        assert "chmod 0600" in exec_calls[2][-1]
+        assert "ln -sfn" in exec_calls[3][-1]
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
@@ -829,13 +1144,14 @@ class TestNormalizePermissionsIntegration:
         spec = _minimal_spec(config_dir=".codex")
         runtime.run(spec)
 
-        all_cmds = [call[0][0] for call in mock_run_docker.call_args_list]
+        all_cmds = _docker_calls(mock_run_docker)
+        exec_calls = [c for c in all_cmds if c[0] == "exec"]
         # Dir chmod references .codex
-        dir_shell = all_cmds[2][-1]
+        dir_shell = exec_calls[0][-1]
         assert ".codex" in dir_shell
         assert "chmod 0700" in dir_shell
         # Auth chmod references auth.json
-        auth_shell = all_cmds[3][-1]
+        auth_shell = exec_calls[1][-1]
         assert "auth.json" in auth_shell
 
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")

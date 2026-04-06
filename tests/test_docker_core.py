@@ -910,6 +910,20 @@ class TestListSccContainers:
             assert containers == []
 
 
+class TestListRunningSccContainers:
+    """Tests for list_running_scc_containers() - running SCC inventory only."""
+
+    def test_filters_out_stopped_scc_containers(self):
+        """Should include only running SCC-managed containers."""
+        running = docker.ContainerInfo(id="a1", name="run", status="Up 2 hours")
+        stopped = docker.ContainerInfo(id="b2", name="stop", status="Exited (0) 1 hour ago")
+
+        with patch("scc_cli.docker.core.list_scc_containers", return_value=[running, stopped]):
+            containers = docker.list_running_scc_containers()
+
+        assert containers == [running]
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for list_running_sandboxes
 # ═══════════════════════════════════════════════════════════════════════════════

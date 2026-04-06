@@ -38,7 +38,7 @@ class TestStatusBasicOutput:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -57,7 +57,7 @@ class TestStatusBasicOutput:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -74,7 +74,7 @@ class TestStatusBasicOutput:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -110,7 +110,7 @@ class TestStatusSessionInfo:
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
                 with patch(
-                    "scc_cli.commands.admin.docker.list_running_sandboxes",
+                    "scc_cli.commands.admin.docker.list_running_scc_containers",
                     return_value=[mock_container],
                 ):
                     status_cmd()
@@ -130,7 +130,7 @@ class TestStatusSessionInfo:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -161,7 +161,7 @@ class TestStatusJsonOutput:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     try:
                         status_cmd(json_output=True, pretty=False)
                     except click.exceptions.Exit:
@@ -182,7 +182,7 @@ class TestStatusJsonOutput:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     try:
                         status_cmd(json_output=True, pretty=False)
                     except click.exceptions.Exit:
@@ -218,7 +218,7 @@ class TestStatusJsonOutput:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     try:
                         status_cmd(json_output=True, pretty=False)
                     except click.exceptions.Exit:
@@ -260,7 +260,7 @@ class TestStatusVerboseMode:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd(verbose=True)
 
         captured = capsys.readouterr()
@@ -295,7 +295,7 @@ class TestStatusVerboseMode:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd(verbose=True)
 
         captured = capsys.readouterr()
@@ -325,7 +325,7 @@ class TestStatusWorkspaceDetection:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()
@@ -348,7 +348,7 @@ class TestStatusWorkspaceDetection:
             with patch(
                 "scc_cli.commands.admin.config.load_cached_org_config", return_value=mock_org
             ):
-                with patch("scc_cli.commands.admin.docker.list_running_sandboxes", return_value=[]):
+                with patch("scc_cli.commands.admin.docker.list_running_scc_containers", return_value=[]):
                     status_cmd()
 
         captured = capsys.readouterr()

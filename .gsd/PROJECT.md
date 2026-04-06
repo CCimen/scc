@@ -1,4 +1,4 @@
-# Sandboxed Code CLI (SCC)
+# Sandboxed Coding CLI (SCC)
 
 ## What the project is
 SCC is a governed runtime for coding agents. It lets organizations run approved agents inside portable sandboxes with explicit policy, team-level configuration, safer defaults, and runtime-enforced controls that are explainable to security reviewers.
@@ -40,7 +40,7 @@ Delivered shared safety policy and verdict engine, runtime wrapper baseline, pro
 Delivered comprehensive architecture quality: module decomposition (15 files split), typed governed-artifact model hierarchy, provider-neutral bundle resolution/rendering pipeline, 100% branch coverage on pipeline modules, D023 portable artifact rendering, and 18 truthfulness guardrail tests. Final: 4486 tests.
 
 ### M006 — Provider Selection UX and End-to-End Codex Launch ✅
-SCC became a genuine multi-provider runtime. Users choose Claude or Codex via config or CLI flag (`scc provider show/set`, `scc start --provider codex`), validated against org/team policy. Provider identity flows through container naming, volume naming, session identity, machine-readable outputs (dry-run JSON, support bundle, session list). CodexAgentRunner adapter with Codex-specific image, settings, and argv. Provider-aware branding ("Sandboxed Code CLI"), doctor image check with exact build commands, and 16 coexistence proofs. 153 new tests, 4643 total, zero regressions.
+SCC became a genuine multi-provider runtime. Users choose Claude or Codex via config or CLI flag (`scc provider show/set`, `scc start --provider codex`), validated against org/team policy. Provider identity flows through container naming, volume naming, session identity, machine-readable outputs (dry-run JSON, support bundle, session list). CodexAgentRunner adapter with Codex-specific image, settings, and argv. Provider-aware branding ("Sandboxed Coding CLI"), doctor image check with exact build commands, and 16 coexistence proofs. 153 new tests, 4643 total, zero regressions.
 
 ### M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup ✅
 Eliminated Claude assumptions from shared/core/operator paths. ProviderRuntimeSpec replaces 5 scattered dicts. Settings serialization is provider-owned (rendered_bytes, not dict). Config layering is provider-native (Claude home-scoped, Codex workspace-scoped). Unknown providers fail closed. Auth readiness is adapter-owned via auth_check() on AgentProvider. Runtime permission normalization. Config freshness guarantee on every fresh launch. Doctor is provider-aware with --provider flag and categorized output. Core constants stripped to product-level only. 32 truthfulness guardrail tests. 166 net new tests, 4820 total.
@@ -121,7 +121,7 @@ Eliminated Claude assumptions from shared/core/operator paths. ProviderRuntimeSp
 - Doctor checks are categorized (backend/provider/config/worktree/general) and rendered with section headers. `--provider` flag scopes checks to a specific provider's readiness.
 - **core/constants.py holds only product-level values** (CLI_VERSION, CURRENT_SCHEMA_VERSION, WORKTREE_BRANCH_PREFIX). All Claude-specific runtime constants live in the adapter/consumer modules that use them. Guardrail test `test_no_claude_constants_in_core.py` prevents re-introduction via tokenize-based definition scanning and codebase-wide import scanning.
 - **commands/profile.py is Claude provider only** — the module docstring documents intentional hardcoded `.claude/settings.local.json` references. Future provider generalization tracked separately.
-- **Product name is 'SCC — Sandboxed Code CLI'** consistently across README, pyproject.toml, CLI branding, D-001, and all user-facing surfaces (D030).
+- **Product name is 'SCC — Sandboxed Coding CLI'** consistently across README, pyproject.toml, CLI branding, D045, and all user-facing surfaces.
 - **32 truthfulness guardrail tests** (test_docs_truthfulness.py) cover M007 deliverables: ProviderRuntimeSpec, fail-closed dispatch, doctor provider-auth, README title, core constants cleanliness, D033 bypass flag, D035 rendered_bytes, D037 auth_check, D040 file auth store, D041 settings scope, and D-001/D030 product identity consistency.
 - **scc-base Dockerfile** pre-creates both .claude and .codex dirs with 0700/uid1000. scc-agent-codex pins Codex CLI version via ARG. 25 structural tests cover all image Dockerfiles without requiring Docker.
 - **Resume preserves session context**: `_build_agent_settings(is_resume=True)` returns None, so OCI runtime skips config injection on resume. Fresh launch always writes config deterministically — even when logically empty — to clear stale state (D038/D042).

@@ -1,4 +1,4 @@
-"""SCC - Sandboxed Code CLI.
+"""SCC - Sandboxed Coding CLI.
 
 Provide a command-line tool for safely running AI coding agents in Docker sandboxes
 with team-specific configurations and worktree management.

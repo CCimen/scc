@@ -15,6 +15,7 @@ from rich.table import Table
 
 from ... import git
 from ...cli_common import MAX_DISPLAY_PATH_LENGTH, PATH_TRUNCATE_LENGTH, console, err_console
+from ...panels import create_info_panel
 from ...theme import Indicators
 from ...ui.chrome import print_with_layout
 
@@ -175,6 +176,13 @@ def show_launch_panel(
     console.print()
     start_line = "[dim]Starting Docker sandbox...[/dim]"
     print_with_layout(console, start_line)
+    console.print()
+
+
+def show_auth_bootstrap_panel(title: str, content: str, subtitle: str = "") -> None:
+    """Display an informational panel before an interactive auth bootstrap."""
+    console.print()
+    print_with_layout(console, create_info_panel(title, content, subtitle), constrain=True)
     console.print()
 
 

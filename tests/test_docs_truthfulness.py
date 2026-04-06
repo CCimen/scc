@@ -572,26 +572,26 @@ def test_bundle_resolver_portable_comment_is_truthful() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test q: README title must say 'Sandboxed Code CLI' (D030)
+# Test q: README title must say 'Sandboxed Coding CLI' (D045)
 # ---------------------------------------------------------------------------
 
 
-def test_readme_title_says_sandboxed_code_cli() -> None:
-    """README title must say 'Sandboxed Code CLI', not 'Sandboxed Claude CLI'.
+def test_readme_title_says_sandboxed_coding_cli() -> None:
+    """README title must say 'Sandboxed Coding CLI', not 'Sandboxed Claude CLI'.
 
-    Per D030, the product name is provider-neutral. The title line must
-    contain 'Sandboxed Code CLI' — not 'Sandboxed Claude CLI' or
-    'Sandboxed Coding CLI'.
+    Per D045, the product name is provider-neutral. The title line must
+    contain 'Sandboxed Coding CLI' — not 'Sandboxed Claude CLI' or
+    the older 'Sandboxed Code CLI'.
     """
     first_line = README.read_text(encoding="utf-8").splitlines()[0]
-    assert "Sandboxed Code CLI" in first_line, (
-        f"README.md title does not contain 'Sandboxed Code CLI'. Got: {first_line!r}"
+    assert "Sandboxed Coding CLI" in first_line, (
+        f"README.md title does not contain 'Sandboxed Coding CLI'. Got: {first_line!r}"
     )
     assert "Sandboxed Claude CLI" not in first_line, (
         f"README.md title still contains stale 'Sandboxed Claude CLI'. Got: {first_line!r}"
     )
-    assert "Sandboxed Coding CLI" not in first_line, (
-        f"README.md title contains incorrect 'Sandboxed Coding CLI'. Got: {first_line!r}"
+    assert "Sandboxed Code CLI" not in first_line, (
+        f"README.md title still contains older 'Sandboxed Code CLI'. Got: {first_line!r}"
     )
 
 
@@ -874,12 +874,12 @@ def test_d041_claude_settings_scope_is_home() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test: D-001 product identity is consistent with D030
+# Test: product identity docs are consistent with D045
 # ---------------------------------------------------------------------------
 
 
 def test_d001_product_identity_consistent() -> None:
-    """D-001 and D030 both establish the product name as 'Sandboxed Code CLI'.
+    """Current docs and metadata must use the provider-neutral product identity.
 
     The pyproject.toml description must not contain 'Claude' in a way
     that implies the product is Claude-specific.
@@ -891,5 +891,5 @@ def test_d001_product_identity_consistent() -> None:
     # The description line should not say "Sandboxed Claude CLI"
     assert "Sandboxed Claude CLI" not in text, (
         "pyproject.toml still contains 'Sandboxed Claude CLI'. "
-        "D030 requires provider-neutral naming."
+        "Product metadata must stay provider-neutral."
     )

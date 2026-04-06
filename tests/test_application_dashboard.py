@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from scc_cli.application import dashboard as app_dashboard
+from scc_cli.ports.session_models import SessionSummary
 
 
 def _empty_tab_data(tab: app_dashboard.DashboardTab) -> app_dashboard.DashboardTabData:
@@ -66,11 +69,31 @@ def test_start_flow_cancel_sets_toast() -> None:
     assert outcome.state.toast_message == "Start cancelled"
 
 
+def test_start_flow_cancel_uses_specific_message_when_provided() -> None:
+    state = app_dashboard.DashboardFlowState()
+    effect = app_dashboard.StartFlowEvent(
+        return_to=app_dashboard.DashboardTab.STATUS,
+        reason="dashboard_start",
+    )
+
+    outcome = app_dashboard.apply_dashboard_effect_result(
+        state,
+        effect,
+        app_dashboard.StartFlowResult(
+            decision=app_dashboard.StartFlowDecision.CANCELLED,
+            message="Kept existing sandbox",
+        ),
+    )
+
+    assert outcome.exit_dashboard is False
+    assert outcome.state.toast_message == "Kept existing sandbox"
+
+
 def test_session_resume_success_exits_dashboard() -> None:
     state = app_dashboard.DashboardFlowState()
     effect = app_dashboard.SessionResumeEvent(
         return_to=app_dashboard.DashboardTab.SESSIONS,
-        session={"name": "session"},
+        session=cast(SessionSummary, {"name": "session"}),
     )
 
     outcome = app_dashboard.apply_dashboard_effect_result(state, effect, True)

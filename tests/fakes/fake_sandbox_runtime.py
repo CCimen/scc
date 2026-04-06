@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from scc_cli.ports.models import SandboxHandle, SandboxSpec, SandboxState, SandboxStatus
+from scc_cli.ports.models import (
+    SandboxConflict,
+    SandboxHandle,
+    SandboxSpec,
+    SandboxState,
+    SandboxStatus,
+)
 
 
 @dataclass
@@ -29,6 +35,9 @@ class FakeSandboxRuntime:
         status = SandboxStatus(state=SandboxState.RUNNING)
         self._records[handle.sandbox_id] = _SandboxRecord(handle=handle, status=status)
         return handle
+
+    def detect_launch_conflict(self, spec: SandboxSpec) -> SandboxConflict | None:
+        return None
 
     def resume(self, handle: SandboxHandle) -> None:
         record = self._records.get(handle.sandbox_id)

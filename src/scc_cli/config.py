@@ -244,20 +244,25 @@ def set_selected_profile(profile: str) -> None:
 
 
 def get_selected_provider() -> str | None:
-    """Get the currently selected provider name.
+    """Get the persisted provider preference.
 
     Returns:
-        Provider name string or None if not selected
+        ``"claude"`` or ``"codex"`` for a concrete preference,
+        ``"ask"`` for an explicit "prompt when ambiguous" preference,
+        or ``None`` when no startup preference has been configured yet.
     """
     config = load_user_config()
-    return config.get("selected_provider")
+    provider = config.get("selected_provider")
+    return provider if isinstance(provider, str) else None
 
 
-def set_selected_provider(provider: str) -> None:
-    """Set the selected provider.
+def set_selected_provider(provider: str | None) -> None:
+    """Set the persisted provider preference.
 
     Args:
-        provider: Provider name to select (e.g. 'claude', 'codex')
+        provider: ``"claude"`` or ``"codex"`` for a concrete preference,
+            ``"ask"`` to always prompt when multiple providers are viable,
+            or ``None`` to clear the preference entirely.
     """
     config = load_user_config()
     config["selected_provider"] = provider

@@ -61,6 +61,9 @@ class TestResolveActiveProvider:
         with pytest.raises(ProviderNotAllowedError):
             resolve_active_provider(None, "codex", allowed_providers=("claude",))
 
+    def test_ask_config_provider_falls_back_to_default(self) -> None:
+        assert resolve_active_provider(None, "ask") == "claude"
+
     def test_known_providers_contains_claude_and_codex(self) -> None:
         assert "claude" in KNOWN_PROVIDERS
         assert "codex" in KNOWN_PROVIDERS
@@ -135,6 +138,23 @@ class TestProviderConfigHelpers:
         # Verify it's actually on disk
         on_disk = json.loads(config_file.read_text())
         assert on_disk["selected_provider"] == "codex"
+
+    def test_set_and_get_selected_provider_ask(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from scc_cli import config as config_mod
+
+        config_dir = tmp_path / ".config" / "scc"
+        config_dir.mkdir(parents=True)
+        config_file = config_dir / "config.json"
+        monkeypatch.setattr(config_mod, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(config_mod, "CONFIG_FILE", config_file)
+
+        config_mod.set_selected_provider("ask")
+        assert config_mod.get_selected_provider() == "ask"
+
+        on_disk = json.loads(config_file.read_text())
+        assert on_disk["selected_provider"] == "ask"
 
     def test_set_provider_preserves_other_config(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -1,5 +1,5 @@
 """
-Typed exceptions for SCC - Sandboxed Code CLI.
+Typed exceptions for SCC - Sandboxed Coding CLI.
 
 Error handling philosophy: "One message, one action"
 - Each error has a clear user_message (what went wrong)
@@ -246,6 +246,36 @@ class ContainerNotFoundError(ToolError):
 
 
 @dataclass
+class ExistingSandboxConflictError(ToolError):
+    """A live sandbox already exists for this workspace/provider."""
+
+    container_name: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.user_message:
+            if self.container_name:
+                self.user_message = (
+                    f"An SCC sandbox is already running for this workspace: {self.container_name}"
+                )
+            else:
+                self.user_message = "An SCC sandbox is already running for this workspace"
+        if not self.suggested_action:
+            if self.container_name:
+                self.suggested_action = (
+                    "Use 'scc start --fresh' to replace it, "
+                    f"'scc stop {shlex.quote(self.container_name)}' to stop it, "
+                    "or remove it manually first."
+                )
+            else:
+                self.suggested_action = (
+                    "Use 'scc start --fresh' to replace it, or stop/remove the existing container first"
+                )
+
+
+@dataclass
 class InternalError(SCCError):
     """Internal error (bug in the CLI)."""
 
@@ -404,6 +434,34 @@ class ProviderImageMissingError(PrerequisiteError):
                 )
             else:
                 self.suggested_action = "Build the provider image and try again."
+
+
+@dataclass
+class ProviderImageBuildError(ToolError):
+    """Provider container image build failed."""
+
+    provider_id: str = ""
+    image_ref: str = ""
+    build_command: str = ""
+    user_message: str = field(default="")
+    suggested_action: str = field(default="")
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.user_message:
+            image_detail = f" ({self.image_ref})" if self.image_ref else ""
+            self.user_message = (
+                f"Failed to build the container image for provider '{self.provider_id}'"
+                f"{image_detail}."
+            )
+        if not self.suggested_action:
+            if self.build_command:
+                self.suggested_action = (
+                    "Review the Docker build output and retry:\n"
+                    f"  {self.build_command}"
+                )
+            else:
+                self.suggested_action = "Review the Docker build output and try again."
 
 
 @dataclass

@@ -7,7 +7,7 @@ This file is append-only. Record new decisions as new entries.
 ## D-001 — Product identity
 SCC means **Sandboxed Code CLI**.
 
-Status: accepted (updated per D030)
+Status: superseded by D045
 
 ---
 
@@ -102,6 +102,19 @@ Status: accepted
 
 ---
 
+## D045 — Product naming refinement
+SCC means **Sandboxed Coding CLI**.
+
+This supersedes D030's "Sandboxed Code CLI" wording. Use "Sandboxed Coding CLI"
+across current user-facing surfaces, package metadata, branding, and active
+project docs. Historical milestone artifacts may retain older wording as
+execution history unless they are part of current user-facing product surfaces
+or active architecture docs.
+
+Status: accepted
+
+---
+
 ## Decisions Table
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |
@@ -148,3 +161,6 @@ Status: accepted
 | D042 | M007-cqttot planning refinement | architecture | Refinement of D038: what exactly does SCC write on fresh launch for config freshness? | On every fresh launch, SCC writes the SCC-managed config file deterministically, even when logically empty. For Claude: writes /home/agent/.claude/settings.json (already the pattern). For Codex: writes /workspace/.codex/config.toml with SCC-managed values (cli_auth_credentials_store, sandbox/approval overrides, MCP servers from governed bundles). These are provider-native injection surfaces that do NOT overwrite user-level config in the persistent volume. On resume, SCC leaves existing config in place. The fresh-launch write is scoped to SCC-owned config layers only — user/provider preferences in the persistent volume are never modified. | D038 as originally stated ('write the authoritative settings file on every fresh launch') was ambiguous about which file was being written. With D041 establishing that SCC uses provider-native layering (project-scoped for Codex, settings.json for Claude), D038's freshness guarantee becomes precise: SCC deterministically writes its own layer, not the user's config. This preserves user preferences while guaranteeing no stale team/workspace config leaks. | Yes | collaborative |
 | D043 | M007-cqttot/S01/T02 | architecture | Where does provider_registry.py actually live after the no-root-sprawl guardrail? | Moved provider_registry.py from package root (D034's plan) to src/scc_cli/core/provider_registry.py. The no-root-sprawl guardrail test (test_no_root_sprawl.py) rejects new top-level modules. core/ is acceptable because the module imports only from core and does not introduce adapter or command dependencies. ProviderRuntimeSpec (the type) and PROVIDER_REGISTRY (the dict) now colocate in core/, which simplifies imports for all consumers. | D034 placed the registry at package root alongside bootstrap.py, but the existing test_no_root_sprawl guardrail rejects new top-level .py files. Moving to core/ satisfies the guardrail while maintaining the same import accessibility — all consumers (doctor, sessions, dependencies, start_session) can import from scc_cli.core.provider_registry without layer violations. The module still only imports from core (contracts, errors, image_contracts), so it does not violate the core → adapters boundary. | Yes | agent |
 | D044 | M007-cqttot/S05/T01 | roadmap | Whether M007/S05 should close as docs-only or include implementation reconciliation tasks | Expand S05 to include reconciliation tasks that implement D033, D035, D037, D038, D039, D040, D041, D042 in code and tests before milestone closeout. S05 is no longer docs/naming-only — it must verify that the M007 architecture (provider-owned settings serialization, Codex launch policy, config ownership layering, auth persistence, runtime permissions, fail-closed dispatch) is real in the codebase, not just documented in decisions and context files. | User override: the final M007 architecture and the current code are still out of sync in several important places. Decisions were recorded but not all implemented. Closing M007 as docs-only would leave the codebase misrepresenting its own architecture — the exact kind of truthfulness gap M007 was supposed to eliminate. The 11 reconciliation items cover: provider-owned settings serialization (D035), Codex launch argv (D033), config ownership layering (D041), file-based Codex auth (D040), config freshness (D038/D042), runtime permission normalization (D039), adapter-owned auth readiness (D037), Claude fallback removal (D032), and image hardening. | No — user directed | human |
+| D045 | M008-g7jk8d planning | branding | Whether M008 should change product name in .scc.yaml and other surfaces | Preserve 'Sandboxed Coding CLI' per D045. Do not revert to 'Sandboxed Code CLI' (D030 was superseded). M008 must verify and guard branding consistency, not introduce drift. | D045 supersedes D030 and establishes 'Sandboxed Coding CLI' as canonical. The live codebase (branding.py, theme.py, cli.py, setup_ui.py, errors.py, init.py, README, pyproject.toml) already uses this consistently. Reverting would reintroduce the exact naming confusion M007 was supposed to eliminate. | No — user directed | human |
+| D046 | M008-g7jk8d planning | architecture | Architecture constraints for the shared launch preflight module (commands/launch/preflight.py) | The preflight module must: (1) stay command-layer only — no placement in core/ or application/, (2) not leak provider-specific behavior into core contracts — it dispatches to existing provider_image.py and auth_bootstrap.py, (3) not own UI wording beyond structured error messages (user_message, suggested_action) — callers own rendering, (4) separate pure decision logic (resolve_launch_provider, collect_launch_readiness) from side effects (ensure_launch_ready) so the decision functions are independently testable without mocking I/O. | The preflight module consolidates orchestration that is currently duplicated five times across command and UI layers. Keeping it command-layer prevents core from growing execution concerns. Separating pure decisions from side effects prevents it from becoming a god-function — the pure functions can be tested with plain data, the side-effect function is thin. Not owning UI wording keeps the module reusable across interactive (console) and non-interactive (JSON error) contexts. | Yes | collaborative |
+| D047 | M008-g7jk8d planning refinement | architecture | Whether LaunchReadiness should use enums or loose booleans/strings for readiness state | Use frozen dataclass with enum fields: ImageStatus, AuthStatus, ProviderResolutionSource. Derived booleans (requires_image_bootstrap, requires_auth_bootstrap, launch_ready) are computed from enum values, not independent flags. Callers pattern-match on enum values, not string comparisons or bool combos. | The shared preflight module consolidates logic from five sites. Without typed enums, the consolidated readiness state would become ad hoc branching glue — callers comparing strings like 'present' or checking combos of loose booleans. Enums make the state space explicit and exhaustible. The derived booleans are convenience accessors for the common 'do I need to bootstrap?' check, not independent state. | Yes | collaborative |

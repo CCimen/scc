@@ -134,8 +134,8 @@ def list_cmd(
         ],
     )
 
-    console.print("[dim]Resume with: docker start -ai <container_name>[/dim]")
-    console.print("[dim]Or use: scc list -i for interactive mode[/dim]")
+    console.print("[dim]Resume work with: scc sessions --select or scc[/dim]")
+    console.print("[dim]Or use: scc list -i for interactive container actions[/dim]")
 
 
 @handle_errors
@@ -164,15 +164,14 @@ def stop_cmd(
         scc stop --yes                   # Stop all without confirmation
     """
     with Status("[cyan]Fetching sandboxes...[/cyan]", console=console, spinner=Spinners.DOCKER):
-        # List Docker Desktop sandbox containers (image: docker/sandbox-templates:claude-code)
-        running = docker.list_running_sandboxes()
+        running = docker.list_running_scc_containers()
 
     if not running:
         console.print(
             create_info_panel(
-                "No Running Sandboxes",
-                "No sandboxes are currently running.",
-                "Start one with: scc -w /path/to/project",
+                "No Running Containers",
+                "No SCC-managed containers are currently running.",
+                "Start one with: scc start ~/project",
             )
         )
         return

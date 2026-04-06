@@ -56,6 +56,7 @@ from .core import (
     get_docker_desktop_version,
     get_docker_version,
     list_running_sandboxes,
+    list_running_scc_containers,
     list_scc_containers,
     remove_container,
     resume_container,
@@ -108,6 +109,7 @@ __all__ = [
     "validate_container_filename",
     # Container queries
     "list_scc_containers",
+    "list_running_scc_containers",
     "list_running_sandboxes",
     # Credential management
     "prepare_sandbox_volume_for_credentials",

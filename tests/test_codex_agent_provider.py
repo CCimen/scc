@@ -14,6 +14,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
+from scc_cli.adapters.codex_launch import build_codex_container_argv
+from scc_cli.core.contracts import AuthReadiness
+from scc_cli.core.errors import ProviderNotReadyError
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -52,7 +55,7 @@ def test_prepare_launch_without_settings_produces_clean_spec(
     spec = provider.prepare_launch(config={}, workspace=tmp_path, settings_path=None)
 
     assert spec.provider_id == "codex"
-    assert spec.argv == ("codex",)
+    assert spec.argv == build_codex_container_argv()
     assert spec.env == {}
     assert spec.artifact_paths == ()
     assert spec.required_destination_sets == ("openai-core",)
@@ -184,3 +187,48 @@ class TestCodexAuthCheck:
         result = provider.auth_check()
         assert result.status == "missing"
         assert "Timed out" in result.guidance
+
+
+class TestCodexBootstrapAuth:
+    """bootstrap_auth() uses browser auth and confirms cache presence afterwards."""
+
+    @patch("scc_cli.adapters.codex_agent_provider.run_codex_browser_auth")
+    def test_bootstrap_auth_succeeds_when_auth_cache_becomes_present(
+        self,
+        mock_browser_auth: MagicMock,
+        provider: CodexAgentProvider,
+    ) -> None:
+        mock_browser_auth.return_value = 0
+        with patch.object(
+            provider,
+            "auth_check",
+            return_value=AuthReadiness(
+                status="present",
+                mechanism="auth_json_file",
+                guidance="Codex auth cache present — no action needed",
+            ),
+        ):
+            provider.bootstrap_auth()
+
+        mock_browser_auth.assert_called_once()
+
+    @patch("scc_cli.adapters.codex_agent_provider.run_codex_browser_auth")
+    def test_bootstrap_auth_raises_when_cache_still_missing(
+        self,
+        mock_browser_auth: MagicMock,
+        provider: CodexAgentProvider,
+    ) -> None:
+        mock_browser_auth.return_value = 1
+        with patch.object(
+            provider,
+            "auth_check",
+            return_value=AuthReadiness(
+                status="missing",
+                mechanism="auth_json_file",
+                guidance="Auth cache still missing",
+            ),
+        ):
+            with pytest.raises(ProviderNotReadyError):
+                provider.bootstrap_auth()
+
+        mock_browser_auth.assert_called_once()

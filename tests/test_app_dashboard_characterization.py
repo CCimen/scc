@@ -94,6 +94,7 @@ class TestStartFlowResult:
     def test_from_legacy_false_is_cancelled(self) -> None:
         result = StartFlowResult.from_legacy(False)
         assert result.decision is StartFlowDecision.CANCELLED
+        assert result.message is None
 
 
 # ══════════��══════════════════════════════════════════════════════���═════════════
@@ -244,6 +245,19 @@ class TestApplyDashboardEffectResult:
         assert result.exit_dashboard is not True
         assert result.state.toast_message == "Start cancelled"
 
+    def test_start_flow_cancelled_uses_specific_message(self) -> None:
+        state = DashboardFlowState()
+        result = apply_dashboard_effect_result(
+            state,
+            StartFlowEvent(return_to=DashboardTab.STATUS, reason="test"),
+            StartFlowResult(
+                decision=StartFlowDecision.CANCELLED,
+                message="Kept existing sandbox",
+            ),
+        )
+        assert result.exit_dashboard is not True
+        assert result.state.toast_message == "Kept existing sandbox"
+
     def test_session_resume_success_exits(self) -> None:
         session = MagicMock(spec=SessionSummary)
         state = DashboardFlowState()
@@ -271,6 +285,7 @@ class TestApplyDashboardEffectResult:
             StatuslineInstallEvent(return_to=DashboardTab.STATUS),
             True,
         )
+        assert result.state.toast_message is not None
         assert "installed" in result.state.toast_message.lower()
 
     def test_statusline_install_failure(self) -> None:
@@ -280,6 +295,7 @@ class TestApplyDashboardEffectResult:
             StatuslineInstallEvent(return_to=DashboardTab.STATUS),
             False,
         )
+        assert result.state.toast_message is not None
         assert "failed" in result.state.toast_message.lower()
 
     def test_container_stop_success(self) -> None:
@@ -291,6 +307,7 @@ class TestApplyDashboardEffectResult:
             ),
             (True, None),
         )
+        assert result.state.toast_message is not None
         assert "stopped" in result.state.toast_message.lower()
 
     def test_container_stop_failure(self) -> None:
@@ -302,6 +319,7 @@ class TestApplyDashboardEffectResult:
             ),
             (False, "Error: connection refused"),
         )
+        assert result.state.toast_message is not None
         assert "connection refused" in result.state.toast_message.lower()
 
     def test_container_stop_invalid_result_raises(self) -> None:
@@ -320,6 +338,7 @@ class TestApplyDashboardEffectResult:
         result = apply_dashboard_effect_result(
             state, GitInitEvent(return_to=DashboardTab.STATUS), True
         )
+        assert result.state.toast_message is not None
         assert "initialized" in result.state.toast_message.lower()
 
     def test_create_worktree_git_repo(self) -> None:
@@ -329,6 +348,7 @@ class TestApplyDashboardEffectResult:
             CreateWorktreeEvent(return_to=DashboardTab.WORKTREES, is_git_repo=True),
             True,
         )
+        assert result.state.toast_message is not None
         assert "worktree created" in result.state.toast_message.lower()
 
     def test_create_worktree_clone(self) -> None:
@@ -338,6 +358,7 @@ class TestApplyDashboardEffectResult:
             CreateWorktreeEvent(return_to=DashboardTab.WORKTREES, is_git_repo=False),
             True,
         )
+        assert result.state.toast_message is not None
         assert "cloned" in result.state.toast_message.lower()
 
     def test_settings_result_applied(self) -> None:
@@ -356,6 +377,7 @@ class TestApplyDashboardEffectResult:
             RecentWorkspacesEvent(return_to=DashboardTab.STATUS),
             "/path/to/workspace",
         )
+        assert result.state.toast_message is not None
         assert "/path/to/workspace" in result.state.toast_message
 
     def test_recent_workspaces_cancelled(self) -> None:

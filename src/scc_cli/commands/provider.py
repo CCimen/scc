@@ -1,9 +1,4 @@
-"""Provider management commands for SCC CLI.
-
-Provide structured provider management:
-- scc provider show  - Show current provider
-- scc provider set   - Set the default provider
-"""
+"""Provider management commands for SCC CLI."""
 
 from __future__ import annotations
 
@@ -25,22 +20,27 @@ provider_app = typer.Typer(
 @handle_errors
 def show() -> None:
     """Show the currently selected agent provider."""
-    provider = config.get_selected_provider() or "claude"
+    provider = config.get_selected_provider() or "ask"
     console.print(provider)
 
 
 @provider_app.command("set")
 @handle_errors
 def set_provider(
-    provider: str = typer.Argument(..., help="Provider to set (claude or codex)"),
+    provider: str = typer.Argument(..., help="Provider to set (claude, codex, or ask)"),
 ) -> None:
-    """Set the default agent provider."""
+    """Set the global provider preference."""
+    if provider == "ask":
+        config.set_selected_provider("ask")
+        console.print("Provider preference set to [bold]ask[/bold]")
+        return
+
     if provider not in KNOWN_PROVIDERS:
         console.print(
             f"[red]Error:[/red] Unknown provider '{provider}'. "
-            f"Known providers: {', '.join(KNOWN_PROVIDERS)}",
+            f"Known providers: {', '.join(KNOWN_PROVIDERS)}, ask",
             highlight=False,
         )
         raise typer.Exit(2)
     config.set_selected_provider(provider)
-    console.print(f"Provider set to [bold]{provider}[/bold]")
+    console.print(f"Provider preference set to [bold]{provider}[/bold]")

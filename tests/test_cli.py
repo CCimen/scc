@@ -222,6 +222,8 @@ class TestStartCommand:
             patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
             patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
             patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
+            patch("scc_cli.commands.launch.flow._resolve_provider", return_value="claude"),
+            patch("scc_cli.commands.launch.flow.ensure_provider_image"),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
         ):
             result = runner.invoke(app, ["start", str(tmp_path), "--standalone"])
@@ -249,6 +251,8 @@ class TestStartCommand:
             patch("scc_cli.commands.launch.flow._configure_team_settings"),
             patch("scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}),
             patch("scc_cli.commands.launch.flow.get_default_adapters", return_value=fake_adapters),
+            patch("scc_cli.commands.launch.flow._resolve_provider", return_value="claude"),
+            patch("scc_cli.commands.launch.flow.ensure_provider_image"),
             patch("scc_cli.commands.launch.workspace.check_branch_safety"),
             patch(
                 "scc_cli.application.start_session.compute_effective_config",
@@ -626,7 +630,7 @@ class TestStopCommand:
 
         with (
             patch(
-                "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+                "scc_cli.commands.worktree.container_commands.docker.list_running_scc_containers",
                 return_value=[mock_container],
             ),
             patch(
@@ -647,7 +651,7 @@ class TestStopCommand:
         mock_container.id = "other123"
 
         with patch(
-            "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+            "scc_cli.commands.worktree.container_commands.docker.list_running_scc_containers",
             return_value=[mock_container],
         ):
             result = runner.invoke(app, ["stop", "nonexistent"])
@@ -658,7 +662,7 @@ class TestStopCommand:
     def test_stop_all_when_no_containers(self):
         """Stop should show message when no containers running."""
         with patch(
-            "scc_cli.commands.worktree.container_commands.docker.list_running_sandboxes",
+            "scc_cli.commands.worktree.container_commands.docker.list_running_scc_containers",
             return_value=[],
         ):
             result = runner.invoke(app, ["stop"])
