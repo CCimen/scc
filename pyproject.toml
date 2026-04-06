@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scc-cli"
-version = "1.7.3"
+version = "2.0.0"
 description = "Governed runtime for AI coding agents with container sandboxes, network controls, and team-managed configuration"
 readme = "README.md"
 license = "MIT"
