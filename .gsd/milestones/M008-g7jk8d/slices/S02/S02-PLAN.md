@@ -53,7 +53,7 @@ Note: the live codebase already shows 'Sandboxed Coding CLI' in init.py line 73 
   - Estimate: 25min
   - Files: src/scc_cli/commands/launch/provider_choice.py, src/scc_cli/setup.py, src/scc_cli/commands/init.py, tests/test_docs_truthfulness.py
   - Verify: uv run pytest tests/test_docs_truthfulness.py tests/test_start_provider_choice.py -v && uv run ruff check && uv run mypy src/scc_cli/commands/launch/provider_choice.py src/scc_cli/setup.py
-- [ ] **T04: Slice verification gate** — Run full verification:
+- [x] **T04: All 6 verification checks pass: ruff clean, mypy clean, 5008 tests (0 failures), no Docker Desktop in active paths, branding consistent** — Run full verification:
 1. ruff check on all touched files
 2. mypy on all touched source files
 3. Focused pytest on guardrail, truthfulness, lifecycle, and provider choice tests
