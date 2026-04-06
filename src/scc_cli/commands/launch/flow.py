@@ -30,7 +30,6 @@ from ...presentation.launch_presenter import build_sync_output_view_model, rende
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
 from ...workspace_local_config import set_workspace_last_used_provider
-from .auth_bootstrap import ensure_provider_auth
 from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
 from .flow_interactive import interactive_start, run_start_wizard_flow
@@ -39,8 +38,7 @@ from .flow_session import (
     _record_session_and_context,
     _resolve_session_selection,
 )
-from .preflight import resolve_launch_provider
-from .provider_image import ensure_provider_image
+from .preflight import collect_launch_readiness, ensure_launch_ready, resolve_launch_provider
 from .render import (
     build_dry_run_data,
     show_auth_bootstrap_panel,
@@ -332,6 +330,23 @@ def start(
             console.print("[dim]Cancelled.[/dim]")
         raise typer.Exit(EXIT_CANCELLED)
 
+    # ── Step 6.2: Preflight readiness (image + auth) ─────────────────────────
+    # For non-resume fresh starts, check readiness before plan construction.
+    # Dry-run skips this entirely (no image/auth needed for preview).
+    # Resume paths skip auth bootstrap since the original session authenticated.
+    if not dry_run and not resume:
+        readiness = collect_launch_readiness(
+            resolved_provider, _resolution_source, adapters
+        )
+        if not readiness.launch_ready:
+            ensure_launch_ready(
+                readiness,
+                adapters=adapters,
+                console=console,
+                non_interactive=non_interactive,
+                show_notice=show_auth_bootstrap_panel,
+            )
+
     start_request = StartSessionRequest(
         workspace_path=workspace_path,
         workspace_arg=workspace_arg,
@@ -414,19 +429,6 @@ def start(
         console.print("[dim]Cancelled.[/dim]")
         raise typer.Exit(EXIT_CANCELLED)
     start_plan = conflict_resolution.plan
-
-    ensure_provider_image(
-        resolved_provider,
-        console=console,
-        non_interactive=non_interactive,
-        show_notice=show_auth_bootstrap_panel,
-    )
-    ensure_provider_auth(
-        start_plan,
-        dependencies=start_dependencies,
-        non_interactive=non_interactive,
-        show_notice=show_auth_bootstrap_panel,
-    )
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
     _record_session_and_context(

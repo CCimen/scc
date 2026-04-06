@@ -19,6 +19,12 @@ from scc_cli.commands.launch.conflict_resolution import (
     LaunchConflictDecision,
     LaunchConflictResolution,
 )
+from scc_cli.commands.launch.preflight import (
+    AuthStatus,
+    ImageStatus,
+    LaunchReadiness,
+    ProviderResolutionSource,
+)
 from scc_cli.commands.launch.provider_choice import _resolve_prompt_default
 from scc_cli.core.contracts import AuthReadiness, ProviderCapabilityProfile
 from scc_cli.core.errors import SandboxLaunchError
@@ -134,8 +140,8 @@ _FLOW_BASE_PATCHES = [
     "scc_cli.commands.launch.flow.resolve_launch_conflict",
     "scc_cli.commands.launch.flow._record_session_and_context",
     "scc_cli.commands.launch.flow.set_workspace_last_used_provider",
-    "scc_cli.commands.launch.flow.ensure_provider_image",
-    "scc_cli.commands.launch.flow.ensure_provider_auth",
+    "scc_cli.commands.launch.flow.collect_launch_readiness",
+    "scc_cli.commands.launch.flow.ensure_launch_ready",
     "scc_cli.commands.launch.flow.show_auth_bootstrap_panel",
     "scc_cli.commands.launch.flow.show_launch_panel",
     "scc_cli.commands.launch.flow.finalize_launch",
@@ -166,6 +172,15 @@ def _apply_flow_patches(
     mocks["prepare_workspace"].return_value = tmp_path
     mocks["resolve_workspace_team"].return_value = None
     mocks["resolve_launch_provider"].return_value = (provider_id, "explicit")
+    mocks["collect_launch_readiness"].return_value = LaunchReadiness(
+        provider_id=provider_id,
+        resolution_source=ProviderResolutionSource.EXPLICIT,
+        image_status=ImageStatus.AVAILABLE,
+        auth_status=AuthStatus.PRESENT,
+        requires_image_bootstrap=False,
+        requires_auth_bootstrap=False,
+        launch_ready=True,
+    )
     mocks["prepare_live_start_plan"].return_value = (deps, plan)
     mocks["_apply_personal_profile"].return_value = (None, False)
     mocks["resolve_launch_conflict"].return_value = LaunchConflictResolution(

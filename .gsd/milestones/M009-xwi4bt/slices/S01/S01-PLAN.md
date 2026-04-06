@@ -16,7 +16,7 @@ Steps:
   - Estimate: 25min
   - Files: src/scc_cli/commands/launch/preflight.py, src/scc_cli/commands/worktree/worktree_commands.py, src/scc_cli/ui/dashboard/orchestrator_handlers.py, tests/test_launch_preflight.py
   - Verify: uv run pytest tests/test_launch_preflight.py -v && uv run pytest tests/test_launch_preflight_guardrail.py -v && uv run ruff check
-- [ ] **T02: Migrate flow.py and flow_interactive.py to shared preflight readiness path** — Replace the inline ensure_provider_image + ensure_provider_auth calls in flow.py start() and flow_interactive.py run_start_wizard_flow() with collect_launch_readiness() + ensure_launch_ready() from preflight.py.
+- [x] **T02: Replaced inline ensure_provider_image + ensure_provider_auth calls in flow.py and flow_interactive.py with shared preflight readiness path, completing the migration of all five launch sites** — Replace the inline ensure_provider_image + ensure_provider_auth calls in flow.py start() and flow_interactive.py run_start_wizard_flow() with collect_launch_readiness() + ensure_launch_ready() from preflight.py.
 
 Key ordering constraint (D048): flow.py calls ensure_provider_image/auth AFTER prepare_live_start_plan and conflict_resolution. But the actual dependency is thin — ensure_provider_auth only uses plan.resume (to skip on resume) and dependencies.agent_provider (for auth_check/bootstrap_auth). For non-resume fresh starts, we can call collect_launch_readiness + ensure_launch_ready BEFORE plan construction, same as worktree/dashboard. For resume, the readiness check should skip auth bootstrap since auth is already present from the original session.
 

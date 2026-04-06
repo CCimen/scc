@@ -27,15 +27,18 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "scc_cli"
 # preflight.resolve_launch_provider() instead of inline choose_start_provider /
 # resolve_active_provider / _resolve_provider calls.
 #
-# ensure_provider_image / ensure_provider_auth remain inline per T03 decision:
-# ensure_launch_ready lacks StartSessionPlan context for post-plan auth bootstrap.
+# All five launch sites now use collect_launch_readiness + ensure_launch_ready.
+# ensure_provider_image and ensure_provider_auth must not appear in migrated files.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Functions that must NOT appear as direct calls in migrated files.
-# These must go through preflight.resolve_launch_provider().
+# These must go through preflight.resolve_launch_provider() and
+# preflight.collect_launch_readiness() + ensure_launch_ready().
 _RESOLUTION_FUNCTIONS = frozenset({
     "choose_start_provider",
     "resolve_active_provider",
+    "ensure_provider_image",
+    "ensure_provider_auth",
 })
 
 # Files that have been migrated to use preflight for provider resolution.
@@ -60,8 +63,9 @@ class TestProviderResolutionAntiDrift:
     """Migrated launch files must not call resolution functions directly."""
 
     def test_migrated_files_do_not_call_resolution_functions(self) -> None:
-        """flow.py and flow_interactive.py should not contain direct calls
-        to choose_start_provider or resolve_active_provider."""
+        """Migrated launch files should not contain direct calls to
+        choose_start_provider, resolve_active_provider,
+        ensure_provider_image, or ensure_provider_auth."""
         violations: list[str] = []
         for path in _MIGRATED_FILES:
             assert path.exists(), f"Missing migrated file: {path}"
@@ -71,8 +75,9 @@ class TestProviderResolutionAntiDrift:
                 if name in _RESOLUTION_FUNCTIONS:
                     violations.append(f"{path.name}: contains '{name}'")
         assert not violations, (
-            "Migrated files contain direct resolution calls. "
-            "Use preflight.resolve_launch_provider() instead:\n"
+            "Migrated files contain direct resolution/bootstrap calls. "
+            "Use preflight.resolve_launch_provider() + collect_launch_readiness() "
+            "+ ensure_launch_ready() instead:\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
 

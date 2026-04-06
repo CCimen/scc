@@ -299,7 +299,7 @@ class TestWorktreeCommandProviderResolution:
     - No workspace_last_used lookup
     - No connected_provider_ids probing
     - No resume_provider
-    - Missing ensure_provider_auth() call
+    - Now uses shared preflight (collect_launch_readiness + ensure_launch_ready)
     - Falls back to 'claude' (hardcoded DEFAULT_PROVIDER) when nothing is set
     """
 
@@ -377,14 +377,12 @@ class TestWorktreeCommandProviderResolution:
                 allowed_providers=("codex",),  # claude default is blocked
             )
 
-    def test_worktree_site_skips_image_and_auth_bootstrap(self) -> None:
-        """Document that worktree_create_cmd calls ensure_provider_image
-        but NOT ensure_provider_auth — a behavioral difference from flow.py."""
-        # This is a documentation test. The worktree site calls:
-        #   ensure_provider_image(resolved_provider, ...)
-        # but does NOT call:
-        #   ensure_provider_auth(start_plan, ...)
-        # Verified by source inspection.
+    def test_worktree_site_uses_shared_preflight(self) -> None:
+        """Document that worktree_create_cmd now uses the shared preflight path
+        (collect_launch_readiness + ensure_launch_ready) instead of inline
+        ensure_provider_image / ensure_provider_auth calls."""
+        # Verified by source inspection. Both image and auth are handled
+        # through the unified preflight readiness model.
         pass
 
 
@@ -401,7 +399,7 @@ class TestOrchestratorWorktreeStartResolution:
     - cli_flag is always None (no CLI flag in dashboard context)
     - resume_provider is always None (new start, not resume)
     - Always interactive (non_interactive=False)
-    - Does call ensure_provider_image AND ensure_provider_auth
+    - Uses shared preflight (collect_launch_readiness + ensure_launch_ready)
     - Uses workspace_last_used and connected probing
     """
 
@@ -448,10 +446,12 @@ class TestOrchestratorWorktreeStartResolution:
         )
         assert result == "claude"  # workspace_last_used wins
 
-    def test_both_image_and_auth_called(self) -> None:
-        """Document: _handle_worktree_start calls both ensure_provider_image
-        AND ensure_provider_auth — unlike worktree_commands which skips auth."""
-        # Verified by source inspection. Both calls present in the try block.
+    def test_uses_shared_preflight(self) -> None:
+        """Document: _handle_worktree_start uses the shared preflight path
+        (collect_launch_readiness + ensure_launch_ready), same as all other
+        launch sites."""
+        # Verified by source inspection. Uses collect_launch_readiness +
+        # ensure_launch_ready in the try block.
         pass
 
 

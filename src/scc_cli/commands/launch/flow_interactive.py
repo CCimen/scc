@@ -74,7 +74,6 @@ from ...ui.wizard import (
     render_start_wizard_prompt,
 )
 from ...workspace_local_config import set_workspace_last_used_provider
-from .auth_bootstrap import ensure_provider_auth
 from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
 from .flow_session import _record_session_and_context
@@ -83,8 +82,7 @@ from .flow_types import (
     reset_for_team_switch,
     set_team_context,
 )
-from .preflight import resolve_launch_provider
-from .provider_image import ensure_provider_image
+from .preflight import collect_launch_readiness, ensure_launch_ready, resolve_launch_provider
 from .render import show_auth_bootstrap_panel, show_launch_panel
 from .team_settings import _configure_team_settings
 from .workspace import prepare_workspace, validate_and_resolve_workspace
@@ -719,6 +717,19 @@ def run_start_wizard_flow(
                 message="Start cancelled",
             )
 
+        # Shared preflight: readiness check before plan construction
+        readiness = collect_launch_readiness(
+            resolved_provider, _resolution_source, adapters
+        )
+        if not readiness.launch_ready:
+            ensure_launch_ready(
+                readiness,
+                adapters=adapters,
+                console=console,
+                non_interactive=False,
+                show_notice=show_auth_bootstrap_panel,
+            )
+
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -779,19 +790,6 @@ def run_start_wizard_flow(
                 message="Start cancelled",
             )
         start_plan = conflict_resolution.plan
-
-        ensure_provider_image(
-            resolved_provider,
-            console=console,
-            non_interactive=False,
-            show_notice=show_auth_bootstrap_panel,
-        )
-        ensure_provider_auth(
-            start_plan,
-            dependencies=start_dependencies,
-            non_interactive=False,
-            show_notice=show_auth_bootstrap_panel,
-        )
 
         _record_session_and_context(
             workspace_path,
