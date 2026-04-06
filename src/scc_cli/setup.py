@@ -323,6 +323,28 @@ def prompt_hooks_enablement(console: Console, *, rendered: bool = False) -> bool
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _three_tier_status(provider_id: str, auth_readiness: Any) -> str:
+    """Return three-tier readiness label for a provider.
+
+    Three-tier vocabulary: 'launch-ready' (image + auth), 'auth cache present'
+    (auth ok, image missing), 'image available' (image ok, auth missing),
+    'sign-in needed' (no auth, image status unknown).
+    """
+    from .commands.launch.preflight import ImageStatus, _check_image_available
+
+    has_auth = auth_readiness is not None and auth_readiness.status == "present"
+    image_status = _check_image_available(provider_id)
+    has_image = image_status == ImageStatus.AVAILABLE
+
+    if has_auth and has_image:
+        return "launch-ready"
+    if has_auth and not has_image:
+        return "auth cache present"
+    if not has_auth and has_image:
+        return "image available"
+    return "sign-in needed"
+
+
 def show_setup_complete(
     console: Console,
     org_name: str | None = None,
@@ -365,13 +387,13 @@ def show_setup_complete(
         _append_dot_leader(
             content,
             "claude",
-            "auth cache present" if claude_ready and claude_ready.status == "present" else "sign-in needed",
+            _three_tier_status("claude", claude_ready),
             value_style="white",
         )
         _append_dot_leader(
             content,
             "codex",
-            "auth cache present" if codex_ready and codex_ready.status == "present" else "sign-in needed",
+            _three_tier_status("codex", codex_ready),
             value_style="white",
         )
     if provider_preference is not None:

@@ -29,7 +29,11 @@ from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
 from ...ui.picker import TeamSwitchRequested, pick_worktree
 from ..launch.dependencies import prepare_live_start_plan
-from ..launch.provider_image import ensure_provider_image
+from ..launch.preflight import (
+    collect_launch_readiness,
+    ensure_launch_ready,
+    resolve_launch_provider,
+)
 from ._helpers import build_worktree_list_data
 
 if TYPE_CHECKING:
@@ -133,7 +137,7 @@ def worktree_create_cmd(
     base_branch: str | None = typer.Option(
         None, "-b", "--base", help="Base branch (default: current)"
     ),
-    start_claude: bool = typer.Option(
+    start_agent: bool = typer.Option(
         True, "--start/--no-start", help="Start agent after creating"
     ),
     install_deps: bool = typer.Option(
@@ -233,7 +237,7 @@ def worktree_create_cmd(
         else:
             console.print("[yellow]! Could not detect package manager or install failed[/yellow]")
 
-    if start_claude:
+    if start_agent:
         console.print()
         if Confirm.ask("[cyan]Start agent in this worktree?[/cyan]", default=True):
             adapters.sandbox_runtime.ensure_available()
@@ -241,21 +245,38 @@ def worktree_create_cmd(
             standalone_mode = config.is_standalone_mode()
             team = None if standalone_mode else user_config.get("selected_profile")
             raw_org_config = None if standalone_mode else config.load_cached_org_config()
-            # D032: resolve provider explicitly — never silent-default to Claude.
-            from scc_cli.core.provider_resolution import resolve_active_provider
-
-            resolved_provider = resolve_active_provider(
+            normalized_org = (
+                NormalizedOrgConfig.from_dict(raw_org_config)
+                if raw_org_config is not None
+                else None
+            )
+            # Shared preflight: resolve → readiness → ensure ready
+            resolved_provider, _source = resolve_launch_provider(
                 cli_flag=None,
+                resume_provider=None,
+                workspace_path=result.worktree_path,
                 config_provider=user_config.get("selected_provider"),
-            )
-            ensure_provider_image(
-                resolved_provider,
-                console=console,
+                normalized_org=normalized_org,
+                team=team,
+                adapters=adapters,
                 non_interactive=False,
-                show_notice=lambda title, content, subtitle: console.print(
-                    create_warning_panel(title, content, subtitle)
-                ),
             )
+            if resolved_provider is None:
+                console.print("[dim]Cancelled.[/dim]")
+                raise typer.Exit(EXIT_CANCELLED)
+            readiness = collect_launch_readiness(
+                resolved_provider, _source, adapters
+            )
+            if not readiness.launch_ready:
+                ensure_launch_ready(
+                    readiness,
+                    adapters=adapters,
+                    console=console,
+                    non_interactive=False,
+                    show_notice=lambda title, content, subtitle: console.print(
+                        create_warning_panel(title, content, subtitle)
+                    ),
+                )
             start_request = StartSessionRequest(
                 workspace_path=result.worktree_path,
                 workspace_arg=str(result.worktree_path),
@@ -268,7 +289,7 @@ def worktree_create_cmd(
                 standalone=standalone_mode,
                 dry_run=False,
                 allow_suspicious=False,
-                org_config=NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None,
+                org_config=normalized_org,
                 raw_org_config=raw_org_config,
                 provider_id=resolved_provider,
             )

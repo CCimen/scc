@@ -174,30 +174,25 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     from ...application.launch import finalize_launch
     from ...application.start_session import StartSessionRequest
     from ...bootstrap import get_default_adapters
-    from ...commands.launch.auth_bootstrap import ensure_provider_auth
     from ...commands.launch.conflict_resolution import (
         LaunchConflictDecision,
         resolve_launch_conflict,
     )
     from ...commands.launch.dependencies import prepare_live_start_plan
-    from ...commands.launch.preflight import allowed_provider_ids
-    from ...commands.launch.provider_choice import (
-        choose_start_provider,
-        connected_provider_ids,
-        prompt_for_provider_choice,
+    from ...commands.launch.preflight import (
+        collect_launch_readiness,
+        ensure_launch_ready,
+        resolve_launch_provider,
     )
-    from ...commands.launch.provider_image import ensure_provider_image
     from ...commands.launch.render import show_auth_bootstrap_panel, show_launch_panel
     from ...commands.launch.team_settings import _configure_team_settings
     from ...commands.launch.workspace import (
         validate_and_resolve_workspace as _validate_and_resolve_workspace,
     )
+    from ...core.errors import ProviderNotReadyError
     from ...ports.config_models import NormalizedOrgConfig
     from ...theme import Spinners
-    from ...workspace_local_config import (
-        get_workspace_last_used_provider,
-        set_workspace_last_used_provider,
-    )
+    from ...workspace_local_config import set_workspace_last_used_provider
 
     console = get_err_console()
 
@@ -235,23 +230,30 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         normalized_org = (
             NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
         )
-        resolved_provider = choose_start_provider(
+        # Shared preflight: resolve → readiness → ensure ready
+        resolved_provider, _source = resolve_launch_provider(
             cli_flag=None,
             resume_provider=None,
-            workspace_last_used=get_workspace_last_used_provider(workspace_path),
+            workspace_path=workspace_path,
             config_provider=config.get_selected_provider(),
-            connected_provider_ids=connected_provider_ids(
-                adapters,
-                allowed_providers=allowed_provider_ids(normalized_org, team),
-            ),
-            allowed_providers=allowed_provider_ids(normalized_org, team),
+            normalized_org=normalized_org,
+            team=team,
+            adapters=adapters,
             non_interactive=False,
-            prompt_choice=prompt_for_provider_choice,
         )
         if resolved_provider is None:
             return app_dashboard.StartFlowResult(
                 decision=app_dashboard.StartFlowDecision.CANCELLED,
                 message="Start cancelled",
+            )
+        readiness = collect_launch_readiness(resolved_provider, _source, adapters)
+        if not readiness.launch_ready:
+            ensure_launch_ready(
+                readiness,
+                adapters=adapters,
+                console=console,
+                non_interactive=False,
+                show_notice=show_auth_bootstrap_panel,
             )
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
@@ -312,18 +314,6 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
                 message="Start cancelled",
             )
 
-        ensure_provider_image(
-            resolved_provider,
-            console=console,
-            non_interactive=False,
-            show_notice=show_auth_bootstrap_panel,
-        )
-        ensure_provider_auth(
-            conflict_resolution.plan,
-            dependencies=start_dependencies,
-            non_interactive=False,
-            show_notice=show_auth_bootstrap_panel,
-        )
         show_launch_panel(
             workspace=workspace_path,
             team=team,
@@ -338,6 +328,11 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled[/yellow]")
+        return app_dashboard.StartFlowResult.from_legacy(False)
+    except ProviderNotReadyError as e:
+        console.print(f"[red]{e.user_message}[/red]")
+        if e.suggested_action:
+            console.print(f"[dim]{e.suggested_action}[/dim]")
         return app_dashboard.StartFlowResult.from_legacy(False)
     except Exception as e:
         console.print(f"[red]Error starting session: {e}[/red]")
@@ -366,30 +361,25 @@ def _handle_session_resume(session: SessionSummary) -> bool:
     from ...application.launch import finalize_launch
     from ...application.start_session import StartSessionRequest
     from ...bootstrap import get_default_adapters
-    from ...commands.launch.auth_bootstrap import ensure_provider_auth
     from ...commands.launch.conflict_resolution import (
         LaunchConflictDecision,
         resolve_launch_conflict,
     )
     from ...commands.launch.dependencies import prepare_live_start_plan
-    from ...commands.launch.preflight import allowed_provider_ids
-    from ...commands.launch.provider_choice import (
-        choose_start_provider,
-        connected_provider_ids,
-        prompt_for_provider_choice,
+    from ...commands.launch.preflight import (
+        collect_launch_readiness,
+        ensure_launch_ready,
+        resolve_launch_provider,
     )
-    from ...commands.launch.provider_image import ensure_provider_image
     from ...commands.launch.render import show_auth_bootstrap_panel, show_launch_panel
     from ...commands.launch.team_settings import _configure_team_settings
     from ...commands.launch.workspace import (
         validate_and_resolve_workspace as _validate_and_resolve_workspace,
     )
+    from ...core.errors import ProviderNotReadyError
     from ...ports.config_models import NormalizedOrgConfig
     from ...theme import Spinners
-    from ...workspace_local_config import (
-        get_workspace_last_used_provider,
-        set_workspace_last_used_provider,
-    )
+    from ...workspace_local_config import set_workspace_last_used_provider
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
@@ -433,21 +423,28 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         normalized_org = (
             NormalizedOrgConfig.from_dict(raw_org_config_2) if raw_org_config_2 is not None else None
         )
-        resolved_provider = choose_start_provider(
+        # Shared preflight: resolve → readiness → ensure ready
+        resolved_provider, _source = resolve_launch_provider(
             cli_flag=None,
             resume_provider=session.provider_id,
-            workspace_last_used=get_workspace_last_used_provider(workspace_path),
+            workspace_path=workspace_path,
             config_provider=config.get_selected_provider(),
-            connected_provider_ids=connected_provider_ids(
-                adapters,
-                allowed_providers=allowed_provider_ids(normalized_org, team),
-            ),
-            allowed_providers=allowed_provider_ids(normalized_org, team),
+            normalized_org=normalized_org,
+            team=team,
+            adapters=adapters,
             non_interactive=False,
-            prompt_choice=prompt_for_provider_choice,
         )
         if resolved_provider is None:
             return False
+        readiness = collect_launch_readiness(resolved_provider, _source, adapters)
+        if not readiness.launch_ready:
+            ensure_launch_ready(
+                readiness,
+                adapters=adapters,
+                console=console,
+                non_interactive=False,
+                show_notice=show_auth_bootstrap_panel,
+            )
         start_request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -504,18 +501,6 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
             return False
 
-        ensure_provider_image(
-            resolved_provider,
-            console=console,
-            non_interactive=False,
-            show_notice=show_auth_bootstrap_panel,
-        )
-        ensure_provider_auth(
-            conflict_resolution.plan,
-            dependencies=start_dependencies,
-            non_interactive=False,
-            show_notice=show_auth_bootstrap_panel,
-        )
         show_launch_panel(
             workspace=workspace_path,
             team=team,
@@ -528,6 +513,11 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         set_workspace_last_used_provider(workspace_path, resolved_provider)
         return True
 
+    except ProviderNotReadyError as e:
+        console.print(f"[red]{e.user_message}[/red]")
+        if e.suggested_action:
+            console.print(f"[dim]{e.suggested_action}[/dim]")
+        return False
     except Exception as e:
         console.print(f"[red]Error resuming session: {e}[/red]")
         return False

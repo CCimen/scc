@@ -278,6 +278,7 @@ def collect_launch_readiness(
 def ensure_launch_ready(
     readiness: LaunchReadiness,
     *,
+    adapters: Any,
     console: Any,
     non_interactive: bool,
     show_notice: Any,
@@ -287,6 +288,9 @@ def ensure_launch_ready(
     Uses readiness.requires_image_bootstrap / requires_auth_bootstrap
     to decide — no re-probing. In non-interactive mode: raises typed
     ProviderNotReadyError with actionable guidance instead of prompting.
+
+    The ``adapters`` parameter provides access to the provider adapter
+    for performing auth bootstrap (browser sign-in flow).
     """
     if readiness.launch_ready:
         return
@@ -304,6 +308,7 @@ def ensure_launch_ready(
     if readiness.requires_auth_bootstrap:
         _ensure_auth(
             readiness,
+            adapters=adapters,
             non_interactive=non_interactive,
             show_notice=show_notice,
         )
@@ -312,14 +317,17 @@ def ensure_launch_ready(
 def _ensure_auth(
     readiness: LaunchReadiness,
     *,
+    adapters: Any,
     non_interactive: bool,
     show_notice: Any,
 ) -> None:
     """Handle auth bootstrap for a provider with missing/expired auth.
 
     Non-interactive: raises ProviderNotReadyError with actionable guidance.
-    Interactive: delegates to the provider's bootstrap_auth() via show_notice.
+    Interactive: shows the notice, then calls provider.bootstrap_auth()
+    to trigger the browser sign-in flow.
     """
+    from scc_cli.commands.launch.dependencies import get_agent_provider
     from scc_cli.core.provider_resolution import get_provider_display_name
 
     display_name = get_provider_display_name(readiness.provider_id)
@@ -349,3 +357,22 @@ def _ensure_auth(
             f"{display_name} volume."
         ),
     )
+
+    provider = get_agent_provider(adapters, readiness.provider_id)
+    if provider is not None:
+        try:
+            provider.bootstrap_auth()
+        except ProviderNotReadyError:
+            raise
+        except Exception as exc:
+            raise ProviderNotReadyError(
+                provider_id=readiness.provider_id,
+                user_message=(
+                    f"{display_name} auth bootstrap failed: {exc}"
+                ),
+                suggested_action=(
+                    f"Run 'scc start --provider {readiness.provider_id}' interactively "
+                    "to complete the browser sign-in. If the issue persists, "
+                    f"run 'scc doctor --provider {readiness.provider_id}' to diagnose."
+                ),
+            ) from exc

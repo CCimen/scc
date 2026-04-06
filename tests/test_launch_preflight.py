@@ -658,7 +658,11 @@ class TestEnsureLaunchReady:
             launch_ready=True,
         )
         ensure_launch_ready(
-            readiness, console=MagicMock(), non_interactive=False, show_notice=MagicMock()
+            readiness,
+            adapters=MagicMock(),
+            console=MagicMock(),
+            non_interactive=False,
+            show_notice=MagicMock(),
         )
 
     @patch("scc_cli.commands.launch.provider_image.ensure_provider_image")
@@ -675,7 +679,11 @@ class TestEnsureLaunchReady:
         console = MagicMock()
         notice = MagicMock()
         ensure_launch_ready(
-            readiness, console=console, non_interactive=False, show_notice=notice
+            readiness,
+            adapters=MagicMock(),
+            console=console,
+            non_interactive=False,
+            show_notice=notice,
         )
         mock_ensure.assert_called_once_with(
             "claude", console=console, non_interactive=False, show_notice=notice
@@ -693,7 +701,11 @@ class TestEnsureLaunchReady:
         )
         with pytest.raises(ProviderNotReadyError, match="auth cache is missing"):
             ensure_launch_ready(
-                readiness, console=MagicMock(), non_interactive=True, show_notice=MagicMock()
+                readiness,
+                adapters=MagicMock(),
+                console=MagicMock(),
+                non_interactive=True,
+                show_notice=MagicMock(),
             )
 
     def test_non_interactive_auth_expired_raises(self) -> None:
@@ -708,10 +720,19 @@ class TestEnsureLaunchReady:
         )
         with pytest.raises(ProviderNotReadyError, match="auth cache is expired"):
             ensure_launch_ready(
-                readiness, console=MagicMock(), non_interactive=True, show_notice=MagicMock()
+                readiness,
+                adapters=MagicMock(),
+                console=MagicMock(),
+                non_interactive=True,
+                show_notice=MagicMock(),
             )
 
-    def test_interactive_auth_missing_calls_show_notice(self) -> None:
+    @patch("scc_cli.commands.launch.dependencies.get_agent_provider")
+    def test_interactive_auth_missing_calls_show_notice_and_bootstrap(
+        self, mock_get_provider: MagicMock
+    ) -> None:
+        mock_provider = MagicMock()
+        mock_get_provider.return_value = mock_provider
         readiness = LaunchReadiness(
             provider_id="claude",
             resolution_source=ProviderResolutionSource.EXPLICIT,
@@ -722,15 +743,27 @@ class TestEnsureLaunchReady:
             launch_ready=False,
         )
         notice = MagicMock()
+        adapters = MagicMock()
         ensure_launch_ready(
-            readiness, console=MagicMock(), non_interactive=False, show_notice=notice
+            readiness,
+            adapters=adapters,
+            console=MagicMock(),
+            non_interactive=False,
+            show_notice=notice,
         )
         notice.assert_called_once()
         call_args = notice.call_args[0]
         assert "Authenticating" in call_args[0]
+        mock_get_provider.assert_called_once_with(adapters, "claude")
+        mock_provider.bootstrap_auth.assert_called_once()
 
+    @patch("scc_cli.commands.launch.dependencies.get_agent_provider")
     @patch("scc_cli.commands.launch.provider_image.ensure_provider_image")
-    def test_both_missing_fixes_image_then_auth(self, mock_ensure_image: MagicMock) -> None:
+    def test_both_missing_fixes_image_then_auth(
+        self, mock_ensure_image: MagicMock, mock_get_provider: MagicMock
+    ) -> None:
+        mock_provider = MagicMock()
+        mock_get_provider.return_value = mock_provider
         readiness = LaunchReadiness(
             provider_id="claude",
             resolution_source=ProviderResolutionSource.EXPLICIT,
@@ -742,12 +775,75 @@ class TestEnsureLaunchReady:
         )
         notice = MagicMock()
         ensure_launch_ready(
-            readiness, console=MagicMock(), non_interactive=False, show_notice=notice
+            readiness,
+            adapters=MagicMock(),
+            console=MagicMock(),
+            non_interactive=False,
+            show_notice=notice,
         )
         # Image should be ensured
         mock_ensure_image.assert_called_once()
-        # Auth notice should also fire
+        # Auth notice should fire and bootstrap_auth should be called
         assert notice.call_count >= 1
+        mock_provider.bootstrap_auth.assert_called_once()
+
+    @patch("scc_cli.commands.launch.dependencies.get_agent_provider")
+    def test_bootstrap_auth_failure_wraps_as_provider_not_ready(
+        self, mock_get_provider: MagicMock
+    ) -> None:
+        """bootstrap_auth() failure gets wrapped in ProviderNotReadyError."""
+        mock_provider = MagicMock()
+        mock_provider.bootstrap_auth.side_effect = RuntimeError("browser failed")
+        mock_get_provider.return_value = mock_provider
+        readiness = LaunchReadiness(
+            provider_id="claude",
+            resolution_source=ProviderResolutionSource.EXPLICIT,
+            image_status=ImageStatus.AVAILABLE,
+            auth_status=AuthStatus.MISSING,
+            requires_image_bootstrap=False,
+            requires_auth_bootstrap=True,
+            launch_ready=False,
+        )
+        with pytest.raises(ProviderNotReadyError, match="auth bootstrap failed"):
+            ensure_launch_ready(
+                readiness,
+                adapters=MagicMock(),
+                console=MagicMock(),
+                non_interactive=False,
+                show_notice=MagicMock(),
+            )
+
+    @patch("scc_cli.commands.launch.dependencies.get_agent_provider")
+    def test_bootstrap_auth_provider_not_ready_passes_through(
+        self, mock_get_provider: MagicMock
+    ) -> None:
+        """ProviderNotReadyError from bootstrap_auth() passes through unwrapped."""
+        original_err = ProviderNotReadyError(
+            provider_id="claude",
+            user_message="Auth denied",
+            suggested_action="Try again",
+        )
+        mock_provider = MagicMock()
+        mock_provider.bootstrap_auth.side_effect = original_err
+        mock_get_provider.return_value = mock_provider
+        readiness = LaunchReadiness(
+            provider_id="claude",
+            resolution_source=ProviderResolutionSource.EXPLICIT,
+            image_status=ImageStatus.AVAILABLE,
+            auth_status=AuthStatus.MISSING,
+            requires_image_bootstrap=False,
+            requires_auth_bootstrap=True,
+            launch_ready=False,
+        )
+        with pytest.raises(ProviderNotReadyError) as exc_info:
+            ensure_launch_ready(
+                readiness,
+                adapters=MagicMock(),
+                console=MagicMock(),
+                non_interactive=False,
+                show_notice=MagicMock(),
+            )
+        assert exc_info.value is original_err
 
 
 # ─────────────────────────────────────────────────────────────────────────────

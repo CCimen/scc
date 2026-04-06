@@ -553,8 +553,8 @@ class TestRecordSessionAndContextProviderGap:
         )
         assert ctx.provider_id == "codex"
 
-    def test_record_session_and_context_creates_context_without_provider(self) -> None:
-        """Prove that _record_session_and_context builds WorkContext without provider_id.
+    def test_record_session_and_context_threads_provider_to_work_context(self) -> None:
+        """Prove that _record_session_and_context threads provider_id to WorkContext.
 
         We mock the dependencies to avoid filesystem side effects.
         """
@@ -573,20 +573,20 @@ class TestRecordSessionAndContextProviderGap:
                 team="myteam",
                 session_name="sess1",
                 current_branch="main",
-                provider_id="codex",  # <-- passed in
+                provider_id="codex",
             )
 
-            # sessions.record_session DOES get provider_id
+            # sessions.record_session gets provider_id
             mock_sessions.record_session.assert_called_once()
             call_kwargs = mock_sessions.record_session.call_args
             assert call_kwargs.kwargs.get("provider_id") == "codex" or (
                 len(call_kwargs.args) == 0 and call_kwargs[1].get("provider_id") == "codex"
             )
 
-            # record_context gets a WorkContext WITHOUT provider_id
+            # record_context now gets a WorkContext WITH provider_id
             mock_record_ctx.assert_called_once()
             recorded_context: WorkContext = mock_record_ctx.call_args[0][0]
-            assert recorded_context.provider_id is None  # <-- gap!
+            assert recorded_context.provider_id == "codex"
             assert recorded_context.team == "myteam"
             assert recorded_context.branch == "main"
 

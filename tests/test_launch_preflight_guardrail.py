@@ -39,11 +39,11 @@ _RESOLUTION_FUNCTIONS = frozenset({
 })
 
 # Files that have been migrated to use preflight for provider resolution.
-# When orchestrator_handlers.py and worktree_commands.py are migrated,
-# add them here.
 _MIGRATED_FILES = (
     SRC / "commands" / "launch" / "flow.py",
     SRC / "commands" / "launch" / "flow_interactive.py",
+    SRC / "ui" / "dashboard" / "orchestrator_handlers.py",
+    SRC / "commands" / "worktree" / "worktree_commands.py",
 )
 
 # preflight.py itself is the one legitimate consumer of choose_start_provider.

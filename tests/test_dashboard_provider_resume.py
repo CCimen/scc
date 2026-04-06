@@ -7,6 +7,12 @@ from unittest.mock import MagicMock, patch
 
 from scc_cli.application import dashboard as app_dashboard
 from scc_cli.commands.launch.conflict_resolution import LaunchConflictDecision
+from scc_cli.commands.launch.preflight import (
+    AuthStatus,
+    ImageStatus,
+    LaunchReadiness,
+    ProviderResolutionSource,
+)
 from scc_cli.ports.session_models import SessionSummary
 from scc_cli.ui.dashboard.orchestrator_handlers import (
     _handle_session_resume,
@@ -25,15 +31,29 @@ def _fake_adapters() -> MagicMock:
     return adapters
 
 
+def _ready_readiness(provider_id: str = "codex") -> LaunchReadiness:
+    return LaunchReadiness(
+        provider_id=provider_id,
+        resolution_source=ProviderResolutionSource.GLOBAL_PREFERRED,
+        image_status=ImageStatus.AVAILABLE,
+        auth_status=AuthStatus.PRESENT,
+        requires_image_bootstrap=False,
+        requires_auth_bootstrap=False,
+        launch_ready=True,
+    )
+
+
 @patch("scc_cli.config.load_user_config", return_value={})
 @patch("scc_cli.config.load_cached_org_config", return_value=None)
 @patch("scc_cli.commands.launch.workspace.validate_and_resolve_workspace")
 @patch("scc_cli.bootstrap.get_default_adapters")
-@patch("scc_cli.commands.launch.provider_choice.choose_start_provider", return_value="codex")
+@patch(
+    "scc_cli.commands.launch.preflight.resolve_launch_provider",
+    return_value=("codex", ProviderResolutionSource.RESUME),
+)
+@patch("scc_cli.commands.launch.preflight.collect_launch_readiness")
 @patch("scc_cli.commands.launch.dependencies.prepare_live_start_plan")
 @patch("scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict")
-@patch("scc_cli.commands.launch.provider_image.ensure_provider_image")
-@patch("scc_cli.commands.launch.auth_bootstrap.ensure_provider_auth")
 @patch("scc_cli.commands.launch.render.show_launch_panel")
 @patch("scc_cli.application.launch.finalize_launch")
 @patch("scc_cli.workspace_local_config.set_workspace_last_used_provider")
@@ -41,11 +61,10 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
     mock_set_workspace_provider: MagicMock,
     mock_finalize: MagicMock,
     mock_launch_panel: MagicMock,
-    mock_bootstrap: MagicMock,
-    mock_ensure_image: MagicMock,
     mock_conflict: MagicMock,
     mock_prepare: MagicMock,
-    _mock_choose: MagicMock,
+    mock_readiness: MagicMock,
+    _mock_resolve: MagicMock,
     mock_adapters: MagicMock,
     mock_validate: MagicMock,
     _mock_org: MagicMock,
@@ -57,6 +76,7 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
     mock_validate.return_value = workspace
     adapters = _fake_adapters()
     mock_adapters.return_value = adapters
+    mock_readiness.return_value = _ready_readiness()
     start_plan = MagicMock()
     start_plan.current_branch = "develop"
     mock_prepare.return_value = (adapters, start_plan)
@@ -80,8 +100,7 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
     request = mock_prepare.call_args.args[0]
     assert request.provider_id == "codex"
     assert request.resume is True
-    mock_ensure_image.assert_called_once()
-    mock_bootstrap.assert_called_once()
+    mock_readiness.assert_called_once()
     mock_launch_panel.assert_called_once()
     mock_finalize.assert_called_once_with(start_plan, dependencies=adapters)
     mock_set_workspace_provider.assert_called_once_with(workspace, "codex")
@@ -89,13 +108,16 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
 
 @patch("scc_cli.config.load_user_config", return_value={})
 @patch("scc_cli.config.load_cached_org_config", return_value=None)
+@patch("scc_cli.config.get_selected_provider", return_value=None)
 @patch("scc_cli.commands.launch.workspace.validate_and_resolve_workspace")
 @patch("scc_cli.bootstrap.get_default_adapters")
-@patch("scc_cli.commands.launch.provider_choice.choose_start_provider", return_value="codex")
+@patch(
+    "scc_cli.commands.launch.preflight.resolve_launch_provider",
+    return_value=("codex", ProviderResolutionSource.GLOBAL_PREFERRED),
+)
+@patch("scc_cli.commands.launch.preflight.collect_launch_readiness")
 @patch("scc_cli.commands.launch.dependencies.prepare_live_start_plan")
 @patch("scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict")
-@patch("scc_cli.commands.launch.provider_image.ensure_provider_image")
-@patch("scc_cli.commands.launch.auth_bootstrap.ensure_provider_auth")
 @patch("scc_cli.commands.launch.render.show_launch_panel")
 @patch("scc_cli.application.launch.finalize_launch")
 @patch("scc_cli.workspace_local_config.set_workspace_last_used_provider")
@@ -103,13 +125,13 @@ def test_handle_worktree_start_uses_provider_neutral_pipeline(
     mock_set_workspace_provider: MagicMock,
     mock_finalize: MagicMock,
     mock_launch_panel: MagicMock,
-    mock_bootstrap: MagicMock,
-    mock_ensure_image: MagicMock,
     mock_conflict: MagicMock,
     mock_prepare: MagicMock,
-    _mock_choose: MagicMock,
+    mock_readiness: MagicMock,
+    _mock_resolve: MagicMock,
     mock_adapters: MagicMock,
     mock_validate: MagicMock,
+    _mock_selected: MagicMock,
     _mock_org: MagicMock,
     _mock_cfg: MagicMock,
     tmp_path: Path,
@@ -119,6 +141,7 @@ def test_handle_worktree_start_uses_provider_neutral_pipeline(
     mock_validate.return_value = workspace
     adapters = _fake_adapters()
     mock_adapters.return_value = adapters
+    mock_readiness.return_value = _ready_readiness()
     start_plan = MagicMock()
     start_plan.current_branch = "feature"
     mock_prepare.return_value = (adapters, start_plan)
@@ -133,8 +156,7 @@ def test_handle_worktree_start_uses_provider_neutral_pipeline(
     request = mock_prepare.call_args.args[0]
     assert request.provider_id == "codex"
     assert request.resume is False
-    mock_ensure_image.assert_called_once()
-    mock_bootstrap.assert_called_once()
+    mock_readiness.assert_called_once()
     mock_launch_panel.assert_called_once()
     mock_finalize.assert_called_once_with(start_plan, dependencies=adapters)
     mock_set_workspace_provider.assert_called_once_with(workspace, "codex")

@@ -510,6 +510,14 @@ class TestWorktreeWorkflow:
             patch("scc_cli.commands.worktree.worktree_commands.config.is_standalone_mode", return_value=True),
             patch("scc_cli.commands.worktree.worktree_commands.config.load_user_config", return_value={}),
             patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=True),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.resolve_launch_provider",
+                return_value=("claude", None),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
         ):
             result = runner.invoke(app, ["worktree", ".", "create", str(git_workspace), "feature-auto"])
 
@@ -561,6 +569,14 @@ class TestWorktreeWorkflow:
                 return_value={"selected_profile": "platform"},
             ),
             patch("scc_cli.commands.worktree.worktree_commands.config.load_cached_org_config", return_value={}),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.resolve_launch_provider",
+                return_value=("claude", None),
+            ),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.collect_launch_readiness",
+                return_value=MagicMock(launch_ready=True),
+            ),
             patch(
                 "scc_cli.application.start_session.compute_effective_config",
                 return_value=EffectiveConfig(network_policy="locked-down-web"),

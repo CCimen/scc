@@ -158,6 +158,7 @@ class TestResumeWithDeletedAuthVolume:
         with pytest.raises(ProviderNotReadyError) as exc_info:
             ensure_launch_ready(
                 readiness,
+                adapters=MagicMock(),
                 console=MagicMock(),
                 non_interactive=True,
                 show_notice=MagicMock(),
@@ -205,6 +206,7 @@ class TestResumeWithImageRemoved:
         notice_mock = MagicMock()
         ensure_launch_ready(
             readiness,
+            adapters=MagicMock(),
             console=console_mock,
             non_interactive=False,
             show_notice=notice_mock,
@@ -236,6 +238,7 @@ class TestResumeWithImageRemoved:
         with pytest.raises(Exception) as exc_info:
             ensure_launch_ready(
                 readiness,
+                adapters=MagicMock(),
                 console=MagicMock(),
                 non_interactive=True,
                 show_notice=MagicMock(),
@@ -413,6 +416,7 @@ class TestExplicitProviderMissingAuthNonInteractive:
         with pytest.raises(ProviderNotReadyError) as exc_info:
             ensure_launch_ready(
                 readiness,
+                adapters=MagicMock(),
                 console=MagicMock(),
                 non_interactive=True,
                 show_notice=MagicMock(),
@@ -437,6 +441,7 @@ class TestExplicitProviderMissingAuthNonInteractive:
         with pytest.raises(ProviderNotReadyError):
             ensure_launch_ready(
                 readiness,
+                adapters=MagicMock(),
                 console=MagicMock(),
                 non_interactive=True,
                 show_notice=show_notice,
@@ -455,7 +460,12 @@ class TestExplicitProviderMissingAuthNonInteractive:
             launch_ready=False,
         )
         show_notice = MagicMock()
-        _ensure_auth(readiness, non_interactive=False, show_notice=show_notice)
+        _ensure_auth(
+            readiness,
+            adapters=MagicMock(),
+            non_interactive=False,
+            show_notice=show_notice,
+        )
         show_notice.assert_called_once()
         call_args = show_notice.call_args[0]
         assert "authenticating" in call_args[0].lower()

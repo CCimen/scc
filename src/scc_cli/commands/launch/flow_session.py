@@ -417,6 +417,7 @@ def _record_session_and_context(
         worktree_name=worktree_name,
         branch=current_branch,
         last_session_id=session_name,
+        provider_id=provider_id,
     )
     try:
         record_context(context)
