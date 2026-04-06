@@ -4,7 +4,7 @@
 **Demo:** After this: setup.py _render_provider_status shows launch-ready/auth cache present/image available/sign-in needed. Same as show_setup_complete.
 
 ## Tasks
-- [ ] **T01: Update _render_provider_status to use three-tier readiness and final verification** — Steps:
+- [x] **T01: Replaced inline two-tier status in _render_provider_status with _three_tier_status() and added provider preference hints to setup completion next-steps** — Steps:
 1. In setup.py _render_provider_status(), replace the inline two-tier status logic with _three_tier_status(provider_id, state).
 2. Update any tests that assert on the old two-tier wording in _render_provider_status output.
 3. Add provider preference hint to setup completion: show 'scc provider show' / 'scc provider set ask|claude|codex' in the next-steps section (reviewer item #5 — small, high UX value).

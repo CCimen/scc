@@ -48,6 +48,9 @@ Eliminated Claude assumptions from shared/core/operator paths. ProviderRuntimeSp
 ### M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening ✅
 Consolidated five duplicated launch preflight sequences into one shared module. S01: shared preflight module with typed LaunchReadiness model, flow.py and flow_interactive.py migrated, 7 structural guardrail tests. S02: auth vocabulary truthfulness (three-tier distinction), Docker Desktop removed from active paths, provider adapter dispatch consolidated via shared get_agent_provider() helper, 15 new guardrail tests. S03: 106 edge-case and regression-guard tests covering workspace persistence, resume-after-drift, setup idempotency, and error message quality. Auth bootstrap exception wrapping. Legacy Docker Desktop module documentation. 294 net new tests (5114 total), zero regressions.
 
+### M009 — Preflight Convergence and Auth Bootstrap Unification (in progress)
+S01 ✅: All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py, and the start command) now use collect_launch_readiness() + ensure_launch_ready() through the shared preflight module. ensure_launch_ready() actually calls bootstrap_auth() when auth is missing (silent gap closed). auth_bootstrap.py reduced to deprecated redirect. Auth messaging centralized in preflight._ensure_auth(). D048 superseded by D049. 3 net new tests (5117 total).
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
@@ -57,14 +60,15 @@ Consolidated five duplicated launch preflight sequences into one shared module. 
 6. ~~M006 — Provider Selection UX and End-to-End Codex Launch~~ ✅
 7. ~~M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup~~ ✅
 8. ~~M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening~~ ✅
+9. **M009 — Preflight Convergence and Auth Bootstrap Unification** (S01 ✅, S02 pending)
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all eight milestones.
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all nine milestones.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run mypy src/scc_cli` ✅ (303 files, 0 issues)
-- `uv run pytest -q` ✅ (5114 passed, 23 skipped, 2 xfailed)
+- `uv run pytest -q` ✅ (5117 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
 
@@ -81,7 +85,7 @@ Consolidated five duplicated launch preflight sequences into one shared module. 
 - Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 - start_claude parameter rename to start_agent in worktree_commands.py (deferred from M008/S01)
 - WorkContext.provider_id threading through _record_session_and_context (deferred from M008/S01)
-- orchestrator_handlers.py and worktree_commands.py full migration to shared preflight ensure_launch_ready()
+- Delete auth_bootstrap.py entirely after updating test consumers to use preflight directly
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -97,7 +101,7 @@ Consolidated five duplicated launch preflight sequences into one shared module. 
 - SafetyPolicy loader is fail-closed: any parse failure → default block policy. Uses raw org config (not NormalizedOrgConfig).
 - Provider safety adapters are pure UX/audit wrappers with zero verdict logic — the engine is the single source of safety truth.
 - Import boundary guard (test_import_boundaries.py) mechanically enforces layer separation via AST scanning.
-- **Launch preflight is shared via commands/launch/preflight.py (D046):** resolve_launch_provider() → collect_launch_readiness() → ensure_launch_ready() is the canonical three-function split. Pure decision logic separated from side effects. Currently adopted by flow.py and flow_interactive.py; remaining sites (orchestrator_handlers, worktree_commands) are tracked for migration.
+- **Launch preflight is fully unified via commands/launch/preflight.py (D046, D049):** resolve_launch_provider() → collect_launch_readiness() → ensure_launch_ready() is the canonical three-function sequence used by all five launch sites. ensure_launch_ready() calls bootstrap_auth() when auth is missing. Auth messaging lives in _ensure_auth() only.
 - Renderers return fragment dicts for caller-owned merge — they do not write shared config files (settings.local.json, .mcp.json) directly.
 - **ProviderRuntimeSpec** (frozen dataclass in `core/contracts.py`) is the single source of truth for provider runtime details. **PROVIDER_REGISTRY** in `core/provider_registry.py` maps provider_id → spec.
 - Unknown, forbidden, or unavailable providers fail closed in active launch logic — never silently fall back to Claude.
@@ -107,4 +111,4 @@ Consolidated five duplicated launch preflight sequences into one shared module. 
 - **Docker Desktop references** are confined to docker/, adapters/, core/errors.py, and doctor/ layers only. Active user-facing commands/ paths use 'Docker' or 'container runtime'.
 - **Provider adapter dispatch** uses a shared `get_agent_provider(adapters, provider_id)` helper in dependencies.py — no hardcoded per-site dispatch dicts.
 - **40+ guardrail tests** across test_docs_truthfulness.py, test_auth_vocabulary_guardrail.py, test_lifecycle_inventory_consistency.py, and test_launch_preflight_guardrail.py mechanically prevent regression.
-- **Auth bootstrap exception wrapping** in ensure_provider_auth: raw exceptions from bootstrap_auth() become ProviderNotReadyError with actionable guidance; already-typed ProviderNotReadyError passes through unchanged.
+- **Auth bootstrap exception wrapping** in ensure_launch_ready/_ensure_auth: raw exceptions from bootstrap_auth() become ProviderNotReadyError with actionable guidance; already-typed ProviderNotReadyError passes through unchanged.

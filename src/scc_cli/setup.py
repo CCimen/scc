@@ -435,6 +435,16 @@ def show_setup_complete(
         "  [cyan]scc doctor[/cyan]            [dim]Check system health[/dim]",
         metrics,
     )
+    _print_padded(
+        console,
+        "  [cyan]scc provider show[/cyan]     [dim]Show current provider preference[/dim]",
+        metrics,
+    )
+    _print_padded(
+        console,
+        "  [cyan]scc provider set[/cyan]      [dim]Set preference (ask|claude|codex)[/dim]",
+        metrics,
+    )
     console.print()
 
 
@@ -447,7 +457,7 @@ def _render_provider_status(readiness: dict[str, Any]) -> Table:
 
     for provider_id in ("claude", "codex"):
         state = readiness.get(provider_id)
-        status = "auth cache present" if state and state.status == "present" else "sign-in needed"
+        status = _three_tier_status(provider_id, state)
         guidance = state.guidance if state is not None else "unavailable"
         table.add_row(get_provider_display_name(provider_id), status, guidance)
     return table

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exported_at": "2026-04-06T16:54:57.672Z",
+  "exported_at": "2026-04-06T17:05:13.037Z",
   "milestones": [
     {
       "id": "M001",
@@ -1332,14 +1332,14 @@
       "milestone_id": "M009-xwi4bt",
       "id": "S01",
       "title": "Unify all launch paths on shared preflight and fix auth bootstrap gap",
-      "status": "pending",
+      "status": "complete",
       "risk": "high",
       "depends": [],
       "demo": "All five launch sites call collect_launch_readiness + ensure_launch_ready. ensure_launch_ready actually calls bootstrap_auth(). auth_bootstrap.py eliminated or trivial. Auth messaging in one place.",
       "created_at": "2026-04-06T16:14:59.677Z",
-      "completed_at": null,
-      "full_summary_md": "",
-      "full_uat_md": "",
+      "completed_at": "2026-04-06T16:59:40.981Z",
+      "full_summary_md": "---\nid: S01\nparent: M009-xwi4bt\nmilestone: M009-xwi4bt\nprovides:\n  - Unified preflight path: all launch sites use collect_launch_readiness() + ensure_launch_ready()\n  - Auth bootstrap actually fires when auth is missing (silent gap closed)\n  - Canonical auth messaging lives in preflight._ensure_auth() only\n  - auth_bootstrap.py is a deprecated redirect — safe to delete in future cleanup\nrequires:\n  []\naffects:\n  - S02\nkey_files:\n  - src/scc_cli/commands/launch/preflight.py\n  - src/scc_cli/commands/launch/flow.py\n  - src/scc_cli/commands/launch/flow_interactive.py\n  - src/scc_cli/commands/launch/auth_bootstrap.py\n  - src/scc_cli/commands/worktree/worktree_commands.py\n  - src/scc_cli/ui/dashboard/orchestrator_handlers.py\n  - tests/test_launch_preflight.py\n  - tests/test_launch_preflight_guardrail.py\n  - tests/test_auth_vocabulary_guardrail.py\n  - tests/test_start_codex_auth_bootstrap.py\nkey_decisions:\n  - D049: D048 superseded — flow.py and flow_interactive.py now use shared preflight before plan construction, not inline ensure_provider_image/ensure_provider_auth after conflict resolution\n  - Readiness check placed before plan construction to fail faster and match dashboard/worktree pattern\n  - Resume and dry-run paths skip readiness entirely\n  - auth_bootstrap.py kept as deprecated redirect rather than deleted, for test compatibility\n  - Optional provider parameter added to _ensure_auth for redirect compatibility\n  - Deferred import of get_agent_provider inside _ensure_auth to satisfy D046 architecture guard\npatterns_established:\n  - All five launch sites now follow the same three-function preflight sequence: resolve_launch_provider() → collect_launch_readiness() → ensure_launch_ready()\n  - Auth bootstrap is invoked inside ensure_launch_ready via _ensure_auth — no caller needs to separately manage auth\n  - The anti-drift guardrail in test_launch_preflight_guardrail.py covers all migrated files, preventing regression to inline ensure_provider_image/ensure_provider_auth calls\n  - Deprecated redirect pattern: auth_bootstrap.py delegates to the canonical implementation in preflight._ensure_auth rather than being deleted outright, preserving test compatibility\nobservability_surfaces:\n  - Auth bootstrap failures are wrapped as ProviderNotReadyError with actionable guidance — consistent across all five launch paths\n  - Auth vocabulary guardrail (test_auth_vocabulary_guardrail.py) now checks preflight.py as the canonical auth messaging source\ndrill_down_paths:\n  - .gsd/milestones/M009-xwi4bt/slices/S01/tasks/T01-SUMMARY.md\n  - .gsd/milestones/M009-xwi4bt/slices/S01/tasks/T02-SUMMARY.md\n  - .gsd/milestones/M009-xwi4bt/slices/S01/tasks/T03-SUMMARY.md\nduration: \"\"\nverification_result: passed\ncompleted_at: 2026-04-06T16:59:40.982Z\nblocker_discovered: false\n---\n\n# S01: Unify all launch paths on shared preflight and fix auth bootstrap gap\n\n**All five launch sites now call collect_launch_readiness() + ensure_launch_ready() through the shared preflight module, with bootstrap_auth() actually invoked when auth is missing, and auth messaging centralized in one function.**\n\n## What Happened\n\nThis slice closed two structural gaps in the launch preflight system and completed the migration that M008 started.\n\n**T01 — Fixed the silent auth gap.** The shared ensure_launch_ready() showed an auth bootstrap notice but never called provider.bootstrap_auth(). Added an `adapters` parameter so _ensure_auth() can resolve the provider adapter via get_agent_provider() and call bootstrap_auth() after the notice. Exception handling mirrors the old auth_bootstrap.py: ProviderNotReadyError passes through, other exceptions get wrapped. Three new tests prove the bootstrap call, exception wrapping, and passthrough behavior. All callers (worktree_commands.py, orchestrator_handlers.py) updated.\n\n**T02 — Migrated the last two launch sites.** flow.py start() and flow_interactive.py run_start_wizard_flow() replaced their inline ensure_provider_image + ensure_provider_auth calls with collect_launch_readiness() + ensure_launch_ready(). The readiness check is placed after provider resolution but before plan construction — this is strictly better than the old position (after conflict resolution) because it fails faster and avoids unnecessary plan construction. Resume and dry-run paths skip readiness entirely. The anti-drift guardrail now bans the old functions from all migrated files. D048 is superseded by D049.\n\n**T03 — Centralized auth messaging.** With all launch sites on shared preflight, auth_bootstrap.py had zero non-test callers. Reduced it to a deprecated redirect that builds a minimal LaunchReadiness and delegates to preflight._ensure_auth(). Added an optional `provider` parameter to _ensure_auth() for redirect compatibility. The vocabulary guardrail test now checks preflight.py as the canonical auth messaging location.\n\n## Verification\n\nExit gate: `uv run ruff check` (0 errors), `uv run mypy src/scc_cli` (303 files, 0 issues), `uv run pytest -q` (5117 passed, 23 skipped, 2 xfailed). Targeted tests: test_launch_preflight.py (53 passed), test_launch_preflight_guardrail.py (7 passed), test_auth_vocabulary_guardrail.py (5 passed), test_start_dryrun.py (10 passed, 4 skipped), test_integration.py (20 passed), test_start_codex_auth_bootstrap.py (3 passed). grep confirms ensure_provider_image and ensure_provider_auth are absent from flow.py and flow_interactive.py. grep confirms no non-test imports from auth_bootstrap module.\n\n## Requirements Advanced\n\n- R001 — Eliminated duplicated auth/image bootstrap logic from flow.py and flow_interactive.py. Auth messaging centralized from two modules (auth_bootstrap.py + preflight.py) to one (_ensure_auth in preflight.py). Anti-drift guardrail prevents regression.\n\n## Requirements Validated\n\nNone.\n\n## New Requirements Surfaced\n\nNone.\n\n## Requirements Invalidated or Re-scoped\n\nNone.\n\n## Deviations\n\nT02 placed the readiness check before plan construction (not after conflict resolution as originally specced). This is a deliberate improvement — fails faster and matches the dashboard/worktree pattern. D048 superseded by D049.\n\n## Known Limitations\n\nauth_bootstrap.py still exists as a deprecated redirect for test compatibility. A future cleanup can delete it entirely once tests are updated to use preflight directly. The optional `provider` parameter on _ensure_auth() is a backward-compat convenience for the redirect — it could be removed when auth_bootstrap.py is deleted.\n\n## Follow-ups\n\nDelete auth_bootstrap.py entirely after updating its test consumers to use preflight._ensure_auth directly. Remove the optional `provider` parameter from _ensure_auth() at the same time.\n\n## Files Created/Modified\n\n- `src/scc_cli/commands/launch/preflight.py` — Added adapters parameter to ensure_launch_ready() and _ensure_auth(). _ensure_auth now calls bootstrap_auth() via get_agent_provider() after showing the auth notice. Added optional provider parameter for deprecated redirect compatibility.\n- `src/scc_cli/commands/launch/flow.py` — Replaced inline ensure_provider_image + ensure_provider_auth with collect_launch_readiness() + ensure_launch_ready(). Readiness check before plan construction. Resume and dry-run paths skip readiness.\n- `src/scc_cli/commands/launch/flow_interactive.py` — Replaced inline ensure_provider_image + ensure_provider_auth with collect_launch_readiness() + ensure_launch_ready(). Same pattern as flow.py.\n- `src/scc_cli/commands/launch/auth_bootstrap.py` — Reduced to deprecated redirect delegating to preflight._ensure_auth(). Preserves old ensure_provider_auth signature for test compatibility.\n- `src/scc_cli/commands/worktree/worktree_commands.py` — Updated ensure_launch_ready() call to pass adapters parameter.\n- `src/scc_cli/ui/dashboard/orchestrator_handlers.py` — Updated ensure_launch_ready() call to pass adapters parameter.\n- `tests/test_launch_preflight.py` — Added 3 new tests for bootstrap_auth call, exception wrapping, and ProviderNotReadyError passthrough. Updated existing tests for adapters parameter.\n- `tests/test_launch_preflight_guardrail.py` — Extended anti-drift guardrail to ban ensure_provider_image/ensure_provider_auth from flow.py and flow_interactive.py.\n- `tests/test_auth_vocabulary_guardrail.py` — Updated to check preflight.py as canonical auth messaging location.\n- `tests/test_start_codex_auth_bootstrap.py` — Updated to mock shared preflight functions instead of inline image/auth calls.\n- `tests/test_workspace_provider_persistence.py` — Updated mocks for shared preflight migration.\n- `tests/test_cli.py` — Updated mocks for shared preflight migration.\n- `tests/test_launch_preflight_characterization.py` — Updated mocks for shared preflight migration.\n- `tests/test_resume_after_drift.py` — Updated for ensure_launch_ready adapters parameter.\n",
+      "full_uat_md": "# S01: Unify all launch paths on shared preflight and fix auth bootstrap gap — UAT\n\n**Milestone:** M009-xwi4bt\n**Written:** 2026-04-06T16:59:40.983Z\n\n## UAT: Unify all launch paths on shared preflight and fix auth bootstrap gap\n\n### Prerequisites\n- SCC repo at M009/S01 completion point\n- `uv sync` completed\n- All tests passing: `uv run pytest -q`\n\n### Test Case 1: Auth bootstrap is invoked when auth is missing (T01 core fix)\n\n**Steps:**\n1. Run `uv run pytest tests/test_launch_preflight.py::TestEnsureLaunchReady::test_interactive_auth_missing_calls_show_notice_and_bootstrap -v`\n2. Verify the test passes — confirms bootstrap_auth() is called after show_notice() when auth_status is MISSING in interactive mode.\n\n**Expected:** Test passes. The mock for bootstrap_auth() is called exactly once.\n\n### Test Case 2: Auth bootstrap exception wrapping (T01 error handling)\n\n**Steps:**\n1. Run `uv run pytest tests/test_launch_preflight.py::TestEnsureLaunchReady::test_bootstrap_auth_failure_wraps_as_provider_not_ready -v`\n2. Run `uv run pytest tests/test_launch_preflight.py::TestEnsureLaunchReady::test_bootstrap_auth_provider_not_ready_passes_through -v`\n\n**Expected:** Both pass. Generic exceptions from bootstrap_auth() become ProviderNotReadyError. Already-typed ProviderNotReadyError passes through unchanged.\n\n### Test Case 3: flow.py no longer uses inline image/auth calls (T02 migration)\n\n**Steps:**\n1. Run `grep -n 'ensure_provider_image\\|ensure_provider_auth' src/scc_cli/commands/launch/flow.py`\n2. Run `grep -n 'ensure_provider_image\\|ensure_provider_auth' src/scc_cli/commands/launch/flow_interactive.py`\n\n**Expected:** Both greps return empty — no matches. The inline calls have been replaced with shared preflight.\n\n### Test Case 4: Anti-drift guardrail covers migrated files (T02 guardrail)\n\n**Steps:**\n1. Run `uv run pytest tests/test_launch_preflight_guardrail.py::TestProviderResolutionAntiDrift -v`\n\n**Expected:** All 3 tests pass:\n- `test_migrated_files_do_not_call_resolution_functions` — flow.py and flow_interactive.py don't call choose_start_provider or resolve_launch_provider_id\n- `test_migrated_files_import_from_preflight` — both import from preflight module\n- `test_preflight_is_sole_wrapper_of_choose_start_provider` — only preflight.py wraps choose_start_provider\n\n### Test Case 5: auth_bootstrap.py is a deprecated redirect (T03 centralization)\n\n**Steps:**\n1. Run `grep -rn 'from.*auth_bootstrap' src/scc_cli/ --include='*.py' | grep -v __pycache__`\n2. Verify that no results reference `ensure_provider_auth` from `auth_bootstrap` module (matches for `show_auth_bootstrap_panel` from `render` module are expected false positives)\n3. Run `wc -l src/scc_cli/commands/launch/auth_bootstrap.py`\n\n**Expected:** Step 1 returns only `render` module imports (show_auth_bootstrap_panel), not auth_bootstrap.ensure_provider_auth. Step 3 shows ~20 lines (thin redirect, not the original ~50 line implementation).\n\n### Test Case 6: Resume path skips readiness (T02 ordering)\n\n**Steps:**\n1. Run `uv run pytest tests/test_start_codex_auth_bootstrap.py -v`\n\n**Expected:** All 3 tests pass, including the test that verifies readiness is skipped when provider is already ready (no unnecessary readiness checks on resume).\n\n### Test Case 7: Full suite regression check\n\n**Steps:**\n1. Run `uv run ruff check`\n2. Run `uv run mypy src/scc_cli`\n3. Run `uv run pytest -q`\n\n**Expected:** ruff clean, mypy 303 files with 0 issues, 5117 passed / 23 skipped / 2 xfailed.\n\n### Edge Cases\n\n- **Non-interactive mode with missing auth:** ensure_launch_ready raises ProviderNotReadyError with actionable message (no bootstrap_auth call in non-interactive mode). Covered by `test_non_interactive_auth_missing_raises`.\n- **Both image and auth missing:** ensure_launch_ready fixes image first, then auth. Covered by `test_both_missing_fixes_image_then_auth`.\n- **Dry-run path:** Skips readiness check entirely (no image pull, no auth bootstrap). Covered by test_start_dryrun.py tests mocking the preflight path.\n",
       "goal": "Eliminate the last two launch sites (flow.py, flow_interactive.py) that bypass the shared preflight readiness path. Fix the auth bootstrap gap where ensure_launch_ready shows the notice but never calls bootstrap_auth(). Centralize auth messaging so it lives in exactly one module.",
       "success_criteria": "grep -rn ensure_provider_image src/scc_cli/commands/launch/flow.py returns empty. grep -rn ensure_provider_auth src/scc_cli/commands/launch/flow.py returns empty. Same for flow_interactive.py. ensure_launch_ready test proves bootstrap_auth() is called. Auth messaging lives in preflight.py only. Full suite 5114+ passed.",
       "proof_level": "automated — targeted pytest + grep + full suite",
@@ -7715,19 +7715,23 @@
       "milestone_id": "M009-xwi4bt",
       "slice_id": "S02",
       "id": "T01",
-      "title": "Update _render_provider_status to use three-tier readiness and final verification",
-      "status": "pending",
-      "one_liner": "",
-      "narrative": "",
-      "verification_result": "",
+      "title": "Replaced inline two-tier status in _render_provider_status with _three_tier_status() and added provider preference hints to setup completion next-steps",
+      "status": "complete",
+      "one_liner": "Replaced inline two-tier status in _render_provider_status with _three_tier_status() and added provider preference hints to setup completion next-steps",
+      "narrative": "_render_provider_status() had inline two-tier logic (\"auth cache present\" / \"sign-in needed\") while show_setup_complete() already used the four-state _three_tier_status() helper. Replaced the inline logic with a call to _three_tier_status(provider_id, state) so both surfaces show consistent readiness vocabulary. Added scc provider show and scc provider set hints to the Get started next-steps block in show_setup_complete().",
+      "verification_result": "Full exit gate green: uv run ruff check (0 issues), uv run mypy src/scc_cli (0 issues in 303 files), uv run pytest -q (5117 passed, 23 skipped, 2 xfailed).",
       "duration": "",
-      "completed_at": null,
+      "completed_at": "2026-04-06T17:05:13.013Z",
       "blocker_discovered": false,
-      "deviations": "",
-      "known_issues": "",
-      "key_files": [],
-      "key_decisions": [],
-      "full_summary_md": "",
+      "deviations": "None.",
+      "known_issues": "None.",
+      "key_files": [
+        "src/scc_cli/setup.py"
+      ],
+      "key_decisions": [
+        "Reused existing _three_tier_status() helper in _render_provider_status rather than duplicating logic"
+      ],
+      "full_summary_md": "---\nid: T01\nparent: S02\nmilestone: M009-xwi4bt\nkey_files:\n  - src/scc_cli/setup.py\nkey_decisions:\n  - Reused existing _three_tier_status() helper in _render_provider_status rather than duplicating logic\nduration: \nverification_result: passed\ncompleted_at: 2026-04-06T17:05:13.012Z\nblocker_discovered: false\n---\n\n# T01: Replaced inline two-tier status in _render_provider_status with _three_tier_status() and added provider preference hints to setup completion next-steps\n\n**Replaced inline two-tier status in _render_provider_status with _three_tier_status() and added provider preference hints to setup completion next-steps**\n\n## What Happened\n\n_render_provider_status() had inline two-tier logic (\"auth cache present\" / \"sign-in needed\") while show_setup_complete() already used the four-state _three_tier_status() helper. Replaced the inline logic with a call to _three_tier_status(provider_id, state) so both surfaces show consistent readiness vocabulary. Added scc provider show and scc provider set hints to the Get started next-steps block in show_setup_complete().\n\n## Verification\n\nFull exit gate green: uv run ruff check (0 issues), uv run mypy src/scc_cli (0 issues in 303 files), uv run pytest -q (5117 passed, 23 skipped, 2 xfailed).\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| 1 | `uv run ruff check` | 0 | ✅ pass | 11800ms |\n| 2 | `uv run mypy src/scc_cli` | 0 | ✅ pass | 8100ms |\n| 3 | `uv run pytest -q` | 0 | ✅ pass | 78600ms |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\n- `src/scc_cli/setup.py`\n",
       "description": "Steps:\n1. In setup.py _render_provider_status(), replace the inline two-tier status logic with _three_tier_status(provider_id, state).\n2. Update any tests that assert on the old two-tier wording in _render_provider_status output.\n3. Add provider preference hint to setup completion: show 'scc provider show' / 'scc provider set ask|claude|codex' in the next-steps section (reviewer item #5 — small, high UX value).\n4. Run full exit gate: ruff, mypy, pytest.",
       "estimate": "15min",
       "files": [
@@ -8298,6 +8302,18 @@
       "decision": "Whether flow.py start() should use ensure_launch_ready() or keep ensure_provider_image/ensure_provider_auth inline",
       "choice": "Keep ensure_provider_image/ensure_provider_auth inline in flow.py start() because the auth bootstrap path needs StartSessionPlan context (artifact_paths, provider-specific config) that is not available until after prepare_live_start_plan(). Only provider resolution was migrated to the shared preflight module.",
       "rationale": "The start() flow resolves the provider first (shared preflight), then builds StartSessionPlan, then uses plan-dependent data for image and auth bootstrap. ensure_launch_ready() cannot receive plan context because it runs before plan construction. This is a legitimate ordering constraint, not laziness — the image/auth bootstrap steps will consolidate when the plan-before-bootstrap ordering is refactored in a future slice.",
+      "revisable": "Yes",
+      "made_by": "agent",
+      "superseded_by": null
+    },
+    {
+      "seq": 47,
+      "id": "D049",
+      "when_context": "M009-xwi4bt/S01/T02",
+      "scope": "architecture",
+      "decision": "Whether D048 (keeping ensure_provider_image/ensure_provider_auth inline in flow.py) still holds after M009/S01/T02 migration",
+      "choice": "D048 is superseded. flow.py start() now uses collect_launch_readiness() + ensure_launch_ready() from the shared preflight module, placed after provider resolution but before plan construction. The ordering constraint that D048 cited (auth bootstrap needs StartSessionPlan context) was dissolved — ensure_launch_ready() only needs the provider adapter and readiness status, both available before plan construction. Resume and dry-run paths skip readiness entirely. All five launch sites now use the same shared preflight path.",
+      "rationale": "T02 completed the migration of flow.py and flow_interactive.py to shared preflight, proving the ordering constraint in D048 was narrower than assumed. The auth bootstrap only needs provider_id and the adapter's bootstrap_auth() method — not the full StartSessionPlan. Moving readiness before plan construction is strictly better: it fails faster and avoids unnecessary plan construction when the provider isn't ready.",
       "revisable": "Yes",
       "made_by": "agent",
       "superseded_by": null
@@ -13198,6 +13214,39 @@
       "verdict": "✅ pass",
       "duration_ms": 100,
       "created_at": "2026-04-06T16:54:57.641Z"
+    },
+    {
+      "id": 446,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M009-xwi4bt",
+      "command": "uv run ruff check",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 11800,
+      "created_at": "2026-04-06T17:05:13.013Z"
+    },
+    {
+      "id": 447,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M009-xwi4bt",
+      "command": "uv run mypy src/scc_cli",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 8100,
+      "created_at": "2026-04-06T17:05:13.013Z"
+    },
+    {
+      "id": 448,
+      "task_id": "T01",
+      "slice_id": "S02",
+      "milestone_id": "M009-xwi4bt",
+      "command": "uv run pytest -q",
+      "exit_code": 0,
+      "verdict": "✅ pass",
+      "duration_ms": 78600,
+      "created_at": "2026-04-06T17:05:13.013Z"
     }
   ]
 }
