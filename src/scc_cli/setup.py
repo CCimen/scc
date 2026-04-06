@@ -364,13 +364,13 @@ def show_setup_complete(
         _append_dot_leader(
             content,
             "claude",
-            "ready" if claude_ready and claude_ready.status == "present" else "not connected",
+            "auth cache present" if claude_ready and claude_ready.status == "present" else "sign-in needed",
             value_style="white",
         )
         _append_dot_leader(
             content,
             "codex",
-            "ready" if codex_ready and codex_ready.status == "present" else "not connected",
+            "auth cache present" if codex_ready and codex_ready.status == "present" else "sign-in needed",
             value_style="white",
         )
     if provider_preference is not None:
@@ -424,7 +424,7 @@ def _render_provider_status(readiness: dict[str, Any]) -> Table:
 
     for provider_id in ("claude", "codex"):
         state = readiness.get(provider_id)
-        status = "connected" if state and state.status == "present" else "not connected"
+        status = "auth cache present" if state and state.status == "present" else "sign-in needed"
         guidance = state.guidance if state is not None else "unavailable"
         table.add_row(get_provider_display_name(provider_id), status, guidance)
     return table
@@ -556,7 +556,7 @@ def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, s
             _print_padded(
                 console,
                 create_info_panel(
-                    f"{display_name} not connected",
+                    f"{display_name} sign-in incomplete",
                     exc.user_message,
                     exc.suggested_action or "You can retry the provider sign-in later during start.",
                 ),

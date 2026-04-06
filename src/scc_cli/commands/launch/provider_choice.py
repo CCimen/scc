@@ -123,7 +123,7 @@ def prompt_for_provider_choice(
             default_choice = str(index)
         elif provider_id in connected_provider_ids and default_choice == "1":
             default_choice = str(index)
-        status = "connected" if provider_id in connected_provider_ids else "sign-in required"
+        status = "auth cache present" if provider_id in connected_provider_ids else "sign-in needed"
         table.add_row(
             f"[{index}]",
             get_provider_display_name(provider_id),

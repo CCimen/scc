@@ -4,7 +4,7 @@
 **Demo:** After this: Doctor, setup summary, and choose-provider screen use consistent auth vocabulary. No 'Docker Desktop' in active error paths. Provider adapter dispatch uses shared lookup.
 
 ## Tasks
-- [ ] **T01: Audit and fix auth-status vocabulary with three-tier readiness distinction** — Audit every user-facing string that describes provider readiness:
+- [x] **T01: Fixed 6 misleading auth-status strings across provider_choice.py, setup.py, and doctor checks; added 5-test guardrail preventing vocabulary regression** — Audit every user-facing string that describes provider readiness:
 
 1. Doctor output (checks/environment.py, render.py) — currently uses 'auth cache present'
 2. Setup summary (setup.py _render_setup_summary, _render_provider_status) — uses what vocabulary?

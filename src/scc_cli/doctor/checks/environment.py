@@ -373,7 +373,7 @@ def check_provider_auth(provider_id: str | None = None) -> CheckResult:
     return CheckResult(
         name="Provider Auth",
         passed=False,
-        message=f"{provider_id} auth cache not ready ({readiness.mechanism})",
+        message=f"{provider_id} auth cache missing ({readiness.mechanism})",
         fix_hint=readiness.guidance,
         severity=SeverityLevel.WARNING,
         category="provider",
