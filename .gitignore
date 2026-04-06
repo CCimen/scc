@@ -84,3 +84,19 @@ refactor-plan.md
 .bg-shell/
 coverage.json
 READMEGSD.md
+
+# ── GSD baseline (auto-generated) ──
+.gsd-id
+*.code-workspace
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+*.pyc
+target/
+vendor/
+*.log
+coverage/
+.cache/
+tmp/
