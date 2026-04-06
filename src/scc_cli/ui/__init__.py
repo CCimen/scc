@@ -37,6 +37,8 @@ Internal modules (not part of public API, may change without notice):
 
 from __future__ import annotations
 
+from scc_cli import __version__
+
 # Dashboard: Main tabbed navigation view
 from .dashboard import run_dashboard
 
@@ -106,13 +108,8 @@ from .prompts import (
     select_team,
 )
 
-# =============================================================================
-# Package metadata
-# =============================================================================
-
-__version__ = "0.1.0"
-
 __all__ = [
+    "__version__",
     # Tier 1: High-level API
     "InteractivityContext",
     "InteractivityMode",
