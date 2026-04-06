@@ -23,7 +23,7 @@
   - Estimate: 30min
   - Files: tests/test_workspace_provider_persistence.py, tests/test_start_provider_choice.py
   - Verify: uv run pytest tests/test_workspace_provider_persistence.py tests/test_start_provider_choice.py -v
-- [ ] **T02: Resume-after-drift edge cases and auth bootstrap failure handling** — **Resume-after-drift tests:**
+- [x] **T02: Added 22 resume-after-drift edge case tests and auth bootstrap exception wrapping in ensure_provider_auth** — **Resume-after-drift tests:**
 1. Session exists with provider_id='codex', but Codex auth volume was deleted → resume triggers auth bootstrap (not silent switch to Claude)
 2. Session exists with provider_id='codex', but Codex image was removed → resume triggers image auto-build in interactive mode, fails with build command in non-interactive
 3. Session exists with provider_id='codex', explicit --provider claude → CLI flag overrides resume provider (intentional switch)

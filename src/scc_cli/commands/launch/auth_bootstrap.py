@@ -54,4 +54,19 @@ def ensure_provider_auth(
             f"{display_name} volume."
         ),
     )
-    provider.bootstrap_auth()
+    try:
+        provider.bootstrap_auth()
+    except ProviderNotReadyError:
+        raise
+    except Exception as exc:
+        raise ProviderNotReadyError(
+            provider_id=provider_id,
+            user_message=(
+                f"{display_name} auth bootstrap failed: {exc}"
+            ),
+            suggested_action=(
+                f"Run 'scc start --provider {provider_id}' interactively "
+                "to complete the browser sign-in. If the issue persists, "
+                f"run 'scc doctor --provider {provider_id}' to diagnose."
+            ),
+        ) from exc
