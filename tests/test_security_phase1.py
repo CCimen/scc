@@ -13,7 +13,11 @@ from typing import Any
 
 import pytest
 
-from scc_cli import profiles
+from scc_cli.application.compute_effective_config import (
+    compute_effective_config,
+    validate_stdio_server,
+)
+from scc_cli.core.governance_patterns import matches_blocked
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test fixtures
@@ -60,20 +64,20 @@ class TestCaseInsensitiveBlocking:
         Pattern is uppercase, item is lowercase - should still match.
         """
         patterns = ["Malicious-*"]
-        result = profiles.matches_blocked("malicious-tool", patterns)
+        result = matches_blocked("malicious-tool", patterns)
         assert result is not None, "Should match case-insensitively"
         assert result == "Malicious-*"
 
     def test_lowercase_pattern_matches_uppercase_item(self):
         """blocked_plugins: ['evil-*'] should block 'EVIL-TOOL'."""
         patterns = ["evil-*"]
-        result = profiles.matches_blocked("EVIL-TOOL", patterns)
+        result = matches_blocked("EVIL-TOOL", patterns)
         assert result is not None, "Should match case-insensitively"
 
     def test_mixed_case_matching(self):
         """Pattern and item with mixed case should match."""
         patterns = ["MaLiCiOuS-*"]
-        result = profiles.matches_blocked("mAlIcIoUs-ToOl", patterns)
+        result = matches_blocked("mAlIcIoUs-ToOl", patterns)
         assert result is not None, "Mixed case should match"
 
     def test_casefold_handles_german_eszett(self):
@@ -83,25 +87,25 @@ class TestCaseInsensitiveBlocking:
         """
         # ß casefolded becomes "ss"
         patterns = ["straße-*"]
-        result = profiles.matches_blocked("STRASSE-TOOL", patterns)
+        result = matches_blocked("STRASSE-TOOL", patterns)
         assert result is not None, "ß should casefold to ss and match"
 
     def test_exact_match_is_case_insensitive(self):
         """Exact matches (no wildcards) should also be case-insensitive."""
         patterns = ["BadPlugin"]
-        result = profiles.matches_blocked("badplugin", patterns)
+        result = matches_blocked("badplugin", patterns)
         assert result is not None, "Exact match should be case-insensitive"
 
     def test_whitespace_trimmed(self):
         """Leading/trailing whitespace should be trimmed."""
         patterns = ["  evil-*  "]
-        result = profiles.matches_blocked("  evil-tool  ", patterns)
+        result = matches_blocked("  evil-tool  ", patterns)
         assert result is not None, "Whitespace should be trimmed"
 
     def test_non_matching_is_none(self):
         """Non-matching items should return None."""
         patterns = ["Malicious-*"]
-        result = profiles.matches_blocked("safe-tool", patterns)
+        result = matches_blocked("safe-tool", patterns)
         assert result is None
 
     def test_security_blocks_apply_after_merge(self, org_config_with_blocks, tmp_path):
@@ -116,7 +120,7 @@ additional_plugins:
   - malicious-tool
 """)
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_blocks,
             team_name="test-team",
             workspace_path=tmp_path,
@@ -158,7 +162,7 @@ class TestStdioFeatureGate:
             },
         }
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={"name": "local-tool", "type": "stdio", "command": "/usr/bin/tool"},
             org_config=org_config,
         )
@@ -174,7 +178,7 @@ class TestStdioFeatureGate:
             "security": {"allow_stdio_mcp": True},
         }
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={"name": "local-tool", "type": "stdio", "command": "/usr/bin/tool"},
             org_config=org_config,
         )
@@ -198,7 +202,7 @@ class TestStdioPathValidation:
             "security": {"allow_stdio_mcp": True},
         }
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={"name": "tool", "type": "stdio", "command": "./local-script"},
             org_config=org_config,
         )
@@ -226,7 +230,7 @@ class TestStdioPathValidation:
             },
         }
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={
                 "name": "evil",
                 "type": "stdio",
@@ -261,7 +265,7 @@ class TestStdioPathValidation:
         test_tool.touch()
         test_tool.chmod(0o755)
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={
                 "name": "good",
                 "type": "stdio",
@@ -287,7 +291,7 @@ class TestStdioPathValidation:
             # Note: no allowed_stdio_prefixes
         }
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={
                 "name": "tool",
                 "type": "stdio",
@@ -310,7 +314,7 @@ class TestStdioPathValidation:
             "security": {"allow_stdio_mcp": True},
         }
 
-        result = profiles.validate_stdio_server(
+        result = validate_stdio_server(
             server={
                 "name": "tool",
                 "type": "stdio",
@@ -346,7 +350,7 @@ additional_plugins:
   - evil-tool
 """)
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_blocks,
             team_name="test-team",
             workspace_path=tmp_path,
@@ -383,7 +387,7 @@ additional_plugins:
   - new-plugin
 """)
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config,
             team_name="test-team",
             workspace_path=tmp_path,

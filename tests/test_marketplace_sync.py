@@ -497,6 +497,43 @@ class TestBlockedPluginWarnings:
         # Should have a warning about the blocked plugin
         assert any("bad-plugin" in w.lower() for w in result.warnings)
 
+    def test_blocked_plugin_warning_uses_shared_pattern_matching(
+        self,
+        tmp_path: Path,
+        sync_dependencies: SyncMarketplaceDependencies,
+    ) -> None:
+        """Existing plugin warnings should use normalized plugin pattern matching."""
+        from scc_cli.application.sync_marketplace import sync_marketplace_settings
+
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.local.json").write_text(
+            json.dumps({"enabledPlugins": ["  Bad-Plugin@Marketplace  "]})
+        )
+
+        config = {
+            "schema_version": "1.0.0",
+            "organization": {"name": "Test Org", "id": "test-org"},
+            "security": {
+                "blocked_plugins": ["bad-plugin@*"],
+            },
+            "profiles": {
+                "test-team": {},
+            },
+        }
+
+        result = sync_marketplace_settings(
+            project_dir=tmp_path,
+            org_config_data=config,
+            team_id="test-team",
+            dependencies=sync_dependencies,
+        )
+
+        assert any(
+            "Bad-Plugin@Marketplace" in warning and "matched pattern: bad-plugin@*" in warning
+            for warning in result.warnings
+        )
+
 
 class TestLoadExistingPlugins:
     """Tests for _load_existing_plugins helper."""

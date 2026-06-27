@@ -17,7 +17,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scc_cli.commands.launch.auth_bootstrap import ensure_provider_auth
 from scc_cli.commands.launch.preflight import (
     AuthStatus,
     ImageStatus,
@@ -94,6 +93,18 @@ def _make_codex_provider_mock(
     if bootstrap_raises:
         provider.bootstrap_auth.side_effect = bootstrap_raises
     return provider
+
+
+def _missing_codex_readiness() -> LaunchReadiness:
+    return LaunchReadiness(
+        provider_id="codex",
+        resolution_source=ProviderResolutionSource.EXPLICIT,
+        image_status=ImageStatus.AVAILABLE,
+        auth_status=AuthStatus.MISSING,
+        requires_image_bootstrap=False,
+        requires_auth_bootstrap=True,
+        launch_ready=False,
+    )
 
 
 def _mock_org_with_allowed(allowed: tuple[str, ...]) -> MagicMock:
@@ -471,8 +482,7 @@ class TestExplicitProviderMissingAuthNonInteractive:
 
 
 class TestAuthBootstrapCallbackFailure:
-    """When bootstrap_auth() raises an unexpected error, ensure_provider_auth
-    wraps it in a clean ProviderNotReadyError with guidance."""
+    """When bootstrap_auth() raises, launch preflight wraps it with guidance."""
 
     def test_port_unavailable_raises_provider_not_ready(self) -> None:
         """Codex port-unavailable produces ProviderNotReadyError with guidance."""
@@ -489,22 +499,18 @@ class TestAuthBootstrapCallbackFailure:
 
     def test_bootstrap_auth_oserror_wrapped_in_provider_not_ready(self) -> None:
         """OSError from bootstrap_auth() is wrapped in ProviderNotReadyError."""
-        plan = MagicMock()
-        plan.resume = False
-
         provider = _make_codex_provider_mock(
             auth_status="missing",
             bootstrap_raises=OSError("socket binding failed"),
         )
-        deps = MagicMock()
-        deps.agent_provider = provider
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_codex_readiness(),
+                adapters=MagicMock(),
                 non_interactive=False,
                 show_notice=MagicMock(),
+                provider=provider,
             )
         err = exc_info.value
         assert "codex" in err.provider_id
@@ -512,22 +518,18 @@ class TestAuthBootstrapCallbackFailure:
 
     def test_bootstrap_auth_file_not_found_wrapped(self) -> None:
         """FileNotFoundError (Docker not installed) is wrapped cleanly."""
-        plan = MagicMock()
-        plan.resume = False
-
         provider = _make_codex_provider_mock(
             auth_status="missing",
             bootstrap_raises=FileNotFoundError("docker: command not found"),
         )
-        deps = MagicMock()
-        deps.agent_provider = provider
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_codex_readiness(),
+                adapters=MagicMock(),
                 non_interactive=False,
                 show_notice=MagicMock(),
+                provider=provider,
             )
         err = exc_info.value
         assert "codex" in err.provider_id
@@ -535,31 +537,24 @@ class TestAuthBootstrapCallbackFailure:
 
     def test_bootstrap_auth_subprocess_timeout_wrapped(self) -> None:
         """subprocess.TimeoutExpired is wrapped in ProviderNotReadyError."""
-        plan = MagicMock()
-        plan.resume = False
-
         provider = _make_codex_provider_mock(
             auth_status="missing",
             bootstrap_raises=subprocess.TimeoutExpired(cmd="docker", timeout=30),
         )
-        deps = MagicMock()
-        deps.agent_provider = provider
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_codex_readiness(),
+                adapters=MagicMock(),
                 non_interactive=False,
                 show_notice=MagicMock(),
+                provider=provider,
             )
         err = exc_info.value
         assert "codex" in err.provider_id
 
     def test_provider_not_ready_from_bootstrap_passes_through(self) -> None:
         """ProviderNotReadyError from bootstrap_auth passes through unchanged."""
-        plan = MagicMock()
-        plan.resume = False
-
         original_error = ProviderNotReadyError(
             provider_id="codex",
             user_message="Codex browser sign-in did not complete successfully.",
@@ -569,34 +564,14 @@ class TestAuthBootstrapCallbackFailure:
             auth_status="missing",
             bootstrap_raises=original_error,
         )
-        deps = MagicMock()
-        deps.agent_provider = provider
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_codex_readiness(),
+                adapters=MagicMock(),
                 non_interactive=False,
                 show_notice=MagicMock(),
+                provider=provider,
             )
         # Should be the exact same error, not a re-wrap
         assert exc_info.value is original_error
-
-    def test_resume_skips_auth_bootstrap(self) -> None:
-        """When plan.resume=True, ensure_provider_auth returns early."""
-        plan = MagicMock()
-        plan.resume = True
-
-        provider = _make_codex_provider_mock(auth_status="missing")
-        deps = MagicMock()
-        deps.agent_provider = provider
-
-        # Should not raise — resume skips auth bootstrap entirely
-        ensure_provider_auth(
-            plan,
-            dependencies=deps,
-            non_interactive=False,
-            show_notice=MagicMock(),
-        )
-        provider.auth_check.assert_not_called()
-        provider.bootstrap_auth.assert_not_called()

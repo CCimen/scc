@@ -84,12 +84,10 @@ class TestEnforcedModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_sets_up_topology_before_create(
         self,
         mock_find: MagicMock,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -114,12 +112,10 @@ class TestEnforcedModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_passes_network_to_create(
         self,
         mock_find: MagicMock,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -141,12 +137,10 @@ class TestEnforcedModeIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_injects_proxy_env(
         self,
         mock_find: MagicMock,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -164,6 +158,38 @@ class TestEnforcedModeIntegration:
         assert "HTTP_PROXY=http://172.18.0.2:3128" in create_cmd
         assert "HTTPS_PROXY=http://172.18.0.2:3128" in create_cmd
         assert "NO_PROXY=" in create_cmd
+
+    @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
+    @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
+    @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
+    def test_run_enforced_host_proxy_env_does_not_override_scc_proxy(
+        self,
+        mock_find: MagicMock,
+        mock_topo_cls: MagicMock,
+        mock_run_docker: MagicMock,
+        mock_execvp: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        runtime: OciSandboxRuntime,
+    ) -> None:
+        """Host proxy env must not replace SCC-owned enforced egress proxy settings."""
+        monkeypatch.setenv("HTTP_PROXY", "http://host-proxy.example:8080")
+        monkeypatch.setenv("HTTPS_PROXY", "http://host-proxy.example:8443")
+        monkeypatch.setenv("NO_PROXY", "localhost,metadata.internal")
+        mock_topo = MagicMock()
+        mock_topo.setup.return_value = _FAKE_TOPO_INFO
+        mock_topo_cls.return_value = mock_topo
+        mock_run_docker.return_value = MagicMock(stdout="cid123\n")
+
+        runtime.run(_enforced_spec())
+
+        create_cmd: list[str] = mock_run_docker.call_args_list[0][0][0]
+        assert "HTTP_PROXY=http://172.18.0.2:3128" in create_cmd
+        assert "HTTPS_PROXY=http://172.18.0.2:3128" in create_cmd
+        assert "NO_PROXY=" in create_cmd
+        assert "HTTP_PROXY=http://host-proxy.example:8080" not in create_cmd
+        assert "HTTPS_PROXY=http://host-proxy.example:8443" not in create_cmd
+        assert "NO_PROXY=localhost,metadata.internal" not in create_cmd
 
 
 class TestLockedDownModeIntegration:
@@ -309,12 +335,10 @@ class TestGuardrail:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     @patch("scc_cli.adapters.oci_sandbox_runtime._find_existing_container", return_value=None)
     def test_run_enforced_always_passes_network_name(
         self,
         mock_find: MagicMock,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -369,14 +393,12 @@ class TestDestinationSetEgressIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     @patch("scc_cli.adapters.oci_sandbox_runtime.compile_squid_acl")
     @patch("scc_cli.adapters.oci_sandbox_runtime.build_egress_plan")
     def test_destination_sets_threaded_into_egress_plan(
         self,
         mock_build_plan: MagicMock,
         mock_compile_acl: MagicMock,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -414,10 +436,8 @@ class TestDestinationSetEgressIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     def test_enforced_spec_without_destinations_produces_no_allow_rules(
         self,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,
@@ -438,14 +458,12 @@ class TestDestinationSetEgressIntegration:
     @patch("scc_cli.adapters.oci_sandbox_runtime.os.execvp")
     @patch("scc_cli.adapters.oci_sandbox_runtime._run_docker")
     @patch("scc_cli.adapters.oci_sandbox_runtime.NetworkTopologyManager")
-    @patch("scc_cli.adapters.oci_sandbox_runtime.collect_proxy_env", return_value={})
     @patch("scc_cli.adapters.oci_sandbox_runtime.compile_squid_acl")
     @patch("scc_cli.adapters.oci_sandbox_runtime.build_egress_plan")
     def test_multiple_destination_sets_produce_multiple_allow_rules(
         self,
         mock_build_plan: MagicMock,
         mock_compile_acl: MagicMock,
-        mock_collect: MagicMock,
         mock_topo_cls: MagicMock,
         mock_run_docker: MagicMock,
         mock_execvp: MagicMock,

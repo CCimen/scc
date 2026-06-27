@@ -228,7 +228,7 @@ class TestStartCLIErrorPaths:
     ) -> None:
         """--standalone --dry-run without workspace tries auto-detect → exits with usage error if not in a git repo."""
         with patch(
-            "scc_cli.commands.launch.flow._resolve_session_selection",
+            "scc_cli.commands.launch.flow_session._resolve_session_selection",
             return_value=(None, None, None, None, False, False, None),
         ):
             result = cli_runner.invoke(app, ["start", "--standalone", "--dry-run"])
@@ -247,7 +247,7 @@ class TestResolveSessionSelection:
     @patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False)
     def test_dry_run_auto_detects_workspace(self, mock_gate: MagicMock) -> None:
         """--dry-run without workspace tries resolve_workspace auto-detection."""
-        from scc_cli.commands.launch.flow import _resolve_session_selection
+        from scc_cli.commands.launch.flow_session import _resolve_session_selection
 
         mock_session_svc = MagicMock()
 
@@ -276,7 +276,7 @@ class TestResolveSessionSelection:
 
     def test_explicit_workspace_passthrough(self) -> None:
         """Explicit workspace arg passes through without session selection."""
-        from scc_cli.commands.launch.flow import _resolve_session_selection
+        from scc_cli.commands.launch.flow_session import _resolve_session_selection
 
         mock_session_svc = MagicMock()
 
@@ -302,7 +302,7 @@ class TestResolveSessionSelection:
     @patch("scc_cli.commands.launch.flow_session.select_session")
     def test_resume_no_active_team_returns_none(self, mock_select: MagicMock) -> None:
         """--resume with no team and no selected_profile → returns None workspace."""
-        from scc_cli.commands.launch.flow import _resolve_session_selection
+        from scc_cli.commands.launch.flow_session import _resolve_session_selection
 
         mock_session_svc = MagicMock()
 

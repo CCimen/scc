@@ -1,14 +1,15 @@
 """Container action handlers for the dashboard orchestrator.
 
-Extracted from orchestrator_handlers.py to keep that module below the
-800-line threshold.  Every function follows the same pattern used by the
-other handler helpers: get the Rich console, prepare for nested UI,
-execute, and return ``(success, message)`` tuples.
+This module owns stop, resume, and remove side effects for dashboard container
+rows. Handlers prepare terminal state, execute Docker actions, and return
+structured container action results.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+from scc_cli.application.dashboard_models import ContainerActionResult
 
 from ...console import get_err_console
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 
 def _prepare_for_nested_ui(console: Console) -> None:
-    """Prepare terminal state for nested UI (thin copy — delegates to same logic)."""
+    """Prepare terminal state for nested UI."""
     import io
     import sys
 
@@ -38,7 +39,7 @@ def _prepare_for_nested_ui(console: Console) -> None:
         pass
 
 
-def _handle_container_stop(container_id: str, container_name: str) -> tuple[bool, str | None]:
+def _handle_container_stop(container_id: str, container_name: str) -> ContainerActionResult:
     """Stop a container from the dashboard."""
     from rich.status import Status
 
@@ -50,7 +51,7 @@ def _handle_container_stop(container_id: str, container_name: str) -> tuple[bool
 
     status = docker.get_container_status(container_name)
     if status and status.startswith("Up") is False:
-        return True, f"Already stopped: {container_name}"
+        return ContainerActionResult(success=True, message=f"Already stopped: {container_name}")
 
     with Status(
         f"[cyan]Stopping {container_name}...[/cyan]",
@@ -59,10 +60,13 @@ def _handle_container_stop(container_id: str, container_name: str) -> tuple[bool
     ):
         success = docker.stop_container(container_id)
 
-    return success, (f"Stopped {container_name}" if success else f"Failed to stop {container_name}")
+    return ContainerActionResult(
+        success=success,
+        message=f"Stopped {container_name}" if success else f"Failed to stop {container_name}",
+    )
 
 
-def _handle_container_resume(container_id: str, container_name: str) -> tuple[bool, str | None]:
+def _handle_container_resume(container_id: str, container_name: str) -> ContainerActionResult:
     """Resume a container from the dashboard."""
     from rich.status import Status
 
@@ -74,7 +78,7 @@ def _handle_container_resume(container_id: str, container_name: str) -> tuple[bo
 
     status = docker.get_container_status(container_name)
     if status and status.startswith("Up"):
-        return True, f"Already running: {container_name}"
+        return ContainerActionResult(success=True, message=f"Already running: {container_name}")
 
     with Status(
         f"[cyan]Starting {container_name}...[/cyan]",
@@ -83,12 +87,13 @@ def _handle_container_resume(container_id: str, container_name: str) -> tuple[bo
     ):
         success = docker.resume_container(container_id)
 
-    return success, (
-        f"Resumed {container_name}" if success else f"Failed to resume {container_name}"
+    return ContainerActionResult(
+        success=success,
+        message=f"Resumed {container_name}" if success else f"Failed to resume {container_name}",
     )
 
 
-def _handle_container_remove(container_id: str, container_name: str) -> tuple[bool, str | None]:
+def _handle_container_remove(container_id: str, container_name: str) -> ContainerActionResult:
     """Remove a stopped container from the dashboard."""
     from rich.status import Status
 
@@ -100,7 +105,9 @@ def _handle_container_remove(container_id: str, container_name: str) -> tuple[bo
 
     status = docker.get_container_status(container_name)
     if status and status.startswith("Up"):
-        return False, f"Stop {container_name} before deleting"
+        return ContainerActionResult(
+            success=False, message=f"Stop {container_name} before deleting"
+        )
 
     with Status(
         f"[cyan]Removing {container_name}...[/cyan]",
@@ -109,6 +116,7 @@ def _handle_container_remove(container_id: str, container_name: str) -> tuple[bo
     ):
         success = docker.remove_container(container_name or container_id)
 
-    return success, (
-        f"Removed {container_name}" if success else f"Failed to remove {container_name}"
+    return ContainerActionResult(
+        success=success,
+        message=f"Removed {container_name}" if success else f"Failed to remove {container_name}",
     )

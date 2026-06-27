@@ -47,11 +47,11 @@ class TestExitCodes:
 
         assert EXIT_SUCCESS == 0
 
-    def test_exit_error_is_one(self):
-        """EXIT_ERROR must be 1 (general error)."""
-        from scc_cli.core.exit_codes import EXIT_ERROR
+    def test_exit_not_found_is_one(self):
+        """EXIT_NOT_FOUND must be 1."""
+        from scc_cli.core.exit_codes import EXIT_NOT_FOUND
 
-        assert EXIT_ERROR == 1
+        assert EXIT_NOT_FOUND == 1
 
     def test_exit_usage_is_two(self):
         """EXIT_USAGE must be 2 (Click/Typer convention)."""
@@ -65,11 +65,11 @@ class TestExitCodes:
 
         assert EXIT_CONFIG == 3
 
-    def test_exit_validation_is_four(self):
-        """EXIT_VALIDATION must be 4."""
-        from scc_cli.core.exit_codes import EXIT_VALIDATION
+    def test_exit_tool_is_four(self):
+        """EXIT_TOOL must be 4."""
+        from scc_cli.core.exit_codes import EXIT_TOOL
 
-        assert EXIT_VALIDATION == 4
+        assert EXIT_TOOL == 4
 
     def test_exit_prereq_is_five(self):
         """EXIT_PREREQ must be 5."""
@@ -83,20 +83,46 @@ class TestExitCodes:
 
         assert EXIT_GOVERNANCE == 6
 
-    def test_get_exit_code_for_config_error(self):
-        """ConfigError should map to EXIT_CONFIG."""
-        from scc_cli.core.errors import ConfigError
-        from scc_cli.core.exit_codes import EXIT_CONFIG, get_exit_code_for_exception
+    @pytest.mark.parametrize(
+        ("exc", "expected_exit_code"),
+        [
+            pytest.param("config", 3, id="config-error"),
+            pytest.param("policy", 6, id="policy-violation"),
+            pytest.param("prereq", 5, id="prerequisite-error"),
+            pytest.param("invalid_provider", 2, id="invalid-provider"),
+            pytest.param("sandbox_launch", 5, id="sandbox-launch"),
+            pytest.param("remote_validation", 4, id="remote-validation"),
+            pytest.param("unknown", 1, id="unknown-error"),
+        ],
+    )
+    def test_to_exit_code_preserves_json_error_mapping(
+        self, exc: str, expected_exit_code: int
+    ) -> None:
+        """The JSON error mapper owns programmatic exit-code behavior."""
+        from scc_cli import remote
+        from scc_cli.core.error_mapping import to_exit_code
+        from scc_cli.core.errors import (
+            ConfigError,
+            InvalidProviderError,
+            PolicyViolationError,
+            PrerequisiteError,
+            SandboxLaunchError,
+        )
 
-        exc = ConfigError(user_message="test")
-        assert get_exit_code_for_exception(exc) == EXIT_CONFIG
+        exceptions = {
+            "config": ConfigError(user_message="test"),
+            "policy": PolicyViolationError(item="blocked"),
+            "prereq": PrerequisiteError(user_message="missing prerequisite"),
+            "invalid_provider": InvalidProviderError(
+                provider_id="bad",
+                known_providers=("claude", "codex"),
+            ),
+            "sandbox_launch": SandboxLaunchError(),
+            "remote_validation": remote.ConfigValidationError("invalid config"),
+            "unknown": RuntimeError("test"),
+        }
 
-    def test_get_exit_code_for_unknown_error(self):
-        """Unknown exceptions should map to EXIT_ERROR."""
-        from scc_cli.core.exit_codes import EXIT_ERROR, get_exit_code_for_exception
-
-        exc = RuntimeError("test")
-        assert get_exit_code_for_exception(exc) == EXIT_ERROR
+        assert to_exit_code(exceptions[exc]) == expected_exit_code
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

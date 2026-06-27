@@ -15,11 +15,12 @@ from typing import Any
 
 import pytest
 
-from scc_cli import profiles, validate
-from scc_cli.profiles import (
+from scc_cli import validate
+from scc_cli.application.compute_effective_config import (
     EffectiveConfig,
     MCPServer,
     SessionConfig,
+    compute_effective_config,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -217,7 +218,7 @@ class TestMCPServerInProfiles:
 
     def test_profile_mcp_servers_inherit_from_defaults(self, org_config_with_mcp, tmp_path):
         """Team should inherit allowed_mcp_servers patterns from defaults."""
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,
@@ -228,12 +229,12 @@ class TestMCPServerInProfiles:
 
     def test_multiple_profiles_have_different_mcp_servers(self, org_config_with_mcp, tmp_path):
         """Different teams should have their own MCP servers."""
-        gis_effective = profiles.compute_effective_config(
+        gis_effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,
         )
-        finance_effective = profiles.compute_effective_config(
+        finance_effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="finance-team",
             workspace_path=tmp_path,
@@ -273,7 +274,7 @@ additional_mcp_servers:
             "allow_project_overrides": True
         }
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,
@@ -297,7 +298,7 @@ additional_mcp_servers:
             "allow_project_overrides": True
         }
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,
@@ -332,7 +333,7 @@ additional_mcp_servers:
             "allow_project_overrides": True
         }
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,
@@ -361,7 +362,7 @@ additional_mcp_servers:
             "allow_project_overrides": True
         }
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,
@@ -385,7 +386,7 @@ additional_mcp_servers:
             "allow_project_overrides": True
         }
 
-        effective = profiles.compute_effective_config(
+        effective = compute_effective_config(
             org_config=org_config_with_mcp,
             team_name="gis-team",
             workspace_path=tmp_path,

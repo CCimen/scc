@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from scc_cli.marketplace.normalize import (
+    is_plugin_allowed_by_patterns,
+    matches_any_pattern,
     matches_pattern,
     normalize_plugin,
 )
@@ -93,18 +95,6 @@ def _team_matches_patterns(team_id: str, patterns: list[str]) -> bool:
     return False
 
 
-def _is_plugin_allowed(plugin_ref: str, allowed_plugins: list[str] | None) -> bool:
-    """Check if plugin is allowed by allowlist semantics."""
-    if allowed_plugins is None:
-        return True
-    if not allowed_plugins:
-        return False
-    for pattern in allowed_plugins:
-        if matches_pattern(plugin_ref, pattern):
-            return True
-    return False
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Computation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,7 +162,7 @@ def compute_effective_plugins(
         if not team_can_add:
             result.not_allowed.append(plugin)
             continue
-        if not _is_plugin_allowed(plugin, defaults.allowed_plugins):
+        if not is_plugin_allowed_by_patterns(plugin, defaults.allowed_plugins):
             result.not_allowed.append(plugin)
             continue
         merged_plugins.add(plugin)
@@ -183,17 +173,16 @@ def compute_effective_plugins(
 
     blocked_patterns = security.blocked_plugins
     for plugin in list(merged_plugins):
-        for pattern in blocked_patterns:
-            if matches_pattern(plugin, pattern):
-                merged_plugins.discard(plugin)
-                result.blocked.append(
-                    BlockedPlugin(
-                        plugin_id=plugin,
-                        reason="Blocked by security policy",
-                        pattern=pattern,
-                    )
+        matched = matches_any_pattern(plugin, blocked_patterns)
+        if matched:
+            merged_plugins.discard(plugin)
+            result.blocked.append(
+                BlockedPlugin(
+                    plugin_id=plugin,
+                    reason="Blocked by security policy",
+                    pattern=matched,
                 )
-                break
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Step 5: Collect extra marketplaces
@@ -259,7 +248,7 @@ def compute_effective_plugins_federated(
         if not team_can_add:
             result.not_allowed.append(normalized)
             continue
-        if _is_plugin_allowed(normalized, defaults.allowed_plugins):
+        if is_plugin_allowed_by_patterns(normalized, defaults.allowed_plugins):
             merged_plugins.add(normalized)
         else:
             result.not_allowed.append(normalized)
@@ -294,17 +283,16 @@ def compute_effective_plugins_federated(
 
     blocked_patterns = security.blocked_plugins
     for plugin in list(merged_plugins):
-        for pattern in blocked_patterns:
-            if matches_pattern(plugin, pattern):
-                merged_plugins.discard(plugin)
-                result.blocked.append(
-                    BlockedPlugin(
-                        plugin_id=plugin,
-                        reason="Blocked by security policy",
-                        pattern=pattern,
-                    )
+        matched = matches_any_pattern(plugin, blocked_patterns)
+        if matched:
+            merged_plugins.discard(plugin)
+            result.blocked.append(
+                BlockedPlugin(
+                    plugin_id=plugin,
+                    reason="Blocked by security policy",
+                    pattern=matched,
                 )
-                break
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Collect extra marketplaces (defaults only)

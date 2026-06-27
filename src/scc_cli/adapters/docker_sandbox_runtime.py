@@ -12,14 +12,12 @@ from __future__ import annotations
 from typing import Any
 
 from scc_cli import docker
-from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.errors import (
     DockerDaemonNotRunningError,
     DockerNotFoundError,
     DockerVersionError,
     SandboxNotAvailableError,
 )
-from scc_cli.core.network_policy import collect_proxy_env
 from scc_cli.docker.core import MIN_DOCKER_VERSION, _parse_version
 from scc_cli.ports.models import (
     SandboxConflict,
@@ -81,9 +79,6 @@ class DockerSandboxRuntime(SandboxRuntime):
     def run(self, spec: SandboxSpec) -> SandboxHandle:
         docker.prepare_sandbox_volume_for_credentials()
         env_vars = dict(spec.env) if spec.env else {}
-        if spec.network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
-            for key, value in collect_proxy_env().items():
-                env_vars.setdefault(key, value)
         runtime_env = env_vars or None
         docker_cmd, _is_resume = docker.get_or_create_container(
             workspace=spec.workspace_mount.source,

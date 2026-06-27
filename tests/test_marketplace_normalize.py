@@ -229,6 +229,18 @@ class TestMatchesPattern:
 class TestMatchesPatternEdgeCases:
     """Edge cases for pattern matching."""
 
+    def test_strips_surrounding_whitespace_from_plugin_ref(self) -> None:
+        """Plugin refs from raw config cannot bypass matching with surrounding whitespace."""
+        from scc_cli.marketplace.normalize import matches_pattern
+
+        assert matches_pattern("  evil@marketplace  ", "evil") is True
+
+    def test_strips_surrounding_whitespace_from_pattern(self) -> None:
+        """Policy patterns from raw config match even with surrounding whitespace."""
+        from scc_cli.marketplace.normalize import matches_pattern
+
+        assert matches_pattern("evil@marketplace", "  evil  ") is True
+
     def test_empty_plugin(self) -> None:
         """Empty plugin string doesn't match patterns."""
         from scc_cli.marketplace.normalize import matches_pattern
@@ -254,6 +266,30 @@ class TestMatchesPatternEdgeCases:
 
         assert matches_pattern("any-tool@internal", "*-tool@internal") is True
         assert matches_pattern("another-tool@internal", "*-tool@internal") is True
+
+
+class TestIsPluginAllowedByPatterns:
+    """Optional plugin allowlist semantics."""
+
+    def test_none_allowlist_allows_all(self) -> None:
+        from scc_cli.marketplace.normalize import is_plugin_allowed_by_patterns
+
+        assert is_plugin_allowed_by_patterns("anything@marketplace", None) is True
+
+    def test_empty_allowlist_blocks_all(self) -> None:
+        from scc_cli.marketplace.normalize import is_plugin_allowed_by_patterns
+
+        assert is_plugin_allowed_by_patterns("anything@marketplace", []) is False
+
+    def test_matching_pattern_allows(self) -> None:
+        from scc_cli.marketplace.normalize import is_plugin_allowed_by_patterns
+
+        assert is_plugin_allowed_by_patterns("tool@marketplace", ["tool"]) is True
+
+    def test_non_matching_pattern_blocks(self) -> None:
+        from scc_cli.marketplace.normalize import is_plugin_allowed_by_patterns
+
+        assert is_plugin_allowed_by_patterns("other@marketplace", ["tool"]) is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

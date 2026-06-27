@@ -20,21 +20,7 @@ from scc_cli.application import dashboard as app_dashboard
 from ...confirm import Confirm
 from ...console import get_err_console
 from ..chrome import print_with_layout
-
-# ── Re-exports from orchestrator_container_actions.py ───────────────────────
-from .orchestrator_container_actions import (  # noqa: F401
-    _handle_container_remove,
-    _handle_container_resume,
-    _handle_container_stop,
-)
-
-# ── Re-exports from orchestrator_menus.py (preserve test-patch targets) ─────
-from .orchestrator_menus import (  # noqa: F401
-    _handle_profile_menu,
-    _handle_sandbox_import,
-    _handle_settings,
-    _show_onboarding_banner,
-)
+from . import orchestrator_container_actions
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -89,8 +75,6 @@ def _handle_team_switch() -> None:
     _prepare_for_nested_ui(console)
 
     try:
-        # Load config and org config for team list
-        cfg = config.load_user_config()
         org_config = config.load_cached_org_config()
 
         available_teams = teams.list_teams(org_config)
@@ -98,8 +82,7 @@ def _handle_team_switch() -> None:
             print_with_layout(console, "[yellow]No teams available[/yellow]", max_width=120)
             return
 
-        # Get current team for marking
-        current_team = cfg.get("selected_profile")
+        current_team = config.get_selected_profile()
 
         selected = pick_team(
             available_teams,
@@ -108,16 +91,13 @@ def _handle_team_switch() -> None:
         )
 
         if selected:
-            # Update team selection
             team_name = selected.get("name", "")
-            cfg["selected_profile"] = team_name
-            config.save_user_config(cfg)
+            config.set_selected_profile(team_name)
             print_with_layout(
                 console,
                 f"[green]Switched to team: {team_name}[/green]",
                 max_width=120,
             )
-        # If cancelled, just return to dashboard
 
     except TeamSwitchRequested:
         # Nested team switch (shouldn't happen, but handle gracefully)
@@ -202,7 +182,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     # Validate workspace exists
     if not workspace_path.exists():
         console.print(f"[red]Worktree no longer exists: {worktree_path}[/red]")
-        return app_dashboard.StartFlowResult.from_legacy(False)
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
 
     console.print(f"[cyan]Starting session in:[/cyan] {workspace_name}")
     console.print()
@@ -219,7 +199,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         resolved_path = _validate_and_resolve_workspace(str(workspace_path))
         if resolved_path is None:
             console.print("[red]Workspace validation failed[/red]")
-            return app_dashboard.StartFlowResult.from_legacy(False)
+            return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
         workspace_path = resolved_path
 
         # Get current team from config
@@ -324,19 +304,19 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
         )
         finalize_launch(conflict_resolution.plan, dependencies=start_dependencies)
         set_workspace_last_used_provider(workspace_path, resolved_provider)
-        return app_dashboard.StartFlowResult.from_legacy(True)
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.LAUNCHED)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled[/yellow]")
-        return app_dashboard.StartFlowResult.from_legacy(False)
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
     except ProviderNotReadyError as e:
         console.print(f"[red]{e.user_message}[/red]")
         if e.suggested_action:
             console.print(f"[dim]{e.suggested_action}[/dim]")
-        return app_dashboard.StartFlowResult.from_legacy(False)
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
     except Exception as e:
         console.print(f"[red]Error starting session: {e}[/red]")
-        return app_dashboard.StartFlowResult.from_legacy(False)
+        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
 
 
 def _handle_session_resume(session: SessionSummary) -> bool:
@@ -770,20 +750,29 @@ def _handle_container_action_menu(container_id: str, container_name: str) -> str
 
     if selected == "attach_shell":
         cmd = ["docker", "exec", "-it", container_name, "bash"]
-        result = subprocess.run(cmd)
-        return "Shell closed" if result.returncode == 0 else "Shell exited with errors"
+        process_result = subprocess.run(cmd)
+        return "Shell closed" if process_result.returncode == 0 else "Shell exited with errors"
 
     if selected == "stop":
-        _, message = _handle_container_stop(container_id, container_name)
-        return message
+        action_result = orchestrator_container_actions._handle_container_stop(
+            container_id,
+            container_name,
+        )
+        return action_result.message
 
     if selected == "resume":
-        _, message = _handle_container_resume(container_id, container_name)
-        return message
+        action_result = orchestrator_container_actions._handle_container_resume(
+            container_id,
+            container_name,
+        )
+        return action_result.message
 
     if selected == "delete":
-        _, message = _handle_container_remove(container_id, container_name)
-        return message
+        action_result = orchestrator_container_actions._handle_container_remove(
+            container_id,
+            container_name,
+        )
+        return action_result.message
 
     return None
 

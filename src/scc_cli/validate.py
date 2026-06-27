@@ -326,12 +326,16 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
     - Security blocklists must not conflict with enabled plugins
     - MCP servers must respect allowlists and blocklists
     """
-    from urllib.parse import urlparse
-
+    from scc_cli.core.governance_patterns import (
+        is_mcp_allowed,
+        match_blocked_mcp,
+        mcp_candidates,
+    )
     from scc_cli.marketplace.normalize import (
         AmbiguousMarketplaceError,
         InvalidPluginRefError,
-        matches_pattern,
+        is_plugin_allowed_by_patterns,
+        matches_any_pattern,
         normalize_plugin,
     )
 
@@ -361,39 +365,6 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
             )
             return None
 
-    def is_allowed_by_patterns(value: str, patterns: list[str] | None) -> bool:
-        if patterns is None:
-            return True
-        if not patterns:
-            return False
-        return any(matches_pattern(value, pattern) for pattern in patterns)
-
-    def any_allowed(values: list[str], patterns: list[str] | None) -> bool:
-        if patterns is None:
-            return True
-        if not patterns:
-            return False
-        for candidate in values:
-            if any(matches_pattern(candidate, pattern) for pattern in patterns):
-                return True
-        return False
-
-    def mcp_candidates(server: dict[str, Any]) -> list[str]:
-        candidates: list[str] = []
-        name = server.get("name", "")
-        if name:
-            candidates.append(name)
-        url = server.get("url", "")
-        if url:
-            candidates.append(url)
-            parsed = urlparse(url)
-            if parsed.netloc:
-                candidates.append(parsed.netloc)
-        command = server.get("command", "")
-        if command:
-            candidates.append(command)
-        return candidates
-
     # ─────────────────────────────────────────────────────────────────────────
     # Plugins: enforce allowlist for team additions
     # ─────────────────────────────────────────────────────────────────────────
@@ -402,7 +373,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
             normalized = normalize_plugin_safe(plugin_ref, f"Team '{team_name}'")
             if not normalized:
                 continue
-            if not is_allowed_by_patterns(normalized, allowed_plugins):
+            if not is_plugin_allowed_by_patterns(normalized, allowed_plugins):
                 violations.append(
                     InvariantViolation(
                         rule="additional_plugin_not_allowed",
@@ -413,36 +384,32 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                     )
                 )
 
-            for pattern in blocked_plugins:
-                if matches_pattern(normalized, pattern):
-                    violations.append(
-                        InvariantViolation(
-                            rule="plugin_blocked",
-                            message=(
-                                f"Team '{team_name}' plugin '{normalized}' matches blocked pattern '{pattern}'"
-                            ),
-                            severity=SeverityLevel.ERROR,
-                        )
+            matched = matches_any_pattern(normalized, blocked_plugins)
+            if matched:
+                violations.append(
+                    InvariantViolation(
+                        rule="plugin_blocked",
+                        message=(
+                            f"Team '{team_name}' plugin '{normalized}' matches blocked pattern '{matched}'"
+                        ),
+                        severity=SeverityLevel.ERROR,
                     )
-                    break
+                )
 
     # Ensure org defaults are not blocked
     for plugin_ref in defaults.get("enabled_plugins", []) or []:
         normalized = normalize_plugin_safe(plugin_ref, "Defaults")
         if not normalized:
             continue
-        for pattern in blocked_plugins:
-            if matches_pattern(normalized, pattern):
-                violations.append(
-                    InvariantViolation(
-                        rule="plugin_blocked",
-                        message=(
-                            f"Default plugin '{normalized}' matches blocked pattern '{pattern}'"
-                        ),
-                        severity=SeverityLevel.ERROR,
-                    )
+        matched = matches_any_pattern(normalized, blocked_plugins)
+        if matched:
+            violations.append(
+                InvariantViolation(
+                    rule="plugin_blocked",
+                    message=f"Default plugin '{normalized}' matches blocked pattern '{matched}'",
+                    severity=SeverityLevel.ERROR,
                 )
-                break
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # MCP servers: enforce allowlist and blocklist for team additions
@@ -460,7 +427,7 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                 )
                 continue
 
-            if not any_allowed(candidates, allowed_mcp_servers):
+            if not is_mcp_allowed(server, allowed_mcp_servers):
                 allowed = allowed_mcp_servers
                 allowed_desc = "[]" if allowed == [] else "defaults.allowed_mcp_servers"
                 violations.append(
@@ -473,17 +440,16 @@ def validate_config_invariants(config: dict[str, Any]) -> list[InvariantViolatio
                     )
                 )
 
-            for pattern in blocked_mcp_servers:
-                if any(matches_pattern(candidate, pattern) for candidate in candidates):
-                    violations.append(
-                        InvariantViolation(
-                            rule="mcp_blocked",
-                            message=(
-                                f"Team '{team_name}' MCP server '{candidates[0]}' matches blocked pattern '{pattern}'"
-                            ),
-                            severity=SeverityLevel.ERROR,
-                        )
+            matched = match_blocked_mcp(server, blocked_mcp_servers)
+            if matched:
+                violations.append(
+                    InvariantViolation(
+                        rule="mcp_blocked",
+                        message=(
+                            f"Team '{team_name}' MCP server '{candidates[0]}' matches blocked pattern '{matched}'"
+                        ),
+                        severity=SeverityLevel.ERROR,
                     )
-                    break
+                )
 
     return violations

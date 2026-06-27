@@ -327,9 +327,7 @@ def _ensure_auth(
     Interactive: shows the notice, then calls provider.bootstrap_auth()
     to trigger the browser sign-in flow.
 
-    If ``provider`` is passed directly, the adapter lookup via ``adapters``
-    is skipped.  This is used by the deprecated ``auth_bootstrap.py`` redirect
-    which already has the provider in hand.
+    If ``provider`` is passed directly, the adapter lookup via ``adapters`` is skipped.
     """
     from scc_cli.core.provider_resolution import get_provider_display_name
 

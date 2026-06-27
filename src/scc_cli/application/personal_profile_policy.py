@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from scc_cli.application.compute_effective_config import (
-    match_blocked_mcp,
     matches_blocked_plugin,
     validate_stdio_server,
 )
 from scc_cli.core.enums import MCPServerType, TargetType
+from scc_cli.core.governance_patterns import match_blocked_mcp
 from scc_cli.ports.config_models import NormalizedOrgConfig
 
 

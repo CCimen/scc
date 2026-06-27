@@ -38,9 +38,6 @@ from .worktree_commands import (
     worktree_switch_cmd,
 )
 
-# Backward compatibility alias (original name had underscore prefix)
-_is_container_stopped = is_container_stopped
-
 __all__ = [
     # Typer apps
     "worktree_app",
@@ -69,5 +66,4 @@ __all__ = [
     # Pure helpers
     "build_worktree_list_data",
     "is_container_stopped",
-    "_is_container_stopped",
 ]

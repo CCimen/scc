@@ -19,11 +19,14 @@ orchestrator delegates to:
 from __future__ import annotations
 
 from collections.abc import Mapping
+from unittest.mock import patch
 
 import pytest
 
 from scc_cli.application.dashboard import (
+    ContainerActionResult,
     ContainerStopEvent,
+    DashboardEffect,
     DashboardEffectRequest,
     DashboardFlowOutcome,
     DashboardFlowState,
@@ -31,7 +34,10 @@ from scc_cli.application.dashboard import (
     DashboardTabData,
     PlaceholderItem,
     PlaceholderKind,
+    ProfileMenuEvent,
     RefreshEvent,
+    SandboxImportEvent,
+    SettingsEvent,
     StartFlowDecision,
     StartFlowEvent,
     StartFlowResult,
@@ -43,7 +49,8 @@ from scc_cli.application.dashboard import (
     placeholder_start_reason,
     placeholder_tip,
 )
-from scc_cli.ui.dashboard.orchestrator import _resolve_tab
+from scc_cli.ui.dashboard.orchestrator import _resolve_tab, _run_effect
+from scc_cli.ui.dashboard.orchestrator_handlers import _handle_container_action_menu
 
 
 def _make_empty_tab_data(tab: DashboardTab) -> DashboardTabData:
@@ -206,7 +213,7 @@ class TestApplyEffectResult:
             container_id="abc",
             container_name="test",
         )
-        outcome = apply_dashboard_effect_result(state, effect, (True, None))
+        outcome = apply_dashboard_effect_result(state, effect, ContainerActionResult(success=True))
         assert outcome.state.toast_message == "Container stopped"
 
     def test_container_stop_failure_toast(self) -> None:
@@ -217,7 +224,7 @@ class TestApplyEffectResult:
             container_id="abc",
             container_name="test",
         )
-        outcome = apply_dashboard_effect_result(state, effect, (False, None))
+        outcome = apply_dashboard_effect_result(state, effect, ContainerActionResult(success=False))
         assert outcome.state.toast_message == "Stop failed"
 
     def test_container_stop_custom_message(self) -> None:
@@ -228,7 +235,11 @@ class TestApplyEffectResult:
             container_id="abc",
             container_name="test",
         )
-        outcome = apply_dashboard_effect_result(state, effect, (True, "Custom msg"))
+        outcome = apply_dashboard_effect_result(
+            state,
+            effect,
+            ContainerActionResult(success=True, message="Custom msg"),
+        )
         assert outcome.state.toast_message == "Custom msg"
 
     def test_start_flow_wrong_result_type_raises(self) -> None:
@@ -237,6 +248,77 @@ class TestApplyEffectResult:
         effect = StartFlowEvent(return_to=DashboardTab.STATUS, reason="test")
         with pytest.raises(TypeError, match="StartFlowResult"):
             apply_dashboard_effect_result(state, effect, "wrong")
+
+
+class TestContainerActionMenu:
+    """Characterize container action menu result handling."""
+
+    @pytest.mark.parametrize(
+        ("status", "selected", "handler_name", "message"),
+        [
+            ("Up 1 minute", "stop", "_handle_container_stop", "Stopped test"),
+            ("Exited", "resume", "_handle_container_resume", "Resumed test"),
+            ("Exited", "delete", "_handle_container_remove", "Removed test"),
+        ],
+    )
+    def test_returns_container_action_result_message(
+        self,
+        status: str,
+        selected: str,
+        handler_name: str,
+        message: str,
+    ) -> None:
+        with (
+            patch("scc_cli.ui.dashboard.orchestrator_handlers.get_err_console"),
+            patch("scc_cli.ui.dashboard.orchestrator_handlers._prepare_for_nested_ui"),
+            patch("scc_cli.docker.get_container_status", return_value=status),
+            patch("scc_cli.ui.list_screen.ListScreen") as list_screen_cls,
+            patch(
+                f"scc_cli.ui.dashboard.orchestrator_container_actions.{handler_name}",
+                return_value=ContainerActionResult(success=True, message=message),
+            ),
+        ):
+            list_screen_cls.return_value.run.return_value = selected
+
+            assert _handle_container_action_menu("abc", "test") == message
+
+
+class TestRunEffectMenuHandlers:
+    """Characterize menu effect handler ownership."""
+
+    @pytest.mark.parametrize(
+        ("effect", "handler_name", "message"),
+        [
+            (
+                SettingsEvent(return_to=DashboardTab.STATUS),
+                "_handle_settings",
+                "Settings updated",
+            ),
+            (
+                ProfileMenuEvent(return_to=DashboardTab.STATUS),
+                "_handle_profile_menu",
+                "Profile updated",
+            ),
+            (
+                SandboxImportEvent(return_to=DashboardTab.STATUS),
+                "_handle_sandbox_import",
+                "Sandbox imported",
+            ),
+        ],
+    )
+    def test_menu_effects_call_owner_module(
+        self,
+        effect: DashboardEffect,
+        handler_name: str,
+        message: str,
+    ) -> None:
+        with patch(
+            f"scc_cli.ui.dashboard.orchestrator_menus.{handler_name}",
+            return_value=message,
+        ) as handler:
+            assert _run_effect(effect) == message
+
+        handler.assert_called_once_with()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

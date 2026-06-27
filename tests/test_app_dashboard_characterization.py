@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from scc_cli.application.dashboard import (
+    ContainerActionResult,
     ContainerStopEvent,
     CreateWorktreeEvent,
     DashboardEffectRequest,
@@ -78,23 +79,6 @@ class TestDashboardTabData:
             count_total=5,
         )
         assert data.subtitle == "2 active, 5 total"
-
-
-class TestStartFlowResult:
-    """Legacy bool/None conversion."""
-
-    def test_from_legacy_none_is_quit(self) -> None:
-        result = StartFlowResult.from_legacy(None)
-        assert result.decision is StartFlowDecision.QUIT
-
-    def test_from_legacy_true_is_launched(self) -> None:
-        result = StartFlowResult.from_legacy(True)
-        assert result.decision is StartFlowDecision.LAUNCHED
-
-    def test_from_legacy_false_is_cancelled(self) -> None:
-        result = StartFlowResult.from_legacy(False)
-        assert result.decision is StartFlowDecision.CANCELLED
-        assert result.message is None
 
 
 # ══════════��══════════════════════════════════════════════════════���═════════════
@@ -305,7 +289,7 @@ class TestApplyDashboardEffectResult:
             ContainerStopEvent(
                 return_to=DashboardTab.CONTAINERS, container_id="abc", container_name="c1"
             ),
-            (True, None),
+            ContainerActionResult(success=True),
         )
         assert result.state.toast_message is not None
         assert "stopped" in result.state.toast_message.lower()
@@ -317,7 +301,7 @@ class TestApplyDashboardEffectResult:
             ContainerStopEvent(
                 return_to=DashboardTab.CONTAINERS, container_id="abc", container_name="c1"
             ),
-            (False, "Error: connection refused"),
+            ContainerActionResult(success=False, message="Error: connection refused"),
         )
         assert result.state.toast_message is not None
         assert "connection refused" in result.state.toast_message.lower()
@@ -330,7 +314,18 @@ class TestApplyDashboardEffectResult:
                 ContainerStopEvent(
                     return_to=DashboardTab.CONTAINERS, container_id="a", container_name="c"
                 ),
-                "not_a_tuple",
+                "not_a_result",
+            )
+
+    def test_container_stop_tuple_result_raises(self) -> None:
+        state = DashboardFlowState()
+        with pytest.raises(TypeError, match="ContainerActionResult"):
+            apply_dashboard_effect_result(
+                state,
+                ContainerStopEvent(
+                    return_to=DashboardTab.CONTAINERS, container_id="a", container_name="c"
+                ),
+                (True, None),
             )
 
     def test_git_init_success(self) -> None:

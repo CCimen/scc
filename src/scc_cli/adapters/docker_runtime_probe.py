@@ -76,11 +76,8 @@ class DockerRuntimeProbe:
 
         display_name = "Docker Desktop" if desktop_version else "Docker Engine"
 
-        # Preferred backend selection
-        if sandbox_available:
-            preferred_backend: str | None = "docker-sandbox"
-        else:
-            preferred_backend = "oci"
+        # D050: Docker Desktop sandbox capability is diagnostic; launches prefer OCI.
+        preferred_backend: str | None = "oci"
 
         return RuntimeInfo(
             runtime_id="docker",

@@ -97,7 +97,7 @@ class TestOrgValidate:
                     json_output=False,
                     pretty=False,
                 )
-            assert exc_info.value.exit_code == 4  # EXIT_VALIDATION
+            assert exc_info.value.exit_code == 4  # EXIT_TOOL
 
     def test_validate_json_output_valid(self, tmp_path: Path, capsys) -> None:
         """validate --json should output JSON envelope for valid config."""

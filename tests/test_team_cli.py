@@ -4,7 +4,9 @@ Tests for Team CLI commands.
 TDD approach: Tests define the expected behavior of the team command group.
 """
 
+import ast
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,6 +16,47 @@ from typer.testing import CliRunner
 from scc_cli.cli import app
 
 runner = CliRunner()
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TEAM_SWITCH_HANDLER_PATHS = (
+    REPO_ROOT / "src" / "scc_cli" / "commands" / "team.py",
+    REPO_ROOT / "src" / "scc_cli" / "ui" / "dashboard" / "orchestrator_handlers.py",
+)
+
+
+def _assigns_selected_profile(target: ast.AST) -> bool:
+    return (
+        isinstance(target, ast.Subscript)
+        and isinstance(target.slice, ast.Constant)
+        and target.slice.value == "selected_profile"
+    )
+
+
+def _selected_profile_assignment_lines(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        targets: list[ast.AST]
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            targets = [node.target]
+        else:
+            continue
+
+        if any(_assigns_selected_profile(target) for target in targets):
+            offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    return offenders
+
+
+def test_team_switch_handlers_use_selected_profile_owner() -> None:
+    """Team-switch handlers must route persistence through the config owner."""
+    offenders = [
+        offender
+        for path in TEAM_SWITCH_HANDLER_PATHS
+        for offender in _selected_profile_assignment_lines(path)
+    ]
+
+    assert offenders == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

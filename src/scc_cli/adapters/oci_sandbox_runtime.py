@@ -2,7 +2,7 @@
 
 Uses standard ``docker create`` / ``docker start`` / ``docker exec``
 commands instead of Docker Desktop's ``docker sandbox run``, making SCC
-work on Docker Engine, OrbStack, Colima, and any OCI-compatible runtime.
+work on Docker Engine, OrbStack, Colima, and Docker Desktop.
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from scc_cli.core.errors import (
     ExistingSandboxConflictError,
     SandboxLaunchError,
 )
-from scc_cli.core.network_policy import collect_proxy_env
 from scc_cli.ports.models import (
     SandboxConflict,
     SandboxHandle,
@@ -468,8 +467,6 @@ class OciSandboxRuntime:
                 "HTTPS_PROXY": topo_info.proxy_endpoint,
                 "NO_PROXY": "",
             }
-            # Also forward host proxy env for parity with DockerSandboxRuntime
-            proxy_env.update(collect_proxy_env())
 
         # -- Build docker create command ------------------------------------
         create_cmd = self._build_create_cmd(

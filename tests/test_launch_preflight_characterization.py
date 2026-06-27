@@ -590,6 +590,36 @@ class TestRecordSessionAndContextProviderGap:
             assert recorded_context.team == "myteam"
             assert recorded_context.branch == "main"
 
+    def test_record_session_and_context_warns_when_context_recording_fails(self) -> None:
+        """Quick Resume context failures should warn without blocking launch recording."""
+        with (
+            patch("scc_cli.commands.launch.flow_session.sessions") as mock_sessions,
+            patch("scc_cli.commands.launch.flow_session.git") as mock_git,
+            patch(
+                "scc_cli.commands.launch.flow_session.record_context",
+                side_effect=OSError("disk full"),
+            ),
+            patch("scc_cli.commands.launch.flow_session.config"),
+            patch("scc_cli.commands.launch.flow_session.print_human") as mock_print,
+        ):
+            mock_git.get_worktree_main_repo.return_value = Path("/repo")
+
+            from scc_cli.commands.launch.flow_session import _record_session_and_context
+
+            _record_session_and_context(
+                workspace_path=Path("/repo/wt"),
+                team="myteam",
+                session_name="sess1",
+                current_branch="main",
+                provider_id="codex",
+            )
+
+            mock_sessions.record_session.assert_called_once()
+
+        warning_messages = [call.args[0] for call in mock_print.call_args_list]
+        assert "[yellow]Warning:[/yellow] Could not save Quick Resume context." in warning_messages
+        assert "[dim]disk full[/dim]" in warning_messages
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Non-interactive behavior characterization

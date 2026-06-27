@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from scc_cli.marketplace.managed import ManagedState, save_managed_state
 from scc_cli.marketplace.materialize import MaterializationError
-from scc_cli.marketplace.normalize import matches_pattern
+from scc_cli.marketplace.normalize import matches_any_pattern
 from scc_cli.marketplace.render import check_conflicts, merge_settings, render_settings
 from scc_cli.marketplace.schema import OrganizationConfig, normalize_org_config_data
 from scc_cli.ports.clock import Clock
@@ -169,13 +169,12 @@ def sync_marketplace_settings(
     if security.blocked_plugins:
         existing = _load_existing_plugins(project_dir, dependencies.filesystem)
         for plugin in existing:
-            for pattern in security.blocked_plugins:
-                if matches_pattern(plugin, pattern):
-                    warnings.append(
-                        f"⚠️ Plugin '{plugin}' is blocked by organization policy "
-                        f"(matched pattern: {pattern})"
-                    )
-                    break  # Only one warning per plugin
+            matched = matches_any_pattern(plugin, security.blocked_plugins)
+            if matched:
+                warnings.append(
+                    f"⚠️ Plugin '{plugin}' is blocked by organization policy "
+                    f"(matched pattern: {matched})"
+                )
 
     # ── Step 3: Materialize required marketplaces ───────────────────────────
     materialized: dict[str, Any] = {}

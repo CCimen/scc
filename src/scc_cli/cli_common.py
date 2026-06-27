@@ -120,13 +120,12 @@ def handle_errors(func: F) -> F:
         except Exception as e:
             if is_json_command_mode():
                 # JSON mode: emit structured error envelope for unexpected errors
-                from .core.exit_codes import EXIT_INTERNAL
                 from .json_output import build_error_envelope
                 from .output_mode import print_json
 
                 envelope = build_error_envelope(e)
                 print_json(envelope)
-                raise typer.Exit(EXIT_INTERNAL)
+                raise typer.Exit(EXIT_PREREQ)
             # Human mode: unexpected errors to stderr
             if state.debug:
                 err_console.print_exception()

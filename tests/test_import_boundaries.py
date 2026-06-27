@@ -12,6 +12,7 @@ This test file uses grep-based boundary tests (not just cycle detection) to catc
 bad-direction imports that don't form a cycle.
 """
 
+import ast
 import subprocess
 from pathlib import Path
 
@@ -180,6 +181,689 @@ class TestApplicationLayerBoundaries:
         )
         assert result.returncode == 1, (
             f"application/ imports ui/ or commands/ modules:\n{result.stdout}"
+        )
+
+
+class TestMarketplaceSyncBoundary:
+    """Marketplace sync workflow has one application owner."""
+
+    def test_marketplace_sync_has_single_owner(self) -> None:
+        """sync_marketplace_settings is owned by application/sync_marketplace.py."""
+        result = subprocess.run(
+            ["grep", "-rEn", r"^def sync_marketplace_settings\(", str(SRC)],
+            capture_output=True,
+            text=True,
+        )
+        expected_owner = SRC / "application" / "sync_marketplace.py"
+        owners = [
+            Path(line.split(":", 1)[0]).resolve() for line in result.stdout.splitlines() if line
+        ]
+
+        assert owners == [expected_owner.resolve()], (
+            "sync_marketplace_settings must have one owner in "
+            f"{expected_owner.relative_to(REPO_ROOT)}.\n"
+            f"Found definitions:\n{result.stdout}"
+        )
+
+
+class TestProfilesCompatibilityBoundary:
+    """Profile and effective-config callers should import canonical owners."""
+
+    def test_top_level_profiles_facade_stays_deleted(self) -> None:
+        """Do not reintroduce the no-behavior scc_cli.profiles compatibility facade."""
+        facade = SRC / "profiles.py"
+        problems: list[str] = []
+
+        if facade.exists():
+            problems.append(
+                "Profile helpers are owned by scc_cli.application.profiles and "
+                f"scc_cli.application.compute_effective_config; delete {facade.relative_to(REPO_ROOT)}."
+            )
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude=test_import_boundaries.py",
+                "--exclude-dir=__pycache__",
+                (
+                    r"(from scc_cli import profiles|from scc_cli\.profiles|"
+                    r"import scc_cli\.profiles|from \.\. import .*profiles)"
+                ),
+                str(SRC),
+                str(REPO_ROOT / "tests"),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            problems.append(
+                "Import profile helpers from their canonical owners instead of scc_cli.profiles.\n"
+                f"Found imports:\n{result.stdout}"
+            )
+        elif result.returncode != 1:
+            problems.append(f"profiles facade grep failed:\n{result.stderr}")
+
+        assert not problems, "\n\n".join(problems)
+
+
+class TestGovernancePatternOwnership:
+    """Governance pattern matching has one implementation owner."""
+
+    def test_plugin_pattern_matching_has_single_implementation_owner(self) -> None:
+        """Plugin-specific pattern matching is owned by marketplace.normalize.matches_pattern."""
+        result = subprocess.run(
+            ["grep", "-rEn", r"^def matches_plugin_pattern\(", str(SRC)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1, (
+            "Plugin pattern matching should be implemented by "
+            "marketplace.normalize.matches_pattern, not a duplicate helper.\n"
+            f"Found duplicate definitions:\n{result.stdout}"
+        )
+
+    def test_optional_plugin_allowlist_semantics_have_single_owner(self) -> None:
+        """Optional plugin allowlist semantics are owned by marketplace.normalize."""
+        expected_owner = SRC / "marketplace" / "normalize.py"
+        owner_result = subprocess.run(
+            ["grep", "-rEn", r"def is_plugin_allowed_by_patterns\(", str(SRC)],
+            capture_output=True,
+            text=True,
+        )
+        owners = [
+            Path(line.split(":", 1)[0]).resolve()
+            for line in owner_result.stdout.splitlines()
+            if line
+        ]
+
+        problems: list[str] = []
+        if owners != [expected_owner.resolve()]:
+            problems.append(
+                "is_plugin_allowed_by_patterns must have one owner in "
+                f"{expected_owner.relative_to(REPO_ROOT)}.\n"
+                f"Found definitions:\n{owner_result.stdout or '<none>'}"
+            )
+
+        duplicate_patterns = {
+            "_is_plugin_allowed": r"def _is_plugin_allowed\(",
+            "is_allowed_by_patterns": r"def is_allowed_by_patterns\(",
+        }
+        for name, pattern in duplicate_patterns.items():
+            duplicate_result = subprocess.run(
+                ["grep", "-rEn", pattern, str(SRC)],
+                capture_output=True,
+                text=True,
+            )
+            if duplicate_result.returncode == 0:
+                problems.append(
+                    f"{name} duplicates plugin allowlist semantics:\n{duplicate_result.stdout}"
+                )
+
+        assert not problems, "\n\n".join(problems)
+
+    def test_mcp_policy_matching_has_single_core_owner(self) -> None:
+        """MCP policy matching is owned by core.governance_patterns."""
+        expected_owner = SRC / "core" / "governance_patterns.py"
+        problems: list[str] = []
+
+        for name in (
+            "matches_blocked",
+            "mcp_candidates",
+            "is_mcp_allowed",
+            "match_blocked_mcp",
+        ):
+            result = subprocess.run(
+                ["grep", "-rEn", rf"^def {name}\(", str(SRC)],
+                capture_output=True,
+                text=True,
+            )
+            owners = [
+                Path(line.split(":", 1)[0]).resolve() for line in result.stdout.splitlines() if line
+            ]
+            if owners != [expected_owner.resolve()]:
+                problems.append(
+                    f"{name} must have one owner in {expected_owner.relative_to(REPO_ROOT)}.\n"
+                    f"Found definitions:\n{result.stdout or '<none>'}"
+                )
+
+        validate_source = (SRC / "validate.py").read_text(encoding="utf-8")
+        for nested_name in ("any_allowed", "mcp_candidates"):
+            if f"def {nested_name}(" in validate_source:
+                problems.append(f"validate.py must not define nested MCP matcher {nested_name}().")
+
+        assert not problems, "\n\n".join(problems)
+
+
+class TestAuditReaderBoundaries:
+    """Audit readers share neutral JSONL primitives."""
+
+    def test_audit_readers_share_jsonl_primitives(self) -> None:
+        """Launch and safety audit readers must not own duplicate JSONL primitives."""
+        application_path = SRC / "application"
+        expected_owner = application_path / "audit_jsonl.py"
+        safety_audit = application_path / "safety_audit.py"
+
+        problems: list[str] = []
+        safety_source = safety_audit.read_text(encoding="utf-8")
+        if "from scc_cli.application.launch.audit_log import" in safety_source:
+            problems.append("safety_audit.py must not import private launch audit helpers")
+
+        for name in ("scan_line_limit", "tail_lines", "redact_value", "redact_string"):
+            result = subprocess.run(
+                ["grep", "-rEn", rf"^def {name}\(", str(application_path)],
+                capture_output=True,
+                text=True,
+            )
+            owners = [
+                Path(line.split(":", 1)[0]).resolve() for line in result.stdout.splitlines() if line
+            ]
+            if owners != [expected_owner.resolve()]:
+                problems.append(
+                    f"{name} must have one owner in {expected_owner.relative_to(REPO_ROOT)}.\n"
+                    f"Found definitions:\n{result.stdout or '<none>'}"
+                )
+
+        for name in ("DEFAULT_SCAN_LINE_FLOOR", "BINARY_CHUNK_SIZE"):
+            result = subprocess.run(
+                ["grep", "-rEn", rf"^{name}\s*=", str(application_path)],
+                capture_output=True,
+                text=True,
+            )
+            owners = [
+                Path(line.split(":", 1)[0]).resolve() for line in result.stdout.splitlines() if line
+            ]
+            if owners != [expected_owner.resolve()]:
+                problems.append(
+                    f"{name} must have one owner in {expected_owner.relative_to(REPO_ROOT)}.\n"
+                    f"Found definitions:\n{result.stdout or '<none>'}"
+                )
+
+        for name in ("_scan_line_limit", "_tail_lines", "_redact_value", "_redact_string"):
+            result = subprocess.run(
+                ["grep", "-rEn", rf"^def {name}\(", str(application_path)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                problems.append(f"{name} duplicates audit JSONL primitives:\n{result.stdout}")
+
+        assert not problems, "\n\n".join(problems)
+
+
+class TestMaintenanceOwnershipBoundary:
+    """Maintenance operations are owned by the maintenance package."""
+
+    def test_core_maintenance_facade_stays_deleted(self) -> None:
+        """Do not reintroduce the no-behavior core.maintenance compatibility facade."""
+        facade = SRC / "core" / "maintenance.py"
+        problems: list[str] = []
+
+        if facade.exists():
+            problems.append(
+                "Maintenance operations are owned by scc_cli.maintenance; "
+                f"delete {facade.relative_to(REPO_ROOT)}."
+            )
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                r"(from scc_cli\.core\.maintenance|import scc_cli\.core\.maintenance)",
+                str(SRC),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            problems.append(
+                "Import scc_cli.maintenance directly instead of the deleted core facade.\n"
+                f"Found imports:\n{result.stdout}"
+            )
+
+        assert not problems, "\n\n".join(problems)
+
+
+class TestDashboardLegacyBoundary:
+    """Dashboard flow outcomes should use structured results directly."""
+
+    def test_start_flow_result_has_no_legacy_bool_adapter(self) -> None:
+        """Do not reintroduce StartFlowResult bool/None adapter conversions."""
+        problems: list[str] = []
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude-dir=__pycache__",
+                r"from_legacy",
+                str(SRC / "application"),
+                str(SRC / "ui"),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            problems.append(
+                "Dashboard start-flow handlers should return explicit StartFlowResult values.\n"
+                f"Found legacy adapter references:\n{result.stdout}"
+            )
+        elif result.returncode != 1:
+            problems.append(f"Legacy adapter grep failed:\n{result.stderr}")
+
+        models_file = SRC / "application" / "dashboard_models.py"
+        models_tree = ast.parse(models_file.read_text(encoding="utf-8"))
+        for node in ast.walk(models_tree):
+            if not isinstance(node, ast.ClassDef) or node.name != "StartFlowResult":
+                continue
+            for item in node.body:
+                if not isinstance(item, ast.FunctionDef):
+                    continue
+                is_classmethod = any(
+                    isinstance(decorator, ast.Name) and decorator.id == "classmethod"
+                    for decorator in item.decorator_list
+                )
+                if not is_classmethod:
+                    continue
+                boolish_args: list[str] = []
+                for arg in item.args.args[1:]:
+                    if arg.annotation is None:
+                        continue
+                    annotation = ast.unparse(arg.annotation)
+                    if annotation == "bool" or ("bool" in annotation and "None" in annotation):
+                        boolish_args.append(arg.arg)
+                if boolish_args:
+                    problems.append(
+                        "StartFlowResult should not regain a bool/None classmethod adapter. "
+                        f"Found {item.name}({', '.join(boolish_args)}) in "
+                        f"{models_file.relative_to(REPO_ROOT)}."
+                    )
+
+        assert not problems, "\n\n".join(problems)
+
+    def test_container_actions_use_named_result_contract(self) -> None:
+        """Container action effects should not cross layers as raw bool/message tuples."""
+        models_file = SRC / "application" / "dashboard_models.py"
+        reducer_file = SRC / "application" / "dashboard.py"
+        actions_file = SRC / "ui" / "dashboard" / "orchestrator_container_actions.py"
+
+        models_source = models_file.read_text(encoding="utf-8")
+        reducer_source = reducer_file.read_text(encoding="utf-8")
+        actions_source = actions_file.read_text(encoding="utf-8")
+
+        problems: list[str] = []
+        if "class ContainerActionResult" not in models_source:
+            problems.append("dashboard_models.py must own ContainerActionResult.")
+        if "tuple[bool, str | None]" in actions_source:
+            problems.append(
+                "orchestrator_container_actions.py should return ContainerActionResult, "
+                "not tuple[bool, str | None]."
+            )
+        if (
+            "Container effect requires tuple" in reducer_source
+            or "isinstance(result, tuple)" in reducer_source
+        ):
+            problems.append(
+                "apply_dashboard_effect_result() should require ContainerActionResult, "
+                "not validate tuple internals."
+            )
+
+        assert not problems, "\n".join(problems)
+
+
+class TestDashboardHandlerOwnership:
+    """Dashboard handler implementation modules should own their private handlers."""
+
+    def test_container_action_handlers_have_single_owner(self) -> None:
+        """Container action handlers are owned by orchestrator_container_actions.py."""
+        handler_names = {
+            "_handle_container_stop",
+            "_handle_container_resume",
+            "_handle_container_remove",
+        }
+        dashboard_path = SRC / "ui" / "dashboard"
+        owner_file = dashboard_path / "orchestrator_container_actions.py"
+        consumer_files = (
+            dashboard_path / "orchestrator.py",
+            dashboard_path / "orchestrator_handlers.py",
+        )
+
+        problems: list[str] = []
+        definitions: dict[str, list[Path]] = {name: [] for name in handler_names}
+        for path in dashboard_path.glob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name in handler_names:
+                    definitions[node.name].append(path.resolve())
+
+        for name, owners in sorted(definitions.items()):
+            if owners != [owner_file.resolve()]:
+                formatted = ", ".join(str(path.relative_to(REPO_ROOT)) for path in owners)
+                problems.append(
+                    f"{name} must be defined only in {owner_file.relative_to(REPO_ROOT)}; "
+                    f"found {formatted or '<none>'}."
+                )
+
+        for path in consumer_files:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom) and node.module in {
+                    "orchestrator_container_actions",
+                    "orchestrator_handlers",
+                }:
+                    imported = sorted(
+                        handler_names.intersection(alias.name for alias in node.names)
+                    )
+                    if imported:
+                        problems.append(
+                            f"{path.relative_to(REPO_ROOT)} should call "
+                            "orchestrator_container_actions.<handler>() instead of importing "
+                            f"{', '.join(imported)}."
+                        )
+                if path.name == "orchestrator.py" and isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name) and target.id == "__all__":
+                            if isinstance(node.value, ast.List):
+                                exported = sorted(
+                                    handler_names.intersection(
+                                        item.value
+                                        for item in node.value.elts
+                                        if isinstance(item, ast.Constant)
+                                        and isinstance(item.value, str)
+                                    )
+                                )
+                                if exported:
+                                    problems.append(
+                                        "orchestrator.py should not export private container "
+                                        f"action handlers: {', '.join(exported)}."
+                                    )
+
+        assert not problems, "\n".join(problems)
+
+    def test_menu_handlers_have_single_owner(self) -> None:
+        """Menu handlers are owned by orchestrator_menus.py."""
+        handler_names = {
+            "_handle_settings",
+            "_handle_profile_menu",
+            "_handle_sandbox_import",
+            "_show_onboarding_banner",
+        }
+        dashboard_path = SRC / "ui" / "dashboard"
+        owner_file = dashboard_path / "orchestrator_menus.py"
+        consumer_files = (
+            dashboard_path / "orchestrator.py",
+            dashboard_path / "orchestrator_handlers.py",
+        )
+
+        problems: list[str] = []
+        definitions: dict[str, list[Path]] = {name: [] for name in handler_names}
+        for path in dashboard_path.glob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name in handler_names:
+                    definitions[node.name].append(path.resolve())
+
+        for name, owners in sorted(definitions.items()):
+            if owners != [owner_file.resolve()]:
+                formatted = ", ".join(str(path.relative_to(REPO_ROOT)) for path in owners)
+                problems.append(
+                    f"{name} must be defined only in {owner_file.relative_to(REPO_ROOT)}; "
+                    f"found {formatted or '<none>'}."
+                )
+
+        for path in consumer_files:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom) and node.module in {
+                    "orchestrator_handlers",
+                    "orchestrator_menus",
+                }:
+                    imported = sorted(
+                        handler_names.intersection(alias.name for alias in node.names)
+                    )
+                    if imported:
+                        problems.append(
+                            f"{path.relative_to(REPO_ROOT)} should call "
+                            "orchestrator_menus.<handler>() instead of importing "
+                            f"{', '.join(imported)}."
+                        )
+                if path.name == "orchestrator.py" and isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name) and target.id == "__all__":
+                            if isinstance(node.value, ast.List):
+                                exported = sorted(
+                                    handler_names.intersection(
+                                        item.value
+                                        for item in node.value.elts
+                                        if isinstance(item, ast.Constant)
+                                        and isinstance(item.value, str)
+                                    )
+                                )
+                                if exported:
+                                    problems.append(
+                                        "orchestrator.py should not export private menu "
+                                        f"handlers: {', '.join(exported)}."
+                                    )
+
+        assert not problems, "\n".join(problems)
+
+
+class TestLaunchOwnershipBoundary:
+    """Launch preparation has one canonical application owner."""
+
+    def test_launch_package_has_no_private_workspace_compat_aliases(self) -> None:
+        """Do not reintroduce private package aliases for launch workspace helpers."""
+        init_file = SRC / "commands" / "launch" / "__init__.py"
+        tree = ast.parse(init_file.read_text())
+        aliases = (
+            "_validate_and_resolve_workspace",
+            "_prepare_workspace",
+            "_resolve_workspace_team",
+            "_resolve_mount_and_branch",
+            "_warn_if_non_worktree",
+        )
+
+        bound_names: list[str] = []
+        exported_names: list[str] = []
+        for node in tree.body:
+            if isinstance(node, ast.Import | ast.ImportFrom):
+                bound_names.extend(alias.asname or alias.name for alias in node.names)
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        bound_names.append(target.id)
+                        if target.id == "__all__" and isinstance(node.value, ast.List):
+                            exported_names.extend(
+                                item.value
+                                for item in node.value.elts
+                                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                            )
+
+        bound_aliases = sorted(set(aliases).intersection(bound_names))
+        exported_aliases = sorted(set(aliases).intersection(exported_names))
+        problems = []
+        if bound_aliases:
+            problems.append(f"private bindings: {', '.join(bound_aliases)}")
+        if exported_aliases:
+            problems.append(f"private __all__ entries: {', '.join(exported_aliases)}")
+
+        assert not problems, (
+            "commands.launch should expose canonical public exports only. "
+            "Import workspace/render owners directly instead of private compat aliases.\n"
+            f"Found aliases: {'; '.join(problems)}"
+        )
+
+    def test_flow_session_helpers_are_owned_by_flow_session(self) -> None:
+        """Do not re-export launch session private helpers from flow.py."""
+        flow_file = SRC / "commands" / "launch" / "flow.py"
+        tree = ast.parse(flow_file.read_text())
+        private_helpers = {
+            "_resolve_session_selection",
+            "_apply_personal_profile",
+            "_record_session_and_context",
+        }
+
+        imported_helpers: list[str] = []
+        exported_helpers: list[str] = []
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.module in {
+                "flow_session",
+                "scc_cli.commands.launch.flow_session",
+            }:
+                imported_helpers.extend(alias.name for alias in node.names)
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "__all__":
+                        if isinstance(node.value, ast.List):
+                            exported_helpers.extend(
+                                item.value
+                                for item in node.value.elts
+                                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                            )
+
+        imported = sorted(private_helpers.intersection(imported_helpers))
+        exported = sorted(private_helpers.intersection(exported_helpers))
+        assert not imported and not exported, (
+            "commands.launch.flow_session owns launch session helpers; flow.py should call "
+            "the owner module and only export start entrypoints.\n"
+            f"Imported from flow_session: {', '.join(imported) or '<none>'}\n"
+            f"Exported in __all__: {', '.join(exported) or '<none>'}"
+        )
+
+    def test_start_session_preparation_has_single_owner(self) -> None:
+        """Start-session preparation must not have a launch-plan facade twin."""
+        expected_owner = SRC / "application" / "start_session.py"
+
+        owner_result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude-dir=__pycache__",
+                r"^def prepare_start_session\(",
+                str(SRC),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        owners = [
+            Path(line.split(":", 1)[0]).resolve()
+            for line in owner_result.stdout.splitlines()
+            if line
+        ]
+
+        problems: list[str] = []
+        if owners != [expected_owner.resolve()]:
+            problems.append(
+                "prepare_start_session must have one owner in "
+                f"{expected_owner.relative_to(REPO_ROOT)}.\n"
+                f"Found definitions:\n{owner_result.stdout or '<none>'}"
+            )
+
+        twin_result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude-dir=__pycache__",
+                r"prepare_launch_plan|PrepareLaunchPlan",
+                str(SRC),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if twin_result.returncode == 0:
+            problems.append(
+                "Launch plan preparation is owned by prepare_start_session; "
+                "do not reintroduce prepare_launch_plan aliases.\n"
+                f"Found twins:\n{twin_result.stdout}"
+            )
+
+        assert not problems, "\n\n".join(problems)
+
+    def test_auth_bootstrap_redirect_stays_deleted(self) -> None:
+        """Auth bootstrap behavior is owned by commands.launch.preflight."""
+        redirect = SRC / "commands" / "launch" / "auth_bootstrap.py"
+        problems: list[str] = []
+
+        if redirect.exists():
+            problems.append(
+                "Auth bootstrap is owned by commands/launch/preflight.py; "
+                f"delete {redirect.relative_to(REPO_ROOT)}."
+            )
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                r"(from scc_cli\.commands\.launch\.auth_bootstrap|import scc_cli\.commands\.launch\.auth_bootstrap)",
+                str(SRC),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            problems.append(
+                "Import commands.launch.preflight instead of the deleted auth bootstrap redirect.\n"
+                f"Found imports:\n{result.stdout}"
+            )
+
+        assert not problems, "\n\n".join(problems)
+
+
+class TestExitCodeBoundary:
+    """Exit-code source should expose one semantic name per numeric behavior."""
+
+    def test_deprecated_exit_code_aliases_stay_deleted(self) -> None:
+        """Use primary semantic exit-code constants instead of deprecated aliases."""
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude-dir=__pycache__",
+                r"EXIT_(ERROR|VALIDATION|INTERNAL)",
+                str(SRC),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 1, (
+            "Use EXIT_NOT_FOUND, EXIT_TOOL, or EXIT_PREREQ directly instead of "
+            "deprecated exit-code aliases.\n"
+            f"Found aliases:\n{result.stdout}"
+        )
+
+    def test_dead_exception_exit_code_map_stays_deleted(self) -> None:
+        """Programmatic error mapping is owned by core.error_mapping.to_exit_code."""
+        banned_tokens = ("EXIT_CODE_MAP", "get_exit_code_for_exception")
+        checked_files = [
+            SRC / "core" / "exit_codes.py",
+            SRC / "core" / "__init__.py",
+        ]
+        problems: list[str] = []
+
+        for path in checked_files:
+            content = path.read_text()
+            found = [token for token in banned_tokens if token in content]
+            if found:
+                problems.append(
+                    f"{path.relative_to(REPO_ROOT)} still exports dead mapper tokens: "
+                    f"{', '.join(found)}"
+                )
+
+        assert not problems, "\n".join(problems)
+
+
+class TestWorktreeExportBoundary:
+    """Worktree package exports should not keep unused private aliases."""
+
+    def test_worktree_package_has_no_private_container_status_alias(self) -> None:
+        """Import is_container_stopped directly instead of a package-level private alias."""
+        init_file = SRC / "commands" / "worktree" / "__init__.py"
+        content = init_file.read_text()
+
+        assert "_is_container_stopped" not in content, (
+            "commands.worktree should expose is_container_stopped directly; "
+            "do not reintroduce the private _is_container_stopped alias."
         )
 
 

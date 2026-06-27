@@ -181,14 +181,13 @@ class StartFlowResult:
     decision: StartFlowDecision
     message: str | None = None
 
-    @classmethod
-    def from_legacy(cls, result: bool | None) -> StartFlowResult:
-        """Convert legacy bool/None start result into a structured outcome."""
-        if result is None:
-            return cls(decision=StartFlowDecision.QUIT)
-        if result is True:
-            return cls(decision=StartFlowDecision.LAUNCHED)
-        return cls(decision=StartFlowDecision.CANCELLED)
+
+@dataclass(frozen=True)
+class ContainerActionResult:
+    """Result from executing a container action."""
+
+    success: bool
+    message: str | None = None
 
 
 @dataclass(frozen=True)

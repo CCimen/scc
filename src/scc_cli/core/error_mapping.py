@@ -4,32 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from scc_cli.core.errors import ConfigError, PolicyViolationError, PrerequisiteError, SCCError
-from scc_cli.core.exit_codes import (
-    EXIT_CONFIG,
-    EXIT_ERROR,
-    EXIT_GOVERNANCE,
-    EXIT_PREREQ,
-    EXIT_VALIDATION,
-)
+from scc_cli.core.errors import SCCError
+from scc_cli.core.exit_codes import EXIT_NOT_FOUND, EXIT_TOOL
 
 
 def to_exit_code(exc: Exception) -> int:
-    """Map exceptions to standardized exit codes.
-
-    This mirrors legacy json_command handling to preserve behavior.
-    """
-    if isinstance(exc, PolicyViolationError):
-        return EXIT_GOVERNANCE
-    if isinstance(exc, PrerequisiteError):
-        return EXIT_PREREQ
-    if isinstance(exc, ConfigError):
-        return EXIT_CONFIG
+    """Return the programmatic exit code for SCC and foreign exceptions."""
     if isinstance(exc, SCCError):
-        return getattr(exc, "exit_code", EXIT_ERROR)
+        return exc.exit_code
+    # Non-SCC validation errors from remote config and schema tooling are tool failures.
     if "Validation" in type(exc).__name__:
-        return EXIT_VALIDATION
-    return EXIT_ERROR
+        return EXIT_TOOL
+    return EXIT_NOT_FOUND
 
 
 def to_json_payload(exc: Exception) -> dict[str, Any]:

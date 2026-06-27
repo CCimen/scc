@@ -3,8 +3,6 @@
 This module contains the start() CLI entrypoint. Interactive wizard flows
 live in flow_interactive.py; session resolution and personal profile helpers
 live in flow_session.py.
-
-Re-exports public names for backward compatibility.
 """
 
 from __future__ import annotations
@@ -20,7 +18,7 @@ from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.errors import WorkspaceNotFoundError
-from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_ERROR, EXIT_USAGE
+from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_NOT_FOUND, EXIT_USAGE
 from ...core.provider_resolution import get_provider_display_name
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_info_panel
@@ -30,14 +28,10 @@ from ...presentation.launch_presenter import build_sync_output_view_model, rende
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
 from ...workspace_local_config import set_workspace_last_used_provider
+from . import flow_session
 from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
 from .dependencies import prepare_live_start_plan
 from .flow_interactive import interactive_start, run_start_wizard_flow
-from .flow_session import (
-    _apply_personal_profile,
-    _record_session_and_context,
-    _resolve_session_selection,
-)
 from .preflight import collect_launch_readiness, ensure_launch_ready, resolve_launch_provider
 from .render import (
     build_dry_run_data,
@@ -49,14 +43,11 @@ from .render import (
 from .team_settings import _configure_team_settings
 from .workspace import prepare_workspace, resolve_workspace_team, validate_and_resolve_workspace
 
-# Re-export public names for backward compatibility
+# Public start-flow entrypoints
 __all__ = [
     "start",
     "interactive_start",
     "run_start_wizard_flow",
-    "_resolve_session_selection",
-    "_apply_personal_profile",
-    "_record_session_and_context",
 ]
 
 
@@ -75,7 +66,7 @@ def _apply_profile_and_show_stack(
     profile_service: Any,
 ) -> None:
     """Apply personal profile overlay and print the active stack summary."""
-    personal_profile_id, personal_applied = _apply_personal_profile(
+    personal_profile_id, personal_applied = flow_session._apply_personal_profile(
         workspace_path,
         org_config=org_config,
         json_mode=json_mode,
@@ -241,7 +232,7 @@ def start(
 
     # ── Step 2: Session selection (interactive, --select, --resume) ──────────
     workspace, team, session_name, worktree_name, cancelled, was_auto_detected, session_provider = (
-        _resolve_session_selection(
+        flow_session._resolve_session_selection(
             workspace=workspace,
             team=team,
             resume=resume,
@@ -260,7 +251,7 @@ def start(
                 console.print("[dim]Cancelled.[/dim]")
             raise typer.Exit(EXIT_CANCELLED)
         if select or resume:
-            raise typer.Exit(EXIT_ERROR)
+            raise typer.Exit(EXIT_NOT_FOUND)
         raise typer.Exit(EXIT_CANCELLED)
 
     # ── Step 3: Docker availability check ────────────────────────────────────
@@ -427,7 +418,7 @@ def start(
     start_plan = conflict_resolution.plan
 
     # ── Step 8: Launch sandbox ───────────────────────────────────────────────
-    _record_session_and_context(
+    flow_session._record_session_and_context(
         workspace_path,
         team,
         session_name,

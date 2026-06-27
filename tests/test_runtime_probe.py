@@ -15,7 +15,7 @@ _MOD = "scc_cli.adapters.docker_runtime_probe"
 
 
 class TestDockerRuntimeProbeDesktopPresent:
-    """Docker Desktop present: all capabilities available."""
+    """Docker Desktop present: sandbox capability is diagnostic, OCI is selected."""
 
     @patch(f"{_MOD}._check_docker_installed", return_value=True)
     @patch(f"{_MOD}.get_docker_version", return_value="Docker version 27.5.1, build abc1234")
@@ -46,7 +46,7 @@ class TestDockerRuntimeProbeDesktopPresent:
         assert info.daemon_reachable is True
         assert info.sandbox_available is True
         assert info.rootless is True
-        assert info.preferred_backend == "docker-sandbox"
+        assert info.preferred_backend == "oci"
 
 
 class TestDockerRuntimeProbeEngineOnly:

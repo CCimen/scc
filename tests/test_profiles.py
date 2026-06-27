@@ -5,7 +5,7 @@ Tests profile resolution and marketplace URL logic with HTTPS-only enforcement.
 
 import pytest
 
-from scc_cli import profiles
+from scc_cli.application import profiles
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Test Fixtures
