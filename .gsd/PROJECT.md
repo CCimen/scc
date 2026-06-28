@@ -51,6 +51,9 @@ Consolidated five duplicated launch preflight sequences into one shared module. 
 ### M009 — Preflight Convergence and Auth Bootstrap Unification ✅
 All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py, and the start command) now use collect_launch_readiness() + ensure_launch_ready() through the shared preflight module. ensure_launch_ready() actually calls bootstrap_auth() when auth is missing (silent gap closed). auth_bootstrap.py reduced to deprecated redirect. Auth messaging centralized in preflight._ensure_auth(). Setup's _render_provider_status uses _three_tier_status() so both onboarding panel and completion summary show identical four-state readiness vocabulary. D048 superseded by D049. 3 net new tests (5117 total).
 
+### M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth
+Active milestone. S01 established a source-grounded gap map and ownership reconciliation. S02 proved project `network_policy` can narrow but not widen org/team policy. S03 recorded that v1 project identity is repository/worktree context, not a separate registry. S04 made ignored project policy widening visible in `scc config explain` and validated project network-policy values. S05/S06 cleaned docs truth and added a minimal enterprise pilot blueprint.
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
@@ -61,16 +64,17 @@ All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orche
 7. ~~M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup~~ ✅
 8. ~~M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening~~ ✅
 9. ~~M009 — Preflight Convergence and Auth Bootstrap Unification~~ ✅
+10. M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all nine milestones.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (303 files, 0 issues)
-- `uv run pytest -q` ✅ (5117 passed, 23 skipped, 2 xfailed)
+- `uv run mypy src/scc_cli` ✅ (299 files, 0 issues)
+- `uv run pytest -q` ✅ (5158 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
-- One file in 800–1100 zone justified (compute_effective_config.py at 852, 93% coverage)
+- Current line-count watchlist from `find src/scc_cli -name '*.py' -exec wc -l {} +`: setup.py 1035, orchestrator_handlers.py 878, flow_interactive.py 811. `compute_effective_config.py` is 710 lines after M010/S04 model extraction.
 
 ## Known deferred items
 - Wizard cast cleanup (23 casts in wizard.py/flow_interactive.py) — deferred per D018

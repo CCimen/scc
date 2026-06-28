@@ -10,10 +10,8 @@ Before planning or changing code, read these files in this order:
 5. `.gsd/DECISIONS.md`
 6. `.gsd/KNOWLEDGE.md`
 7. `.gsd/RUNTIME.md`
-8. `.gsd/milestones/M001-ROADMAP.md`
-9. `.gsd/milestones/M001-CONTEXT.md`
-10. `.gsd/milestones/M001-RESEARCH.md`
-11. `specs/`
+8. Current `.gsd/milestones/*.md` files that match the active or planned milestone
+9. `specs/`
 
 ## Project rules
 - Treat this repository root as the implementation root.
@@ -30,7 +28,10 @@ Before planning or changing code, read these files in this order:
 - Treat open Agent Skills as the only intended cross-provider portability surface.
 
 ## Execution guidance
-- M001 is the only active milestone until it is complete.
+- `.gsd/PROJECT.md` is the canonical milestone register. Files in `.gsd/milestones/`
+  are supplementary planning artifacts for current or future milestones only.
+- M010 is the current planning milestone for enterprise workflow readiness. Reuse or
+  evolve existing owners before adding new runtime concepts.
 - Prefer small, typed, contract-preserving refactors over broad rewrites.
 - Add characterization tests before splitting monoliths.
 - Keep provider-core destination validation in launch planning, not as a runtime surprise.
@@ -40,6 +41,7 @@ Before planning or changing code, read these files in this order:
 ## Code Review Graph
 - Use code-review-graph first for non-trivial exploration, review context, and impact checks, then verify concrete claims in source files/tests.
 - Use `rg` instead for exact symbols/strings, tiny edits, config/lock/generated files, and final file:line evidence.
+- If the local CRG graph is empty or stale, fall back to `rg`, direct source reads, and tests rather than waiting on graph repair.
 - Local embeddings use `ibm-granite/granite-embedding-small-english-r2`; refresh with `CRG_PARSE_EXECUTOR=thread code-review-graph build --repo .` then `code-review-graph embed --repo . --provider local --model ibm-granite/granite-embedding-small-english-r2`.
 
 ## Maintainability Review Protocol

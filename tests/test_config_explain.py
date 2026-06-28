@@ -24,6 +24,7 @@ from scc_cli.application.compute_effective_config import (
     ConfigDecision,
     DelegationDenied,
     EffectiveConfig,
+    IgnoredPolicyChange,
     MCPServer,
     SessionConfig,
 )
@@ -362,6 +363,105 @@ class TestConfigExplainDenied:
         assert "delegat" in result.output.lower() or "scope" in result.output.lower()
 
 
+class TestConfigExplainIgnoredPolicies:
+    """Tests for ignored policy changes in config explain."""
+
+    def test_explain_shows_ignored_project_network_policy(self, mock_org_config):
+        """Should show when a project network_policy is ignored."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="locked-down-web",
+            session_config=SessionConfig(),
+            decisions=[
+                ConfigDecision(
+                    field="network_policy",
+                    value="locked-down-web",
+                    reason="Organization default network policy",
+                    source="org.defaults",
+                )
+            ],
+            blocked_items=[],
+            denied_additions=[],
+            ignored_policy_changes=[
+                IgnoredPolicyChange(
+                    field="network_policy",
+                    requested_value="open",
+                    effective_value="locked-down-web",
+                    source="project",
+                    reason="Project network_policy cannot be less restrictive than inherited policy",
+                )
+            ],
+        )
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "Ignored Policy Changes" in result.output
+        assert "network_policy" in result.output
+        assert "open" in result.output
+        assert "locked-down-web" in result.output
+        assert "unblock" not in result.output.lower()
+
+    def test_explain_shows_ignored_team_network_policy(self, mock_org_config):
+        """Should show when a team network_policy is ignored."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="locked-down-web",
+            session_config=SessionConfig(),
+            decisions=[
+                ConfigDecision(
+                    field="network_policy",
+                    value="locked-down-web",
+                    reason="Organization default network policy",
+                    source="org.defaults",
+                )
+            ],
+            blocked_items=[],
+            denied_additions=[],
+            ignored_policy_changes=[
+                IgnoredPolicyChange(
+                    field="network_policy",
+                    requested_value="open",
+                    effective_value="locked-down-web",
+                    source="team.dev",
+                    reason="Team network_policy cannot be less restrictive than inherited policy",
+                )
+            ],
+        )
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain"])
+
+        assert result.exit_code == 0
+        assert "Ignored Policy Changes" in result.output
+        assert "team.dev" in result.output
+        assert "open" in result.output
+        assert "locked-down-web" in result.output
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for field filter
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -641,33 +741,6 @@ class TestConfigExplainWarnings:
         assert "Warnings" in result.output
         assert "auto_resume" in result.output
 
-    def test_explain_warns_on_team_network_policy(self, effective_config_basic):
-        """Should warn when team network_policy is less restrictive than org default."""
-        effective_config_basic.network_policy = "locked-down-web"
-        org_config = {
-            "schema_version": "1.0.0",
-            "organization": {"name": "Test Org", "id": "test-org"},
-            "defaults": {"network_policy": "locked-down-web"},
-            "profiles": {"dev": {"description": "Dev team", "network_policy": "open"}},
-        }
-
-        with (
-            patch(
-                "scc_cli.commands.config.config.load_cached_org_config",
-                return_value=org_config,
-            ),
-            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
-            patch(
-                "scc_cli.commands.config.compute_effective_config",
-                return_value=effective_config_basic,
-            ),
-        ):
-            result = runner.invoke(cli.app, ["config", "explain"])
-
-        assert result.exit_code == 0
-        assert "network_policy" in result.output
-        assert "ignored" in result.output.lower()
-
     def test_explain_warns_on_missing_proxy_env(self, effective_config_basic):
         """Should warn when web-egress-enforced has no proxy env configured."""
         effective_config_basic.network_policy = "web-egress-enforced"
@@ -718,6 +791,52 @@ class TestConfigExplainJsonOutput:
         payload = json.loads(result.output)
         assert payload["kind"] == "ConfigExplain"
         assert "enforcement" in payload["data"]
+
+    def test_explain_json_includes_ignored_policy_changes(self, mock_org_config):
+        """Should serialize ignored project policy changes."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            network_policy="locked-down-web",
+            session_config=SessionConfig(),
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[],
+            ignored_policy_changes=[
+                IgnoredPolicyChange(
+                    field="network_policy",
+                    requested_value="open",
+                    effective_value="locked-down-web",
+                    source="project",
+                    reason="Project network_policy cannot be less restrictive than inherited policy",
+                )
+            ],
+        )
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["data"]["ignored_policy_changes"] == [
+            {
+                "field": "network_policy",
+                "requested_value": "open",
+                "effective_value": "locked-down-web",
+                "source": "project",
+                "reason": "Project network_policy cannot be less restrictive than inherited policy",
+            }
+        ]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...application.compute_effective_config import (
+from ...application.effective_config_models import (
     BlockedItem,
     ConfigDecision,
     DelegationDenied,
     EffectiveConfig,
+    IgnoredPolicyChange,
     MCPServer,
 )
 from ...core import personal_profiles
@@ -51,6 +52,9 @@ def build_config_explain_data(
         "blocked_items": [_serialize_blocked_item(item) for item in effective.blocked_items],
         "denied_additions": [
             _serialize_denied_addition(denied) for denied in effective.denied_additions
+        ],
+        "ignored_policy_changes": [
+            _serialize_ignored_policy_change(change) for change in effective.ignored_policy_changes
         ],
         "personal_profile": _serialize_personal_profile(profile),
     }
@@ -102,6 +106,16 @@ def _serialize_denied_addition(denied: DelegationDenied) -> dict[str, Any]:
         "requested_by": denied.requested_by,
         "reason": denied.reason,
         "target_type": denied.target_type,
+    }
+
+
+def _serialize_ignored_policy_change(change: IgnoredPolicyChange) -> dict[str, Any]:
+    return {
+        "field": change.field,
+        "requested_value": change.requested_value,
+        "effective_value": change.effective_value,
+        "source": change.source,
+        "reason": change.reason,
     }
 
 

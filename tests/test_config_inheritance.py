@@ -1041,6 +1041,20 @@ session:
         assert result["session"]["timeout_hours"] == 2
         assert result["session"]["auto_resume"] is False
 
+    def test_read_project_config_network_policy_only(self, tmp_path):
+        """Should read valid project network_policy settings."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+network_policy: locked-down-web
+""")
+
+        result = read_project_config(tmp_path)
+
+        assert result is not None
+        assert result["network_policy"] == "locked-down-web"
+
     def test_read_project_config_mcp_servers_only(self, tmp_path):
         """Should read config with only MCP servers."""
         from scc_cli.config import read_project_config
@@ -1164,6 +1178,20 @@ session:
             read_project_config(tmp_path)
 
         assert "timeout_hours" in str(exc_info.value) or "integer" in str(exc_info.value).lower()
+
+    def test_read_project_config_network_policy_must_be_known_value(self, tmp_path):
+        """Should reject unknown project network_policy values."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+network_policy: isolated
+""")
+
+        with pytest.raises(ValueError) as exc_info:
+            read_project_config(tmp_path)
+
+        assert "network_policy" in str(exc_info.value)
 
     def test_read_project_config_allows_unknown_fields(self, tmp_path):
         """Should allow unknown fields for forward compatibility."""

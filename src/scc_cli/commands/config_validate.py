@@ -73,8 +73,9 @@ def _config_validate(
     unknown_keys: list[str] = []
 
     if not errors and project_config and org_config:
-        allowed_keys = {"additional_plugins", "additional_mcp_servers", "session"}
-        unknown_keys = sorted([key for key in project_config if key not in allowed_keys])
+        unknown_keys = sorted(
+            [key for key in project_config if key not in config.PROJECT_CONFIG_KEYS]
+        )
         if unknown_keys:
             warnings.append("Unknown keys in .scc.yaml (ignored): " + ", ".join(unknown_keys))
 

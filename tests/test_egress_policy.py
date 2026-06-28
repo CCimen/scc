@@ -13,6 +13,7 @@ from scc_cli.core.contracts import (
 )
 from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl
 from scc_cli.core.enums import NetworkPolicy
+from scc_cli.core.network_policy import policy_rank
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # build_egress_plan() — mode behavior
@@ -21,6 +22,9 @@ from scc_cli.core.enums import NetworkPolicy
 
 class TestBuildEgressPlanModes:
     """Plan builder produces correct plans for each NetworkPolicy mode."""
+
+    def test_every_network_policy_has_a_rank(self) -> None:
+        assert all(policy_rank(policy.value) >= 0 for policy in NetworkPolicy)
 
     def test_open_mode_produces_no_rules(self) -> None:
         plan = build_egress_plan(NetworkPolicy.OPEN)
