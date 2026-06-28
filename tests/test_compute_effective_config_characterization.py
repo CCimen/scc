@@ -372,6 +372,21 @@ class TestComputeEffectiveConfig:
         assert "proj-plugin@mp" not in result.plugins
         assert any(d.item == "proj-plugin@mp" for d in result.denied_additions)
 
+    def test_project_session_ignored_when_not_delegated(self) -> None:
+        org = {
+            "defaults": {"session": {"timeout_hours": 8, "auto_resume": False}},
+            "delegation": {"projects": {"inherit_team_delegation": False}},
+        }
+        project = {"session": {"timeout_hours": 2, "auto_resume": True}}
+        result = compute_effective_config(org, "team-a", project_config=project)
+
+        assert result.session_config.timeout_hours == 8
+        assert result.session_config.auto_resume is False
+        assert not any(
+            decision.source == "project" and decision.field.startswith("session.")
+            for decision in result.decisions
+        )
+
     def test_session_config_org_default(self) -> None:
         org = {"defaults": {"session": {"timeout_hours": 8, "auto_resume": True}}}
         result = compute_effective_config(org, None)
@@ -411,6 +426,21 @@ class TestComputeEffectiveConfig:
         }
         result = compute_effective_config(org, "team-a")
         assert not any(s.name == "my-mcp" for s in result.mcp_servers)
+
+    def test_project_typeless_url_mcp_blocked_under_locked_down_web(self) -> None:
+        org = {
+            "defaults": {"network_policy": "locked-down-web"},
+            "delegation": {"projects": {"inherit_team_delegation": True}},
+            "profiles": {"team-a": {"delegation": {"allow_project_overrides": True}}},
+        }
+        project = {"additional_mcp_servers": [{"name": "project-mcp", "url": "https://mcp"}]}
+        result = compute_effective_config(org, "team-a", project_config=project)
+
+        assert not any(server.name == "project-mcp" for server in result.mcp_servers)
+        assert any(
+            blocked.item == "project-mcp" and blocked.blocked_by == "network_policy=locked-down-web"
+            for blocked in result.blocked_items
+        )
 
     def test_disabled_plugins_excluded(self) -> None:
         org = {

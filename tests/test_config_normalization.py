@@ -14,6 +14,7 @@ from scc_cli.adapters.config_normalizer import (
 )
 from scc_cli.ports.config_models import (
     NormalizedOrgConfig,
+    NormalizedProjectConfig,
     SafetyNetConfig,
     StatsConfig,
 )
@@ -299,6 +300,25 @@ class TestNormalizeProjectConfig:
 
         assert result is not None
         assert result.network_policy == "locked-down-web"
+
+
+class TestNormalizedProjectConfigFromDict:
+    """Test NormalizedProjectConfig.from_dict()."""
+
+    def test_from_dict_matches_normalize_project_config(self) -> None:
+        """from_dict should produce identical results to normalize_project_config."""
+        raw = {
+            "additional_plugins": ["project-tool"],
+            "additional_mcp_servers": [
+                {"name": "project-mcp", "type": "sse", "url": "https://mcp.example.com"}
+            ],
+            "network_policy": "locked-down-web",
+            "session": {"timeout_hours": 4, "auto_resume": True},
+        }
+        from_dict_result = NormalizedProjectConfig.from_dict(raw)
+        direct_result = normalize_project_config(raw)
+
+        assert from_dict_result == direct_result
 
 
 class TestSafetyNetNormalization:

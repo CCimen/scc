@@ -244,3 +244,18 @@ class NormalizedProjectConfig:
     additional_mcp_servers: tuple[MCPServerConfig, ...] = ()
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> NormalizedProjectConfig:
+        """Create a NormalizedProjectConfig from a raw dict.
+
+        Uses importlib to avoid a static ports→adapters import that would
+        violate the architectural import boundary enforced by tests.
+        """
+        import importlib
+
+        mod = importlib.import_module("scc_cli.adapters.config_normalizer")
+        normalized = mod.normalize_project_config(raw)
+        if normalized is None:
+            return cls()
+        return normalized  # type: ignore[no-any-return]

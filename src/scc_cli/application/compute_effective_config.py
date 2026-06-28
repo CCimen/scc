@@ -27,7 +27,13 @@ from scc_cli.marketplace.normalize import (
     is_plugin_allowed_by_patterns,
     matches_any_pattern,
 )
-from scc_cli.ports.config_models import NormalizedOrgConfig, NormalizedTeamConfig, SessionSettings
+from scc_cli.ports.config_models import (
+    MCPServerConfig,
+    NormalizedOrgConfig,
+    NormalizedProjectConfig,
+    NormalizedTeamConfig,
+    SessionSettings,
+)
 
 __all__ = [
     "BlockedItem",
@@ -257,6 +263,21 @@ def is_project_delegated(
     return (True, "")
 
 
+def _mcp_config_to_dict(mcp: MCPServerConfig) -> dict[str, Any]:
+    server_dict: dict[str, Any] = {"name": mcp.name, "type": mcp.type}
+    if mcp.url:
+        server_dict["url"] = mcp.url
+    if mcp.command:
+        server_dict["command"] = mcp.command
+    if mcp.args:
+        server_dict["args"] = mcp.args
+    if mcp.env:
+        server_dict["env"] = mcp.env
+    if mcp.headers:
+        server_dict["headers"] = mcp.headers
+    return server_dict
+
+
 def _merge_team_mcp_servers(
     result: EffectiveConfig,
     *,
@@ -270,19 +291,9 @@ def _merge_team_mcp_servers(
     """Merge team MCP servers into the effective config."""
     team_mcp_servers_raw: list[dict[str, Any]] = []
     if team_config:
-        for mcp in team_config.additional_mcp_servers:
-            server_dict: dict[str, Any] = {"name": mcp.name, "type": mcp.type}
-            if mcp.url:
-                server_dict["url"] = mcp.url
-            if mcp.command:
-                server_dict["command"] = mcp.command
-            if mcp.args:
-                server_dict["args"] = mcp.args
-            if mcp.env:
-                server_dict["env"] = mcp.env
-            if mcp.headers:
-                server_dict["headers"] = mcp.headers
-            team_mcp_servers_raw.append(server_dict)
+        team_mcp_servers_raw = [
+            _mcp_config_to_dict(mcp) for mcp in team_config.additional_mcp_servers
+        ]
 
     team_delegated_mcp = is_team_delegated_for_mcp(org_config, team_name)
 
@@ -374,7 +385,7 @@ def _merge_team_mcp_servers(
 def _merge_project_config(
     result: EffectiveConfig,
     *,
-    project_config: dict[str, Any],
+    project_config: NormalizedProjectConfig,
     org_config: NormalizedOrgConfig,
     team_name: str | None,
     blocked_plugins: list[str],
@@ -386,7 +397,7 @@ def _merge_project_config(
     """Merge project-level config into the effective config."""
     project_delegated, delegation_reason = is_project_delegated(org_config, team_name)
 
-    project_network_policy = project_config.get("network_policy")
+    project_network_policy = project_config.network_policy
     network_policy_source = merge_restrictive_network_policy_layer(
         result,
         requested_policy=project_network_policy,
@@ -399,7 +410,7 @@ def _merge_project_config(
         current_source=network_policy_source,
     )
 
-    project_plugins = project_config.get("additional_plugins", [])
+    project_plugins = project_config.additional_plugins
     for plugin in project_plugins:
         blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
         if blocked_by:
@@ -438,8 +449,8 @@ def _merge_project_config(
             )
         )
 
-    project_mcp_servers = project_config.get("additional_mcp_servers", [])
-    for server_dict in project_mcp_servers:
+    for mcp in project_config.additional_mcp_servers:
+        server_dict = _mcp_config_to_dict(mcp)
         server_name = server_dict.get("name", "")
         server_url = server_dict.get("url", "")
 
@@ -523,25 +534,25 @@ def _merge_project_config(
             )
         )
 
-    project_session = project_config.get("session", {})
-    if project_session.get("timeout_hours") is not None:
+    project_session = project_config.session
+    if project_session.timeout_hours is not None:
         if project_delegated:
-            result.session_config.timeout_hours = project_session["timeout_hours"]
+            result.session_config.timeout_hours = project_session.timeout_hours
             result.decisions.append(
                 ConfigDecision(
                     field="session.timeout_hours",
-                    value=project_session["timeout_hours"],
+                    value=project_session.timeout_hours,
                     reason="Overridden by project config",
                     source="project",
                 )
             )
-    if project_session.get("auto_resume") is not None:
+    if project_session.auto_resume is not None:
         if project_delegated:
-            result.session_config.auto_resume = project_session["auto_resume"]
+            result.session_config.auto_resume = project_session.auto_resume
             result.decisions.append(
                 ConfigDecision(
                     field="session.auto_resume",
-                    value=project_session["auto_resume"],
+                    value=project_session.auto_resume,
                     reason="Overridden by project config",
                     source="project",
                 )
@@ -560,6 +571,9 @@ def compute_effective_config(
 
     if workspace_path is not None:
         project_config = config_module.read_project_config(workspace_path)
+    normalized_project_config = (
+        NormalizedProjectConfig.from_dict(project_config) if project_config else None
+    )
 
     result = EffectiveConfig()
 
@@ -723,10 +737,10 @@ def compute_effective_config(
             )
         )
 
-    if project_config:
+    if normalized_project_config is not None:
         _merge_project_config(
             result,
-            project_config=project_config,
+            project_config=normalized_project_config,
             org_config=org_config,
             team_name=team_name,
             blocked_plugins=blocked_plugins,
