@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import typer
 from rich.status import Status
 
-from ... import config, git
+from ... import config
 from ...adapters.local_platform_probe import LocalPlatformProbe
 from ...application.workspace import WorkspaceValidationResult, validate_workspace
 from ...bootstrap import get_default_adapters
@@ -30,6 +30,7 @@ from ...core.exit_codes import EXIT_CANCELLED
 from ...core.workspace import ResolverResult
 from ...output_mode import print_human
 from ...panels import create_info_panel, create_success_panel, create_warning_panel
+from ...services import git
 from ...theme import Indicators, Spinners
 from ...ui import check_branch_safety, create_worktree
 from ...ui.gate import is_interactive_allowed

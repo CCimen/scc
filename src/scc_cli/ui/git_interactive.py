@@ -5,8 +5,6 @@ interactive user workflows. They use:
 - services/git/ for data operations
 - ui/git_render.py for pure rendering
 - panels, theme for consistent styling
-
-Extracted from git.py to achieve "no Rich imports in git.py" criterion.
 """
 
 import os

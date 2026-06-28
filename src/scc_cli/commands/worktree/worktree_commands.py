@@ -18,12 +18,12 @@ from ...confirm import Confirm
 from ...core.constants import WORKTREE_BRANCH_PREFIX
 from ...core.errors import NotAGitRepoError, WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED
-from ...git import WorktreeInfo
 from ...json_command import json_command
 from ...kinds import Kind
 from ...output_mode import is_json_mode
 from ...panels import create_success_panel, create_warning_panel
 from ...ports.config_models import NormalizedOrgConfig
+from ...services.git import WorktreeInfo
 from ...theme import Indicators, Spinners
 from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext

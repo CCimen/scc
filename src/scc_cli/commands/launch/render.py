@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING, Any
 from rich.panel import Panel
 from rich.table import Table
 
-from ... import git
 from ...cli_common import MAX_DISPLAY_PATH_LENGTH, PATH_TRUNCATE_LENGTH, console, err_console
 from ...panels import create_info_panel
+from ...services import git
 from ...theme import Indicators
 from ...ui.chrome import print_with_layout
 

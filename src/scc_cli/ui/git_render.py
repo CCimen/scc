@@ -2,8 +2,6 @@
 
 Pure functions with no side effects beyond console output. These take
 data structures (like WorktreeInfo) and render them to Rich consoles.
-
-Extracted from git.py to separate rendering from domain logic.
 """
 
 from rich import box

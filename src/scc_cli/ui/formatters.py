@@ -23,8 +23,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from ..docker.core import ContainerInfo
-from ..git import WorktreeInfo, get_display_branch
 from ..ports.session_models import SessionSummary
+from ..services.git import WorktreeInfo, get_display_branch
 from ..theme import Indicators
 from .list_screen import ListItem
 from .time_format import format_relative_time_compact
@@ -230,7 +230,7 @@ def format_worktree(worktree: WorktreeInfo) -> ListItem[WorktreeInfo]:
         ListItem suitable for ListScreen display.
 
     Example:
-        >>> from scc_cli.git import WorktreeInfo
+        >>> from scc_cli.services.git import WorktreeInfo
         >>> wt = WorktreeInfo(
         ...     path="/home/user/project-feature",
         ...     branch="feature/auth",

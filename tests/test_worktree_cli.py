@@ -16,7 +16,7 @@ from unittest.mock import patch
 import click
 import pytest
 
-from scc_cli.git import WorktreeInfo
+from scc_cli.services.git import WorktreeInfo
 from scc_cli.ui import render_worktrees
 
 
@@ -727,7 +727,7 @@ class TestFindWorktreeByQuery:
 
     def test_exact_branch_match(self, tmp_path: Path) -> None:
         """Exact branch name match should return single result."""
-        from scc_cli.git import find_worktree_by_query
+        from scc_cli.services.git import find_worktree_by_query
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
@@ -741,7 +741,7 @@ class TestFindWorktreeByQuery:
 
     def test_partial_branch_match(self, tmp_path: Path) -> None:
         """Partial branch match should return in matches list."""
-        from scc_cli.git import find_worktree_by_query
+        from scc_cli.services.git import find_worktree_by_query
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
@@ -756,7 +756,7 @@ class TestFindWorktreeByQuery:
 
     def test_no_match_returns_empty(self, tmp_path: Path) -> None:
         """No matching query should return empty results."""
-        from scc_cli.git import find_worktree_by_query
+        from scc_cli.services.git import find_worktree_by_query
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
@@ -769,7 +769,7 @@ class TestFindWorktreeByQuery:
 
     def test_directory_name_match(self, tmp_path: Path) -> None:
         """Should match by worktree directory name."""
-        from scc_cli.git import find_worktree_by_query
+        from scc_cli.services.git import find_worktree_by_query
 
         worktrees = [
             WorktreeInfo(path="/home/user/repos/my-feature", branch="feature/auth", status=""),
@@ -786,7 +786,7 @@ class TestFindMainWorktree:
 
     def test_finds_main_branch_worktree(self, tmp_path: Path) -> None:
         """Should find worktree for main/master branch."""
-        from scc_cli.git import find_main_worktree
+        from scc_cli.services.git import find_main_worktree
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "feature"), branch="feature/auth", status=""),
@@ -803,7 +803,7 @@ class TestFindMainWorktree:
 
     def test_returns_none_when_no_main_worktree(self, tmp_path: Path) -> None:
         """Should return None when no main branch worktree exists."""
-        from scc_cli.git import find_main_worktree
+        from scc_cli.services.git import find_main_worktree
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "feature"), branch="feature/auth", status=""),
@@ -822,7 +822,7 @@ class TestListBranchesWithoutWorktrees:
 
     def test_filters_out_branches_with_worktrees(self, tmp_path: Path) -> None:
         """Should return only branches that don't have worktrees."""
-        from scc_cli.git import list_branches_without_worktrees
+        from scc_cli.services.git import list_branches_without_worktrees
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
@@ -845,7 +845,7 @@ class TestListBranchesWithoutWorktrees:
 
     def test_empty_when_all_have_worktrees(self, tmp_path: Path) -> None:
         """Should return empty list when all branches have worktrees."""
-        from scc_cli.git import list_branches_without_worktrees
+        from scc_cli.services.git import list_branches_without_worktrees
 
         worktrees = [
             WorktreeInfo(path=str(tmp_path / "main"), branch="main", status=""),
@@ -964,7 +964,7 @@ class TestGetWorktreeStatus:
         """Should correctly count staged changes."""
         from unittest.mock import MagicMock
 
-        from scc_cli.git import get_worktree_status
+        from scc_cli.services.git import get_worktree_status
 
         # Git status --porcelain format: XY filename
         # A = staged added, M = staged modified
@@ -984,7 +984,7 @@ class TestGetWorktreeStatus:
         """Should correctly count modified (unstaged) changes."""
         from unittest.mock import MagicMock
 
-        from scc_cli.git import get_worktree_status
+        from scc_cli.services.git import get_worktree_status
 
         # Space in first column = unstaged, M in second = modified
         mock_result = MagicMock()
@@ -1003,7 +1003,7 @@ class TestGetWorktreeStatus:
         """Should correctly count untracked files."""
         from unittest.mock import MagicMock
 
-        from scc_cli.git import get_worktree_status
+        from scc_cli.services.git import get_worktree_status
 
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -1021,7 +1021,7 @@ class TestGetWorktreeStatus:
         """Clean repo should return all zeros."""
         from unittest.mock import MagicMock
 
-        from scc_cli.git import get_worktree_status
+        from scc_cli.services.git import get_worktree_status
 
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -1039,7 +1039,7 @@ class TestGetWorktreeStatus:
         """Timeout should set timed_out flag to True."""
         import subprocess
 
-        from scc_cli.git import get_worktree_status
+        from scc_cli.services.git import get_worktree_status
 
         with patch(
             "scc_cli.services.git.worktree.subprocess.run",

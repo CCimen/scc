@@ -72,7 +72,6 @@ ALLOWED_LEGACY = {
     "contexts.py",
     "deprecation.py",
     "deps.py",
-    "git.py",
     "json_command.py",
     "json_output.py",
     "kinds.py",

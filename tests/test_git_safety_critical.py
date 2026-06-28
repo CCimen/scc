@@ -26,7 +26,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scc_cli import git
+from scc_cli.services import git
 from scc_cli.ui import cleanup_worktree
 
 # ═══════════════════════════════════════════════════════════════════════════════

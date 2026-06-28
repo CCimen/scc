@@ -20,7 +20,7 @@ from scc_cli.commands.launch.wizard_resume import (
     resolve_workspace_resume,
 )
 
-from ... import config, git, sessions, setup, teams
+from ... import config, sessions, setup, teams
 from ...application.launch import (
     BackRequested,
     CwdContext,
@@ -62,6 +62,7 @@ from ...panels import create_info_panel, create_warning_panel
 from ...ports.config_models import NormalizedOrgConfig
 from ...ports.git_client import GitClient
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
+from ...services import git
 from ...services.workspace import has_project_markers, is_suspicious_directory
 from ...theme import Colors, Spinners, get_brand_header
 from ...ui.chrome import render_with_layout

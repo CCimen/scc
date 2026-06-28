@@ -19,8 +19,8 @@ import pytest
 
 from scc_cli.contexts import WorkContext
 from scc_cli.docker.core import ContainerInfo
-from scc_cli.git import WorktreeInfo
 from scc_cli.ports.session_models import SessionSummary
+from scc_cli.services.git import WorktreeInfo
 from scc_cli.ui.formatters import (
     _format_relative_time,
     _shorten_docker_status,

@@ -451,7 +451,7 @@ def _extract_container_time(status: str) -> str:
 
 
 def _format_worktree_description(worktree: WorktreeInfo, *, verbose: bool) -> str:
-    from scc_cli import git
+    from scc_cli.services import git
 
     desc_parts: list[str] = []
     if worktree.branch:

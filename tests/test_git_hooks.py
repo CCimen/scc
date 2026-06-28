@@ -1,4 +1,4 @@
-"""Tests for git.py repo-local hooks functionality.
+"""Tests for repo-local git hook functionality.
 
 These tests verify the new architecture requirements:
 - Repo-local hooks (NOT global)
@@ -10,7 +10,8 @@ These tests verify the new architecture requirements:
 import os
 from unittest.mock import patch
 
-from scc_cli import git
+from scc_cli.services import git
+from scc_cli.services.git.hooks import _write_scc_hook
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for SCC_HOOK_MARKER
@@ -248,7 +249,7 @@ class TestWriteSccHook:
         """_write_scc_hook should include SCC marker."""
         hook_path = tmp_path / "pre-push"
 
-        git._write_scc_hook(hook_path)
+        _write_scc_hook(hook_path)
 
         content = hook_path.read_text()
         assert git.SCC_HOOK_MARKER in content
@@ -257,7 +258,7 @@ class TestWriteSccHook:
         """_write_scc_hook should make hook executable."""
         hook_path = tmp_path / "pre-push"
 
-        git._write_scc_hook(hook_path)
+        _write_scc_hook(hook_path)
 
         assert os.access(hook_path, os.X_OK)
 
@@ -265,7 +266,7 @@ class TestWriteSccHook:
         """_write_scc_hook should include bash shebang."""
         hook_path = tmp_path / "pre-push"
 
-        git._write_scc_hook(hook_path)
+        _write_scc_hook(hook_path)
 
         content = hook_path.read_text()
         assert content.startswith("#!/bin/bash")

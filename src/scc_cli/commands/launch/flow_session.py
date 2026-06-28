@@ -15,7 +15,7 @@ from typing import Any, cast
 
 import typer
 
-from ... import config, git, sessions
+from ... import config, sessions
 from ...application.launch import (
     ApplyPersonalProfileConfirmation,
     ApplyPersonalProfileDependencies,
@@ -40,6 +40,7 @@ from ...core.exit_codes import EXIT_USAGE
 from ...output_mode import print_human, print_json
 from ...ports.personal_profile_service import PersonalProfileService
 from ...presentation.json.profile_json import build_profile_apply_envelope
+from ...services import git
 from ...ui.chrome import print_with_layout
 from ...ui.gate import is_interactive_allowed
 from ...ui.picker import pick_session

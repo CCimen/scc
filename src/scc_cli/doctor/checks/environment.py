@@ -35,7 +35,7 @@ def _probe_runtime_info() -> RuntimeInfo | None:
 
 def check_git() -> CheckResult:
     """Check if Git is installed and accessible."""
-    from ... import git as git_module
+    from ...services import git as git_module
 
     if not git_module.check_git_installed():
         return CheckResult(

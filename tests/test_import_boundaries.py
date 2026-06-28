@@ -19,6 +19,7 @@ from pathlib import Path
 # Use absolute paths relative to this test file
 REPO_ROOT = Path(__file__).parent.parent
 SRC = REPO_ROOT / "src" / "scc_cli"
+TESTS = REPO_ROOT / "tests"
 
 
 class TestDomainDoesNotImportCLI:
@@ -951,68 +952,50 @@ class TestAdapterBoundaries:
         assert result.returncode == 1, f"Non-bootstrap modules import adapters:\n{result.stdout}"
 
 
-class TestGitModuleBoundary:
-    """git.py facade must have no Rich imports after Phase 4 refactoring.
+class TestGitFacadeDeletionBoundary:
+    """Git behavior is owned by services/git, not a top-level facade."""
 
-    Phase 4 acceptance criterion: "git.py has no direct Rich imports"
-    """
-
-    def test_git_facade_has_no_rich_imports(self) -> None:
-        """git.py must NOT directly import from rich library.
-
-        After Phase 4 refactoring, git.py should be a pure facade that
-        re-exports from services/git/ and ui/ without any Rich imports.
-        This is a key acceptance criterion from the maintainability plan.
-        """
-        git_file = SRC / "git.py"
-        if not git_file.exists():
-            return
-
-        content = git_file.read_text()
-
-        # Check for direct rich imports
-        rich_imports = [
-            "from rich",
-            "import rich",
-        ]
-        violations = []
-        for pattern in rich_imports:
-            if pattern in content:
-                violations.append(pattern)
-
-        assert not violations, (
-            f"git.py should not have Rich imports after Phase 4.\n"
-            f"Found: {violations}\n"
-            f"Rich imports should be in ui/git_render.py or ui/git_interactive.py"
+    def test_top_level_git_facade_stays_deleted(self) -> None:
+        """Do not reintroduce the no-behavior scc_cli.git compatibility facade."""
+        facade = SRC / "git.py"
+        assert not facade.exists(), (
+            "Git operations are owned by scc_cli.services.git; "
+            f"delete {facade.relative_to(REPO_ROOT)}."
         )
 
-    def test_git_facade_is_reexports_only(self) -> None:
-        """git.py should only contain re-exports, no function definitions.
+    def test_top_level_git_imports_stay_deleted(self) -> None:
+        """Import git operations from scc_cli.services.git."""
+        problems: list[str] = []
+        paths = list(SRC.rglob("*.py")) + list(TESTS.rglob("*.py"))
 
-        After refactoring, git.py should be a thin facade that imports
-        and re-exports from other modules. It should not define any
-        functions itself.
-        """
-        git_file = SRC / "git.py"
-        if not git_file.exists():
-            return
+        for path in paths:
+            if path == Path(__file__):
+                continue
 
-        # Check for function definitions (excluding class methods)
-        result = subprocess.run(
-            ["grep", "-E", r"^def [a-z_]+\(", str(git_file)],
-            capture_output=True,
-            text=True,
-        )
+            source = path.read_text(encoding="utf-8")
+            relative = path.relative_to(REPO_ROOT)
+            if "scc_cli.git" in source:
+                problems.append(f"{relative}: contains scc_cli.git")
 
-        # grep returns 0 when matches found, 1 when not
-        # We want no matches (returncode 1)
-        if result.returncode == 0:
-            funcs = result.stdout.strip().split("\n")
-            assert False, (
-                f"git.py should only contain re-exports, not function definitions.\n"
-                f"Found {len(funcs)} function(s):\n{result.stdout}\n"
-                f"Move these to services/git/ or ui/git_*.py"
-            )
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name == "scc_cli.git" or alias.name.startswith("scc_cli.git."):
+                            problems.append(f"{relative}:{node.lineno}: import {alias.name}")
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    imported_names = {alias.name for alias in node.names}
+                    if module == "scc_cli" and "git" in imported_names:
+                        problems.append(f"{relative}:{node.lineno}: from scc_cli import git")
+                    if module == "scc_cli.git" or module.startswith("scc_cli.git."):
+                        problems.append(f"{relative}:{node.lineno}: from {module} import ...")
+                    if node.level and not module and "git" in imported_names:
+                        problems.append(f"{relative}:{node.lineno}: relative import git")
+                    if node.level and (module == "git" or module.startswith("git.")):
+                        problems.append(f"{relative}:{node.lineno}: relative import from {module}")
+
+        assert not problems, "\n".join(problems)
 
 
 class TestServicesGitBoundary:
@@ -1109,9 +1092,6 @@ class TestUICanImportServices:
         assert "from ..services.git" in content or "from scc_cli.services.git" in content, (
             "ui/git_interactive.py should import from services/git/"
         )
-
-
-TESTS = REPO_ROOT / "tests"
 
 
 class TestCoreWorkspaceBoundary:

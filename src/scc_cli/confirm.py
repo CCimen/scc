@@ -1,8 +1,4 @@
-"""Case-insensitive confirmation prompt.
-
-Separated from prompts.py to avoid circular imports since git.py needs Confirm
-but prompts.py imports from git.py via formatters.py.
-"""
+"""Case-insensitive confirmation prompt."""
 
 from rich.prompt import Confirm as RichConfirm
 

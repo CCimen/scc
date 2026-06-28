@@ -186,7 +186,7 @@ def check_git_version_for_worktrees() -> CheckResult | None:
     Returns:
         CheckResult with version check status, or None if git not installed.
     """
-    from ... import git as git_module
+    from ...services import git as git_module
 
     if not git_module.check_git_installed():
         return None  # Already covered by check_git()
