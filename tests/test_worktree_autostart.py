@@ -81,21 +81,24 @@ def test_created_worktree_autostart_preserves_existing_launch_sequence(
         ),
         patch(
             "scc_cli.commands.launch.worktree_autostart.resolve_launch_provider",
-            side_effect=lambda **_kwargs: call_order.append("resolve")
-            or ("codex", ProviderResolutionSource.GLOBAL_PREFERRED),
+            side_effect=lambda **_kwargs: (
+                call_order.append("resolve") or ("codex", ProviderResolutionSource.GLOBAL_PREFERRED)
+            ),
         ) as mock_resolve_provider,
         patch(
             "scc_cli.commands.launch.worktree_autostart.collect_launch_readiness",
-            side_effect=lambda *_args, **_kwargs: call_order.append("readiness")
-            or _ready_readiness(),
+            side_effect=lambda *_args, **_kwargs: (
+                call_order.append("readiness") or _ready_readiness()
+            ),
         ) as mock_readiness,
         patch(
             "scc_cli.commands.launch.worktree_autostart.ensure_launch_ready"
         ) as mock_ensure_ready,
         patch(
             "scc_cli.commands.launch.worktree_autostart.prepare_live_start_plan",
-            side_effect=lambda *_args, **_kwargs: call_order.append("prepare")
-            or (start_dependencies, start_plan),
+            side_effect=lambda *_args, **_kwargs: (
+                call_order.append("prepare") or (start_dependencies, start_plan)
+            ),
         ) as mock_prepare,
         patch(
             "scc_cli.commands.launch.worktree_autostart.finalize_launch",
