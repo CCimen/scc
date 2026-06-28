@@ -1186,9 +1186,7 @@ class TestAdapterBoundaries:
                 continue
             violations.append(line)
 
-        assert not violations, (
-            "Unexpected non-bootstrap adapter imports:\n" + "\n".join(violations)
-        )
+        assert not violations, "Unexpected non-bootstrap adapter imports:\n" + "\n".join(violations)
 
 
 class TestGitFacadeDeletionBoundary:
