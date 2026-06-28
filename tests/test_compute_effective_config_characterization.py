@@ -8,6 +8,8 @@ and the full compute_effective_config pipeline.
 
 from __future__ import annotations
 
+from typing import get_type_hints
+
 from scc_cli.application.compute_effective_config import EffectiveConfig as AppEffectiveConfig
 from scc_cli.application.compute_effective_config import (
     compute_effective_config,
@@ -19,6 +21,11 @@ from scc_cli.application.compute_effective_config import (
     matches_blocked_plugin,
     record_network_policy_decision,
     validate_stdio_server,
+)
+from scc_cli.application.effective_config_models import (
+    ConfigDecision,
+    ConfigTraceValue,
+    IgnoredPolicyChange,
 )
 from scc_cli.core.enums import MCPServerType
 from scc_cli.core.governance_patterns import (
@@ -258,6 +265,13 @@ class TestValidateStdioServer:
 # ═══════════════════════════════════════════════════════════════════════════════
 # record_network_policy_decision
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_effective_config_trace_values_stay_scalar() -> None:
+    assert get_type_hints(ConfigDecision)["value"] == ConfigTraceValue
+    ignored_hints = get_type_hints(IgnoredPolicyChange)
+    assert ignored_hints["requested_value"] == ConfigTraceValue
+    assert ignored_hints["effective_value"] == ConfigTraceValue
 
 
 class TestRecordNetworkPolicyDecision:

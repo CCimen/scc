@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TypeAlias
 
 from scc_cli.core.enums import TargetType
+
+ConfigTraceValue: TypeAlias = str | int | bool | None
 
 
 @dataclass
@@ -13,7 +15,7 @@ class ConfigDecision:
     """Tracks where a config value came from."""
 
     field: str
-    value: Any
+    value: ConfigTraceValue
     reason: str
     source: str
 
@@ -23,8 +25,8 @@ class IgnoredPolicyChange:
     """Tracks a requested config policy value that was rejected."""
 
     field: str
-    requested_value: Any
-    effective_value: Any
+    requested_value: ConfigTraceValue
+    effective_value: ConfigTraceValue
     source: str
     reason: str
 
