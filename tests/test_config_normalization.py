@@ -292,6 +292,14 @@ class TestNormalizeProjectConfig:
         assert result is not None
         assert result.session.timeout_hours == 16
 
+    def test_network_policy_normalized(self) -> None:
+        """Project network policy should be preserved for typed callers."""
+        raw = {"network_policy": "locked-down-web"}
+        result = normalize_project_config(raw)
+
+        assert result is not None
+        assert result.network_policy == "locked-down-web"
+
 
 class TestSafetyNetNormalization:
     """Test security.safety_net normalization."""

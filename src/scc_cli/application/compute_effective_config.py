@@ -2,123 +2,44 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from scc_cli import config as config_module
+from scc_cli.application.effective_config_models import (
+    BlockedItem,
+    ConfigDecision,
+    DelegationDenied,
+    EffectiveConfig,
+    IgnoredPolicyChange,
+    MCPServer,
+    SessionConfig,
+    StdioValidationResult,
+)
 from scc_cli.core.enums import MCPServerType, NetworkPolicy, RequestSource, TargetType
 from scc_cli.core.governance_patterns import (
     is_mcp_allowed,
     match_blocked_mcp,
     matches_blocked,
 )
-from scc_cli.core.network_policy import is_more_or_equal_restrictive
+from scc_cli.core.network_policy import is_more_or_equal_restrictive, policy_rank
 from scc_cli.marketplace.normalize import (
     is_plugin_allowed_by_patterns,
     matches_any_pattern,
 )
 from scc_cli.ports.config_models import NormalizedOrgConfig, NormalizedTeamConfig, SessionSettings
 
-if TYPE_CHECKING:
-    pass
-
-
-@dataclass
-class ConfigDecision:
-    """Tracks where a config value came from (for scc config explain)."""
-
-    field: str
-    value: Any
-    reason: str
-    source: str  # "org.security" | "org.defaults" | "team.X" | "project"
-
-
-@dataclass
-class BlockedItem:
-    """Tracks an item blocked by security pattern."""
-
-    item: str
-    blocked_by: str
-    source: str  # Always "org.security"
-    target_type: str = TargetType.PLUGIN
-
-
-@dataclass
-class DelegationDenied:
-    """Tracks an addition denied due to delegation rules."""
-
-    item: str
-    requested_by: str  # RequestSource.TEAM or RequestSource.PROJECT
-    reason: str
-    target_type: str = TargetType.PLUGIN
-
-
-@dataclass
-class MCPServer:
-    """Represents an MCP server configuration.
-
-    Supports three transport types:
-    - sse: Server-Sent Events (requires url)
-    - stdio: Standard I/O (requires command, optional args and env)
-    - http: HTTP transport (requires url, optional headers)
-    """
-
-    name: str
-    type: str  # MCPServerType value
-    url: str | None = None
-    command: str | None = None
-    args: list[str] | None = None
-    env: dict[str, str] | None = None
-    headers: dict[str, str] | None = None
-
-
-@dataclass
-class SessionConfig:
-    """Session configuration."""
-
-    timeout_hours: int | None = None
-    auto_resume: bool | None = None
-
-
-@dataclass
-class EffectiveConfig:
-    """The computed effective configuration after 3-layer merge.
-
-    Contains:
-    - Final resolved values (plugins, mcp_servers, etc.)
-    - Tracking information for debugging (decisions, blocked_items, denied_additions)
-    """
-
-    plugins: set[str] = field(default_factory=set)
-    mcp_servers: list[MCPServer] = field(default_factory=list)
-    network_policy: str | None = None
-    session_config: SessionConfig = field(default_factory=SessionConfig)
-
-    decisions: list[ConfigDecision] = field(default_factory=list)
-    blocked_items: list[BlockedItem] = field(default_factory=list)
-    denied_additions: list[DelegationDenied] = field(default_factory=list)
-
-
-@dataclass
-class StdioValidationResult:
-    """Result of validating a stdio MCP server configuration.
-
-    stdio servers are the "sharpest knife" - they have elevated privileges:
-    - Mounted workspace (write access)
-    - Network access (required for some tools)
-    - Tokens in environment variables
-
-    This validation implements layered defense:
-    - Gate 1: Feature gate (org must explicitly enable)
-    - Gate 2: Absolute path required (prevents ./evil injection)
-    - Gate 3: Prefix allowlist + commonpath (prevents path traversal)
-    - Warnings for host-side checks (command runs in container, not host)
-    """
-
-    blocked: bool
-    reason: str = ""
-    warnings: list[str] = field(default_factory=list)
+__all__ = [
+    "BlockedItem",
+    "ConfigDecision",
+    "DelegationDenied",
+    "EffectiveConfig",
+    "IgnoredPolicyChange",
+    "MCPServer",
+    "SessionConfig",
+    "StdioValidationResult",
+    "compute_effective_config",
+]
 
 
 def matches_blocked_plugin(plugin_ref: str, blocked_patterns: list[str]) -> str | None:
@@ -153,6 +74,49 @@ def record_network_policy_decision(
             source=source,
         )
     )
+
+
+def merge_restrictive_network_policy_layer(
+    result: EffectiveConfig,
+    *,
+    requested_policy: str | None,
+    source: str,
+    apply_reason: str,
+    unknown_reason: str,
+    less_restrictive_reason: str,
+    current_source: str | None,
+) -> str | None:
+    """Apply a network_policy only when it does not widen the current policy."""
+    if not requested_policy:
+        return current_source
+
+    ignored_reason: str | None = None
+    if policy_rank(requested_policy) < 0:
+        ignored_reason = unknown_reason
+    elif result.network_policy is None or is_more_or_equal_restrictive(
+        requested_policy, result.network_policy
+    ):
+        result.network_policy = requested_policy
+        record_network_policy_decision(
+            result,
+            policy=requested_policy,
+            reason=apply_reason,
+            source=source,
+        )
+        return source
+    else:
+        ignored_reason = less_restrictive_reason
+
+    result.ignored_policy_changes.append(
+        IgnoredPolicyChange(
+            field="network_policy",
+            requested_value=requested_policy,
+            effective_value=result.network_policy,
+            source=source,
+            reason=ignored_reason,
+        )
+    )
+    return current_source
 
 
 def validate_stdio_server(
@@ -422,6 +386,19 @@ def _merge_project_config(
     """Merge project-level config into the effective config."""
     project_delegated, delegation_reason = is_project_delegated(org_config, team_name)
 
+    project_network_policy = project_config.get("network_policy")
+    network_policy_source = merge_restrictive_network_policy_layer(
+        result,
+        requested_policy=project_network_policy,
+        source="project",
+        apply_reason="Applied from project config",
+        unknown_reason="Unknown project network_policy value",
+        less_restrictive_reason=(
+            "Project network_policy cannot be less restrictive than inherited policy"
+        ),
+        current_source=network_policy_source,
+    )
+
     project_plugins = project_config.get("additional_plugins", [])
     for plugin in project_plugins:
         blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
@@ -660,25 +637,18 @@ def compute_effective_config(
     team_config = org_config.profiles.get(team_name) if team_name else None
 
     team_network_policy = team_config.network_policy if team_config else None
-    if team_network_policy:
-        if result.network_policy is None:
-            result.network_policy = team_network_policy
-            network_policy_source = f"team.{team_name}"
-            record_network_policy_decision(
-                result,
-                policy=team_network_policy,
-                reason=f"Overridden by team profile '{team_name}'",
-                source=f"team.{team_name}",
-            )
-        elif is_more_or_equal_restrictive(team_network_policy, result.network_policy):
-            result.network_policy = team_network_policy
-            network_policy_source = f"team.{team_name}"
-            record_network_policy_decision(
-                result,
-                policy=team_network_policy,
-                reason=f"Overridden by team profile '{team_name}'",
-                source=f"team.{team_name}",
-            )
+    if team_name:
+        network_policy_source = merge_restrictive_network_policy_layer(
+            result,
+            requested_policy=team_network_policy,
+            source=f"team.{team_name}",
+            apply_reason=f"Overridden by team profile '{team_name}'",
+            unknown_reason="Unknown team network_policy value",
+            less_restrictive_reason=(
+                "Team network_policy cannot be less restrictive than inherited policy"
+            ),
+            current_source=network_policy_source,
+        )
 
     team_plugins = list(team_config.additional_plugins) if team_config else []
     team_delegated_plugins = is_team_delegated_for_plugins(org_config, team_name)

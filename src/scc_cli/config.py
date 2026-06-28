@@ -21,6 +21,8 @@ from typing import Any, cast
 import yaml  # type: ignore[import-untyped]
 from rich.console import Console
 
+from scc_cli.core.enums import NetworkPolicy
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # XDG Base Directory Paths
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -486,6 +488,14 @@ def load_cached_org_config() -> dict[Any, Any] | None:
 
 # Project config filename
 PROJECT_CONFIG_FILE = ".scc.yaml"
+PROJECT_CONFIG_KEYS = frozenset(
+    {
+        "additional_plugins",
+        "additional_mcp_servers",
+        "network_policy",
+        "session",
+    }
+)
 
 
 def read_project_config(workspace_path: str | Path) -> dict[str, Any] | None:
@@ -557,6 +567,13 @@ def _validate_project_config_schema(config: dict[str, Any]) -> None:
     if "additional_mcp_servers" in config:
         if not isinstance(config["additional_mcp_servers"], list):
             raise ValueError("additional_mcp_servers must be a list")
+
+    # network_policy must be one of the supported policy values
+    if "network_policy" in config:
+        valid_policies = {policy.value for policy in NetworkPolicy}
+        if config["network_policy"] not in valid_policies:
+            expected = ", ".join(sorted(valid_policies))
+            raise ValueError(f"network_policy must be one of: {expected}")
 
     # session must be a dict
     if "session" in config:

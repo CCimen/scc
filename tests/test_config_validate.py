@@ -48,6 +48,57 @@ session:
     assert "Project Config Valid" in result.output
 
 
+def test_config_validate_accepts_network_policy(tmp_path, monkeypatch):
+    scc_yaml = tmp_path / ".scc.yaml"
+    scc_yaml.write_text("network_policy: locked-down-web\n")
+
+    org_config = _org_config(allowed_plugins=["*"])
+    monkeypatch.setattr(
+        "scc_cli.commands.config.config.load_cached_org_config",
+        lambda: org_config,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["config", "validate", "--workspace", str(tmp_path), "--team", "backend"],
+    )
+
+    assert result.exit_code == 0
+    assert "Project Config Valid" in result.output
+    assert "Unknown keys" not in result.output
+    assert "network_policy" not in result.output
+
+
+def test_config_validate_json_accepts_network_policy(tmp_path, monkeypatch):
+    scc_yaml = tmp_path / ".scc.yaml"
+    scc_yaml.write_text("network_policy: locked-down-web\n")
+
+    org_config = _org_config(allowed_plugins=["*"])
+    monkeypatch.setattr(
+        "scc_cli.commands.config.config.load_cached_org_config",
+        lambda: org_config,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "config",
+            "validate",
+            "--workspace",
+            str(tmp_path),
+            "--team",
+            "backend",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"]["ok"] is True
+    assert payload["status"]["warnings"] == []
+    assert payload["data"]["unknown_keys"] == []
+
+
 def test_config_validate_denied_plugin_returns_governance_exit(tmp_path, monkeypatch):
     scc_yaml = tmp_path / ".scc.yaml"
     scc_yaml.write_text(

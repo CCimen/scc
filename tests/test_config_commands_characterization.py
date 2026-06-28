@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from scc_cli.commands.config import (
     EnforcementStatusEntry,
+    _build_enforcement_status_entries,
     _collect_advisory_warnings,
     _serialize_enforcement_status_entries,
 )
@@ -32,6 +33,14 @@ class TestEnforcementStatusEntry:
         assert entry.surface == "plugins"
         assert entry.status == "enforced"
         assert entry.detail == "All plugins validated"
+
+    def test_network_policy_entry_reflects_topology_enforcement(self) -> None:
+        """network_policy status should match the runtime topology docs."""
+        entries = _build_enforcement_status_entries()
+        network_entry = next(entry for entry in entries if entry.surface == "network_policy")
+
+        assert network_entry.status == "Enforced"
+        assert "topology" in network_entry.detail.lower()
 
 
 class TestSerializeEnforcementStatusEntries:
@@ -96,20 +105,6 @@ class TestCollectAdvisoryWarnings:
                 effective_network_policy=None,
             )
         assert any("auto_resume" in w and "advisory" in w for w in warnings)
-
-    def test_team_less_restrictive_warning(self, tmp_path: Path) -> None:
-        with patch("scc_cli.commands.config.config") as mock_config:
-            mock_config.read_project_config.return_value = None
-            warnings = _collect_advisory_warnings(
-                org_config={
-                    "defaults": {"network_policy": "locked-down-web"},
-                    "profiles": {"team-a": {"network_policy": "open"}},
-                },
-                team_name="team-a",
-                workspace_path=tmp_path,
-                effective_network_policy=None,
-            )
-        assert any("less restrictive" in w for w in warnings)
 
     def test_web_egress_no_proxy_warning(self, tmp_path: Path) -> None:
         with (

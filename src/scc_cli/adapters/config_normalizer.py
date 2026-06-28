@@ -365,5 +365,6 @@ def normalize_project_config(raw: dict[str, Any] | None) -> NormalizedProjectCon
     return NormalizedProjectConfig(
         additional_plugins=tuple(raw.get("additional_plugins", [])),
         additional_mcp_servers=mcp_servers,
+        network_policy=raw.get("network_policy"),
         session=_normalize_session_settings(raw.get("session")),
     )

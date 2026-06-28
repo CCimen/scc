@@ -14,16 +14,17 @@ from typing import Annotated, Any
 import typer
 
 from .. import config, setup
-from ..application.compute_effective_config import (
+from ..application.compute_effective_config import compute_effective_config
+from ..application.effective_config_models import (
     ConfigDecision,
     EffectiveConfig,
-    compute_effective_config,
+    IgnoredPolicyChange,
 )
 from ..cli_common import console, handle_errors
 from ..core import personal_profiles
 from ..core.enums import NetworkPolicy
 from ..core.exit_codes import EXIT_USAGE
-from ..core.network_policy import collect_proxy_env, is_more_or_equal_restrictive
+from ..core.network_policy import collect_proxy_env
 from ..panels import create_error_panel, create_info_panel
 from ..ports.config_models import NormalizedOrgConfig
 from ..source_resolver import ResolveError, resolve_source
@@ -357,6 +358,7 @@ def _config_explain(
 
     _render_enforcement_status(enforcement_status, field_filter)
     _render_config_decisions(effective, field_filter)
+    _render_ignored_policy_changes(effective.ignored_policy_changes, field_filter)
     _render_personal_profile(ws_path, field_filter)
 
     if effective.blocked_items and (not field_filter or field_filter == "blocked"):
@@ -406,8 +408,8 @@ def _build_enforcement_status_entries() -> list[EnforcementStatusEntry]:
         ),
         EnforcementStatusEntry(
             surface="network_policy",
-            status="Partially enforced",
-            detail="Proxy env injection and MCP suppression, not full egress control.",
+            status="Enforced",
+            detail="Topology-enforced for OCI sessions; proxy env injection is a compatibility aid.",
         ),
         EnforcementStatusEntry(
             surface="safety_net policy",
@@ -470,18 +472,6 @@ def _collect_advisory_warnings(
         sources = ", ".join(auto_resume_sources)
         warnings.append(
             f"session.auto_resume is advisory only and not enforced (set by {sources})."
-        )
-
-    default_network_policy = org_config.get("defaults", {}).get("network_policy")
-    team_network_policy = org_config.get("profiles", {}).get(team_name, {}).get("network_policy")
-    if (
-        default_network_policy
-        and team_network_policy
-        and not is_more_or_equal_restrictive(team_network_policy, default_network_policy)
-    ):
-        warnings.append(
-            "team network_policy is less restrictive than org default and is ignored "
-            f"({team_network_policy} < {default_network_policy})."
         )
 
     if effective_network_policy == NetworkPolicy.WEB_EGRESS_ENFORCED.value:
@@ -600,6 +590,27 @@ def _render_config_decisions(effective: EffectiveConfig, field_filter: str | Non
         else:
             console.print("  [dim]None configured[/dim]")
         console.print()
+
+
+def _render_ignored_policy_changes(
+    changes: list[IgnoredPolicyChange], field_filter: str | None
+) -> None:
+    """Render policy values that were rejected during effective-config merge."""
+    if field_filter and field_filter not in {"network", "network_policy"}:
+        return
+
+    if not changes:
+        return
+
+    console.print("[bold yellow]Ignored Policy Changes[/bold yellow]")
+    for change in changes:
+        console.print(
+            f"  [yellow]⚠[/yellow] {change.field}: requested "
+            f"{change.requested_value} from {change.source} was ignored "
+            f"[dim](effective: {change.effective_value})[/dim]"
+        )
+        console.print(f"      [dim]{change.reason}[/dim]")
+    console.print()
 
 
 def _render_personal_profile(ws_path: Path, field_filter: str | None) -> None:

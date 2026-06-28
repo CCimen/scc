@@ -242,4 +242,5 @@ class NormalizedProjectConfig:
 
     additional_plugins: tuple[str, ...] = ()
     additional_mcp_servers: tuple[MCPServerConfig, ...] = ()
+    network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
