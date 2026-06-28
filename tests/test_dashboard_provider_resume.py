@@ -64,7 +64,7 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
     mock_conflict: MagicMock,
     mock_prepare: MagicMock,
     mock_readiness: MagicMock,
-    _mock_resolve: MagicMock,
+    mock_resolve: MagicMock,
     mock_adapters: MagicMock,
     mock_validate: MagicMock,
     _mock_org: MagicMock,
@@ -100,6 +100,7 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
     request = mock_prepare.call_args.args[0]
     assert request.provider_id == "codex"
     assert request.resume is True
+    assert mock_resolve.call_args.kwargs["resume_provider"] == "codex"
     mock_readiness.assert_called_once()
     mock_launch_panel.assert_called_once()
     mock_finalize.assert_called_once_with(start_plan, dependencies=adapters)

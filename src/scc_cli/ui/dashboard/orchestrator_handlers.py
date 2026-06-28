@@ -183,6 +183,7 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     )
     if result.decision is ResolvedWorkspaceLaunchDecision.LAUNCHED:
         return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.LAUNCHED)
+    # Keeping an existing sandbox is not a new worktree start.
     return app_dashboard.StartFlowResult(
         decision=app_dashboard.StartFlowDecision.CANCELLED,
         message=result.message,
@@ -245,6 +246,7 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         ),
         console=console,
     )
+    # Resuming onto an existing sandbox still completes the resume action.
     return result.decision in {
         ResolvedWorkspaceLaunchDecision.LAUNCHED,
         ResolvedWorkspaceLaunchDecision.KEPT_EXISTING,

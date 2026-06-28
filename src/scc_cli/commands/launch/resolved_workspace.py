@@ -61,10 +61,9 @@ def launch_resolved_workspace(
 ) -> ResolvedWorkspaceLaunchResult:
     """Run the standard live launch sequence for a selected workspace.
 
-    Dashboard callers own their local validation and return-type mapping. This
-    command-layer owner keeps provider resolution, readiness, plan preparation,
-    conflict resolution, launch rendering, finalization, and last-used-provider
-    recording on the same path.
+    Dashboard callers own local validation and return-type mapping. This helper
+    centralizes their shared launch sequence until the remaining S04 launch paths
+    converge.
     """
     try:
         adapters = bootstrap.get_default_adapters()
