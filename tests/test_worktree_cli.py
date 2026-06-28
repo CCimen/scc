@@ -167,6 +167,48 @@ class TestWorktreeCreate:
             request = mock_create.call_args.args[0]
             assert request.base_branch == "develop"
 
+    def test_create_with_start_agent_delegates_created_worktree_launch(
+        self,
+        tmp_path: Path,
+        worktree_command_dependencies,
+    ) -> None:
+        """create should leave auto-start launch orchestration to the launch package."""
+        from scc_cli.application.worktree import WorktreeCreateResult
+        from scc_cli.commands.worktree import worktree_create_cmd
+
+        dependencies, adapters = worktree_command_dependencies
+        worktree_path = tmp_path / "worktrees" / "feature"
+        with (
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.worktree_use_cases.create_worktree"
+            ) as mock_create,
+            patch("scc_cli.commands.worktree.worktree_commands.Confirm.ask", return_value=True),
+            patch(
+                "scc_cli.commands.worktree.worktree_commands.launch_created_worktree"
+            ) as mock_launch,
+        ):
+            mock_create.return_value = WorktreeCreateResult(
+                worktree_path=worktree_path,
+                worktree_name="feature",
+                branch_name="scc/feature",
+                base_branch="main",
+                dependencies_installed=True,
+            )
+
+            worktree_create_cmd(
+                workspace=str(tmp_path),
+                name="feature",
+                base_branch=None,
+                start_agent=True,
+                install_deps=False,
+            )
+
+        mock_launch.assert_called_once()
+        request = mock_launch.call_args.args[0]
+        assert request.worktree_path == worktree_path
+        assert mock_launch.call_args.kwargs["adapters"] is adapters
+        assert dependencies.dependency_installer.install.call_count == 0
+
     def test_create_raises_for_non_repo(
         self, tmp_path: Path, worktree_command_dependencies
     ) -> None:

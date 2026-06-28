@@ -48,7 +48,7 @@ _MIGRATED_FILES = (
     SRC / "commands" / "launch" / "flow.py",
     SRC / "commands" / "launch" / "flow_interactive.py",
     SRC / "commands" / "launch" / "resolved_workspace.py",
-    SRC / "commands" / "worktree" / "worktree_commands.py",
+    SRC / "commands" / "launch" / "worktree_autostart.py",
 )
 
 # preflight.py itself is the one legitimate consumer of choose_start_provider.

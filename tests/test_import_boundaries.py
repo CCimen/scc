@@ -881,6 +881,42 @@ class TestPreparedLaunchCompletionBoundary:
         )
 
 
+class TestWorktreeLaunchRoutingBoundary:
+    """Worktree commands delegate auto-start launch orchestration to launch owners."""
+
+    BANNED_WORKTREE_LAUNCH_IMPORTS = {
+        "StartSessionRequest",
+        "NormalizedOrgConfig",
+        "finalize_launch",
+        "prepare_live_start_plan",
+        "resolve_launch_provider",
+        "collect_launch_readiness",
+        "ensure_launch_ready",
+    }
+
+    def test_worktree_commands_do_not_import_launch_internals(self) -> None:
+        """Worktree command UI should not build live launch plans inline."""
+        worktree_file = SRC / "commands" / "worktree" / "worktree_commands.py"
+        tree = ast.parse(worktree_file.read_text(encoding="utf-8"))
+        problems: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            imported = sorted(
+                self.BANNED_WORKTREE_LAUNCH_IMPORTS.intersection(alias.name for alias in node.names)
+            )
+            if imported:
+                problems.append(
+                    f"{worktree_file.relative_to(REPO_ROOT)}:{node.lineno}: {', '.join(imported)}"
+                )
+
+        assert not problems, (
+            "Worktree commands should delegate created-worktree auto-start to "
+            "commands.launch instead of importing launch internals:\n" + "\n".join(problems)
+        )
+
+
 class TestLaunchOwnershipBoundary:
     """Launch preparation has one canonical application owner."""
 
