@@ -88,6 +88,13 @@ def _config_validate(
             team_name=team,
             project_config=project_config,
         )
+        for ignored in effective.ignored_policy_changes:
+            if ignored.source != "project":
+                continue
+            warnings.append(
+                f"{ignored.field} ignored: {ignored.reason} "
+                f"({ignored.requested_value} -> {ignored.effective_value})."
+            )
 
         project_plugins = set(project_config.get("additional_plugins", []))
         project_mcp_tokens: set[str] = set()

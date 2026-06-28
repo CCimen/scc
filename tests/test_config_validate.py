@@ -11,11 +11,17 @@ from scc_cli import cli
 runner = CliRunner()
 
 
-def _org_config(*, allowed_plugins: list[str] | None = None) -> dict[str, object]:
+def _org_config(
+    *, allowed_plugins: list[str] | None = None, network_policy: str | None = None
+) -> dict[str, object]:
+    defaults: dict[str, object] = {"allowed_plugins": allowed_plugins}
+    if network_policy is not None:
+        defaults["network_policy"] = network_policy
+
     return {
         "schema_version": "1.0.0",
         "organization": {"name": "Test Org", "id": "test-org"},
-        "defaults": {"allowed_plugins": allowed_plugins},
+        "defaults": defaults,
         "delegation": {"projects": {"inherit_team_delegation": True}},
         "profiles": {"backend": {"delegation": {"allow_project_overrides": True}}},
     }
@@ -96,6 +102,61 @@ def test_config_validate_json_accepts_network_policy(tmp_path, monkeypatch):
     payload = json.loads(result.output)
     assert payload["status"]["ok"] is True
     assert payload["status"]["warnings"] == []
+    assert payload["data"]["unknown_keys"] == []
+
+
+def test_config_validate_warns_when_project_network_policy_is_ignored(tmp_path, monkeypatch):
+    scc_yaml = tmp_path / ".scc.yaml"
+    scc_yaml.write_text("network_policy: open\n")
+
+    org_config = _org_config(allowed_plugins=["*"], network_policy="locked-down-web")
+    monkeypatch.setattr(
+        "scc_cli.commands.config.config.load_cached_org_config",
+        lambda: org_config,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["config", "validate", "--workspace", str(tmp_path), "--team", "backend"],
+    )
+
+    assert result.exit_code == 0
+    assert "Project Config Valid" in result.output
+    assert "Warnings" in result.output
+    assert "network_policy ignored" in result.output
+    assert "open -> locked-down-web" in result.output
+
+
+def test_config_validate_json_warns_when_project_network_policy_is_ignored(tmp_path, monkeypatch):
+    scc_yaml = tmp_path / ".scc.yaml"
+    scc_yaml.write_text("network_policy: open\n")
+
+    org_config = _org_config(allowed_plugins=["*"], network_policy="locked-down-web")
+    monkeypatch.setattr(
+        "scc_cli.commands.config.config.load_cached_org_config",
+        lambda: org_config,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "config",
+            "validate",
+            "--workspace",
+            str(tmp_path),
+            "--team",
+            "backend",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"]["ok"] is True
+    assert payload["status"]["warnings"] == [
+        "network_policy ignored: Project network_policy cannot be less restrictive than "
+        "inherited policy (open -> locked-down-web)."
+    ]
     assert payload["data"]["unknown_keys"] == []
 
 
