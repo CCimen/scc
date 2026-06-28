@@ -43,46 +43,6 @@ class TestPromptOrgUrl:
             "[red]✗ HTTP URLs are not allowed. Please use HTTPS.[/red]"
         )
 
-    def test_returns_false_for_standalone(self):
-        """Should return False when user chooses standalone mode (choice 2)."""
-        mock_console = MagicMock()
-        with patch("scc_cli.setup.prompt_with_layout", return_value="2"):
-            result = setup.prompt_has_org_config(mock_console)
-        assert result is False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for prompt_auth_method
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestPromptAuthMethod:
-    """Tests for prompt_auth_method() function."""
-
-    def test_returns_env_auth_spec(self):
-        """Should return env:VAR format."""
-        mock_console = MagicMock()
-        with patch("scc_cli.setup.prompt_with_layout", side_effect=["1", "GITLAB_TOKEN"]):
-            result = setup.prompt_auth_method(mock_console)
-        assert result == "env:GITLAB_TOKEN"
-
-    def test_returns_command_auth_spec(self):
-        """Should return command:CMD format."""
-        mock_console = MagicMock()
-        with patch(
-            "scc_cli.setup.prompt_with_layout",
-            side_effect=["2", "op read op://Dev/token"],
-        ):
-            result = setup.prompt_auth_method(mock_console)
-        assert result == "command:op read op://Dev/token"
-
-    def test_returns_none_for_skip(self):
-        """Should return None when user skips auth."""
-        mock_console = MagicMock()
-        with patch("scc_cli.setup.prompt_with_layout", return_value="3"):
-            result = setup.prompt_auth_method(mock_console)
-        assert result is None
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for fetch_and_validate_org_config
@@ -140,70 +100,6 @@ class TestFetchAndValidateOrgConfig:
                 mock_console, "https://example.org/config.json", auth="env:TOKEN"
             )
             assert result2 == sample_config
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for prompt_profile_selection
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestPromptProfileSelection:
-    """Tests for prompt_profile_selection() function."""
-
-    def test_displays_profiles_from_org_config(self):
-        """Should display profiles from org config."""
-        mock_console = MagicMock()
-        org_config = {
-            "profiles": {
-                "platform": {"description": "Platform team"},
-                "api": {"description": "API team"},
-            }
-        }
-        with patch("scc_cli.setup.prompt_with_layout", return_value="1"):
-            result = setup.prompt_profile_selection(mock_console, org_config)
-        assert result in ["platform", "api"]
-
-    def test_returns_none_for_no_profile_selection(self):
-        """Should return None when user selects no profile."""
-        mock_console = MagicMock()
-        org_config = {
-            "profiles": {
-                "platform": {"description": "Platform team"},
-            }
-        }
-        with patch("scc_cli.setup.prompt_with_layout", return_value="0"):
-            result = setup.prompt_profile_selection(mock_console, org_config)
-        assert result is None
-
-    def test_handles_empty_profiles(self):
-        """Should handle org config with no profiles."""
-        mock_console = MagicMock()
-        org_config = {"profiles": {}}
-        result = setup.prompt_profile_selection(mock_console, org_config)
-        assert result is None
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for prompt_hooks_enablement
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestPromptHooksEnablement:
-    """Tests for prompt_hooks_enablement() function."""
-
-    def test_returns_true_when_user_accepts(self):
-        """Should return True when user accepts hooks."""
-        mock_console = MagicMock()
-        with patch("scc_cli.setup.confirm_with_layout", return_value=True):
-            result = setup.prompt_hooks_enablement(mock_console)
-        assert result is True
-
-    def test_returns_false_when_user_declines(self):
-        """Should return False when user declines hooks."""
-        mock_console = MagicMock()
-        with patch("scc_cli.setup.confirm_with_layout", return_value=False):
-            result = setup.prompt_hooks_enablement(mock_console)
-        assert result is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

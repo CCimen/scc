@@ -1,21 +1,16 @@
 """
 Configuration building, preview, and persistence for the SCC setup wizard.
 
-Extracted from setup.py to reduce module size.
-Contains: config preview rendering, proposed config assembly, config diff,
-save logic, setup summary, and confirmation flow.
+Contains config preview rendering, proposed config assembly, config diff,
+and save logic.
 """
 
 from typing import Any
 
-from rich import box
 from rich.console import Console
-from rich.panel import Panel
 from rich.text import Text
 
 from . import config
-from .setup_ui import _layout_metrics, _print_padded
-from .ui.prompts import confirm_with_layout
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Config Preview Helpers
@@ -207,104 +202,14 @@ def save_setup_config(
     # Ensure config directory exists
     config.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Build configuration
-    user_config: dict[str, Any] = {
-        "config_version": "1.0.0",
-        "hooks": {"enabled": hooks_enabled},
-    }
-
-    if standalone:
-        user_config["standalone"] = True
-        user_config["organization_source"] = None
-    elif org_url:
-        org_source: dict[str, Any] = {
-            "url": org_url,
-            "auth": auth,
-        }
-        if auth_header:
-            org_source["auth_header"] = auth_header
-        user_config["organization_source"] = org_source
-        user_config["selected_profile"] = profile
-
-    # Save to config file
-    config.save_user_config(user_config)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Setup Summary & Confirmation
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def _build_setup_summary(
-    *,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None,
-    profile: str | None,
-    hooks_enabled: bool,
-    standalone: bool,
-    org_name: str | None = None,
-) -> Text:
-    """Build a summary text block for setup confirmation."""
-    summary = Text()
-
-    def _line(label: str, value: str) -> None:
-        summary.append(f"{label}: ", style="cyan")
-        summary.append(value, style="white")
-        summary.append("\n")
-
-    if standalone:
-        _line("Mode", "Standalone")
-    else:
-        _line("Mode", "Organization")
-        if org_name:
-            _line("Organization", org_name)
-        if org_url:
-            _line("Org URL", org_url)
-        _line("Profile", profile or "none")
-        _line("Auth", auth or "none")
-        if auth_header:
-            _line("Auth Header", auth_header)
-
-    _line("Hooks", "enabled" if hooks_enabled else "disabled")
-    _line("Config dir", str(config.CONFIG_DIR))
-    return summary
-
-
-def _confirm_setup(
-    console: Console,
-    *,
-    org_url: str | None,
-    auth: str | None,
-    auth_header: str | None = None,
-    profile: str | None,
-    hooks_enabled: bool,
-    standalone: bool,
-    org_name: str | None = None,
-    rendered: bool = False,
-) -> bool:
-    """Show a configuration summary and ask for confirmation."""
-    summary = _build_setup_summary(
+    user_config = _build_proposed_config(
         org_url=org_url,
         auth=auth,
         auth_header=auth_header,
         profile=profile,
         hooks_enabled=hooks_enabled,
         standalone=standalone,
-        org_name=org_name,
     )
 
-    if not rendered:
-        metrics = _layout_metrics(console)
-        panel = Panel(
-            summary,
-            title="[bold cyan]Review & Confirm[/bold cyan]",
-            border_style="bright_black",
-            box=box.ROUNDED,
-            padding=(1, 2),
-            width=min(metrics.content_width, 80),
-        )
-        _print_padded(console, panel, metrics)
-        console.print()
-
-    return confirm_with_layout(console, "[cyan]Apply these settings?[/cyan]", default=True)
+    # Save to config file
+    config.save_user_config(user_config)

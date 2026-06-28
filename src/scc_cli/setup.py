@@ -8,7 +8,7 @@ Remote organization config workflow:
 - Git hooks enablement option
 """
 
-from typing import Any, cast
+from typing import Any
 
 from rich import box
 from rich.console import Console
@@ -36,8 +36,6 @@ from .setup_config import (  # noqa: F401
     _build_config_changes,
     _build_config_preview,
     _build_proposed_config,
-    _build_setup_summary,
-    _confirm_setup,
     _format_preview_value,
     _get_config_value,
     save_setup_config,
@@ -56,28 +54,11 @@ from .setup_ui import (  # noqa: F401
     show_welcome,
 )
 from .theme import Spinners
-from .ui.prompts import confirm_with_layout, prompt_with_layout  # noqa: F401
+from .ui.prompts import prompt_with_layout  # noqa: F401
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Organization Config URL
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-def prompt_has_org_config(console: Console, *, rendered: bool = False) -> bool:
-    """Prompt the user to confirm if they have an organization config URL.
-
-    Returns:
-        True if user has org config URL, False for standalone mode.
-    """
-    if not rendered:
-        console.print()
-    choice = prompt_with_layout(
-        console,
-        "[cyan]Select mode[/cyan]",
-        choices=["1", "2"],
-        default="1",
-    )
-    return choice == "1"
 
 
 def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
@@ -106,58 +87,6 @@ def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
             continue
 
         return url
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Authentication
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def prompt_auth_method(console: Console, *, rendered: bool = False) -> str | None:
-    """Prompt the user to select an authentication method.
-
-    Options:
-    1. Environment variable (env:VAR)
-    2. Command (command:CMD)
-    3. Skip (no auth)
-
-    Returns:
-        Auth spec string (env:VAR or command:CMD) or None to skip.
-    """
-    if not rendered:
-        console.print()
-        console.print("[bold cyan]Authentication for org config[/bold cyan]")
-        console.print()
-        console.print("[dim]This is only used to fetch your organization config URL.[/dim]")
-        console.print("[dim]If your config is private, SCC needs a token to download it.[/dim]")
-        console.print("[dim]This does not affect agent auth inside the container.[/dim]")
-        console.print()
-        console.print("[dim]How would you like to provide the token?[/dim]")
-        console.print()
-        console.print("  [yellow][1][/yellow] Environment variable (env:VAR_NAME)")
-        console.print("      [dim]Example: env:SCC_ORG_TOKEN[/dim]")
-        console.print("  [yellow][2][/yellow] Command (command:your-command)")
-        console.print("      [dim]Example: command:op read --password scc/token[/dim]")
-        console.print("  [yellow][3][/yellow] Skip authentication (public URL)")
-    console.print()
-
-    choice = prompt_with_layout(
-        console,
-        "[cyan]Select auth method[/cyan]",
-        choices=["1", "2", "3"],
-        default="1",
-    )
-
-    if choice == "1":
-        var_name = prompt_with_layout(console, "[cyan]Environment variable name[/cyan]")
-        return f"env:{var_name}"
-
-    if choice == "2":
-        command = prompt_with_layout(console, "[cyan]Command to run[/cyan]")
-        return f"command:{command}"
-
-    # Choice 3: Skip
-    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -213,109 +142,6 @@ def fetch_and_validate_org_config(
     console.print("[dim]Organization config cached locally[/dim]")
 
     return config_data
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Profile Selection
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def prompt_profile_selection(console: Console, org_config: dict[str, Any]) -> str | None:
-    """Prompt the user to select a profile from the org config.
-
-    Args:
-        console: Rich console for output
-        org_config: Organization config with profiles
-
-    Returns:
-        Selected profile name or None for no profile.
-    """
-    profiles = org_config.get("profiles", {})
-
-    table, profile_list = build_profile_table(profiles)
-
-    if not profile_list:
-        console.print("[dim]No profiles configured.[/dim]")
-        return None
-
-    console.print()
-    console.print("[bold cyan]Select your team profile[/bold cyan]")
-    console.print()
-    console.print(table)
-    console.print()
-
-    return prompt_profile_choice(console, profile_list)
-
-
-def build_profile_table(profiles: dict[str, Any]) -> tuple[Table, list[str]]:
-    """Build the profile selection table and return it with profile list."""
-    table = Table(
-        box=box.SIMPLE,
-        show_header=False,
-        padding=(0, 2),
-        border_style="bright_black",
-    )
-    table.add_column("Option", style="yellow", width=4)
-    table.add_column("Profile", style="cyan", min_width=15)
-    table.add_column("Description", style="dim")
-
-    profile_list = list(profiles.keys())
-    for i, profile_name in enumerate(profile_list, 1):
-        profile_info = profiles[profile_name]
-        desc = profile_info.get("description", "")
-        table.add_row(f"[{i}]", profile_name, desc)
-
-    table.add_row("[0]", "none", "No profile")
-    return table, profile_list
-
-
-def prompt_profile_choice(console: Console, profile_list: list[str]) -> str | None:
-    """Prompt user to choose a profile from a list."""
-    if not profile_list:
-        return None
-    valid_choices = [str(i) for i in range(0, len(profile_list) + 1)]
-    choice_str = prompt_with_layout(
-        console,
-        "[cyan]Select profile[/cyan]",
-        default="0" if not profile_list else "1",
-        choices=valid_choices,
-    )
-    choice = int(choice_str)
-    if choice == 0:
-        return None
-    return cast(str, profile_list[choice - 1])
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Hooks Configuration
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def prompt_hooks_enablement(console: Console, *, rendered: bool = False) -> bool:
-    """Prompt the user about git hooks installation.
-
-    Returns:
-        True if hooks should be enabled, False otherwise.
-    """
-    if not rendered:
-        console.print()
-        console.print("[bold cyan]Git Hooks Protection[/bold cyan]")
-        console.print()
-        console.print("[dim]SCC can install a local pre-push hook that blocks direct pushes[/dim]")
-        console.print(
-            "[dim]to protected branches (main, master, develop, production, staging).[/dim]"
-        )
-        console.print("[dim]Hooks run inside the container too (unless --no-verify is used).[/dim]")
-        console.print(
-            "[dim]You can disable or remove it later; SCC only touches its own hook.[/dim]"
-        )
-        console.print()
-
-    return confirm_with_layout(
-        console,
-        "[cyan]Enable git hooks protection?[/cyan]",
-        default=True,
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

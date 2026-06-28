@@ -294,6 +294,79 @@ class TestEffectiveConfigOwnershipBoundary:
         )
 
 
+class TestSetupSurfaceBoundary:
+    """Setup keeps one live wizard path instead of legacy prompt twins."""
+
+    DEAD_SETUP_PROMPTS = {
+        "prompt_has_org_config",
+        "prompt_auth_method",
+        "prompt_profile_selection",
+        "build_profile_table",
+        "prompt_profile_choice",
+        "prompt_hooks_enablement",
+    }
+    DEAD_SETUP_CONFIRMATION = {
+        "_build_setup_summary",
+        "_confirm_setup",
+    }
+
+    def test_legacy_setup_prompt_surface_stays_deleted(self) -> None:
+        """The arrow-key setup wizard owns prompting; do not keep old prompt twins."""
+        setup_tree = ast.parse((SRC / "setup.py").read_text(encoding="utf-8"))
+        definitions = {
+            node.name for node in ast.walk(setup_tree) if isinstance(node, ast.FunctionDef)
+        }
+        legacy_defs = sorted(self.DEAD_SETUP_PROMPTS.intersection(definitions))
+
+        assert not legacy_defs, (
+            "setup.py should keep one live setup prompt path. Delete legacy prompt "
+            f"helpers instead of testing unreachable twins: {', '.join(legacy_defs)}"
+        )
+
+    def test_dead_setup_confirmation_helpers_stay_deleted(self) -> None:
+        """Confirmation rendering is inline in run_setup_wizard; do not keep dead twins."""
+        setup_config_tree = ast.parse((SRC / "setup_config.py").read_text(encoding="utf-8"))
+        definitions = {
+            node.name for node in ast.walk(setup_config_tree) if isinstance(node, ast.FunctionDef)
+        }
+        legacy_defs = sorted(self.DEAD_SETUP_CONFIRMATION.intersection(definitions))
+
+        assert not legacy_defs, (
+            "setup_config.py should not keep unused confirmation helpers. "
+            f"Found: {', '.join(legacy_defs)}"
+        )
+
+    def test_save_setup_config_reuses_proposed_config_builder(self) -> None:
+        """Persisted config must use the same assembly owner as the preview."""
+        setup_config_tree = ast.parse((SRC / "setup_config.py").read_text(encoding="utf-8"))
+        save_function = next(
+            node
+            for node in ast.walk(setup_config_tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "save_setup_config"
+        )
+
+        calls_builder = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_build_proposed_config"
+            for node in ast.walk(save_function)
+        )
+        assigns_inline_user_config = any(
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "user_config"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.Dict)
+            for node in ast.walk(save_function)
+        )
+
+        assert calls_builder and not assigns_inline_user_config, (
+            "save_setup_config should delegate config assembly to _build_proposed_config "
+            "so preview and persistence cannot drift."
+        )
+
+
 class TestGovernancePatternOwnership:
     """Governance pattern matching has one implementation owner."""
 
