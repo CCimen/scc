@@ -185,6 +185,129 @@ class TestStartWizardStateMachine:
         assert state.context.session_name == "my-session"
 
 
+class TestStartWizardFlowCompletion:
+    """Characterize the wizard handoff to the shared prepared-launch completion owner."""
+
+    def _run_with_completion(
+        self,
+        *,
+        tmp_path: Path,
+        monkeypatch: Any,
+        decision: Any,
+        message: str | None = None,
+    ) -> tuple[Any, Any, Any, Any, Any]:
+        import scc_cli.commands.launch.flow_interactive as flow
+        from scc_cli.commands.launch.completion import PreparedLaunchCompletionResult
+
+        adapters = MagicMock()
+        plan = MagicMock()
+        plan.current_branch = "main"
+        plan.resolver_result.is_mount_expanded = False
+        dependencies = MagicMock()
+        captured_request: dict[str, Any] = {}
+
+        def complete_launch(request: Any, *, console: Any) -> PreparedLaunchCompletionResult:
+            captured_request["request"] = request
+            return PreparedLaunchCompletionResult(decision=decision, message=message)
+
+        monkeypatch.setattr(flow.setup, "is_setup_needed", lambda: False)
+        monkeypatch.setattr(flow.config, "load_user_config", lambda: {})
+        monkeypatch.setattr(flow, "get_default_adapters", lambda: adapters)
+        monkeypatch.setattr(
+            flow,
+            "interactive_start",
+            lambda *args, **kwargs: (str(tmp_path), "platform", "demo", None),
+        )
+        monkeypatch.setattr(flow, "validate_and_resolve_workspace", lambda value: tmp_path)
+        monkeypatch.setattr(
+            flow,
+            "prepare_workspace",
+            lambda path, worktree_name, install_deps: tmp_path,
+        )
+        monkeypatch.setattr(flow, "_configure_team_settings", lambda *args, **kwargs: None)
+        monkeypatch.setattr(flow.config, "is_standalone_mode", lambda: True)
+        monkeypatch.setattr(flow.config, "get_selected_provider", lambda: "codex")
+        monkeypatch.setattr(flow, "resolve_launch_provider", lambda **kwargs: ("codex", "explicit"))
+        monkeypatch.setattr(
+            flow,
+            "collect_launch_readiness",
+            lambda *args, **kwargs: MagicMock(launch_ready=True),
+        )
+        monkeypatch.setattr(
+            flow,
+            "prepare_live_start_plan",
+            lambda *args, **kwargs: (dependencies, plan),
+        )
+        monkeypatch.setattr(flow, "build_sync_output_view_model", lambda plan: object())
+        monkeypatch.setattr(flow, "render_launch_output", lambda *args, **kwargs: None)
+        monkeypatch.setattr(flow, "complete_prepared_launch", complete_launch)
+
+        return flow, flow.run_start_wizard_flow(), captured_request["request"], plan, dependencies
+
+    def test_keep_existing_completion_returns_wizard_keep_existing(
+        self,
+        tmp_path: Path,
+        monkeypatch: Any,
+    ) -> None:
+        from scc_cli.commands.launch.completion import PreparedLaunchCompletionDecision
+
+        flow, result, request, plan, dependencies = self._run_with_completion(
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+            decision=PreparedLaunchCompletionDecision.KEPT_EXISTING,
+            message="Kept existing sandbox",
+        )
+        assert result.decision is flow.StartWizardFlowDecision.KEPT_EXISTING
+        assert result.message == "Kept existing sandbox"
+        assert request.workspace_path == tmp_path
+        assert request.team == "platform"
+        assert request.session_name == "demo"
+        assert request.current_branch == "main"
+        assert request.provider_id == "codex"
+        assert request.start_plan is plan
+        assert request.dependencies is dependencies
+        assert request.record_session is True
+        assert request.is_resume is False
+        assert request.json_mode is False
+        assert request.non_interactive is False
+
+    def test_cancelled_completion_returns_wizard_cancelled_and_prints_notice(
+        self,
+        tmp_path: Path,
+        monkeypatch: Any,
+        capfd: Any,
+    ) -> None:
+        from scc_cli.commands.launch.completion import PreparedLaunchCompletionDecision
+
+        flow, result, _request, _plan, _dependencies = self._run_with_completion(
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+            decision=PreparedLaunchCompletionDecision.CANCELLED,
+            message="Start cancelled",
+        )
+
+        captured = capfd.readouterr()
+        assert result.decision is flow.StartWizardFlowDecision.CANCELLED
+        assert result.message == "Start cancelled"
+        assert "Cancelled." in captured.out + captured.err
+
+    def test_launched_completion_returns_wizard_launched(
+        self,
+        tmp_path: Path,
+        monkeypatch: Any,
+    ) -> None:
+        from scc_cli.commands.launch.completion import PreparedLaunchCompletionDecision
+
+        flow, result, _request, _plan, _dependencies = self._run_with_completion(
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+            decision=PreparedLaunchCompletionDecision.LAUNCHED,
+        )
+
+        assert result.decision is flow.StartWizardFlowDecision.LAUNCHED
+        assert result.message is None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # start() CLI error paths (via typer test runner)
 # ═══════════════════════════════════════════════════════════════════════════════

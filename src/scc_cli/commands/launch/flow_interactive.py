@@ -50,14 +50,12 @@ from ...application.launch import (
     build_workspace_picker_prompt,
     build_workspace_source_prompt,
     build_worktree_name_prompt,
-    finalize_launch,
     initialize_start_wizard,
 )
 from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.exit_codes import EXIT_CONFIG
-from ...core.provider_resolution import get_provider_display_name
 from ...panels import create_info_panel, create_warning_panel
 from ...ports.config_models import NormalizedOrgConfig
 from ...ports.git_client import GitClient
@@ -74,17 +72,19 @@ from ...ui.wizard import (
     _normalize_path,
     render_start_wizard_prompt,
 )
-from ...workspace_local_config import set_workspace_last_used_provider
-from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
+from .completion import (
+    PreparedLaunchCompletionDecision,
+    PreparedLaunchCompletionRequest,
+    complete_prepared_launch,
+)
 from .dependencies import prepare_live_start_plan
-from .flow_session import _record_session_and_context
 from .flow_types import (
     WizardResumeContext,
     reset_for_team_switch,
     set_team_context,
 )
 from .preflight import collect_launch_readiness, ensure_launch_ready, resolve_launch_provider
-from .render import show_auth_bootstrap_panel, show_launch_panel
+from .render import show_auth_bootstrap_panel
 from .team_settings import _configure_team_settings
 from .workspace import prepare_workspace, validate_and_resolve_workspace
 
@@ -764,45 +764,33 @@ def run_start_wizard_flow(
             console.print()
         current_branch = start_plan.current_branch
 
-        conflict_resolution = resolve_launch_conflict(
-            start_plan,
-            dependencies=start_dependencies,
+        completion_result = complete_prepared_launch(
+            PreparedLaunchCompletionRequest(
+                workspace_path=workspace_path,
+                team=team,
+                session_name=session_name,
+                current_branch=current_branch,
+                provider_id=resolved_provider,
+                start_plan=start_plan,
+                dependencies=start_dependencies,
+                is_resume=False,
+                json_mode=False,
+                non_interactive=False,
+                record_session=True,
+            ),
             console=console,
-            display_name=get_provider_display_name(resolved_provider),
-            json_mode=False,
-            non_interactive=False,
         )
-        if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
-            set_workspace_last_used_provider(workspace_path, resolved_provider)
+        if completion_result.decision is PreparedLaunchCompletionDecision.KEPT_EXISTING:
             return StartWizardFlowResult(
                 decision=StartWizardFlowDecision.KEPT_EXISTING,
-                message="Kept existing sandbox",
+                message=completion_result.message,
             )
-        if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
+        if completion_result.decision is PreparedLaunchCompletionDecision.CANCELLED:
             console.print("[dim]Cancelled.[/dim]")
             return StartWizardFlowResult(
                 decision=StartWizardFlowDecision.CANCELLED,
-                message="Start cancelled",
+                message=completion_result.message,
             )
-        start_plan = conflict_resolution.plan
-
-        _record_session_and_context(
-            workspace_path,
-            team,
-            session_name,
-            current_branch,
-            provider_id=start_request.provider_id,
-        )
-        show_launch_panel(
-            workspace=workspace_path,
-            team=team,
-            session_name=session_name,
-            branch=current_branch,
-            is_resume=False,
-            display_name=get_provider_display_name(resolved_provider),
-        )
-        finalize_launch(start_plan, dependencies=start_dependencies)
-        set_workspace_last_used_provider(workspace_path, resolved_provider)
         return StartWizardFlowResult(decision=StartWizardFlowDecision.LAUNCHED)
     except Exception as e:
         err_console.print(f"[red]Error launching sandbox: {e}[/red]")
