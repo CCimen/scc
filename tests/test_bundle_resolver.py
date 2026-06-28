@@ -39,6 +39,7 @@ from scc_cli.ports.config_models import (
     NormalizedTeamConfig,
     OrganizationInfo,
 )
+from scc_cli.services.config_normalizer import normalize_org_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -579,7 +580,7 @@ class TestConfigNormalization:
                 },
             },
         }
-        org = NormalizedOrgConfig.from_dict(raw)
+        org = normalize_org_config(raw)
 
         # Catalog populated
         assert "code-review-skill" in org.governed_artifacts.artifacts
@@ -612,7 +613,7 @@ class TestConfigNormalization:
     def test_normalizer_empty_governed_artifacts(self) -> None:
         """Org config with no governed_artifacts section produces empty catalog."""
         raw = {"organization": {"name": "test-org"}}
-        org = NormalizedOrgConfig.from_dict(raw)
+        org = normalize_org_config(raw)
         assert org.governed_artifacts.artifacts == {}
         assert org.governed_artifacts.bundles == {}
         assert org.governed_artifacts.bindings == {}
@@ -647,7 +648,7 @@ class TestConfigNormalization:
                 },
             },
         }
-        org = NormalizedOrgConfig.from_dict(raw)
+        org = normalize_org_config(raw)
 
         # Claude gets both
         claude_result = resolve_render_plan(org, "dev-team", "claude")

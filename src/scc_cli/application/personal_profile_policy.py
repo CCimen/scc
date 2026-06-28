@@ -12,6 +12,7 @@ from scc_cli.application.compute_effective_config import (
 from scc_cli.core.enums import MCPServerType, TargetType
 from scc_cli.core.governance_patterns import match_blocked_mcp
 from scc_cli.ports.config_models import NormalizedOrgConfig
+from scc_cli.services.config_normalizer import normalize_org_config
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ def filter_personal_profile_settings(
 ) -> tuple[dict[str, Any], list[ProfilePolicySkip]]:
     """Filter personal profile settings against org security blocks."""
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     blocked_plugins = list(org_config.security.blocked_plugins)
     if not personal_settings or not blocked_plugins:
@@ -84,7 +85,7 @@ def filter_personal_profile_mcp(
         return personal_mcp, []
 
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     blocked_mcp_servers = list(org_config.security.blocked_mcp_servers)
     servers_raw = personal_mcp.get("mcpServers")

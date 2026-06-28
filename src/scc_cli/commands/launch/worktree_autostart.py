@@ -14,7 +14,7 @@ from scc_cli.application.start_session import StartSessionRequest
 from scc_cli.bootstrap import DefaultAdapters
 from scc_cli.core.exit_codes import EXIT_CANCELLED
 from scc_cli.panels import create_warning_panel
-from scc_cli.ports.config_models import NormalizedOrgConfig
+from scc_cli.services.config_normalizer import normalize_org_config
 
 from .dependencies import prepare_live_start_plan
 from .preflight import collect_launch_readiness, ensure_launch_ready, resolve_launch_provider
@@ -39,9 +39,7 @@ def launch_created_worktree(
     standalone_mode = config.is_standalone_mode()
     team = None if standalone_mode else user_config.get("selected_profile")
     raw_org_config = None if standalone_mode else config.load_cached_org_config()
-    normalized_org = (
-        NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
-    )
+    normalized_org = normalize_org_config(raw_org_config) if raw_org_config is not None else None
 
     resolved_provider, resolution_source = resolve_launch_provider(
         cli_flag=None,

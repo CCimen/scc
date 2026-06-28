@@ -7,16 +7,14 @@ from __future__ import annotations
 
 import pytest
 
-from scc_cli.adapters.config_normalizer import (
+from scc_cli.ports.config_models import (
+    SafetyNetConfig,
+    StatsConfig,
+)
+from scc_cli.services.config_normalizer import (
     normalize_org_config,
     normalize_project_config,
     normalize_user_config,
-)
-from scc_cli.ports.config_models import (
-    NormalizedOrgConfig,
-    NormalizedProjectConfig,
-    SafetyNetConfig,
-    StatsConfig,
 )
 
 
@@ -302,25 +300,6 @@ class TestNormalizeProjectConfig:
         assert result.network_policy == "locked-down-web"
 
 
-class TestNormalizedProjectConfigFromDict:
-    """Test NormalizedProjectConfig.from_dict()."""
-
-    def test_from_dict_matches_normalize_project_config(self) -> None:
-        """from_dict should produce identical results to normalize_project_config."""
-        raw = {
-            "additional_plugins": ["project-tool"],
-            "additional_mcp_servers": [
-                {"name": "project-mcp", "type": "sse", "url": "https://mcp.example.com"}
-            ],
-            "network_policy": "locked-down-web",
-            "session": {"timeout_hours": 4, "auto_resume": True},
-        }
-        from_dict_result = NormalizedProjectConfig.from_dict(raw)
-        direct_result = normalize_project_config(raw)
-
-        assert from_dict_result == direct_result
-
-
 class TestSafetyNetNormalization:
     """Test security.safety_net normalization."""
 
@@ -468,59 +447,6 @@ class TestConfigSource:
         result = normalize_org_config(raw)
 
         assert result.config_source == "42"
-
-
-class TestNormalizedOrgConfigFromDict:
-    """Test NormalizedOrgConfig.from_dict() convenience method."""
-
-    def test_from_dict_returns_normalized_config(self) -> None:
-        """from_dict should return a properly normalized config."""
-        raw = {
-            "organization": {"name": "FromDict"},
-            "security": {"blocked_plugins": ["bad"]},
-        }
-        result = NormalizedOrgConfig.from_dict(raw)
-
-        assert isinstance(result, NormalizedOrgConfig)
-        assert result.organization.name == "FromDict"
-        assert result.security.blocked_plugins == ("bad",)
-
-    def test_from_dict_preserves_all_sections(self) -> None:
-        """from_dict should normalize all sections including new fields."""
-        raw = {
-            "organization": {"name": "Full"},
-            "security": {"safety_net": {"action": "warn"}},
-            "stats": {"enabled": True},
-            "config_source": "test-source",
-            "profiles": {"team1": {"description": "Team 1"}},
-        }
-        result = NormalizedOrgConfig.from_dict(raw)
-
-        assert result.security.safety_net.action == "warn"
-        assert result.stats.enabled is True
-        assert result.config_source == "test-source"
-        assert "team1" in result.profiles
-
-    def test_from_dict_empty_gives_defaults(self) -> None:
-        """from_dict with minimal input should give safe defaults."""
-        result = NormalizedOrgConfig.from_dict({"organization": {"name": "Min"}})
-
-        assert result.security.safety_net.action == "block"
-        assert result.stats.enabled is False
-        assert result.config_source is None
-
-    def test_from_dict_matches_normalize_org_config(self) -> None:
-        """from_dict should produce identical results to normalize_org_config."""
-        raw = {
-            "organization": {"name": "Compare"},
-            "security": {"safety_net": {"action": "warn", "rules": {"x": True}}},
-            "stats": {"enabled": True, "endpoint": "https://example.com"},
-            "config_source": "test",
-        }
-        from_dict_result = NormalizedOrgConfig.from_dict(raw)
-        direct_result = normalize_org_config(raw)
-
-        assert from_dict_result == direct_result
 
 
 class TestConfigModelImmutability:

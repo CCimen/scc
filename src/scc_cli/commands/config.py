@@ -26,7 +26,7 @@ from ..core.enums import NetworkPolicy
 from ..core.exit_codes import EXIT_USAGE
 from ..core.network_policy import collect_proxy_env
 from ..panels import create_error_panel, create_info_panel
-from ..ports.config_models import NormalizedOrgConfig
+from ..services.config_normalizer import normalize_org_config
 from ..source_resolver import ResolveError, resolve_source
 
 # Re-export extracted symbols for backward compatibility
@@ -312,7 +312,7 @@ def _config_explain(
 
     ws_path = Path(workspace_path) if workspace_path else Path.cwd()
 
-    normalized = NormalizedOrgConfig.from_dict(org_config)
+    normalized = normalize_org_config(org_config)
     effective = compute_effective_config(
         org_config=normalized,
         team_name=team,

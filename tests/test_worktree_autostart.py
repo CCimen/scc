@@ -76,7 +76,7 @@ def test_created_worktree_autostart_preserves_existing_launch_sequence(
             return_value={"teams": {}},
         ),
         patch(
-            "scc_cli.commands.launch.worktree_autostart.NormalizedOrgConfig.from_dict",
+            "scc_cli.commands.launch.worktree_autostart.normalize_org_config",
             return_value=normalized_org,
         ),
         patch(

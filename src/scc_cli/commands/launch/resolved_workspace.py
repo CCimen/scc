@@ -19,7 +19,7 @@ from scc_cli.commands.launch import (
 )
 from scc_cli.commands.launch import workspace as launch_workspace
 from scc_cli.core.errors import ProviderNotReadyError
-from scc_cli.ports.config_models import NormalizedOrgConfig
+from scc_cli.services.config_normalizer import normalize_org_config
 from scc_cli.theme import Spinners
 
 from .completion import (
@@ -88,7 +88,7 @@ def launch_resolved_workspace(
         team_settings._configure_team_settings(request.team, cfg)
         raw_org_config = config.load_cached_org_config()
         normalized_org = (
-            NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
+            normalize_org_config(raw_org_config) if raw_org_config is not None else None
         )
 
         resolved_provider, resolution_source = preflight.resolve_launch_provider(

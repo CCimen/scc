@@ -20,9 +20,9 @@ from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_NOT_FOUND, EXIT_USAGE
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_info_panel
-from ...ports.config_models import NormalizedOrgConfig
 from ...presentation.json.launch_json import build_start_dry_run_envelope
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
+from ...services.config_normalizer import normalize_org_config
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
 from . import flow_session
@@ -301,7 +301,7 @@ def start(
     workspace_arg = None if was_auto_detected else str(workspace_path)
 
     # ── Step 6.1: Resolve active provider ────────────────────────────────────
-    normalized_org = NormalizedOrgConfig.from_dict(org_config) if org_config is not None else None
+    normalized_org = normalize_org_config(org_config) if org_config is not None else None
     # Normalize typer default: direct calls pass OptionInfo, not None.
     cli_provider = provider if isinstance(provider, str) else None
     resolved_provider, _resolution_source = resolve_launch_provider(

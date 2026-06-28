@@ -5,17 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from scc_cli import config as config_module
-from scc_cli.adapters.config_normalizer import (
-    normalize_org_config,
-    normalize_project_config,
-    normalize_user_config,
-)
 from scc_cli.ports.config_models import (
     NormalizedOrgConfig,
     NormalizedProjectConfig,
     NormalizedUserConfig,
 )
 from scc_cli.ports.config_store import ConfigStore
+from scc_cli.services.config_normalizer import (
+    normalize_org_config,
+    normalize_project_config,
+    normalize_user_config,
+)
 
 
 class LocalConfigStore:

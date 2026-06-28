@@ -212,21 +212,6 @@ class NormalizedOrgConfig:
     governed_artifacts: GovernedArtifactsCatalog = field(default_factory=GovernedArtifactsCatalog)
     config_source: str | None = None
 
-    @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> NormalizedOrgConfig:
-        """Create a NormalizedOrgConfig from a raw dict.
-
-        Convenience wrapper around normalize_org_config() for use in tests
-        and application code that starts from raw dicts.
-
-        Uses importlib to avoid a static ports→adapters import that would
-        violate the architectural import boundary enforced by tests.
-        """
-        import importlib
-
-        mod = importlib.import_module("scc_cli.adapters.config_normalizer")
-        return mod.normalize_org_config(raw)  # type: ignore[no-any-return]
-
     def get_profile(self, name: str) -> NormalizedTeamConfig | None:
         """Get a team profile by name."""
         return self.profiles.get(name)
@@ -244,18 +229,3 @@ class NormalizedProjectConfig:
     additional_mcp_servers: tuple[MCPServerConfig, ...] = ()
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
-
-    @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> NormalizedProjectConfig:
-        """Create a NormalizedProjectConfig from a raw dict.
-
-        Uses importlib to avoid a static ports→adapters import that would
-        violate the architectural import boundary enforced by tests.
-        """
-        import importlib
-
-        mod = importlib.import_module("scc_cli.adapters.config_normalizer")
-        normalized = mod.normalize_project_config(raw)
-        if normalized is None:
-            return cls()
-        return normalized  # type: ignore[no-any-return]

@@ -34,6 +34,7 @@ from scc_cli.ports.config_models import (
     NormalizedTeamConfig,
     SessionSettings,
 )
+from scc_cli.services.config_normalizer import normalize_org_config, normalize_project_config
 
 __all__ = [
     "BlockedItem",
@@ -154,7 +155,7 @@ def validate_stdio_server(
     import os
 
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     command = server.get("command", "")
     warnings: list[str] = []
@@ -220,7 +221,7 @@ def is_team_delegated_for_plugins(
         return False
 
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     allowed_patterns = org_config.delegation.teams.allow_additional_plugins
     return matches_blocked(team_name, list(allowed_patterns)) is not None
@@ -234,7 +235,7 @@ def is_team_delegated_for_mcp(
         return False
 
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     allowed_patterns = org_config.delegation.teams.allow_additional_mcp_servers
     return matches_blocked(team_name, list(allowed_patterns)) is not None
@@ -248,7 +249,7 @@ def is_project_delegated(
         return (False, "No team specified")
 
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     if not org_config.delegation.projects.inherit_team_delegation:
         return (False, "Org disabled project delegation (inherit_team_delegation: false)")
@@ -567,13 +568,11 @@ def compute_effective_config(
 ) -> EffectiveConfig:
     """Compute effective configuration by merging org defaults → team → project."""
     if isinstance(org_config, dict):
-        org_config = NormalizedOrgConfig.from_dict(org_config)
+        org_config = normalize_org_config(org_config)
 
     if workspace_path is not None:
         project_config = config_module.read_project_config(workspace_path)
-    normalized_project_config = (
-        NormalizedProjectConfig.from_dict(project_config) if project_config else None
-    )
+    normalized_project_config = normalize_project_config(project_config) if project_config else None
 
     result = EffectiveConfig()
 

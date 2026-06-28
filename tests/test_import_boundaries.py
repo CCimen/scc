@@ -1158,20 +1158,37 @@ class TestAdapterBoundaries:
         assert result.returncode == 1, f"adapters/ imports ui/:\n{result.stdout}"
 
     def test_only_bootstrap_imports_adapters(self) -> None:
-        """Only bootstrap.py should import adapters for composition."""
+        """Non-bootstrap adapter imports must be fixed or explicitly allowlisted."""
         result = subprocess.run(
             [
                 "grep",
-                "-rE",
-                r"(from scc_cli\.adapters|import scc_cli\.adapters|from \.\.adapters)",
+                "-rIE",
+                r"(scc_cli\.adapters|from \.+adapters)",
                 str(SRC),
                 "--exclude-dir=adapters",
+                "--exclude-dir=__pycache__",
                 "--exclude=bootstrap.py",
             ],
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 1, f"Non-bootstrap modules import adapters:\n{result.stdout}"
+        assert result.returncode in (0, 1), result.stderr
+
+        workspace_file = SRC / "commands" / "launch" / "workspace.py"
+        allowed_debt = {
+            str(workspace_file): "from ...adapters.local_platform_probe import LocalPlatformProbe",
+        }
+        violations: list[str] = []
+        for line in result.stdout.splitlines():
+            file_path, _, import_line = line.partition(":")
+            allowed_import = allowed_debt.get(file_path)
+            if allowed_import and allowed_import in import_line:
+                continue
+            violations.append(line)
+
+        assert not violations, (
+            "Unexpected non-bootstrap adapter imports:\n" + "\n".join(violations)
+        )
 
 
 class TestGitFacadeDeletionBoundary:

@@ -31,6 +31,7 @@ from scc_cli.core.image_contracts import SCC_CLAUDE_IMAGE_REF, SCC_CODEX_IMAGE_R
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.config_models import GovernedArtifactsCatalog, NormalizedOrgConfig
 from scc_cli.ports.models import MountSpec, SandboxSpec
+from scc_cli.services.config_normalizer import normalize_org_config
 from scc_cli.services.git.worktree import WorktreeInfo
 from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
@@ -155,7 +156,7 @@ def test_prepare_start_session_builds_plan_with_sync_result(tmp_path: Path) -> N
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config=NormalizedOrgConfig.from_dict(
+        org_config=normalize_org_config(
             {
                 "defaults": {"network_policy": "restricted"},
                 "profiles": {"alpha": {}},
@@ -219,7 +220,7 @@ def test_prepare_start_session_captures_sync_error(tmp_path: Path) -> None:
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config=NormalizedOrgConfig.from_dict(_raw),
+        org_config=normalize_org_config(_raw),
         raw_org_config=_raw,
         provider_id="claude",
     )
@@ -269,7 +270,7 @@ def test_prepare_start_session_injects_mcp_servers(tmp_path: Path) -> None:
         standalone=False,
         dry_run=False,
         allow_suspicious=False,
-        org_config=NormalizedOrgConfig.from_dict(_raw),
+        org_config=normalize_org_config(_raw),
         raw_org_config=_raw,
         provider_id="claude",
     )
@@ -1486,7 +1487,7 @@ class TestConfigFreshness:
             standalone=False,
             dry_run=False,
             allow_suspicious=False,
-            org_config=NormalizedOrgConfig.from_dict(_raw),
+            org_config=normalize_org_config(_raw),
             raw_org_config=_raw,
             provider_id="claude",
         )
@@ -1532,7 +1533,7 @@ class TestConfigFreshness:
             workspace_path,
             resume=False,
             team="alpha",
-            org_config=NormalizedOrgConfig.from_dict(_raw),
+            org_config=normalize_org_config(_raw),
             raw_org_config=_raw,
         )
         resolver_result = _build_resolver_result(workspace_path)
@@ -1569,7 +1570,7 @@ class TestConfigFreshness:
             workspace_path,
             resume=True,
             team="alpha",
-            org_config=NormalizedOrgConfig.from_dict(_raw),
+            org_config=normalize_org_config(_raw),
             raw_org_config=_raw,
         )
         resolver_result = _build_resolver_result(workspace_path)
