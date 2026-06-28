@@ -115,6 +115,30 @@ Status: accepted
 
 ---
 
+## D051 — Enterprise workflow readiness starts from existing owners
+The next enterprise-readiness milestone is M010. The first slice is an evidence-backed gap map and ownership reconciliation, not runtime feature code.
+
+External feedback proposed useful concepts, but SCC already has owners for several of them: `EffectiveContext` should evolve the current `EffectiveConfig` computation path, `PolicySourceTrace` maps to `ConfigDecision`, blocked and denied reasons map to `BlockedItem` and `DelegationDenied`, project and workspace identity start from `WorkContext`, and explainability should evolve `scc config explain` unless a later decision supersedes it.
+
+`.gsd/PROJECT.md` remains the canonical milestone register. Stale M001 milestone files are removed because M001-M009 are complete and standalone M001 files were misleading future agents. Future `.gsd/milestones/*.md` files should describe current or future milestones only.
+
+Status: accepted
+
+---
+
+## D052 — Project identity in v1 is repo plus worktree context
+SCC v1 does not add a separate project registry or `.scc.yaml` `project_name` field.
+
+The live project identity for switching and quick resume is the existing `WorkContext`: selected team, repository root, worktree path/name, branch, session id, and provider id. This matches the current developer workflow: switch team/provider, enter a repository or worktree, then start SCC.
+
+`stats.record_session_start(project_name=...)` is not a live identity source because the stats session-start/end functions have no production caller. Do not build project switching, docs, or enterprise rollout guidance on top of that field until the stats subsystem is explicitly wired or deleted in a separate milestone.
+
+If a future release needs a human project display name, add it as an explicit schema and migration decision. Do not infer it from dormant stats code.
+
+Status: accepted
+
+---
+
 ## Decisions Table
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |
