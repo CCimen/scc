@@ -1,7 +1,7 @@
-"""Tests for EffectiveConfig dataclass (Phase 2: Federation).
+"""Tests for MarketplaceResolution dataclass (Phase 2: Federation).
 
 Covers:
-- EffectiveConfig dataclass creation and field validation
+- MarketplaceResolution dataclass creation and field validation
 - Federated vs inline config detection
 """
 
@@ -45,18 +45,18 @@ def allow_all_delegation() -> DelegationConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# EffectiveConfig Dataclass Tests
+# MarketplaceResolution Dataclass Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestEffectiveConfigCreation:
-    """Tests for EffectiveConfig dataclass instantiation."""
+class TestMarketplaceResolutionCreation:
+    """Tests for MarketplaceResolution dataclass instantiation."""
 
     def test_minimal_inline_config(self) -> None:
         """Create minimal inline (non-federated) effective config."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins={"plugin-a@official", "plugin-b@official"},
@@ -70,7 +70,7 @@ class TestEffectiveConfigCreation:
 
     def test_federated_config_with_github_source(self) -> None:
         """Create federated config with GitHub config source."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
         from scc_cli.marketplace.schema import ConfigSourceGitHub
 
         source = ConfigSourceGitHub(
@@ -79,7 +79,7 @@ class TestEffectiveConfigCreation:
             repo="team-config",
         )
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=True,
             config_source=source,
@@ -93,7 +93,7 @@ class TestEffectiveConfigCreation:
 
     def test_federated_config_with_url_source(self) -> None:
         """Create federated config with URL config source."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
         from scc_cli.marketplace.schema import ConfigSourceURL
 
         source = ConfigSourceURL(
@@ -101,7 +101,7 @@ class TestEffectiveConfigCreation:
             url="https://teams.sundsvall.se/backend/team-config.json",
         )
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=True,
             config_source=source,
@@ -114,9 +114,9 @@ class TestEffectiveConfigCreation:
         assert config.config_commit_sha is None
 
     def test_blocked_plugins_tracking(self) -> None:
-        """EffectiveConfig tracks blocked plugins with reasons."""
+        """MarketplaceResolution tracks blocked plugins with reasons."""
         from scc_cli.marketplace.compute import BlockedPlugin
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
         blocked = [
             BlockedPlugin(
@@ -126,7 +126,7 @@ class TestEffectiveConfigCreation:
             ),
         ]
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins=set(),
@@ -137,10 +137,10 @@ class TestEffectiveConfigCreation:
         assert config.blocked_plugins[0].plugin_id == "dangerous@evil"
 
     def test_disabled_and_not_allowed_plugins(self) -> None:
-        """EffectiveConfig tracks disabled and not_allowed plugins."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        """MarketplaceResolution tracks disabled and not_allowed plugins."""
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins={"allowed@official"},
@@ -152,8 +152,8 @@ class TestEffectiveConfigCreation:
         assert config.not_allowed_plugins == ["blocked-by-allowlist@internal"]
 
     def test_effective_marketplaces(self) -> None:
-        """EffectiveConfig tracks effective marketplaces."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        """MarketplaceResolution tracks effective marketplaces."""
+        from scc_cli.marketplace.resolve import MarketplaceResolution
         from scc_cli.marketplace.schema import MarketplaceSourceGitHub
 
         mp_source = MarketplaceSourceGitHub(
@@ -162,7 +162,7 @@ class TestEffectiveConfigCreation:
             repo="plugins",
         )
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins=set(),
@@ -173,10 +173,10 @@ class TestEffectiveConfigCreation:
         assert config.marketplaces["shared"] == mp_source
 
     def test_extra_marketplaces_list(self) -> None:
-        """EffectiveConfig tracks extra marketplace IDs."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        """MarketplaceResolution tracks extra marketplace IDs."""
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins=set(),
@@ -187,9 +187,9 @@ class TestEffectiveConfigCreation:
 
     def test_default_values(self) -> None:
         """Optional fields have sensible defaults."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins=set(),
@@ -205,15 +205,15 @@ class TestEffectiveConfigCreation:
         assert config.extra_marketplaces == []
 
 
-class TestEffectiveConfigProperties:
-    """Tests for EffectiveConfig computed properties."""
+class TestMarketplaceResolutionProperties:
+    """Tests for MarketplaceResolution computed properties."""
 
     def test_has_security_violations_when_blocked(self) -> None:
         """has_security_violations returns True when plugins blocked."""
         from scc_cli.marketplace.compute import BlockedPlugin
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins=set(),
@@ -226,9 +226,9 @@ class TestEffectiveConfigProperties:
 
     def test_has_security_violations_false_when_clean(self) -> None:
         """has_security_violations returns False when no blocked plugins."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins={"clean@official"},
@@ -238,9 +238,9 @@ class TestEffectiveConfigProperties:
 
     def test_plugin_count(self) -> None:
         """plugin_count returns total enabled plugins."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins={"a@x", "b@x", "c@y"},
@@ -250,9 +250,9 @@ class TestEffectiveConfigProperties:
 
     def test_source_description_for_inline(self) -> None:
         """source_description returns 'inline' for non-federated."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=False,
             enabled_plugins=set(),
@@ -262,7 +262,7 @@ class TestEffectiveConfigProperties:
 
     def test_source_description_for_github(self) -> None:
         """source_description returns GitHub URL for GitHub source."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
         from scc_cli.marketplace.schema import ConfigSourceGitHub
 
         source = ConfigSourceGitHub(
@@ -271,7 +271,7 @@ class TestEffectiveConfigProperties:
             repo="backend-config",
         )
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=True,
             config_source=source,
@@ -282,7 +282,7 @@ class TestEffectiveConfigProperties:
 
     def test_source_description_for_url(self) -> None:
         """source_description returns URL for URL source."""
-        from scc_cli.marketplace.resolve import EffectiveConfig
+        from scc_cli.marketplace.resolve import MarketplaceResolution
         from scc_cli.marketplace.schema import ConfigSourceURL
 
         source = ConfigSourceURL(
@@ -290,7 +290,7 @@ class TestEffectiveConfigProperties:
             url="https://teams.sundsvall.se/backend/config.json",
         )
 
-        config = EffectiveConfig(
+        config = MarketplaceResolution(
             team_id="backend",
             is_federated=True,
             config_source=source,
@@ -305,12 +305,12 @@ class TestEffectiveConfigProperties:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestResolveEffectiveConfigInline:
+class TestResolveMarketplaceResolutionInline:
     """Tests for resolve_effective_config() with inline (non-federated) teams."""
 
     def test_inline_team_returns_effective_config(self) -> None:
-        """Inline teams (no config_source) return EffectiveConfig with is_federated=False."""
-        from scc_cli.marketplace.resolve import EffectiveConfig, resolve_effective_config
+        """Inline teams (no config_source) return MarketplaceResolution with is_federated=False."""
+        from scc_cli.marketplace.resolve import MarketplaceResolution, resolve_effective_config
         from scc_cli.marketplace.schema import DefaultsConfig
 
         config = make_org_config(
@@ -324,7 +324,7 @@ class TestResolveEffectiveConfigInline:
 
         result = resolve_effective_config(config, "backend")
 
-        assert isinstance(result, EffectiveConfig)
+        assert isinstance(result, MarketplaceResolution)
         assert result.team_id == "backend"
         assert result.is_federated is False
         assert "plugin-a@claude-plugins-official" in result.enabled_plugins
@@ -437,7 +437,7 @@ class TestResolveEffectiveConfigInline:
         assert "shared" in result.marketplaces
 
 
-class TestResolveEffectiveConfigFederated:
+class TestResolveMarketplaceResolutionFederated:
     """Tests for resolve_effective_config() with federated teams."""
 
     def test_federated_team_detection(self) -> None:

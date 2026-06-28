@@ -9,7 +9,7 @@ from typing import Any
 
 from scc_cli.application.compute_effective_config import EffectiveConfig, compute_effective_config
 from scc_cli.application.sync_marketplace import (
-    EffectiveConfigResolver,
+    MarketplaceConfigResolver,
     MarketplaceMaterializer,
     SyncError,
     SyncMarketplaceDependencies,
@@ -50,7 +50,7 @@ class StartSessionDependencies:
     git_client: GitClient
     agent_runner: AgentRunner
     sandbox_runtime: SandboxRuntime
-    resolve_effective_config: EffectiveConfigResolver
+    resolve_effective_config: MarketplaceConfigResolver
     materialize_marketplace: MarketplaceMaterializer
     agent_provider: AgentProvider | None = None
     audit_event_sink: AuditEventSink | None = None

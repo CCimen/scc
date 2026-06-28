@@ -18,15 +18,15 @@ from scc_cli.ports.remote_fetcher import RemoteFetcher
 
 if TYPE_CHECKING:
     from scc_cli.marketplace.materialize import MaterializedMarketplace
-    from scc_cli.marketplace.resolve import EffectiveConfig
+    from scc_cli.marketplace.resolve import MarketplaceResolution
     from scc_cli.marketplace.schema import MarketplaceSource
 
 
-class EffectiveConfigResolver(Protocol):
+class MarketplaceConfigResolver(Protocol):
     """Protocol for resolving effective marketplace config."""
 
-    def __call__(self, config: OrganizationConfig, team_id: str) -> EffectiveConfig:
-        """Return effective config for the specified team."""
+    def __call__(self, config: OrganizationConfig, team_id: str) -> MarketplaceResolution:
+        """Return marketplace resolution for the specified team."""
 
 
 class MarketplaceMaterializer(Protocol):
@@ -50,7 +50,7 @@ class SyncMarketplaceDependencies:
     filesystem: Filesystem
     remote_fetcher: RemoteFetcher
     clock: Clock
-    resolve_effective_config: EffectiveConfigResolver
+    resolve_effective_config: MarketplaceConfigResolver
     materialize_marketplace: MarketplaceMaterializer
 
 

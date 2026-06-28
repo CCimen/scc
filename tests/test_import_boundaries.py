@@ -247,6 +247,52 @@ class TestProfilesCompatibilityBoundary:
         assert not problems, "\n\n".join(problems)
 
 
+class TestEffectiveConfigOwnershipBoundary:
+    """EffectiveConfig is the application merge result, not a marketplace result."""
+
+    def test_effective_config_class_has_single_application_owner(self) -> None:
+        """Only application/effective_config_models.py should define EffectiveConfig."""
+        expected_owner = SRC / "application" / "effective_config_models.py"
+        result = subprocess.run(
+            ["grep", "-rEn", r"^class EffectiveConfig(\(|:)", str(SRC)],
+            capture_output=True,
+            text=True,
+        )
+        owners = [
+            Path(line.split(":", 1)[0]).resolve() for line in result.stdout.splitlines() if line
+        ]
+
+        assert owners == [expected_owner.resolve()], (
+            "EffectiveConfig must name only the application-layer org/team/project "
+            f"merge result in {expected_owner.relative_to(REPO_ROOT)}.\n"
+            f"Found definitions:\n{result.stdout or '<none>'}"
+        )
+
+    def test_marketplace_resolution_imports_do_not_use_effective_config_name(self) -> None:
+        """Import MarketplaceResolution from marketplace.resolve, not EffectiveConfig."""
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude=test_import_boundaries.py",
+                (
+                    r"(from scc_cli\.marketplace\.resolve import .*EffectiveConfig|"
+                    r"from \.marketplace\.resolve import .*EffectiveConfig|"
+                    r"from \.resolve import .*EffectiveConfig)"
+                ),
+                str(SRC),
+                str(TESTS),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 1, (
+            "Marketplace resolution should not reuse the application EffectiveConfig name.\n"
+            f"Found imports:\n{result.stdout}"
+        )
+
+
 class TestGovernancePatternOwnership:
     """Governance pattern matching has one implementation owner."""
 

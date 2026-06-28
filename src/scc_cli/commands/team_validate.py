@@ -18,7 +18,7 @@ from rich.table import Table
 from .. import config
 from ..cli_common import console
 from ..marketplace.compute import TeamNotFoundError
-from ..marketplace.resolve import ConfigFetchError, EffectiveConfig, resolve_effective_config
+from ..marketplace.resolve import ConfigFetchError, MarketplaceResolution, resolve_effective_config
 from ..marketplace.schema import OrganizationConfig, normalize_org_config_data
 from ..marketplace.trust import TrustViolationError
 from ..output_mode import is_json_mode
@@ -227,7 +227,7 @@ def team_validate(
     return response
 
 
-def _render_validation_result(effective: EffectiveConfig, verbose: bool) -> None:
+def _render_validation_result(effective: MarketplaceResolution, verbose: bool) -> None:
     """Render validation result to terminal."""
     console.print()
 

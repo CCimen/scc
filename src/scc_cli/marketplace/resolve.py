@@ -1,17 +1,12 @@
-"""Effective config resolution for team profiles.
+"""Marketplace configuration resolution for team profiles.
 
 This module provides:
-- EffectiveConfig: Complete resolved configuration for a team
+- MarketplaceResolution: plugins, marketplaces, federation, and cache metadata
 - ConfigFetchError: Error when fetching federated team config fails
-- resolve_effective_config(): Main orchestrator (T2a-18, to be implemented)
+- resolve_effective_config(): marketplace-resolution entrypoint
 
-EffectiveConfig serves as the unified result type for both inline and federated
-team configurations.
-
-Design Decision:
-    EffectiveConfig wraps the plugin computation results (from compute.py) with
-    additional metadata about the configuration source. This allows the CLI to
-    display federated vs inline status, version info, and trust state.
+The function name keeps the historical CLI vocabulary for this slice, but its
+result type is intentionally not the application-layer EffectiveConfig model.
 """
 
 from __future__ import annotations
@@ -105,33 +100,13 @@ def _get_fetch_remediation(source_type: str, error: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# EffectiveConfig Dataclass
+# MarketplaceResolution Dataclass
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @dataclass
-class EffectiveConfig:
-    """Complete resolved configuration for a team.
-
-    This is the unified result type for both inline and federated team
-    configurations. It contains all the information needed to:
-    - Launch Claude Code with the correct plugins
-    - Display status information to the user
-    - Validate security compliance
-
-    Attributes:
-        team_id: Team/profile identifier
-        is_federated: True if config came from external source
-        enabled_plugins: Set of enabled plugin references (name@marketplace)
-        config_source: External config source (if federated)
-        config_commit_sha: Git commit SHA (for git/github sources)
-        config_etag: HTTP ETag (for URL sources)
-        blocked_plugins: Plugins blocked by security policy
-        disabled_plugins: Plugins removed by disabled_plugins patterns
-        not_allowed_plugins: Plugins rejected by allowed_plugins filter
-        marketplaces: Effective marketplace sources
-        extra_marketplaces: Additional marketplace IDs to enable
-    """
+class MarketplaceResolution:
+    """Resolved marketplace state for an inline or federated team."""
 
     # Required fields
     team_id: str
@@ -226,7 +201,7 @@ class EffectiveConfig:
 def resolve_effective_config(
     config: OrganizationConfig,
     team_id: str,
-) -> EffectiveConfig:
+) -> MarketplaceResolution:
     """Resolve effective configuration for a team (inline or federated).
 
     This is the main orchestrator for configuration resolution.
@@ -235,19 +210,19 @@ def resolve_effective_config(
 
     For inline teams (no config_source):
         - Uses compute_effective_plugins() from compute.py
-        - Returns EffectiveConfig with is_federated=False
+        - Returns MarketplaceResolution with is_federated=False
 
     For federated teams (has config_source):
         - Fetches external team config via fetch_team_config()
         - Uses compute_effective_plugins_federated() from compute.py
-        - Returns EffectiveConfig with is_federated=True and metadata
+        - Returns MarketplaceResolution with is_federated=True and metadata
 
     Args:
         config: Organization configuration with profiles and security
         team_id: The profile/team ID to resolve plugins for
 
     Returns:
-        EffectiveConfig with complete resolved configuration
+        MarketplaceResolution with complete resolved configuration
 
     Raises:
         TeamNotFoundError: If team_id is not in config.profiles
@@ -274,7 +249,7 @@ def resolve_effective_config(
         # ─────────────────────────────────────────────────────────────────
         plugins = compute_effective_plugins(config, team_id)
 
-        return EffectiveConfig(
+        return MarketplaceResolution(
             team_id=team_id,
             is_federated=False,
             enabled_plugins=plugins.enabled,
@@ -345,7 +320,7 @@ def resolve_effective_config(
         if team_config.marketplaces and trust and trust.allow_additional_marketplaces:
             effective_marketplaces.update(team_config.marketplaces)
 
-        return EffectiveConfig(
+        return MarketplaceResolution(
             team_id=team_id,
             is_federated=True,
             enabled_plugins=plugins.enabled,
