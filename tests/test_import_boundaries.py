@@ -294,6 +294,29 @@ class TestEffectiveConfigOwnershipBoundary:
         )
 
 
+class TestConfigModelOwnershipBoundary:
+    """Config model ports stay pure data; normalization lives in services."""
+
+    def test_normalized_config_models_do_not_reintroduce_from_dict(self) -> None:
+        """Raw-to-typed normalization belongs in services/config_normalizer.py."""
+        tree = ast.parse((SRC / "ports" / "config_models.py").read_text(encoding="utf-8"))
+        offenders: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for item in node.body:
+                if (
+                    isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)
+                    and item.name == "from_dict"
+                ):
+                    offenders.append(f"{node.name}.from_dict")
+
+        assert not offenders, (
+            "Config model ports must stay pure data; use "
+            f"scc_cli.services.config_normalizer instead of {', '.join(offenders)}."
+        )
+
+
 class TestSetupSurfaceBoundary:
     """Setup keeps one live wizard path instead of legacy prompt twins."""
 
