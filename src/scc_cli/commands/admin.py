@@ -11,7 +11,11 @@ from rich.panel import Panel
 from rich.status import Status
 from rich.table import Table
 
-from .. import config, docker, doctor, profiles, stats
+from .. import config, docker, doctor, stats
+from ..application.compute_effective_config import (
+    is_team_delegated_for_mcp,
+    is_team_delegated_for_plugins,
+)
 from ..cli_common import console, handle_errors
 from ..docker.core import ContainerInfo
 from ..json_command import json_command
@@ -133,8 +137,8 @@ def build_status_data(
     # Look up delegation info if org config available
     if org and team_name:
         team_details["delegation"] = {
-            "allow_additional_plugins": profiles.is_team_delegated_for_plugins(org, team_name),
-            "allow_additional_mcp_servers": profiles.is_team_delegated_for_mcp(org, team_name),
+            "allow_additional_plugins": is_team_delegated_for_plugins(org, team_name),
+            "allow_additional_mcp_servers": is_team_delegated_for_mcp(org, team_name),
         }
 
     # Session info

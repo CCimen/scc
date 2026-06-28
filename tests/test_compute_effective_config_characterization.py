@@ -11,21 +11,22 @@ from __future__ import annotations
 from scc_cli.application.compute_effective_config import EffectiveConfig as AppEffectiveConfig
 from scc_cli.application.compute_effective_config import (
     compute_effective_config,
-    is_mcp_allowed,
     is_network_mcp,
     is_plugin_allowed,
     is_project_delegated,
     is_team_delegated_for_mcp,
     is_team_delegated_for_plugins,
-    match_blocked_mcp,
-    matches_blocked,
     matches_blocked_plugin,
-    matches_plugin_pattern,
-    mcp_candidates,
     record_network_policy_decision,
     validate_stdio_server,
 )
 from scc_cli.core.enums import MCPServerType
+from scc_cli.core.governance_patterns import (
+    is_mcp_allowed,
+    match_blocked_mcp,
+    matches_blocked,
+    mcp_candidates,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Pattern matching helpers
@@ -54,28 +55,6 @@ class TestMatchesBlocked:
         assert matches_blocked("  evil  ", ["evil"]) == "evil"
 
 
-class TestMatchesPluginPattern:
-    """matches_plugin_pattern: bare names match any marketplace."""
-
-    def test_exact_ref_match(self) -> None:
-        assert matches_plugin_pattern("tool@marketplace", "tool@marketplace") is True
-
-    def test_bare_pattern_matches_any_marketplace(self) -> None:
-        assert matches_plugin_pattern("tool@marketplace", "tool") is True
-
-    def test_bare_pattern_wildcard(self) -> None:
-        assert matches_plugin_pattern("my-tool@marketplace", "my-*") is True
-
-    def test_no_match(self) -> None:
-        assert matches_plugin_pattern("tool@marketplace", "other") is False
-
-    def test_empty_ref_returns_false(self) -> None:
-        assert matches_plugin_pattern("", "tool") is False
-
-    def test_empty_pattern_returns_false(self) -> None:
-        assert matches_plugin_pattern("tool@mp", "") is False
-
-
 class TestIsPluginAllowed:
     """is_plugin_allowed: None means all allowed, empty means none allowed."""
 
@@ -97,6 +76,9 @@ class TestMatchesBlockedPlugin:
 
     def test_blocked_by_pattern(self) -> None:
         assert matches_blocked_plugin("evil@mp", ["evil"]) == "evil"
+
+    def test_strips_surrounding_whitespace(self) -> None:
+        assert matches_blocked_plugin(" evil@mp ", [" evil "]) == " evil "
 
     def test_not_blocked(self) -> None:
         assert matches_blocked_plugin("good@mp", ["evil"]) is None

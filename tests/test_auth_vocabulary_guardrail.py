@@ -231,7 +231,7 @@ def test_auth_bootstrap_uses_truthful_vocabulary() -> None:
     """Auth bootstrap messages must use 'auth cache' vocabulary.
 
     Canonical auth messaging lives in preflight.py._ensure_auth.
-    auth_bootstrap.py is a deprecated redirect with no user-facing text.
+    The old auth_bootstrap.py redirect is deleted.
     """
     preflight_path = SRC / "commands" / "launch" / "preflight.py"
     assert preflight_path.exists(), f"Expected {preflight_path} to exist"
@@ -248,10 +248,5 @@ def test_auth_bootstrap_uses_truthful_vocabulary() -> None:
         "preflight.py should not use 'connected' as auth status wording"
     )
 
-    # auth_bootstrap.py still exists as a deprecated redirect
     bootstrap_path = SRC / "commands" / "launch" / "auth_bootstrap.py"
-    assert bootstrap_path.exists(), "auth_bootstrap.py should exist as a deprecated redirect"
-    bootstrap_content = bootstrap_path.read_text()
-    assert "deprecated" in bootstrap_content.lower(), (
-        "auth_bootstrap.py should be marked as deprecated"
-    )
+    assert not bootstrap_path.exists(), "auth_bootstrap.py should stay deleted"

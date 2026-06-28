@@ -636,8 +636,8 @@ class TestCheckRuntimeBackend:
             adapters.runtime_probe.probe.return_value = runtime_info
         return adapters
 
-    def test_returns_ok_for_docker_sandbox_backend(self) -> None:
-        """Should return passed=True when daemon is reachable with docker-sandbox backend."""
+    def test_returns_ok_for_oci_when_docker_sandbox_available(self) -> None:
+        """Should report OCI as selected even when Docker sandbox is available."""
         from scc_cli.core.contracts import RuntimeInfo
 
         mock_info = RuntimeInfo(
@@ -650,7 +650,7 @@ class TestCheckRuntimeBackend:
             version="27.0.1",
             daemon_reachable=True,
             sandbox_available=True,
-            preferred_backend="docker-sandbox",
+            preferred_backend="oci",
         )
         with patch(
             "scc_cli.bootstrap.get_default_adapters",
@@ -660,7 +660,7 @@ class TestCheckRuntimeBackend:
 
         assert result.passed is True
         assert result.name == "Runtime Backend"
-        assert "docker-sandbox" in result.message
+        assert "oci" in result.message
         assert "Docker Desktop" in result.message
         assert result.version == "27.0.1"
 
@@ -743,14 +743,40 @@ class TestCheckDockerSandbox:
             adapters.runtime_probe.probe.return_value = runtime_info
         return adapters
 
-    def test_returns_ok_when_docker_sandbox_is_available(self) -> None:
-        """Should pass when Docker Desktop sandbox support exists."""
-        with patch("scc_cli.docker.check_docker_sandbox", return_value=True):
+    def test_reports_oci_when_docker_sandbox_feature_is_available(self) -> None:
+        """Should describe the selected backend from RuntimeInfo, not a second probe."""
+        from scc_cli.core.contracts import RuntimeInfo
+
+        mock_info = RuntimeInfo(
+            runtime_id="docker",
+            display_name="Docker Desktop",
+            cli_name="docker",
+            supports_oci=True,
+            supports_internal_networks=True,
+            supports_host_network=True,
+            version="27.0.1",
+            daemon_reachable=True,
+            sandbox_available=True,
+            preferred_backend="oci",
+        )
+
+        with (
+            patch(
+                "scc_cli.docker.check_docker_sandbox",
+                side_effect=AssertionError("doctor should use RuntimeInfo"),
+            ),
+            patch(
+                "scc_cli.bootstrap.get_default_adapters",
+                return_value=self._mock_adapters(mock_info),
+            ),
+        ):
             result = doctor.check_docker_sandbox()
 
         assert result.passed is True
         assert result.name == "Sandbox Backend"
-        assert "Docker sandbox backend" in result.message
+        assert result.severity == "info"
+        assert "OCI backend" in result.message
+        assert "Docker sandbox feature" in result.message
 
     def test_returns_ok_when_oci_backend_is_selected(self) -> None:
         """Should pass when OCI is the selected runtime backend."""

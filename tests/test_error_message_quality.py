@@ -8,7 +8,7 @@ Verifies:
 - Doctor check failures wrap Docker errors with SCC context
 - ProviderNotAllowedError names the allowed providers
 - SandboxLaunchError surfaces stderr
-- ensure_provider_auth wraps raw exceptions with actionable guidance
+- launch preflight auth bootstrap wraps raw exceptions with actionable guidance
 """
 
 from __future__ import annotations
@@ -17,20 +17,36 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from scc_cli.commands.launch.preflight import (
+    AuthStatus,
+    ImageStatus,
+    LaunchReadiness,
+    ProviderResolutionSource,
+    _ensure_auth,
+)
 from scc_cli.core.contracts import AuthReadiness
 from scc_cli.core.errors import (
+    BundleResolutionError,
     ConfigError,
     DockerDaemonNotRunningError,
     DockerNotFoundError,
     ExistingSandboxConflictError,
     InvalidProviderError,
     LaunchPolicyBlockedError,
+    PolicyViolationError,
     ProviderImageBuildError,
     ProviderImageMissingError,
     ProviderNotAllowedError,
     ProviderNotReadyError,
     SandboxLaunchError,
     SCCError,
+)
+from scc_cli.core.exit_codes import (
+    EXIT_CONFIG,
+    EXIT_GOVERNANCE,
+    EXIT_PREREQ,
+    EXIT_TOOL,
+    EXIT_USAGE,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -63,9 +79,9 @@ class TestProviderNotReadyErrorMessages:
         assert err.suggested_action == "Do this specific thing"
 
     def test_exit_code_is_prerequisite(self) -> None:
-        """ProviderNotReadyError has exit code 3 (prerequisite)."""
+        """ProviderNotReadyError uses the prerequisite exit code."""
         err = ProviderNotReadyError(provider_id="claude")
-        assert err.exit_code == 3
+        assert err.exit_code == EXIT_PREREQ
 
     def test_non_interactive_auth_missing_gives_fix_command(self) -> None:
         """Non-interactive ProviderNotReadyError includes the exact CLI command."""
@@ -305,40 +321,44 @@ class TestDockerPrerequisiteErrors:
         assert "Start" in err.suggested_action or "start" in err.suggested_action
 
     def test_docker_not_found_exit_code(self) -> None:
-        """DockerNotFoundError has exit code 3 (prerequisite)."""
+        """DockerNotFoundError uses the prerequisite exit code."""
         err = DockerNotFoundError()
-        assert err.exit_code == 3
+        assert err.exit_code == EXIT_PREREQ
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ensure_provider_auth — wrapping raw exceptions
+# launch preflight auth bootstrap — wrapping raw exceptions
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestEnsureProviderAuthErrorWrapping:
-    """ensure_provider_auth wraps raw exceptions with SCC context."""
+def _missing_auth_readiness(provider_id: str) -> LaunchReadiness:
+    return LaunchReadiness(
+        provider_id=provider_id,
+        resolution_source=ProviderResolutionSource.EXPLICIT,
+        image_status=ImageStatus.AVAILABLE,
+        auth_status=AuthStatus.MISSING,
+        requires_image_bootstrap=False,
+        requires_auth_bootstrap=True,
+        launch_ready=False,
+    )
+
+
+class TestLaunchPreflightAuthErrorWrapping:
+    """Launch preflight auth bootstrap wraps raw exceptions with SCC context."""
 
     def test_os_error_wrapped_with_guidance(self) -> None:
         """OSError from bootstrap_auth is wrapped in ProviderNotReadyError."""
-        from scc_cli.commands.launch.auth_bootstrap import ensure_provider_auth
-
-        plan = MagicMock()
-        plan.resume = False
         mock_provider = MagicMock()
-        mock_provider.auth_check.return_value = MagicMock(status="missing")
-        mock_provider.capability_profile.return_value = MagicMock(provider_id="claude")
         mock_provider.bootstrap_auth.side_effect = OSError("Permission denied")
-
-        deps = MagicMock()
-        deps.agent_provider = mock_provider
         show = MagicMock()
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_auth_readiness("claude"),
+                adapters=MagicMock(),
                 non_interactive=False,
                 show_notice=show,
+                provider=mock_provider,
             )
         err = exc_info.value
         assert "Permission denied" in err.user_message
@@ -347,30 +367,22 @@ class TestEnsureProviderAuthErrorWrapping:
 
     def test_provider_not_ready_passes_through(self) -> None:
         """ProviderNotReadyError from bootstrap_auth passes through unchanged."""
-        from scc_cli.commands.launch.auth_bootstrap import ensure_provider_auth
-
-        plan = MagicMock()
-        plan.resume = False
         original = ProviderNotReadyError(
             provider_id="codex",
             user_message="Original message",
             suggested_action="Original action",
         )
         mock_provider = MagicMock()
-        mock_provider.auth_check.return_value = MagicMock(status="missing")
-        mock_provider.capability_profile.return_value = MagicMock(provider_id="codex")
         mock_provider.bootstrap_auth.side_effect = original
-
-        deps = MagicMock()
-        deps.agent_provider = mock_provider
         show = MagicMock()
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_auth_readiness("codex"),
+                adapters=MagicMock(),
                 non_interactive=False,
                 show_notice=show,
+                provider=mock_provider,
             )
         # Should be the exact same object, not double-wrapped
         assert exc_info.value is original
@@ -378,48 +390,18 @@ class TestEnsureProviderAuthErrorWrapping:
 
     def test_non_interactive_missing_auth_gives_fix(self) -> None:
         """Non-interactive mode with missing auth raises with fix command."""
-        from scc_cli.commands.launch.auth_bootstrap import ensure_provider_auth
-
-        plan = MagicMock()
-        plan.resume = False
-        mock_provider = MagicMock()
-        mock_provider.auth_check.return_value = MagicMock(status="missing")
-        mock_provider.capability_profile.return_value = MagicMock(provider_id="codex")
-
-        deps = MagicMock()
-        deps.agent_provider = mock_provider
         show = MagicMock()
 
         with pytest.raises(ProviderNotReadyError) as exc_info:
-            ensure_provider_auth(
-                plan,
-                dependencies=deps,
+            _ensure_auth(
+                _missing_auth_readiness("codex"),
+                adapters=MagicMock(),
                 non_interactive=True,
                 show_notice=show,
             )
         err = exc_info.value
         assert "non-interactive" in err.user_message
         assert "scc start --provider codex" in err.suggested_action
-
-    def test_resume_skips_auth_check(self) -> None:
-        """Resume mode skips auth bootstrap entirely."""
-        from scc_cli.commands.launch.auth_bootstrap import ensure_provider_auth
-
-        plan = MagicMock()
-        plan.resume = True
-        mock_provider = MagicMock()
-
-        deps = MagicMock()
-        deps.agent_provider = mock_provider
-
-        # Should not raise, no bootstrap called
-        ensure_provider_auth(
-            plan,
-            dependencies=deps,
-            non_interactive=False,
-            show_notice=MagicMock(),
-        )
-        mock_provider.bootstrap_auth.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -592,11 +574,13 @@ class TestErrorHierarchySanity:
     @pytest.mark.parametrize(
         "error_cls,kwargs,expected_exit_code",
         [
-            (ProviderNotReadyError, {"provider_id": "claude"}, 3),
-            (InvalidProviderError, {"provider_id": "x", "known_providers": ()}, 2),
-            (SandboxLaunchError, {}, 5),
-            (DockerNotFoundError, {}, 3),
-            (ConfigError, {}, 2),
+            (ProviderNotReadyError, {"provider_id": "claude"}, EXIT_PREREQ),
+            (InvalidProviderError, {"provider_id": "x", "known_providers": ()}, EXIT_USAGE),
+            (SandboxLaunchError, {}, EXIT_PREREQ),
+            (DockerNotFoundError, {}, EXIT_PREREQ),
+            (ConfigError, {}, EXIT_CONFIG),
+            (PolicyViolationError, {"item": "blocked"}, EXIT_GOVERNANCE),
+            (BundleResolutionError, {"bundle_id": "missing"}, EXIT_TOOL),
         ],
     )
     def test_exit_codes_match_documented_scheme(
@@ -605,6 +589,6 @@ class TestErrorHierarchySanity:
         kwargs: dict,
         expected_exit_code: int,
     ) -> None:
-        """Exit codes match the documented scheme (2=usage, 3=prereq, 4=tool, 5=internal)."""
+        """Exit codes match the canonical command contract."""
         err = error_cls(**kwargs)
         assert err.exit_code == expected_exit_code

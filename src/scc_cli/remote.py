@@ -7,8 +7,7 @@ Handle all HTTP concerns for fetching org config:
 - ETag-based conditional fetching
 - Local cache with TTL
 
-Module Separation: This module does HTTP only, no business logic.
-Business logic is in profiles.py, format knowledge is in claude_adapter.py.
+Module Separation: this module does HTTP only; governance and format logic live elsewhere.
 """
 
 from __future__ import annotations

@@ -16,6 +16,7 @@ import pytest
 
 from scc_cli.core.contracts import AuthReadiness
 from scc_cli.core.errors import ProviderImageMissingError, ProviderNotReadyError
+from scc_cli.core.exit_codes import EXIT_PREREQ
 from scc_cli.doctor.checks.environment import check_provider_auth
 from scc_cli.doctor.types import CheckResult
 
@@ -36,9 +37,9 @@ class TestProviderNotReadyError:
         err = ProviderNotReadyError(provider_id="codex")
         assert "scc doctor --provider codex" in err.suggested_action
 
-    def test_exit_code_is_3(self) -> None:
+    def test_exit_code_is_prereq(self) -> None:
         err = ProviderNotReadyError(provider_id="claude")
-        assert err.exit_code == 3
+        assert err.exit_code == EXIT_PREREQ
 
     def test_str_returns_user_message(self) -> None:
         err = ProviderNotReadyError(provider_id="claude")
@@ -77,9 +78,9 @@ class TestProviderImageMissingError:
         err = ProviderImageMissingError(provider_id="codex")
         assert "images/scc-agent-codex/" in err.suggested_action
 
-    def test_exit_code_is_3(self) -> None:
+    def test_exit_code_is_prereq(self) -> None:
         err = ProviderImageMissingError(provider_id="claude")
-        assert err.exit_code == 3
+        assert err.exit_code == EXIT_PREREQ
 
     def test_custom_messages_preserved(self) -> None:
         err = ProviderImageMissingError(

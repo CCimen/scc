@@ -457,6 +457,36 @@ class TestLoadStatusTabData:
                     assert data.tab == DashboardTab.STATUS
                     assert data.title == "Status"
 
+
+class TestDashboardTeamSwitchHandler:
+    """Test dashboard team-switch side effects."""
+
+    def test_persists_selected_team(self) -> None:
+        """Selected dashboard team is saved to user config."""
+        from scc_cli.ui.dashboard.orchestrator_handlers import _handle_team_switch
+
+        saved_config: dict[str, object] = {}
+
+        def save_config(cfg: dict[str, object]) -> None:
+            saved_config.update(cfg)
+
+        with (
+            patch("scc_cli.ui.dashboard.orchestrator_handlers.get_err_console"),
+            patch("scc_cli.ui.dashboard.orchestrator_handlers._prepare_for_nested_ui"),
+            patch("scc_cli.ui.dashboard.orchestrator_handlers.print_with_layout"),
+            patch(
+                "scc_cli.config.load_user_config",
+                return_value={"selected_profile": "platform"},
+            ),
+            patch("scc_cli.config.load_cached_org_config", return_value={}),
+            patch("scc_cli.teams.list_teams", return_value=[{"name": "frontend"}]),
+            patch("scc_cli.ui.picker.pick_team", return_value={"name": "frontend"}),
+            patch("scc_cli.config.save_user_config", side_effect=save_config),
+        ):
+            _handle_team_switch()
+
+        assert saved_config.get("selected_profile") == "frontend"
+
     def test_includes_team_info_when_selected(self) -> None:
         """Includes team info when a team is selected."""
         with patch("scc_cli.config.load_user_config") as mock_config:

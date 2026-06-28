@@ -62,6 +62,10 @@ safetypluginclone/.claude/.state/
 
 # Local refactor checklist
 refactor-plan.md
+MAINTAINABILITY_IMPLEMENTATION_PLAN.md
+
+# Local agent review artifacts
+.codex/
 
 # GSD runtime/state noise (keep curated project docs + milestone docs committed)
 .gsd/STATE.md
@@ -100,3 +104,6 @@ vendor/
 coverage/
 .cache/
 tmp/
+# Added by code-review-graph
+.code-review-graph/
+.mcp.json

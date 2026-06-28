@@ -125,29 +125,27 @@ def check_docker_desktop() -> CheckResult:
 def check_docker_sandbox() -> CheckResult:
     """Check whether SCC has a valid sandbox backend.
 
-    Docker Desktop sandbox support is one valid backend. If it is unavailable
-    but the runtime probe selected plain OCI, the check should still pass.
+    OCI is the selected backend whenever the Docker daemon is reachable.
+    Docker Desktop sandbox support is reported only as diagnostic capability.
     """
     from ... import docker as docker_module
-
-    if docker_module.check_docker_sandbox():
-        return CheckResult(
-            name="Sandbox Backend",
-            passed=True,
-            message="Docker sandbox backend is available",
-        )
 
     runtime_info = _probe_runtime_info()
     if runtime_info is not None and runtime_info.daemon_reachable:
         if runtime_info.preferred_backend == "oci":
+            message = "SCC will use the OCI backend"
+            if runtime_info.sandbox_available:
+                message = (
+                    "SCC will use the OCI backend; "
+                    "Docker sandbox feature is available but not selected"
+                )
             return CheckResult(
                 name="Sandbox Backend",
                 passed=True,
-                message="Docker sandbox unavailable; SCC will use the OCI backend instead",
+                message=message,
                 version=runtime_info.version,
                 severity=SeverityLevel.INFO,
             )
-
     return CheckResult(
         name="Sandbox Backend",
         passed=False,

@@ -80,7 +80,6 @@ ALLOWED_LEGACY = {
     "output_mode.py",
     "panels.py",
     "platform.py",
-    "profiles.py",
     "remote.py",
     "sessions.py",
     "setup.py",

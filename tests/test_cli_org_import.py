@@ -324,8 +324,9 @@ class TestOrgImportSave:
                 with patch("scc_cli.commands.org.import_cmd.save_user_config") as mock_save:
                     result = cli_runner.invoke(org_app, ["import", "https://example.com/org.json"])
 
-        # Should fail with non-zero exit code
-        assert result.exit_code != 0
+        from scc_cli.core.exit_codes import EXIT_TOOL
+
+        assert result.exit_code == EXIT_TOOL
         # Should NOT save invalid config
         mock_save.assert_not_called()
 

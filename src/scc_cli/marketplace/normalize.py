@@ -232,7 +232,7 @@ def matches_pattern(plugin_ref: str, pattern: str) -> bool:
     - `[!seq]` matches any character not in seq
 
     Args:
-        plugin_ref: Canonical plugin reference (name@marketplace)
+        plugin_ref: Plugin reference to check (name@marketplace)
         pattern: Glob pattern to match against
 
     Returns:
@@ -252,11 +252,10 @@ def matches_pattern(plugin_ref: str, pattern: str) -> bool:
     if not plugin_ref or not pattern:
         return False
 
-    # Use fnmatch for glob-style matching with case-insensitive comparison
-    # Documentation requires Unicode-aware casefolding for security patterns
-    # to prevent bypass attempts using case variations (e.g., "MALICIOUS-*" vs "malicious-*")
-    normalized_ref = plugin_ref.casefold()
-    normalized_pattern = pattern.casefold()
+    # Raw org config is not pre-stripped; normalize here so policy checks cannot be
+    # bypassed with surrounding whitespace or case variation.
+    normalized_ref = plugin_ref.strip().casefold()
+    normalized_pattern = pattern.strip().casefold()
     if "@" not in normalized_pattern and "@" in normalized_ref:
         plugin_name = normalized_ref.split("@", 1)[0]
         return fnmatch.fnmatch(plugin_name, normalized_pattern)
@@ -284,6 +283,15 @@ def matches_any_pattern(plugin_ref: str, patterns: list[str]) -> str | None:
         if matches_pattern(plugin_ref, pattern):
             return pattern
     return None
+
+
+def is_plugin_allowed_by_patterns(plugin_ref: str, patterns: list[str] | None) -> bool:
+    """Apply SCC plugin allowlist semantics: None allows all, [] allows none."""
+    if patterns is None:
+        return True
+    if not patterns:
+        return False
+    return matches_any_pattern(plugin_ref, patterns) is not None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
-from scc_cli.core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG
+from scc_cli.core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_NOT_FOUND
 
 runner = CliRunner()
 
@@ -19,7 +19,7 @@ def test_start_cancelled_exits_130_and_message():
         patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
         patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
         patch(
-            "scc_cli.commands.launch.flow._resolve_session_selection",
+            "scc_cli.commands.launch.flow_session._resolve_session_selection",
             return_value=(None, None, None, None, True, False, None),
         ),
     ):
@@ -27,6 +27,21 @@ def test_start_cancelled_exits_130_and_message():
 
     assert result.exit_code == EXIT_CANCELLED
     assert "Cancelled" in result.output
+
+
+def test_start_select_without_session_exits_not_found():
+    """--select with no resolved session should exit with EXIT_NOT_FOUND."""
+    with (
+        patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False),
+        patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}),
+        patch(
+            "scc_cli.commands.launch.flow_session._resolve_session_selection",
+            return_value=(None, None, None, None, False, False, None),
+        ),
+    ):
+        result = runner.invoke(app, ["start", "--select"])
+
+    assert result.exit_code == EXIT_NOT_FOUND
 
 
 def test_start_offline_without_cache_exits_config():

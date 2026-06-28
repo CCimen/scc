@@ -4,7 +4,7 @@ This module contains the entry point and flow handlers:
 - run_dashboard: Main entry point for `scc` with no arguments
 - _apply_event / _run_effect: Event routing and effect execution
 
-Handler implementations live in orchestrator_handlers.py.
+Handler implementations live in specialized dashboard handler modules.
 
 The orchestrator manages the dashboard lifecycle including intent exceptions
 that exit the Rich Live context before handling nested UI components.
@@ -39,49 +39,37 @@ from ..keys import (
 )
 from ..list_screen import ListState
 from ..time_format import format_relative_time_from_datetime
+from . import orchestrator_container_actions, orchestrator_menus
 from ._dashboard import Dashboard
 from .loaders import _to_tab_data
 from .models import DashboardState
 
-# Re-export handler functions for backward compatibility and __init__.py
+# Handler functions used by the dashboard event loop.
 from .orchestrator_handlers import (
     _handle_clone,
     _handle_container_action_menu,
-    _handle_container_remove,
-    _handle_container_resume,
-    _handle_container_stop,
     _handle_create_worktree,
     _handle_git_init,
-    _handle_profile_menu,
     _handle_recent_workspaces,
-    _handle_sandbox_import,
     _handle_session_action_menu,
     _handle_session_resume,
-    _handle_settings,
     _handle_start_flow,
     _handle_statusline_install,
     _handle_team_switch,
     _handle_worktree_action_menu,
     _handle_worktree_start,
     _prepare_for_nested_ui,
-    _show_onboarding_banner,
 )
 
 __all__ = [
     "_apply_event",
     "_handle_clone",
     "_handle_container_action_menu",
-    "_handle_container_remove",
-    "_handle_container_resume",
-    "_handle_container_stop",
     "_handle_create_worktree",
     "_handle_git_init",
-    "_handle_profile_menu",
     "_handle_recent_workspaces",
-    "_handle_sandbox_import",
     "_handle_session_action_menu",
     "_handle_session_resume",
-    "_handle_settings",
     "_handle_start_flow",
     "_handle_statusline_install",
     "_handle_team_switch",
@@ -90,7 +78,6 @@ __all__ = [
     "_prepare_for_nested_ui",
     "_resolve_tab",
     "_run_effect",
-    "_show_onboarding_banner",
     "run_dashboard",
 ]
 
@@ -124,7 +111,7 @@ def run_dashboard() -> None:
 
     # Show one-time onboarding banner for new users
     if not scc_config.has_seen_onboarding():
-        _show_onboarding_banner()
+        orchestrator_menus._show_onboarding_banner()
         scc_config.mark_onboarding_seen()
 
     flow_state = app_dashboard.DashboardFlowState()
@@ -378,17 +365,26 @@ def _run_effect(effect: app_dashboard.DashboardEffect) -> object:
             return _handle_create_worktree()
         return _handle_clone()
     if isinstance(effect, app_dashboard.SettingsEvent):
-        return _handle_settings()
+        return orchestrator_menus._handle_settings()
     if isinstance(effect, app_dashboard.ContainerStopEvent):
-        return _handle_container_stop(effect.container_id, effect.container_name)
+        return orchestrator_container_actions._handle_container_stop(
+            effect.container_id,
+            effect.container_name,
+        )
     if isinstance(effect, app_dashboard.ContainerResumeEvent):
-        return _handle_container_resume(effect.container_id, effect.container_name)
+        return orchestrator_container_actions._handle_container_resume(
+            effect.container_id,
+            effect.container_name,
+        )
     if isinstance(effect, app_dashboard.ContainerRemoveEvent):
-        return _handle_container_remove(effect.container_id, effect.container_name)
+        return orchestrator_container_actions._handle_container_remove(
+            effect.container_id,
+            effect.container_name,
+        )
     if isinstance(effect, app_dashboard.ProfileMenuEvent):
-        return _handle_profile_menu()
+        return orchestrator_menus._handle_profile_menu()
     if isinstance(effect, app_dashboard.SandboxImportEvent):
-        return _handle_sandbox_import()
+        return orchestrator_menus._handle_sandbox_import()
     if isinstance(effect, app_dashboard.ContainerActionMenuEvent):
         return _handle_container_action_menu(effect.container_id, effect.container_name)
     if isinstance(effect, app_dashboard.SessionActionMenuEvent):

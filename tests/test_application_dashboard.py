@@ -175,10 +175,18 @@ def test_container_stop_effect_uses_fallback_message() -> None:
         container_name="scc-demo",
     )
 
-    outcome = app_dashboard.apply_dashboard_effect_result(state, effect, (True, None))
+    outcome = app_dashboard.apply_dashboard_effect_result(
+        state,
+        effect,
+        app_dashboard.ContainerActionResult(success=True),
+    )
 
     assert outcome.state.toast_message == "Container stopped"
 
-    outcome = app_dashboard.apply_dashboard_effect_result(state, effect, (False, "Custom"))
+    outcome = app_dashboard.apply_dashboard_effect_result(
+        state,
+        effect,
+        app_dashboard.ContainerActionResult(success=False, message="Custom"),
+    )
 
     assert outcome.state.toast_message == "Custom"

@@ -30,6 +30,7 @@ FLOW_PATH = (
     / "launch"
     / "flow_interactive.py"
 )
+LAUNCH_DIR = FLOW_PATH.parent
 MAX_INTERACTIVE_START_LINES = 550
 
 
@@ -71,6 +72,22 @@ def test_interactive_start_resume_hotspot_stays_extracted() -> None:
 
     assert line_count <= MAX_INTERACTIVE_START_LINES
     assert nested_functions == []
+
+
+def test_command_launch_modules_do_not_own_docker_handoff() -> None:
+    """Docker handoff belongs behind SandboxRuntime, not command launch helpers."""
+    forbidden = (
+        "docker.get_or_create_container",
+        "docker.prepare_sandbox_volume_for_credentials",
+        "docker.run(",
+    )
+    offenders = sorted(
+        path.name
+        for path in LAUNCH_DIR.glob("*.py")
+        if any(pattern in path.read_text(encoding="utf-8") for pattern in forbidden)
+    )
+
+    assert offenders == []
 
 
 def test_handle_top_level_quick_resume_rejects_non_context_selection(

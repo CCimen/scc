@@ -6,16 +6,21 @@ Error handling philosophy: "One message, one action"
 - Each error has a suggested_action (what to do next)
 - Debug context is available with --debug flag
 
-Exit codes:
-- 0: Success
-- 2: Invalid usage / bad input
-- 3: Missing prerequisites (Docker, Git)
-- 4: External tool failure (docker/git command failed)
-- 5: Internal error (bug)
+Exit-code fields use scc_cli.core.exit_codes constants so human and JSON output
+share the same command contract.
 """
 
 import shlex
 from dataclasses import dataclass, field
+
+from .exit_codes import (
+    EXIT_CONFIG,
+    EXIT_GOVERNANCE,
+    EXIT_NOT_FOUND,
+    EXIT_PREREQ,
+    EXIT_TOOL,
+    EXIT_USAGE,
+)
 
 
 @dataclass
@@ -25,7 +30,7 @@ class SCCError(Exception):
     user_message: str
     suggested_action: str = ""
     debug_context: str | None = None
-    exit_code: int = 1
+    exit_code: int = EXIT_NOT_FOUND
 
     def __str__(self) -> str:
         return self.user_message
@@ -35,14 +40,14 @@ class SCCError(Exception):
 class UsageError(SCCError):
     """Invalid usage or bad input."""
 
-    exit_code: int = field(default=2, init=False)
+    exit_code: int = field(default=EXIT_USAGE, init=False)
 
 
 @dataclass
 class PrerequisiteError(SCCError):
     """Docker/Git missing or wrong version."""
 
-    exit_code: int = field(default=3, init=False)
+    exit_code: int = field(default=EXIT_PREREQ, init=False)
 
 
 @dataclass
@@ -107,7 +112,7 @@ class GitNotFoundError(PrerequisiteError):
 class ToolError(SCCError):
     """External tool (Docker/Git) command failed."""
 
-    exit_code: int = field(default=4, init=False)
+    exit_code: int = field(default=EXIT_TOOL, init=False)
     command: str | None = None
     stderr: str | None = None
 
@@ -213,7 +218,8 @@ class WorktreeCreationError(GitWorktreeError):
 class SandboxLaunchError(ToolError):
     """Docker sandbox failed to start."""
 
-    exit_code: int = field(default=5, init=False)
+    # Local runtime launch failures use the prereq/system exit, not generic tool failure.
+    exit_code: int = field(default=EXIT_PREREQ, init=False)
     user_message: str = field(default="Failed to start Docker sandbox")
     suggested_action: str = field(
         default="Check Docker Desktop is running and has available resources"
@@ -277,7 +283,8 @@ class ExistingSandboxConflictError(ToolError):
 class InternalError(SCCError):
     """Internal error (bug in the CLI)."""
 
-    exit_code: int = field(default=5, init=False)
+    # Unexpected system failures share the prereq/system exit used by cli_common.
+    exit_code: int = field(default=EXIT_PREREQ, init=False)
     suggested_action: str = field(
         default="Please report this issue at https://github.com/CCimen/scc/issues"
     )
@@ -287,7 +294,7 @@ class InternalError(SCCError):
 class ConfigError(SCCError):
     """Configuration error."""
 
-    exit_code: int = field(default=2, init=False)
+    exit_code: int = field(default=EXIT_CONFIG, init=False)
     user_message: str = field(default="Configuration error")
     suggested_action: str = field(default="Run 'scc config --show' to view current configuration")
 
@@ -313,6 +320,7 @@ class PolicyViolationError(ConfigError):
     organization security policies.
     """
 
+    exit_code: int = field(default=EXIT_GOVERNANCE, init=False)
     item: str = ""
     blocked_by: str = ""
     item_type: str = "plugin"  # Default to plugin
@@ -373,7 +381,7 @@ class InvalidProviderError(SCCError):
 
     provider_id: str = ""
     known_providers: tuple[str, ...] = ()
-    exit_code: int = field(default=2, init=False)
+    exit_code: int = field(default=EXIT_USAGE, init=False)
     user_message: str = field(default="")
     suggested_action: str = field(default="")
 
@@ -560,7 +568,7 @@ class RendererError(SCCError):
 
     bundle_id: str = ""
     artifact_name: str = ""
-    exit_code: int = field(default=4, init=False)
+    exit_code: int = field(default=EXIT_TOOL, init=False)
 
 
 @dataclass

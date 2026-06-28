@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
 
 from scc_cli import config as config_module
 from scc_cli.core.enums import MCPServerType, NetworkPolicy, RequestSource, TargetType
+from scc_cli.core.governance_patterns import (
+    is_mcp_allowed,
+    match_blocked_mcp,
+    matches_blocked,
+)
 from scc_cli.core.network_policy import is_more_or_equal_restrictive
+from scc_cli.marketplace.normalize import (
+    is_plugin_allowed_by_patterns,
+    matches_any_pattern,
+)
 from scc_cli.ports.config_models import NormalizedOrgConfig, NormalizedTeamConfig, SessionSettings
 
 if TYPE_CHECKING:
@@ -114,98 +121,14 @@ class StdioValidationResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def matches_blocked(item: str, blocked_patterns: list[str]) -> str | None:
-    """Check whether item matches any blocked pattern using fnmatch.
-
-    Use casefold() for case-insensitive matching. This is important because:
-    - casefold() handles Unicode edge cases (e.g., German ss -> ss)
-    - Pattern "Malicious-*" should block "malicious-tool"
-
-    Args:
-        item: The item to check (plugin name, MCP server name/URL, etc.)
-        blocked_patterns: List of fnmatch patterns
-
-    Returns:
-        The pattern that matched, or None if no match
-    """
-    normalized_item = item.strip().casefold()
-
-    for pattern in blocked_patterns:
-        normalized_pattern = pattern.strip().casefold()
-        if fnmatch(normalized_item, normalized_pattern):
-            return pattern
-    return None
-
-
-def matches_plugin_pattern(plugin_ref: str, pattern: str) -> bool:
-    """Check plugin patterns, allowing bare names to match any marketplace."""
-    if not plugin_ref or not pattern:
-        return False
-    normalized_ref = plugin_ref.strip().casefold()
-    normalized_pattern = pattern.strip().casefold()
-    if "@" not in normalized_pattern and "@" in normalized_ref:
-        plugin_name = normalized_ref.split("@", 1)[0]
-        return fnmatch(plugin_name, normalized_pattern)
-    return fnmatch(normalized_ref, normalized_pattern)
-
-
 def matches_blocked_plugin(plugin_ref: str, blocked_patterns: list[str]) -> str | None:
     """Return the matching pattern for a blocked plugin, if any."""
-    for pattern in blocked_patterns:
-        if matches_plugin_pattern(plugin_ref, pattern):
-            return pattern
-    return None
+    return matches_any_pattern(plugin_ref, blocked_patterns)
 
 
 def is_plugin_allowed(plugin_ref: str, allowed_patterns: list[str] | None) -> bool:
     """Check whether plugin is allowed by an optional allowlist."""
-    if allowed_patterns is None:
-        return True
-    if not allowed_patterns:
-        return False
-    for pattern in allowed_patterns:
-        if matches_plugin_pattern(plugin_ref, pattern):
-            return True
-    return False
-
-
-def mcp_candidates(server: dict[str, Any]) -> list[str]:
-    """Collect candidate strings for MCP allow/block matching."""
-    candidates: list[str] = []
-    name = server.get("name", "")
-    if name:
-        candidates.append(name)
-    url = server.get("url", "")
-    if url:
-        candidates.append(url)
-        domain = _extract_domain(url)
-        if domain:
-            candidates.append(domain)
-    command = server.get("command", "")
-    if command:
-        candidates.append(command)
-    return candidates
-
-
-def is_mcp_allowed(server: dict[str, Any], allowed_patterns: list[str] | None) -> bool:
-    """Check whether MCP server is allowed by patterns."""
-    if allowed_patterns is None:
-        return True
-    if not allowed_patterns:
-        return False
-    for candidate in mcp_candidates(server):
-        if matches_blocked(candidate, allowed_patterns):
-            return True
-    return False
-
-
-def match_blocked_mcp(server: dict[str, Any], blocked_patterns: list[str]) -> str | None:
-    """Return the matching pattern for a blocked MCP server, if any."""
-    for candidate in mcp_candidates(server):
-        matched = matches_blocked(candidate, blocked_patterns)
-        if matched:
-            return matched
-    return None
+    return is_plugin_allowed_by_patterns(plugin_ref, allowed_patterns)
 
 
 def is_network_mcp(server: dict[str, Any]) -> bool:
@@ -317,12 +240,6 @@ def validate_stdio_server(
         blocked=False,
         warnings=warnings,
     )
-
-
-def _extract_domain(url: str) -> str:
-    """Extract domain from URL for pattern matching."""
-    parsed = urlparse(url)
-    return parsed.netloc or url
 
 
 def is_team_delegated_for_plugins(

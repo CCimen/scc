@@ -24,9 +24,9 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from scc_cli.application.profiles import get_marketplace_url
 from scc_cli.auth import is_remote_command_allowed
 from scc_cli.auth import resolve_auth as _resolve_auth_impl
-from scc_cli.profiles import get_marketplace_url
 
 if TYPE_CHECKING:
     from scc_cli.application.compute_effective_config import EffectiveConfig, MCPServer

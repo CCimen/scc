@@ -9,7 +9,7 @@ import typer
 
 from ...cli_common import console, handle_errors
 from ...core.constants import CURRENT_SCHEMA_VERSION
-from ...core.exit_codes import EXIT_CONFIG, EXIT_VALIDATION
+from ...core.exit_codes import EXIT_CONFIG, EXIT_TOOL
 from ...json_output import build_envelope
 from ...kinds import Kind
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
@@ -187,7 +187,7 @@ def org_validate_cmd(
                 errors=all_errors if not is_valid else None,
             )
             print_json(envelope)
-            raise typer.Exit(0 if is_valid else EXIT_VALIDATION)
+            raise typer.Exit(0 if is_valid else EXIT_TOOL)
 
     # Human-readable output
     if data["valid"]:
@@ -220,4 +220,4 @@ def org_validate_cmd(
             )
         )
 
-    raise typer.Exit(EXIT_VALIDATION)
+    raise typer.Exit(EXIT_TOOL)

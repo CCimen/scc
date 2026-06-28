@@ -285,7 +285,6 @@ def team_switch(
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON (implies --json)"),
 ) -> dict[str, Any]:
     """Switch to a different team profile."""
-    cfg = config.load_user_config()
     org_config = config.load_cached_org_config()
 
     available_teams = teams.list_teams(org_config)
@@ -303,7 +302,7 @@ def team_switch(
             )
         return {"success": False, "error": "no_teams_available", "previous": None, "current": None}
 
-    current = cfg.get("selected_profile")
+    current = config.get_selected_profile()
 
     resolved_name: str | None = team_name
 
@@ -349,11 +348,8 @@ def team_switch(
         )
         return {"success": False, "error": "team_not_found", "team": resolved_name}
 
-    previous = cfg.get("selected_profile")
-
-    # Switch team
-    cfg["selected_profile"] = resolved_name
-    config.save_user_config(cfg)
+    previous = current
+    config.set_selected_profile(resolved_name)
 
     # Check if team is federated and fetch config to prime cache
     fetch_result = _fetch_federated_team_config(org_config, resolved_name)

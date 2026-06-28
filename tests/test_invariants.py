@@ -253,6 +253,26 @@ class TestCombinedInvariants:
         rules = {v.rule for v in violations}
         assert "additional_plugin_not_allowed" in rules
         assert "plugin_blocked" in rules
+        blocked = next(v for v in violations if v.rule == "plugin_blocked")
+        assert "malicious-*" in blocked.message
+
+    def test_additional_plugin_matches_blocked_pattern_reports_pattern(self) -> None:
+        """Team additional plugins should report the matched org block pattern."""
+        config = {
+            "defaults": {
+                "allowed_plugins": ["*"],
+            },
+            "profiles": {
+                "team": {"additional_plugins": ["malicious-plugin@mp"]},
+            },
+            "security": {
+                "blocked_plugins": ["malicious-*"],
+            },
+        }
+        violations = validate_config_invariants(config)
+        blocked = next(v for v in violations if v.rule == "plugin_blocked")
+        assert "malicious-plugin@mp" in blocked.message
+        assert "malicious-*" in blocked.message
 
     def test_no_enabled_plugins_passes(self) -> None:
         """No enabled plugins should always pass."""
@@ -290,6 +310,55 @@ class TestCombinedInvariants:
         violations = validate_config_invariants(config)
         # Should pass - plugin is enabled, allowed (unrestricted), not blocked (empty)
         assert len(violations) == 0
+
+
+class TestMcpServerInvariants:
+    """MCP allow/block checks must use whole-string policy matching."""
+
+    def test_mcp_blocklist_matches_url_userinfo_host_candidate(self) -> None:
+        config = {
+            "defaults": {"allowed_mcp_servers": None},
+            "security": {"blocked_mcp_servers": ["*evil.example.org"]},
+            "profiles": {
+                "team": {
+                    "additional_mcp_servers": [
+                        {
+                            "name": "credentialed-api",
+                            "type": "sse",
+                            "url": "https://svc@evil.example.org/mcp",
+                        }
+                    ],
+                },
+            },
+        }
+
+        violations = validate_config_invariants(config)
+
+        assert all(v.rule != "mcp_not_allowed" for v in violations)
+        blocked = next(v for v in violations if v.rule == "mcp_blocked")
+        assert "credentialed-api" in blocked.message
+        assert "*evil.example.org" in blocked.message
+
+    def test_mcp_allowlist_matches_url_userinfo_host_candidate(self) -> None:
+        config = {
+            "defaults": {"allowed_mcp_servers": ["*api.example.org"]},
+            "security": {"blocked_mcp_servers": []},
+            "profiles": {
+                "team": {
+                    "additional_mcp_servers": [
+                        {
+                            "name": "credentialed-api",
+                            "type": "sse",
+                            "url": "https://svc@api.example.org/mcp",
+                        }
+                    ],
+                },
+            },
+        }
+
+        violations = validate_config_invariants(config)
+
+        assert violations == []
 
 
 class TestEdgeCases:

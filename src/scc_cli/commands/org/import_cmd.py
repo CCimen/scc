@@ -15,7 +15,7 @@ from rich.table import Table
 
 from ...cli_common import console, handle_errors
 from ...config import load_user_config, save_user_config
-from ...core.exit_codes import EXIT_CONFIG, EXIT_VALIDATION
+from ...core.exit_codes import EXIT_CONFIG, EXIT_TOOL
 from ...json_output import build_envelope
 from ...kinds import Kind
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
@@ -174,14 +174,14 @@ def org_import_cmd(
                     errors=validation_errors,
                 )
                 print_json(envelope)
-                raise typer.Exit(EXIT_VALIDATION)
+                raise typer.Exit(EXIT_TOOL)
         console.print(
             create_error_panel(
                 "Validation Failed",
                 "\n".join(f"* {e}" for e in validation_errors),
             )
         )
-        raise typer.Exit(EXIT_VALIDATION)
+        raise typer.Exit(EXIT_TOOL)
 
     # Save to user config
     user_config = load_user_config()

@@ -22,6 +22,7 @@ from scc_cli.application.dashboard_loaders import (
 from scc_cli.application.dashboard_models import (
     TAB_ORDER,
     ContainerActionMenuEvent,
+    ContainerActionResult,
     ContainerItem,
     ContainerRemoveEvent,
     ContainerResumeEvent,
@@ -67,6 +68,7 @@ __all__ = [
     "ContainerActionMenuEvent",
     "ContainerItem",
     "ContainerRemoveEvent",
+    "ContainerActionResult",
     "ContainerResumeEvent",
     "ContainerStopEvent",
     "ContainerSummary",
@@ -373,16 +375,9 @@ def _apply_container_message(
     success_message: str,
     failure_message: str,
 ) -> DashboardFlowOutcome:
-    if not isinstance(result, tuple) or len(result) != 2:
-        msg = "Container effect requires tuple[bool, str | None]"
+    if not isinstance(result, ContainerActionResult):
+        msg = "Container effect requires ContainerActionResult"
         raise TypeError(msg)
-    success, message = result
-    if not isinstance(success, bool):
-        msg = "Container effect success flag must be bool"
-        raise TypeError(msg)
-    if message is not None and not isinstance(message, str):
-        msg = "Container effect message must be str or None"
-        raise TypeError(msg)
-    fallback = success_message if success else failure_message
-    next_state = replace(state, toast_message=message or fallback)
+    fallback = success_message if result.success else failure_message
+    next_state = replace(state, toast_message=result.message or fallback)
     return DashboardFlowOutcome(state=next_state)

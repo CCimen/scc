@@ -8,11 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from scc_cli import config
+from scc_cli.application.audit_jsonl import (
+    redact_string,
+    redact_value,
+    scan_line_limit,
+    tail_lines,
+)
 from scc_cli.core.enums import SeverityLevel
 
 DEFAULT_LAUNCH_AUDIT_LIMIT = 10
-DEFAULT_SCAN_LINE_FLOOR = 50
-BINARY_CHUNK_SIZE = 8192
 
 
 @dataclass(frozen=True)
@@ -58,7 +62,7 @@ def read_launch_audit_diagnostics(
     """Read a bounded, redaction-safe summary of recent launch-audit events."""
     resolved_path = audit_path or config.LAUNCH_AUDIT_FILE
     requested_limit = max(limit, 0)
-    sink_path = _redact_string(str(resolved_path), redact_paths=redact_paths)
+    sink_path = redact_string(str(resolved_path), redact_paths=redact_paths)
 
     if not resolved_path.exists():
         return LaunchAuditDiagnostics(
@@ -75,7 +79,7 @@ def read_launch_audit_diagnostics(
     try:
         if not resolved_path.is_file():
             raise OSError(f"{resolved_path} is not a file")
-        raw_lines = _tail_lines(resolved_path, max_lines=_scan_line_limit(requested_limit))
+        raw_lines = tail_lines(resolved_path, max_lines=scan_line_limit(requested_limit))
     except OSError as exc:
         return LaunchAuditDiagnostics(
             sink_path=sink_path,
@@ -139,50 +143,6 @@ def read_launch_audit_diagnostics(
     )
 
 
-def _scan_line_limit(limit: int) -> int:
-    if limit <= 0:
-        return 0
-    return max(limit * 4, DEFAULT_SCAN_LINE_FLOOR)
-
-
-def _tail_lines(path: Path, *, max_lines: int) -> list[str]:
-    if max_lines <= 0:
-        return []
-
-    with path.open("rb") as handle:
-        handle.seek(0, 2)
-        file_size = handle.tell()
-        position = file_size
-        if file_size == 0:
-            return []
-
-        lines: list[bytes] = []
-        remainder = b""
-        skip_trailing_newline = True
-
-        while position > 0 and len(lines) < max_lines:
-            read_size = min(BINARY_CHUNK_SIZE, position)
-            position -= read_size
-            handle.seek(position)
-            chunk = handle.read(read_size)
-            parts = (chunk + remainder).split(b"\n")
-            remainder = parts[0]
-
-            for part in reversed(parts[1:]):
-                if skip_trailing_newline and part == b"":
-                    skip_trailing_newline = False
-                    continue
-                skip_trailing_newline = False
-                lines.append(part)
-                if len(lines) >= max_lines:
-                    break
-
-        if len(lines) < max_lines and remainder:
-            lines.append(remainder)
-
-    return [line.decode("utf-8", errors="replace") for line in reversed(lines)]
-
-
 def _parse_record(
     raw_line: str,
     *,
@@ -200,7 +160,7 @@ def _parse_record(
     if not isinstance(payload, dict):
         return None
 
-    sanitized_payload = _redact_value(payload, redact_paths=redact_paths)
+    sanitized_payload = redact_value(payload, redact_paths=redact_paths)
     if not isinstance(sanitized_payload, dict):
         return None
 
@@ -247,20 +207,3 @@ def _parse_record(
 
 def _is_failure_record(record: LaunchAuditEventRecord) -> bool:
     return record.severity == SeverityLevel.ERROR.value or record.event_type.endswith(".failed")
-
-
-def _redact_value(value: Any, *, redact_paths: bool) -> Any:
-    if isinstance(value, str):
-        return _redact_string(value, redact_paths=redact_paths)
-    if isinstance(value, dict):
-        return {key: _redact_value(item, redact_paths=redact_paths) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact_value(item, redact_paths=redact_paths) for item in value]
-    return value
-
-
-def _redact_string(value: str, *, redact_paths: bool) -> str:
-    if not redact_paths:
-        return value
-    home = str(Path.home())
-    return value.replace(home, "~") if home in value else value

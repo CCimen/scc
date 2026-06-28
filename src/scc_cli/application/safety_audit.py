@@ -8,10 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from scc_cli import config
-from scc_cli.application.launch.audit_log import _tail_lines
+from scc_cli.application.audit_jsonl import (
+    redact_string,
+    redact_value,
+    scan_line_limit,
+    tail_lines,
+)
 
 DEFAULT_SAFETY_AUDIT_LIMIT = 10
-DEFAULT_SCAN_LINE_FLOOR = 50
 
 
 @dataclass(frozen=True)
@@ -60,7 +64,7 @@ def read_safety_audit_diagnostics(
     """Read a bounded, redaction-safe summary of recent safety-check events."""
     resolved_path = audit_path or config.LAUNCH_AUDIT_FILE
     requested_limit = max(limit, 0)
-    sink_path = _redact_string(str(resolved_path), redact_paths=redact_paths)
+    sink_path = redact_string(str(resolved_path), redact_paths=redact_paths)
 
     if not resolved_path.exists():
         return SafetyAuditDiagnostics(
@@ -79,7 +83,7 @@ def read_safety_audit_diagnostics(
     try:
         if not resolved_path.is_file():
             raise OSError(f"{resolved_path} is not a file")
-        raw_lines = _tail_lines(resolved_path, max_lines=_scan_line_limit(requested_limit))
+        raw_lines = tail_lines(resolved_path, max_lines=scan_line_limit(requested_limit))
     except OSError as exc:
         return SafetyAuditDiagnostics(
             sink_path=sink_path,
@@ -159,12 +163,6 @@ def read_safety_audit_diagnostics(
     )
 
 
-def _scan_line_limit(limit: int) -> int:
-    if limit <= 0:
-        return 0
-    return max(limit * 4, DEFAULT_SCAN_LINE_FLOOR)
-
-
 def _is_parseable_non_safety(raw_line: str) -> bool:
     """Return True when the line is valid JSON but not a safety.check event."""
     if raw_line.strip() == "":
@@ -201,7 +199,7 @@ def _parse_safety_record(
     if not isinstance(event_type, str) or event_type != "safety.check":
         return None
 
-    sanitized = _redact_value(payload, redact_paths=redact_paths)
+    sanitized = redact_value(payload, redact_paths=redact_paths)
     if not isinstance(sanitized, dict):
         return None
 
@@ -247,20 +245,3 @@ def _parse_safety_record(
         provider_id=provider_id,
         metadata=metadata,
     )
-
-
-def _redact_value(value: Any, *, redact_paths: bool) -> Any:
-    if isinstance(value, str):
-        return _redact_string(value, redact_paths=redact_paths)
-    if isinstance(value, dict):
-        return {key: _redact_value(item, redact_paths=redact_paths) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact_value(item, redact_paths=redact_paths) for item in value]
-    return value
-
-
-def _redact_string(value: str, *, redact_paths: bool) -> str:
-    if not redact_paths:
-        return value
-    home = str(Path.home())
-    return value.replace(home, "~") if home in value else value
