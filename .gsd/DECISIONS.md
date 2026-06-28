@@ -139,6 +139,17 @@ Status: accepted
 
 ---
 
+## D053 — M011 is architecture convergence before runtime/devcontainer work
+M011 is the architecture-convergence milestone: inventory remaining ownership ambiguity, stale compatibility paths, oversized interaction surfaces, dict-shaped trust boundaries, test debt, performance leads, and docs-truth drift before implementation begins.
+
+This supersedes the M010 forecast that runtime/devcontainer interoperability would be M011. Runtime/devcontainer work is still important, but it moves to M012 so the launch/setup/dashboard/config surfaces are easier to explain and change before adding a new runtime attachment mode.
+
+M011/S01 is code-free. Its source of truth is one supplementary milestone file in `.gsd/milestones/`; do not create separate M011 context, roadmap, inventory, or owner-map files. Ownership must be captured in the gap-map table and in existing owners such as `.gsd/PROJECT.md`, `.gsd/DECISIONS.md`, and guardrail tests.
+
+Status: accepted
+
+---
+
 ## Decisions Table
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |

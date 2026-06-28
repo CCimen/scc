@@ -51,8 +51,11 @@ Consolidated five duplicated launch preflight sequences into one shared module. 
 ### M009 — Preflight Convergence and Auth Bootstrap Unification ✅
 All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orchestrator_handlers.py, and the start command) now use collect_launch_readiness() + ensure_launch_ready() through the shared preflight module. ensure_launch_ready() actually calls bootstrap_auth() when auth is missing (silent gap closed). auth_bootstrap.py reduced to deprecated redirect. Auth messaging centralized in preflight._ensure_auth(). Setup's _render_provider_status uses _three_tier_status() so both onboarding panel and completion summary show identical four-state readiness vocabulary. D048 superseded by D049. 3 net new tests (5117 total).
 
-### M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth
-Active milestone. S01 established a source-grounded gap map and ownership reconciliation. S02 proved project `network_policy` can narrow but not widen org/team policy. S03 recorded that v1 project identity is repository/worktree context, not a separate registry. S04 made ignored project policy widening visible in `scc config explain` and validated project network-policy values. S05/S06 cleaned docs truth and added a minimal enterprise pilot blueprint.
+### M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth ✅
+S01 established a source-grounded gap map and ownership reconciliation. S02 proved project `network_policy` can narrow but not widen org/team policy. S03 recorded that v1 project identity is repository/worktree context, not a separate registry. S04 made ignored project policy widening visible in `scc config explain` and validated project network-policy values. S05/S06 cleaned docs truth and added a minimal enterprise pilot blueprint.
+
+### M011 — Architecture Convergence And Interaction Surface Slimming
+Active milestone. S01 is a code-free architecture inventory that measures remaining large modules, ambiguous ownership, compatibility seams, dict-shaped boundaries, stale skips/xfails, performance leads, and docs-truth cleanup needs before any refactor begins. Runtime/devcontainer interoperability moves to M012 per D053.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -64,7 +67,11 @@ Active milestone. S01 established a source-grounded gap map and ownership reconc
 7. ~~M007 — Provider Neutralization, Operator Truthfulness, and Legacy Claude Cleanup~~ ✅
 8. ~~M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening~~ ✅
 9. ~~M009 — Preflight Convergence and Auth Bootstrap Unification~~ ✅
-10. M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth
+10. ~~M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth~~ ✅
+11. M011 — Architecture Convergence And Interaction Surface Slimming
+12. M012 — Runtime/devcontainer Interoperability
+13. M013 — Audit, Support, And Compliance Bundle
+14. M014 — Enterprise Identity And Signed Policy
 
 ## Requirement status
 - **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all nine milestones.
@@ -74,7 +81,7 @@ Active milestone. S01 established a source-grounded gap map and ownership reconc
 - `uv run mypy src/scc_cli` ✅ (299 files, 0 issues)
 - `uv run pytest -q` ✅ (5158 passed, 23 skipped, 2 xfailed)
 - Zero files in src/scc_cli/ exceed 1100 lines
-- Current line-count watchlist from `find src/scc_cli -name '*.py' -exec wc -l {} +`: setup.py 1035, orchestrator_handlers.py 878, flow_interactive.py 811. `compute_effective_config.py` is 710 lines after M010/S04 model extraction.
+- Current file-size guardrail baseline from `uv run pytest tests/test_file_sizes.py -q -s --no-cov`: 299 source files scanned; 3 warning-zone files; 0 failing files. Warning-zone files are `scc_cli/setup.py` 1035 lines, `scc_cli/ui/dashboard/orchestrator_handlers.py` 878 lines, and `scc_cli/commands/launch/flow_interactive.py` 811 lines. `scc_cli/application/compute_effective_config.py` is 739 lines and below the 800-line warning threshold after M010/S04 model extraction.
 
 ## Known deferred items
 - Wizard cast cleanup (23 casts in wizard.py/flow_interactive.py) — deferred per D018
@@ -89,7 +96,7 @@ Active milestone. S01 established a source-grounded gap map and ownership reconc
 - Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 - start_claude parameter rename to start_agent in worktree_commands.py (deferred from M008/S01)
 - WorkContext.provider_id threading through _record_session_and_context (deferred from M008/S01)
-- Delete auth_bootstrap.py entirely after updating test consumers to use preflight directly
+- M011 architecture convergence inventory controls the next cleanup slices: stale compatibility facades, ambiguous `EffectiveConfig` naming, setup/dashboard/interactive launch surface slimming, dict/`Any` trust boundaries, skip/xfail cleanup, and docs truth.
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
@@ -116,3 +123,4 @@ Active milestone. S01 established a source-grounded gap map and ownership reconc
 - **Provider adapter dispatch** uses a shared `get_agent_provider(adapters, provider_id)` helper in dependencies.py — no hardcoded per-site dispatch dicts.
 - **40+ guardrail tests** across test_docs_truthfulness.py, test_auth_vocabulary_guardrail.py, test_lifecycle_inventory_consistency.py, and test_launch_preflight_guardrail.py mechanically prevent regression.
 - **Auth bootstrap exception wrapping** in ensure_launch_ready/_ensure_auth: raw exceptions from bootstrap_auth() become ProviderNotReadyError with actionable guidance; already-typed ProviderNotReadyError passes through unchanged.
+- **Size guardrails are the mechanical source of truth**: `tests/test_file_sizes.py` owns source file thresholds (warning 800, fail 1100) and `tests/test_function_sizes.py` owns function thresholds (warning 200, fail 300). Planning docs may cite measured snapshots, but refactor gates must rerun the guardrails.
