@@ -680,7 +680,6 @@ def run_setup_wizard(console: Console) -> bool:
 
     # Save config
     save_setup_config(
-        console,
         org_url=org_url,
         auth=auth,
         auth_header=auth_header,
@@ -738,7 +737,6 @@ def run_non_interactive_setup(
     if standalone:
         # Standalone mode - no org config needed
         save_setup_config(
-            console,
             org_url=None,
             auth=None,
             auth_header=None,
@@ -777,7 +775,6 @@ def run_non_interactive_setup(
 
     # Save config
     save_setup_config(
-        console,
         org_url=org_url,
         auth=auth,
         auth_header=auth_header,

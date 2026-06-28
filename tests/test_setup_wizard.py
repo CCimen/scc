@@ -112,14 +112,12 @@ class TestSaveSetupConfig:
 
     def test_saves_org_source_url(self, tmp_path):
         """Should save organization source URL to config."""
-        mock_console = MagicMock()
         with (
             patch("scc_cli.setup.config.CONFIG_DIR", tmp_path),
             patch("scc_cli.setup.config.CONFIG_FILE", tmp_path / "config.json"),
             patch("scc_cli.setup.config.save_user_config") as mock_save,
         ):
             setup.save_setup_config(
-                mock_console,
                 org_url="https://example.org/config.json",
                 auth="env:TOKEN",
                 auth_header="PRIVATE-TOKEN",
@@ -136,14 +134,12 @@ class TestSaveSetupConfig:
 
     def test_saves_standalone_config(self, tmp_path):
         """Should save standalone mode config."""
-        mock_console = MagicMock()
         with (
             patch("scc_cli.setup.config.CONFIG_DIR", tmp_path),
             patch("scc_cli.setup.config.CONFIG_FILE", tmp_path / "config.json"),
             patch("scc_cli.setup.config.save_user_config") as mock_save,
         ):
             setup.save_setup_config(
-                mock_console,
                 org_url=None,  # Standalone
                 auth=None,
                 auth_header=None,

@@ -7,7 +7,6 @@ and save logic.
 
 from typing import Any
 
-from rich.console import Console
 from rich.text import Text
 
 from . import config
@@ -180,7 +179,6 @@ def _build_config_changes(before: dict[str, Any], after: dict[str, Any]) -> Text
 
 
 def save_setup_config(
-    console: Console,
     org_url: str | None,
     auth: str | None,
     auth_header: str | None,
@@ -191,7 +189,6 @@ def save_setup_config(
     """Save the setup configuration to the user config file.
 
     Args:
-        console: Rich console for output
         org_url: Organization config URL or None
         auth: Auth spec or None
         auth_header: Optional auth header for org fetch
