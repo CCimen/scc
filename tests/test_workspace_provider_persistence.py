@@ -248,6 +248,28 @@ class TestFailedLaunchDoesNotWritePreference:
 
         mocks["set_workspace_last_used_provider"].assert_not_called()
 
+    def test_finalize_launch_failure_preserves_record_before_finalize_order(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        call_order: list[str] = []
+        mocks = _apply_flow_patches(tmp_path, provider_id="codex")
+        mocks["_record_session_and_context"].side_effect = lambda *a, **kw: call_order.append(
+            "record"
+        )
+
+        def fail_finalize(*_args: object, **_kwargs: object) -> None:
+            call_order.append("finalize")
+            raise RuntimeError("unexpected container failure")
+
+        mocks["finalize_launch"].side_effect = fail_finalize
+
+        with _patch_all(mocks), pytest.raises(RuntimeError):
+            _invoke_start(tmp_path, provider="codex")
+
+        assert call_order == ["record", "finalize"]
+        mocks["set_workspace_last_used_provider"].assert_not_called()
+
     def test_finalize_launch_raises_runtime_error_skips_preference(self, tmp_path: Path) -> None:
         mocks = _apply_flow_patches(
             tmp_path,

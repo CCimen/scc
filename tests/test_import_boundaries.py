@@ -700,6 +700,73 @@ class TestDashboardHandlerOwnership:
 
         assert not problems, "\n".join(problems)
 
+    def test_menu_handlers_have_single_owner(self) -> None:
+        """Menu handlers are owned by orchestrator_menus.py."""
+        handler_names = {
+            "_handle_settings",
+            "_handle_profile_menu",
+            "_handle_sandbox_import",
+            "_show_onboarding_banner",
+        }
+        dashboard_path = SRC / "ui" / "dashboard"
+        owner_file = dashboard_path / "orchestrator_menus.py"
+        consumer_files = (
+            dashboard_path / "orchestrator.py",
+            dashboard_path / "orchestrator_handlers.py",
+        )
+
+        problems: list[str] = []
+        definitions: dict[str, list[Path]] = {name: [] for name in handler_names}
+        for path in dashboard_path.glob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name in handler_names:
+                    definitions[node.name].append(path.resolve())
+
+        for name, owners in sorted(definitions.items()):
+            if owners != [owner_file.resolve()]:
+                formatted = ", ".join(str(path.relative_to(REPO_ROOT)) for path in owners)
+                problems.append(
+                    f"{name} must be defined only in {owner_file.relative_to(REPO_ROOT)}; "
+                    f"found {formatted or '<none>'}."
+                )
+
+        for path in consumer_files:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom) and node.module in {
+                    "orchestrator_handlers",
+                    "orchestrator_menus",
+                }:
+                    imported = sorted(
+                        handler_names.intersection(alias.name for alias in node.names)
+                    )
+                    if imported:
+                        problems.append(
+                            f"{path.relative_to(REPO_ROOT)} should call "
+                            "orchestrator_menus.<handler>() instead of importing "
+                            f"{', '.join(imported)}."
+                        )
+                if path.name == "orchestrator.py" and isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name) and target.id == "__all__":
+                            if isinstance(node.value, ast.List):
+                                exported = sorted(
+                                    handler_names.intersection(
+                                        item.value
+                                        for item in node.value.elts
+                                        if isinstance(item, ast.Constant)
+                                        and isinstance(item.value, str)
+                                    )
+                                )
+                                if exported:
+                                    problems.append(
+                                        "orchestrator.py should not export private menu "
+                                        f"handlers: {', '.join(exported)}."
+                                    )
+
+        assert not problems, "\n".join(problems)
+
 
 class TestDashboardLaunchRoutingBoundary:
     """Dashboard UI routes launch effects through the launch command owner."""
@@ -811,73 +878,6 @@ class TestPreparedLaunchCompletionBoundary:
             "commands.launch.completion instead of owning conflict/show/finalize/persist "
             "logic:\n" + "\n".join(problems)
         )
-
-    def test_menu_handlers_have_single_owner(self) -> None:
-        """Menu handlers are owned by orchestrator_menus.py."""
-        handler_names = {
-            "_handle_settings",
-            "_handle_profile_menu",
-            "_handle_sandbox_import",
-            "_show_onboarding_banner",
-        }
-        dashboard_path = SRC / "ui" / "dashboard"
-        owner_file = dashboard_path / "orchestrator_menus.py"
-        consumer_files = (
-            dashboard_path / "orchestrator.py",
-            dashboard_path / "orchestrator_handlers.py",
-        )
-
-        problems: list[str] = []
-        definitions: dict[str, list[Path]] = {name: [] for name in handler_names}
-        for path in dashboard_path.glob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and node.name in handler_names:
-                    definitions[node.name].append(path.resolve())
-
-        for name, owners in sorted(definitions.items()):
-            if owners != [owner_file.resolve()]:
-                formatted = ", ".join(str(path.relative_to(REPO_ROOT)) for path in owners)
-                problems.append(
-                    f"{name} must be defined only in {owner_file.relative_to(REPO_ROOT)}; "
-                    f"found {formatted or '<none>'}."
-                )
-
-        for path in consumer_files:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in tree.body:
-                if isinstance(node, ast.ImportFrom) and node.module in {
-                    "orchestrator_handlers",
-                    "orchestrator_menus",
-                }:
-                    imported = sorted(
-                        handler_names.intersection(alias.name for alias in node.names)
-                    )
-                    if imported:
-                        problems.append(
-                            f"{path.relative_to(REPO_ROOT)} should call "
-                            "orchestrator_menus.<handler>() instead of importing "
-                            f"{', '.join(imported)}."
-                        )
-                if path.name == "orchestrator.py" and isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name) and target.id == "__all__":
-                            if isinstance(node.value, ast.List):
-                                exported = sorted(
-                                    handler_names.intersection(
-                                        item.value
-                                        for item in node.value.elts
-                                        if isinstance(item, ast.Constant)
-                                        and isinstance(item.value, str)
-                                    )
-                                )
-                                if exported:
-                                    problems.append(
-                                        "orchestrator.py should not export private menu "
-                                        f"handlers: {', '.join(exported)}."
-                                    )
-
-        assert not problems, "\n".join(problems)
 
 
 class TestLaunchOwnershipBoundary:

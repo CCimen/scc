@@ -122,6 +122,59 @@ def test_handle_session_resume_uses_provider_neutral_pipeline(
 @patch("scc_cli.commands.launch.render.show_launch_panel")
 @patch("scc_cli.application.launch.finalize_launch")
 @patch("scc_cli.workspace_local_config.set_workspace_last_used_provider")
+def test_handle_worktree_start_keep_existing_persists_provider(
+    mock_set_workspace_provider: MagicMock,
+    mock_finalize: MagicMock,
+    mock_launch_panel: MagicMock,
+    mock_conflict: MagicMock,
+    mock_prepare: MagicMock,
+    mock_readiness: MagicMock,
+    _mock_resolve: MagicMock,
+    mock_adapters: MagicMock,
+    mock_validate: MagicMock,
+    _mock_selected: MagicMock,
+    _mock_org: MagicMock,
+    _mock_cfg: MagicMock,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "worktree"
+    workspace.mkdir()
+    mock_validate.return_value = workspace
+    adapters = _fake_adapters()
+    mock_adapters.return_value = adapters
+    mock_readiness.return_value = _ready_readiness()
+    start_plan = MagicMock()
+    start_plan.current_branch = "feature"
+    mock_prepare.return_value = (adapters, start_plan)
+    mock_conflict.return_value = MagicMock(
+        decision=LaunchConflictDecision.KEEP_EXISTING,
+        plan=start_plan,
+    )
+
+    result = _handle_worktree_start(str(workspace))
+
+    assert result.decision is app_dashboard.StartFlowDecision.CANCELLED
+    assert result.message == "Kept existing sandbox"
+    mock_launch_panel.assert_not_called()
+    mock_finalize.assert_not_called()
+    mock_set_workspace_provider.assert_called_once_with(workspace, "codex")
+
+
+@patch("scc_cli.config.load_user_config", return_value={})
+@patch("scc_cli.config.load_cached_org_config", return_value=None)
+@patch("scc_cli.config.get_selected_provider", return_value=None)
+@patch("scc_cli.commands.launch.workspace.validate_and_resolve_workspace")
+@patch("scc_cli.bootstrap.get_default_adapters")
+@patch(
+    "scc_cli.commands.launch.preflight.resolve_launch_provider",
+    return_value=("codex", ProviderResolutionSource.GLOBAL_PREFERRED),
+)
+@patch("scc_cli.commands.launch.preflight.collect_launch_readiness")
+@patch("scc_cli.commands.launch.dependencies.prepare_live_start_plan")
+@patch("scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict")
+@patch("scc_cli.commands.launch.render.show_launch_panel")
+@patch("scc_cli.application.launch.finalize_launch")
+@patch("scc_cli.workspace_local_config.set_workspace_last_used_provider")
 def test_handle_worktree_start_uses_provider_neutral_pipeline(
     mock_set_workspace_provider: MagicMock,
     mock_finalize: MagicMock,

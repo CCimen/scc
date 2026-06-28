@@ -55,11 +55,12 @@ def complete_prepared_launch(
     console: Console,
 ) -> PreparedLaunchCompletionResult:
     """Resolve conflicts, launch, and persist provider selection."""
+    display_name = get_provider_display_name(request.provider_id)
     conflict = conflict_resolution.resolve_launch_conflict(
         request.start_plan,
         dependencies=request.dependencies,
         console=console,
-        display_name=get_provider_display_name(request.provider_id),
+        display_name=display_name,
         json_mode=request.json_mode,
         non_interactive=request.non_interactive,
     )
@@ -92,7 +93,7 @@ def complete_prepared_launch(
         session_name=request.session_name,
         branch=request.current_branch,
         is_resume=request.is_resume,
-        display_name=get_provider_display_name(request.provider_id),
+        display_name=display_name,
     )
     app_launch.finalize_launch(conflict.plan, dependencies=request.dependencies)
     workspace_local_config.set_workspace_last_used_provider(
