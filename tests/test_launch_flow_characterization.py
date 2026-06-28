@@ -188,27 +188,19 @@ class TestStartWizardStateMachine:
 class TestStartWizardFlowCompletion:
     """Characterize the wizard handoff to the shared prepared-launch completion owner."""
 
-    def _run_with_completion(
+    def _patch_wizard_setup(
         self,
         *,
         tmp_path: Path,
         monkeypatch: Any,
-        decision: Any,
-        message: str | None = None,
-    ) -> tuple[Any, Any, Any, Any, Any]:
+    ) -> tuple[Any, MagicMock, MagicMock]:
         import scc_cli.commands.launch.flow_interactive as flow
-        from scc_cli.commands.launch.completion import PreparedLaunchCompletionResult
 
         adapters = MagicMock()
         plan = MagicMock()
         plan.current_branch = "main"
         plan.resolver_result.is_mount_expanded = False
         dependencies = MagicMock()
-        captured_request: dict[str, Any] = {}
-
-        def complete_launch(request: Any, *, console: Any) -> PreparedLaunchCompletionResult:
-            captured_request["request"] = request
-            return PreparedLaunchCompletionResult(decision=decision, message=message)
 
         monkeypatch.setattr(flow.setup, "is_setup_needed", lambda: False)
         monkeypatch.setattr(flow.config, "load_user_config", lambda: {})
@@ -240,6 +232,29 @@ class TestStartWizardFlowCompletion:
         )
         monkeypatch.setattr(flow, "build_sync_output_view_model", lambda plan: object())
         monkeypatch.setattr(flow, "render_launch_output", lambda *args, **kwargs: None)
+
+        return flow, plan, dependencies
+
+    def _run_with_completion(
+        self,
+        *,
+        tmp_path: Path,
+        monkeypatch: Any,
+        decision: Any,
+        message: str | None = None,
+    ) -> tuple[Any, Any, Any, Any, Any]:
+        from scc_cli.commands.launch.completion import PreparedLaunchCompletionResult
+
+        flow, plan, dependencies = self._patch_wizard_setup(
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+        )
+        captured_request: dict[str, Any] = {}
+
+        def complete_launch(request: Any, *, console: Any) -> PreparedLaunchCompletionResult:
+            captured_request["request"] = request
+            return PreparedLaunchCompletionResult(decision=decision, message=message)
+
         monkeypatch.setattr(flow, "complete_prepared_launch", complete_launch)
 
         return flow, flow.run_start_wizard_flow(), captured_request["request"], plan, dependencies
@@ -306,6 +321,64 @@ class TestStartWizardFlowCompletion:
 
         assert result.decision is flow.StartWizardFlowDecision.LAUNCHED
         assert result.message is None
+
+    def test_launch_completion_records_then_finalizes_and_persists_provider(
+        self,
+        tmp_path: Path,
+        monkeypatch: Any,
+    ) -> None:
+        import scc_cli.commands.launch.completion as completion
+        from scc_cli.commands.launch.conflict_resolution import (
+            LaunchConflictDecision,
+            LaunchConflictResolution,
+        )
+
+        flow, plan, dependencies = self._patch_wizard_setup(
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+        )
+        call_order: list[str] = []
+        mock_resolve_conflict = MagicMock(
+            return_value=LaunchConflictResolution(
+                decision=LaunchConflictDecision.PROCEED,
+                plan=plan,
+            )
+        )
+        mock_record = MagicMock(side_effect=lambda *args, **kwargs: call_order.append("record"))
+        mock_show_panel = MagicMock(side_effect=lambda *args, **kwargs: call_order.append("panel"))
+        mock_finalize = MagicMock(side_effect=lambda *args, **kwargs: call_order.append("finalize"))
+        mock_persist = MagicMock(side_effect=lambda *args, **kwargs: call_order.append("persist"))
+        monkeypatch.setattr(
+            completion.conflict_resolution,
+            "resolve_launch_conflict",
+            mock_resolve_conflict,
+        )
+        monkeypatch.setattr(
+            completion.flow_session,
+            "_record_session_and_context",
+            mock_record,
+        )
+        monkeypatch.setattr(completion.render, "show_launch_panel", mock_show_panel)
+        monkeypatch.setattr(completion.app_launch, "finalize_launch", mock_finalize)
+        monkeypatch.setattr(
+            completion.workspace_local_config,
+            "set_workspace_last_used_provider",
+            mock_persist,
+        )
+
+        result = flow.run_start_wizard_flow()
+
+        assert result.decision is flow.StartWizardFlowDecision.LAUNCHED
+        assert call_order == ["record", "panel", "finalize", "persist"]
+        mock_record.assert_called_once_with(
+            tmp_path,
+            "platform",
+            "demo",
+            "main",
+            provider_id="codex",
+        )
+        mock_finalize.assert_called_once_with(plan, dependencies=dependencies)
+        mock_persist.assert_called_once_with(tmp_path, "codex")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
