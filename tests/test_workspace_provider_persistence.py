@@ -137,14 +137,14 @@ _FLOW_BASE_PATCHES = [
     "scc_cli.commands.launch.flow.render_launch_output",
     "scc_cli.commands.launch.flow_session._apply_personal_profile",
     "scc_cli.commands.launch.flow.warn_if_non_worktree",
-    "scc_cli.commands.launch.flow.resolve_launch_conflict",
+    "scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict",
     "scc_cli.commands.launch.flow_session._record_session_and_context",
-    "scc_cli.commands.launch.flow.set_workspace_last_used_provider",
+    "scc_cli.workspace_local_config.set_workspace_last_used_provider",
     "scc_cli.commands.launch.flow.collect_launch_readiness",
     "scc_cli.commands.launch.flow.ensure_launch_ready",
     "scc_cli.commands.launch.flow.show_auth_bootstrap_panel",
-    "scc_cli.commands.launch.flow.show_launch_panel",
-    "scc_cli.commands.launch.flow.finalize_launch",
+    "scc_cli.commands.launch.render.show_launch_panel",
+    "scc_cli.application.launch.finalize_launch",
 ]
 
 

@@ -13,13 +13,11 @@ import typer
 from rich.status import Status
 
 from ... import config, sessions, setup
-from ...application.launch import finalize_launch
 from ...application.start_session import StartSessionRequest
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.errors import WorkspaceNotFoundError
 from ...core.exit_codes import EXIT_CANCELLED, EXIT_CONFIG, EXIT_NOT_FOUND, EXIT_USAGE
-from ...core.provider_resolution import get_provider_display_name
 from ...output_mode import json_output_mode, print_json, set_pretty_mode
 from ...panels import create_info_panel
 from ...ports.config_models import NormalizedOrgConfig
@@ -27,9 +25,12 @@ from ...presentation.json.launch_json import build_start_dry_run_envelope
 from ...presentation.launch_presenter import build_sync_output_view_model, render_launch_output
 from ...theme import Spinners
 from ...ui.chrome import print_with_layout
-from ...workspace_local_config import set_workspace_last_used_provider
 from . import flow_session
-from .conflict_resolution import LaunchConflictDecision, resolve_launch_conflict
+from .completion import (
+    PreparedLaunchCompletionDecision,
+    PreparedLaunchCompletionRequest,
+    complete_prepared_launch,
+)
 from .dependencies import prepare_live_start_plan
 from .flow_interactive import interactive_start, run_start_wizard_flow
 from .preflight import collect_launch_readiness, ensure_launch_ready, resolve_launch_provider
@@ -37,7 +38,6 @@ from .render import (
     build_dry_run_data,
     show_auth_bootstrap_panel,
     show_dry_run_panel,
-    show_launch_panel,
     warn_if_non_worktree,
 )
 from .team_settings import _configure_team_settings
@@ -401,37 +401,24 @@ def start(
 
     warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
 
-    conflict_resolution = resolve_launch_conflict(
-        start_plan,
-        dependencies=start_dependencies,
+    completion_result = complete_prepared_launch(
+        PreparedLaunchCompletionRequest(
+            workspace_path=workspace_path,
+            team=team,
+            session_name=session_name,
+            current_branch=current_branch,
+            provider_id=resolved_provider,
+            start_plan=start_plan,
+            dependencies=start_dependencies,
+            is_resume=False,
+            json_mode=(json_output or pretty),
+            non_interactive=non_interactive,
+            record_session=True,
+        ),
         console=console,
-        display_name=get_provider_display_name(resolved_provider),
-        json_mode=(json_output or pretty),
-        non_interactive=non_interactive,
     )
-    if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
-        set_workspace_last_used_provider(workspace_path, resolved_provider)
+    if completion_result.decision is PreparedLaunchCompletionDecision.KEPT_EXISTING:
         raise typer.Exit(0)
-    if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
+    if completion_result.decision is PreparedLaunchCompletionDecision.CANCELLED:
         console.print("[dim]Cancelled.[/dim]")
         raise typer.Exit(EXIT_CANCELLED)
-    start_plan = conflict_resolution.plan
-
-    # ── Step 8: Launch sandbox ───────────────────────────────────────────────
-    flow_session._record_session_and_context(
-        workspace_path,
-        team,
-        session_name,
-        current_branch,
-        provider_id=resolved_provider,
-    )
-    show_launch_panel(
-        workspace=workspace_path,
-        team=team,
-        session_name=session_name,
-        branch=current_branch,
-        is_resume=False,
-        display_name=get_provider_display_name(resolved_provider),
-    )
-    finalize_launch(start_plan, dependencies=start_dependencies)
-    set_workspace_last_used_provider(workspace_path, resolved_provider)

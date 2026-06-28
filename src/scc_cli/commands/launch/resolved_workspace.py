@@ -9,11 +9,9 @@ from pathlib import Path
 from rich.console import Console
 from rich.status import Status
 
-from scc_cli import bootstrap, config, workspace_local_config
-from scc_cli.application import launch as app_launch
+from scc_cli import bootstrap, config
 from scc_cli.application.start_session import StartSessionRequest
 from scc_cli.commands.launch import (
-    conflict_resolution,
     dependencies,
     preflight,
     render,
@@ -21,9 +19,14 @@ from scc_cli.commands.launch import (
 )
 from scc_cli.commands.launch import workspace as launch_workspace
 from scc_cli.core.errors import ProviderNotReadyError
-from scc_cli.core.provider_resolution import get_provider_display_name
 from scc_cli.ports.config_models import NormalizedOrgConfig
 from scc_cli.theme import Spinners
+
+from .completion import (
+    PreparedLaunchCompletionDecision,
+    PreparedLaunchCompletionRequest,
+    complete_prepared_launch,
+)
 
 
 class ResolvedWorkspaceLaunchDecision(Enum):
@@ -155,42 +158,32 @@ def launch_resolved_workspace(
             console.print(f"[dim]Branch: {current_branch}[/dim]")
         console.print()
 
-        conflict = conflict_resolution.resolve_launch_conflict(
-            start_plan,
-            dependencies=start_dependencies,
+        completion_result = complete_prepared_launch(
+            PreparedLaunchCompletionRequest(
+                workspace_path=workspace_path,
+                team=request.team,
+                session_name=request.session_name,
+                current_branch=current_branch,
+                provider_id=resolved_provider,
+                start_plan=start_plan,
+                dependencies=start_dependencies,
+                is_resume=request.resume,
+                json_mode=False,
+                non_interactive=False,
+                record_session=False,
+            ),
             console=console,
-            display_name=get_provider_display_name(resolved_provider),
-            json_mode=False,
-            non_interactive=False,
         )
-        if conflict.decision is conflict_resolution.LaunchConflictDecision.KEEP_EXISTING:
-            workspace_local_config.set_workspace_last_used_provider(
-                workspace_path,
-                resolved_provider,
-            )
+        if completion_result.decision is PreparedLaunchCompletionDecision.KEPT_EXISTING:
             return ResolvedWorkspaceLaunchResult(
                 decision=ResolvedWorkspaceLaunchDecision.KEPT_EXISTING,
-                message="Kept existing sandbox",
+                message=completion_result.message,
             )
-        if conflict.decision is conflict_resolution.LaunchConflictDecision.CANCELLED:
+        if completion_result.decision is PreparedLaunchCompletionDecision.CANCELLED:
             return ResolvedWorkspaceLaunchResult(
                 decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
-                message="Start cancelled",
+                message=completion_result.message,
             )
-
-        render.show_launch_panel(
-            workspace=workspace_path,
-            team=request.team,
-            session_name=request.session_name,
-            branch=current_branch,
-            is_resume=request.resume,
-            display_name=get_provider_display_name(resolved_provider),
-        )
-        app_launch.finalize_launch(conflict.plan, dependencies=start_dependencies)
-        workspace_local_config.set_workspace_last_used_provider(
-            workspace_path,
-            resolved_provider,
-        )
         return ResolvedWorkspaceLaunchResult(
             decision=ResolvedWorkspaceLaunchDecision.LAUNCHED,
         )

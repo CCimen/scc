@@ -93,10 +93,10 @@ def _invoke_start(tmp_path: Path) -> None:
     )
 
 
-@patch("scc_cli.commands.launch.flow.finalize_launch")
+@patch("scc_cli.application.launch.finalize_launch")
 @patch("scc_cli.commands.launch.flow_session._record_session_and_context")
-@patch("scc_cli.commands.launch.flow.resolve_launch_conflict")
-@patch("scc_cli.commands.launch.flow.show_launch_panel")
+@patch("scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict")
+@patch("scc_cli.commands.launch.render.show_launch_panel")
 @patch("scc_cli.commands.launch.flow.warn_if_non_worktree")
 @patch("scc_cli.commands.launch.flow_session._apply_personal_profile", return_value=(None, False))
 @patch("scc_cli.commands.launch.flow.render_launch_output")
@@ -153,10 +153,10 @@ def test_start_keep_existing_exits_cleanly_without_recording_or_launching(
     mock_finalize_launch.assert_not_called()
 
 
-@patch("scc_cli.commands.launch.flow.finalize_launch")
+@patch("scc_cli.application.launch.finalize_launch")
 @patch("scc_cli.commands.launch.flow_session._record_session_and_context")
-@patch("scc_cli.commands.launch.flow.resolve_launch_conflict")
-@patch("scc_cli.commands.launch.flow.show_launch_panel")
+@patch("scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict")
+@patch("scc_cli.commands.launch.render.show_launch_panel")
 @patch("scc_cli.commands.launch.flow.warn_if_non_worktree")
 @patch("scc_cli.commands.launch.flow_session._apply_personal_profile", return_value=(None, False))
 @patch("scc_cli.commands.launch.flow.render_launch_output")
@@ -213,10 +213,10 @@ def test_start_cancel_conflict_exits_130_without_recording_or_launching(
     mock_finalize_launch.assert_not_called()
 
 
-@patch("scc_cli.commands.launch.flow.finalize_launch")
+@patch("scc_cli.application.launch.finalize_launch")
 @patch("scc_cli.commands.launch.flow_session._record_session_and_context")
-@patch("scc_cli.commands.launch.flow.resolve_launch_conflict")
-@patch("scc_cli.commands.launch.flow.show_launch_panel")
+@patch("scc_cli.commands.launch.conflict_resolution.resolve_launch_conflict")
+@patch("scc_cli.commands.launch.render.show_launch_panel")
 @patch("scc_cli.commands.launch.flow.warn_if_non_worktree")
 @patch("scc_cli.commands.launch.flow_session._apply_personal_profile", return_value=(None, False))
 @patch("scc_cli.commands.launch.flow.render_launch_output")

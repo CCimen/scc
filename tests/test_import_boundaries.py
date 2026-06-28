@@ -755,6 +755,63 @@ class TestDashboardLaunchRoutingBoundary:
             "Route CLI/wizard/worktree convergence separately before changing this behavior."
         )
 
+
+class TestPreparedLaunchCompletionBoundary:
+    """Migrated launch paths route prepared-plan completion through one owner."""
+
+    MIGRATED_FILES = (
+        SRC / "commands" / "launch" / "flow.py",
+        SRC / "commands" / "launch" / "resolved_workspace.py",
+    )
+    BANNED_COMPLETION_IMPORTS = {
+        "resolve_launch_conflict",
+        "show_launch_panel",
+        "finalize_launch",
+        "set_workspace_last_used_provider",
+    }
+    BANNED_COMPLETION_CALLS = {
+        ("app_launch", "finalize_launch"),
+        ("conflict_resolution", "resolve_launch_conflict"),
+        ("flow_session", "_record_session_and_context"),
+        ("render", "show_launch_panel"),
+        ("workspace_local_config", "set_workspace_last_used_provider"),
+    }
+
+    def test_migrated_paths_do_not_own_prepared_launch_completion(self) -> None:
+        """Prepared-plan conflict/show/finalize/persist behavior has one command owner."""
+        problems: list[str] = []
+
+        for path in self.MIGRATED_FILES:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    imported = sorted(
+                        self.BANNED_COMPLETION_IMPORTS.intersection(
+                            alias.name for alias in node.names
+                        )
+                    )
+                    if imported:
+                        problems.append(
+                            f"{path.relative_to(REPO_ROOT)}:{node.lineno}: imports "
+                            f"{', '.join(imported)}"
+                        )
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and (node.func.value.id, node.func.attr) in self.BANNED_COMPLETION_CALLS
+                ):
+                    problems.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: calls "
+                        f"{node.func.value.id}.{node.func.attr}"
+                    )
+
+        assert not problems, (
+            "Migrated launch paths should delegate prepared-plan completion to "
+            "commands.launch.completion instead of owning conflict/show/finalize/persist "
+            "logic:\n" + "\n".join(problems)
+        )
+
     def test_menu_handlers_have_single_owner(self) -> None:
         """Menu handlers are owned by orchestrator_menus.py."""
         handler_names = {
