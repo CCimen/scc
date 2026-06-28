@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from scc_cli.application.launch.start_wizard import (
+from scc_cli.application.launch.start_wizard import WorkspaceSource
+from scc_cli.application.launch.wizard_models import (
     TeamRepoOption,
-    WorkspaceSource,
     WorkspaceSourceOption,
     WorkspaceSourceViewModel,
     WorkspaceSummary,

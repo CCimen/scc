@@ -58,6 +58,9 @@ from scc_cli.application.launch.start_wizard import (  # noqa: F401
     WORKSPACE_SOURCE_REQUEST_ID,
     WORKTREE_CONFIRM_REQUEST_ID,
     WORKTREE_NAME_REQUEST_ID,
+    WorkspaceSource,
+)
+from scc_cli.application.launch.wizard_models import (  # noqa: F401
     QuickResumeOption,
     QuickResumeViewModel,
     StartWizardPrompt,
@@ -65,7 +68,6 @@ from scc_cli.application.launch.start_wizard import (  # noqa: F401
     TeamRepoPickerViewModel,
     TeamSelectionViewModel,
     WorkspacePickerViewModel,
-    WorkspaceSource,
     WorkspaceSourceOption,
     WorkspaceSourceViewModel,
     WorkspaceSummary,

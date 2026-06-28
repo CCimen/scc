@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from scc_cli.application.launch.start_wizard import TeamRepoOption
+from scc_cli.application.launch.wizard_models import TeamRepoOption
 from scc_cli.ports.session_models import SessionSummary
 from scc_cli.ui.wizard import (
     BACK,

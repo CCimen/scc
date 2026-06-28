@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from scc_cli.application.interaction_requests import (
     ConfirmRequest,
@@ -177,23 +178,23 @@ StartWizardEvent = (
     | CancelRequested
 )
 
-# Re-export ViewModel/Option/Prompt types from wizard_models for backward compatibility
-from scc_cli.application.launch.wizard_models import (  # noqa: E402, F401
-    CwdContext,
+if TYPE_CHECKING:
+    from scc_cli.application.launch.wizard_models import (
+        QuickResumeViewModel,
+        TeamOption,
+        TeamRepoOption,
+        TeamRepoPickerViewModel,
+        TeamSelectionViewModel,
+        WorkspacePickerViewModel,
+        WorkspaceSourceOption,
+        WorkspaceSourceViewModel,
+        WorkspaceSummary,
+    )
+
+# Deferred to avoid the wizard_models -> start_wizard import cycle.
+from scc_cli.application.launch.wizard_models import (  # noqa: E402
     QuickResumeOption,
-    QuickResumeViewModel,
-    StartWizardOutcome,
-    StartWizardProgress,
     StartWizardPrompt,
-    StartWizardViewModel,
-    TeamOption,
-    TeamRepoOption,
-    TeamRepoPickerViewModel,
-    TeamSelectionViewModel,
-    WorkspacePickerViewModel,
-    WorkspaceSourceOption,
-    WorkspaceSourceViewModel,
-    WorkspaceSummary,
 )
 
 

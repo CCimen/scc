@@ -998,6 +998,84 @@ class TestGitFacadeDeletionBoundary:
         assert not problems, "\n".join(problems)
 
 
+class TestStartWizardModelOwnershipBoundary:
+    """Wizard view models are owned by application.launch.wizard_models."""
+
+    MODEL_NAMES = {
+        "CwdContext",
+        "QuickResumeOption",
+        "QuickResumeViewModel",
+        "StartWizardOutcome",
+        "StartWizardProgress",
+        "StartWizardPrompt",
+        "StartWizardViewModel",
+        "TeamOption",
+        "TeamRepoOption",
+        "TeamRepoPickerViewModel",
+        "TeamSelectionViewModel",
+        "WorkspacePickerViewModel",
+        "WorkspaceSourceOption",
+        "WorkspaceSourceViewModel",
+        "WorkspaceSummary",
+    }
+    START_WIZARD_RUNTIME_MODELS = {"QuickResumeOption", "StartWizardPrompt"}
+
+    def test_start_wizard_runtime_model_imports_stay_narrow(self) -> None:
+        """start_wizard may construct prompts, but must not re-export all UI models."""
+        module_path = SRC / "application" / "launch" / "start_wizard.py"
+        tree = ast.parse(module_path.read_text(encoding="utf-8"))
+
+        imported: set[str] = set()
+        for node in tree.body:
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "scc_cli.application.launch.wizard_models"
+            ):
+                imported.update(alias.name for alias in node.names)
+
+        assert imported == self.START_WIZARD_RUNTIME_MODELS, (
+            "start_wizard.py owns the state machine and prompt builders only. "
+            "Import UI view models from application.launch.wizard_models.\n"
+            f"Found runtime imports: {', '.join(sorted(imported)) or '<none>'}"
+        )
+
+    def test_consumers_import_wizard_models_from_owner(self) -> None:
+        """Consumers should not import UI model dataclasses through start_wizard."""
+        start_wizard = SRC / "application" / "launch" / "start_wizard.py"
+        wizard_models = SRC / "application" / "launch" / "wizard_models.py"
+        problems: list[str] = []
+
+        for path in list(SRC.rglob("*.py")) + list(TESTS.rglob("*.py")):
+            if path in {start_wizard, wizard_models, Path(__file__)}:
+                continue
+
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            relative = path.relative_to(REPO_ROOT)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                module = node.module or ""
+                if node.level:
+                    imports_start_wizard = module == "start_wizard" or module.endswith(
+                        ".start_wizard"
+                    )
+                else:
+                    imports_start_wizard = module == "scc_cli.application.launch.start_wizard"
+                if not imports_start_wizard:
+                    continue
+
+                imported_models = sorted(
+                    {alias.name for alias in node.names}.intersection(self.MODEL_NAMES)
+                )
+                if imported_models:
+                    problems.append(
+                        f"{relative}:{node.lineno}: import "
+                        f"{', '.join(imported_models)} from wizard_models"
+                    )
+
+        assert not problems, "\n".join(problems)
+
+
 class TestServicesGitBoundary:
     """services/git/ must be pure data layer with no UI dependencies."""
 
