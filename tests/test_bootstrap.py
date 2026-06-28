@@ -12,11 +12,12 @@ from scc_cli.adapters.local_audit_event_sink import LocalAuditEventSink
 from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
+from scc_cli.adapters.local_platform_probe import LocalPlatformProbe
 from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
 from scc_cli.adapters.personal_profile_service_local import LocalPersonalProfileService
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
 from scc_cli.adapters.system_clock import SystemClock
-from scc_cli.bootstrap import DefaultAdapters, get_default_adapters
+from scc_cli.bootstrap import DefaultAdapters, build_platform_probe, get_default_adapters
 from scc_cli.commands.launch.dependencies import build_start_session_dependencies
 from scc_cli.core.errors import InvalidLaunchPlanError, LaunchAuditUnavailableError
 from tests.fakes import build_fake_adapters
@@ -35,6 +36,12 @@ def test_get_default_adapters_returns_expected_types() -> None:
     assert isinstance(adapters.sandbox_runtime, (DockerSandboxRuntime, OciSandboxRuntime))
     assert isinstance(adapters.personal_profile_service, LocalPersonalProfileService)
     assert isinstance(adapters.audit_event_sink, LocalAuditEventSink)
+
+
+def test_build_platform_probe_returns_local_probe() -> None:
+    probe = build_platform_probe()
+
+    assert isinstance(probe, LocalPlatformProbe)
 
 
 # ---------------------------------------------------------------------------

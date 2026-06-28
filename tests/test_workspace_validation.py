@@ -7,21 +7,7 @@ import pytest
 
 from scc_cli.application.workspace import validate_workspace
 from scc_cli.core.errors import UsageError
-from scc_cli.ports.platform_probe import PlatformProbe
-
-
-class FakePlatformProbe(PlatformProbe):
-    def __init__(self, is_wsl2: bool, is_optimal: bool) -> None:
-        self._is_wsl2 = is_wsl2
-        self._is_optimal = is_optimal
-
-    def is_wsl2(self) -> bool:
-        return self._is_wsl2
-
-    def check_path_performance(self, path: Path) -> tuple[bool, str | None]:
-        if self._is_optimal:
-            return True, None
-        return False, "warning"
+from tests.fakes import FakePlatformProbe
 
 
 def test_validate_workspace_returns_none_when_unset() -> None:

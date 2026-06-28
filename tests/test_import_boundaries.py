@@ -1181,7 +1181,7 @@ class TestAdapterBoundaries:
         assert result.returncode == 1, f"adapters/ imports ui/:\n{result.stdout}"
 
     def test_only_bootstrap_imports_adapters(self) -> None:
-        """Non-bootstrap adapter imports must be fixed or explicitly allowlisted."""
+        """Only bootstrap.py may import adapters for composition."""
         result = subprocess.run(
             [
                 "grep",
@@ -1197,18 +1197,7 @@ class TestAdapterBoundaries:
         )
         assert result.returncode in (0, 1), result.stderr
 
-        workspace_file = SRC / "commands" / "launch" / "workspace.py"
-        allowed_debt = {
-            str(workspace_file): "from ...adapters.local_platform_probe import LocalPlatformProbe",
-        }
-        violations: list[str] = []
-        for line in result.stdout.splitlines():
-            file_path, _, import_line = line.partition(":")
-            allowed_import = allowed_debt.get(file_path)
-            if allowed_import and allowed_import in import_line:
-                continue
-            violations.append(line)
-
+        violations = result.stdout.splitlines()
         assert not violations, "Unexpected non-bootstrap adapter imports:\n" + "\n".join(violations)
 
 

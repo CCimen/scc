@@ -19,9 +19,8 @@ import typer
 from rich.status import Status
 
 from ... import config
-from ...adapters.local_platform_probe import LocalPlatformProbe
 from ...application.workspace import WorkspaceValidationResult, validate_workspace
-from ...bootstrap import get_default_adapters
+from ...bootstrap import build_platform_probe, get_default_adapters
 from ...cli_common import console
 from ...confirm import Confirm
 from ...core.constants import WORKTREE_BRANCH_PREFIX
@@ -131,7 +130,7 @@ def validate_and_resolve_workspace(
             json_mode=json_mode,
             no_interactive_flag=no_interactive,
         ),
-        platform_probe=LocalPlatformProbe(),
+        platform_probe=build_platform_probe(),
     )
     if validation is None:
         return None

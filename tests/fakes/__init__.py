@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from scc_cli.adapters.local_config_store import LocalConfigStore
 from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
@@ -15,6 +16,7 @@ from scc_cli.adapters.system_clock import SystemClock
 from scc_cli.adapters.zip_archive_writer import ZipArchiveWriter
 from scc_cli.bootstrap import DefaultAdapters
 from scc_cli.core.contracts import AuditEvent
+from scc_cli.ports.platform_probe import PlatformProbe
 from tests.fakes.fake_agent_provider import FakeAgentProvider
 from tests.fakes.fake_agent_runner import FakeAgentRunner
 from tests.fakes.fake_runtime_probe import FakeRuntimeProbe
@@ -34,6 +36,22 @@ class FakeAuditEventSink:
 
     def describe_destination(self) -> str:
         return "memory://launch-events"
+
+
+class FakePlatformProbe(PlatformProbe):
+    """Configurable platform probe for workspace validation tests."""
+
+    def __init__(self, is_wsl2: bool, is_optimal: bool) -> None:
+        self._is_wsl2 = is_wsl2
+        self._is_optimal = is_optimal
+
+    def is_wsl2(self) -> bool:
+        return self._is_wsl2
+
+    def check_path_performance(self, path: Path) -> tuple[bool, str | None]:
+        if self._is_optimal:
+            return True, None
+        return False, "warning"
 
 
 def build_fake_adapters() -> DefaultAdapters:

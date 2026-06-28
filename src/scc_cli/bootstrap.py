@@ -22,6 +22,7 @@ from scc_cli.adapters.local_dependency_installer import LocalDependencyInstaller
 from scc_cli.adapters.local_doctor_runner import LocalDoctorRunner
 from scc_cli.adapters.local_filesystem import LocalFilesystem
 from scc_cli.adapters.local_git_client import LocalGitClient
+from scc_cli.adapters.local_platform_probe import LocalPlatformProbe
 from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
 from scc_cli.adapters.personal_profile_service_local import LocalPersonalProfileService
 from scc_cli.adapters.requests_fetcher import RequestsFetcher
@@ -40,6 +41,7 @@ from scc_cli.ports.doctor_runner import DoctorRunner
 from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.git_client import GitClient
 from scc_cli.ports.personal_profile_service import PersonalProfileService
+from scc_cli.ports.platform_probe import PlatformProbe
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.ports.runtime_probe import RuntimeProbe
 from scc_cli.ports.safety_adapter import SafetyAdapter
@@ -127,3 +129,8 @@ def build_session_store(filesystem: Filesystem | None = None) -> SessionStore:
 
     fs = filesystem or get_default_adapters().filesystem
     return JsonSessionStore(filesystem=fs, sessions_file=config.SESSIONS_FILE)
+
+
+def build_platform_probe() -> PlatformProbe:
+    """Build the default platform probe adapter."""
+    return LocalPlatformProbe()

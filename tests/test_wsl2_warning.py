@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fakes import FakePlatformProbe
+
 
 def test_wsl2_warning_emitted_in_non_interactive(tmp_path: Path) -> None:
     """WSL2 performance warning should be emitted without prompting."""
@@ -12,10 +14,9 @@ def test_wsl2_warning_emitted_in_non_interactive(tmp_path: Path) -> None:
     workspace.mkdir()
 
     with (
-        patch("scc_cli.commands.launch.workspace.LocalPlatformProbe.is_wsl2", return_value=True),
         patch(
-            "scc_cli.commands.launch.workspace.LocalPlatformProbe.check_path_performance",
-            return_value=(False, "warning"),
+            "scc_cli.commands.launch.workspace.build_platform_probe",
+            return_value=FakePlatformProbe(is_wsl2=True, is_optimal=False),
         ),
         patch("scc_cli.commands.launch.workspace.is_interactive_allowed", return_value=False),
         patch("scc_cli.commands.launch.workspace.Confirm.ask") as mock_confirm,
