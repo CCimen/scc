@@ -47,19 +47,22 @@ def _prepare_for_nested_ui(console: Console) -> None:
     console.show_cursor(True)
     console.print()  # Ensure clean newline
 
-    # Flush buffered input (best-effort, Unix only)
     try:
         import termios
+    except ModuleNotFoundError:
+        return
 
+    # Flush buffered input (best-effort, Unix/Tty only)
+    try:
         termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
     except (
-        ModuleNotFoundError,  # Windows - no termios module
-        OSError,  # Redirected stdin, no TTY
-        ValueError,  # Invalid file descriptor
-        TypeError,  # Mock stdin without fileno
-        io.UnsupportedOperation,  # Stdin without fileno support
+        OSError,
+        ValueError,
+        TypeError,
+        termios.error,
+        io.UnsupportedOperation,
     ):
-        pass  # Non-Unix or non-TTY environment - safe to ignore
+        pass
 
 
 def _handle_team_switch() -> None:
@@ -148,31 +151,12 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     """Handle starting a session in a specific worktree."""
     from pathlib import Path
 
-    from rich.status import Status
-
     from ... import config
-    from ...application.launch import finalize_launch
-    from ...application.start_session import StartSessionRequest
-    from ...bootstrap import get_default_adapters
-    from ...commands.launch.conflict_resolution import (
-        LaunchConflictDecision,
-        resolve_launch_conflict,
+    from ...commands.launch.resolved_workspace import (
+        ResolvedWorkspaceLaunchDecision,
+        ResolvedWorkspaceLaunchRequest,
+        launch_resolved_workspace,
     )
-    from ...commands.launch.dependencies import prepare_live_start_plan
-    from ...commands.launch.preflight import (
-        collect_launch_readiness,
-        ensure_launch_ready,
-        resolve_launch_provider,
-    )
-    from ...commands.launch.render import show_auth_bootstrap_panel, show_launch_panel
-    from ...commands.launch.team_settings import _configure_team_settings
-    from ...commands.launch.workspace import (
-        validate_and_resolve_workspace as _validate_and_resolve_workspace,
-    )
-    from ...core.errors import ProviderNotReadyError
-    from ...ports.config_models import NormalizedOrgConfig
-    from ...theme import Spinners
-    from ...workspace_local_config import set_workspace_last_used_provider
 
     console = get_err_console()
 
@@ -187,136 +171,22 @@ def _handle_worktree_start(worktree_path: str) -> app_dashboard.StartFlowResult:
     console.print(f"[cyan]Starting session in:[/cyan] {workspace_name}")
     console.print()
 
-    try:
-        # Obtain adapters early so the probe-backed runtime check can run
-        adapters = get_default_adapters()
-
-        # Docker availability check (via RuntimeProbe)
-        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
-            adapters.sandbox_runtime.ensure_available()
-
-        # Validate and resolve workspace
-        resolved_path = _validate_and_resolve_workspace(str(workspace_path))
-        if resolved_path is None:
-            console.print("[red]Workspace validation failed[/red]")
-            return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
-        workspace_path = resolved_path
-
-        # Get current team from config
-        cfg = config.load_user_config()
-        team = cfg.get("selected_profile")
-        _configure_team_settings(team, cfg)
-        raw_org_config = config.load_cached_org_config()
-        normalized_org = (
-            NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
-        )
-        # Shared preflight: resolve → readiness → ensure ready
-        resolved_provider, _source = resolve_launch_provider(
-            cli_flag=None,
-            resume_provider=None,
+    cfg = config.load_user_config()
+    result = launch_resolved_workspace(
+        ResolvedWorkspaceLaunchRequest(
             workspace_path=workspace_path,
-            config_provider=config.get_selected_provider(),
-            normalized_org=normalized_org,
-            team=team,
-            adapters=adapters,
-            non_interactive=False,
-        )
-        if resolved_provider is None:
-            return app_dashboard.StartFlowResult(
-                decision=app_dashboard.StartFlowDecision.CANCELLED,
-                message="Start cancelled",
-            )
-        readiness = collect_launch_readiness(resolved_provider, _source, adapters)
-        if not readiness.launch_ready:
-            ensure_launch_ready(
-                readiness,
-                adapters=adapters,
-                console=console,
-                non_interactive=False,
-                show_notice=show_auth_bootstrap_panel,
-            )
-        start_request = StartSessionRequest(
-            workspace_path=workspace_path,
-            workspace_arg=str(workspace_path),
-            entry_dir=workspace_path,
-            team=team,
+            team=cfg.get("selected_profile"),
             session_name=None,
             resume=False,
-            fresh=False,
-            offline=False,
-            standalone=team is None,
-            dry_run=False,
-            allow_suspicious=False,
-            org_config=normalized_org,
-            raw_org_config=raw_org_config,
-            org_config_url=None,
-            provider_id=resolved_provider,
-        )
-        start_dependencies, start_plan = prepare_live_start_plan(
-            start_request,
-            adapters=adapters,
-            console=console,
-            provider_id=resolved_provider,
-        )
-        provider_adapter = start_dependencies.agent_provider
-        if provider_adapter is None:
-            console.print("[red]Provider wiring is unavailable for this start request[/red]")
-            return app_dashboard.StartFlowResult(
-                decision=app_dashboard.StartFlowDecision.CANCELLED,
-                message="Start cancelled",
-            )
-        current_branch = start_plan.current_branch
-
-        # Show session info
-        if team:
-            console.print(f"[dim]Team: {team}[/dim]")
-        if current_branch:
-            console.print(f"[dim]Branch: {current_branch}[/dim]")
-        console.print()
-
-        conflict_resolution = resolve_launch_conflict(
-            start_plan,
-            dependencies=start_dependencies,
-            console=console,
-            display_name=provider_adapter.capability_profile().display_name,
-            json_mode=False,
-            non_interactive=False,
-        )
-        if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
-            set_workspace_last_used_provider(workspace_path, resolved_provider)
-            return app_dashboard.StartFlowResult(
-                decision=app_dashboard.StartFlowDecision.CANCELLED,
-                message="Kept existing sandbox",
-            )
-        if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
-            return app_dashboard.StartFlowResult(
-                decision=app_dashboard.StartFlowDecision.CANCELLED,
-                message="Start cancelled",
-            )
-
-        show_launch_panel(
-            workspace=workspace_path,
-            team=team,
-            session_name=None,
-            branch=current_branch,
-            is_resume=False,
-            display_name=provider_adapter.capability_profile().display_name,
-        )
-        finalize_launch(conflict_resolution.plan, dependencies=start_dependencies)
-        set_workspace_last_used_provider(workspace_path, resolved_provider)
+        ),
+        console=console,
+    )
+    if result.decision is ResolvedWorkspaceLaunchDecision.LAUNCHED:
         return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.LAUNCHED)
-
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Cancelled[/yellow]")
-        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
-    except ProviderNotReadyError as e:
-        console.print(f"[red]{e.user_message}[/red]")
-        if e.suggested_action:
-            console.print(f"[dim]{e.suggested_action}[/dim]")
-        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
-    except Exception as e:
-        console.print(f"[red]Error starting session: {e}[/red]")
-        return app_dashboard.StartFlowResult(decision=app_dashboard.StartFlowDecision.CANCELLED)
+    return app_dashboard.StartFlowResult(
+        decision=app_dashboard.StartFlowDecision.CANCELLED,
+        message=result.message,
+    )
 
 
 def _handle_session_resume(session: SessionSummary) -> bool:
@@ -335,31 +205,11 @@ def _handle_session_resume(session: SessionSummary) -> bool:
 
     from pathlib import Path
 
-    from rich.status import Status
-
-    from ... import config
-    from ...application.launch import finalize_launch
-    from ...application.start_session import StartSessionRequest
-    from ...bootstrap import get_default_adapters
-    from ...commands.launch.conflict_resolution import (
-        LaunchConflictDecision,
-        resolve_launch_conflict,
+    from ...commands.launch.resolved_workspace import (
+        ResolvedWorkspaceLaunchDecision,
+        ResolvedWorkspaceLaunchRequest,
+        launch_resolved_workspace,
     )
-    from ...commands.launch.dependencies import prepare_live_start_plan
-    from ...commands.launch.preflight import (
-        collect_launch_readiness,
-        ensure_launch_ready,
-        resolve_launch_provider,
-    )
-    from ...commands.launch.render import show_auth_bootstrap_panel, show_launch_panel
-    from ...commands.launch.team_settings import _configure_team_settings
-    from ...commands.launch.workspace import (
-        validate_and_resolve_workspace as _validate_and_resolve_workspace,
-    )
-    from ...core.errors import ProviderNotReadyError
-    from ...ports.config_models import NormalizedOrgConfig
-    from ...theme import Spinners
-    from ...workspace_local_config import set_workspace_last_used_provider
 
     console = get_err_console()
     _prepare_for_nested_ui(console)
@@ -381,128 +231,24 @@ def _handle_session_resume(session: SessionSummary) -> bool:
         console.print("[dim]The session may have been deleted or moved.[/dim]")
         return False
 
-    try:
-        # Obtain adapters early so the probe-backed runtime check can run
-        adapters = get_default_adapters()
+    workspace_name = workspace_path.name
+    print_with_layout(console, f"[cyan]Resuming session:[/cyan] {workspace_name}")
 
-        # Docker availability check (via RuntimeProbe)
-        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
-            adapters.sandbox_runtime.ensure_available()
-
-        # Validate and resolve workspace (we know it exists from earlier check)
-        resolved_path = _validate_and_resolve_workspace(str(workspace_path))
-        if resolved_path is None:
-            console.print("[red]Workspace validation failed[/red]")
-            return False
-        workspace_path = resolved_path
-
-        # Configure team settings
-        cfg = config.load_user_config()
-        _configure_team_settings(team, cfg)
-        raw_org_config_2 = config.load_cached_org_config()
-        normalized_org = (
-            NormalizedOrgConfig.from_dict(raw_org_config_2)
-            if raw_org_config_2 is not None
-            else None
-        )
-        # Shared preflight: resolve → readiness → ensure ready
-        resolved_provider, _source = resolve_launch_provider(
-            cli_flag=None,
-            resume_provider=session.provider_id,
+    result = launch_resolved_workspace(
+        ResolvedWorkspaceLaunchRequest(
             workspace_path=workspace_path,
-            config_provider=config.get_selected_provider(),
-            normalized_org=normalized_org,
-            team=team,
-            adapters=adapters,
-            non_interactive=False,
-        )
-        if resolved_provider is None:
-            return False
-        readiness = collect_launch_readiness(resolved_provider, _source, adapters)
-        if not readiness.launch_ready:
-            ensure_launch_ready(
-                readiness,
-                adapters=adapters,
-                console=console,
-                non_interactive=False,
-                show_notice=show_auth_bootstrap_panel,
-            )
-        start_request = StartSessionRequest(
-            workspace_path=workspace_path,
-            workspace_arg=str(workspace_path),
-            entry_dir=workspace_path,
             team=team,
             session_name=session_name,
             resume=True,
-            fresh=False,
-            offline=False,
-            standalone=team is None,
-            dry_run=False,
-            allow_suspicious=False,
-            org_config=normalized_org,
-            raw_org_config=raw_org_config_2,
-            org_config_url=None,
-            provider_id=resolved_provider,
-        )
-        start_dependencies, start_plan = prepare_live_start_plan(
-            start_request,
-            adapters=adapters,
-            console=console,
-            provider_id=resolved_provider,
-        )
-        provider_adapter = start_dependencies.agent_provider
-        if provider_adapter is None:
-            console.print("[red]Provider wiring is unavailable for this session[/red]")
-            return False
-        current_branch = start_plan.current_branch
-
-        # Use session's stored branch if available (more accurate than detected)
-        if branch:
-            current_branch = branch
-
-        # Show resume info
-        workspace_name = workspace_path.name
-        print_with_layout(console, f"[cyan]Resuming session:[/cyan] {workspace_name}")
-        if team:
-            print_with_layout(console, f"[dim]Team: {team}[/dim]")
-        if current_branch:
-            print_with_layout(console, f"[dim]Branch: {current_branch}[/dim]")
-        console.print()
-
-        conflict_resolution = resolve_launch_conflict(
-            start_plan,
-            dependencies=start_dependencies,
-            console=console,
-            display_name=provider_adapter.capability_profile().display_name,
-            json_mode=False,
-            non_interactive=False,
-        )
-        if conflict_resolution.decision is LaunchConflictDecision.KEEP_EXISTING:
-            set_workspace_last_used_provider(workspace_path, resolved_provider)
-            return True
-        if conflict_resolution.decision is LaunchConflictDecision.CANCELLED:
-            return False
-
-        show_launch_panel(
-            workspace=workspace_path,
-            team=team,
-            session_name=session_name,
-            branch=current_branch,
-            is_resume=True,
-            display_name=provider_adapter.capability_profile().display_name,
-        )
-        finalize_launch(conflict_resolution.plan, dependencies=start_dependencies)
-        set_workspace_last_used_provider(workspace_path, resolved_provider)
-        return True
-
-    except ProviderNotReadyError as e:
-        console.print(f"[red]{e.user_message}[/red]")
-        if e.suggested_action:
-            console.print(f"[dim]{e.suggested_action}[/dim]")
-        return False
-    except Exception as e:
-        console.print(f"[red]Error resuming session: {e}[/red]")
-        return False
+            resume_provider=session.provider_id,
+            branch_override=branch,
+        ),
+        console=console,
+    )
+    return result.decision in {
+        ResolvedWorkspaceLaunchDecision.LAUNCHED,
+        ResolvedWorkspaceLaunchDecision.KEPT_EXISTING,
+    }
 
 
 def _handle_statusline_install() -> bool:

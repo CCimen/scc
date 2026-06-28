@@ -47,7 +47,7 @@ _RESOLUTION_FUNCTIONS = frozenset(
 _MIGRATED_FILES = (
     SRC / "commands" / "launch" / "flow.py",
     SRC / "commands" / "launch" / "flow_interactive.py",
-    SRC / "ui" / "dashboard" / "orchestrator_handlers.py",
+    SRC / "commands" / "launch" / "resolved_workspace.py",
     SRC / "commands" / "worktree" / "worktree_commands.py",
 )
 

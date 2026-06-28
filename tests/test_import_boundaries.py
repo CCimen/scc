@@ -700,6 +700,61 @@ class TestDashboardHandlerOwnership:
 
         assert not problems, "\n".join(problems)
 
+
+class TestDashboardLaunchRoutingBoundary:
+    """Dashboard UI routes launch effects through the launch command owner."""
+
+    BANNED_DASHBOARD_LAUNCH_IMPORTS = {
+        "StartSessionRequest",
+        "NormalizedOrgConfig",
+        "get_default_adapters",
+        "prepare_live_start_plan",
+        "resolve_launch_conflict",
+        "collect_launch_readiness",
+        "ensure_launch_ready",
+        "resolve_launch_provider",
+        "show_auth_bootstrap_panel",
+        "show_launch_panel",
+        "finalize_launch",
+        "_configure_team_settings",
+        "set_workspace_last_used_provider",
+    }
+
+    def test_dashboard_handlers_do_not_import_launch_internals(self) -> None:
+        """Dashboard handlers should call one launch entrypoint, not launch internals."""
+        handlers_file = SRC / "ui" / "dashboard" / "orchestrator_handlers.py"
+        tree = ast.parse(handlers_file.read_text(encoding="utf-8"))
+        problems: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            imported = sorted(
+                self.BANNED_DASHBOARD_LAUNCH_IMPORTS.intersection(
+                    alias.name for alias in node.names
+                )
+            )
+            if imported:
+                problems.append(
+                    f"{handlers_file.relative_to(REPO_ROOT)}:{node.lineno}: {', '.join(imported)}"
+                )
+
+        assert not problems, (
+            "Dashboard UI should route direct start/resume through the commands.launch "
+            "resolved-workspace launch helper instead of importing launch internals:\n"
+            + "\n".join(problems)
+        )
+
+    def test_dashboard_launch_helper_does_not_record_sessions_yet(self) -> None:
+        """Dashboard launch extraction preserves existing session-history behavior."""
+        helper_file = SRC / "commands" / "launch" / "resolved_workspace.py"
+        source = helper_file.read_text(encoding="utf-8")
+
+        assert "_record_session_and_context" not in source, (
+            "Dashboard direct start/resume did not record session history before S04. "
+            "Route CLI/wizard/worktree convergence separately before changing this behavior."
+        )
+
     def test_menu_handlers_have_single_owner(self) -> None:
         """Menu handlers are owned by orchestrator_menus.py."""
         handler_names = {

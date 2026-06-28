@@ -1,0 +1,218 @@
+"""Launch an already-selected workspace through the shared launch pipeline."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum, auto
+from pathlib import Path
+
+from rich.console import Console
+from rich.status import Status
+
+from scc_cli import bootstrap, config, workspace_local_config
+from scc_cli.application import launch as app_launch
+from scc_cli.application.start_session import StartSessionRequest
+from scc_cli.commands.launch import (
+    conflict_resolution,
+    dependencies,
+    preflight,
+    render,
+    team_settings,
+)
+from scc_cli.commands.launch import workspace as launch_workspace
+from scc_cli.core.errors import ProviderNotReadyError
+from scc_cli.core.provider_resolution import get_provider_display_name
+from scc_cli.ports.config_models import NormalizedOrgConfig
+from scc_cli.theme import Spinners
+
+
+class ResolvedWorkspaceLaunchDecision(Enum):
+    """Outcomes for launching a workspace that has already been selected."""
+
+    LAUNCHED = auto()
+    CANCELLED = auto()
+    KEPT_EXISTING = auto()
+
+
+@dataclass(frozen=True)
+class ResolvedWorkspaceLaunchRequest:
+    """Inputs needed to launch a selected workspace."""
+
+    workspace_path: Path
+    team: str | None
+    session_name: str | None
+    resume: bool
+    resume_provider: str | None = None
+    branch_override: str | None = None
+
+
+@dataclass(frozen=True)
+class ResolvedWorkspaceLaunchResult:
+    """Result from the selected-workspace launch pipeline."""
+
+    decision: ResolvedWorkspaceLaunchDecision
+    message: str | None = None
+
+
+def launch_resolved_workspace(
+    request: ResolvedWorkspaceLaunchRequest,
+    *,
+    console: Console,
+) -> ResolvedWorkspaceLaunchResult:
+    """Run the standard live launch sequence for a selected workspace.
+
+    Dashboard callers own their local validation and return-type mapping. This
+    command-layer owner keeps provider resolution, readiness, plan preparation,
+    conflict resolution, launch rendering, finalization, and last-used-provider
+    recording on the same path.
+    """
+    try:
+        adapters = bootstrap.get_default_adapters()
+
+        with Status("[cyan]Checking Docker...[/cyan]", console=console, spinner=Spinners.DOCKER):
+            adapters.sandbox_runtime.ensure_available()
+
+        workspace_path = launch_workspace.validate_and_resolve_workspace(
+            str(request.workspace_path)
+        )
+        if workspace_path is None:
+            console.print("[red]Workspace validation failed[/red]")
+            return ResolvedWorkspaceLaunchResult(
+                decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+                message="Start cancelled",
+            )
+
+        cfg = config.load_user_config()
+        team_settings._configure_team_settings(request.team, cfg)
+        raw_org_config = config.load_cached_org_config()
+        normalized_org = (
+            NormalizedOrgConfig.from_dict(raw_org_config) if raw_org_config is not None else None
+        )
+
+        resolved_provider, resolution_source = preflight.resolve_launch_provider(
+            cli_flag=None,
+            resume_provider=request.resume_provider,
+            workspace_path=workspace_path,
+            config_provider=config.get_selected_provider(),
+            normalized_org=normalized_org,
+            team=request.team,
+            adapters=adapters,
+            non_interactive=False,
+        )
+        if resolved_provider is None:
+            return ResolvedWorkspaceLaunchResult(
+                decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+                message="Start cancelled",
+            )
+
+        readiness = preflight.collect_launch_readiness(
+            resolved_provider,
+            resolution_source,
+            adapters,
+        )
+        if not readiness.launch_ready:
+            preflight.ensure_launch_ready(
+                readiness,
+                adapters=adapters,
+                console=console,
+                non_interactive=False,
+                show_notice=render.show_auth_bootstrap_panel,
+            )
+
+        start_request = StartSessionRequest(
+            workspace_path=workspace_path,
+            workspace_arg=str(workspace_path),
+            entry_dir=workspace_path,
+            team=request.team,
+            session_name=request.session_name,
+            resume=request.resume,
+            fresh=False,
+            offline=False,
+            standalone=request.team is None,
+            dry_run=False,
+            allow_suspicious=False,
+            org_config=normalized_org,
+            raw_org_config=raw_org_config,
+            org_config_url=None,
+            provider_id=resolved_provider,
+        )
+        start_dependencies, start_plan = dependencies.prepare_live_start_plan(
+            start_request,
+            adapters=adapters,
+            console=console,
+            provider_id=resolved_provider,
+        )
+        if start_dependencies.agent_provider is None:
+            console.print("[red]Provider wiring is unavailable for this start request[/red]")
+            return ResolvedWorkspaceLaunchResult(
+                decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+                message="Start cancelled",
+            )
+
+        current_branch = request.branch_override or start_plan.current_branch
+        if request.team:
+            console.print(f"[dim]Team: {request.team}[/dim]")
+        if current_branch:
+            console.print(f"[dim]Branch: {current_branch}[/dim]")
+        console.print()
+
+        conflict = conflict_resolution.resolve_launch_conflict(
+            start_plan,
+            dependencies=start_dependencies,
+            console=console,
+            display_name=get_provider_display_name(resolved_provider),
+            json_mode=False,
+            non_interactive=False,
+        )
+        if conflict.decision is conflict_resolution.LaunchConflictDecision.KEEP_EXISTING:
+            workspace_local_config.set_workspace_last_used_provider(
+                workspace_path,
+                resolved_provider,
+            )
+            return ResolvedWorkspaceLaunchResult(
+                decision=ResolvedWorkspaceLaunchDecision.KEPT_EXISTING,
+                message="Kept existing sandbox",
+            )
+        if conflict.decision is conflict_resolution.LaunchConflictDecision.CANCELLED:
+            return ResolvedWorkspaceLaunchResult(
+                decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+                message="Start cancelled",
+            )
+
+        render.show_launch_panel(
+            workspace=workspace_path,
+            team=request.team,
+            session_name=request.session_name,
+            branch=current_branch,
+            is_resume=request.resume,
+            display_name=get_provider_display_name(resolved_provider),
+        )
+        app_launch.finalize_launch(conflict.plan, dependencies=start_dependencies)
+        workspace_local_config.set_workspace_last_used_provider(
+            workspace_path,
+            resolved_provider,
+        )
+        return ResolvedWorkspaceLaunchResult(
+            decision=ResolvedWorkspaceLaunchDecision.LAUNCHED,
+        )
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled[/yellow]")
+        return ResolvedWorkspaceLaunchResult(
+            decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+            message="Start cancelled",
+        )
+    except ProviderNotReadyError as exc:
+        console.print(f"[red]{exc.user_message}[/red]")
+        if exc.suggested_action:
+            console.print(f"[dim]{exc.suggested_action}[/dim]")
+        return ResolvedWorkspaceLaunchResult(
+            decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+            message="Start cancelled",
+        )
+    except Exception as exc:
+        console.print(f"[red]Error starting session: {exc}[/red]")
+        return ResolvedWorkspaceLaunchResult(
+            decision=ResolvedWorkspaceLaunchDecision.CANCELLED,
+            message="Start cancelled",
+        )
