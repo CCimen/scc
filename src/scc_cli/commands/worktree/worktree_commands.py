@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import typer
 from rich.status import Status
 
 from ...application import worktree as worktree_use_cases
-from ...bootstrap import get_default_adapters
+from ...bootstrap import DefaultAdapters, get_default_adapters
 from ...cli_common import console, err_console, handle_errors
 from ...confirm import Confirm
 from ...core.constants import WORKTREE_BRANCH_PREFIX
@@ -30,11 +30,10 @@ from ..launch.worktree_autostart import (
 )
 from ._helpers import build_worktree_list_data
 
-if TYPE_CHECKING:
-    pass
 
-
-def _build_worktree_dependencies() -> tuple[worktree_use_cases.WorktreeDependencies, Any]:
+def _build_worktree_dependencies() -> tuple[
+    worktree_use_cases.WorktreeDependencies, DefaultAdapters
+]:
     adapters = get_default_adapters()
     dependencies = worktree_use_cases.WorktreeDependencies(
         git_client=adapters.git_client,

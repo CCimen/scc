@@ -91,4 +91,5 @@ def launch_created_worktree(
         console=console,
         provider_id=resolved_provider,
     )
+    # Keep created-worktree auto-start on its legacy tail: no conflict panel or provider persistence.
     finalize_launch(start_plan, dependencies=start_dependencies)
