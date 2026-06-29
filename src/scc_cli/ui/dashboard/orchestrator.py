@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from typing import TypeAlias, cast
 
 from scc_cli.application import dashboard as app_dashboard
 
@@ -63,6 +64,7 @@ from .orchestrator_handlers import (
 
 __all__ = [
     "_apply_event",
+    "_dashboard_event_from_request",
     "_handle_clone",
     "_handle_container_action_menu",
     "_handle_create_worktree",
@@ -77,9 +79,52 @@ __all__ = [
     "_handle_worktree_start",
     "_prepare_for_nested_ui",
     "_resolve_tab",
+    "_run_dashboard_request",
     "_run_effect",
     "run_dashboard",
 ]
+
+DashboardRequest: TypeAlias = (
+    TeamSwitchRequested
+    | StartRequested
+    | RefreshRequested
+    | SessionResumeRequested
+    | StatuslineInstallRequested
+    | RecentWorkspacesRequested
+    | GitInitRequested
+    | CreateWorktreeRequested
+    | VerboseToggleRequested
+    | SettingsRequested
+    | ContainerStopRequested
+    | ContainerResumeRequested
+    | ContainerRemoveRequested
+    | ProfileMenuRequested
+    | SandboxImportRequested
+    | ContainerActionMenuRequested
+    | SessionActionMenuRequested
+    | WorktreeActionMenuRequested
+)
+
+DASHBOARD_REQUEST_TYPES: tuple[type[Exception], ...] = (
+    TeamSwitchRequested,
+    StartRequested,
+    RefreshRequested,
+    SessionResumeRequested,
+    StatuslineInstallRequested,
+    RecentWorkspacesRequested,
+    GitInitRequested,
+    CreateWorktreeRequested,
+    VerboseToggleRequested,
+    SettingsRequested,
+    ContainerStopRequested,
+    ContainerResumeRequested,
+    ContainerRemoveRequested,
+    ProfileMenuRequested,
+    SandboxImportRequested,
+    ContainerActionMenuRequested,
+    SessionActionMenuRequested,
+    WorktreeActionMenuRequested,
+)
 
 
 def _format_last_used(iso_timestamp: str) -> str:
@@ -88,6 +133,88 @@ def _format_last_used(iso_timestamp: str) -> str:
     except ValueError:
         return iso_timestamp
     return format_relative_time_from_datetime(dt)
+
+
+def _dashboard_event_from_request(request: DashboardRequest) -> app_dashboard.DashboardEvent:
+    if isinstance(request, TeamSwitchRequested):
+        return app_dashboard.TeamSwitchEvent()
+    if isinstance(request, StartRequested):
+        return app_dashboard.StartFlowEvent(
+            return_to=_resolve_tab(request.return_to),
+            reason=request.reason,
+        )
+    if isinstance(request, RefreshRequested):
+        return app_dashboard.RefreshEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, SessionResumeRequested):
+        return app_dashboard.SessionResumeEvent(
+            return_to=_resolve_tab(request.return_to),
+            session=request.session,
+        )
+    if isinstance(request, StatuslineInstallRequested):
+        return app_dashboard.StatuslineInstallEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, RecentWorkspacesRequested):
+        return app_dashboard.RecentWorkspacesEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, GitInitRequested):
+        return app_dashboard.GitInitEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, CreateWorktreeRequested):
+        return app_dashboard.CreateWorktreeEvent(
+            return_to=_resolve_tab(request.return_to),
+            is_git_repo=request.is_git_repo,
+        )
+    if isinstance(request, VerboseToggleRequested):
+        return app_dashboard.VerboseToggleEvent(
+            return_to=_resolve_tab(request.return_to),
+            verbose=request.verbose,
+        )
+    if isinstance(request, SettingsRequested):
+        return app_dashboard.SettingsEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, ContainerStopRequested):
+        return app_dashboard.ContainerStopEvent(
+            return_to=_resolve_tab(request.return_to),
+            container_id=request.container_id,
+            container_name=request.container_name,
+        )
+    if isinstance(request, ContainerResumeRequested):
+        return app_dashboard.ContainerResumeEvent(
+            return_to=_resolve_tab(request.return_to),
+            container_id=request.container_id,
+            container_name=request.container_name,
+        )
+    if isinstance(request, ContainerRemoveRequested):
+        return app_dashboard.ContainerRemoveEvent(
+            return_to=_resolve_tab(request.return_to),
+            container_id=request.container_id,
+            container_name=request.container_name,
+        )
+    if isinstance(request, ProfileMenuRequested):
+        return app_dashboard.ProfileMenuEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, SandboxImportRequested):
+        return app_dashboard.SandboxImportEvent(return_to=_resolve_tab(request.return_to))
+    if isinstance(request, ContainerActionMenuRequested):
+        return app_dashboard.ContainerActionMenuEvent(
+            return_to=_resolve_tab(request.return_to),
+            container_id=request.container_id,
+            container_name=request.container_name,
+        )
+    if isinstance(request, SessionActionMenuRequested):
+        return app_dashboard.SessionActionMenuEvent(
+            return_to=_resolve_tab(request.return_to),
+            session=request.session,
+        )
+    if isinstance(request, WorktreeActionMenuRequested):
+        return app_dashboard.WorktreeActionMenuEvent(
+            return_to=_resolve_tab(request.return_to),
+            worktree_path=request.worktree_path,
+        )
+    msg = f"Unsupported dashboard request: {request!r}"
+    raise TypeError(msg)
+
+
+def _run_dashboard_request(
+    state: app_dashboard.DashboardFlowState,
+    request: DashboardRequest,
+) -> tuple[app_dashboard.DashboardFlowState, bool]:
+    return _apply_event(state, _dashboard_event_from_request(request))
 
 
 def run_dashboard() -> None:
@@ -147,179 +274,10 @@ def run_dashboard() -> None:
         try:
             dashboard.run()
             break
-        except TeamSwitchRequested:
-            flow_state, should_exit = _apply_event(flow_state, app_dashboard.TeamSwitchEvent())
-            if should_exit:
-                break
-
-        except StartRequested as start_req:
-            flow_state, should_exit = _apply_event(
+        except DASHBOARD_REQUEST_TYPES as request:
+            flow_state, should_exit = _run_dashboard_request(
                 flow_state,
-                app_dashboard.StartFlowEvent(
-                    return_to=_resolve_tab(start_req.return_to),
-                    reason=start_req.reason,
-                ),
-            )
-            if should_exit:
-                break
-
-        except RefreshRequested as refresh_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.RefreshEvent(return_to=_resolve_tab(refresh_req.return_to)),
-            )
-            if should_exit:
-                break
-
-        except SessionResumeRequested as resume_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.SessionResumeEvent(
-                    return_to=_resolve_tab(resume_req.return_to),
-                    session=resume_req.session,
-                ),
-            )
-            if should_exit:
-                break
-
-        except StatuslineInstallRequested as statusline_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.StatuslineInstallEvent(
-                    return_to=_resolve_tab(statusline_req.return_to)
-                ),
-            )
-            if should_exit:
-                break
-
-        except RecentWorkspacesRequested as recent_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.RecentWorkspacesEvent(return_to=_resolve_tab(recent_req.return_to)),
-            )
-            if should_exit:
-                break
-
-        except GitInitRequested as init_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.GitInitEvent(return_to=_resolve_tab(init_req.return_to)),
-            )
-            if should_exit:
-                break
-
-        except CreateWorktreeRequested as create_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.CreateWorktreeEvent(
-                    return_to=_resolve_tab(create_req.return_to),
-                    is_git_repo=create_req.is_git_repo,
-                ),
-            )
-            if should_exit:
-                break
-
-        except VerboseToggleRequested as verbose_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.VerboseToggleEvent(
-                    return_to=_resolve_tab(verbose_req.return_to),
-                    verbose=verbose_req.verbose,
-                ),
-            )
-            if should_exit:
-                break
-
-        except SettingsRequested as settings_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.SettingsEvent(return_to=_resolve_tab(settings_req.return_to)),
-            )
-            if should_exit:
-                break
-
-        except ContainerStopRequested as container_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.ContainerStopEvent(
-                    return_to=_resolve_tab(container_req.return_to),
-                    container_id=container_req.container_id,
-                    container_name=container_req.container_name,
-                ),
-            )
-            if should_exit:
-                break
-
-        except ContainerResumeRequested as container_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.ContainerResumeEvent(
-                    return_to=_resolve_tab(container_req.return_to),
-                    container_id=container_req.container_id,
-                    container_name=container_req.container_name,
-                ),
-            )
-            if should_exit:
-                break
-
-        except ContainerRemoveRequested as container_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.ContainerRemoveEvent(
-                    return_to=_resolve_tab(container_req.return_to),
-                    container_id=container_req.container_id,
-                    container_name=container_req.container_name,
-                ),
-            )
-            if should_exit:
-                break
-
-        except ProfileMenuRequested as profile_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.ProfileMenuEvent(return_to=_resolve_tab(profile_req.return_to)),
-            )
-            if should_exit:
-                break
-
-        except SandboxImportRequested as import_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.SandboxImportEvent(return_to=_resolve_tab(import_req.return_to)),
-            )
-            if should_exit:
-                break
-
-        except ContainerActionMenuRequested as action_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.ContainerActionMenuEvent(
-                    return_to=_resolve_tab(action_req.return_to),
-                    container_id=action_req.container_id,
-                    container_name=action_req.container_name,
-                ),
-            )
-            if should_exit:
-                break
-
-        except SessionActionMenuRequested as action_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.SessionActionMenuEvent(
-                    return_to=_resolve_tab(action_req.return_to),
-                    session=action_req.session,
-                ),
-            )
-            if should_exit:
-                break
-
-        except WorktreeActionMenuRequested as action_req:
-            flow_state, should_exit = _apply_event(
-                flow_state,
-                app_dashboard.WorktreeActionMenuEvent(
-                    return_to=_resolve_tab(action_req.return_to),
-                    worktree_path=action_req.worktree_path,
-                ),
+                cast(DashboardRequest, request),
             )
             if should_exit:
                 break

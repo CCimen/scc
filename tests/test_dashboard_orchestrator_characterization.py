@@ -24,33 +24,69 @@ from unittest.mock import patch
 import pytest
 
 from scc_cli.application.dashboard import (
+    ContainerActionMenuEvent,
     ContainerActionResult,
+    ContainerRemoveEvent,
+    ContainerResumeEvent,
     ContainerStopEvent,
+    CreateWorktreeEvent,
     DashboardEffect,
     DashboardEffectRequest,
+    DashboardEvent,
     DashboardFlowOutcome,
     DashboardFlowState,
     DashboardTab,
     DashboardTabData,
+    GitInitEvent,
     PlaceholderItem,
     PlaceholderKind,
     ProfileMenuEvent,
+    RecentWorkspacesEvent,
     RefreshEvent,
     SandboxImportEvent,
+    SessionActionMenuEvent,
+    SessionResumeEvent,
     SettingsEvent,
     StartFlowDecision,
     StartFlowEvent,
     StartFlowResult,
+    StatuslineInstallEvent,
     TeamSwitchEvent,
     VerboseToggleEvent,
+    WorktreeActionMenuEvent,
     apply_dashboard_effect_result,
     build_dashboard_view,
     handle_dashboard_event,
     placeholder_start_reason,
     placeholder_tip,
 )
-from scc_cli.ui.dashboard.orchestrator import _resolve_tab, _run_effect
+from scc_cli.ports.session_models import SessionSummary
+from scc_cli.ui.dashboard.orchestrator import (
+    _dashboard_event_from_request,
+    _resolve_tab,
+    _run_effect,
+)
 from scc_cli.ui.dashboard.orchestrator_handlers import _handle_container_action_menu
+from scc_cli.ui.keys import (
+    ContainerActionMenuRequested,
+    ContainerRemoveRequested,
+    ContainerResumeRequested,
+    ContainerStopRequested,
+    CreateWorktreeRequested,
+    GitInitRequested,
+    ProfileMenuRequested,
+    RecentWorkspacesRequested,
+    RefreshRequested,
+    SandboxImportRequested,
+    SessionActionMenuRequested,
+    SessionResumeRequested,
+    SettingsRequested,
+    StartRequested,
+    StatuslineInstallRequested,
+    TeamSwitchRequested,
+    VerboseToggleRequested,
+    WorktreeActionMenuRequested,
+)
 
 
 def _make_empty_tab_data(tab: DashboardTab) -> DashboardTabData:
@@ -75,6 +111,18 @@ def _make_loader(
         return tabs
 
     return loader
+
+
+def _sample_session() -> SessionSummary:
+    return SessionSummary(
+        name="session-a",
+        workspace="/workspace/a",
+        team="platform",
+        last_used="2026-06-29T12:00:00",
+        container_name="scc-session-a",
+        branch="main",
+        provider_id="codex",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -170,6 +218,116 @@ class TestHandleDashboardEvent:
         assert isinstance(result, DashboardFlowOutcome)
         assert result.state.verbose_worktrees is False
         assert result.state.toast_message == "Status off"
+
+
+class TestDashboardRequestMapping:
+    """Characterize UI request signal → application event conversion."""
+
+    @pytest.mark.parametrize(
+        ("signal", "expected"),
+        [
+            (TeamSwitchRequested(), TeamSwitchEvent()),
+            (
+                StartRequested(return_to="SESSIONS", reason="no_sessions"),
+                StartFlowEvent(return_to=DashboardTab.SESSIONS, reason="no_sessions"),
+            ),
+            (
+                RefreshRequested(return_to="CONTAINERS"),
+                RefreshEvent(return_to=DashboardTab.CONTAINERS),
+            ),
+            (
+                SessionResumeRequested(session=_sample_session(), return_to="SESSIONS"),
+                SessionResumeEvent(
+                    return_to=DashboardTab.SESSIONS,
+                    session=_sample_session(),
+                ),
+            ),
+            (
+                StatuslineInstallRequested(return_to="STATUS"),
+                StatuslineInstallEvent(return_to=DashboardTab.STATUS),
+            ),
+            (
+                RecentWorkspacesRequested(return_to="WORKTREES"),
+                RecentWorkspacesEvent(return_to=DashboardTab.WORKTREES),
+            ),
+            (
+                GitInitRequested(return_to="WORKTREES"),
+                GitInitEvent(return_to=DashboardTab.WORKTREES),
+            ),
+            (
+                CreateWorktreeRequested(return_to="WORKTREES", is_git_repo=False),
+                CreateWorktreeEvent(return_to=DashboardTab.WORKTREES, is_git_repo=False),
+            ),
+            (
+                VerboseToggleRequested(return_to="WORKTREES", verbose=True),
+                VerboseToggleEvent(return_to=DashboardTab.WORKTREES, verbose=True),
+            ),
+            (
+                SettingsRequested(return_to="STATUS"),
+                SettingsEvent(return_to=DashboardTab.STATUS),
+            ),
+            (
+                ContainerStopRequested("abc", "scc-abc", return_to="CONTAINERS"),
+                ContainerStopEvent(
+                    return_to=DashboardTab.CONTAINERS,
+                    container_id="abc",
+                    container_name="scc-abc",
+                ),
+            ),
+            (
+                ContainerResumeRequested("abc", "scc-abc", return_to="CONTAINERS"),
+                ContainerResumeEvent(
+                    return_to=DashboardTab.CONTAINERS,
+                    container_id="abc",
+                    container_name="scc-abc",
+                ),
+            ),
+            (
+                ContainerRemoveRequested("abc", "scc-abc", return_to="CONTAINERS"),
+                ContainerRemoveEvent(
+                    return_to=DashboardTab.CONTAINERS,
+                    container_id="abc",
+                    container_name="scc-abc",
+                ),
+            ),
+            (
+                ProfileMenuRequested(return_to="STATUS"),
+                ProfileMenuEvent(return_to=DashboardTab.STATUS),
+            ),
+            (
+                SandboxImportRequested(return_to="STATUS"),
+                SandboxImportEvent(return_to=DashboardTab.STATUS),
+            ),
+            (
+                ContainerActionMenuRequested("abc", "scc-abc", return_to="CONTAINERS"),
+                ContainerActionMenuEvent(
+                    return_to=DashboardTab.CONTAINERS,
+                    container_id="abc",
+                    container_name="scc-abc",
+                ),
+            ),
+            (
+                SessionActionMenuRequested(session=_sample_session(), return_to="SESSIONS"),
+                SessionActionMenuEvent(
+                    return_to=DashboardTab.SESSIONS,
+                    session=_sample_session(),
+                ),
+            ),
+            (
+                WorktreeActionMenuRequested("/workspace/a", return_to="WORKTREES"),
+                WorktreeActionMenuEvent(
+                    return_to=DashboardTab.WORKTREES,
+                    worktree_path="/workspace/a",
+                ),
+            ),
+        ],
+    )
+    def test_dashboard_request_maps_to_application_event(
+        self,
+        signal: Exception,
+        expected: DashboardEvent,
+    ) -> None:
+        assert _dashboard_event_from_request(signal) == expected
 
 
 # ══════════════════════════════════════════════════════════════════════════════
