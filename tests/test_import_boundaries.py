@@ -1266,6 +1266,34 @@ class TestWorktreeExportBoundary:
             "do not reintroduce the private _is_container_stopped alias."
         )
 
+    def test_worktree_use_cases_do_not_reexport_operations(self) -> None:
+        """Worktree operations stay owned by operations.py and package __init__."""
+        path = SRC / "application" / "worktree" / "use_cases.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        banned_public = {
+            "_build_shell_result",
+            "_cleanup_partial_worktree",
+            "create_worktree",
+            "enter_worktree_shell",
+        }
+        offenders: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.module != "scc_cli.application.worktree.operations":
+                continue
+            for alias in node.names:
+                bound_name = alias.asname or alias.name
+                if alias.name in banned_public and not bound_name.startswith("_"):
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {alias.name}")
+
+        assert not offenders, (
+            "application.worktree.use_cases should not re-export worktree operations; "
+            "import via scc_cli.application.worktree or operations.py instead.\n"
+            + "\n".join(offenders)
+        )
+
 
 class TestAdapterBoundaries:
     """Adapter layer must not depend on UI and only bootstrap composes adapters."""

@@ -32,14 +32,7 @@ from scc_cli.application.worktree.models import (  # noqa: F401
     WorktreeWarning,
     WorktreeWarningOutcome,
 )
-
-# Re-export operations for backward compatibility
-from scc_cli.application.worktree.operations import (  # noqa: F401
-    _build_shell_result,
-    _cleanup_partial_worktree,
-    create_worktree,
-    enter_worktree_shell,
-)
+from scc_cli.application.worktree.operations import create_worktree as _create_worktree
 from scc_cli.core.errors import NotAGitRepoError, WorkspaceNotFoundError
 from scc_cli.core.exit_codes import EXIT_CANCELLED
 from scc_cli.ports.git_client import GitClient
@@ -252,7 +245,7 @@ def switch_worktree(
                         exit_code=EXIT_CANCELLED,
                     )
                 if request.confirm_create is True:
-                    return create_worktree(
+                    return _create_worktree(
                         WorktreeCreateRequest(
                             workspace_path=request.workspace_path,
                             name=request.target,
@@ -416,7 +409,7 @@ def _resolve_selection(
             exit_code=EXIT_CANCELLED,
         )
 
-    return create_worktree(
+    return _create_worktree(
         WorktreeCreateRequest(
             workspace_path=request.workspace_path,
             name=selection.branch,
