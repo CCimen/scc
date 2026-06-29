@@ -150,10 +150,7 @@ class WorkContext:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WorkContext:
-        """Create from dictionary (JSON deserialization).
-
-        Handles backward compatibility for contexts without branch field.
-        """
+        """Create from dictionary (JSON deserialization)."""
         return cls(
             team=data["team"],
             repo_root=normalize_path(data["repo_root"]),
@@ -188,9 +185,6 @@ def _load_contexts_raw() -> list[dict[str, Any]]:
                 if isinstance(contexts, list):
                     return contexts
                 return []
-            # Legacy: raw list (migrate on next write)
-            if isinstance(data, list):
-                return data
             return []
     except (json.JSONDecodeError, OSError):
         return []

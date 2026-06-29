@@ -511,23 +511,22 @@ class TestEdgeCases:
         contexts = load_recent_contexts()
         assert contexts == []
 
-    def test_handles_legacy_list_format(self) -> None:
-        """Handles legacy raw list format (auto-migrates on next write)."""
+    def test_ignores_raw_list_format(self) -> None:
+        """Only the versioned contexts object is accepted."""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        legacy_data = [
+        raw_list_data = [
             {
-                "team": "legacy",
-                "repo_root": "/legacy",
-                "worktree_path": "/legacy",
+                "team": "old",
+                "repo_root": "/old",
+                "worktree_path": "/old",
                 "worktree_name": "main",
                 "last_used": "2024-01-01T00:00:00+00:00",
             }
         ]
-        (self.cache_dir / "contexts.json").write_text(json.dumps(legacy_data))
+        (self.cache_dir / "contexts.json").write_text(json.dumps(raw_list_data))
 
         contexts = load_recent_contexts()
-        assert len(contexts) == 1
-        assert contexts[0].team == "legacy"
+        assert contexts == []
 
     def test_creates_cache_directory_if_missing(self) -> None:
         """Creates cache directory when recording context."""
