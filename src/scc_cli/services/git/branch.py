@@ -89,8 +89,7 @@ def sanitize_branch_name(name: str) -> str:
 def get_display_branch(branch: str) -> str:
     """Get user-friendly branch name (strip worktree prefixes if present).
 
-    Strips both `scc/` (current) and `claude/` (legacy) prefixes for cleaner display.
-    This is display-only; matching rules still require `scc/` prefix for new branches.
+    Strips the SCC worktree prefix for cleaner display.
 
     Args:
         branch: The full branch name.
@@ -98,10 +97,8 @@ def get_display_branch(branch: str) -> str:
     Returns:
         Branch name with worktree prefix stripped for display.
     """
-    # Strip both current (scc/) and legacy (claude/) prefixes for display
-    for prefix in (WORKTREE_BRANCH_PREFIX, "claude/"):
-        if branch.startswith(prefix):
-            return branch[len(prefix) :]
+    if branch.startswith(WORKTREE_BRANCH_PREFIX):
+        return branch[len(WORKTREE_BRANCH_PREFIX) :]
     return branch
 
 
