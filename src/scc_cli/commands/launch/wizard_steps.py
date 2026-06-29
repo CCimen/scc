@@ -234,8 +234,8 @@ def handle_workspace_source(
         )
         if resume_state is None:
             return (state, show_all_teams)
-        if isinstance(resume_state, tuple):
-            return WizardExit(resume_state)
+        if isinstance(resume_state, WizardExit):
+            return resume_state
         return (resume_state, show_all_teams)
 
     return (apply_start_wizard_event(state, WorkspaceSourceChosen(source=source)), show_all_teams)
@@ -367,8 +367,8 @@ def handle_workspace_picker(
     )
     if resume_state is None:
         return (state, show_all_teams)
-    if isinstance(resume_state, tuple):
-        return WizardExit(resume_state)
+    if isinstance(resume_state, WizardExit):
+        return resume_state
     return (resume_state, show_all_teams)
 
 

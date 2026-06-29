@@ -21,8 +21,6 @@ StartWizardResult: TypeAlias = tuple[
     str | None,
     str | None,
 ]
-QuickResumeResolution: TypeAlias = StartWizardState | StartWizardResult
-WorkspaceResumeResolution: TypeAlias = StartWizardState | StartWizardResult | None
 
 
 @dataclass(frozen=True)
@@ -30,6 +28,10 @@ class WizardExit:
     """Terminal wizard result crossing an extracted handler boundary."""
 
     result: StartWizardResult
+
+
+QuickResumeResolution: TypeAlias = StartWizardState | WizardExit
+WorkspaceResumeResolution: TypeAlias = StartWizardState | WizardExit | None
 
 
 @dataclass(frozen=True)

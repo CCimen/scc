@@ -26,6 +26,7 @@ from ...ui.wizard import (
 )
 from .flow_types import (
     QuickResumeResolution,
+    WizardExit,
     WizardResumeContext,
     WorkspaceResumeResolution,
     filter_contexts_for_workspace,
@@ -193,7 +194,7 @@ def resolve_workspace_resume(
         )
 
     if resume_answer.kind is StartWizardAnswerKind.CANCELLED:
-        return ((None, None, None, None), show_all_teams)
+        return (WizardExit((None, None, None, None)), show_all_teams)
     if resume_answer.kind is StartWizardAnswerKind.BACK:
         return (None, show_all_teams)
 
@@ -216,11 +217,13 @@ def resolve_workspace_resume(
 
     selected_context = _require_selected_context(resume_answer)
     return (
-        (
-            str(selected_context.worktree_path),
-            selected_context.team,
-            selected_context.last_session_id,
-            None,
+        WizardExit(
+            (
+                str(selected_context.worktree_path),
+                selected_context.team,
+                selected_context.last_session_id,
+                None,
+            )
         ),
         show_all_teams,
     )
@@ -278,11 +281,11 @@ def handle_top_level_quick_resume(
     )
 
     if answer.kind is StartWizardAnswerKind.CANCELLED:
-        return ((None, None, None, None), show_all_teams)
+        return (WizardExit((None, None, None, None)), show_all_teams)
     if answer.kind is StartWizardAnswerKind.BACK:
         if render_context.allow_back:
-            return ((BACK, None, None, None), show_all_teams)
-        return ((None, None, None, None), show_all_teams)
+            return (WizardExit((BACK, None, None, None)), show_all_teams)
+        return (WizardExit((None, None, None, None)), show_all_teams)
 
     if answer.value is StartWizardAction.SWITCH_TEAM:
         dismissed_state = apply_start_wizard_event(state, QuickResumeDismissed())
@@ -311,11 +314,13 @@ def handle_top_level_quick_resume(
         return (state, show_all_teams)
 
     return (
-        (
-            str(selected_context.worktree_path),
-            selected_context.team,
-            selected_context.last_session_id,
-            None,
+        WizardExit(
+            (
+                str(selected_context.worktree_path),
+                selected_context.team,
+                selected_context.last_session_id,
+                None,
+            )
         ),
         show_all_teams,
     )

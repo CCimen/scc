@@ -202,8 +202,8 @@ def interactive_start(
                 render_context=resume_context,
                 show_all_teams=show_all_teams,
             )
-            if isinstance(resolution, tuple):
-                return resolution
+            if isinstance(resolution, WizardExit):
+                return resolution.result
             state = resolution
             continue
 

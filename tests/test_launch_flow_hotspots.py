@@ -105,6 +105,23 @@ def test_interactive_start_prompt_steps_stay_extracted() -> None:
     assert called_names.isdisjoint(INLINE_WIZARD_PROMPT_BUILDERS)
 
 
+def test_interactive_start_uses_explicit_wizard_exit_contract() -> None:
+    """Terminal handler outcomes should not be inferred from raw tuple shape."""
+    node = _interactive_start_node()
+    tuple_type_checks = [
+        call
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id == "isinstance"
+        and len(call.args) >= 2
+        and isinstance(call.args[1], ast.Name)
+        and call.args[1].id == "tuple"
+    ]
+
+    assert tuple_type_checks == []
+
+
 def test_command_launch_modules_do_not_own_docker_handoff() -> None:
     """Docker handoff belongs behind SandboxRuntime, not command launch helpers."""
     forbidden = (
