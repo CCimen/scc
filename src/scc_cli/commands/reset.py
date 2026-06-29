@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal, cast
 
@@ -47,6 +48,52 @@ from ..maintenance import (
 console = Console()
 
 ExceptionScope = Literal["all", "user", "repo"]
+
+
+@dataclass(frozen=True)
+class ResetSelection:
+    """Selected reset actions from CLI flags."""
+
+    cache: bool = False
+    contexts: bool = False
+    exceptions: bool = False
+    exceptions_expired: bool = False
+    exceptions_scope: str | None = None
+    containers: bool = False
+    sessions: bool = False
+    sessions_all: bool = False
+    config: bool = False
+    factory_reset: bool = False
+
+    @property
+    def has_action(self) -> bool:
+        return any(
+            [
+                self.cache,
+                self.contexts,
+                self.exceptions,
+                self.exceptions_expired,
+                self.containers,
+                self.sessions,
+                self.sessions_all,
+                self.config,
+                self.factory_reset,
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class ResetExecutionOptions:
+    """Execution modifiers for selected reset actions."""
+
+    plan: bool = False
+    dry_run: bool = False
+    yes: bool = False
+    force: bool = False
+    no_backup: bool = False
+    continue_on_error: bool = False
+    json_output: bool = False
+    non_interactive: bool = False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -377,6 +424,169 @@ def _execute_factory_reset(
         raise typer.Exit(1)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Command Flow Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _validate_selection(selection: ResetSelection) -> None:
+    """Validate CLI flag combinations before resolving tasks."""
+    if selection.exceptions_scope and not selection.exceptions:
+        console.print("[red]Error: --exceptions-scope requires --exceptions.[/red]")
+        raise typer.Exit(EXIT_USAGE)
+
+    if selection.exceptions_scope and selection.exceptions_scope not in ("all", "user", "repo"):
+        console.print("[red]Error: --exceptions-scope must be all, user, or repo.[/red]")
+        raise typer.Exit(EXIT_USAGE)
+
+
+def _require_task(action_id: str) -> MaintenanceTask:
+    """Return a registered maintenance task or exit with usage error."""
+    task = get_task(action_id)
+    if task is None:
+        console.print(f"[red]Unknown action: {action_id}[/red]")
+        raise typer.Exit(EXIT_USAGE)
+    return task
+
+
+def _collect_operations(selection: ResetSelection) -> list[MaintenanceTask]:
+    """Build the ordered task list for selected reset flags."""
+    selected_actions = [
+        (selection.cache, "clear_cache"),
+        (selection.exceptions_expired, "cleanup_expired_exceptions"),
+        (selection.contexts, "clear_contexts"),
+        (selection.containers, "prune_containers"),
+        (selection.sessions, "prune_sessions"),
+        (selection.exceptions, "reset_exceptions"),
+        (selection.sessions_all, "delete_all_sessions"),
+        (selection.config, "reset_config"),
+    ]
+    return [_require_task(action_id) for selected, action_id in selected_actions if selected]
+
+
+def _build_reset_context(
+    selection: ResetSelection,
+    options: ResetExecutionOptions,
+) -> MaintenanceTaskContext:
+    """Create the maintenance context for selected CLI flags."""
+    exception_scope = _normalize_exception_scope(selection.exceptions_scope)
+    repo_root = (
+        _resolve_repo_root()
+        if selection.exceptions and exception_scope in ("all", "repo")
+        else None
+    )
+    return _build_context(
+        dry_run=options.dry_run,
+        create_backup=not options.no_backup,
+        continue_on_error=options.continue_on_error,
+        exception_scope=exception_scope,
+        repo_root=repo_root,
+    )
+
+
+def _print_operation_plan(
+    operations: list[MaintenanceTask],
+    context: MaintenanceTaskContext,
+) -> None:
+    """Render the selected reset operation preview."""
+    console.print("\n[bold cyan]Reset Preview[/bold cyan]\n")
+    for task in operations:
+        preview = _preview_task(task, context)
+        _print_preview(preview)
+
+
+def _confirm_operations(
+    operations: list[MaintenanceTask],
+    context: MaintenanceTaskContext,
+    options: ResetExecutionOptions,
+) -> None:
+    """Confirm the selected reset operations based on their highest risk tier."""
+    max_tier = _max_risk([task.risk_tier for task in operations])
+
+    if max_tier == RiskTier.CHANGES_STATE and not options.yes:
+        action_names = ", ".join(task.id for task in operations)
+        if not _confirm_tier_1(action_names, options.yes, options.non_interactive):
+            raise typer.Exit(EXIT_CANCELLED)
+    elif max_tier == RiskTier.DESTRUCTIVE and not options.yes:
+        for task in operations:
+            if task.risk_tier == RiskTier.DESTRUCTIVE:
+                preview = _preview_task(task, context)
+                _print_preview(preview)
+
+        if not Confirm.ask("\n[bold]Proceed with destructive operations?[/bold]"):
+            raise typer.Exit(EXIT_CANCELLED)
+
+
+def _record_task_result(
+    task_result: ResetResult | list[ResetResult],
+    results: list[ResetResult],
+    *,
+    json_output: bool,
+) -> bool:
+    """Append a task result and render human output when requested."""
+    task_results = task_result if isinstance(task_result, list) else [task_result]
+    results.extend(task_results)
+    if not json_output:
+        for item in task_results:
+            _print_result(item)
+    return all(item.success for item in task_results)
+
+
+def _record_task_exception(
+    task: MaintenanceTask,
+    exc: Exception,
+    results: list[ResetResult],
+    *,
+    json_output: bool,
+) -> None:
+    """Append and optionally render a reset task failure."""
+    result = ResetResult(
+        success=False,
+        action_id=task.id,
+        risk_tier=task.risk_tier,
+        error=str(exc),
+        message=f"Failed: {exc}",
+    )
+    results.append(result)
+
+    if not json_output:
+        _print_result(result)
+
+
+def _run_operations(
+    operations: list[MaintenanceTask],
+    context: MaintenanceTaskContext,
+    options: ResetExecutionOptions,
+) -> list[ResetResult]:
+    """Run selected maintenance operations under the maintenance lock."""
+    results: list[ResetResult] = []
+
+    try:
+        with MaintenanceLock():
+            for task in operations:
+                try:
+                    success = _record_task_result(
+                        run_task(task.id, context),
+                        results,
+                        json_output=options.json_output,
+                    )
+
+                    if not success and not options.continue_on_error:
+                        break
+
+                except Exception as exc:
+                    _record_task_exception(task, exc, results, json_output=options.json_output)
+
+                    if not options.continue_on_error:
+                        break
+
+    except MaintenanceLockError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    return results
+
+
 # Main Command
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -490,168 +700,64 @@ def reset_cmd(
       # CI/scripting: factory reset without prompts
       scc reset --all --yes --force
     """
-    # Check if any selection flag is provided
-    any_selection = any(
-        [
-            cache,
-            contexts,
-            exceptions,
-            exceptions_expired,
-            containers,
-            sessions,
-            sessions_all,
-            config_flag,
-            all_flag,
-        ]
+    selection = ResetSelection(
+        cache=cache,
+        contexts=contexts,
+        exceptions=exceptions,
+        exceptions_expired=exceptions_expired,
+        exceptions_scope=exceptions_scope,
+        containers=containers,
+        sessions=sessions,
+        sessions_all=sessions_all,
+        config=config_flag,
+        factory_reset=all_flag,
+    )
+    options = ResetExecutionOptions(
+        plan=plan,
+        dry_run=dry_run,
+        yes=yes,
+        force=force,
+        no_backup=no_backup,
+        continue_on_error=continue_on_error,
+        json_output=json_output,
+        non_interactive=non_interactive,
     )
 
-    # If no selection and TTY, run interactive mode
-    if not any_selection:
+    if not selection.has_action:
         if sys.stdin.isatty() and not non_interactive:
             _run_interactive_mode()
             return
-        else:
-            console.print("[red]Error: No action specified. Use --cache, --contexts, etc.[/red]")
-            raise typer.Exit(EXIT_USAGE)
-
-    # Validate flag combinations
-    if exceptions_scope and not exceptions:
-        console.print("[red]Error: --exceptions-scope requires --exceptions.[/red]")
+        console.print("[red]Error: No action specified. Use --cache, --contexts, etc.[/red]")
         raise typer.Exit(EXIT_USAGE)
 
-    if exceptions_scope and exceptions_scope not in ("all", "user", "repo"):
-        console.print("[red]Error: --exceptions-scope must be all, user, or repo.[/red]")
-        raise typer.Exit(EXIT_USAGE)
+    _validate_selection(selection)
 
-    # --all overrides individual flags
-    if all_flag:
+    if selection.factory_reset:
         _execute_factory_reset(
-            plan=plan,
-            yes=yes,
-            force=force,
-            non_interactive=non_interactive,
-            dry_run=dry_run,
-            no_backup=no_backup,
-            continue_on_error=continue_on_error,
-            json_output=json_output,
+            plan=options.plan,
+            yes=options.yes,
+            force=options.force,
+            non_interactive=options.non_interactive,
+            dry_run=options.dry_run,
+            no_backup=options.no_backup,
+            continue_on_error=options.continue_on_error,
+            json_output=options.json_output,
         )
         return
 
-    # Build list of operations to perform
-    operations: list[MaintenanceTask] = []
+    operations = _collect_operations(selection)
+    context = _build_reset_context(selection, options)
 
-    def _require_task(action_id: str) -> MaintenanceTask:
-        task = get_task(action_id)
-        if task is None:
-            console.print(f"[red]Unknown action: {action_id}[/red]")
-            raise typer.Exit(EXIT_USAGE)
-        return task
-
-    if cache:
-        operations.append(_require_task("clear_cache"))
-
-    if exceptions_expired:
-        operations.append(_require_task("cleanup_expired_exceptions"))
-
-    if contexts:
-        operations.append(_require_task("clear_contexts"))
-
-    if containers:
-        operations.append(_require_task("prune_containers"))
-
-    if sessions:
-        operations.append(_require_task("prune_sessions"))
-
-    if exceptions:
-        operations.append(_require_task("reset_exceptions"))
-
-    if sessions_all:
-        operations.append(_require_task("delete_all_sessions"))
-
-    if config_flag:
-        operations.append(_require_task("reset_config"))
-
-    exception_scope = _normalize_exception_scope(exceptions_scope)
-    repo_root = _resolve_repo_root() if exceptions and exception_scope in ("all", "repo") else None
-    context = _build_context(
-        dry_run=dry_run,
-        create_backup=not no_backup,
-        continue_on_error=continue_on_error,
-        exception_scope=exception_scope,
-        repo_root=repo_root,
-    )
-
-    # Handle --plan mode
-    if plan:
-        console.print("\n[bold cyan]Reset Preview[/bold cyan]\n")
-        for task in operations:
-            preview = _preview_task(task, context)
-            _print_preview(preview)
+    if options.plan:
+        _print_operation_plan(operations, context)
         return
 
-    # Get confirmation based on max risk tier
-    max_tier = _max_risk([task.risk_tier for task in operations])
+    _confirm_operations(operations, context, options)
+    results = _run_operations(operations, context, options)
 
-    if max_tier == RiskTier.CHANGES_STATE and not yes:
-        action_names = ", ".join(task.id for task in operations)
-        if not _confirm_tier_1(action_names, yes, non_interactive):
-            raise typer.Exit(EXIT_CANCELLED)
-    elif max_tier == RiskTier.DESTRUCTIVE and not yes:
-        for task in operations:
-            if task.risk_tier == RiskTier.DESTRUCTIVE:
-                preview = _preview_task(task, context)
-                _print_preview(preview)
-
-        if not Confirm.ask("\n[bold]Proceed with destructive operations?[/bold]"):
-            raise typer.Exit(EXIT_CANCELLED)
-
-    # Execute operations
-    results: list[ResetResult] = []
-
-    try:
-        with MaintenanceLock():
-            for task in operations:
-                try:
-                    task_result = run_task(task.id, context)
-                    if isinstance(task_result, list):
-                        results.extend(task_result)
-                        if not json_output:
-                            for item in task_result:
-                                _print_result(item)
-                        success = all(item.success for item in task_result)
-                    else:
-                        results.append(task_result)
-                        if not json_output:
-                            _print_result(task_result)
-                        success = task_result.success
-
-                    if not success and not continue_on_error:
-                        break
-
-                except Exception as exc:
-                    result = ResetResult(
-                        success=False,
-                        action_id=task.id,
-                        risk_tier=task.risk_tier,
-                        error=str(exc),
-                        message=f"Failed: {exc}",
-                    )
-                    results.append(result)
-
-                    if not json_output:
-                        _print_result(result)
-
-                    if not continue_on_error:
-                        break
-
-    except MaintenanceLockError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
-
-    if json_output:
+    if options.json_output:
         _print_json_results(results)
 
-    # Exit with error if any failed
     if not all(r.success for r in results):
         raise typer.Exit(1)
 
