@@ -7,13 +7,18 @@ live in flow_session.py.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import typer
 from rich.status import Status
 
 from ... import config, sessions, setup
-from ...application.start_session import StartSessionRequest
+from ...application.start_session import (
+    StartSessionDependencies,
+    StartSessionPlan,
+    StartSessionRequest,
+)
 from ...bootstrap import get_default_adapters
 from ...cli_common import console, err_console
 from ...core.errors import WorkspaceNotFoundError
@@ -58,7 +63,7 @@ __all__ = [
 
 def _apply_profile_and_show_stack(
     *,
-    workspace_path: Any,
+    workspace_path: Path,
     org_config: dict[str, Any] | None,
     team: str | None,
     json_mode: bool,
@@ -92,8 +97,8 @@ def _apply_profile_and_show_stack(
 
 def _handle_dry_run(
     *,
-    start_plan: Any,
-    workspace_path: Any,
+    start_plan: StartSessionPlan,
+    workspace_path: Path,
     team: str | None,
     resolved_provider: str,
     json_output: bool,
@@ -131,6 +136,158 @@ def _handle_dry_run(
         show_dry_run_panel(dry_run_data)
 
     raise typer.Exit(0)
+
+
+def _prepare_start_plan(
+    *,
+    workspace_path: Path,
+    workspace_arg: str | None,
+    entry_dir: Path,
+    team: str | None,
+    session_name: str | None,
+    resume: bool,
+    fresh: bool,
+    offline: bool,
+    standalone: bool,
+    dry_run: bool,
+    allow_suspicious_workspace: bool,
+    org_config: dict[str, Any] | None,
+    cli_provider: str | None,
+    session_provider: str | None,
+    adapters: Any,
+    non_interactive: bool,
+    json_mode: bool,
+) -> tuple[str, StartSessionDependencies, StartSessionPlan]:
+    """Resolve provider readiness and build the prepared start plan."""
+    normalized_org = normalize_org_config(org_config) if org_config is not None else None
+    resolved_provider, resolution_source = resolve_launch_provider(
+        cli_flag=cli_provider,
+        resume_provider=session_provider,
+        workspace_path=workspace_path,
+        config_provider=config.get_selected_provider(),
+        normalized_org=normalized_org,
+        team=team,
+        adapters=adapters,
+        non_interactive=non_interactive,
+    )
+    if resolved_provider is None:
+        if not json_mode:
+            console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(EXIT_CANCELLED)
+
+    if not dry_run and not resume:
+        readiness = collect_launch_readiness(resolved_provider, resolution_source, adapters)
+        if not readiness.launch_ready:
+            ensure_launch_ready(
+                readiness,
+                adapters=adapters,
+                console=console,
+                non_interactive=non_interactive,
+                show_notice=show_auth_bootstrap_panel,
+            )
+
+    start_request = StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=workspace_arg,
+        entry_dir=entry_dir,
+        team=team,
+        session_name=session_name,
+        resume=resume,
+        fresh=fresh,
+        offline=offline,
+        standalone=standalone,
+        dry_run=dry_run,
+        allow_suspicious=allow_suspicious_workspace,
+        org_config=normalized_org,
+        raw_org_config=org_config,
+        provider_id=resolved_provider,
+    )
+    start_dependencies, start_plan = prepare_live_start_plan(
+        start_request,
+        adapters=adapters,
+        console=console,
+        provider_id=resolved_provider,
+    )
+    return resolved_provider, start_dependencies, start_plan
+
+
+def _handle_prepared_start_plan(
+    *,
+    start_plan: StartSessionPlan,
+    start_dependencies: StartSessionDependencies,
+    workspace_path: Path,
+    team: str | None,
+    org_config: dict[str, Any] | None,
+    session_name: str | None,
+    resolved_provider: str,
+    dry_run: bool,
+    json_output: bool,
+    pretty: bool,
+    non_interactive: bool,
+    adapters: Any,
+) -> None:
+    """Render output and complete an already prepared CLI start plan."""
+    json_mode = json_output or pretty
+    output_view_model = build_sync_output_view_model(start_plan)
+    render_launch_output(output_view_model, console=console, json_mode=json_mode)
+
+    if not dry_run:
+        _apply_profile_and_show_stack(
+            workspace_path=workspace_path,
+            org_config=org_config,
+            team=team,
+            json_mode=json_mode,
+            non_interactive=non_interactive,
+            profile_service=adapters.personal_profile_service,
+        )
+
+    resolver_result = start_plan.resolver_result
+    if resolver_result.is_mount_expanded and not json_mode:
+        console.print()
+        print_with_layout(
+            console,
+            create_info_panel(
+                "Worktree Detected",
+                f"Mounting parent directory for worktree support:\n{resolver_result.mount_root}",
+                "Both worktree and main repo will be accessible",
+            ),
+            constrain=True,
+        )
+        console.print()
+
+    if dry_run:
+        _handle_dry_run(
+            start_plan=start_plan,
+            workspace_path=workspace_path,
+            team=team,
+            resolved_provider=resolved_provider,
+            json_output=json_output,
+            pretty=pretty,
+        )
+
+    warn_if_non_worktree(workspace_path, json_mode=json_mode)
+
+    completion_result = complete_prepared_launch(
+        PreparedLaunchCompletionRequest(
+            workspace_path=workspace_path,
+            team=team,
+            session_name=session_name,
+            current_branch=start_plan.current_branch,
+            provider_id=resolved_provider,
+            start_plan=start_plan,
+            dependencies=start_dependencies,
+            is_resume=False,
+            json_mode=json_mode,
+            non_interactive=non_interactive,
+            record_session=True,
+        ),
+        console=console,
+    )
+    if completion_result.decision is PreparedLaunchCompletionDecision.KEPT_EXISTING:
+        raise typer.Exit(0)
+    if completion_result.decision is PreparedLaunchCompletionDecision.CANCELLED:
+        console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(EXIT_CANCELLED)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -178,8 +335,6 @@ def start(
 
     If no arguments provided, launches interactive mode.
     """
-    from pathlib import Path  # noqa: F811
-
     # Capture original CWD for entry_dir tracking (before any directory changes)
     original_cwd = Path.cwd()
 
@@ -195,8 +350,9 @@ def start(
     # ── Fast Fail: Validate mode flags before any processing ──────────────────
     from scc_cli.ui.gate import validate_mode_flags
 
+    json_mode = json_output or pretty
     validate_mode_flags(
-        json_mode=(json_output or pretty),
+        json_mode=json_mode,
         select=select,
     )
 
@@ -238,7 +394,7 @@ def start(
             resume=resume,
             select=select,
             cfg=cfg,
-            json_mode=(json_output or pretty),
+            json_mode=json_mode,
             standalone_override=standalone,
             no_interactive=non_interactive,
             dry_run=dry_run,
@@ -247,7 +403,7 @@ def start(
     )
     if workspace is None:
         if cancelled:
-            if not json_output and not pretty:
+            if not json_mode:
                 console.print("[dim]Cancelled.[/dim]")
             raise typer.Exit(EXIT_CANCELLED)
         if select or resume:
@@ -264,10 +420,10 @@ def start(
         workspace,
         no_interactive=non_interactive,
         allow_suspicious=allow_suspicious_workspace,
-        json_mode=(json_output or pretty),
+        json_mode=json_mode,
     )
     if workspace_path is None:
-        if not json_output and not pretty:
+        if not json_mode:
             console.print("[dim]Cancelled.[/dim]")
         raise typer.Exit(EXIT_CANCELLED)
     if not workspace_path.exists():
@@ -283,7 +439,7 @@ def start(
         workspace_path,
         team,
         cfg,
-        json_mode=(json_output or pretty),
+        json_mode=json_mode,
         standalone=standalone,
         no_interactive=non_interactive,
     )
@@ -300,41 +456,7 @@ def start(
 
     workspace_arg = None if was_auto_detected else str(workspace_path)
 
-    # ── Step 6.1: Resolve active provider ────────────────────────────────────
-    normalized_org = normalize_org_config(org_config) if org_config is not None else None
-    # Normalize typer default: direct calls pass OptionInfo, not None.
-    cli_provider = provider if isinstance(provider, str) else None
-    resolved_provider, _resolution_source = resolve_launch_provider(
-        cli_flag=cli_provider,
-        resume_provider=session_provider,
-        workspace_path=workspace_path,
-        config_provider=config.get_selected_provider(),
-        normalized_org=normalized_org,
-        team=team,
-        adapters=adapters,
-        non_interactive=non_interactive,
-    )
-    if resolved_provider is None:
-        if not (json_output or pretty):
-            console.print("[dim]Cancelled.[/dim]")
-        raise typer.Exit(EXIT_CANCELLED)
-
-    # ── Step 6.2: Preflight readiness (image + auth) ─────────────────────────
-    # For non-resume fresh starts, check readiness before plan construction.
-    # Dry-run skips this entirely (no image/auth needed for preview).
-    # Resume paths skip auth bootstrap since the original session authenticated.
-    if not dry_run and not resume:
-        readiness = collect_launch_readiness(resolved_provider, _resolution_source, adapters)
-        if not readiness.launch_ready:
-            ensure_launch_ready(
-                readiness,
-                adapters=adapters,
-                console=console,
-                non_interactive=non_interactive,
-                show_notice=show_auth_bootstrap_panel,
-            )
-
-    start_request = StartSessionRequest(
+    resolved_provider, start_dependencies, start_plan = _prepare_start_plan(
         workspace_path=workspace_path,
         workspace_arg=workspace_arg,
         entry_dir=original_cwd,
@@ -345,80 +467,26 @@ def start(
         offline=offline,
         standalone=standalone,
         dry_run=dry_run,
-        allow_suspicious=allow_suspicious_workspace,
-        org_config=normalized_org,
-        raw_org_config=org_config,
-        provider_id=resolved_provider,
-    )
-    start_dependencies, start_plan = prepare_live_start_plan(
-        start_request,
+        allow_suspicious_workspace=allow_suspicious_workspace,
+        org_config=org_config,
+        cli_provider=provider if isinstance(provider, str) else None,
+        session_provider=session_provider,
         adapters=adapters,
-        console=console,
-        provider_id=resolved_provider,
+        non_interactive=non_interactive,
+        json_mode=json_mode,
     )
 
-    output_view_model = build_sync_output_view_model(start_plan)
-    render_launch_output(output_view_model, console=console, json_mode=(json_output or pretty))
-
-    # ── Step 6.55–6.6: Personal profile + active stack summary ──────────────
-    if not dry_run and workspace_path is not None:
-        _apply_profile_and_show_stack(
-            workspace_path=workspace_path,
-            org_config=org_config,
-            team=team,
-            json_mode=(json_output or pretty),
-            non_interactive=non_interactive,
-            profile_service=adapters.personal_profile_service,
-        )
-
-    # ── Step 6.7: Resolve mount path for worktrees (needed for dry-run too) ────
-    assert workspace_path is not None
-    resolver_result = start_plan.resolver_result
-    if resolver_result.is_mount_expanded and not (json_output or pretty):
-        console.print()
-        print_with_layout(
-            console,
-            create_info_panel(
-                "Worktree Detected",
-                f"Mounting parent directory for worktree support:\n{resolver_result.mount_root}",
-                "Both worktree and main repo will be accessible",
-            ),
-            constrain=True,
-        )
-        console.print()
-    current_branch = start_plan.current_branch
-
-    # ── Step 6.8: Handle --dry-run (preview without launching) ────────────────
-    if dry_run:
-        _handle_dry_run(
-            start_plan=start_plan,
-            workspace_path=workspace_path,
-            team=team,
-            resolved_provider=resolved_provider,
-            json_output=json_output,
-            pretty=pretty,
-        )
-
-    warn_if_non_worktree(workspace_path, json_mode=(json_output or pretty))
-
-    completion_result = complete_prepared_launch(
-        PreparedLaunchCompletionRequest(
-            workspace_path=workspace_path,
-            team=team,
-            session_name=session_name,
-            current_branch=current_branch,
-            provider_id=resolved_provider,
-            start_plan=start_plan,
-            dependencies=start_dependencies,
-            is_resume=False,
-            json_mode=(json_output or pretty),
-            non_interactive=non_interactive,
-            record_session=True,
-        ),
-        console=console,
+    _handle_prepared_start_plan(
+        start_plan=start_plan,
+        start_dependencies=start_dependencies,
+        workspace_path=workspace_path,
+        team=team,
+        org_config=org_config,
+        session_name=session_name,
+        resolved_provider=resolved_provider,
+        dry_run=dry_run,
+        json_output=json_output,
+        pretty=pretty,
+        non_interactive=non_interactive,
+        adapters=adapters,
     )
-    if completion_result.decision is PreparedLaunchCompletionDecision.KEPT_EXISTING:
-        raise typer.Exit(0)
-    if completion_result.decision is PreparedLaunchCompletionDecision.CANCELLED:
-        console.print("[dim]Cancelled.[/dim]")
-        raise typer.Exit(EXIT_CANCELLED)
