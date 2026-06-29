@@ -1,10 +1,11 @@
 """Characterization tests for quick resume wizard flows."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from scc_cli.contexts import WorkContext
 from scc_cli.ui.picker import QuickResumeResult
+from scc_cli.ui.wizard import BACK
 
 
 def test_quick_resume_new_session_moves_to_workspace_source() -> None:
@@ -56,6 +57,56 @@ def test_quick_resume_back_returns_cancelled() -> None:
         ),
     ):
         result = interactive_start(cfg={}, allow_back=False)
+
+    assert result == (None, None, None, None)
+
+
+def test_workspace_source_back_returns_dashboard_back() -> None:
+    from scc_cli.commands.launch import interactive_start
+
+    git_client = MagicMock()
+    git_client.get_current_branch.return_value = None
+
+    with (
+        patch(
+            "scc_cli.commands.launch.flow_interactive.config.load_cached_org_config",
+            return_value={},
+        ),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
+        patch("scc_cli.ui.wizard.pick_workspace_source", return_value=BACK),
+    ):
+        result = interactive_start(
+            cfg={},
+            skip_quick_resume=True,
+            allow_back=True,
+            standalone_override=True,
+            git_client=git_client,
+        )
+
+    assert result == (BACK, None, None, None)
+
+
+def test_workspace_source_cancel_returns_cancelled() -> None:
+    from scc_cli.commands.launch import interactive_start
+
+    git_client = MagicMock()
+    git_client.get_current_branch.return_value = None
+
+    with (
+        patch(
+            "scc_cli.commands.launch.flow_interactive.config.load_cached_org_config",
+            return_value={},
+        ),
+        patch("scc_cli.commands.launch.flow_interactive.teams.list_teams", return_value=[]),
+        patch("scc_cli.ui.wizard.pick_workspace_source", return_value=None),
+    ):
+        result = interactive_start(
+            cfg={},
+            skip_quick_resume=True,
+            allow_back=False,
+            standalone_override=True,
+            git_client=git_client,
+        )
 
     assert result == (None, None, None, None)
 

@@ -26,6 +26,13 @@ WorkspaceResumeResolution: TypeAlias = StartWizardState | StartWizardResult | No
 
 
 @dataclass(frozen=True)
+class WizardExit:
+    """Terminal wizard result crossing an extracted handler boundary."""
+
+    result: StartWizardResult
+
+
+@dataclass(frozen=True)
 class WizardResumeContext:
     """Explicit inputs for quick-resume helper flows."""
 

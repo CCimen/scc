@@ -1,12 +1,11 @@
-"""Characterization tests for commands/launch/flow.py.
+"""Characterization tests for launch command flows.
 
-These tests capture the current behavior of the launch flow module
-before S02 surgery decomposes it. They protect against accidental behavior
-changes during the split.
+These tests capture current launch flow behavior and protect against accidental
+changes during ownership cleanup.
 
-Target: src/scc_cli/commands/launch/flow.py
-  - start() (293 lines): CLI entrypoint
-  - interactive_start() (534 lines): wizard flow
+Targets:
+  - commands/launch/flow.py start(): CLI entrypoint
+  - commands/launch/flow_interactive.py interactive_start(): wizard flow
 
 Since both functions are deeply coupled to TTY interactions, Rich UI, and
 the full bootstrap stack, we test the pure logic they delegate to:

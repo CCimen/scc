@@ -31,7 +31,25 @@ FLOW_PATH = (
     / "flow_interactive.py"
 )
 LAUNCH_DIR = FLOW_PATH.parent
-MAX_INTERACTIVE_START_LINES = 550
+MAX_INTERACTIVE_START_LINES = 240
+EXTRACTED_WIZARD_STEP_HANDLERS = {
+    "handle_session_name",
+    "handle_team_selection",
+    "handle_worktree_decision",
+    "handle_workspace_picker",
+    "handle_workspace_source",
+}
+INLINE_WIZARD_PROMPT_BUILDERS = {
+    "build_clone_repo_prompt",
+    "build_confirm_worktree_prompt",
+    "build_custom_workspace_prompt",
+    "build_session_name_prompt",
+    "build_team_repo_prompt",
+    "build_team_selection_prompt",
+    "build_workspace_picker_prompt",
+    "build_workspace_source_prompt",
+    "build_worktree_name_prompt",
+}
 
 
 def _interactive_start_node() -> ast.FunctionDef:
@@ -72,6 +90,19 @@ def test_interactive_start_resume_hotspot_stays_extracted() -> None:
 
     assert line_count <= MAX_INTERACTIVE_START_LINES
     assert nested_functions == []
+
+
+def test_interactive_start_prompt_steps_stay_extracted() -> None:
+    """interactive_start should route wizard state, not own prompt rendering details."""
+    node = _interactive_start_node()
+    called_names = {
+        call.func.id
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+    }
+
+    assert EXTRACTED_WIZARD_STEP_HANDLERS <= called_names
+    assert called_names.isdisjoint(INLINE_WIZARD_PROMPT_BUILDERS)
 
 
 def test_command_launch_modules_do_not_own_docker_handoff() -> None:
