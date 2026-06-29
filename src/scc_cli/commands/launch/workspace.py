@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import typer
 from rich.status import Status
@@ -33,9 +33,6 @@ from ...services import git
 from ...theme import Indicators, Spinners
 from ...ui import check_branch_safety, create_worktree
 from ...ui.gate import is_interactive_allowed
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass

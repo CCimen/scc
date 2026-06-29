@@ -6,12 +6,9 @@ They have no side effects and are ideal for unit testing.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from scc_cli.core.constants import CURRENT_SCHEMA_VERSION
-
-if TYPE_CHECKING:
-    pass
 
 
 def build_validation_data(

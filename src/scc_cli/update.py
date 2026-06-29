@@ -24,15 +24,12 @@ from datetime import datetime, timedelta, timezone
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_installed_version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from rich.console import Console
 from rich.panel import Panel
 
 from scc_cli.core.enums import OrgConfigUpdateStatus
-
-if TYPE_CHECKING:
-    pass
 
 # Package name on PyPI
 PACKAGE_NAME = "scc-cli"

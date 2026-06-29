@@ -22,6 +22,31 @@ SRC = REPO_ROOT / "src" / "scc_cli"
 TESTS = REPO_ROOT / "tests"
 
 
+class TestDeadScaffolding:
+    """Keep no-op scaffolding out of source and tests."""
+
+    def test_empty_type_checking_blocks_stay_deleted(self) -> None:
+        """Delete empty TYPE_CHECKING blocks instead of preserving no-op imports."""
+        offenders: list[str] = []
+        for root in (SRC, TESTS):
+            for path in root.rglob("*.py"):
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, ast.If)
+                        and isinstance(node.test, ast.Name)
+                        and node.test.id == "TYPE_CHECKING"
+                        and len(node.body) == 1
+                        and isinstance(node.body[0], ast.Pass)
+                    ):
+                        offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+
+        assert not offenders, (
+            "Empty TYPE_CHECKING blocks are dead scaffolding. Delete the block and "
+            "the unused import instead:\n" + "\n".join(offenders)
+        )
+
+
 class TestDomainDoesNotImportCLI:
     """Domain/service packages must not depend on CLI surface modules."""
 

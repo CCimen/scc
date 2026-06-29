@@ -17,16 +17,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from jsonschema import Draft7Validator
 
 from .core.constants import CLI_VERSION, CURRENT_SCHEMA_VERSION
 from .core.enums import SeverityLevel
-
-if TYPE_CHECKING:
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Invariant Validation Types

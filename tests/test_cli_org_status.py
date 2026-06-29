@@ -9,15 +9,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
-
-if TYPE_CHECKING:
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures

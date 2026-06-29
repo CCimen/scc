@@ -22,13 +22,9 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from scc_cli.config import CACHE_DIR
-
-if TYPE_CHECKING:
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants

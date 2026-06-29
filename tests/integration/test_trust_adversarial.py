@@ -16,8 +16,6 @@ These tests attempt to bypass trust controls through:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pytest
 
 from scc_cli.marketplace.normalize import (
@@ -43,10 +41,6 @@ from scc_cli.marketplace.trust import (
 from scc_cli.marketplace.trust import (
     get_source_url as trust_get_source_url,
 )
-
-if TYPE_CHECKING:
-    pass
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Protocol Normalization Tests

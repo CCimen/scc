@@ -19,7 +19,7 @@ Federated Teams:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
 
@@ -67,10 +67,6 @@ def allow_all_delegation() -> DelegationConfig:
     return DelegationConfig(
         teams=DelegationTeamsConfig(allow_additional_plugins=["*"]),
     )
-
-
-if TYPE_CHECKING:
-    pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────

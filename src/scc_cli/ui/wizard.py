@@ -42,7 +42,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from rich.console import Console
 
@@ -99,9 +99,6 @@ from .wizard_pickers import (  # noqa: F401
     pick_team_repo,
     pick_workspace_source,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 class StartWizardRendererError(RuntimeError):

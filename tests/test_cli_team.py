@@ -8,15 +8,10 @@ Tests cover: team list, team current, team switch, team info commands.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
-
-if TYPE_CHECKING:
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures

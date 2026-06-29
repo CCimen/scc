@@ -21,14 +21,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import Generic, TypeVar
 
 import readchar
 
 from scc_cli.ports.session_models import SessionSummary
-
-if TYPE_CHECKING:
-    pass
 
 T = TypeVar("T")
 

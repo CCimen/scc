@@ -7,16 +7,12 @@ and optionally federated team configs from their remote sources.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from scc_cli.cli import app
-
-if TYPE_CHECKING:
-    pass
 
 runner = CliRunner()
 

@@ -11,14 +11,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-if TYPE_CHECKING:
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures

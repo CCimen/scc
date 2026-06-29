@@ -7,7 +7,7 @@ from URLs or shorthands.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import requests
 import typer
@@ -24,9 +24,6 @@ from ...remote import save_to_cache
 from ...source_resolver import ResolveError, resolve_source
 from ...validate import validate_org_config
 from ._builders import build_import_preview_data
-
-if TYPE_CHECKING:
-    pass
 
 
 @handle_errors

@@ -9,7 +9,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from rich.console import Console
 from rich.text import Text
@@ -26,9 +26,6 @@ from ..services.git.branch import (
     sanitize_branch_name,
 )
 from ..theme import Indicators, Spinners
-
-if TYPE_CHECKING:
-    pass
 
 
 def _get_confirm_with_layout() -> Any:

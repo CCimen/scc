@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from rich.console import RenderableType
 from rich.live import Live
@@ -33,9 +33,6 @@ from scc_cli.theme import Indicators
 
 from .chrome import Chrome, ChromeConfig
 from .keys import Action, ActionType, KeyReader, TeamSwitchRequested
-
-if TYPE_CHECKING:
-    pass
 
 T = TypeVar("T")
 

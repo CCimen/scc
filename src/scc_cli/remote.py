@@ -18,7 +18,7 @@ import stat
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -30,10 +30,6 @@ from scc_cli.core.enums import SeverityLevel
 from scc_cli.output_mode import print_human
 from scc_cli.ports.remote_fetcher import RemoteFetcher
 from scc_cli.utils.locks import file_lock, lock_path
-
-if TYPE_CHECKING:
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # XDG Base Directory Paths

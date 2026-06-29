@@ -8,15 +8,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from scc_cli.models.plugin_audit import (
     ManifestStatus,
     PluginAuditResult,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 class TestReadPluginManifests:

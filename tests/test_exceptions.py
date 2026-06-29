@@ -14,15 +14,11 @@ Tests cover:
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
 import pytest
 
 # Will import from scc_cli.models.exceptions once implemented
 # For now, these imports will fail until we implement the models
-
-if TYPE_CHECKING:
-    pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

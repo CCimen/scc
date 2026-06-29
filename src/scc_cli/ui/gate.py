@@ -31,14 +31,11 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 from rich.console import Console
 
 from ..core.exit_codes import EXIT_SUCCESS, EXIT_USAGE
-
-if TYPE_CHECKING:
-    pass
 
 T = TypeVar("T")
 
