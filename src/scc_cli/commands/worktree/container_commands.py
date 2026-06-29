@@ -13,7 +13,8 @@ from ...cli_helpers import ConfirmItems, confirm_action
 from ...panels import create_info_panel, create_success_panel, create_warning_panel
 from ...theme import Indicators, Spinners
 from ...ui.gate import InteractivityContext
-from ...ui.picker import TeamSwitchRequested, pick_containers
+from ...ui.keys import TeamSwitchRequested
+from ...ui.picker import pick_containers
 from ._helpers import is_container_stopped
 
 

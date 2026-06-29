@@ -18,7 +18,8 @@ from ...maintenance import prune_sessions as maintenance_prune_sessions
 from ...output_mode import is_json_mode
 from ...panels import create_warning_panel
 from ...presentation.json.sessions_json import build_session_list_data
-from ...ui.picker import TeamSwitchRequested, pick_session
+from ...ui.keys import TeamSwitchRequested
+from ...ui.picker import pick_session
 
 
 def _format_last_used(last_used: str | None) -> str:

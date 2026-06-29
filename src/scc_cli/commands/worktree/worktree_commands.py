@@ -23,7 +23,8 @@ from ...services.git import WorktreeInfo
 from ...theme import Indicators, Spinners
 from ...ui import cleanup_worktree, render_worktrees
 from ...ui.gate import InteractivityContext
-from ...ui.picker import TeamSwitchRequested, pick_worktree
+from ...ui.keys import TeamSwitchRequested
+from ...ui.picker import pick_worktree
 from ..launch.worktree_autostart import (
     CreatedWorktreeLaunchRequest,
     launch_created_worktree,

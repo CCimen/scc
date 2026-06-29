@@ -13,6 +13,7 @@ bad-direction imports that don't form a cycle.
 """
 
 import ast
+import importlib
 import subprocess
 from pathlib import Path
 
@@ -45,6 +46,40 @@ class TestDeadScaffolding:
             "Empty TYPE_CHECKING blocks are dead scaffolding. Delete the block and "
             "the unused import instead:\n" + "\n".join(offenders)
         )
+
+
+class TestPickerControlFlowOwnership:
+    """Picker UI should not own shared control-flow signals."""
+
+    def test_team_switch_requested_is_owned_by_keys(self) -> None:
+        """Import TeamSwitchRequested from ui.keys, not the picker module."""
+        picker = importlib.import_module("scc_cli.ui.picker")
+        problems: list[str] = []
+
+        if hasattr(picker, "TeamSwitchRequested"):
+            problems.append("scc_cli.ui.picker must not re-export TeamSwitchRequested.")
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude=test_import_boundaries.py",
+                r"(from scc_cli\.ui\.picker import .*TeamSwitchRequested|from \.+ui\.picker import .*TeamSwitchRequested)",
+                str(SRC),
+                str(TESTS),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            problems.append(
+                "TeamSwitchRequested is owned by scc_cli.ui.keys; import it from there.\n"
+                f"Found imports:\n{result.stdout}"
+            )
+        elif result.returncode != 1:
+            problems.append(f"TeamSwitchRequested grep failed:\n{result.stderr}")
+
+        assert not problems, "\n\n".join(problems)
 
 
 class TestDomainDoesNotImportCLI:

@@ -45,6 +45,7 @@ from rich.text import Text
 from ..contexts import normalize_path
 from ..ports.session_models import SessionSummary
 from ..theme import Indicators
+from . import keys as ui_keys
 from .chrome import Chrome, ChromeConfig
 from .formatters import (
     format_container,
@@ -54,13 +55,11 @@ from .formatters import (
     format_worktree,
 )
 from .keys import BACK as BACK_SENTINEL
-from .keys import ActionType, KeyReader, TeamSwitchRequested, _BackSentinel
+from .keys import ActionType, KeyReader, _BackSentinel
 from .list_screen import ListItem, ListMode, ListScreen, ListState
 
-# Re-export for backwards compatibility
 __all__ = [
     "QuickResumeResult",
-    "TeamSwitchRequested",
     "NEW_SESSION_SENTINEL",
     "SWITCH_TEAM_SENTINEL",
 ]
@@ -629,7 +628,7 @@ def _run_single_select_picker(
                     return None
 
                 case ActionType.TEAM_SWITCH:
-                    raise TeamSwitchRequested()
+                    raise ui_keys.TeamSwitchRequested()
 
                 case ActionType.FILTER_CHAR:
                     if action.filter_char:
@@ -746,7 +745,7 @@ def _run_quick_resume_picker(
                         if current.value is NEW_SESSION_SENTINEL:
                             return (QuickResumeResult.NEW_SESSION, None)
                         if current.value is SWITCH_TEAM_SENTINEL:
-                            raise TeamSwitchRequested()
+                            raise ui_keys.TeamSwitchRequested()
                         # Otherwise it's a WorkContext
                         # Type ignore: we know context_items contain WorkContext values
                         return (QuickResumeResult.SELECTED, current.value)  # type: ignore[return-value]
@@ -770,7 +769,7 @@ def _run_quick_resume_picker(
                     return (QuickResumeResult.CANCELLED, None)
 
                 case ActionType.TEAM_SWITCH:
-                    raise TeamSwitchRequested()
+                    raise ui_keys.TeamSwitchRequested()
 
                 case ActionType.FILTER_CHAR:
                     if action.filter_char:

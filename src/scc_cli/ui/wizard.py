@@ -75,11 +75,10 @@ from scc_cli.application.launch.wizard_models import (  # noqa: F401
 
 from ..ports.session_models import SessionSummary
 from ..services.workspace import has_project_markers
-from .keys import BACK
+from .keys import BACK, TeamSwitchRequested
 from .keys import _BackSentinel as _BackSentinel  # noqa: F401
 from .picker import (  # noqa: F401
     QuickResumeResult,
-    TeamSwitchRequested,
     _run_single_select_picker,
     pick_context_quick_resume,
     pick_team,

@@ -30,7 +30,8 @@ from ..marketplace.team_fetch import TeamFetchResult, fetch_team_config
 from ..output_mode import is_json_mode, print_human
 from ..panels import create_error_panel, create_success_panel
 from ..ui.gate import InteractivityContext
-from ..ui.picker import TeamSwitchRequested, pick_team
+from ..ui.keys import TeamSwitchRequested
+from ..ui.picker import pick_team
 from ..validate import validate_team_config
 from .team_info import team_info as _team_info_fn
 from .team_info import team_list as _team_list_fn

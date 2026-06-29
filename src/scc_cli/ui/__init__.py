@@ -76,6 +76,7 @@ from .help import (
     HelpMode,
     show_help_overlay,
 )
+from .keys import TeamSwitchRequested
 
 # =============================================================================
 # Tier 2: Advanced building blocks (supported, but may evolve)
@@ -90,7 +91,6 @@ from .list_screen import (
 
 # Pickers: Domain-specific selection workflows
 from .picker import (
-    TeamSwitchRequested,
     pick_container,
     pick_containers,
     pick_context,
