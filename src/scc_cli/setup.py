@@ -48,17 +48,16 @@ from .setup_ui import (  # noqa: F401
     _build_hint_text,
     _layout_metrics,
     _print_padded,
+    _render_config_changes_review,
+    _render_org_url_help,
     _render_setup_header,
     _render_setup_layout,
+    _render_standalone_summary,
     _select_option,
     show_welcome,
 )
 from .theme import Spinners
 from .ui.prompts import prompt_with_layout  # noqa: F401
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Organization Config URL
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
@@ -87,11 +86,6 @@ def prompt_org_url(console: Console, *, rendered: bool = False) -> str:
             continue
 
         return url
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Remote Config Fetching
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def fetch_and_validate_org_config(
@@ -142,11 +136,6 @@ def fetch_and_validate_org_config(
     console.print("[dim]Organization config cached locally[/dim]")
 
     return config_data
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Setup Complete Display
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def _three_tier_status(provider_id: str, auth_readiness: Any) -> str:
@@ -432,11 +421,6 @@ def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, s
     return refreshed, selected_preference
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Main Setup Wizard
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 def run_setup_wizard(console: Console) -> bool:
     """Run the interactive setup wizard.
 
@@ -476,27 +460,7 @@ def run_setup_wizard(console: Console) -> bool:
     if has_org_config:
         # Get org URL - single centered panel
         _render_setup_header(console, step_index=1, subtitle="Enter your organization config URL.")
-
-        org_help = Text()
-        org_help.append("Your platform team provides this URL.\n\n", style="dim")
-        org_help.append("  • Must be HTTPS\n", style="dim")
-        org_help.append("  • Points to your org-config.json\n", style="dim")
-        org_help.append("  • If the URL loads without a token, skip auth\n", style="dim")
-        org_help.append("  • Example: ", style="dim")
-        org_help.append("https://example.com/scc/org.json", style="cyan dim")
-
-        metrics = _layout_metrics(console)
-        org_panel = Panel(
-            org_help,
-            title="[bold cyan]Organization URL[/bold cyan]",
-            border_style="bright_black",
-            box=box.ROUNDED,
-            padding=(1, 2),
-            width=min(metrics.content_width, 80),
-        )
-        console.print()
-        _print_padded(console, org_panel, metrics)
-        console.print()
+        _render_org_url_help(console)
 
         org_url = prompt_org_url(console, rendered=True)
 
@@ -596,12 +560,6 @@ def run_setup_wizard(console: Console) -> bool:
             profile = None
 
     else:
-        standalone_left = Text()
-        standalone_left.append("Standalone mode selected.\n\n")
-        standalone_left.append("• No organization config required\n", style="dim")
-        standalone_left.append("• You can switch later with `scc setup`\n", style="dim")
-        standalone_left.append("• Teams and profiles stay disabled\n", style="dim")
-
         preview = _build_config_preview(
             org_url=None,
             auth=None,
@@ -610,17 +568,7 @@ def run_setup_wizard(console: Console) -> bool:
             hooks_enabled=None,
             standalone=True,
         )
-
-        _render_setup_layout(
-            console,
-            step_index=1,
-            subtitle="Standalone mode (no organization config).",
-            left_title="Standalone",
-            left_body=standalone_left,
-            right_title="Config Preview",
-            right_body=preview,
-            footer_hint="Next: configure hooks",
-        )
+        _render_standalone_summary(console, preview)
 
     # Hooks with arrow-key selection
     _render_setup_header(
@@ -649,23 +597,7 @@ def run_setup_wizard(console: Console) -> bool:
     )
     existing = config.load_user_config()
     changes = _build_config_changes(existing, proposed)
-
-    _render_setup_header(console, step_index=5, subtitle="Review and confirm your settings.")
-
-    # Single centered Changes panel
-    metrics = _layout_metrics(console)
-    changes_panel = Panel(
-        changes,
-        title="[bold cyan]Changes[/bold cyan]",
-        border_style="bright_black",
-        box=box.ROUNDED,
-        padding=(1, 2),
-        width=min(metrics.content_width, 80),
-    )
-    console.print()
-    _print_padded(console, changes_panel, metrics)
-    console.print()
-    _print_padded(console, "[dim]  This will update your config file.[/dim]", metrics)
+    _render_config_changes_review(console, changes)
 
     # Arrow-key confirm selection
     confirm_options = [
@@ -708,11 +640,6 @@ def run_setup_wizard(console: Console) -> bool:
         )
 
     return True
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Non-Interactive Setup
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def run_non_interactive_setup(
@@ -796,11 +723,6 @@ def run_non_interactive_setup(
     return True
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Setup Detection
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
 def is_setup_needed() -> bool:
     """Check if first-run setup is needed and return the result.
 
@@ -834,11 +756,6 @@ def maybe_run_setup(console: Console) -> bool:
     console.print()
 
     return run_setup_wizard(console)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Configuration Reset
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def reset_setup(console: Console) -> None:

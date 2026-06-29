@@ -301,3 +301,66 @@ def _render_setup_layout(
     separator_len = max(len(hints.plain), content_width)
     _print_padded(console, Borders.FOOTER_SEPARATOR * separator_len, metrics)
     _print_padded(console, hints, metrics)
+
+
+def _render_org_url_help(console: Console) -> None:
+    """Render organization URL guidance for the setup wizard."""
+    org_help = Text()
+    org_help.append("Your platform team provides this URL.\n\n", style="dim")
+    org_help.append("  • Must be HTTPS\n", style="dim")
+    org_help.append("  • Points to your org-config.json\n", style="dim")
+    org_help.append("  • If the URL loads without a token, skip auth\n", style="dim")
+    org_help.append("  • Example: ", style="dim")
+    org_help.append("https://example.com/scc/org.json", style="cyan dim")
+
+    metrics = _layout_metrics(console)
+    org_panel = Panel(
+        org_help,
+        title="[bold cyan]Organization URL[/bold cyan]",
+        border_style="bright_black",
+        box=box.ROUNDED,
+        padding=(1, 2),
+        width=min(metrics.content_width, 80),
+    )
+    console.print()
+    _print_padded(console, org_panel, metrics)
+    console.print()
+
+
+def _render_standalone_summary(console: Console, preview: Text) -> None:
+    """Render standalone-mode setup summary and config preview."""
+    standalone_left = Text()
+    standalone_left.append("Standalone mode selected.\n\n")
+    standalone_left.append("• No organization config required\n", style="dim")
+    standalone_left.append("• You can switch later with `scc setup`\n", style="dim")
+    standalone_left.append("• Teams and profiles stay disabled\n", style="dim")
+
+    _render_setup_layout(
+        console,
+        step_index=1,
+        subtitle="Standalone mode (no organization config).",
+        left_title="Standalone",
+        left_body=standalone_left,
+        right_title="Config Preview",
+        right_body=preview,
+        footer_hint="Next: configure hooks",
+    )
+
+
+def _render_config_changes_review(console: Console, changes: Text) -> None:
+    """Render setup config changes before confirmation."""
+    _render_setup_header(console, step_index=5, subtitle="Review and confirm your settings.")
+
+    metrics = _layout_metrics(console)
+    changes_panel = Panel(
+        changes,
+        title="[bold cyan]Changes[/bold cyan]",
+        border_style="bright_black",
+        box=box.ROUNDED,
+        padding=(1, 2),
+        width=min(metrics.content_width, 80),
+    )
+    console.print()
+    _print_padded(console, changes_panel, metrics)
+    console.print()
+    _print_padded(console, "[dim]  This will update your config file.[/dim]", metrics)
