@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+from scc_cli.marketplace.constants import IMPLICIT_MARKETPLACES
 from scc_cli.marketplace.managed import ManagedState, save_managed_state
 from scc_cli.marketplace.materialize import MaterializationError
 from scc_cli.marketplace.normalize import matches_any_pattern
@@ -83,6 +84,162 @@ class SyncResult:
         self.rendered_settings = rendered_settings
 
 
+def _collect_policy_warnings(
+    *,
+    project_dir: Path,
+    org_config: OrganizationConfig,
+    effective_config: MarketplaceResolution,
+    filesystem: Filesystem,
+) -> list[str]:
+    warnings: list[str] = []
+    existing_plugins: list[str] | None = None
+
+    if effective_config.blocked_plugins:
+        existing_plugins = _load_existing_plugins(project_dir, filesystem)
+        warnings.extend(
+            check_conflicts(
+                existing_plugins=existing_plugins,
+                blocked_plugins=[
+                    {
+                        "plugin_id": blocked.plugin_id,
+                        "reason": blocked.reason,
+                        "pattern": blocked.pattern,
+                    }
+                    for blocked in effective_config.blocked_plugins
+                ],
+            )
+        )
+
+    security = org_config.security
+    if security.blocked_plugins:
+        if existing_plugins is None:
+            existing_plugins = _load_existing_plugins(project_dir, filesystem)
+        for plugin in existing_plugins:
+            matched = matches_any_pattern(plugin, security.blocked_plugins)
+            if matched:
+                warnings.append(
+                    f"⚠️ Plugin '{plugin}' is blocked by organization policy "
+                    f"(matched pattern: {matched})"
+                )
+
+    return warnings
+
+
+def _required_marketplaces(effective_config: MarketplaceResolution) -> set[str]:
+    marketplaces_used: set[str] = set()
+    for plugin_ref in effective_config.enabled_plugins:
+        if "@" in plugin_ref:
+            marketplaces_used.add(plugin_ref.split("@")[1])
+
+    marketplaces_used.update(effective_config.extra_marketplaces)
+    return marketplaces_used
+
+
+def _materialize_required_marketplaces(
+    *,
+    project_dir: Path,
+    effective_config: MarketplaceResolution,
+    force_refresh: bool,
+    dependencies: SyncMarketplaceDependencies,
+) -> tuple[dict[str, Any], list[str]]:
+    materialized: dict[str, Any] = {}
+    warnings: list[str] = []
+
+    for marketplace_name in _required_marketplaces(effective_config):
+        if marketplace_name in IMPLICIT_MARKETPLACES:
+            continue
+
+        source = effective_config.marketplaces.get(marketplace_name)
+        if source is None:
+            warnings.append(f"Marketplace '{marketplace_name}' not defined in effective config")
+            continue
+
+        try:
+            result = dependencies.materialize_marketplace(
+                name=marketplace_name,
+                source=source,
+                project_dir=project_dir,
+                force_refresh=force_refresh,
+                fetcher=dependencies.remote_fetcher,
+            )
+            materialized[marketplace_name] = {
+                "relative_path": result.relative_path,
+                "source_type": result.source_type,
+                "canonical_name": result.canonical_name,
+            }
+        except MaterializationError as exc:
+            warnings.append(f"Failed to materialize '{marketplace_name}': {exc}")
+
+    return materialized, warnings
+
+
+def _ensure_unique_canonical_marketplace_names(materialized: dict[str, Any]) -> None:
+    canonical_to_aliases: dict[str, list[str]] = {}
+    for alias_name, data in materialized.items():
+        canonical = data.get("canonical_name", alias_name)
+        if canonical not in canonical_to_aliases:
+            canonical_to_aliases[canonical] = []
+        canonical_to_aliases[canonical].append(alias_name)
+
+    for canonical, aliases in canonical_to_aliases.items():
+        if len(aliases) > 1:
+            raise SyncError(
+                f"Canonical name collision: marketplace.json name '{canonical}' "
+                f"is used by multiple org config entries: {', '.join(aliases)}. "
+                "Each marketplace must have a unique canonical name.",
+                details={"canonical_name": canonical, "conflicting_aliases": aliases},
+            )
+
+
+def _settings_payload(
+    *,
+    project_dir: Path,
+    rendered: dict[str, Any],
+    write_to_workspace: bool,
+    filesystem: Filesystem,
+) -> dict[str, Any]:
+    if write_to_workspace:
+        return merge_settings(project_dir, rendered, filesystem=filesystem)
+    return rendered
+
+
+def _build_managed_state(
+    *,
+    effective_config: MarketplaceResolution,
+    materialized: dict[str, Any],
+    clock: Clock,
+    org_config_url: str | None,
+    team_id: str,
+) -> ManagedState:
+    return ManagedState(
+        managed_plugins=list(effective_config.enabled_plugins),
+        managed_marketplaces=[item.get("relative_path", "") for item in materialized.values()],
+        last_sync=clock.now(),
+        org_config_url=org_config_url,
+        team_id=team_id,
+    )
+
+
+def _write_sync_artifacts(
+    *,
+    project_dir: Path,
+    merged_settings: dict[str, Any],
+    managed_state: ManagedState,
+    dry_run: bool,
+    write_to_workspace: bool,
+    filesystem: Filesystem,
+) -> None:
+    if dry_run:
+        return
+
+    claude_dir = project_dir / ".claude"
+    filesystem.mkdir(claude_dir, parents=True, exist_ok=True)
+    if write_to_workspace:
+        settings_path = claude_dir / "settings.local.json"
+        filesystem.write_text(settings_path, json.dumps(merged_settings, indent=2))
+    save_managed_state(project_dir, managed_state, filesystem=filesystem)
+
+
 def sync_marketplace_settings(
     project_dir: Path,
     org_config_data: dict[str, Any],
@@ -130,8 +287,6 @@ def sync_marketplace_settings(
         SyncError: On validation or processing errors
         TeamNotFoundError: If team_id not found in config
     """
-    warnings: list[str] = []
-
     # ── Step 1: Parse org config ─────────────────────────────────────────────
     # Org config is already validated by JSON Schema before caching.
     try:
@@ -147,96 +302,25 @@ def sync_marketplace_settings(
     # This handles both inline and federated teams uniformly
     effective_config = dependencies.resolve_effective_config(org_config, team_id=team_id)
 
-    # Check for blocked plugins that user has installed
-    # First, check if org-enabled plugins were blocked
-    if effective_config.blocked_plugins:
-        existing = _load_existing_plugins(project_dir, dependencies.filesystem)
-        conflict_warnings = check_conflicts(
-            existing_plugins=existing,
-            blocked_plugins=[
-                {
-                    "plugin_id": blocked.plugin_id,
-                    "reason": blocked.reason,
-                    "pattern": blocked.pattern,
-                }
-                for blocked in effective_config.blocked_plugins
-            ],
-        )
-        warnings.extend(conflict_warnings)
-
-    # Also check user's existing plugins against security.blocked_plugins patterns
-    security = org_config.security
-    if security.blocked_plugins:
-        existing = _load_existing_plugins(project_dir, dependencies.filesystem)
-        for plugin in existing:
-            matched = matches_any_pattern(plugin, security.blocked_plugins)
-            if matched:
-                warnings.append(
-                    f"⚠️ Plugin '{plugin}' is blocked by organization policy "
-                    f"(matched pattern: {matched})"
-                )
+    warnings = _collect_policy_warnings(
+        project_dir=project_dir,
+        org_config=org_config,
+        effective_config=effective_config,
+        filesystem=dependencies.filesystem,
+    )
 
     # ── Step 3: Materialize required marketplaces ───────────────────────────
-    materialized: dict[str, Any] = {}
-    marketplaces_used = set()
-
-    # Determine which marketplaces are needed
-    for plugin_ref in effective_config.enabled_plugins:
-        if "@" in plugin_ref:
-            marketplace_name = plugin_ref.split("@")[1]
-            marketplaces_used.add(marketplace_name)
-
-    # Also include any extra marketplaces from the effective result
-    for marketplace_name in effective_config.extra_marketplaces:
-        marketplaces_used.add(marketplace_name)
-
-    # Materialize each marketplace
-    for marketplace_name in marketplaces_used:
-        # Skip implicit marketplaces (claude-plugins-official)
-        from scc_cli.marketplace.constants import IMPLICIT_MARKETPLACES
-
-        if marketplace_name in IMPLICIT_MARKETPLACES:
-            continue
-
-        # Find source configuration from effective marketplaces (includes team sources for federated)
-        source = effective_config.marketplaces.get(marketplace_name)
-        if source is None:
-            warnings.append(f"Marketplace '{marketplace_name}' not defined in effective config")
-            continue
-
-        try:
-            result = dependencies.materialize_marketplace(
-                name=marketplace_name,
-                source=source,
-                project_dir=project_dir,
-                force_refresh=force_refresh,
-                fetcher=dependencies.remote_fetcher,
-            )
-            materialized[marketplace_name] = {
-                "relative_path": result.relative_path,
-                "source_type": result.source_type,
-                "canonical_name": result.canonical_name,  # Critical for alias → canonical translation
-            }
-        except MaterializationError as exc:
-            warnings.append(f"Failed to materialize '{marketplace_name}': {exc}")
+    materialized, materialization_warnings = _materialize_required_marketplaces(
+        project_dir=project_dir,
+        effective_config=effective_config,
+        force_refresh=force_refresh,
+        dependencies=dependencies,
+    )
+    warnings.extend(materialization_warnings)
 
     # ── Step 3b: Check for canonical name collisions ────────────────────────
     # Multiple aliases resolving to the same canonical name is a configuration error
-    canonical_to_aliases: dict[str, list[str]] = {}
-    for alias_name, data in materialized.items():
-        canonical = data.get("canonical_name", alias_name)
-        if canonical not in canonical_to_aliases:
-            canonical_to_aliases[canonical] = []
-        canonical_to_aliases[canonical].append(alias_name)
-
-    for canonical, aliases in canonical_to_aliases.items():
-        if len(aliases) > 1:
-            raise SyncError(
-                f"Canonical name collision: marketplace.json name '{canonical}' "
-                f"is used by multiple org config entries: {', '.join(aliases)}. "
-                "Each marketplace must have a unique canonical name.",
-                details={"canonical_name": canonical, "conflicting_aliases": aliases},
-            )
+    _ensure_unique_canonical_marketplace_names(materialized)
 
     # ── Step 4: Render settings ─────────────────────────────────────────────
     effective_dict = {
@@ -249,35 +333,32 @@ def sync_marketplace_settings(
     # ── Step 5: Merge with existing settings (only if writing to workspace) ──
     # When write_to_workspace=False, we skip merging because settings go to
     # container HOME, not the workspace settings.local.json
-    if write_to_workspace:
-        merged = merge_settings(project_dir, rendered, filesystem=dependencies.filesystem)
-    else:
-        # For container-only mode, use rendered settings directly
-        # (no merging with workspace settings since we're not writing there)
-        merged = rendered
+    merged = _settings_payload(
+        project_dir=project_dir,
+        rendered=rendered,
+        write_to_workspace=write_to_workspace,
+        filesystem=dependencies.filesystem,
+    )
 
     # ── Step 6: Prepare managed state ───────────────────────────────────────
-    managed_state = ManagedState(
-        managed_plugins=list(effective_config.enabled_plugins),
-        managed_marketplaces=[item.get("relative_path", "") for item in materialized.values()],
-        last_sync=dependencies.clock.now(),
+    managed_state = _build_managed_state(
+        effective_config=effective_config,
+        materialized=materialized,
+        clock=dependencies.clock,
         org_config_url=org_config_url,
         team_id=team_id,
     )
 
     # ── Step 7: Write files (unless dry_run or write_to_workspace=False) ─────
     settings_path = project_dir / ".claude" / "settings.local.json"
-    claude_dir = project_dir / ".claude"
-
-    if not dry_run and write_to_workspace:
-        dependencies.filesystem.mkdir(claude_dir, parents=True, exist_ok=True)
-        dependencies.filesystem.write_text(settings_path, json.dumps(merged, indent=2))
-        save_managed_state(project_dir, managed_state, filesystem=dependencies.filesystem)
-    elif not dry_run and not write_to_workspace:
-        # Container-only mode: ensure .claude dir exists for marketplaces
-        # (marketplaces are still materialized to workspace for bind-mount access)
-        dependencies.filesystem.mkdir(claude_dir, parents=True, exist_ok=True)
-        save_managed_state(project_dir, managed_state, filesystem=dependencies.filesystem)
+    _write_sync_artifacts(
+        project_dir=project_dir,
+        merged_settings=merged,
+        managed_state=managed_state,
+        dry_run=dry_run,
+        write_to_workspace=write_to_workspace,
+        filesystem=dependencies.filesystem,
+    )
 
     return SyncResult(
         success=True,
