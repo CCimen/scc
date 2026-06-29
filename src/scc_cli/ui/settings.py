@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import readchar
+from rich import box
 from rich.console import Group, RenderableType
 from rich.live import Live
 from rich.panel import Panel
@@ -547,17 +548,8 @@ class SettingsScreen:
 
         render_doctor_results(self._console, info.result)
 
-    def _render(self) -> RenderableType:
-        """Render the settings screen."""
-        metrics = get_layout_metrics(self._console, max_width=104)
-        inner_width = (
-            metrics.inner_width(padding_x=1, border=2)
-            if metrics.apply
-            else self._console.size.width
-        )
-
+    def _render_header(self) -> Text:
         header_info = self._view_model.header
-
         header = Text()
         header.append("Profile", style="dim")
         header.append(": ", style="dim")
@@ -568,15 +560,9 @@ class SettingsScreen:
             header.append(": ", style="dim")
             header.append(header_info.org_name, style="cyan")
         header.append("\n")
+        return header
 
-        from rich import box
-
-        # Two-column layout
-        layout = Table.grid(padding=(0, 2))
-        layout.add_column()  # Categories
-        layout.add_column()  # Actions
-
-        # Render category list
+    def _render_category_panel(self) -> Panel:
         cat_text = Text()
         for cat in Category:
             prefix = Indicators.get("CURSOR") + " " if cat == self._active_category else "  "
@@ -584,8 +570,15 @@ class SettingsScreen:
             cat_text.append(prefix, style="cyan" if cat == self._active_category else "")
             cat_text.append(cat.name.title() + "\n", style=style)
 
-        # Render action list for current category
-        actions = self._actions_for_category()
+        return Panel(
+            cat_text,
+            title="[dim]Categories[/dim]",
+            border_style="bright_black",
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+
+    def _render_action_panel(self, actions: list[SettingsAction]) -> Panel:
         action_text = Text()
         label_width = max((len(action.label) for action in actions), default=0)
         separator_width = max(18, min(36, label_width + 8))
@@ -610,31 +603,34 @@ class SettingsScreen:
             action_text.append("\n")
             action_text.append(f"  {action.description}\n", style="dim")
 
-        layout.add_row(
-            Panel(
-                cat_text,
-                title="[dim]Categories[/dim]",
-                border_style="bright_black",
-                box=box.ROUNDED,
-                padding=(0, 1),
-            ),
-            Panel(
-                action_text,
-                title="[dim]Actions[/dim]",
-                border_style="bright_black",
-                box=box.ROUNDED,
-                padding=(0, 1),
-            ),
+        return Panel(
+            action_text,
+            title="[dim]Actions[/dim]",
+            border_style="bright_black",
+            box=box.ROUNDED,
+            padding=(0, 1),
         )
 
-        # Receipt line (shows last action result)
-        receipt = Text()
-        if self._last_result:
-            receipt.append("✓ ", style="green")
-            receipt.append(self._last_result, style="green")
-            receipt.append("\n")
+    def _render_action_layout(self, actions: list[SettingsAction]) -> Table:
+        layout = Table.grid(padding=(0, 2))
+        layout.add_column()
+        layout.add_column()
+        layout.add_row(
+            self._render_category_panel(),
+            self._render_action_panel(actions),
+        )
+        return layout
 
-        # Footer hints
+    def _render_receipt(self) -> Text | None:
+        if not self._last_result:
+            return None
+        receipt = Text()
+        receipt.append("✓ ", style="green")
+        receipt.append(self._last_result, style="green")
+        receipt.append("\n")
+        return receipt
+
+    def _render_hint_block(self, inner_width: int) -> Group:
         hint_pairs = [
             ("↑↓", "navigate"),
             ("←→/Tab", "switch category"),
@@ -654,104 +650,136 @@ class SettingsScreen:
 
         separator_width = max(32, min(72, inner_width))
         separator = Text(Indicators.get("HORIZONTAL_LINE") * separator_width, style="dim")
-        hint_block = Group(separator, hints)
+        return Group(separator, hints)
 
-        # Build full screen content
-        content = (
-            Group(header, layout, receipt, hint_block)
-            if self._last_result
-            else Group(header, layout, hint_block)
+    def _render_base_content(self, header: Text, layout: Table, inner_width: int) -> Group:
+        receipt = self._render_receipt()
+        hint_block = self._render_hint_block(inner_width)
+        if receipt:
+            return Group(header, layout, receipt, hint_block)
+        return Group(header, layout, hint_block)
+
+    def _render_help_overlay(self, header: Text, layout: Table) -> Group:
+        help_text = Text()
+        help_text.append("Keyboard Shortcuts\n\n", style="bold")
+        help_text.append("↑/k  ↓/j    ", style="cyan")
+        help_text.append("Navigate actions\n")
+        help_text.append("←/h  →/l    ", style="cyan")
+        help_text.append("Switch category\n")
+        help_text.append("Tab         ", style="cyan")
+        help_text.append("Cycle categories\n")
+        help_text.append("Enter       ", style="cyan")
+        help_text.append("Execute action\n")
+        help_text.append("i           ", style="cyan")
+        help_text.append("Show action info\n")
+        help_text.append("p           ", style="cyan")
+        help_text.append("Preview (Tier 1/2)\n")
+        help_text.append("Esc/q       ", style="cyan")
+        help_text.append("Back to dashboard\n")
+        help_text.append("?           ", style="cyan")
+        help_text.append("Show this help\n")
+        help_panel = Panel(
+            help_text,
+            title="[cyan]Help[/cyan]",
+            border_style="bright_black",
+            box=box.ROUNDED,
         )
+        dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
+        return Group(header, layout, help_panel, dismiss)
 
-        # Help panel overlay
+    def _render_info_overlay(
+        self,
+        header: Text,
+        layout: Table,
+        action: SettingsAction,
+    ) -> Group:
+        info_text = Text()
+        info_text.append(action.label, style="bold")
+        info_text.append(f"\n\n{action.description}\n\nRisk: ")
+        info_text.append(_get_risk_badge(action.risk_tier))
+        info = Panel(
+            info_text,
+            title="[cyan]Action Info[/cyan]",
+            border_style="bright_black",
+            box=box.ROUNDED,
+        )
+        dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
+        return Group(header, layout, info, dismiss)
+
+    def _render_preview_text(self, action: SettingsAction) -> Text:
+        validation = app_settings.validate_settings(
+            SettingsValidationRequest(
+                action_id=action.id,
+                workspace=self._context.workspace,
+            )
+        )
+        preview_text = Text()
+        if not validation or not isinstance(validation.detail, MaintenancePreview):
+            preview_text.append(f"Unable to preview {action.label}")
+            return preview_text
+
+        preview = validation.detail
+        preview_text.append(f"{action.label}\n\n", style="bold")
+        preview_text.append("Risk: ")
+        preview_text.append(_get_risk_badge(preview.risk_tier))
+        preview_text.append("\n\n")
+
+        if preview.paths:
+            preview_text.append("Affects:\n", style="dim")
+            for path in preview.paths[:5]:
+                preview_text.append(f"  {path}\n")
+            if len(preview.paths) > 5:
+                preview_text.append(f"  (+{len(preview.paths) - 5} more)\n", style="dim")
+
+        if preview.item_count > 0:
+            preview_text.append(f"\nItems: {preview.item_count}\n")
+
+        if preview.bytes_estimate > 0:
+            preview_text.append(f"Size: ~{_format_bytes(preview.bytes_estimate)}\n")
+
+        if preview.backup_will_be_created:
+            preview_text.append("\n[yellow]Backup will be created[/yellow]\n")
+
+        return preview_text
+
+    def _render_preview_overlay(
+        self,
+        header: Text,
+        layout: Table,
+        action: SettingsAction,
+    ) -> Group:
+        preview_panel = Panel(
+            self._render_preview_text(action),
+            title="[yellow]Preview[/yellow]",
+            border_style="bright_black",
+            box=box.ROUNDED,
+        )
+        dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
+        return Group(header, layout, preview_panel, dismiss)
+
+    def _render_content(
+        self, header: Text, layout: Table, actions: list[SettingsAction], inner_width: int
+    ) -> Group:
         if self._show_help:
-            help_text = Text()
-            help_text.append("Keyboard Shortcuts\n\n", style="bold")
-            help_text.append("↑/k  ↓/j    ", style="cyan")
-            help_text.append("Navigate actions\n")
-            help_text.append("←/h  →/l    ", style="cyan")
-            help_text.append("Switch category\n")
-            help_text.append("Tab         ", style="cyan")
-            help_text.append("Cycle categories\n")
-            help_text.append("Enter       ", style="cyan")
-            help_text.append("Execute action\n")
-            help_text.append("i           ", style="cyan")
-            help_text.append("Show action info\n")
-            help_text.append("p           ", style="cyan")
-            help_text.append("Preview (Tier 1/2)\n")
-            help_text.append("Esc/q       ", style="cyan")
-            help_text.append("Back to dashboard\n")
-            help_text.append("?           ", style="cyan")
-            help_text.append("Show this help\n")
-            help_panel = Panel(
-                help_text,
-                title="[cyan]Help[/cyan]",
-                border_style="bright_black",
-                box=box.ROUNDED,
-            )
-            dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
-            content = Group(header, layout, help_panel, dismiss)
+            return self._render_help_overlay(header, layout)
+        if self._show_info and actions:
+            return self._render_info_overlay(header, layout, actions[self._cursor])
+        if self._show_preview and actions:
+            return self._render_preview_overlay(header, layout, actions[self._cursor])
+        return self._render_base_content(header, layout, inner_width)
 
-        # Info panel overlay
-        elif self._show_info and actions:
-            action = actions[self._cursor]
-            info_text = Text()
-            info_text.append(action.label, style="bold")
-            info_text.append(f"\n\n{action.description}\n\nRisk: ")
-            info_text.append(_get_risk_badge(action.risk_tier))
-            info = Panel(
-                info_text,
-                title="[cyan]Action Info[/cyan]",
-                border_style="bright_black",
-                box=box.ROUNDED,
-            )
-            dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
-            content = Group(header, layout, info, dismiss)
-
-        # Preview panel overlay
-        elif self._show_preview and actions:
-            action = actions[self._cursor]
-            validation = app_settings.validate_settings(
-                SettingsValidationRequest(
-                    action_id=action.id,
-                    workspace=self._context.workspace,
-                )
-            )
-            preview_text = Text()
-            if validation and isinstance(validation.detail, MaintenancePreview):
-                preview = validation.detail
-                preview_text.append(f"{action.label}\n\n", style="bold")
-                preview_text.append("Risk: ")
-                preview_text.append(_get_risk_badge(preview.risk_tier))
-                preview_text.append("\n\n")
-
-                if preview.paths:
-                    preview_text.append("Affects:\n", style="dim")
-                    for path in preview.paths[:5]:
-                        preview_text.append(f"  {path}\n")
-                    if len(preview.paths) > 5:
-                        preview_text.append(f"  (+{len(preview.paths) - 5} more)\n", style="dim")
-
-                if preview.item_count > 0:
-                    preview_text.append(f"\nItems: {preview.item_count}\n")
-
-                if preview.bytes_estimate > 0:
-                    preview_text.append(f"Size: ~{_format_bytes(preview.bytes_estimate)}\n")
-
-                if preview.backup_will_be_created:
-                    preview_text.append("\n[yellow]Backup will be created[/yellow]\n")
-            else:
-                preview_text.append(f"Unable to preview {action.label}")
-
-            preview_panel = Panel(
-                preview_text,
-                title="[yellow]Preview[/yellow]",
-                border_style="bright_black",
-                box=box.ROUNDED,
-            )
-            dismiss = Text("\n[dim]Press any key to dismiss[/dim]")
-            content = Group(header, layout, preview_panel, dismiss)
-
+    def _render(self) -> RenderableType:
+        """Render the settings screen."""
+        metrics = get_layout_metrics(self._console, max_width=104)
+        inner_width = (
+            metrics.inner_width(padding_x=1, border=2)
+            if metrics.apply
+            else self._console.size.width
+        )
+        actions = self._actions_for_category()
+        header = self._render_header()
+        layout = self._render_action_layout(actions)
+        content = self._render_content(header, layout, actions, inner_width)
         title = Text()
         title.append("Settings", style="bold cyan")
         title.append(" & ", style="dim")
