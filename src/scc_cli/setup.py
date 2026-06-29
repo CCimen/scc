@@ -421,6 +421,40 @@ def _run_provider_onboarding(console: Console) -> tuple[dict[str, Any] | None, s
     return refreshed, selected_preference
 
 
+def _prompt_hooks_enabled(console: Console) -> bool | None:
+    """Prompt whether setup should enable git safety hooks."""
+    _render_setup_header(
+        console, step_index=4, subtitle="Optional safety guardrails for protected branches."
+    )
+
+    hooks_options = [
+        ("Enable hooks", "recommended", "Block direct pushes to main, master, develop"),
+        ("Skip hooks", "", "No git hook protection"),
+    ]
+
+    hooks_choice = _select_option(console, hooks_options, default=0)
+    if hooks_choice is None:
+        console.print("[yellow]Setup cancelled.[/yellow]")
+        return None
+    return hooks_choice == 0
+
+
+def _confirm_config_changes(console: Console, changes: Text) -> bool:
+    """Prompt the user to apply or cancel the proposed setup changes."""
+    _render_config_changes_review(console, changes)
+
+    confirm_options = [
+        ("Apply changes", "", "Write config and complete setup"),
+        ("Cancel", "", "Exit without saving"),
+    ]
+    confirm_choice = _select_option(console, confirm_options, default=0)
+
+    if confirm_choice is None or confirm_choice != 0:
+        console.print("[yellow]Setup cancelled.[/yellow]")
+        return False
+    return True
+
+
 def run_setup_wizard(console: Console) -> bool:
     """Run the interactive setup wizard.
 
@@ -570,23 +604,10 @@ def run_setup_wizard(console: Console) -> bool:
         )
         _render_standalone_summary(console, preview)
 
-    # Hooks with arrow-key selection
-    _render_setup_header(
-        console, step_index=4, subtitle="Optional safety guardrails for protected branches."
-    )
-
-    hooks_options = [
-        ("Enable hooks", "recommended", "Block direct pushes to main, master, develop"),
-        ("Skip hooks", "", "No git hook protection"),
-    ]
-
-    hooks_choice = _select_option(console, hooks_options, default=0)
-    if hooks_choice is None:
-        console.print("[yellow]Setup cancelled.[/yellow]")
+    hooks_enabled = _prompt_hooks_enabled(console)
+    if hooks_enabled is None:
         return False
-    hooks_enabled = hooks_choice == 0
 
-    # Confirm - single centered panel showing changes
     proposed = _build_proposed_config(
         org_url=org_url,
         auth=auth,
@@ -597,17 +618,7 @@ def run_setup_wizard(console: Console) -> bool:
     )
     existing = config.load_user_config()
     changes = _build_config_changes(existing, proposed)
-    _render_config_changes_review(console, changes)
-
-    # Arrow-key confirm selection
-    confirm_options = [
-        ("Apply changes", "", "Write config and complete setup"),
-        ("Cancel", "", "Exit without saving"),
-    ]
-    confirm_choice = _select_option(console, confirm_options, default=0)
-
-    if confirm_choice is None or confirm_choice != 0:
-        console.print("[yellow]Setup cancelled.[/yellow]")
+    if not _confirm_config_changes(console, changes):
         return False
 
     # Save config

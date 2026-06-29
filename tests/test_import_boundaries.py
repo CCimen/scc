@@ -407,7 +407,7 @@ class TestSetupSurfaceBoundary:
         )
 
     def test_dead_setup_confirmation_helpers_stay_deleted(self) -> None:
-        """Confirmation rendering is inline in run_setup_wizard; do not keep dead twins."""
+        """Setup config should not keep unused confirmation helper twins."""
         setup_config_tree = ast.parse((SRC / "setup_config.py").read_text(encoding="utf-8"))
         definitions = {
             node.name for node in ast.walk(setup_config_tree) if isinstance(node, ast.FunctionDef)
