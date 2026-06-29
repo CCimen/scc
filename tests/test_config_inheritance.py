@@ -1078,27 +1078,6 @@ additional_mcp_servers:
         assert server["name"] == "local-api"
         assert server["type"] == "stdio"
 
-    def test_read_project_config_accepts_mcp_servers_alias(self, tmp_path):
-        """Should accept legacy mcp_servers as alias for additional_mcp_servers."""
-        from scc_cli.config import read_project_config
-
-        scc_yaml = tmp_path / ".scc.yaml"
-        scc_yaml.write_text("""
-mcp_servers:
-  - name: "project-api"
-    type: "sse"
-    url: "https://api.example.com/mcp"
-""")
-
-        result = read_project_config(tmp_path)
-
-        assert result is not None
-        assert "additional_mcp_servers" in result
-        server = result["additional_mcp_servers"][0]
-        assert server["name"] == "project-api"
-        assert server["type"] == "sse"
-        assert server["url"] == "https://api.example.com/mcp"
-
 
 class TestReadProjectConfigValidation:
     """Tests for project config schema validation.

@@ -405,6 +405,20 @@ class TestEffectiveConfigOwnershipBoundary:
 class TestConfigModelOwnershipBoundary:
     """Config model ports stay pure data; normalization lives in services."""
 
+    def test_project_config_has_no_mcp_servers_alias(self) -> None:
+        """Project config uses additional_mcp_servers as the only project MCP key."""
+        result = subprocess.run(
+            ["grep", "-nE", r"""['"]mcp_servers['"]""", str(SRC / "config.py")],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 1, (
+            "Project config uses additional_mcp_servers only; do not reintroduce "
+            "the pre-release mcp_servers alias.\n"
+            f"Found aliases:\n{result.stdout}"
+        )
+
     def test_normalized_config_models_do_not_reintroduce_from_dict(self) -> None:
         """Raw-to-typed normalization belongs in services/config_normalizer.py."""
         tree = ast.parse((SRC / "ports" / "config_models.py").read_text(encoding="utf-8"))
