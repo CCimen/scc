@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scc_cli.core.errors import SandboxLaunchError
-from scc_cli.docker import launch
+from scc_cli.docker import launch, sandbox
 
 # ═══════════��═══════════════════════════��══════════════════════════���════════════
 # Safety Net Policy Extraction & Validation
@@ -168,7 +168,7 @@ class TestRunSandboxFailures:
         )
 
         with pytest.raises(SandboxLaunchError, match="Failed to create Docker sandbox"):
-            launch.run_sandbox(workspace=tmp_path, ensure_credentials=True)
+            sandbox.run_sandbox(workspace=tmp_path, ensure_credentials=True)
 
     @patch("scc_cli.docker.launch.write_safety_net_policy_to_host")
     @patch("scc_cli.docker.launch.get_effective_safety_net_policy")
@@ -197,7 +197,7 @@ class TestRunSandboxFailures:
         )
 
         with pytest.raises(SandboxLaunchError, match="empty container ID"):
-            launch.run_sandbox(workspace=tmp_path, ensure_credentials=True)
+            sandbox.run_sandbox(workspace=tmp_path, ensure_credentials=True)
 
     @patch("scc_cli.docker.launch.write_safety_net_policy_to_host")
     @patch("scc_cli.docker.launch.get_effective_safety_net_policy")
@@ -234,7 +234,7 @@ class TestRunSandboxFailures:
         mock_execvp.side_effect = SystemExit(0)
 
         with pytest.raises(SystemExit):
-            launch.run_sandbox(workspace=tmp_path, ensure_credentials=True)
+            sandbox.run_sandbox(workspace=tmp_path, ensure_credentials=True)
 
         # Verify it got past reset failure to the run phase
         assert mock_run.called
@@ -262,7 +262,7 @@ class TestRunSandboxFailures:
             patch("os.execvp", side_effect=SystemExit(0)) as execvp,
         ):
             with pytest.raises(SystemExit):
-                launch.run_sandbox(workspace=tmp_path, ensure_credentials=True)
+                sandbox.run_sandbox(workspace=tmp_path, ensure_credentials=True)
 
         assert run.call_count == 2
         sleep.assert_called_once_with(0.5)
@@ -288,7 +288,7 @@ class TestRunSandboxFailures:
             patch("os.execvp", side_effect=SystemExit(0)),
         ):
             with pytest.raises(SystemExit):
-                launch.run_sandbox(
+                sandbox.run_sandbox(
                     workspace=tmp_path,
                     ensure_credentials=True,
                     plugin_settings={"enabledPlugins": {}},
@@ -319,7 +319,7 @@ class TestRunSandboxFailures:
             patch("os.execvp", side_effect=SystemExit(0)),
         ):
             with pytest.raises(SystemExit):
-                launch.run_sandbox(
+                sandbox.run_sandbox(
                     workspace=tmp_path,
                     ensure_credentials=True,
                     plugin_settings={"enabledPlugins": {}},
@@ -340,19 +340,19 @@ class TestMountRaceDetection:
 
     def test_detects_bind_source_error(self) -> None:
         """'bind source path does not exist' is a retryable mount race."""
-        assert launch._is_mount_race_error("Error: bind source path does not exist") is True
+        assert sandbox._is_mount_race_error("Error: bind source path does not exist") is True
 
     def test_detects_no_such_file(self) -> None:
         """'no such file or directory' is a retryable mount race."""
-        assert launch._is_mount_race_error("Error: no such file or directory") is True
+        assert sandbox._is_mount_race_error("Error: no such file or directory") is True
 
     def test_rejects_unrelated_error(self) -> None:
         """Unrelated Docker errors are not mount race conditions."""
-        assert launch._is_mount_race_error("permission denied") is False
+        assert sandbox._is_mount_race_error("permission denied") is False
 
     def test_case_insensitive(self) -> None:
         """Detection is case-insensitive."""
-        assert launch._is_mount_race_error("BIND SOURCE PATH DOES NOT EXIST") is True
+        assert sandbox._is_mount_race_error("BIND SOURCE PATH DOES NOT EXIST") is True
 
 
 # ═════════════════════════════════════���═════════════════════════════════════════

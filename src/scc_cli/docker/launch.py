@@ -22,16 +22,7 @@ from .core import (
     build_command,
     validate_container_filename,
 )
-
-# Re-export sandbox runtime functions for backward compatibility.
-# These were extracted to sandbox.py to keep launch.py under 800 lines.
-from .sandbox import (  # noqa: F401
-    _build_known_marketplaces_cache,
-    _is_mount_race_error,
-    inject_plugin_settings_to_container,
-    run_sandbox,
-    seed_container_plugin_marketplaces,
-)
+from .sandbox import run_sandbox as _run_sandbox
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Claude-specific Docker Desktop constants (local to this adapter)
@@ -280,8 +271,7 @@ def run(
         elif arg == "--resume":
             resume = True
 
-    # Use the new synchronous run_sandbox function
-    return run_sandbox(
+    return _run_sandbox(
         workspace=workspace,
         continue_session=continue_session,
         resume=resume,

@@ -79,8 +79,8 @@ from .launch import (
     inject_settings,
     reset_global_settings,
     run,
-    run_sandbox,
 )
+from .sandbox import run_sandbox
 
 __all__ = [
     # Constants

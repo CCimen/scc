@@ -114,6 +114,26 @@ class TestDomainDoesNotImportCLI:
         )
         assert result.returncode == 1, f"docker/ imports cli_* modules:\n{result.stdout}"
 
+    def test_docker_launch_does_not_reexport_sandbox_helpers(self) -> None:
+        """Sandbox startup behavior is owned by docker/sandbox.py."""
+        path = SRC / "docker" / "launch.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.module not in {"sandbox", "scc_cli.docker.sandbox"}:
+                continue
+            for alias in node.names:
+                if alias.name != "run_sandbox" or alias.asname != "_run_sandbox":
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {alias.name}")
+
+        assert not offenders, (
+            "docker/launch.py should call sandbox.run_sandbox privately; "
+            "do not re-export sandbox helpers from launch.py:\n" + "\n".join(offenders)
+        )
+
     def test_marketplace_does_not_import_cli_modules(self) -> None:
         """marketplace/ must not depend on cli_*.py modules."""
         result = subprocess.run(
