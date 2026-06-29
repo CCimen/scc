@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeAlias, cast
 
 import typer
 
@@ -46,6 +46,240 @@ from ...ui.gate import is_interactive_allowed
 from ...ui.picker import pick_session
 from ...ui.prompts import confirm_with_layout
 
+SessionSelectionResolution: TypeAlias = tuple[
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    bool,
+    bool,
+    str | None,
+]
+
+
+def _empty_session_resolution(team: str | None) -> SessionSelectionResolution:
+    return None, team, None, None, False, False, None
+
+
+def _cancelled_session_resolution(team: str | None) -> SessionSelectionResolution:
+    return None, team, None, None, True, False, None
+
+
+def _auto_detect_workspace(team: str | None) -> SessionSelectionResolution | None:
+    from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
+
+    context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
+    if context is None:
+        return None
+    return str(context.workspace_root), team, None, None, False, True, None
+
+
+def _effective_session_team(
+    *,
+    team: str | None,
+    cfg: dict[str, Any],
+    standalone_override: bool,
+) -> str | None:
+    if standalone_override:
+        return None
+    return team or cast(str | None, cfg.get("selected_profile"))
+
+
+def _render_missing_effective_team(command: str) -> None:
+    console.print(
+        "[yellow]No active team selected.[/yellow] "
+        f"Run 'scc team switch' or pass --team to {command}."
+    )
+
+
+def _render_no_recent_sessions(*, json_mode: bool) -> None:
+    if not json_mode:
+        console.print("[yellow]No recent sessions found.[/yellow]")
+
+
+def _session_result_resolution(
+    outcome: SelectSessionResult,
+    *,
+    team: str | None,
+    standalone_override: bool,
+    json_mode: bool,
+    label: str,
+) -> SessionSelectionResolution:
+    selected = outcome.session
+    resolved_team = team or selected.team
+    if standalone_override:
+        resolved_team = None
+    if not json_mode:
+        print_with_layout(console, f"[dim]{label}: {selected.workspace}[/dim]")
+    return selected.workspace, resolved_team, None, None, False, False, selected.provider_id
+
+
+def _resolve_interactive_workspace_entry(
+    cfg: dict[str, Any],
+    *,
+    team: str | None,
+    json_mode: bool,
+    standalone_override: bool,
+    no_interactive: bool,
+    dry_run: bool,
+) -> SessionSelectionResolution:
+    if dry_run:
+        detected = _auto_detect_workspace(team)
+        if detected is not None:
+            return detected
+        err_console.print(
+            "[red]Error:[/red] No workspace could be auto-detected.\n"
+            "[dim]Provide a workspace path: scc start --dry-run /path/to/project[/dim]",
+            highlight=False,
+        )
+        raise typer.Exit(EXIT_USAGE)
+
+    if not is_interactive_allowed(
+        json_mode=json_mode,
+        no_interactive_flag=no_interactive,
+    ):
+        detected = _auto_detect_workspace(team)
+        if detected is not None:
+            return detected
+
+        err_console.print(
+            "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
+            "[dim]Provide a workspace path: scc start /path/to/project[/dim]",
+            highlight=False,
+        )
+        raise typer.Exit(EXIT_USAGE)
+
+    from .flow_interactive import interactive_start
+
+    adapters = get_default_adapters()
+    workspace_result, team, session_name, worktree_name = cast(
+        tuple[str | None, str | None, str | None, str | None],
+        interactive_start(
+            cfg,
+            standalone_override=standalone_override,
+            team_override=team,
+            git_client=adapters.git_client,
+        ),
+    )
+    if workspace_result is None:
+        return _cancelled_session_resolution(team)
+    return workspace_result, team, session_name, worktree_name, False, False, None
+
+
+def _resolve_selected_session(
+    cfg: dict[str, Any],
+    *,
+    team: str | None,
+    json_mode: bool,
+    standalone_override: bool,
+    no_interactive: bool,
+    dependencies: SelectSessionDependencies,
+) -> SessionSelectionResolution:
+    if not is_interactive_allowed(
+        json_mode=json_mode,
+        no_interactive_flag=no_interactive,
+    ):
+        console.print(
+            "[red]Error:[/red] --select requires a terminal (TTY).\n"
+            "[dim]Use --resume to auto-select most recent session.[/dim]",
+            highlight=False,
+        )
+        raise typer.Exit(EXIT_USAGE)
+
+    effective_team = _effective_session_team(
+        team=team,
+        cfg=cfg,
+        standalone_override=standalone_override,
+    )
+    if effective_team is None and not standalone_override:
+        if not json_mode:
+            _render_missing_effective_team("select")
+        return _empty_session_resolution(team)
+
+    outcome = select_session(
+        SelectSessionRequest(
+            mode=SessionSelectionMode.SELECT,
+            team=effective_team,
+            include_all=False,
+            limit=10,
+        ),
+        dependencies=dependencies,
+    )
+
+    if isinstance(outcome, SessionSelectionWarningOutcome):
+        _render_no_recent_sessions(json_mode=json_mode)
+        return _empty_session_resolution(team)
+
+    if isinstance(outcome, SessionSelectionPrompt):
+        selected_item = _prompt_for_session_selection(outcome)
+        if selected_item is None:
+            return _cancelled_session_resolution(team)
+        outcome = select_session(
+            SelectSessionRequest(
+                mode=SessionSelectionMode.SELECT,
+                team=effective_team,
+                include_all=False,
+                limit=10,
+                selection=selected_item,
+            ),
+            dependencies=dependencies,
+        )
+
+    if isinstance(outcome, SelectSessionResult):
+        return _session_result_resolution(
+            outcome,
+            team=team,
+            standalone_override=standalone_override,
+            json_mode=json_mode,
+            label="Selected",
+        )
+
+    return _empty_session_resolution(team)
+
+
+def _resolve_resumed_session(
+    cfg: dict[str, Any],
+    *,
+    team: str | None,
+    json_mode: bool,
+    standalone_override: bool,
+    dependencies: SelectSessionDependencies,
+) -> SessionSelectionResolution:
+    effective_team = _effective_session_team(
+        team=team,
+        cfg=cfg,
+        standalone_override=standalone_override,
+    )
+    if effective_team is None and not standalone_override:
+        if not json_mode:
+            _render_missing_effective_team("resume")
+        return _empty_session_resolution(team)
+
+    outcome = select_session(
+        SelectSessionRequest(
+            mode=SessionSelectionMode.RESUME,
+            team=effective_team,
+            include_all=False,
+            limit=50,
+        ),
+        dependencies=dependencies,
+    )
+
+    if isinstance(outcome, SessionSelectionWarningOutcome):
+        _render_no_recent_sessions(json_mode=json_mode)
+        return _empty_session_resolution(team)
+
+    if isinstance(outcome, SelectSessionResult):
+        return _session_result_resolution(
+            outcome,
+            team=team,
+            standalone_override=standalone_override,
+            json_mode=json_mode,
+            label="Resuming",
+        )
+
+    return _empty_session_resolution(team)
+
 
 def _resolve_session_selection(
     workspace: str | None,
@@ -59,7 +293,7 @@ def _resolve_session_selection(
     no_interactive: bool = False,
     dry_run: bool = False,
     session_service: SessionService,
-) -> tuple[str | None, str | None, str | None, str | None, bool, bool, str | None]:
+) -> SessionSelectionResolution:
     """Handle session selection logic for --select, --resume, and interactive modes.
 
     Returns:
@@ -73,216 +307,38 @@ def _resolve_session_selection(
             session_provider_id,
         )
     """
-    session_name = None
-    worktree_name = None
-    cancelled = False
-    session_provider_id: str | None = None
-
     select_dependencies = SelectSessionDependencies(session_service=session_service)
 
-    # Interactive mode if no workspace provided and no session flags
     if workspace is None and not resume and not select:
-        # For --dry-run without workspace, use resolver to auto-detect (skip interactive)
-        if dry_run:
-            from pathlib import Path
-
-            from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
-
-            context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
-            if context is not None:
-                return (
-                    str(context.workspace_root),
-                    team,
-                    None,
-                    None,
-                    False,
-                    True,
-                    None,
-                )  # auto-detected
-            # No auto-detect possible, fall through to error
-            err_console.print(
-                "[red]Error:[/red] No workspace could be auto-detected.\n"
-                "[dim]Provide a workspace path: scc start --dry-run /path/to/project[/dim]",
-                highlight=False,
-            )
-            raise typer.Exit(EXIT_USAGE)
-
-        # Check TTY gating before entering interactive mode
-        if not is_interactive_allowed(
+        return _resolve_interactive_workspace_entry(
+            cfg,
+            team=team,
             json_mode=json_mode,
-            no_interactive_flag=no_interactive,
-        ):
-            # Try auto-detect before failing
-            from pathlib import Path
-
-            from ...application.workspace import ResolveWorkspaceRequest, resolve_workspace
-
-            context = resolve_workspace(ResolveWorkspaceRequest(cwd=Path.cwd(), workspace_arg=None))
-            if context is not None:
-                return (
-                    str(context.workspace_root),
-                    team,
-                    None,
-                    None,
-                    False,
-                    True,
-                    None,
-                )  # auto-detected
-
-            err_console.print(
-                "[red]Error:[/red] Interactive mode requires a terminal (TTY).\n"
-                "[dim]Provide a workspace path: scc start /path/to/project[/dim]",
-                highlight=False,
-            )
-            raise typer.Exit(EXIT_USAGE)
-
-        # Deferred import to avoid circular dependency
-        from .flow_interactive import interactive_start
-
-        adapters = get_default_adapters()
-        workspace_result, team, session_name, worktree_name = cast(
-            tuple[str | None, str | None, str | None, str | None],
-            interactive_start(
-                cfg,
-                standalone_override=standalone_override,
-                team_override=team,
-                git_client=adapters.git_client,
-            ),
-        )
-        if workspace_result is None:
-            return None, team, None, None, True, False, None
-        return (
-            workspace_result,
-            team,
-            session_name,
-            worktree_name,
-            False,
-            False,
-            None,
+            standalone_override=standalone_override,
+            no_interactive=no_interactive,
+            dry_run=dry_run,
         )
 
-    # Handle --select: interactive session picker
     if select and workspace is None:
-        # Check TTY gating before showing session picker
-        if not is_interactive_allowed(
+        return _resolve_selected_session(
+            cfg,
+            team=team,
             json_mode=json_mode,
-            no_interactive_flag=no_interactive,
-        ):
-            console.print(
-                "[red]Error:[/red] --select requires a terminal (TTY).\n"
-                "[dim]Use --resume to auto-select most recent session.[/dim]",
-                highlight=False,
-            )
-            raise typer.Exit(EXIT_USAGE)
-
-        # Prefer explicit --team, then selected_profile for filtering
-        effective_team = team or cfg.get("selected_profile")
-        if standalone_override:
-            effective_team = None
-
-        # If org mode and no active team, require explicit selection
-        if effective_team is None and not standalone_override:
-            if not json_mode:
-                console.print(
-                    "[yellow]No active team selected.[/yellow] "
-                    "Run 'scc team switch' or pass --team to select."
-                )
-            return None, team, None, None, False, False, None
-
-        outcome = select_session(
-            SelectSessionRequest(
-                mode=SessionSelectionMode.SELECT,
-                team=effective_team,
-                include_all=False,
-                limit=10,
-            ),
+            standalone_override=standalone_override,
+            no_interactive=no_interactive,
             dependencies=select_dependencies,
         )
 
-        if isinstance(outcome, SessionSelectionWarningOutcome):
-            if not json_mode:
-                console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None, False, False, None
-
-        if isinstance(outcome, SessionSelectionPrompt):
-            selected_item = _prompt_for_session_selection(outcome)
-            if selected_item is None:
-                return None, team, None, None, True, False, None
-            outcome = select_session(
-                SelectSessionRequest(
-                    mode=SessionSelectionMode.SELECT,
-                    team=effective_team,
-                    include_all=False,
-                    limit=10,
-                    selection=selected_item,
-                ),
-                dependencies=select_dependencies,
-            )
-
-        if isinstance(outcome, SelectSessionResult):
-            selected = outcome.session
-            workspace = selected.workspace
-            if not team:
-                team = selected.team
-            session_provider_id = selected.provider_id
-            # --standalone overrides any team from session (standalone means no team)
-            if standalone_override:
-                team = None
-            if not json_mode:
-                print_with_layout(console, f"[dim]Selected: {workspace}[/dim]")
-
-    # Handle --resume: auto-select most recent session
-    elif resume and workspace is None:
-        # Prefer explicit --team, then selected_profile for resume filtering
-        effective_team = team or cfg.get("selected_profile")
-        if standalone_override:
-            effective_team = None
-
-        # If org mode and no active team, require explicit selection
-        if effective_team is None and not standalone_override:
-            if not json_mode:
-                console.print(
-                    "[yellow]No active team selected.[/yellow] "
-                    "Run 'scc team switch' or pass --team to resume."
-                )
-            return None, team, None, None, False, False, None
-
-        outcome = select_session(
-            SelectSessionRequest(
-                mode=SessionSelectionMode.RESUME,
-                team=effective_team,
-                include_all=False,
-                limit=50,
-            ),
+    if resume and workspace is None:
+        return _resolve_resumed_session(
+            cfg,
+            team=team,
+            json_mode=json_mode,
+            standalone_override=standalone_override,
             dependencies=select_dependencies,
         )
 
-        if isinstance(outcome, SessionSelectionWarningOutcome):
-            if not json_mode:
-                console.print("[yellow]No recent sessions found.[/yellow]")
-            return None, team, None, None, False, False, None
-
-        if isinstance(outcome, SelectSessionResult):
-            recent_session = outcome.session
-            workspace = recent_session.workspace
-            if not team:
-                team = recent_session.team
-            session_provider_id = recent_session.provider_id
-            # --standalone overrides any team from session (standalone means no team)
-            if standalone_override:
-                team = None
-            if not json_mode:
-                print_with_layout(console, f"[dim]Resuming: {workspace}[/dim]")
-
-    return (
-        workspace,
-        team,
-        session_name,
-        worktree_name,
-        cancelled,
-        False,
-        session_provider_id,
-    )  # explicit workspace
+    return workspace, team, None, None, False, False, None
 
 
 def _apply_personal_profile(
