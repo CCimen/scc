@@ -12,7 +12,6 @@ from scc_cli.application.interaction_requests import (
     SelectRequest,
 )
 from scc_cli.application.launch.start_wizard import (
-    StartWizardState,
     StartWizardStep,
     WorkspaceSource,
 )
@@ -202,14 +201,3 @@ class StartWizardPrompt:
     view_model: StartWizardViewModel = None
     allow_team_switch: bool = False
     default_response: bool | None = None
-
-
-@dataclass(frozen=True)
-class StartWizardProgress:
-    """Non-terminal wizard state prompting user input."""
-
-    state: StartWizardState
-    prompt: StartWizardPrompt
-
-
-StartWizardOutcome = StartWizardProgress | StartWizardState

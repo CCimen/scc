@@ -1467,8 +1467,6 @@ class TestStartWizardModelOwnershipBoundary:
         "CwdContext",
         "QuickResumeOption",
         "QuickResumeViewModel",
-        "StartWizardOutcome",
-        "StartWizardProgress",
         "StartWizardPrompt",
         "StartWizardViewModel",
         "TeamOption",
