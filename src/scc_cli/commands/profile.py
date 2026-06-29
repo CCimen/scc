@@ -29,9 +29,7 @@ from ..confirm import Confirm
 from ..core.enums import TargetType
 from ..core.exit_codes import EXIT_USAGE
 from ..core.personal_profiles import (
-    build_diff_text,
     compute_fingerprints,
-    compute_sandbox_import_candidates,
     detect_drift,
     export_profiles_to_repo,
     extract_personal_plugins,
@@ -42,13 +40,17 @@ from ..core.personal_profiles import (
     load_personal_profile_with_status,
     load_workspace_mcp_with_status,
     load_workspace_settings_with_status,
-    merge_personal_mcp,
-    merge_personal_settings,
-    merge_sandbox_imports,
     save_applied_state,
     save_personal_profile,
     write_workspace_mcp,
     write_workspace_settings,
+)
+from ..core.personal_profiles_merge import (
+    build_diff_text,
+    compute_sandbox_import_candidates,
+    merge_personal_mcp,
+    merge_personal_settings,
+    merge_sandbox_imports,
 )
 from ..marketplace.managed import load_managed_state
 from ..subprocess_utils import run_command

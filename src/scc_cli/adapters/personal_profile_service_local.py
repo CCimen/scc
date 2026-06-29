@@ -7,6 +7,7 @@ from typing import Any
 
 from scc_cli.core import personal_profiles
 from scc_cli.core.personal_profiles import PersonalProfile
+from scc_cli.core.personal_profiles_merge import merge_personal_mcp, merge_personal_settings
 from scc_cli.marketplace.managed import load_managed_state
 from scc_cli.ports.personal_profile_service import PersonalProfileService
 
@@ -39,14 +40,14 @@ class LocalPersonalProfileService(PersonalProfileService):
         existing: dict[str, Any],
         personal: dict[str, Any],
     ) -> dict[str, Any]:
-        return personal_profiles.merge_personal_settings(
+        return merge_personal_settings(
             workspace, existing, personal, managed_state_loader=load_managed_state
         )
 
     def merge_personal_mcp(
         self, existing: dict[str, Any], personal: dict[str, Any]
     ) -> dict[str, Any]:
-        return personal_profiles.merge_personal_mcp(existing, personal)
+        return merge_personal_mcp(existing, personal)
 
     def write_workspace_settings(self, workspace: Path, data: dict[str, Any]) -> None:
         personal_profiles.write_workspace_settings(workspace, data)

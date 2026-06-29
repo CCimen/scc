@@ -3,6 +3,11 @@
 from pathlib import Path
 
 from scc_cli.core import personal_profiles
+from scc_cli.core.personal_profiles_merge import (
+    compute_sandbox_import_candidates,
+    merge_personal_settings,
+    merge_sandbox_imports,
+)
 from scc_cli.marketplace.managed import ManagedState, load_managed_state, save_managed_state
 
 
@@ -55,7 +60,7 @@ def test_merge_personal_settings_respects_managed(tmp_path: Path) -> None:
     existing = {"enabledPlugins": {"team@market": True, "user@market": True}}
     personal = {"enabledPlugins": {"team@market": False, "new@market": True}}
 
-    merged = personal_profiles.merge_personal_settings(
+    merged = merge_personal_settings(
         tmp_path, existing, personal, managed_state_loader=load_managed_state
     )
 
@@ -93,9 +98,7 @@ def test_compute_sandbox_import_candidates() -> None:
         },
     }
 
-    missing_plugins, missing_marketplaces = personal_profiles.compute_sandbox_import_candidates(
-        workspace, sandbox
-    )
+    missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(workspace, sandbox)
 
     assert missing_plugins == ["beta@market"]
     assert list(missing_marketplaces.keys()) == ["extra"]
@@ -106,7 +109,7 @@ def test_merge_sandbox_imports() -> None:
         "enabledPlugins": {"alpha@market": True},
         "extraKnownMarketplaces": {"official": {"source": {"path": "x"}}},
     }
-    merged = personal_profiles.merge_sandbox_imports(
+    merged = merge_sandbox_imports(
         workspace,
         ["beta@market"],
         {"extra": {"source": {"path": "y"}}},

@@ -13,19 +13,21 @@ from scc_cli.application.support_bundle import (
 )
 from scc_cli.core.personal_profiles import (
     compute_fingerprints,
-    compute_structured_diff,
     export_profiles_to_repo,
     import_profiles_from_repo,
     list_personal_profiles,
     load_personal_profile,
     load_workspace_mcp,
     load_workspace_settings,
-    merge_personal_mcp,
-    merge_personal_settings,
     save_applied_state,
     save_personal_profile,
     write_workspace_mcp,
     write_workspace_settings,
+)
+from scc_cli.core.personal_profiles_merge import (
+    compute_structured_diff,
+    merge_personal_mcp,
+    merge_personal_settings,
 )
 from scc_cli.doctor.core import run_doctor
 from scc_cli.maintenance import (

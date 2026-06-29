@@ -14,17 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from scc_cli import config as config_module
-
-# Re-export merge/diff symbols for backward compatibility
-from scc_cli.core.personal_profiles_merge import (  # noqa: F401
-    DiffItem,
-    StructuredDiff,
-    build_diff_text,
-    compute_sandbox_import_candidates,
-    compute_structured_diff,
-    merge_personal_mcp,
-    merge_personal_settings,
-    merge_sandbox_imports,
+from scc_cli.core.personal_profiles_merge import (
+    compute_sandbox_import_candidates as _compute_sandbox_import_candidates,
 )
 from scc_cli.subprocess_utils import run_command
 
@@ -511,10 +502,6 @@ def extract_personal_plugins(profile: PersonalProfile) -> list[str]:
     return [str(p) for p in plugins.keys()]
 
 
-def extract_personal_mcp(profile: PersonalProfile) -> dict[str, Any]:
-    return profile.mcp or {}
-
-
 def get_profile_status(workspace: Path) -> ProfileStatus:
     """Get profile status for TUI display."""
     profile = load_personal_profile(workspace)
@@ -538,7 +525,7 @@ def get_profile_status(workspace: Path) -> ProfileStatus:
         sandbox_settings = get_sandbox_settings()
         if sandbox_settings:
             workspace_settings = load_workspace_settings(workspace) or {}
-            missing_plugins, missing_marketplaces = compute_sandbox_import_candidates(
+            missing_plugins, missing_marketplaces = _compute_sandbox_import_candidates(
                 workspace_settings, sandbox_settings
             )
             import_count = len(missing_plugins) + len(missing_marketplaces)

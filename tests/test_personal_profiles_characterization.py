@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from scc_cli.core import personal_profiles
+from scc_cli.core.personal_profiles_merge import merge_personal_mcp
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -205,7 +206,7 @@ class TestMarketplaceInteraction:
         """Personal MCP config merges under existing workspace MCP."""
         existing = {"mcpServers": {"s1": {"type": "sse"}}}
         personal = {"mcpServers": {"s2": {"type": "stdio"}}}
-        merged = personal_profiles.merge_personal_mcp(existing, personal)
+        merged = merge_personal_mcp(existing, personal)
         # deep_merge merges existing into personal copy, so both should be present
         assert "s1" in merged["mcpServers"]
         assert "s2" in merged["mcpServers"]
@@ -213,13 +214,13 @@ class TestMarketplaceInteraction:
     def test_merge_personal_mcp_empty_personal_returns_existing(self) -> None:
         """Empty personal MCP config returns existing unchanged."""
         existing = {"mcpServers": {"s1": {"type": "sse"}}}
-        merged = personal_profiles.merge_personal_mcp(existing, {})
+        merged = merge_personal_mcp(existing, {})
         assert merged == existing
 
     def test_merge_personal_mcp_empty_existing_returns_personal(self) -> None:
         """Empty existing MCP config returns personal."""
         personal = {"mcpServers": {"s2": {"type": "stdio"}}}
-        merged = personal_profiles.merge_personal_mcp({}, personal)
+        merged = merge_personal_mcp({}, personal)
         assert merged == personal
 
 

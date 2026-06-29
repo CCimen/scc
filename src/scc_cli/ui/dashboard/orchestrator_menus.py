@@ -92,13 +92,12 @@ def _handle_profile_menu() -> str | None:
         load_personal_profile,
         load_workspace_mcp,
         load_workspace_settings,
-        merge_personal_mcp,
-        merge_personal_settings,
         save_applied_state,
         save_personal_profile,
         write_workspace_mcp,
         write_workspace_settings,
     )
+    from ...core.personal_profiles_merge import merge_personal_mcp, merge_personal_settings
 
     workspace = Path.cwd()
 
@@ -156,10 +155,10 @@ def _handle_profile_menu() -> str | None:
         from rich.panel import Panel
 
         from ...core.personal_profiles import (
-            compute_structured_diff,
             load_workspace_mcp,
             load_workspace_settings,
         )
+        from ...core.personal_profiles_merge import compute_structured_diff
 
         current_settings = load_workspace_settings(workspace) or {}
         current_mcp = load_workspace_mcp(workspace) or {}
@@ -240,10 +239,12 @@ def _handle_sandbox_import() -> str | None:
     from pathlib import Path
 
     from ...core.personal_profiles import (
-        compute_sandbox_import_candidates,
         load_workspace_settings,
-        merge_sandbox_imports,
         write_workspace_settings,
+    )
+    from ...core.personal_profiles_merge import (
+        compute_sandbox_import_candidates,
+        merge_sandbox_imports,
     )
     from ...docker.launch import get_sandbox_settings
 

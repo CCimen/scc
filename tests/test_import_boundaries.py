@@ -356,6 +356,31 @@ class TestProfilesCompatibilityBoundary:
         assert not problems, "\n\n".join(problems)
 
 
+class TestPersonalProfilesCompatibilityBoundary:
+    """Personal profile storage should not re-export merge/diff helpers."""
+
+    def test_personal_profiles_do_not_reexport_merge_helpers(self) -> None:
+        """Import merge/diff helpers from core.personal_profiles_merge."""
+        personal_profiles = importlib.import_module("scc_cli.core.personal_profiles")
+        banned = {
+            "DiffItem",
+            "StructuredDiff",
+            "build_diff_text",
+            "compute_sandbox_import_candidates",
+            "compute_structured_diff",
+            "merge_personal_mcp",
+            "merge_personal_settings",
+            "merge_sandbox_imports",
+        }
+        offenders = sorted(name for name in banned if hasattr(personal_profiles, name))
+
+        assert not offenders, (
+            "personal_profiles.py owns profile persistence. Import merge/diff helpers "
+            "from scc_cli.core.personal_profiles_merge instead of re-exporting them: "
+            + ", ".join(offenders)
+        )
+
+
 class TestEffectiveConfigOwnershipBoundary:
     """EffectiveConfig is the application merge result, not a marketplace result."""
 

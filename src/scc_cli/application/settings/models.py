@@ -5,7 +5,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import TypeAlias
 
-from scc_cli.core.personal_profiles import StructuredDiff
+from scc_cli.core.personal_profiles_merge import StructuredDiff
 from scc_cli.doctor.types import DoctorResult
 from scc_cli.maintenance import MaintenancePreview, PathInfo, RiskTier
 
