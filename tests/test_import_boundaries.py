@@ -356,6 +356,44 @@ class TestProfilesCompatibilityBoundary:
         assert not problems, "\n\n".join(problems)
 
 
+class TestDeprecationCompatibilityBoundary:
+    """SCC does not keep a separate deprecated-command warning subsystem."""
+
+    def test_deprecation_warning_module_stays_deleted(self) -> None:
+        """Delete deprecated command paths instead of warning around them."""
+        module = SRC / "deprecation.py"
+        problems: list[str] = []
+
+        if module.exists():
+            problems.append(
+                "Deprecated command paths should be deleted before production; "
+                f"remove {module.relative_to(REPO_ROOT)}."
+            )
+
+        result = subprocess.run(
+            [
+                "grep",
+                "-rEn",
+                "--exclude=test_import_boundaries.py",
+                "--exclude-dir=__pycache__",
+                r"(from scc_cli\.deprecation|import scc_cli\.deprecation)",
+                str(SRC),
+                str(TESTS),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            problems.append(
+                "Do not reintroduce scc_cli.deprecation imports; delete old paths instead.\n"
+                f"Found imports:\n{result.stdout}"
+            )
+        elif result.returncode != 1:
+            problems.append(f"deprecation import grep failed:\n{result.stderr}")
+
+        assert not problems, "\n\n".join(problems)
+
+
 class TestPersonalProfilesCompatibilityBoundary:
     """Personal profile storage should not re-export merge/diff helpers."""
 

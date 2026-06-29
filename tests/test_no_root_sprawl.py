@@ -70,7 +70,6 @@ ALLOWED_LEGACY = {
     "confirm.py",
     "console.py",
     "contexts.py",
-    "deprecation.py",
     "deps.py",
     "json_command.py",
     "json_output.py",
