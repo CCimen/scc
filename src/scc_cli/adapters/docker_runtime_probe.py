@@ -12,9 +12,8 @@ from scc_cli.docker import (
     check_docker_sandbox,
     get_docker_desktop_version,
     get_docker_version,
-    run_command,
-    run_command_bool,
 )
+from scc_cli.subprocess_utils import run_command, run_command_bool
 
 
 class DockerRuntimeProbe:

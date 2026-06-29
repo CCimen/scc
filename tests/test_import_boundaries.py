@@ -134,6 +134,34 @@ class TestDomainDoesNotImportCLI:
             "do not re-export sandbox helpers from launch.py:\n" + "\n".join(offenders)
         )
 
+    def test_docker_package_does_not_reexport_subprocess_helpers(self) -> None:
+        """Subprocess helpers are owned by subprocess_utils, not the docker package."""
+        path = SRC / "docker" / "__init__.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        banned = {"run_command", "run_command_bool"}
+        imported: list[str] = []
+        exported: list[str] = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                imported.extend(alias.asname or alias.name for alias in node.names)
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if not (isinstance(target, ast.Name) and target.id == "__all__"):
+                        continue
+                    if isinstance(node.value, ast.List):
+                        exported.extend(
+                            item.value
+                            for item in node.value.elts
+                            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                        )
+
+        offenders = sorted(banned.intersection(imported) | banned.intersection(exported))
+        assert not offenders, (
+            "Import subprocess helpers from scc_cli.subprocess_utils; "
+            f"do not re-export them from docker/__init__.py: {', '.join(offenders)}"
+        )
+
     def test_marketplace_does_not_import_cli_modules(self) -> None:
         """marketplace/ must not depend on cli_*.py modules."""
         result = subprocess.run(

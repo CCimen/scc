@@ -25,17 +25,15 @@ CRITICAL - DO NOT CHANGE:
 See run_sandbox() and build_command() for implementation.
 ===============================================================================
 
-Module Structure:
+Module structure:
     - core.py: Docker primitives (checks, commands, container lifecycle)
     - credentials.py: Credential persistence subsystem
-    - launch.py: High-level launch orchestration and settings
+    - launch.py: High-level launch settings helpers
+    - sandbox.py: Sandbox startup orchestration
 
-All public symbols are re-exported here for backward compatibility.
-Import from scc_cli.docker, not from submodules.
+Common Docker primitives are available at package level. Submodule-specific
+behavior should be imported from its owner module.
 """
-
-# Re-export subprocess utilities for test patching compatibility
-from ..subprocess_utils import run_command, run_command_bool
 
 # Re-export from core.py
 from .core import (
@@ -122,9 +120,6 @@ __all__ = [
     "run",
     "run_sandbox",
     "get_or_create_container",
-    # Re-exported for test patching compatibility
-    "run_command",
-    "run_command_bool",
     "_check_docker_installed",
     "_list_all_sandbox_containers",
     "_parse_version",
