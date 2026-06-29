@@ -22,7 +22,6 @@ class SessionRecord:
         branch: Git branch name for the session.
         last_used: ISO 8601 timestamp string of last use.
         created_at: ISO 8601 timestamp string of creation time.
-        schema_version: Schema version for migration support.
     """
 
     workspace: str
@@ -33,7 +32,6 @@ class SessionRecord:
     last_used: str | None = None
     created_at: str | None = None
     provider_id: str | None = None
-    schema_version: int = 2
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the record for JSON storage.
@@ -62,7 +60,6 @@ class SessionRecord:
             last_used=data.get("last_used"),
             created_at=data.get("created_at"),
             provider_id=data.get("provider_id"),
-            schema_version=data.get("schema_version", 1),
         )
 
 

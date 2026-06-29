@@ -2,18 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum, auto
 from typing import TypeAlias
 
 from scc_cli.application.sync_marketplace import SyncResult
-
-
-class LaunchOutputKind(Enum):
-    """Kinds of output events emitted by launch flows."""
-
-    INFO = auto()
-    WARNING = auto()
-    SUCCESS = auto()
 
 
 @dataclass(frozen=True)

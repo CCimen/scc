@@ -37,14 +37,6 @@ class TestSessionRecordProviderIdField:
         assert restored.provider_id == original.provider_id
         assert restored.team == original.team
 
-    def test_schema_version_defaults_to_2(self) -> None:
-        record = SessionRecord(workspace="/tmp/ws")
-        assert record.schema_version == 2
-
-    def test_from_dict_preserves_legacy_schema_version(self) -> None:
-        record = SessionRecord.from_dict({"workspace": "/tmp/ws", "schema_version": 1})
-        assert record.schema_version == 1
-
 
 class TestSessionSummaryProviderIdField:
     """SessionSummary carries provider_id."""

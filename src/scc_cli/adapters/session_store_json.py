@@ -16,11 +16,10 @@ from scc_cli.utils.locks import file_lock, lock_path
 
 @dataclass(frozen=True)
 class JsonSessionStore:
-    """Persist session records in the legacy JSON schema.
+    """Persist session records in JSON.
 
     Invariants:
         - JSON payload remains `{ "sessions": [...] }` with stable field names.
-        - Legacy migrations run on load ("base" team -> None).
 
     Args:
         filesystem: Filesystem adapter used to read/write session data.
@@ -52,7 +51,7 @@ class JsonSessionStore:
         try:
             data = json.loads(self.filesystem.read_text(self.sessions_file))
             sessions = cast(list[dict[str, Any]], data.get("sessions", []))
-            return [SessionRecord.from_dict(item) for item in _migrate_legacy_sessions(sessions)]
+            return [SessionRecord.from_dict(item) for item in sessions]
         except (OSError, json.JSONDecodeError, TypeError):
             return []
 
@@ -64,21 +63,3 @@ class JsonSessionStore:
         """
         payload = {"sessions": [record.to_dict() for record in sessions]}
         self.filesystem.write_text(self.sessions_file, json.dumps(payload, indent=2))
-
-
-def _migrate_legacy_sessions(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Apply legacy migrations to session records.
-
-    Invariants:
-        - "base" team sentinel becomes None for standalone sessions.
-
-    Args:
-        sessions: Raw session dictionaries loaded from disk.
-
-    Returns:
-        Migrated session dictionaries.
-    """
-    for session in sessions:
-        if session.get("team") == "base":
-            session["team"] = None
-    return sessions

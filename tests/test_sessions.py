@@ -421,90 +421,36 @@ class TestRemoveSession:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Tests for Legacy Migration (Phase 1.2)
+# Tests for current session JSON shape
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestLegacyMigration:
-    """Tests for legacy session migration during load."""
+class TestSessionJsonShape:
+    """Tests for the current session JSON shape."""
 
-    def test_migrates_base_team_to_none(self, sessions_file):
-        """Sessions with team='base' should be migrated to team=None (standalone)."""
-        legacy_sessions = [
-            {
-                "workspace": "/tmp/legacy-project",
-                "team": "base",  # Old hardcoded fallback
-                "last_used": datetime.now().isoformat(),
-            }
-        ]
-        sessions_file.write_text(json.dumps({"sessions": legacy_sessions}))
+    def test_base_team_is_preserved(self, sessions_file):
+        """The team named 'base' is a real team name, not a migration sentinel."""
+        sessions_file.write_text(
+            json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "workspace": "/tmp/base-project",
+                            "team": "base",
+                            "last_used": datetime.now().isoformat(),
+                        }
+                    ]
+                }
+            )
+        )
 
         result = sessions.get_most_recent()
 
         assert result is not None
-        assert result.team is None  # Migrated from "base"
+        assert result.team == "base"
 
-    def test_preserves_valid_team_names(self, sessions_file):
-        """Sessions with actual team names should not be modified."""
-        valid_sessions = [
-            {
-                "workspace": "/tmp/project",
-                "team": "platform",
-                "last_used": datetime.now().isoformat(),
-            }
-        ]
-        sessions_file.write_text(json.dumps({"sessions": valid_sessions}))
-
-        result = sessions.get_most_recent()
-
-        assert result is not None
-        assert result.team == "platform"
-
-    def test_preserves_none_team(self, sessions_file):
-        """Sessions with team=None should remain None."""
-        none_team_sessions = [
-            {
-                "workspace": "/tmp/standalone-project",
-                "team": None,
-                "last_used": datetime.now().isoformat(),
-            }
-        ]
-        sessions_file.write_text(json.dumps({"sessions": none_team_sessions}))
-
-        result = sessions.get_most_recent()
-
-        assert result is not None
-        assert result.team is None
-
-    def test_migration_does_not_persist_without_save(self, sessions_file):
-        """Migration happens in memory; original file unchanged until save."""
-        legacy_sessions = [
-            {
-                "workspace": "/tmp/legacy",
-                "team": "base",
-                "last_used": datetime.now().isoformat(),
-            }
-        ]
-        sessions_file.write_text(json.dumps({"sessions": legacy_sessions}))
-
-        # Just load, don't save
-        sessions.get_most_recent()
-
-        # File should still have "base"
-        raw = json.loads(sessions_file.read_text())
-        assert raw["sessions"][0]["team"] == "base"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tests for schema_version (Phase 1.3)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TestSchemaVersion:
-    """Tests for schema_version field in SessionRecord."""
-
-    def test_new_session_has_schema_version(self, sessions_file):
-        """New sessions should have schema_version=2."""
+    def test_new_session_has_no_schema_version(self, sessions_file):
+        """Local session records do not carry unused compatibility versioning."""
         sessions_file.write_text(json.dumps({"sessions": []}))
 
         record = sessions.record_session(
@@ -512,41 +458,27 @@ class TestSchemaVersion:
             team="dev",
         )
 
-        assert record.schema_version == 2
-
-        # Verify saved
+        assert not hasattr(record, "schema_version")
         saved = json.loads(sessions_file.read_text())
-        assert saved["sessions"][0].get("schema_version") == 2
+        assert "schema_version" not in saved["sessions"][0]
 
-    def test_legacy_session_without_schema_version_defaults_to_1(self, sessions_file):
-        """Sessions without schema_version should default to 1 when loaded."""
-        legacy_session = [
-            {
-                "workspace": "/tmp/old-project",
-                "team": "platform",
-                "last_used": datetime.now().isoformat(),
-                # No schema_version field
-            }
-        ]
-        sessions_file.write_text(json.dumps({"sessions": legacy_session}))
-
-        raw = json.loads(sessions_file.read_text())["sessions"][0]
-        record = SessionRecord.from_dict(raw)
-
-        assert record.schema_version == 1
-
-    def test_schema_version_preserved_on_update(self, sessions_file):
-        """schema_version should be preserved when updating existing session."""
-        initial = [
-            {
-                "workspace": "/tmp/proj",
-                "branch": "main",
-                "schema_version": 1,
-                "last_used": "2024-01-01T00:00:00",
-                "created_at": "2024-01-01T00:00:00",
-            }
-        ]
-        sessions_file.write_text(json.dumps({"sessions": initial}))
+    def test_ignored_input_schema_version_is_not_rewritten(self, sessions_file):
+        """Old schema_version input is ignored on the next write."""
+        sessions_file.write_text(
+            json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "schema_version": 1,
+                            "last_used": "2024-01-01T00:00:00",
+                            "created_at": "2024-01-01T00:00:00",
+                        }
+                    ]
+                }
+            )
+        )
 
         sessions.record_session(
             workspace="/tmp/proj",
@@ -555,7 +487,7 @@ class TestSchemaVersion:
         )
 
         saved = json.loads(sessions_file.read_text())
-        assert saved["sessions"][0].get("schema_version") == 1
+        assert "schema_version" not in saved["sessions"][0]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -668,7 +600,6 @@ class TestSessionService:
             branch="main",
             last_used="2024-01-02T00:00:00",
             created_at="2024-01-01T00:00:00",
-            schema_version=1,
         )
         store = FakeSessionStore([existing])
         service = SessionService(store)

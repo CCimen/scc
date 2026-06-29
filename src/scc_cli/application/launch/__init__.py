@@ -16,7 +16,6 @@ from scc_cli.application.launch.finalize_launch import (
 from scc_cli.application.launch.output_models import (
     LaunchInfoEvent,
     LaunchOutputEvent,
-    LaunchOutputKind,
     LaunchOutputViewModel,
     LaunchSuccessEvent,
     LaunchWarningEvent,
@@ -133,7 +132,6 @@ __all__ = [
     "build_clone_repo_prompt",
     "LaunchInfoEvent",
     "LaunchOutputEvent",
-    "LaunchOutputKind",
     "LaunchOutputViewModel",
     "LaunchSuccessEvent",
     "LaunchWarningEvent",

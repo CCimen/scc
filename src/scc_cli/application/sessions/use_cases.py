@@ -85,9 +85,6 @@ class SessionService:
             sessions = self.store.load_sessions()
             existing_index = _find_session_index(sessions, workspace, branch)
             created_at = sessions[existing_index].created_at if existing_index is not None else now
-            schema_ver = (
-                sessions[existing_index].schema_version if existing_index is not None else 2
-            )
             record = SessionRecord(
                 workspace=workspace,
                 team=team,
@@ -97,7 +94,6 @@ class SessionService:
                 last_used=now,
                 created_at=created_at,
                 provider_id=provider_id,
-                schema_version=schema_ver,
             )
             if existing_index is not None:
                 sessions[existing_index] = record
@@ -134,7 +130,6 @@ class SessionService:
                         last_used=now,
                         created_at=record.created_at,
                         provider_id=record.provider_id,
-                        schema_version=record.schema_version,
                     )
                     sessions[sessions.index(record)] = updated
                     break
