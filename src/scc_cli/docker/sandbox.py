@@ -17,7 +17,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from ..core.errors import SandboxLaunchError
 from .core import build_command
@@ -209,6 +209,165 @@ def inject_plugin_settings_to_container(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _reset_global_settings_for_sandbox() -> None:
+    # Deferred import avoids the launch<->sandbox cycle and keeps test patch points stable.
+    from .launch import reset_global_settings
+
+    if not reset_global_settings():
+        logger.warning(
+            "Failed to reset global settings. Plugin mixing may occur if switching teams."
+        )
+
+
+def _write_safety_net_policy(org_config: dict[str, Any] | None) -> Path | None:
+    from .launch import (
+        get_effective_safety_net_policy,
+        write_safety_net_policy_to_host,
+    )
+
+    effective_policy = get_effective_safety_net_policy(org_config)
+    return write_safety_net_policy_to_host(effective_policy)
+
+
+def _start_detached_container(detached_cmd: list[str]) -> str:
+    max_retries = 5
+    base_delay = 0.5  # Start with 500ms, exponential backoff
+    last_result: subprocess.CompletedProcess[str] | None = None
+
+    for attempt in range(max_retries):
+        result = subprocess.run(
+            detached_cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        last_result = result
+
+        if result.returncode == 0:
+            break
+
+        if _is_mount_race_error(result.stderr) and attempt < max_retries - 1:
+            delay = base_delay * (2**attempt)  # 0.5s, 1s, 2s, 4s
+            logger.warning(
+                "Docker mount race detected, retrying in %.1fs (%d/%d)...",
+                delay,
+                attempt + 1,
+                max_retries,
+            )
+            time.sleep(delay)
+        else:
+            break
+
+    if last_result is None or last_result.returncode != 0:
+        stderr = last_result.stderr if last_result else ""
+        raise SandboxLaunchError(
+            user_message="Failed to create Docker sandbox",
+            command=" ".join(detached_cmd),
+            stderr=stderr,
+        )
+
+    container_id = last_result.stdout.strip()
+    if not container_id:
+        raise SandboxLaunchError(
+            user_message="Docker sandbox returned empty container ID",
+            command=" ".join(detached_cmd),
+        )
+
+    return container_id
+
+
+def _inject_container_plugin_settings(
+    container_id: str,
+    plugin_settings: dict[str, Any] | None,
+) -> None:
+    if not plugin_settings:
+        return
+
+    if not inject_plugin_settings_to_container(container_id, plugin_settings):
+        logger.warning(
+            "Failed to inject plugin settings. SCC-managed plugins may not be available."
+        )
+    elif not seed_container_plugin_marketplaces(container_id, plugin_settings):
+        logger.warning(
+            "Failed to pre-seed plugin marketplaces after settings injection. "
+            "Claude may show transient plugin lookup errors."
+        )
+
+
+def _exec_claude_in_container(
+    *,
+    container_id: str,
+    workspace: Path | None,
+    container_workdir: Path | None,
+    continue_session: bool,
+    resume: bool,
+) -> NoReturn:
+    exec_workdir = container_workdir if container_workdir else workspace
+    exec_cmd = ["docker", "exec", "-it", "-w", str(exec_workdir), container_id, "claude"]
+
+    # Safe in this path because Docker Desktop sandbox already provides isolation.
+    exec_cmd.append("--dangerously-skip-permissions")
+
+    if continue_session:
+        exec_cmd.append("-c")
+    elif resume:
+        exec_cmd.append("--resume")
+
+    os.execvp("docker", exec_cmd)
+    raise SandboxLaunchError(
+        user_message="Failed to exec into Docker sandbox",
+        command=" ".join(exec_cmd),
+    )
+
+
+def _run_credential_sandbox(
+    *,
+    workspace: Path | None,
+    container_workdir: Path | None,
+    continue_session: bool,
+    resume: bool,
+    plugin_settings: dict[str, Any] | None,
+    policy_host_path: Path | None,
+    env_vars: dict[str, str] | None,
+) -> NoReturn:
+    # Sync credentials from existing containers to volume.
+    _sync_credentials_from_existing_containers()
+
+    # Pre-initialize volume files to prevent EOF race conditions.
+    _preinit_credential_volume()
+
+    detached_cmd = build_command(
+        workspace=workspace,
+        detached=True,
+        policy_host_path=policy_host_path,
+        env_vars=env_vars,
+    )
+    container_id = _start_detached_container(detached_cmd)
+
+    _create_symlinks_in_container(container_id)
+    _start_migration_loop(container_id)
+    _inject_container_plugin_settings(container_id, plugin_settings)
+    _exec_claude_in_container(
+        container_id=container_id,
+        workspace=workspace,
+        container_workdir=container_workdir,
+        continue_session=continue_session,
+        resume=resume,
+    )
+
+
+def _run_noncredential_sandbox(cmd: list[str]) -> int:
+    if os.name != "nt":
+        os.execvp(cmd[0], cmd)
+        raise SandboxLaunchError(
+            user_message="Failed to start Docker sandbox",
+            command=" ".join(cmd),
+        )
+
+    result = subprocess.run(cmd, text=True)
+    return result.returncode
+
+
 def run_sandbox(
     workspace: Path | None = None,
     continue_session: bool = False,
@@ -256,170 +415,32 @@ def run_sandbox(
     Raises:
         SandboxLaunchError: If Docker command fails to start
     """
-    # Import sibling functions via module to keep test-patch compatibility.
-    # Tests patch scc_cli.docker.sandbox.<name>; direct imports would bind
-    # at import-time and be immune to patches.
-    from .launch import (
-        get_effective_safety_net_policy,
-        reset_global_settings,
-        write_safety_net_policy_to_host,
-    )
-
     try:
-        # STEP 0: Reset global settings to prevent plugin mixing across teams
-        # This ensures only workspace settings.local.json drives plugins.
-        # Called once per scc start flow, before container exec.
-        if not reset_global_settings():
-            logger.warning(
-                "Failed to reset global settings. Plugin mixing may occur if switching teams."
-            )
-
-        # ALWAYS write policy file and get host path (even without org config)
-        # This ensures the mount is present from first launch, avoiding
-        # sandbox reuse issues when safety-net is enabled later.
-        # If no org config, uses default {"action": "block"} (fail-safe).
-        effective_policy = get_effective_safety_net_policy(org_config)
-        policy_host_path = write_safety_net_policy_to_host(effective_policy)
-        # Note: policy_host_path may be None if write failed - build_command
-        # will handle this gracefully (no mount, plugin uses internal defaults)
+        _reset_global_settings_for_sandbox()
+        policy_host_path = _write_safety_net_policy(org_config)
 
         if os.name != "nt" and ensure_credentials:
-            # STEP 1: Sync credentials from existing containers to volume
-            # This copies credentials from project A's container when starting project B
-            _sync_credentials_from_existing_containers()
-
-            # STEP 2: Pre-initialize volume files (prevents EOF race condition)
-            _preinit_credential_volume()
-
-            # STEP 3: Start container in DETACHED mode (no Claude running yet)
-            # Use retry-with-backoff for Docker Desktop VirtioFS race conditions
-            # (newly created files may not be immediately visible to Docker)
-            detached_cmd = build_command(
+            _run_credential_sandbox(
                 workspace=workspace,
-                detached=True,
-                policy_host_path=policy_host_path,
-                env_vars=env_vars,
-            )
-
-            max_retries = 5
-            base_delay = 0.5  # Start with 500ms, exponential backoff
-            last_result: subprocess.CompletedProcess[str] | None = None
-
-            for attempt in range(max_retries):
-                result = subprocess.run(
-                    detached_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                last_result = result
-
-                if result.returncode == 0:
-                    break  # Success!
-
-                # Check if this is a retryable mount race error
-                if _is_mount_race_error(result.stderr) and attempt < max_retries - 1:
-                    delay = base_delay * (2**attempt)  # 0.5s, 1s, 2s, 4s
-                    logger.warning(
-                        "Docker mount race detected, retrying in %.1fs (%d/%d)...",
-                        delay,
-                        attempt + 1,
-                        max_retries,
-                    )
-                    time.sleep(delay)
-                else:
-                    # Non-retryable error or last attempt failed
-                    break
-
-            # After retry loop, check final result
-            if last_result is None or last_result.returncode != 0:
-                stderr = last_result.stderr if last_result else ""
-                raise SandboxLaunchError(
-                    user_message="Failed to create Docker sandbox",
-                    command=" ".join(detached_cmd),
-                    stderr=stderr,
-                )
-
-            container_id = last_result.stdout.strip()
-            if not container_id:
-                raise SandboxLaunchError(
-                    user_message="Docker sandbox returned empty container ID",
-                    command=" ".join(detached_cmd),
-                )
-
-            # STEP 4: Create symlinks BEFORE Claude starts
-            # This is the KEY fix - symlinks exist BEFORE Claude reads config
-            _create_symlinks_in_container(container_id)
-
-            # STEP 5: Start background migration loop for first-time login
-            # This runs in background to capture OAuth tokens during login
-            _start_migration_loop(container_id)
-
-            # STEP 5.5: Inject plugin settings to container HOME (if provided)
-            # This writes extraKnownMarketplaces and enabledPlugins to
-            # /home/agent/.claude/settings.json - preventing host leakage
-            # while ensuring container Claude can access SCC-managed plugins
-            if plugin_settings:
-                if not inject_plugin_settings_to_container(container_id, plugin_settings):
-                    logger.warning(
-                        "Failed to inject plugin settings. "
-                        "SCC-managed plugins may not be available."
-                    )
-                elif not seed_container_plugin_marketplaces(container_id, plugin_settings):
-                    logger.warning(
-                        "Failed to pre-seed plugin marketplaces after settings injection. "
-                        "Claude may show transient plugin lookup errors."
-                    )
-
-            # STEP 6: Exec Claude interactively (replaces current process)
-            # Claude binary is at /home/agent/.local/bin/claude
-            # Use -w to set working directory so Claude finds .claude/settings.local.json
-            # For worktrees: workspace is mount path (parent), container_workdir is actual workspace
-            exec_workdir = container_workdir if container_workdir else workspace
-            exec_cmd = ["docker", "exec", "-it", "-w", str(exec_workdir), container_id, "claude"]
-
-            # Skip permission prompts by default - safe since we're in a sandbox container
-            # The Docker sandbox already provides isolation, so the extra prompts are redundant
-            exec_cmd.append("--dangerously-skip-permissions")
-
-            # Add Claude-specific flags
-            if continue_session:
-                exec_cmd.append("-c")
-            elif resume:
-                exec_cmd.append("--resume")
-
-            # Replace current process with docker exec
-            os.execvp("docker", exec_cmd)
-
-            # If execvp returns, something went wrong
-            raise SandboxLaunchError(
-                user_message="Failed to exec into Docker sandbox",
-                command=" ".join(exec_cmd),
-            )
-
-        else:
-            # Non-credential mode or Windows: use legacy flow
-            # Policy injection still applies - mount is always present
-            # NOTE: Legacy path uses workspace for BOTH mount and CWD via -w flag.
-            # Worktrees require the exec path (credential mode) for separate mount/CWD.
-            cmd = build_command(
-                workspace=workspace,
+                container_workdir=container_workdir,
                 continue_session=continue_session,
                 resume=resume,
-                detached=False,
+                plugin_settings=plugin_settings,
                 policy_host_path=policy_host_path,
                 env_vars=env_vars,
             )
 
-            if os.name != "nt":
-                os.execvp(cmd[0], cmd)
-                raise SandboxLaunchError(
-                    user_message="Failed to start Docker sandbox",
-                    command=" ".join(cmd),
-                )
-            else:
-                result = subprocess.run(cmd, text=True)
-                return result.returncode
+        # Non-credential mode or Windows: this path uses workspace for both
+        # mount and cwd. Worktrees require the credential exec path above.
+        cmd = build_command(
+            workspace=workspace,
+            continue_session=continue_session,
+            resume=resume,
+            detached=False,
+            policy_host_path=policy_host_path,
+            env_vars=env_vars,
+        )
+        return _run_noncredential_sandbox(cmd)
 
     except subprocess.TimeoutExpired:
         raise SandboxLaunchError(

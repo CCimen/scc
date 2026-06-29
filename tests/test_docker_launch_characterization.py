@@ -239,6 +239,96 @@ class TestRunSandboxFailures:
         # Verify it got past reset failure to the run phase
         assert mock_run.called
 
+    def test_mount_race_retries_then_execs_container(self, tmp_path: Path) -> None:
+        """A retryable mount race sleeps once, retries, then execs the container."""
+        first = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="Error: bind source path does not exist",
+        )
+        second = MagicMock(returncode=0, stdout="container123\n", stderr="")
+
+        with (
+            patch("os.name", "posix"),
+            patch("scc_cli.docker.launch.write_safety_net_policy_to_host", return_value=None),
+            patch("scc_cli.docker.launch.get_effective_safety_net_policy", return_value={}),
+            patch("scc_cli.docker.launch.reset_global_settings", return_value=True),
+            patch("scc_cli.docker.sandbox._sync_credentials_from_existing_containers"),
+            patch("scc_cli.docker.sandbox._preinit_credential_volume"),
+            patch("scc_cli.docker.sandbox._create_symlinks_in_container"),
+            patch("scc_cli.docker.sandbox._start_migration_loop"),
+            patch("scc_cli.docker.sandbox.time.sleep") as sleep,
+            patch("subprocess.run", side_effect=[first, second]) as run,
+            patch("os.execvp", side_effect=SystemExit(0)) as execvp,
+        ):
+            with pytest.raises(SystemExit):
+                launch.run_sandbox(workspace=tmp_path, ensure_credentials=True)
+
+        assert run.call_count == 2
+        sleep.assert_called_once_with(0.5)
+        exec_args = execvp.call_args.args[1]
+        assert exec_args[:6] == ["docker", "exec", "-it", "-w", str(tmp_path), "container123"]
+
+    def test_plugin_seed_skipped_when_settings_injection_fails(self, tmp_path: Path) -> None:
+        """Marketplace seed only runs after settings injection succeeds."""
+        with (
+            patch("os.name", "posix"),
+            patch("scc_cli.docker.launch.write_safety_net_policy_to_host", return_value=None),
+            patch("scc_cli.docker.launch.get_effective_safety_net_policy", return_value={}),
+            patch("scc_cli.docker.launch.reset_global_settings", return_value=True),
+            patch("scc_cli.docker.sandbox._sync_credentials_from_existing_containers"),
+            patch("scc_cli.docker.sandbox._preinit_credential_volume"),
+            patch("scc_cli.docker.sandbox._create_symlinks_in_container"),
+            patch("scc_cli.docker.sandbox._start_migration_loop"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="container123")),
+            patch(
+                "scc_cli.docker.sandbox.inject_plugin_settings_to_container", return_value=False
+            ) as inject,
+            patch("scc_cli.docker.sandbox.seed_container_plugin_marketplaces") as seed,
+            patch("os.execvp", side_effect=SystemExit(0)),
+        ):
+            with pytest.raises(SystemExit):
+                launch.run_sandbox(
+                    workspace=tmp_path,
+                    ensure_credentials=True,
+                    plugin_settings={"enabledPlugins": {}},
+                )
+
+        inject.assert_called_once_with("container123", {"enabledPlugins": {}})
+        seed.assert_not_called()
+
+    def test_plugin_seed_runs_after_settings_injection_succeeds(self, tmp_path: Path) -> None:
+        """Marketplace seed failure warns but does not block container exec."""
+        with (
+            patch("os.name", "posix"),
+            patch("scc_cli.docker.launch.write_safety_net_policy_to_host", return_value=None),
+            patch("scc_cli.docker.launch.get_effective_safety_net_policy", return_value={}),
+            patch("scc_cli.docker.launch.reset_global_settings", return_value=True),
+            patch("scc_cli.docker.sandbox._sync_credentials_from_existing_containers"),
+            patch("scc_cli.docker.sandbox._preinit_credential_volume"),
+            patch("scc_cli.docker.sandbox._create_symlinks_in_container"),
+            patch("scc_cli.docker.sandbox._start_migration_loop"),
+            patch("subprocess.run", return_value=MagicMock(returncode=0, stdout="container123")),
+            patch(
+                "scc_cli.docker.sandbox.inject_plugin_settings_to_container", return_value=True
+            ) as inject,
+            patch(
+                "scc_cli.docker.sandbox.seed_container_plugin_marketplaces", return_value=False
+            ) as seed,
+            patch("scc_cli.docker.sandbox.logger.warning") as warning,
+            patch("os.execvp", side_effect=SystemExit(0)),
+        ):
+            with pytest.raises(SystemExit):
+                launch.run_sandbox(
+                    workspace=tmp_path,
+                    ensure_credentials=True,
+                    plugin_settings={"enabledPlugins": {}},
+                )
+
+        inject.assert_called_once_with("container123", {"enabledPlugins": {}})
+        seed.assert_called_once_with("container123", {"enabledPlugins": {}})
+        assert any("pre-seed plugin marketplaces" in str(call) for call in warning.call_args_list)
+
 
 # ══════════════��═══════════════════════���═════════════════════════════════���══════
 # Mount Race Detection
