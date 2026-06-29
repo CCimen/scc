@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +21,31 @@ runner = CliRunner()
 
 def _json_output(output: str) -> dict[str, Any]:
     return json.loads(output)
+
+
+def _subprocess_env(home: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["XDG_CONFIG_HOME"] = str(home / ".config")
+    env["XDG_CACHE_HOME"] = str(home / ".cache")
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(Path(__file__).resolve().parents[2] / "src"), env.get("PYTHONPATH", "")]
+    )
+    return env
+
+
+def _run_scc_subprocess(
+    args: list[str], *, home: Path, cwd: Path
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "scc_cli.cli", *args],
+        cwd=cwd,
+        env=_subprocess_env(home),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
 
 
 def _enterprise_org_config() -> dict[str, Any]:
@@ -83,6 +111,39 @@ def test_standalone_setup_and_project_init(e2e_config_paths, tmp_path: Path) -> 
     assert init_payload["data"]["created"] is True
     assert Path(init_payload["data"]["file_path"]) == workspace / ".scc.yaml"
     assert (workspace / ".scc.yaml").exists()
+
+
+def test_subprocess_standalone_setup_and_init_use_isolated_home(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    workspace = tmp_path / "subprocess-project"
+    workspace.mkdir()
+
+    setup_result = _run_scc_subprocess(
+        ["setup", "--standalone", "--non-interactive"],
+        home=home,
+        cwd=tmp_path,
+    )
+    assert setup_result.returncode == 0, setup_result.stderr + setup_result.stdout
+
+    config_file = home / ".config" / "scc" / "config.json"
+    config_payload = json.loads(config_file.read_text())
+    assert config_payload["standalone"] is True
+    assert config_payload["organization_source"] is None
+
+    get_result = _run_scc_subprocess(["config", "get", "standalone"], home=home, cwd=tmp_path)
+    assert get_result.returncode == 0, get_result.stderr + get_result.stdout
+    assert get_result.stdout.strip() == "True"
+
+    init_result = _run_scc_subprocess(
+        ["init", str(workspace), "--json"],
+        home=home,
+        cwd=tmp_path,
+    )
+    assert init_result.returncode == 0, init_result.stderr + init_result.stdout
+    init_payload = _json_output(init_result.stdout)
+    assert init_payload["kind"] == "InitResult"
+    assert init_payload["status"]["ok"] is True
+    assert Path(init_payload["data"]["file_path"]) == workspace / ".scc.yaml"
 
 
 def test_org_team_project_effective_config_journey(
