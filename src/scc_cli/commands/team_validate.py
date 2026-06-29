@@ -25,6 +25,77 @@ from ..output_mode import is_json_mode
 from ..panels import create_warning_panel
 
 
+def _validation_error_response(
+    *,
+    team_name: str | None,
+    title: str,
+    message: str,
+    error: str,
+    hint: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not is_json_mode():
+        console.print(create_warning_panel(title, message, hint or ""))
+
+    response: dict[str, Any] = {
+        "mode": "team",
+        "team": team_name,
+        "valid": False,
+        "error": error,
+    }
+    if extra:
+        response.update(extra)
+    return response
+
+
+def _validation_success_response(
+    *,
+    effective: MarketplaceResolution,
+    team_name: str,
+    verbose: bool,
+    json_output: bool,
+    pretty: bool,
+) -> dict[str, Any]:
+    if not is_json_mode():
+        _render_validation_result(effective, verbose)
+
+    response: dict[str, Any] = {
+        "mode": "team",
+        "team": team_name,
+        "valid": not effective.has_security_violations,
+        "is_federated": effective.is_federated,
+        "enabled_plugins_count": effective.plugin_count,
+        "blocked_plugins_count": len(effective.blocked_plugins),
+        "disabled_plugins_count": len(effective.disabled_plugins),
+        "not_allowed_plugins_count": len(effective.not_allowed_plugins),
+    }
+
+    if effective.is_federated:
+        response["config_source"] = effective.source_description
+        if effective.config_commit_sha:
+            response["config_commit_sha"] = effective.config_commit_sha
+        if effective.config_etag:
+            response["config_etag"] = effective.config_etag
+
+    if effective.used_cached_config:
+        response["used_cached_config"] = True
+        response["cache_is_stale"] = effective.cache_is_stale
+        if effective.staleness_warning:
+            response["staleness_warning"] = effective.staleness_warning
+
+    if verbose or json_output or pretty:
+        response["enabled_plugins"] = sorted(effective.enabled_plugins)
+        response["blocked_plugins"] = [
+            {"plugin_id": bp.plugin_id, "reason": bp.reason, "pattern": bp.pattern}
+            for bp in effective.blocked_plugins
+        ]
+        response["disabled_plugins"] = effective.disabled_plugins
+        response["not_allowed_plugins"] = effective.not_allowed_plugins
+        response["extra_marketplaces"] = effective.extra_marketplaces
+
+    return response
+
+
 def team_validate(
     team_name: str | None = typer.Argument(
         None, help="Team name to validate (defaults to current)"
@@ -50,20 +121,13 @@ def team_validate(
     from .team import _looks_like_path, _validate_team_config_file
 
     if file and team_name:
-        if not is_json_mode():
-            console.print(
-                create_warning_panel(
-                    "Conflicting Inputs",
-                    "Use either TEAM_NAME or --file, not both.",
-                    "Examples: scc team validate backend | scc team validate --file team.json",
-                )
-            )
-        return {
-            "mode": "team",
-            "team": team_name,
-            "valid": False,
-            "error": "Conflicting inputs: provide TEAM_NAME or --file, not both",
-        }
+        return _validation_error_response(
+            team_name=team_name,
+            title="Conflicting Inputs",
+            message="Use either TEAM_NAME or --file, not both.",
+            hint="Examples: scc team validate backend | scc team validate --file team.json",
+            error="Conflicting inputs: provide TEAM_NAME or --file, not both",
+        )
 
     # File validation mode (explicit or detected)
     if file or (team_name and _looks_like_path(team_name)):
@@ -75,156 +139,75 @@ def team_validate(
         cfg = config.load_user_config()
         team_name = cfg.get("selected_profile")
         if not team_name:
-            if not is_json_mode():
-                console.print(
-                    create_warning_panel(
-                        "No Team Selected",
-                        "No team provided and no current team is selected.",
-                        "Run 'scc team list' or 'scc team switch <team>' to select one.",
-                    )
-                )
-            return {
-                "mode": "team",
-                "team": None,
-                "valid": False,
-                "error": "No team selected",
-            }
+            return _validation_error_response(
+                team_name=None,
+                title="No Team Selected",
+                message="No team provided and no current team is selected.",
+                hint="Run 'scc team list' or 'scc team switch <team>' to select one.",
+                error="No team selected",
+            )
 
     org_config_data = config.load_cached_org_config()
     if not org_config_data:
-        if not is_json_mode():
-            console.print(
-                create_warning_panel(
-                    "No Org Config",
-                    "No organization configuration found.",
-                    "Run 'scc setup' to configure your organization",
-                )
-            )
-        return {
-            "mode": "team",
-            "team": team_name,
-            "valid": False,
-            "error": "No organization configuration found",
-        }
+        return _validation_error_response(
+            team_name=team_name,
+            title="No Org Config",
+            message="No organization configuration found.",
+            hint="Run 'scc setup' to configure your organization",
+            error="No organization configuration found",
+        )
 
     # Parse org config
     try:
         org_config = OrganizationConfig.model_validate(normalize_org_config_data(org_config_data))
     except Exception as e:
-        if not is_json_mode():
-            console.print(
-                create_warning_panel(
-                    "Invalid Org Config",
-                    f"Organization configuration is invalid: {e}",
-                    "Run 'scc org update' to refresh your configuration",
-                )
-            )
-        return {
-            "mode": "team",
-            "team": team_name,
-            "valid": False,
-            "error": f"Invalid org config: {e}",
-        }
+        return _validation_error_response(
+            team_name=team_name,
+            title="Invalid Org Config",
+            message=f"Organization configuration is invalid: {e}",
+            hint="Run 'scc org update' to refresh your configuration",
+            error=f"Invalid org config: {e}",
+        )
 
     # Resolve effective config
+    assert team_name is not None
     try:
         effective = resolve_effective_config(org_config, team_name)
     except TeamNotFoundError as e:
-        if not is_json_mode():
-            console.print(
-                create_warning_panel(
-                    "Team Not Found",
-                    f"Team '{team_name}' not found in org config.",
-                    f"Available teams: {', '.join(e.available_teams[:5])}",
-                )
-            )
-        return {
-            "mode": "team",
-            "team": team_name,
-            "valid": False,
-            "error": f"Team not found: {team_name}",
-            "available_teams": e.available_teams,
-        }
+        return _validation_error_response(
+            team_name=team_name,
+            title="Team Not Found",
+            message=f"Team '{team_name}' not found in org config.",
+            hint=f"Available teams: {', '.join(e.available_teams[:5])}",
+            error=f"Team not found: {team_name}",
+            extra={"available_teams": e.available_teams},
+        )
     except TrustViolationError as e:
-        if not is_json_mode():
-            console.print(
-                create_warning_panel(
-                    "Trust Violation",
-                    f"Team configuration violates trust policy: {e.violation}",
-                    "Check team config_source and trust grants in org config",
-                )
-            )
-        return {
-            "mode": "team",
-            "team": team_name,
-            "valid": False,
-            "error": f"Trust violation: {e.violation}",
-            "team_name": e.team_name,
-        }
+        return _validation_error_response(
+            team_name=team_name,
+            title="Trust Violation",
+            message=f"Team configuration violates trust policy: {e.violation}",
+            hint="Check team config_source and trust grants in org config",
+            error=f"Trust violation: {e.violation}",
+            extra={"team_name": e.team_name},
+        )
     except ConfigFetchError as e:
-        if not is_json_mode():
-            console.print(
-                create_warning_panel(
-                    "Config Fetch Failed",
-                    f"Failed to fetch config for team '{e.team_id}' from {e.source_type}",
-                    str(e),
-                )
-            )
-        return {
-            "mode": "team",
-            "team": team_name,
-            "valid": False,
-            "error": str(e),
-            "source_type": e.source_type,
-            "source_url": e.source_url,
-        }
+        return _validation_error_response(
+            team_name=team_name,
+            title="Config Fetch Failed",
+            message=f"Failed to fetch config for team '{e.team_id}' from {e.source_type}",
+            hint=str(e),
+            error=str(e),
+            extra={"source_type": e.source_type, "source_url": e.source_url},
+        )
 
-    # Determine overall validity
-    is_valid = not effective.has_security_violations
-
-    # Human output
-    if not is_json_mode():
-        _render_validation_result(effective, verbose)
-
-    # Build JSON response
-    response: dict[str, Any] = {
-        "mode": "team",
-        "team": team_name,
-        "valid": is_valid,
-        "is_federated": effective.is_federated,
-        "enabled_plugins_count": effective.plugin_count,
-        "blocked_plugins_count": len(effective.blocked_plugins),
-        "disabled_plugins_count": len(effective.disabled_plugins),
-        "not_allowed_plugins_count": len(effective.not_allowed_plugins),
-    }
-
-    # Add federation metadata
-    if effective.is_federated:
-        response["config_source"] = effective.source_description
-        if effective.config_commit_sha:
-            response["config_commit_sha"] = effective.config_commit_sha
-        if effective.config_etag:
-            response["config_etag"] = effective.config_etag
-
-    # Add cache status
-    if effective.used_cached_config:
-        response["used_cached_config"] = True
-        response["cache_is_stale"] = effective.cache_is_stale
-        if effective.staleness_warning:
-            response["staleness_warning"] = effective.staleness_warning
-
-    # Add verbose details
-    if verbose or json_output or pretty:
-        response["enabled_plugins"] = sorted(effective.enabled_plugins)
-        response["blocked_plugins"] = [
-            {"plugin_id": bp.plugin_id, "reason": bp.reason, "pattern": bp.pattern}
-            for bp in effective.blocked_plugins
-        ]
-        response["disabled_plugins"] = effective.disabled_plugins
-        response["not_allowed_plugins"] = effective.not_allowed_plugins
-        response["extra_marketplaces"] = effective.extra_marketplaces
-
-    return response
+    return _validation_success_response(
+        effective=effective,
+        team_name=team_name,
+        verbose=verbose,
+        json_output=json_output,
+        pretty=pretty,
+    )
 
 
 def _render_validation_result(effective: MarketplaceResolution, verbose: bool) -> None:
