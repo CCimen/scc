@@ -417,9 +417,7 @@ class TestDashboardFiltering:
 class TestCLIDashboardIntegration:
     """Test CLI integration with dashboard.
 
-    Context-aware routing (Phase 7):
-    - If CWD is a valid workspace → invoke start
-    - If CWD is NOT a valid workspace → show dashboard
+    Interactive no-subcommand routing shows the dashboard once setup is complete.
     """
 
     @pytest.fixture(autouse=True)
@@ -438,30 +436,32 @@ class TestCLIDashboardIntegration:
             if module in sys.modules:
                 del sys.modules[module]
 
-    @pytest.mark.xfail(reason="Test isolation issue - passes individually but fails in full suite")
     def test_cli_shows_dashboard_when_no_workspace_detected(self) -> None:
         """CLI shows dashboard when NOT in a valid workspace (e.g., $HOME)."""
         # Mock resolve_workspace to return None (no strong signal found)
         # This simulates being outside a git repo and without .scc.yaml
-        with patch("scc_cli.application.workspace.resolve_workspace", return_value=None):
-            with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
-                with patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard:
-                    # Import after patching
-                    from scc_cli.cli import main_callback
+        with (
+            patch("scc_cli.application.workspace.resolve_workspace", return_value=None),
+            patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True),
+            patch("scc_cli.config.load_user_config", return_value={"standalone": True}),
+            patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard,
+        ):
+            # Import after patching
+            from scc_cli.cli import main_callback
 
-                    # Create a mock context with no invoked subcommand
-                    mock_ctx = MagicMock()
-                    mock_ctx.invoked_subcommand = None
+            # Create a mock context with no invoked subcommand
+            mock_ctx = MagicMock()
+            mock_ctx.invoked_subcommand = None
 
-                    # Call the callback - should show dashboard
-                    main_callback(mock_ctx, debug=False, version=False, interactive=False)
+            # Call the callback - should show dashboard
+            main_callback(mock_ctx, debug=False, version=False, interactive=False)
 
-                    # Verify dashboard was called
-                    mock_dashboard.assert_called_once()
+            # Verify dashboard was called
+            mock_dashboard.assert_called_once()
+            mock_ctx.invoke.assert_not_called()
 
-    @pytest.mark.xfail(reason="Test isolation issue - passes individually but fails in full suite")
-    def test_cli_invokes_start_when_workspace_detected(self) -> None:
-        """CLI invokes start when in a valid workspace (git repo, .scc.yaml)."""
+    def test_cli_shows_dashboard_when_workspace_detected(self) -> None:
+        """CLI shows dashboard in interactive mode even when a workspace is detected."""
         from pathlib import Path
 
         from scc_cli.core.workspace import ResolverResult
@@ -476,26 +476,28 @@ class TestCLIDashboardIntegration:
             is_suspicious=False,
             reason="git repo detected",
         )
-        with patch(
-            "scc_cli.application.workspace.resolve_workspace",
-            return_value=WorkspaceContext(mock_result),
+        with (
+            patch(
+                "scc_cli.application.workspace.resolve_workspace",
+                return_value=WorkspaceContext(mock_result),
+            ),
+            patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True),
+            patch("scc_cli.config.load_user_config", return_value={"standalone": True}),
+            patch("scc_cli.ui.dashboard.run_dashboard") as mock_dashboard,
         ):
-            with patch("scc_cli.ui.gate.is_interactive_allowed", return_value=True):
-                # Import after patching
-                from scc_cli.cli import main_callback
+            # Import after patching
+            from scc_cli.cli import main_callback
 
-                # Create a mock context with invoke method
-                mock_ctx = MagicMock()
-                mock_ctx.invoked_subcommand = None
+            # Create a mock context with invoke method
+            mock_ctx = MagicMock()
+            mock_ctx.invoked_subcommand = None
 
-                # Call the callback - should invoke start
-                main_callback(mock_ctx, debug=False, version=False, interactive=False)
+            # Call the callback - should show dashboard
+            main_callback(mock_ctx, debug=False, version=False, interactive=False)
 
-                # Verify start was invoked (via ctx.invoke)
-                mock_ctx.invoke.assert_called_once()
-                # Check that workspace was passed (CWD)
-                call_kwargs = mock_ctx.invoke.call_args.kwargs
-                assert call_kwargs["workspace"] is not None
+            # Verify dashboard was called instead of invoking start
+            mock_dashboard.assert_called_once()
+            mock_ctx.invoke.assert_not_called()
 
     def test_cli_invokes_start_in_non_interactive_mode(self) -> None:
         """CLI invokes start command when non-interactive."""
