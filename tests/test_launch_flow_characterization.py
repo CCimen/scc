@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import typer
+
 from scc_cli.application.launch import (
     BackRequested,
     QuickResumeDismissed,
@@ -469,6 +471,65 @@ class TestResolveSessionSelection:
             assert was_auto is True
             assert cancelled is False
             assert session_provider is None
+
+    @patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False)
+    def test_non_interactive_auto_detects_workspace(self, mock_gate: MagicMock) -> None:
+        """Non-interactive start uses resolver auto-detection before failing."""
+        from scc_cli.commands.launch.flow_session import _resolve_session_selection
+
+        mock_session_svc = MagicMock()
+
+        with patch("scc_cli.application.workspace.resolve_workspace") as mock_resolve:
+            mock_resolve.return_value = MagicMock(workspace_root=Path("/auto/detected"))
+
+            result = _resolve_session_selection(
+                workspace=None,
+                team="platform",
+                resume=False,
+                select=False,
+                cfg={},
+                json_mode=False,
+                standalone_override=False,
+                no_interactive=True,
+                dry_run=False,
+                session_service=mock_session_svc,
+            )
+
+        workspace, team, session_name, worktree_name, cancelled, was_auto, session_provider = result
+        assert workspace == "/auto/detected"
+        assert team == "platform"
+        assert cancelled is False
+        assert was_auto is True
+        assert session_provider is None
+        mock_gate.assert_called_once_with(json_mode=False, no_interactive_flag=True)
+
+    @patch("scc_cli.commands.launch.flow_session.is_interactive_allowed", return_value=False)
+    def test_non_interactive_no_auto_detect_exits_usage(self, mock_gate: MagicMock) -> None:
+        """Non-interactive start exits usage when no workspace can be detected."""
+        from scc_cli.commands.launch.flow_session import _resolve_session_selection
+
+        mock_session_svc = MagicMock()
+
+        with patch("scc_cli.application.workspace.resolve_workspace", return_value=None):
+            try:
+                _resolve_session_selection(
+                    workspace=None,
+                    team=None,
+                    resume=False,
+                    select=False,
+                    cfg={},
+                    json_mode=False,
+                    standalone_override=False,
+                    no_interactive=True,
+                    dry_run=False,
+                    session_service=mock_session_svc,
+                )
+            except typer.Exit as exc:
+                assert exc.exit_code == EXIT_USAGE
+            else:
+                raise AssertionError("expected typer.Exit")
+
+        mock_gate.assert_called_once_with(json_mode=False, no_interactive_flag=True)
 
     def test_explicit_workspace_passthrough(self) -> None:
         """Explicit workspace arg passes through without session selection."""
