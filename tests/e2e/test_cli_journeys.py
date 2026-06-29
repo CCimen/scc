@@ -146,6 +146,37 @@ def test_subprocess_standalone_setup_and_init_use_isolated_home(tmp_path: Path) 
     assert Path(init_payload["data"]["file_path"]) == workspace / ".scc.yaml"
 
 
+def test_subprocess_start_dry_run_outputs_launch_contract_without_docker(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    workspace = tmp_path / "dry-run-project"
+    workspace.mkdir()
+    (workspace / ".git").mkdir()
+
+    result = _run_scc_subprocess(
+        [
+            "start",
+            str(workspace),
+            "--standalone",
+            "--dry-run",
+            "--json",
+            "--non-interactive",
+            "--provider",
+            "claude",
+        ],
+        home=home,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    payload = _json_output(result.stdout)
+    assert payload["kind"] == "StartDryRun"
+    assert payload["status"]["ok"] is True
+    assert payload["data"]["workspace_root"] == str(workspace.resolve())
+    assert payload["data"]["provider_id"] == "claude"
+    assert payload["data"]["ready_to_start"] is True
+    assert not (home / ".config" / "scc" / "audit" / "launch-events.jsonl").exists()
+
+
 def test_org_team_project_effective_config_journey(
     e2e_config_paths,
     monkeypatch: pytest.MonkeyPatch,
