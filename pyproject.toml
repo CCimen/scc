@@ -103,6 +103,9 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --cov=scc_cli"
+markers = [
+    "e2e: hermetic end-to-end CLI journeys across core SCC workflows",
+]
 
 [dependency-groups]
 dev = [
