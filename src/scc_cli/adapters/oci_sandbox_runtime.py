@@ -63,6 +63,13 @@ _HOME_LEVEL_AUTH_LINKS: dict[str, tuple[tuple[str, str], ...]] = {
     ".claude": ((".claude.json", f"{_AGENT_HOME}/.claude.json"),),
 }
 
+_MOUNT_ERROR_PATTERNS = (
+    "bind source path does not exist",
+    "invalid mount config",
+    "mounts denied",
+    "no such file or directory",
+)
+
 
 @dataclass(frozen=True)
 class _ContainerProcess:
@@ -113,11 +120,25 @@ def _run_docker(
             stderr=str(exc),
         ) from exc
     except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr or ""
         raise SandboxLaunchError(
             user_message="Docker command failed",
             command=" ".join(cmd),
-            stderr=exc.stderr or "",
+            stderr=stderr,
+            suggested_action=_docker_failure_hint(stderr),
         ) from exc
+
+
+def _docker_failure_hint(stderr: str) -> str:
+    """Return a targeted hint for common Docker launch failures."""
+    lower_stderr = stderr.lower()
+    if any(pattern in lower_stderr for pattern in _MOUNT_ERROR_PATTERNS):
+        return (
+            "If SCC is running inside a devcontainer with the host Docker socket, "
+            "run 'scc doctor <workspace> --json' and set "
+            "SCC_WORKSPACE_PATH_MAP=/workspaces/app:/host/path/app if needed."
+        )
+    return ""
 
 
 def _find_existing_container(container_name: str) -> tuple[str, SandboxState] | None:

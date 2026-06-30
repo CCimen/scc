@@ -11,12 +11,17 @@ from __future__ import annotations
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("claude", "codex")
 
-_DEFAULT_PROVIDER: str = "claude"
+DEFAULT_PROVIDER: str = "claude"
 
 _PROVIDER_DISPLAY_NAMES: dict[str, str] = {
     "claude": "Claude Code",
     "codex": "Codex",
 }
+
+
+def provider_identity(provider_id: str | None) -> str:
+    """Return the persisted provider identity, defaulting old records to Claude."""
+    return provider_id or DEFAULT_PROVIDER
 
 
 def get_provider_display_name(provider_id: str) -> str:
@@ -60,7 +65,7 @@ def resolve_active_provider(
     from scc_cli.core.errors import ProviderNotAllowedError
 
     effective_config_provider = None if config_provider == "ask" else config_provider
-    provider = cli_flag or effective_config_provider or _DEFAULT_PROVIDER
+    provider = cli_flag or effective_config_provider or DEFAULT_PROVIDER
 
     if provider not in KNOWN_PROVIDERS:
         raise ValueError(

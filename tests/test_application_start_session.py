@@ -348,6 +348,51 @@ def test_start_session_runs_sandbox_runtime(tmp_path: Path) -> None:
     assert handle.sandbox_id == "sandbox-1"
 
 
+def test_prepare_start_session_applies_runtime_mount_path_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_path = Path("/workspaces/app")
+    host_path = Path("/Users/dev/app")
+    request = StartSessionRequest(
+        workspace_path=workspace_path,
+        workspace_arg=str(workspace_path),
+        entry_dir=workspace_path,
+        team=None,
+        session_name=None,
+        resume=False,
+        fresh=False,
+        offline=True,
+        standalone=True,
+        dry_run=False,
+        allow_suspicious=False,
+        org_config=None,
+        provider_id="claude",
+    )
+    resolver_result = ResolverResult(
+        workspace_root=workspace_path,
+        entry_dir=workspace_path,
+        mount_root=workspace_path,
+        container_workdir=str(workspace_path),
+        is_auto_detected=False,
+        is_suspicious=False,
+        reason="test-devcontainer",
+    )
+    dependencies = _build_dependencies(FakeGitClient())
+    monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", f"{workspace_path}:{host_path}")
+
+    with patch(
+        "scc_cli.application.start_session.resolve_workspace",
+        return_value=WorkspaceContext(resolver_result),
+    ):
+        plan = prepare_start_session(request, dependencies=dependencies)
+
+    assert plan.runtime_mount_source == host_path
+    assert plan.sandbox_spec is not None
+    assert plan.sandbox_spec.workspace_mount.source == host_path
+    assert plan.sandbox_spec.workspace_mount.target == workspace_path
+    assert plan.sandbox_spec.workdir == workspace_path
+
+
 # ---------------------------------------------------------------------------
 # S01 seam boundary — characterize target shape for T02/T03
 #
@@ -1637,15 +1682,17 @@ class TestConfigFreshness:
         assert plan.agent_settings.suffix == ".toml"
 
     def test_codex_worktree_launch_scopes_settings_to_workspace_not_mount_root(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """D041: worktree launches must write Codex config into the workspace root."""
         from scc_cli.adapters.codex_agent_provider import CodexAgentProvider
         from scc_cli.adapters.codex_agent_runner import CodexAgentRunner
 
         mount_root = tmp_path / "repo-parent"
+        host_mount_root = tmp_path / "host-repo-parent"
         workspace_path = mount_root / "worktree-a"
         workspace_path.mkdir(parents=True)
+        monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", f"{mount_root}:{host_mount_root}")
         request = StartSessionRequest(
             workspace_path=workspace_path,
             workspace_arg=str(workspace_path),
@@ -1690,3 +1737,7 @@ class TestConfigFreshness:
 
         assert plan.agent_settings is not None
         assert plan.agent_settings.path == workspace_path / ".codex" / "config.toml"
+        assert plan.sandbox_spec is not None
+        assert plan.sandbox_spec.workspace_mount.source == host_mount_root
+        assert plan.sandbox_spec.workspace_mount.target == mount_root
+        assert plan.sandbox_spec.workdir == workspace_path

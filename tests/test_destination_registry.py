@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+
 import pytest
 
 from scc_cli.core.contracts import DestinationSet, EgressRule
@@ -35,6 +37,19 @@ class TestRegistryContents:
         for key, ds in PROVIDER_DESTINATION_SETS.items():
             assert isinstance(ds, DestinationSet), f"{key} is not a DestinationSet"
             assert ds.name == key, f"name mismatch: {ds.name!r} != {key!r}"
+
+    def test_provider_core_destinations_are_dns_hosts_not_ip_literals(self) -> None:
+        """Provider-core allow rules must not punch direct IP holes in egress ACLs."""
+        ip_literal_destinations: list[str] = []
+        for dest_set in PROVIDER_DESTINATION_SETS.values():
+            for destination in dest_set.destinations:
+                try:
+                    ipaddress.ip_address(destination)
+                except ValueError:
+                    continue
+                ip_literal_destinations.append(f"{dest_set.name}:{destination}")
+
+        assert ip_literal_destinations == []
 
 
 # ---------------------------------------------------------------------------

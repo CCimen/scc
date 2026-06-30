@@ -61,6 +61,19 @@ def _extract_name_tokens(source_bytes: bytes) -> list[str]:
     return [tok.string for tok in tokens if tok.type == tokenize.NAME]
 
 
+def _extract_call_names(source: str) -> set[str]:
+    tree = ast.parse(source)
+    calls: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            calls.add(node.func.id)
+        elif isinstance(node.func, ast.Attribute):
+            calls.add(node.func.attr)
+    return calls
+
+
 class TestProviderResolutionAntiDrift:
     """Migrated launch files must not call resolution functions directly."""
 
@@ -91,6 +104,25 @@ class TestProviderResolutionAntiDrift:
                 f"{path.name} does not import from preflight module. "
                 "Launch entry points should use preflight.resolve_launch_provider()."
             )
+
+    def test_migrated_files_call_shared_preflight_sequence(self) -> None:
+        """Each migrated launch path must use the shared provider/readiness path."""
+        required_calls = {
+            "resolve_launch_provider",
+            "collect_launch_readiness",
+            "ensure_launch_ready",
+        }
+        violations: list[str] = []
+        for path in _MIGRATED_FILES:
+            calls = _extract_call_names(path.read_text(encoding="utf-8"))
+            missing = sorted(required_calls - calls)
+            if missing:
+                violations.append(f"{path.name}: missing {', '.join(missing)}")
+
+        assert not violations, (
+            "Migrated launch paths must share the same provider preflight sequence:\n"
+            + "\n".join(violations)
+        )
 
     def test_preflight_is_sole_wrapper_of_choose_start_provider(self) -> None:
         """Only preflight.py may import and call choose_start_provider in

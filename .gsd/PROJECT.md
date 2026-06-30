@@ -54,8 +54,11 @@ All five launch sites (flow.py, flow_interactive.py, worktree_commands.py, orche
 ### M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth ✅
 S01 established a source-grounded gap map and ownership reconciliation. S02 proved project `network_policy` can narrow but not widen org/team policy. S03 recorded that v1 project identity is repository/worktree context, not a separate registry. S04 made ignored project policy widening visible in `scc config explain` and validated project network-policy values. S05/S06 cleaned docs truth and added a minimal enterprise pilot blueprint.
 
-### M011 — Architecture Convergence And Interaction Surface Slimming
-Active milestone. S01 is a code-free architecture inventory that measures remaining large modules, ambiguous ownership, compatibility seams, dict-shaped boundaries, stale skips/xfails, performance leads, and docs-truth cleanup needs before any refactor begins. Runtime/devcontainer interoperability moves to M012 per D053.
+### M011 — Architecture Convergence And Interaction Surface Slimming ✅
+Completed architecture convergence and interaction-surface slimming. M011 reduced stale compatibility surfaces, clarified owners, strengthened guardrails, and left the source/docs baseline green.
+
+### M012 — Golden E2E Journeys, Claim Lock, And Pilot Readiness ✅
+Completed golden journey and docs claim-lock coverage for SCC's real organizational adoption path: standalone setup, org onboarding, team/work context switching, effective config explain, governed materialization, Claude/Codex launch plan parity, network enforcement, safety behavior, audit/support evidence, and docs truth. M012 added provider-separated work-context/session identity, support bundle work-context evidence, E2E governance traces, launch/network/safety guardrails, a docs claim map, expanded Config Inheritance docs, and an executable Enterprise Pilot Blueprint. Runtime/devcontainer interoperability remains M013 per D054.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -68,20 +71,23 @@ Active milestone. S01 is a code-free architecture inventory that measures remain
 8. ~~M008 — Cross-Flow Consistency, Reliability, and Maintainability Hardening~~ ✅
 9. ~~M009 — Preflight Convergence and Auth Bootstrap Unification~~ ✅
 10. ~~M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth~~ ✅
-11. M011 — Architecture Convergence And Interaction Surface Slimming
-12. M012 — Runtime/devcontainer Interoperability
-13. M013 — Audit, Support, And Compliance Bundle
-14. M014 — Enterprise Identity And Signed Policy
+11. ~~M011 — Architecture Convergence And Interaction Surface Slimming~~ ✅
+12. ~~M012 — Golden E2E Journeys, Claim Lock, And Pilot Readiness~~ ✅
+13. M013 — Runtime/devcontainer Interoperability
+14. M014 — Audit, Support, And Compliance Bundle
+15. M015 — Enterprise Identity And Signed Policy
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through all nine milestones.
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through M012.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
-- `uv run mypy src/scc_cli` ✅ (299 files, 0 issues)
-- `uv run pytest -q` ✅ (5158 passed, 23 skipped, 2 xfailed)
+- `uv run ruff format --check` ✅
+- `uv run mypy src/scc_cli` ✅ (302 files, 0 issues)
+- `uv run pytest -q --no-cov` ✅ (5250 passed, 14 skipped)
+- `bun run astro check` ✅ in `../scc-cli-docs` (0 errors, 1 existing inline-script hint)
 - Zero files in src/scc_cli/ exceed 1100 lines
-- Current file-size guardrail baseline from `uv run pytest tests/test_file_sizes.py -q -s --no-cov`: 299 source files scanned; 3 warning-zone files; 0 failing files. Warning-zone files are `scc_cli/setup.py` 1035 lines, `scc_cli/ui/dashboard/orchestrator_handlers.py` 878 lines, and `scc_cli/commands/launch/flow_interactive.py` 811 lines. `scc_cli/application/compute_effective_config.py` is 739 lines and below the 800-line warning threshold after M010/S04 model extraction.
+- Current file-size guardrail baseline from `uv run pytest tests/test_file_sizes.py -q -s --no-cov`: 301 source files scanned; 1 warning-zone file; 0 failing files. Warning-zone file is `scc_cli/ui/settings.py` at 820 lines.
 
 ## Known deferred items
 - Wizard cast cleanup (23 casts in wizard.py/flow_interactive.py) — deferred per D018
@@ -95,8 +101,7 @@ Active milestone. S01 is a code-free architecture inventory that measures remain
 - `scc auth login/status/logout` commands — model supports them via auth_check()
 - Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 - start_claude parameter rename to start_agent in worktree_commands.py (deferred from M008/S01)
-- WorkContext.provider_id threading through _record_session_and_context (deferred from M008/S01)
-- M011 architecture convergence inventory controls the next cleanup slices: stale compatibility facades, ambiguous `EffectiveConfig` naming, setup/dashboard/interactive launch surface slimming, dict/`Any` trust boundaries, skip/xfail cleanup, and docs truth.
+- Runtime/devcontainer interoperability remains M013.
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.

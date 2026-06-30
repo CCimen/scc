@@ -18,6 +18,7 @@ from typing import Any, cast
 
 from scc_cli.application.sessions import SessionService
 from scc_cli.bootstrap import build_session_store
+from scc_cli.core.provider_resolution import DEFAULT_PROVIDER
 from scc_cli.ports.filesystem import Filesystem
 from scc_cli.ports.session_models import SessionFilter, SessionRecord, SessionSummary
 from scc_cli.ports.session_store import SessionStore
@@ -93,6 +94,7 @@ def update_session_container(
     workspace: str,
     container_name: str,
     branch: str | None = None,
+    provider_id: str | None = None,
     *,
     filesystem: Filesystem | None = None,
 ) -> None:
@@ -102,6 +104,7 @@ def update_session_container(
         workspace=workspace,
         container_name=container_name,
         branch=branch,
+        provider_id=provider_id,
     )
 
 
@@ -121,26 +124,33 @@ def find_session_by_container(
 def find_session_by_workspace(
     workspace: str,
     branch: str | None = None,
+    provider_id: str | None = None,
     *,
     filesystem: Filesystem | None = None,
 ) -> SessionRecord | None:
     """Find a session by workspace and optionally branch."""
-    sessions_list = get_session_store(filesystem).load_sessions()
-    sessions_list.sort(key=lambda record: record.last_used or "", reverse=True)
-    for record in sessions_list:
-        if record.workspace == workspace and (branch is None or record.branch == branch):
-            return record
-    return None
+    service = get_session_service(filesystem)
+    return service.find_by_workspace(
+        workspace=workspace,
+        branch=branch,
+        provider_id=provider_id,
+    )
 
 
 def get_container_for_workspace(
     workspace: str,
     branch: str | None = None,
+    provider_id: str | None = None,
     *,
     filesystem: Filesystem | None = None,
 ) -> str | None:
     """Return the container name for a workspace (and optionally branch)."""
-    session = find_session_by_workspace(workspace, branch, filesystem=filesystem)
+    session = find_session_by_workspace(
+        workspace,
+        branch,
+        provider_id,
+        filesystem=filesystem,
+    )
     return session.container_name if session else None
 
 
@@ -162,26 +172,17 @@ def clear_history(filesystem: Filesystem | None = None) -> int:
 def remove_session(
     workspace: str,
     branch: str | None = None,
+    provider_id: str | None = None,
     *,
     filesystem: Filesystem | None = None,
 ) -> bool:
     """Remove a specific session from history."""
-    store = get_session_store(filesystem)
-    with store.lock():
-        sessions_list = store.load_sessions()
-        original_count = len(sessions_list)
-
-        if branch:
-            sessions_list = [
-                record
-                for record in sessions_list
-                if not (record.workspace == workspace and record.branch == branch)
-            ]
-        else:
-            sessions_list = [record for record in sessions_list if record.workspace != workspace]
-
-        store.save_sessions(sessions_list)
-        return len(sessions_list) < original_count
+    service = get_session_service(filesystem)
+    return service.remove_session(
+        workspace=workspace,
+        branch=branch,
+        provider_id=provider_id,
+    )
 
 
 def prune_orphaned_sessions(filesystem: Filesystem | None = None) -> int:
@@ -195,12 +196,12 @@ def prune_orphaned_sessions(filesystem: Filesystem | None = None) -> int:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def get_provider_sessions_dir(provider_id: str = "claude") -> Path:
+def get_provider_sessions_dir(provider_id: str = DEFAULT_PROVIDER) -> Path:
     """Return the agent sessions directory for a provider."""
     return Path.home() / get_runtime_spec(provider_id).config_dir
 
 
-def get_provider_recent_sessions(provider_id: str = "claude") -> list[dict[Any, Any]]:
+def get_provider_recent_sessions(provider_id: str = DEFAULT_PROVIDER) -> list[dict[Any, Any]]:
     """Return recent sessions from the agent's own storage."""
     claude_dir = get_provider_sessions_dir(provider_id)
     sessions_file = claude_dir / "sessions.json"

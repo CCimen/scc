@@ -370,6 +370,22 @@ class TestFailureModes:
         with pytest.raises(SandboxLaunchError):
             runtime.run(_minimal_spec())
 
+    @patch("scc_cli.adapters.oci_sandbox_runtime.subprocess.run")
+    def test_mount_failure_suggests_workspace_path_map(
+        self, mock_subprocess: MagicMock, runtime: OciSandboxRuntime
+    ) -> None:
+        mock_subprocess.side_effect = subprocess.CalledProcessError(
+            returncode=1,
+            cmd="docker create",
+            stderr='invalid mount config for type "bind": bind source path does not exist',
+        )
+
+        with pytest.raises(SandboxLaunchError) as excinfo:
+            runtime.run(_minimal_spec())
+
+        assert "SCC_WORKSPACE_PATH_MAP" in excinfo.value.suggested_action
+        assert "scc doctor <workspace> --json" in excinfo.value.suggested_action
+
 
 class TestExistingContainerRecovery:
     """Verify deterministic-name conflicts are handled intentionally."""

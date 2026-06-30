@@ -242,6 +242,52 @@ class TestRecordSession:
         # But created_at preserved
         assert saved["sessions"][0]["created_at"] == "2024-01-01T00:00:00"
 
+    def test_updates_missing_provider_session_for_claude(self, sessions_file):
+        """Missing-provider session records use the Claude/default identity."""
+        initial = [
+            {
+                "workspace": "/tmp/proj",
+                "branch": "main",
+                "team": "old-team",
+                "last_used": "2024-01-01T00:00:00",
+                "created_at": "2024-01-01T00:00:00",
+            }
+        ]
+        sessions_file.write_text(json.dumps({"sessions": initial}))
+
+        sessions.record_session(
+            workspace="/tmp/proj",
+            team="new-team",
+            branch="main",
+            provider_id="claude",
+        )
+
+        saved = json.loads(sessions_file.read_text())
+        assert len(saved["sessions"]) == 1
+        assert saved["sessions"][0]["team"] == "new-team"
+        assert saved["sessions"][0]["provider_id"] == "claude"
+
+    def test_creates_new_session_for_different_provider(self, sessions_file):
+        """Same workspace and branch stay separate across Claude and Codex."""
+        sessions_file.write_text(json.dumps({"sessions": []}))
+
+        sessions.record_session(
+            workspace="/tmp/proj",
+            team="platform",
+            branch="main",
+            provider_id="claude",
+        )
+        sessions.record_session(
+            workspace="/tmp/proj",
+            team="platform",
+            branch="main",
+            provider_id="codex",
+        )
+
+        saved = json.loads(sessions_file.read_text())
+        assert len(saved["sessions"]) == 2
+        assert {record["provider_id"] for record in saved["sessions"]} == {"claude", "codex"}
+
     def test_creates_new_session_for_different_branch(self, sessions_file):
         """Should create new session if branch differs."""
         initial = [
@@ -303,6 +349,108 @@ class TestFindSessionByWorkspace:
         result = sessions.find_session_by_workspace("/tmp/proj1", branch="feature")
 
         assert result is None
+
+    def test_filters_by_provider(self, sessions_file):
+        """Should filter same workspace/branch by provider when requested."""
+        sessions_file.write_text(
+            json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "claude",
+                            "container_name": "scc-claude",
+                            "last_used": "2024-01-01T00:00:00",
+                        },
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "codex",
+                            "container_name": "scc-codex",
+                            "last_used": "2024-01-02T00:00:00",
+                        },
+                    ]
+                }
+            )
+        )
+
+        result = sessions.find_session_by_workspace(
+            "/tmp/proj",
+            branch="main",
+            provider_id="claude",
+        )
+
+        assert result is not None
+        assert result.provider_id == "claude"
+        assert result.container_name == "scc-claude"
+
+    def test_provider_filter_treats_missing_provider_as_claude(self, sessions_file):
+        """Old missing-provider records match an explicit Claude lookup."""
+        sessions_file.write_text(
+            json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "container_name": "scc-old",
+                            "last_used": "2024-01-01T00:00:00",
+                        },
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "codex",
+                            "container_name": "scc-codex",
+                            "last_used": "2024-01-02T00:00:00",
+                        },
+                    ]
+                }
+            )
+        )
+
+        result = sessions.find_session_by_workspace(
+            "/tmp/proj",
+            branch="main",
+            provider_id="claude",
+        )
+
+        assert result is not None
+        assert result.container_name == "scc-old"
+
+    def test_get_container_filters_by_provider(self, sessions_file):
+        """Container lookup should use provider identity when requested."""
+        sessions_file.write_text(
+            json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "claude",
+                            "container_name": "scc-claude",
+                            "last_used": "2024-01-01T00:00:00",
+                        },
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "codex",
+                            "container_name": "scc-codex",
+                            "last_used": "2024-01-02T00:00:00",
+                        },
+                    ]
+                }
+            )
+        )
+
+        assert (
+            sessions.get_container_for_workspace(
+                "/tmp/proj",
+                branch="main",
+                provider_id="codex",
+            )
+            == "scc-codex"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -418,6 +566,34 @@ class TestRemoveSession:
         result = sessions.remove_session("/tmp/nonexistent")
 
         assert result is False
+
+    def test_removes_only_matching_provider(self, sessions_file):
+        """Should leave other provider sessions for the same workspace intact."""
+        sessions_file.write_text(
+            json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "claude",
+                        },
+                        {
+                            "workspace": "/tmp/proj",
+                            "branch": "main",
+                            "provider_id": "codex",
+                        },
+                    ]
+                }
+            )
+        )
+
+        result = sessions.remove_session("/tmp/proj", provider_id="codex")
+
+        assert result is True
+        saved = json.loads(sessions_file.read_text())
+        assert len(saved["sessions"]) == 1
+        assert saved["sessions"][0]["provider_id"] == "claude"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -635,6 +811,37 @@ class TestSessionService:
         updated = store.load_sessions()[0]
         assert updated.container_name == "scc-proj"
         assert updated.created_at == "2024-01-01T00:00:00"
+
+    def test_update_session_container_filters_by_provider(self) -> None:
+        records = [
+            SessionRecord(
+                workspace="/tmp/proj",
+                branch="main",
+                container_name="scc-claude-old",
+                provider_id="claude",
+            ),
+            SessionRecord(
+                workspace="/tmp/proj",
+                branch="main",
+                container_name="scc-codex-old",
+                provider_id="codex",
+            ),
+        ]
+        store = FakeSessionStore(records)
+        service = SessionService(store)
+
+        service.update_session_container(
+            workspace="/tmp/proj",
+            container_name="scc-codex-new",
+            branch="main",
+            provider_id="codex",
+        )
+
+        updated = store.load_sessions()
+        assert [record.container_name for record in updated] == [
+            "scc-claude-old",
+            "scc-codex-new",
+        ]
 
     def test_prune_orphaned_sessions_removes_missing_paths(self, tmp_path) -> None:
         existing = tmp_path / "repo"

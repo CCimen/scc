@@ -22,6 +22,7 @@ from scc_cli.application.support_bundle import (
     redact_paths,
     redact_secrets,
 )
+from scc_cli.contexts import WorkContext
 from scc_cli.core.contracts import AuditEvent
 from scc_cli.core.enums import SeverityLevel
 from scc_cli.doctor import CheckResult, DoctorResult
@@ -225,6 +226,59 @@ class TestSupportBundleManifest:
         assert manifest["launch_audit"]["recent_events"][0]["message"] == (
             f"Launch started {SUPPORT_BUNDLE_AUDIT_LIMIT + 1}"
         )
+
+    def test_manifest_marks_work_context_not_requested(self, tmp_path: Path) -> None:
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=True,
+            workspace_path=None,
+        )
+
+        manifest = build_support_bundle_manifest(
+            request,
+            dependencies=_make_dependencies(),
+        )
+
+        assert manifest["work_context"] == {"state": "not_requested"}
+
+    def test_manifest_includes_work_context_when_workspace_is_known(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "repo"
+        workspace.mkdir()
+        context = WorkContext(
+            team="analytics",
+            repo_root=workspace,
+            worktree_path=workspace,
+            worktree_name="main",
+            branch="main",
+            last_session_id="session-123",
+            provider_id="codex",
+            pinned=True,
+        )
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=False,
+            workspace_path=workspace,
+        )
+
+        with patch(
+            "scc_cli.contexts.get_context_for_path",
+            return_value=context,
+        ):
+            manifest = build_support_bundle_manifest(
+                request,
+                dependencies=_make_dependencies(),
+            )
+
+        work_context = manifest["work_context"]
+        assert work_context["state"] == "available"
+        assert work_context["team"] == "analytics"
+        assert work_context["repo_root"] == str(workspace)
+        assert work_context["worktree_path"] == str(workspace)
+        assert work_context["worktree_name"] == "main"
+        assert work_context["branch"] == "main"
+        assert work_context["provider_id"] == "codex"
+        assert work_context["last_session_id"] == "session-123"
+        assert work_context["pinned"] is True
 
 
 class TestEffectiveEgressSection:

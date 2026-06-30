@@ -50,6 +50,21 @@ class TestBuildDryRunDataProviderId:
         )
         assert result["provider_id"] is None
 
+    def test_runtime_mount_source(self, tmp_path: Path) -> None:
+        from scc_cli.commands.launch.render import build_dry_run_data
+
+        runtime_mount_source = Path("/Users/dev/app")
+        result = build_dry_run_data(
+            workspace_path=tmp_path,
+            team=None,
+            org_config=None,
+            project_config=None,
+            mount_root=Path("/workspaces/app"),
+            runtime_mount_source=runtime_mount_source,
+        )
+
+        assert result["runtime_mount_source"] == str(runtime_mount_source)
+
 
 class TestBuildSessionListDataProviderId:
     """build_session_list_data includes provider_id."""

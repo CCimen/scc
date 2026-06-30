@@ -228,6 +228,46 @@ class TestDryRunJsonOutput:
         assert "status" in output
         assert "data" in output
 
+    def test_dry_run_json_includes_runtime_mount_source(self, tmp_path, monkeypatch, capsys):
+        """--dry-run --json should expose host-visible runtime mount source."""
+        from scc_cli.commands.launch import start
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+        host_path = tmp_path.parent / "host-visible-project"
+        monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", f"{tmp_path}:{host_path}")
+
+        with patch("scc_cli.commands.launch.flow.setup.is_setup_needed", return_value=False):
+            with patch("scc_cli.commands.launch.flow.config.load_user_config", return_value={}):
+                with patch(
+                    "scc_cli.commands.launch.flow.config.load_cached_org_config", return_value={}
+                ):
+                    try:
+                        start(
+                            workspace=str(tmp_path),
+                            team=None,
+                            session_name=None,
+                            resume=False,
+                            select=False,
+                            worktree_name=None,
+                            fresh=False,
+                            install_deps=False,
+                            offline=False,
+                            standalone=False,
+                            provider="claude",
+                            dry_run=True,
+                            json_output=True,
+                            pretty=False,
+                        )
+                    except click.exceptions.Exit:
+                        pass
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["data"]["runtime_mount_source"] == str(host_path)
+        assert output["data"]["mount_root"] == str(tmp_path)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Dry Run Data Builder Tests (Pure Function)
@@ -256,6 +296,7 @@ class TestBuildDryRunData:
         assert result["entry_dir"] == str(tmp_path)
         assert result["mount_root"] == str(tmp_path)
         assert result["container_workdir"] == str(tmp_path)
+        assert result["runtime_mount_source"] == str(tmp_path)
 
     def test_build_dry_run_data_with_plugins(self, tmp_path):
         """build_dry_run_data should include plugins from org config."""

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from scc_cli.core.provider_resolution import provider_identity
 from scc_cli.ports.session_models import (
     SessionFilter,
     SessionListResult,
@@ -21,7 +22,7 @@ class SessionService:
 
     Invariants:
         - Session records are sorted by last_used descending when listed.
-        - Workspace+branch pairs uniquely identify a session entry.
+        - Workspace+branch+provider identity uniquely identify a session entry.
 
     Args:
         store: SessionStore implementation for persistence.
@@ -83,7 +84,7 @@ class SessionService:
         now = datetime.now().isoformat()
         with self.store.lock():
             sessions = self.store.load_sessions()
-            existing_index = _find_session_index(sessions, workspace, branch)
+            existing_index = _find_session_index(sessions, workspace, branch, provider_id)
             created_at = sessions[existing_index].created_at if existing_index is not None else now
             record = SessionRecord(
                 workspace=workspace,
@@ -108,6 +109,7 @@ class SessionService:
         workspace: str,
         container_name: str,
         branch: str | None = None,
+        provider_id: str | None = None,
     ) -> None:
         """Update the container name for an existing session.
 
@@ -115,12 +117,13 @@ class SessionService:
             workspace: Workspace path string.
             container_name: Container name to set.
             branch: Optional branch to match when updating.
+            provider_id: Optional provider identity to match.
         """
         now = datetime.now().isoformat()
         with self.store.lock():
             sessions = self.store.load_sessions()
-            for record in sessions:
-                if record.workspace == workspace and (branch is None or record.branch == branch):
+            for index, record in enumerate(sessions):
+                if _matches_workspace_branch_provider(record, workspace, branch, provider_id):
                     updated = SessionRecord(
                         workspace=record.workspace,
                         team=record.team,
@@ -131,9 +134,42 @@ class SessionService:
                         created_at=record.created_at,
                         provider_id=record.provider_id,
                     )
-                    sessions[sessions.index(record)] = updated
+                    sessions[index] = updated
                     break
             self.store.save_sessions(sessions)
+
+    def find_by_workspace(
+        self,
+        *,
+        workspace: str,
+        branch: str | None = None,
+        provider_id: str | None = None,
+    ) -> SessionRecord | None:
+        """Find the most recent session for a workspace, branch, and provider."""
+        sessions = self.store.load_sessions()
+        sessions.sort(key=lambda record: record.last_used or "", reverse=True)
+        for record in sessions:
+            if _matches_workspace_branch_provider(record, workspace, branch, provider_id):
+                return record
+        return None
+
+    def remove_session(
+        self,
+        *,
+        workspace: str,
+        branch: str | None = None,
+        provider_id: str | None = None,
+    ) -> bool:
+        """Remove sessions for a workspace, optionally scoped to branch/provider."""
+        with self.store.lock():
+            sessions = self.store.load_sessions()
+            remaining = [
+                record
+                for record in sessions
+                if not _matches_workspace_branch_provider(record, workspace, branch, provider_id)
+            ]
+            self.store.save_sessions(remaining)
+            return len(remaining) < len(sessions)
 
     def prune_orphaned_sessions(self) -> int:
         """Remove sessions whose workspace paths no longer exist.
@@ -162,7 +198,12 @@ def _filter_sessions(
     else:
         result = [record for record in sessions if record.team == session_filter.team]
     if session_filter.provider_id is not None:
-        result = [record for record in result if record.provider_id == session_filter.provider_id]
+        result = [
+            record
+            for record in result
+            if provider_identity(record.provider_id)
+            == provider_identity(session_filter.provider_id)
+        ]
     return result
 
 
@@ -177,8 +218,33 @@ def _find_session_index(
     sessions: list[SessionRecord],
     workspace: str,
     branch: str | None,
+    provider_id: str | None,
 ) -> int | None:
+    requested_provider = provider_identity(provider_id)
     for index, record in enumerate(sessions):
-        if record.workspace == workspace and record.branch == branch:
+        if (
+            record.workspace == workspace
+            and record.branch == branch
+            and provider_identity(record.provider_id) == requested_provider
+        ):
             return index
     return None
+
+
+def _matches_workspace_branch_provider(
+    record: SessionRecord,
+    workspace: str,
+    branch: str | None,
+    provider_id: str | None,
+) -> bool:
+    return (
+        record.workspace == workspace
+        and (branch is None or record.branch == branch)
+        and _matches_provider(record.provider_id, provider_id)
+    )
+
+
+def _matches_provider(record_provider_id: str | None, requested_provider_id: str | None) -> bool:
+    if requested_provider_id is None:
+        return True
+    return provider_identity(record_provider_id) == provider_identity(requested_provider_id)

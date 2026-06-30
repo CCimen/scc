@@ -56,6 +56,7 @@ def build_dry_run_data(
     entry_dir: Path | None = None,
     mount_root: Path | None = None,
     container_workdir: str | None = None,
+    runtime_mount_source: Path | None = None,
     resolution_reason: str | None = None,
     provider_id: str | None = None,
 ) -> dict[str, Any]:
@@ -73,6 +74,7 @@ def build_dry_run_data(
         entry_dir: Entry directory (ED), defaults to workspace_path if not provided.
         mount_root: Mount root (MR), defaults to workspace_path if not provided.
         container_workdir: Container workdir (CW), defaults to entry_dir if not provided.
+        runtime_mount_source: Host-visible source path used by the runtime daemon.
         resolution_reason: Debug explanation for how workspace was resolved.
 
     Returns:
@@ -108,12 +110,16 @@ def build_dry_run_data(
     effective_entry = entry_dir if entry_dir is not None else workspace_path
     effective_mount = mount_root if mount_root is not None else workspace_path
     effective_cw = container_workdir if container_workdir is not None else str(effective_entry)
+    effective_runtime_mount = (
+        runtime_mount_source if runtime_mount_source is not None else effective_mount
+    )
 
     return {
         "workspace_root": str(workspace_path),
         "entry_dir": str(effective_entry),
         "mount_root": str(effective_mount),
         "container_workdir": effective_cw,
+        "runtime_mount_source": str(effective_runtime_mount),
         "team": team,
         "provider_id": provider_id,
         "plugins": plugins,
@@ -222,6 +228,12 @@ def show_dry_run_panel(data: dict[str, Any]) -> None:
         if len(container_workdir) > MAX_DISPLAY_PATH_LENGTH:
             container_workdir = "..." + container_workdir[-PATH_TRUNCATE_LENGTH:]
         grid.add_row("Container cwd:", container_workdir)
+
+    runtime_mount_source = data.get("runtime_mount_source", "")
+    if runtime_mount_source and runtime_mount_source != data.get("mount_root"):
+        if len(runtime_mount_source) > MAX_DISPLAY_PATH_LENGTH:
+            runtime_mount_source = "..." + runtime_mount_source[-PATH_TRUNCATE_LENGTH:]
+        grid.add_row("Runtime mount source:", runtime_mount_source)
 
     # Team
     grid.add_row("Team:", data.get("team") or "standalone")

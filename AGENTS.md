@@ -30,10 +30,12 @@ Before planning or changing code, read these files in this order:
 ## Execution guidance
 - `.gsd/PROJECT.md` is the canonical milestone register. Files in `.gsd/milestones/`
   are supplementary planning artifacts for current or future milestones only.
-- M011 is the current planning milestone for architecture convergence and
-  interaction-surface slimming. Complete the evidence inventory before changing
-  code, and reuse, merge, move, or delete existing owners before adding new
-  runtime concepts.
+- M012 golden E2E journeys, docs claim lock, and pilot readiness are complete.
+  Treat `.gsd/milestones/M012-GOLDEN-JOURNEYS.md` as historical execution
+  evidence, not an open task list.
+- M013 is the next planned milestone for runtime/devcontainer interoperability.
+  Do not start M013 implementation without a fresh slice plan and current
+  source/docs validation.
 - Prefer small, typed, contract-preserving refactors over broad rewrites.
 - Add characterization tests before splitting monoliths.
 - Keep provider-core destination validation in launch planning, not as a runtime surprise.

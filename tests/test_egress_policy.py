@@ -11,6 +11,10 @@ from scc_cli.core.contracts import (
     EgressRule,
     NetworkPolicyPlan,
 )
+from scc_cli.core.destination_registry import (
+    destination_sets_to_allow_rules,
+    resolve_destination_sets,
+)
 from scc_cli.core.egress_policy import build_egress_plan, compile_squid_acl
 from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.network_policy import policy_rank
@@ -151,6 +155,22 @@ class TestCompileSquidAcl:
         acl = compile_squid_acl(plan)
 
         assert "dstdomain .anthropic.com" in acl
+
+    def test_provider_core_acl_allows_registered_hosts_and_denies_other_targets(self) -> None:
+        """Provider-core access is allowlisted by DNS host; everything else hits deny all."""
+        destination_sets = resolve_destination_sets(("anthropic-core",))
+        allow_rules = destination_sets_to_allow_rules(destination_sets)
+        plan = build_egress_plan(
+            NetworkPolicy.WEB_EGRESS_ENFORCED,
+            destination_sets=destination_sets,
+            egress_rules=allow_rules,
+        )
+
+        acl = compile_squid_acl(plan)
+
+        assert "dstdomain api.anthropic.com" in acl
+        assert "dst 203.0.113.10" not in acl
+        assert acl.strip().endswith("http_access deny all")
 
     def test_compile_acl_deny_before_allow_ordering(self) -> None:
         custom = (EgressRule(target=".anthropic.com", allow=True, reason="provider API"),)

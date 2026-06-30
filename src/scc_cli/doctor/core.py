@@ -16,6 +16,7 @@ from .checks import (
     check_safety_policy,
     check_user_config_valid,
     check_workspace_path,
+    check_workspace_path_map,
     check_wsl2,
 )
 from .types import CheckResult, DoctorResult
@@ -90,6 +91,10 @@ def run_doctor(
 
     runtime_check = check_runtime_backend()
     result.checks.append(runtime_check)
+
+    path_map_check = check_workspace_path_map(workspace)
+    if path_map_check is not None:
+        result.checks.append(path_map_check)
 
     provider_ids = (provider_id,) if provider_id is not None else _DEFAULT_PROVIDER_IDS
 

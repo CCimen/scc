@@ -518,17 +518,12 @@ class TestOrchestratorSessionResumeResolution:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _record_session_and_context: WorkContext.provider_id is always None
+# _record_session_and_context: WorkContext.provider_id follows provider choice
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestRecordSessionAndContextProviderGap:
-    """Characterize: _record_session_and_context does NOT forward provider_id
-    to WorkContext, even though it receives provider_id and WorkContext has the field.
-
-    The provider_id IS forwarded to sessions.record_session() but NOT to WorkContext.
-    This means Quick Resume context entries lose the provider information.
-    """
+class TestRecordSessionAndContextProviderThreading:
+    """Provider choices are recorded in both sessions and Quick Resume context."""
 
     def test_work_context_provider_id_defaults_to_none(self) -> None:
         """WorkContext.provider_id defaults to None when not explicitly set."""
@@ -542,7 +537,7 @@ class TestRecordSessionAndContextProviderGap:
         assert ctx.provider_id is None
 
     def test_work_context_accepts_provider_id(self) -> None:
-        """WorkContext CAN hold provider_id — it just isn't set by _record_session_and_context."""
+        """WorkContext carries the provider identity used for Quick Resume."""
         ctx = WorkContext(
             team="myteam",
             repo_root=Path("/repo"),

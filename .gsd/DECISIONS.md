@@ -150,6 +150,90 @@ Status: accepted
 
 ---
 
+## D054 — M012 is golden journeys before runtime/devcontainer work
+M012 is the golden E2E journey, docs claim-lock, and pilot-readiness milestone.
+
+This supersedes the D053 forecast that runtime/devcontainer interoperability
+would be M012. Devcontainer and Docker Compose bridge work remains important,
+but it moves to M013 so SCC first has executable proof for the existing v1
+organizational journey:
+
+```text
+setup -> team/work context -> config explain -> governed materialization
+-> Claude/Codex launch plan/start -> network/safety behavior
+-> audit/support evidence -> docs truth
+```
+
+M012 must not implement devcontainer integration, SSO, SCIM, SBOM/compliance
+bundle, project registry, enterprise dashboard, or new providers.
+
+M012's planning source of truth is one supplementary milestone file in
+`.gsd/milestones/`. The roadmap, context, golden journeys, docs claim map, PR
+slicing, and exact first implementation slice live there to avoid root-level
+planning sprawl and duplicate docs-truth sources.
+
+Status: accepted
+
+---
+
+## D055 — M013 starts with explicit devcontainer host-path mapping
+M013 runtime/devcontainer interoperability begins with the sibling-container
+model. SCC may run inside a devcontainer, but the agent still runs in SCC's own
+governed OCI container with the existing provider preflight, safety wrappers,
+and network topology.
+
+The first implementation slice uses one explicit environment variable:
+
+```bash
+SCC_WORKSPACE_PATH_MAP=<container-visible-prefix>:<docker-host-visible-prefix>
+```
+
+Launch planning may translate `MountSpec.source` to the Docker-host-visible path
+when the resolved mount root is equal to or below the container-visible prefix.
+`MountSpec.target`, `SandboxSpec.workdir`, provider config paths, and WorkContext
+identity remain the logical paths visible to SCC and the agent container.
+
+Path mapping belongs in launch planning, not workspace resolution. WorkContext
+continues to describe repository/worktree identity, while mount-source mapping is
+specific to the runtime daemon boundary. OCI container naming remains derived
+from `workspace_mount.source`; when mapping is active, that is the host-visible
+path, which avoids collisions across sibling devcontainers that share generic
+paths such as `/workspaces/repo`.
+
+M013 S01 must not attach the agent container to devcontainer or Compose service
+networks. That requires a separate topology decision because it can conflict
+with the `web-egress-enforced` invariant that the proxy is the only egress-facing
+component.
+
+Status: accepted
+
+---
+
+## D056 — M013 does not attach agent containers to arbitrary devcontainer or Compose networks
+M013 completes devcontainer interoperability with the sibling-container model:
+SCC can run inside a devcontainer, translate the workspace bind-mount source for
+the host Docker daemon, and keep SCC's governed OCI agent container as the
+runtime boundary.
+
+SCC will not add a generic Docker network or Compose network option in M013.
+`web-egress-enforced` requires SCC to own the agent network topology: the agent
+container is attached only to SCC's internal network, and the proxy sidecar is
+the controlled bridge. Attaching the agent to an arbitrary devcontainer or
+Compose network would create a second route and would need its own policy,
+explain output, audit event, denial model, and real-runtime tests before it can
+be a reliable enterprise feature.
+
+The supported v1 operator answer is explicit:
+
+- use `SCC_WORKSPACE_PATH_MAP` for host Docker socket path mismatches;
+- use `network_policy` for agent network posture;
+- keep project service-network attachment as a future governed capability, not
+  a hidden runtime flag.
+
+Status: accepted
+
+---
+
 ## Decisions Table
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |

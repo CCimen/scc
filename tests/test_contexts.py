@@ -92,14 +92,37 @@ class TestWorkContext:
         assert ctx.display_label == "standalone · my-project · main"
 
     def test_unique_key_property(self) -> None:
-        """Unique key is (team, repo_root, worktree_path)."""
+        """Unique key is (team, repo_root, worktree_path, provider identity)."""
         ctx = WorkContext(
             team="platform",
             repo_root=Path("/code/api"),
             worktree_path=Path("/code/api-feature"),
             worktree_name="feature",
         )
-        assert ctx.unique_key == ("platform", Path("/code/api"), Path("/code/api-feature"))
+        assert ctx.unique_key == (
+            "platform",
+            Path("/code/api"),
+            Path("/code/api-feature"),
+            "claude",
+        )
+
+    def test_unique_key_separates_non_default_provider(self) -> None:
+        claude_ctx = WorkContext(
+            team="platform",
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="main",
+            provider_id="claude",
+        )
+        codex_ctx = WorkContext(
+            team="platform",
+            repo_root=Path("/code/api"),
+            worktree_path=Path("/code/api"),
+            worktree_name="main",
+            provider_id="codex",
+        )
+
+        assert claude_ctx.unique_key != codex_ctx.unique_key
 
     def test_to_dict_and_from_dict_roundtrip(self) -> None:
         """Context serializes and deserializes correctly."""
@@ -215,6 +238,62 @@ class TestContextStorage:
         loaded = load_recent_contexts()
         assert len(loaded) == 1  # Still one context
         assert loaded[0].last_session_id == "sess-002"  # Updated
+
+    def test_record_keeps_provider_contexts_separate(self) -> None:
+        """Same team/repo/worktree can have separate Claude and Codex contexts."""
+        workspace = Path("/code/api")
+        record_context(
+            WorkContext(
+                team="platform",
+                repo_root=workspace,
+                worktree_path=workspace,
+                worktree_name="main",
+                last_session_id="claude-session",
+                provider_id="claude",
+            )
+        )
+        record_context(
+            WorkContext(
+                team="platform",
+                repo_root=workspace,
+                worktree_path=workspace,
+                worktree_name="main",
+                last_session_id="codex-session",
+                provider_id="codex",
+            )
+        )
+
+        loaded = load_recent_contexts()
+        assert {ctx.provider_id for ctx in loaded} == {"claude", "codex"}
+        assert {ctx.last_session_id for ctx in loaded} == {"claude-session", "codex-session"}
+
+    def test_record_treats_missing_provider_as_claude_identity(self) -> None:
+        """Old missing-provider contexts update when a Claude context is recorded."""
+        workspace = Path("/code/api")
+        record_context(
+            WorkContext(
+                team="platform",
+                repo_root=workspace,
+                worktree_path=workspace,
+                worktree_name="main",
+                last_session_id="old-session",
+            )
+        )
+        record_context(
+            WorkContext(
+                team="platform",
+                repo_root=workspace,
+                worktree_path=workspace,
+                worktree_name="main",
+                last_session_id="claude-session",
+                provider_id="claude",
+            )
+        )
+
+        loaded = load_recent_contexts()
+        assert len(loaded) == 1
+        assert loaded[0].provider_id == "claude"
+        assert loaded[0].last_session_id == "claude-session"
 
     def test_record_preserves_pinned_status(self) -> None:
         """Recording existing context preserves its pinned status."""

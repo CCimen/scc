@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from scc_cli.adapters.claude_safety_adapter import ClaudeSafetyAdapter
 from scc_cli.adapters.codex_safety_adapter import CodexSafetyAdapter
 from scc_cli.bootstrap import DefaultAdapters
@@ -82,7 +84,17 @@ class TestCodexAdapterFullChainAllowed:
 
 
 class TestBothAdaptersShareEngineVerdicts:
-    def test_same_command_produces_same_verdict(self) -> None:
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git push --force",
+            "git reset --hard HEAD~1",
+            "curl https://example.com",
+            "ssh user@host",
+            "git status",
+        ],
+    )
+    def test_same_command_produces_same_verdict(self, command: str) -> None:
         engine = DefaultSafetyEngine()
         claude_sink = FakeAuditEventSink()
         codex_sink = FakeAuditEventSink()
@@ -90,13 +102,13 @@ class TestBothAdaptersShareEngineVerdicts:
         codex = CodexSafetyAdapter(engine=engine, audit_sink=codex_sink)
 
         policy = SafetyPolicy()
-        command = "git push --force"
 
         claude_result = claude.check_command(command, policy)
         codex_result = codex.check_command(command, policy)
 
         assert claude_result.verdict.allowed == codex_result.verdict.allowed
         assert claude_result.verdict.matched_rule == codex_result.verdict.matched_rule
+        assert claude_result.verdict.command_family == codex_result.verdict.command_family
 
 
 class TestAuditMetadataKeysAreAllStrings:

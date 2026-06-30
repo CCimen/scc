@@ -6,8 +6,10 @@ Squid ACL configuration string.
 
 Security invariants:
 - Deny rules always precede allow rules in compiled output.
-- Default deny rules cover IP literals, loopback, private CIDRs,
-  link-local, and cloud metadata endpoints.
+- Default deny rules cover loopback, private CIDRs, link-local, and cloud
+  metadata endpoints.
+- The terminal deny-all blocks destinations that do not match an allow rule,
+  including direct IP-literal attempts.
 - Final ACL line is ``http_access deny all`` (enforced modes)
   or ``http_access allow all`` (open mode).
 """
