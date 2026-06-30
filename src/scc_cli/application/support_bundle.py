@@ -201,6 +201,40 @@ def _build_launch_audit_manifest_section(
     return diagnostics.to_dict()
 
 
+def _build_work_context_manifest_section(workspace_path: Path | None) -> dict[str, Any]:
+    if workspace_path is None:
+        return {"state": "not_requested"}
+
+    try:
+        from scc_cli.contexts import get_context_for_path
+
+        context = get_context_for_path(workspace_path)
+    except Exception as exc:
+        return {
+            "state": "unavailable",
+            "workspace_path": str(workspace_path),
+            "error": str(exc),
+        }
+
+    if context is None:
+        return {
+            "state": "not_found",
+            "workspace_path": str(workspace_path),
+        }
+
+    return {
+        "state": "available",
+        "team": context.team,
+        "repo_root": str(context.repo_root),
+        "worktree_path": str(context.worktree_path),
+        "worktree_name": context.worktree_name,
+        "branch": context.branch,
+        "provider_id": context.provider_id,
+        "last_session_id": context.last_session_id,
+        "pinned": context.pinned,
+    }
+
+
 def build_support_bundle_manifest(
     request: SupportBundleRequest,
     *,
@@ -335,6 +369,7 @@ def build_support_bundle_manifest(
         "launch_audit": launch_audit,
         "effective_egress": effective_egress,
         "safety": safety_section,
+        "work_context": _build_work_context_manifest_section(request.workspace_path),
         "governed_artifacts": artifact_diagnostics,
     }
 

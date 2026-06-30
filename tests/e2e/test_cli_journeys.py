@@ -88,6 +88,45 @@ def _enterprise_org_config() -> dict[str, Any]:
     }
 
 
+def _governance_trace_org_config() -> dict[str, Any]:
+    return {
+        "schema_version": "1.0.0",
+        "organization": {"name": "Example Municipality", "id": "example-muni"},
+        "defaults": {
+            "enabled_plugins": ["org-baseline@internal"],
+            "allowed_plugins": ["org-*", "team-*", "project-*"],
+            "network_policy": "locked-down-web",
+            "session": {"timeout_hours": 8, "auto_resume": False},
+        },
+        "delegation": {
+            "teams": {
+                "allow_additional_plugins": ["analytics"],
+                "allow_additional_mcp_servers": [],
+            },
+            "projects": {"inherit_team_delegation": True},
+        },
+        "security": {
+            "blocked_plugins": ["blocked-*"],
+            "blocked_mcp_servers": ["blocked-*"],
+        },
+        "profiles": {
+            "analytics": {
+                "description": "Analytics applications",
+                "additional_plugins": ["team-insight@internal"],
+                "additional_mcp_servers": [
+                    {
+                        "name": "team-denied-mcp",
+                        "type": "sse",
+                        "url": "https://team.example.test/mcp",
+                    }
+                ],
+                "delegation": {"allow_project_overrides": True},
+                "session": {"timeout_hours": 5},
+            },
+        },
+    }
+
+
 def test_standalone_setup_and_project_init(e2e_config_paths, tmp_path: Path) -> None:
     setup_result = runner.invoke(app, ["setup", "--standalone", "--non-interactive"])
 
@@ -146,9 +185,12 @@ def test_subprocess_standalone_setup_and_init_use_isolated_home(tmp_path: Path) 
     assert Path(init_payload["data"]["file_path"]) == workspace / ".scc.yaml"
 
 
-def test_subprocess_start_dry_run_outputs_launch_contract_without_docker(tmp_path: Path) -> None:
+@pytest.mark.parametrize("provider", ["claude", "codex"])
+def test_subprocess_start_dry_run_outputs_launch_contract_without_docker(
+    tmp_path: Path, provider: str
+) -> None:
     home = tmp_path / "home"
-    workspace = tmp_path / "dry-run-project"
+    workspace = tmp_path / f"{provider}-dry-run-project"
     workspace.mkdir()
     (workspace / ".git").mkdir()
 
@@ -161,7 +203,7 @@ def test_subprocess_start_dry_run_outputs_launch_contract_without_docker(tmp_pat
             "--json",
             "--non-interactive",
             "--provider",
-            "claude",
+            provider,
         ],
         home=home,
         cwd=tmp_path,
@@ -172,7 +214,7 @@ def test_subprocess_start_dry_run_outputs_launch_contract_without_docker(tmp_pat
     assert payload["kind"] == "StartDryRun"
     assert payload["status"]["ok"] is True
     assert payload["data"]["workspace_root"] == str(workspace.resolve())
-    assert payload["data"]["provider_id"] == "claude"
+    assert payload["data"]["provider_id"] == provider
     assert payload["data"]["ready_to_start"] is True
     assert not (home / ".config" / "scc" / "audit" / "launch-events.jsonl").exists()
 
@@ -278,3 +320,139 @@ def test_org_team_project_effective_config_journey(
             "reason": "Project network_policy cannot be less restrictive than inherited policy",
         }
     ]
+
+    explain_text_result = runner.invoke(
+        app,
+        ["config", "explain", "--workspace", str(workspace), "--field", "network"],
+    )
+    assert explain_text_result.exit_code == 0
+    assert "locked-down-web" in explain_text_result.output
+    assert "Ignored Policy Changes" in explain_text_result.output
+
+
+def test_governance_decision_trace_journey(
+    e2e_config_paths,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "scc_cli.setup.fetch_org_config",
+        lambda url, auth, etag=None, auth_header=None: (
+            _governance_trace_org_config(),
+            '"e2e"',
+            200,
+        ),
+    )
+    monkeypatch.setattr("scc_cli.setup._run_provider_onboarding", lambda console: (None, None))
+
+    setup_result = runner.invoke(
+        app,
+        [
+            "setup",
+            "--org",
+            "https://example.test/scc/governance.json",
+            "--team",
+            "analytics",
+            "--non-interactive",
+        ],
+    )
+    assert setup_result.exit_code == 0
+    assert (e2e_config_paths.cache_dir / "org_config.json").exists()
+
+    workspace = tmp_path / "analytics-governance-project"
+    workspace.mkdir()
+    (workspace / ".scc.yaml").write_text(
+        "\n".join(
+            [
+                "additional_plugins:",
+                '  - "project-runner@internal"',
+                '  - "blocked-danger@internal"',
+                "additional_mcp_servers:",
+                "  - name: blocked-mcp",
+                "    type: sse",
+                "    url: https://blocked.example.test/mcp",
+                "network_policy: open",
+                "session:",
+                "  timeout_hours: 4",
+                "",
+            ]
+        )
+    )
+
+    explain_result = runner.invoke(
+        app,
+        ["config", "explain", "--workspace", str(workspace), "--json"],
+    )
+    assert explain_result.exit_code == 0
+    explain_payload = _json_output(explain_result.output)
+    data = explain_payload["data"]
+
+    assert data["team"] == "analytics"
+    assert data["effective"]["plugins"] == [
+        "org-baseline@internal",
+        "project-runner@internal",
+        "team-insight@internal",
+    ]
+    assert data["effective"]["network_policy"] == "locked-down-web"
+    assert data["effective"]["session"]["timeout_hours"] == 4
+    assert data["effective"]["mcp_servers"] == []
+
+    decisions = {
+        (decision["field"], decision["value"], decision["source"]) for decision in data["decisions"]
+    }
+    assert ("plugins", "org-baseline@internal", "org.defaults") in decisions
+    assert ("plugins", "team-insight@internal", "team.analytics") in decisions
+    assert ("plugins", "project-runner@internal", "project") in decisions
+
+    assert data["blocked_items"] == [
+        {
+            "item": "blocked-danger@internal",
+            "blocked_by": "blocked-*",
+            "source": "org.security",
+            "target_type": "plugin",
+        },
+        {
+            "item": "blocked-mcp",
+            "blocked_by": "blocked-*",
+            "source": "org.security",
+            "target_type": "mcp_server",
+        },
+    ]
+    assert data["denied_additions"] == [
+        {
+            "item": "team-denied-mcp",
+            "requested_by": "team",
+            "reason": "Team 'analytics' not allowed to add MCP servers",
+            "target_type": "mcp_server",
+        }
+    ]
+    assert data["ignored_policy_changes"] == [
+        {
+            "field": "network_policy",
+            "requested_value": "open",
+            "effective_value": "locked-down-web",
+            "source": "project",
+            "reason": "Project network_policy cannot be less restrictive than inherited policy",
+        }
+    ]
+
+    explain_text_result = runner.invoke(
+        app,
+        ["config", "explain", "--workspace", str(workspace)],
+    )
+    assert explain_text_result.exit_code == 0
+    text_output = explain_text_result.output
+
+    for expected in (
+        "org-baseline@internal",
+        "team-insight@internal",
+        "project-runner@internal",
+        "blocked-danger@internal",
+        "blocked-mcp",
+        "team-denied-mcp",
+        "Ignored Policy Changes",
+        "Blocked Items",
+        "Denied Additions",
+        "locked-down-web",
+    ):
+        assert expected in text_output

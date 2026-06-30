@@ -115,6 +115,7 @@ def _handle_dry_run(
         entry_dir=result.entry_dir,
         mount_root=result.mount_root,
         container_workdir=result.container_workdir,
+        runtime_mount_source=start_plan.runtime_mount_source,
         resolution_reason=result.reason,
         provider_id=resolved_provider,
     )

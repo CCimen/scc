@@ -1132,6 +1132,62 @@ class TestPreparedLaunchCompletionBoundary:
         )
 
 
+class TestProviderArtifactOwnershipBoundary:
+    """Provider-native artifact rendering stays behind AgentProvider adapters."""
+
+    BANNED_START_SESSION_IMPORTS = {
+        "scc_cli.adapters.claude_agent_provider",
+        "scc_cli.adapters.codex_agent_provider",
+        "scc_cli.adapters.claude_renderer",
+        "scc_cli.adapters.codex_renderer",
+    }
+    BANNED_START_SESSION_NAMES = {
+        "ClaudeAgentProvider",
+        "CodexAgentProvider",
+        "claude_renderer",
+        "codex_renderer",
+    }
+
+    def test_start_session_uses_provider_port_not_concrete_renderers(self) -> None:
+        """The application launch owner calls AgentProvider, not provider renderers."""
+        path = SRC / "application" / "start_session.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        problems: list[str] = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module in self.BANNED_START_SESSION_IMPORTS:
+                    problems.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: imports {module}"
+                    )
+                imported = sorted(
+                    self.BANNED_START_SESSION_NAMES.intersection(alias.name for alias in node.names)
+                )
+                if imported:
+                    problems.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: imports "
+                        f"{', '.join(imported)}"
+                    )
+            elif isinstance(node, ast.Import):
+                imported_modules = sorted(
+                    self.BANNED_START_SESSION_IMPORTS.intersection(
+                        alias.name for alias in node.names
+                    )
+                )
+                if imported_modules:
+                    problems.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: imports "
+                        f"{', '.join(imported_modules)}"
+                    )
+
+        assert not problems, (
+            "application.start_session should route provider-native artifact rendering "
+            "through the AgentProvider port. Concrete Claude/Codex adapters and renderers "
+            "belong in adapters/:\n" + "\n".join(problems)
+        )
+
+
 class TestWorktreeLaunchRoutingBoundary:
     """Worktree commands delegate auto-start launch orchestration to launch owners."""
 

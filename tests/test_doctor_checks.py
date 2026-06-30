@@ -197,6 +197,67 @@ class TestCheckUserConfigValid:
         assert "line" in result.message.lower()
 
 
+class TestCheckWorkspacePathMap:
+    """Tests for devcontainer runtime mount-source diagnostics."""
+
+    def test_returns_none_on_host_without_path_map(self, monkeypatch) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.delenv("SCC_WORKSPACE_PATH_MAP", raising=False)
+        monkeypatch.setattr(environment, "_running_inside_container", lambda: False)
+
+        assert environment.check_workspace_path_map() is None
+
+    def test_returns_info_inside_container_without_path_map(self, monkeypatch) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.delenv("SCC_WORKSPACE_PATH_MAP", raising=False)
+        monkeypatch.setattr(environment, "_running_inside_container", lambda: True)
+
+        result = environment.check_workspace_path_map()
+
+        assert result is not None
+        assert result.passed is True
+        assert result.severity == "info"
+        assert "SCC_WORKSPACE_PATH_MAP is not set" in result.message
+
+    def test_warns_on_invalid_path_map(self, monkeypatch) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", "workspaces/app:/host/app")
+
+        result = environment.check_workspace_path_map()
+
+        assert result is not None
+        assert result.passed is False
+        assert result.severity == "warning"
+        assert "invalid" in result.message
+
+    def test_warns_when_path_map_does_not_match_workspace(self, monkeypatch) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", "/workspaces/app:/host/app")
+
+        result = environment.check_workspace_path_map(Path("/workspace/other"))
+
+        assert result is not None
+        assert result.passed is False
+        assert result.severity == "warning"
+        assert "does not match workspace" in result.message
+
+    def test_reports_runtime_mount_source_for_matching_workspace(self, monkeypatch) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", "/workspaces/app:/host/app")
+
+        result = environment.check_workspace_path_map(Path("/workspaces/app/service"))
+
+        assert result is not None
+        assert result.passed is True
+        assert result.severity == "info"
+        assert "Runtime mount source: /host/app/service" in result.message
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for check_org_config_reachable
 # ═══════════════════════════════════════════════════════════════════════════════

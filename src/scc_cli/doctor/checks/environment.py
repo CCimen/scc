@@ -5,11 +5,17 @@ Checks for Git, Docker, WSL2, and workspace path requirements.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 from scc_cli.core.contracts import RuntimeInfo
 from scc_cli.core.enums import SeverityLevel
+from scc_cli.core.runtime_mounts import (
+    WORKSPACE_PATH_MAP_ENV,
+    parse_workspace_path_map,
+    resolve_runtime_mount_source,
+)
 
 from ..types import CheckResult
 
@@ -259,6 +265,87 @@ def check_runtime_backend() -> CheckResult:
         passed=True,
         message=(f"Runtime backend: {backend_label} ({info.display_name}, version {version_str})"),
         version=version_str,
+    )
+
+
+def _running_inside_container() -> bool:
+    """Return True when SCC appears to be executing inside a container."""
+    container_markers = (Path("/.dockerenv"), Path("/run/.containerenv"))
+    if any(marker.exists() for marker in container_markers):
+        return True
+
+    return any(
+        os.environ.get(name)
+        for name in (
+            "DEVCONTAINER",
+            "REMOTE_CONTAINERS",
+            "CODESPACES",
+            "container",
+        )
+    )
+
+
+def check_workspace_path_map(workspace: Path | None = None) -> CheckResult | None:
+    """Check devcontainer host-path mapping for sibling container launches."""
+    raw_map = os.environ.get(WORKSPACE_PATH_MAP_ENV)
+    if not raw_map:
+        if not _running_inside_container():
+            return None
+        return CheckResult(
+            name="Workspace Path Map",
+            passed=True,
+            message=f"{WORKSPACE_PATH_MAP_ENV} is not set",
+            fix_hint=(
+                "If this devcontainer uses the host Docker socket and launches fail with "
+                f"bind-mount path errors, set {WORKSPACE_PATH_MAP_ENV}="
+                "/workspaces/app:/host/path/app."
+            ),
+            severity=SeverityLevel.INFO,
+            category="backend",
+        )
+
+    parsed_map = parse_workspace_path_map(raw_map)
+    if parsed_map is None:
+        return CheckResult(
+            name="Workspace Path Map",
+            passed=False,
+            message=f"{WORKSPACE_PATH_MAP_ENV} is invalid",
+            fix_hint=f"Use {WORKSPACE_PATH_MAP_ENV}=/workspaces/app:/host/path/app",
+            severity=SeverityLevel.WARNING,
+            category="backend",
+        )
+
+    container_prefix, host_prefix = parsed_map
+    if workspace is None:
+        return CheckResult(
+            name="Workspace Path Map",
+            passed=True,
+            message=f"{WORKSPACE_PATH_MAP_ENV} maps {container_prefix} to {host_prefix}",
+            severity=SeverityLevel.INFO,
+            category="backend",
+        )
+
+    logical_workspace = workspace.resolve()
+    runtime_mount_source = resolve_runtime_mount_source(logical_workspace, raw_map)
+    if runtime_mount_source == logical_workspace:
+        return CheckResult(
+            name="Workspace Path Map",
+            passed=False,
+            message=f"{WORKSPACE_PATH_MAP_ENV} does not match workspace {logical_workspace}",
+            fix_hint=(
+                f"Set {WORKSPACE_PATH_MAP_ENV}=<container-visible-workspace>:"
+                "<host-visible-workspace> for this project."
+            ),
+            severity=SeverityLevel.WARNING,
+            category="backend",
+        )
+
+    return CheckResult(
+        name="Workspace Path Map",
+        passed=True,
+        message=f"Runtime mount source: {runtime_mount_source}",
+        severity=SeverityLevel.INFO,
+        category="backend",
     )
 
 

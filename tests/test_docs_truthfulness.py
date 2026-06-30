@@ -24,6 +24,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from scc_cli.core.enums import NetworkPolicy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,8 @@ SRC = ROOT / "src" / "scc_cli"
 COMMANDS_DIR = SRC / "commands"
 EXAMPLES_DIR = ROOT / "examples"
 README = ROOT / "README.md"
+DOCS_ROOT = ROOT.parent / "scc-cli-docs"
+DOCS_CONTENT = DOCS_ROOT / "src" / "content" / "docs"
 
 # Stale network-mode names that must not appear as policy values
 STALE_NAMES = {"unrestricted", "corp-proxy-only", "corp-proxy", "isolated"}
@@ -1023,3 +1027,139 @@ def test_setup_uses_shared_dispatch() -> None:
         "setup.py still contains a hardcoded 'provider_map' dict. "
         "Use the shared get_agent_provider() from dependencies.py instead."
     )
+
+
+# ===========================================================================
+# M012 docs-as-contract guardrails
+# ===========================================================================
+
+
+def _read_docs_page(relative_path: str) -> str:
+    """Read a sibling docs page when the clean two-repo workspace is present."""
+    if not DOCS_CONTENT.is_dir():
+        pytest.skip("sibling scc-cli-docs repo is not present in this checkout")
+
+    path = DOCS_CONTENT / relative_path
+    assert path.exists(), f"Expected docs page missing: {path}"
+    return path.read_text(encoding="utf-8")
+
+
+def test_m012_docs_claim_map_exists_and_links_claims_to_tests() -> None:
+    """Docs claim map must tie high-value claims to owners and tests.
+
+    M012 keeps docs claims honest by naming the implementation owner and
+    executable proof for security, network, provider, audit, and inheritance
+    statements.
+    """
+    text = _read_docs_page("reference/docs-claim-map.mdx")
+
+    required_fragments = [
+        "compute_effective_config.py",
+        "tests/test_config_explain.py",
+        "tests/e2e/test_cli_journeys.py",
+        "tests/test_oci_egress_integration.py",
+        "tests/test_safety_adapter_audit.py",
+        "tests/test_support_bundle.py",
+        "future",
+        "remove",
+        "Raw TCP/UDP filtering through the proxy",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    assert not missing, f"Docs claim map is missing expected proof links: {missing}"
+
+
+def test_m012_config_inheritance_docs_cover_project_policy_and_work_context() -> None:
+    """Config inheritance docs must explain v1 merge rules and project identity."""
+    text = _read_docs_page("architecture/config-inheritance.mdx")
+
+    required_fragments = [
+        "organization defaults -> selected team profile -> project .scc.yaml",
+        "open < web-egress-enforced < locked-down-web",
+        "Ignored Policy Changes",
+        "ignored_policy_changes",
+        "v1 does not have a separate project registry",
+        "Each provider gets separate session identity",
+        "scc config explain --json",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    assert not missing, f"Config Inheritance docs are missing M012 claims: {missing}"
+
+
+def test_m012_security_docs_do_not_overclaim_ip_literal_default_deny() -> None:
+    """Security docs must match the actual egress ACL behavior."""
+    text = _read_docs_page("architecture/security-model.mdx")
+
+    stale = (
+        "Default deny rules block IP literals, loopback, private CIDRs, "
+        "link-local ranges, and cloud metadata endpoints before any allow rules"
+    )
+    assert stale not in text
+    assert (
+        "Unlisted destinations, including direct IP-literal attempts, hit the terminal "
+        "deny-all rule"
+    ) in text
+    assert "Raw TCP/UDP beyond HTTP(S) is not filtered by the proxy" in text
+
+
+def test_m013_devcontainer_docs_are_scoped_to_path_mapping() -> None:
+    """Devcontainer docs must describe implemented sibling-container support."""
+    devcontainer_text = _read_docs_page("comparisons/scc-vs-dev-containers.mdx")
+    claim_map_text = _read_docs_page("reference/docs-claim-map.mdx")
+
+    required_devcontainer_fragments = [
+        "SCC_WORKSPACE_PATH_MAP",
+        "scc doctor . --json",
+        "Workspace Path Map",
+        "runtime_mount_source",
+        "SCC_REAL_RUNTIME_SMOKE=1",
+        "SCC_REAL_RUNTIME_IMAGE",
+        "-m real_runtime",
+        "sibling",
+        "does not run the agent inside the existing devcontainer",
+        "does not attach the agent container to arbitrary devcontainer or Compose",
+        "service networks",
+        "policy, explain output, audit",
+    ]
+    missing_devcontainer = [
+        fragment
+        for fragment in required_devcontainer_fragments
+        if fragment not in devcontainer_text
+    ]
+    assert not missing_devcontainer, (
+        "Devcontainer docs are missing scoped M013 claims: " + ", ".join(missing_devcontainer)
+    )
+
+    required_claim_map_fragments = [
+        "SCC_WORKSPACE_PATH_MAP",
+        "tests/test_runtime_mount_mapping.py",
+        "tests/test_doctor_checks.py",
+        "tests/test_start_dryrun.py",
+        "tests/test_real_runtime_smoke.py",
+        "partial",
+        "Explicitly excluded by M013 S04 / D056",
+    ]
+    missing_claim_map = [
+        fragment for fragment in required_claim_map_fragments if fragment not in claim_map_text
+    ]
+    assert not missing_claim_map, "Docs claim map is missing M013 devcontainer proof: " + ", ".join(
+        missing_claim_map
+    )
+
+
+def test_m012_enterprise_pilot_is_executable_for_core_journeys() -> None:
+    """Enterprise pilot docs must include runnable setup, explain, dry-run, and support steps."""
+    text = _read_docs_page("guides/organization/enterprise-pilot.mdx")
+
+    required_fragments = [
+        "Executable Pilot Config",
+        'title="org-config.json"',
+        'title=".scc.yaml"',
+        "scc org validate org-config.json",
+        "scc config explain --json",
+        "scc start --provider claude --dry-run --json --non-interactive .",
+        "scc start --provider codex --dry-run --json --non-interactive .",
+        "scc support bundle",
+        "support bundle manifest includes provider, runtime, policy, and work-context evidence",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in text]
+    assert not missing, f"Enterprise Pilot docs are missing executable journey steps: {missing}"

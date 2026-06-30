@@ -36,6 +36,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from scc_cli.core.provider_resolution import DEFAULT_PROVIDER, provider_identity
+
 from .utils.locks import file_lock, lock_path
 
 # Schema version for future migration support
@@ -121,18 +123,23 @@ class WorkContext:
         This provides meaningful labels (branch names) while maintaining stability
         (directory names don't change when branches switch).
 
-        Appends provider info when provider_id is set and not 'claude' (the default).
+        Appends provider info when provider_id is set and not the default provider.
         """
         name = self.branch or self.worktree_name
         label = f"{self.team_label} · {self.repo_name} · {name}"
-        if self.provider_id and self.provider_id != "claude":
+        if self.provider_id and self.provider_id != DEFAULT_PROVIDER:
             label = f"{label} ({self.provider_id})"
         return label
 
     @property
-    def unique_key(self) -> tuple[str | None, Path, Path]:
-        """Unique identifier for deduplication: (team, repo_root, worktree_path)."""
-        return (self.team, self.repo_root, self.worktree_path)
+    def unique_key(self) -> tuple[str | None, Path, Path, str]:
+        """Unique identifier for deduplication."""
+        return (
+            self.team,
+            self.repo_root,
+            self.worktree_path,
+            provider_identity(self.provider_id),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -325,13 +332,19 @@ def record_context(context: WorkContext) -> None:
         _save_contexts_raw([c.to_dict() for c in final])
 
 
-def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> bool | None:
+def toggle_pin(
+    team: str,
+    repo_root: str | Path,
+    worktree_path: str | Path,
+    provider_id: str | None = None,
+) -> bool | None:
     """Toggle the pinned status of a context.
 
     Args:
         team: Team name.
         repo_root: Repository root path.
         worktree_path: Worktree path.
+        provider_id: Optional provider identity to pin when multiple providers share a context.
 
     Returns:
         New pinned status (True if now pinned, False if unpinned),
@@ -341,7 +354,12 @@ def toggle_pin(team: str, repo_root: str | Path, worktree_path: str | Path) -> b
     with file_lock(lock_file):
         # Load all contexts as WorkContext objects (normalizes paths once)
         contexts = [WorkContext.from_dict(d) for d in _load_contexts_raw()]
-        key = (team, normalize_path(repo_root), normalize_path(worktree_path))
+        key = (
+            team,
+            normalize_path(repo_root),
+            normalize_path(worktree_path),
+            provider_identity(provider_id),
+        )
 
         for i, ctx in enumerate(contexts):
             if ctx.unique_key == key:

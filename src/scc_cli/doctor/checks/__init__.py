@@ -48,6 +48,7 @@ from .environment import (
     check_provider_image,
     check_runtime_backend,
     check_workspace_path,
+    check_workspace_path_map,
     check_wsl2,
 )
 
@@ -99,6 +100,10 @@ def run_all_checks() -> list[CheckResult]:
     results.append(wsl2_result)
 
     results.append(check_runtime_backend())
+
+    path_map_check = check_workspace_path_map()
+    if path_map_check is not None:
+        results.append(path_map_check)
 
     try:
         results.append(check_provider_image())
@@ -182,6 +187,7 @@ __all__ = [
     "check_provider_image",
     "check_runtime_backend",
     "check_workspace_path",
+    "check_workspace_path_map",
     # Worktree checks
     "check_worktree_health",
     "check_git_version_for_worktrees",

@@ -106,6 +106,28 @@ class TestSessionFilterProviderIdFiltering:
         assert len(result.sessions) == 1
         assert result.sessions[0].provider_id == "codex"
 
+    def test_filter_claude_includes_missing_provider_records(self) -> None:
+        from unittest.mock import MagicMock
+
+        from scc_cli.application.sessions.use_cases import SessionService
+
+        old_claude_record = SessionRecord(
+            workspace="/tmp/a",
+            last_used="2025-01-02T00:00:00",
+        )
+        codex_record = SessionRecord(
+            workspace="/tmp/b",
+            provider_id="codex",
+            last_used="2025-01-01T00:00:00",
+        )
+        store = MagicMock()
+        store.load_sessions.return_value = [old_claude_record, codex_record]
+        service = SessionService(store=store)
+        result = service.list_recent(SessionFilter(include_all=True, provider_id="claude"))
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].workspace == "/tmp/a"
+
     def test_filter_without_provider_id_returns_all(self) -> None:
         from unittest.mock import MagicMock
 

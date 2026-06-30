@@ -22,6 +22,7 @@ from scc_cli.core.contracts import AgentLaunchSpec, RenderArtifactsResult, Runti
 from scc_cli.core.destination_registry import resolve_destination_sets
 from scc_cli.core.errors import RendererError, WorkspaceNotFoundError
 from scc_cli.core.provider_registry import get_runtime_spec
+from scc_cli.core.runtime_mounts import resolve_runtime_mount_source
 from scc_cli.core.workspace import ResolverResult
 from scc_cli.ports.agent_provider import AgentProvider
 from scc_cli.ports.agent_runner import AgentRunner
@@ -97,6 +98,7 @@ class StartSessionPlan:
     agent_launch_spec: AgentLaunchSpec | None = None
     bundle_render_results: tuple[RenderArtifactsResult, ...] = ()
     bundle_render_error: str | None = None
+    runtime_mount_source: Path | None = None
 
 
 def prepare_start_session(
@@ -111,6 +113,7 @@ def prepare_start_session(
     the sandbox specification.
     """
     resolver_result = _resolve_workspace_context(request)
+    runtime_mount_source = resolve_runtime_mount_source(resolver_result.mount_root)
     effective_config = _compute_effective_config(request)
     sync_result, sync_error_message = sync_marketplace_settings_for_start(request, dependencies)
     # Resolve provider_id for settings path routing.
@@ -161,6 +164,7 @@ def prepare_start_session(
         runtime_info=dependencies.runtime_info,
         agent_provider=dependencies.agent_provider,
         agent_argv=agent_argv,
+        runtime_mount_source=runtime_mount_source,
     )
     return StartSessionPlan(
         resolver_result=resolver_result,
@@ -178,6 +182,7 @@ def prepare_start_session(
         agent_launch_spec=agent_launch_spec,
         bundle_render_results=bundle_render_results,
         bundle_render_error=bundle_render_error,
+        runtime_mount_source=runtime_mount_source,
     )
 
 
@@ -332,6 +337,7 @@ def _build_sandbox_spec(
     runtime_info: RuntimeInfo | None = None,
     agent_provider: AgentProvider | None = None,
     agent_argv: list[str] | None = None,
+    runtime_mount_source: Path | None = None,
 ) -> SandboxSpec | None:
     if request.dry_run:
         return None
@@ -374,10 +380,12 @@ def _build_sandbox_spec(
         if profile.required_destination_set:
             destination_sets = resolve_destination_sets((profile.required_destination_set,))
 
+    mount_source = runtime_mount_source or resolve_runtime_mount_source(resolver_result.mount_root)
+
     return SandboxSpec(
         image=image,
         workspace_mount=MountSpec(
-            source=resolver_result.mount_root,
+            source=mount_source,
             target=resolver_result.mount_root,
         ),
         workdir=Path(resolver_result.container_workdir),

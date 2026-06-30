@@ -105,6 +105,7 @@ testpaths = ["tests"]
 addopts = "-v --cov=scc_cli"
 markers = [
     "e2e: hermetic end-to-end CLI journeys across core SCC workflows",
+    "real_runtime: opt-in Docker/OCI smoke tests gated by SCC_REAL_RUNTIME_SMOKE=1",
 ]
 
 [dependency-groups]
