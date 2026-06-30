@@ -10,8 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from scc_cli.application.worktree.operations import _build_shell_result
-from scc_cli.application.worktree.use_cases import (
+from scc_cli.application.worktree.models import (
     WorktreeConfirmAction,
     WorktreeConfirmation,
     WorktreeDependencies,
@@ -24,6 +23,9 @@ from scc_cli.application.worktree.use_cases import (
     WorktreeShellResult,
     WorktreeSummary,
     WorktreeWarningOutcome,
+)
+from scc_cli.application.worktree.operations import _build_shell_result
+from scc_cli.application.worktree.use_cases import (
     _build_selection_items,
     list_worktrees,
     select_worktree,

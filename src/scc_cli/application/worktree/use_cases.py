@@ -1,4 +1,4 @@
-"""Worktree use cases and domain models."""
+"""Worktree selection and switching use cases."""
 
 from __future__ import annotations
 
@@ -6,32 +6,8 @@ import os
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
+import scc_cli.application.worktree.models as worktree_models
 from scc_cli.application.interaction_requests import ConfirmRequest, SelectOption, SelectRequest
-
-# Re-export all models for backward compatibility
-from scc_cli.application.worktree.models import (  # noqa: F401
-    ShellCommand,
-    WorktreeConfirmAction,
-    WorktreeConfirmation,
-    WorktreeCreateRequest,
-    WorktreeCreateResult,
-    WorktreeDependencies,
-    WorktreeEnterOutcome,
-    WorktreeEnterRequest,
-    WorktreeListRequest,
-    WorktreeListResult,
-    WorktreeResolution,
-    WorktreeSelectionItem,
-    WorktreeSelectionPrompt,
-    WorktreeSelectOutcome,
-    WorktreeSelectRequest,
-    WorktreeShellResult,
-    WorktreeSummary,
-    WorktreeSwitchOutcome,
-    WorktreeSwitchRequest,
-    WorktreeWarning,
-    WorktreeWarningOutcome,
-)
 from scc_cli.application.worktree.operations import create_worktree as _create_worktree
 from scc_cli.core.errors import NotAGitRepoError, WorkspaceNotFoundError
 from scc_cli.core.exit_codes import EXIT_CANCELLED
@@ -41,10 +17,10 @@ from scc_cli.services.git.worktree import WorktreeInfo
 
 
 def list_worktrees(
-    request: WorktreeListRequest,
+    request: worktree_models.WorktreeListRequest,
     *,
     git_client: GitClient,
-) -> WorktreeListResult:
+) -> worktree_models.WorktreeListResult:
     """List worktrees for a repository.
 
     Invariants:
@@ -53,7 +29,7 @@ def list_worktrees(
     """
     worktrees = git_client.list_worktrees(request.workspace_path)
     current_real = os.path.realpath(request.current_dir)
-    summaries: list[WorktreeSummary] = []
+    summaries: list[worktree_models.WorktreeSummary] = []
 
     for worktree in worktrees:
         path = Path(worktree.path)
@@ -67,7 +43,7 @@ def list_worktrees(
             has_changes = (staged + modified + untracked) > 0
 
         summaries.append(
-            WorktreeSummary.from_info(
+            worktree_models.WorktreeSummary.from_info(
                 worktree,
                 path=path,
                 is_current=is_current,
@@ -79,14 +55,17 @@ def list_worktrees(
             )
         )
 
-    return WorktreeListResult(workspace_path=request.workspace_path, worktrees=tuple(summaries))
+    return worktree_models.WorktreeListResult(
+        workspace_path=request.workspace_path,
+        worktrees=tuple(summaries),
+    )
 
 
 def select_worktree(
-    request: WorktreeSelectRequest,
+    request: worktree_models.WorktreeSelectRequest,
     *,
-    dependencies: WorktreeDependencies,
-) -> WorktreeSelectOutcome:
+    dependencies: worktree_models.WorktreeDependencies,
+) -> worktree_models.WorktreeSelectOutcome:
     """Select a worktree or branch without performing UI prompts.
 
     Invariants:
@@ -106,7 +85,7 @@ def select_worktree(
         return _resolve_selection(request, dependencies)
 
     worktrees = list_worktrees(
-        WorktreeListRequest(
+        worktree_models.WorktreeListRequest(
             workspace_path=request.workspace_path,
             verbose=False,
             current_dir=request.current_dir,
@@ -121,8 +100,8 @@ def select_worktree(
 
     items = _build_selection_items(worktrees, branch_items)
     if not items:
-        return WorktreeWarningOutcome(
-            WorktreeWarning(
+        return worktree_models.WorktreeWarningOutcome(
+            worktree_models.WorktreeWarning(
                 title="No Worktrees or Branches",
                 message="No worktrees found and no remote branches available.",
                 suggestion="Create a worktree with: scc worktree create <repo> <name>",
@@ -132,7 +111,7 @@ def select_worktree(
     subtitle = f"{len(worktrees)} worktrees"
     if branch_items:
         subtitle += f", {len(branch_items)} branches"
-    return WorktreeSelectionPrompt(
+    return worktree_models.WorktreeSelectionPrompt(
         request=_build_select_request(
             request_id="worktree-select",
             title="Select Worktree",
@@ -143,10 +122,10 @@ def select_worktree(
 
 
 def switch_worktree(
-    request: WorktreeSwitchRequest,
+    request: worktree_models.WorktreeSwitchRequest,
     *,
-    dependencies: WorktreeDependencies,
-) -> WorktreeSwitchOutcome:
+    dependencies: worktree_models.WorktreeDependencies,
+) -> worktree_models.WorktreeSwitchOutcome:
     """Resolve a worktree switch target.
 
     Invariants:
@@ -164,7 +143,7 @@ def switch_worktree(
 
     if request.selection is not None:
         return _resolve_selection(
-            WorktreeSelectRequest(
+            worktree_models.WorktreeSelectRequest(
                 workspace_path=request.workspace_path,
                 include_branches=False,
                 current_dir=request.current_dir,
@@ -175,7 +154,7 @@ def switch_worktree(
 
     if request.target is None:
         worktrees = list_worktrees(
-            WorktreeListRequest(
+            worktree_models.WorktreeListRequest(
                 workspace_path=request.workspace_path,
                 verbose=False,
                 current_dir=request.current_dir,
@@ -183,14 +162,14 @@ def switch_worktree(
             git_client=dependencies.git_client,
         ).worktrees
         if not worktrees:
-            return WorktreeWarningOutcome(
-                WorktreeWarning(
+            return worktree_models.WorktreeWarningOutcome(
+                worktree_models.WorktreeWarning(
                     title="No Worktrees",
                     message="No worktrees found for this repository.",
                     suggestion="Create one with: scc worktree create <repo> <name>",
                 )
             )
-        return WorktreeSelectionPrompt(
+        return worktree_models.WorktreeSelectionPrompt(
             request=_build_select_request(
                 request_id="worktree-switch",
                 title="Select Worktree",
@@ -201,33 +180,33 @@ def switch_worktree(
 
     if request.target == "-":
         if not request.oldpwd:
-            return WorktreeWarningOutcome(
-                WorktreeWarning(
+            return worktree_models.WorktreeWarningOutcome(
+                worktree_models.WorktreeWarning(
                     title="No Previous Directory",
                     message="Shell $OLDPWD is not set.",
                     suggestion="This typically means you haven't changed directories yet.",
                 )
             )
-        return WorktreeResolution(worktree_path=Path(request.oldpwd))
+        return worktree_models.WorktreeResolution(worktree_path=Path(request.oldpwd))
 
     if request.target == "^":
         main_worktree = dependencies.git_client.find_main_worktree(request.workspace_path)
         if not main_worktree:
             default_branch = dependencies.git_client.get_default_branch(request.workspace_path)
-            return WorktreeWarningOutcome(
-                WorktreeWarning(
+            return worktree_models.WorktreeWarningOutcome(
+                worktree_models.WorktreeWarning(
                     title="No Main Worktree",
                     message=f"No worktree found for default branch '{default_branch}'.",
                     suggestion="The main branch may not have a separate worktree.",
                 )
             )
-        return WorktreeResolution(worktree_path=Path(main_worktree.path))
+        return worktree_models.WorktreeResolution(worktree_path=Path(main_worktree.path))
 
     exact_match, matches = dependencies.git_client.find_worktree_by_query(
         request.workspace_path, request.target
     )
     if exact_match:
-        return WorktreeResolution(worktree_path=Path(exact_match.path))
+        return worktree_models.WorktreeResolution(worktree_path=Path(exact_match.path))
 
     if not matches:
         if request.target not in ("^", "-", "@") and not request.target.startswith("@{"):
@@ -236,8 +215,8 @@ def switch_worktree(
             )
             if request.target in branches:
                 if request.confirm_create is False:
-                    return WorktreeWarningOutcome(
-                        WorktreeWarning(
+                    return worktree_models.WorktreeWarningOutcome(
+                        worktree_models.WorktreeWarning(
                             title="Cancelled",
                             message="Cancelled.",
                             suggestion=None,
@@ -246,7 +225,7 @@ def switch_worktree(
                     )
                 if request.confirm_create is True:
                     return _create_worktree(
-                        WorktreeCreateRequest(
+                        worktree_models.WorktreeCreateRequest(
                             workspace_path=request.workspace_path,
                             name=request.target,
                             base_branch=request.target,
@@ -255,8 +234,8 @@ def switch_worktree(
                         dependencies=dependencies,
                     )
                 if not request.interactive_allowed:
-                    return WorktreeWarningOutcome(
-                        WorktreeWarning(
+                    return worktree_models.WorktreeWarningOutcome(
+                        worktree_models.WorktreeWarning(
                             title="Branch Exists, No Worktree",
                             message=f"Branch '{request.target}' exists but has no worktree.",
                             suggestion=(
@@ -265,8 +244,8 @@ def switch_worktree(
                             ),
                         )
                     )
-                return WorktreeConfirmation(
-                    action=WorktreeConfirmAction.CREATE_WORKTREE,
+                return worktree_models.WorktreeConfirmation(
+                    action=worktree_models.WorktreeConfirmAction.CREATE_WORKTREE,
                     request=ConfirmRequest(
                         request_id="worktree-create-branch",
                         prompt=f"No worktree for '{request.target}'. Create one?",
@@ -275,8 +254,8 @@ def switch_worktree(
                     branch_name=request.target,
                 )
 
-        return WorktreeWarningOutcome(
-            WorktreeWarning(
+        return worktree_models.WorktreeWarningOutcome(
+            worktree_models.WorktreeWarning(
                 title="Worktree Not Found",
                 message=f"No worktree matches '{request.target}'.",
                 suggestion="Tip: Use 'scc worktree select --branches' to pick from remote branches.",
@@ -284,7 +263,7 @@ def switch_worktree(
         )
 
     if request.interactive_allowed:
-        return WorktreeSelectionPrompt(
+        return worktree_models.WorktreeSelectionPrompt(
             request=_build_select_request(
                 request_id="worktree-switch",
                 title="Multiple Matches",
@@ -306,8 +285,8 @@ def switch_worktree(
             match_lines.append(f"  {i + 1}. {display_branch} -> {dir_name}")
     top_match_dir = Path(matches[0].path).name
 
-    return WorktreeWarningOutcome(
-        WorktreeWarning(
+    return worktree_models.WorktreeWarningOutcome(
+        worktree_models.WorktreeWarning(
             title="Ambiguous Match",
             message=f"'{request.target}' matches {len(matches)} worktrees (ranked by relevance):",
             suggestion=(
@@ -324,13 +303,13 @@ def _require_workspace(workspace_path: Path) -> None:
 
 
 def _build_selection_items(
-    worktrees: Iterable[WorktreeSummary],
+    worktrees: Iterable[worktree_models.WorktreeSummary],
     branches: Sequence[str],
-) -> list[WorktreeSelectionItem]:
-    items: list[WorktreeSelectionItem] = []
+) -> list[worktree_models.WorktreeSelectionItem]:
+    items: list[worktree_models.WorktreeSelectionItem] = []
     for worktree in worktrees:
         items.append(
-            WorktreeSelectionItem(
+            worktree_models.WorktreeSelectionItem(
                 item_id=f"worktree:{worktree.path}",
                 branch=worktree.branch,
                 worktree=worktree,
@@ -339,7 +318,7 @@ def _build_selection_items(
         )
     for branch in branches:
         items.append(
-            WorktreeSelectionItem(
+            worktree_models.WorktreeSelectionItem(
                 item_id=f"branch:{branch}",
                 branch=branch,
                 worktree=None,
@@ -354,8 +333,8 @@ def _build_select_request(
     request_id: str,
     title: str,
     subtitle: str | None,
-    items: Sequence[WorktreeSelectionItem],
-) -> SelectRequest[WorktreeSelectionItem]:
+    items: Sequence[worktree_models.WorktreeSelectionItem],
+) -> SelectRequest[worktree_models.WorktreeSelectionItem]:
     options = [
         SelectOption(
             option_id=item.item_id,
@@ -375,9 +354,9 @@ def _build_select_request(
 
 
 def _resolve_selection(
-    request: WorktreeSelectRequest,
-    dependencies: WorktreeDependencies,
-) -> WorktreeSelectOutcome:
+    request: worktree_models.WorktreeSelectRequest,
+    dependencies: worktree_models.WorktreeDependencies,
+) -> worktree_models.WorktreeSelectOutcome:
     selection = request.selection
     if selection is None:
         raise ValueError("Selection must be provided to resolve a worktree selection")
@@ -386,11 +365,14 @@ def _resolve_selection(
         if not selection.path:
             raise ValueError("Selection missing worktree path")
         worktree_name = selection.branch or selection.path.name
-        return WorktreeResolution(worktree_path=selection.path, worktree_name=worktree_name)
+        return worktree_models.WorktreeResolution(
+            worktree_path=selection.path,
+            worktree_name=worktree_name,
+        )
 
     if request.confirm_create is None:
-        return WorktreeConfirmation(
-            action=WorktreeConfirmAction.CREATE_WORKTREE,
+        return worktree_models.WorktreeConfirmation(
+            action=worktree_models.WorktreeConfirmAction.CREATE_WORKTREE,
             request=ConfirmRequest(
                 request_id="worktree-create-branch",
                 prompt=f"Create worktree for branch '{selection.branch}'?",
@@ -400,8 +382,8 @@ def _resolve_selection(
         )
 
     if not request.confirm_create:
-        return WorktreeWarningOutcome(
-            WorktreeWarning(
+        return worktree_models.WorktreeWarningOutcome(
+            worktree_models.WorktreeWarning(
                 title="Cancelled",
                 message="Cancelled.",
                 suggestion=None,
@@ -410,7 +392,7 @@ def _resolve_selection(
         )
 
     return _create_worktree(
-        WorktreeCreateRequest(
+        worktree_models.WorktreeCreateRequest(
             workspace_path=request.workspace_path,
             name=selection.branch,
             base_branch=selection.branch,
@@ -420,11 +402,13 @@ def _resolve_selection(
     )
 
 
-def _summaries_from_matches(matches: Sequence[WorktreeInfo]) -> list[WorktreeSummary]:
+def _summaries_from_matches(
+    matches: Sequence[WorktreeInfo],
+) -> list[worktree_models.WorktreeSummary]:
     summaries = []
     for match in matches:
         summaries.append(
-            WorktreeSummary(
+            worktree_models.WorktreeSummary(
                 path=Path(match.path),
                 branch=match.branch,
                 status=match.status,

@@ -1371,6 +1371,26 @@ class TestWorktreeExportBoundary:
             + "\n".join(offenders)
         )
 
+    def test_worktree_use_cases_do_not_reexport_models(self) -> None:
+        """Worktree models stay owned by models.py and package __init__."""
+        path = SRC / "application" / "worktree" / "use_cases.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.module != "scc_cli.application.worktree.models":
+                continue
+            imported = ", ".join(alias.name for alias in node.names)
+            offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {imported}")
+
+        assert not offenders, (
+            "application.worktree.use_cases should consume worktree models through "
+            "the models module, not re-export model symbols. Import models from "
+            "scc_cli.application.worktree or models.py instead.\n" + "\n".join(offenders)
+        )
+
 
 class TestAdapterBoundaries:
     """Adapter layer must not depend on UI and only bootstrap composes adapters."""
