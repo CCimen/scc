@@ -39,6 +39,8 @@ def test_runtime_mount_source_maps_nested_mount_path() -> None:
         "/workspaces/app:",
         "workspaces/app:/Users/dev/app",
         "/workspaces/app:Users/dev/app",
+        "/workspaces/app/..:/Users/dev/app",
+        "/workspaces/app:/Users/dev/app/..",
     ],
 )
 def test_runtime_mount_source_ignores_invalid_path_maps(path_map: str) -> None:
@@ -49,5 +51,11 @@ def test_runtime_mount_source_ignores_invalid_path_maps(path_map: str) -> None:
 
 def test_runtime_mount_source_ignores_non_matching_path_map() -> None:
     mount_root = Path("/workspace/app")
+
+    assert resolve_runtime_mount_source(mount_root, "/workspaces/app:/Users/dev/app") == mount_root
+
+
+def test_runtime_mount_source_does_not_map_parent_escape() -> None:
+    mount_root = Path("/workspaces/app/../other")
 
     assert resolve_runtime_mount_source(mount_root, "/workspaces/app:/Users/dev/app") == mount_root

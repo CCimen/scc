@@ -46,6 +46,20 @@ def _docker(
     )
 
 
+def _docker_run_shell(
+    image: str,
+    command: str,
+    *,
+    run_args: list[str] | None = None,
+    timeout: int = 30,
+) -> subprocess.CompletedProcess[str]:
+    args = ["run", "--rm"]
+    if run_args:
+        args.extend(run_args)
+    args.extend(["--entrypoint", "sh", image, "-c", command])
+    return _docker(args, timeout=timeout)
+
+
 def _require_smoke_image() -> str:
     image = os.environ.get(_IMAGE_ENV, _DEFAULT_IMAGE)
     try:
@@ -63,7 +77,7 @@ def _require_smoke_image() -> str:
         pytest.skip(f"Docker image inspect timed out: {exc}")
 
     try:
-        _docker(["run", "--rm", image, "sh", "-c", "true"], timeout=20)
+        _docker_run_shell(image, "true", timeout=20)
     except subprocess.CalledProcessError:
         pytest.skip(f"Docker image {image!r} does not provide a POSIX shell")
     except subprocess.TimeoutExpired as exc:
@@ -84,18 +98,14 @@ def test_real_docker_accepts_devcontainer_path_map_mount(
     runtime_mount_source = resolve_runtime_mount_source(logical_workspace)
 
     assert runtime_mount_source == tmp_path
-    result = _docker(
-        [
-            "run",
-            "--rm",
+    result = _docker_run_shell(
+        image,
+        "test -f marker.txt && pwd",
+        run_args=[
             "-v",
             f"{runtime_mount_source}:{logical_workspace}:ro",
             "-w",
             str(logical_workspace),
-            image,
-            "sh",
-            "-c",
-            "test -f marker.txt && pwd",
         ],
         timeout=30,
     )

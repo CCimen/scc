@@ -8,6 +8,14 @@ from pathlib import Path
 WORKSPACE_PATH_MAP_ENV = "SCC_WORKSPACE_PATH_MAP"
 
 
+def _has_parent_reference(path: Path) -> bool:
+    return ".." in path.parts
+
+
+def _normalize_path(path: Path) -> Path:
+    return path.expanduser().resolve(strict=False)
+
+
 def parse_workspace_path_map(path_map: str | None) -> tuple[Path, Path] | None:
     """Parse ``SCC_WORKSPACE_PATH_MAP`` into container and host prefixes."""
     if not path_map:
@@ -21,8 +29,10 @@ def parse_workspace_path_map(path_map: str | None) -> tuple[Path, Path] | None:
     host_prefix = Path(host_prefix_raw).expanduser()
     if not container_prefix.is_absolute() or not host_prefix.is_absolute():
         return None
+    if _has_parent_reference(container_prefix) or _has_parent_reference(host_prefix):
+        return None
 
-    return container_prefix, host_prefix
+    return _normalize_path(container_prefix), _normalize_path(host_prefix)
 
 
 def resolve_runtime_mount_source(mount_root: Path, path_map: str | None = None) -> Path:
@@ -33,8 +43,9 @@ def resolve_runtime_mount_source(mount_root: Path, path_map: str | None = None) 
         return mount_root
 
     container_prefix, host_prefix = parsed_map
+    normalized_mount_root = _normalize_path(mount_root)
     try:
-        relative_mount = mount_root.relative_to(container_prefix)
+        relative_mount = normalized_mount_root.relative_to(container_prefix)
     except ValueError:
         return mount_root
 

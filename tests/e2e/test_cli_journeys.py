@@ -219,6 +219,74 @@ def test_subprocess_start_dry_run_outputs_launch_contract_without_docker(
     assert not (home / ".config" / "scc" / "audit" / "launch-events.jsonl").exists()
 
 
+def test_subprocess_path_map_journey_reports_runtime_mount_source(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    host_workspace = tmp_path / "host" / "project"
+    host_workspace.mkdir(parents=True)
+    logical_workspace = tmp_path / "container" / "project"
+    logical_workspace.mkdir(parents=True)
+    (logical_workspace / ".git").mkdir()
+
+    env = _subprocess_env(home)
+    env["SCC_WORKSPACE_PATH_MAP"] = f"{logical_workspace}:{host_workspace}"
+
+    dry_run_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scc_cli.cli",
+            "start",
+            str(logical_workspace),
+            "--standalone",
+            "--dry-run",
+            "--json",
+            "--non-interactive",
+            "--allow-suspicious-workspace",
+            "--provider",
+            "claude",
+        ],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert dry_run_result.returncode == 0, dry_run_result.stderr + dry_run_result.stdout
+    dry_run_payload = _json_output(dry_run_result.stdout)
+    assert dry_run_payload["kind"] == "StartDryRun"
+    assert dry_run_payload["data"]["mount_root"] == str(logical_workspace.resolve())
+    assert dry_run_payload["data"]["runtime_mount_source"] == str(host_workspace.resolve())
+
+    doctor_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scc_cli.cli",
+            "doctor",
+            str(logical_workspace),
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert doctor_result.returncode in {0, 3}, doctor_result.stderr + doctor_result.stdout
+    doctor_payload = _json_output(doctor_result.stdout)
+    workspace_map_checks = [
+        check for check in doctor_payload["data"]["checks"] if check["name"] == "Workspace Path Map"
+    ]
+    assert workspace_map_checks
+    assert str(host_workspace.resolve()) in workspace_map_checks[0]["message"]
+
+
 def test_org_team_project_effective_config_journey(
     e2e_config_paths,
     monkeypatch: pytest.MonkeyPatch,
