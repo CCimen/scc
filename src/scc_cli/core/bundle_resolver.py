@@ -228,8 +228,8 @@ def resolve_render_plan(
         provider: Target provider identifier (e.g. 'claude', 'codex').
         fail_closed: If True, missing bundles and invalid artifact references
             raise typed exceptions (``BundleResolutionError``,
-            ``InvalidArtifactReferenceError``) instead of producing
-            diagnostics. Default is False for backward compatibility.
+            ``InvalidArtifactReferenceError``) instead of collecting all
+            diagnostics.
 
     Returns:
         BundleResolutionResult with plans and diagnostics.

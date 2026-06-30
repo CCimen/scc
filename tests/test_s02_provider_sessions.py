@@ -4,7 +4,7 @@ Validates:
 - get_provider_sessions_dir returns correct path per provider
 - get_provider_recent_sessions returns empty list when no sessions.json
 - get_provider_config_dir returns correct path per provider
-- WorkContext.provider_id round-trip and backward compat
+- WorkContext.provider_id round-trip and missing-key defaults
 - WorkContext.display_label with and without provider
 - Session list CLI includes provider_id in session_dicts
 """
@@ -138,7 +138,7 @@ class TestWorkContextProviderId:
         ctx = self._make_ctx()
         assert ctx.provider_id is None
 
-    def test_from_dict_backward_compat_no_provider_key(self) -> None:
+    def test_from_dict_missing_provider_key_defaults_to_none(self) -> None:
         """Old serialized dicts without provider_id should deserialize to None."""
         data = {
             "team": "platform",

@@ -1246,7 +1246,7 @@ session:
     def test_compute_effective_config_project_config_dict_still_works(
         self, valid_org_config, project_config
     ):
-        """Passing project_config dict directly should still work (backward compat)."""
+        """Passing project_config dict directly should still work."""
         from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True

@@ -2,7 +2,8 @@
 
 This module is the public API surface for dashboard types and logic.
 Models are defined in dashboard_models, loaders in dashboard_loaders.
-All public names are re-exported here to preserve backward compatibility.
+Imports are centralized here so UI callers do not depend on the internal
+dashboard module split.
 """
 
 from __future__ import annotations

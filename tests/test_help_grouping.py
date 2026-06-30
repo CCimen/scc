@@ -251,10 +251,10 @@ class TestSubAppGroupings:
 
 
 class TestHiddenCommandsExcluded:
-    """Test that hidden/deprecated commands don't appear in help."""
+    """Test that removed command aliases don't appear in help."""
 
-    def test_teams_hidden_not_in_help(self) -> None:
-        """Deprecated 'teams' command should be hidden."""
+    def test_removed_teams_alias_not_in_help(self) -> None:
+        """Removed 'teams' alias should stay absent."""
         result = subprocess.run(
             ["uv", "run", "scc", "--help"],
             capture_output=True,
@@ -264,8 +264,7 @@ class TestHiddenCommandsExcluded:
 
         output = result.stdout
 
-        # 'teams' should not appear (it's a hidden deprecated alias)
-        # But 'team' (the sub-app) should appear
+        # 'teams' should not appear, but 'team' (the sub-app) should.
         lines = output.lower().split("\n")
         teams_line = [line for line in lines if "teams" in line and "team" not in line]
         # Should not find a standalone 'teams' command

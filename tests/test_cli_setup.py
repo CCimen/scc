@@ -148,7 +148,7 @@ class TestSetupProfileFlag:
         # Verify profile was passed to run_non_interactive_setup
 
     def test_team_flag_still_works(self, cli_runner: CliRunner, sample_org_config: dict) -> None:
-        """--team should still work for backward compatibility."""
+        """--team remains an accepted setup synonym for selecting the profile."""
         from scc_cli.cli import app
         from scc_cli.source_resolver import ResolvedSource
 

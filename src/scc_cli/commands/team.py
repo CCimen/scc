@@ -11,8 +11,8 @@ All commands support --json output with proper envelopes.
 
 team_list and team_info live in team_info.py; team_validate lives in
 team_validate.py. This module keeps display helpers, federation helpers,
-team_app definition, team_callback, team_switch, and team_current, and
-re-exports public names for backward compatibility.
+team_app definition, team_callback, team_switch, and team_current. A
+module-level team_list reference is kept for team_callback delegation.
 """
 
 import json

@@ -154,8 +154,7 @@ def resolve_auth(auth_spec: str | None, *, from_remote: bool = False) -> str | N
         result = _resolve_auth_impl(auth_spec, allow_command=allow_command)
         return result.token if result else None
     except RuntimeError:
-        # Command execution failed - return None for backward compatibility
-        # (old behavior: failed commands returned None)
+        # Auth command failures mean no token is available.
         return None
 
 

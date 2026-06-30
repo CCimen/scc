@@ -89,8 +89,8 @@ class DockerSandboxRuntime(SandboxRuntime):
             env_vars=runtime_env,
         )
         container_name = _extract_container_name(docker_cmd)
-        # Legacy Desktop sandbox path: expects a dict (Claude JSON only).
-        # Deserialize rendered_bytes back to dict for backward compat.
+        # Docker Desktop sandbox runner expects Claude settings as a dict.
+        # Decode the rendered runtime contract at this adapter boundary.
         plugin_settings: dict[str, Any] | None = None
         if spec.agent_settings is not None:
             import json as _json

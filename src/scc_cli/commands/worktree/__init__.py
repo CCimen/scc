@@ -9,7 +9,7 @@ This package contains the decomposed worktree functionality:
 - context_commands.py: Work context management commands
 - _helpers.py: Pure helper functions
 
-Public API re-exports for backward compatibility.
+Public package API exports.
 """
 
 # Re-export pure helpers for testing

@@ -86,8 +86,8 @@ class TestContainerNameProviderAware:
         name_codex = _container_name(tmp_path, "codex")
         assert name_claude != name_codex
 
-    def test_empty_provider_id_backward_compat(self, tmp_path: Path) -> None:
-        """Empty provider_id hashes just the workspace path (backward compat)."""
+    def test_empty_provider_id_uses_workspace_only_hash(self, tmp_path: Path) -> None:
+        """Empty provider_id hashes just the workspace path."""
         from scc_cli.adapters.oci_sandbox_runtime import _container_name
 
         expected_digest = hashlib.sha256(str(tmp_path).encode()).hexdigest()[:12]

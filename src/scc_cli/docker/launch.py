@@ -475,8 +475,8 @@ def get_or_create_container(
 
     Note: Docker sandboxes are ephemeral by design - they don't support container
     re-use patterns like traditional `docker run`. Each invocation creates a new
-    sandbox instance. The branch, profile, force_new, and env_vars parameters are
-    kept for API compatibility but are not used.
+    sandbox instance. The signature mirrors the runtime launch call site, but
+    branch, profile, and force_new do not affect Docker Desktop sandbox commands.
 
     Args:
         workspace: Path to workspace (-w flag for sandbox)

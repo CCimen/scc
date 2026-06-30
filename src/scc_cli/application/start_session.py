@@ -486,7 +486,7 @@ def _build_agent_launch_spec(
 ) -> AgentLaunchSpec | None:
     """Delegate launch spec construction to the provider adapter.
 
-    Returns None when no provider is wired (backward compat) or in dry-run mode.
+    Returns None when no provider is wired or in dry-run mode.
     The provider resolves its own argv, env, and artifact paths from the settings
     artifact already built by the sync/build_agent_settings path.
     """

@@ -11,7 +11,7 @@ This package contains the decomposed org functionality:
 - init_cmd.py: Generate config skeleton from templates
 - _builders.py: Pure builder functions
 
-Public API re-exports for backward compatibility.
+Public package API exports.
 """
 
 # Re-export pure builders for testing
