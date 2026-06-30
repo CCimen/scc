@@ -12,9 +12,6 @@ from pathlib import Path
 import pytest
 
 from scc_cli.marketplace.materialize import (
-    CloneResult,
-    DiscoveryResult,
-    DownloadResult,
     InvalidMarketplaceError,
     MaterializationError,
     MaterializedMarketplace,
@@ -22,6 +19,11 @@ from scc_cli.marketplace.materialize import (
     is_cache_fresh,
     load_manifest,
     save_manifest,
+)
+from scc_cli.marketplace.materialize_git import (
+    CloneResult,
+    DiscoveryResult,
+    DownloadResult,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════

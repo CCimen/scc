@@ -321,7 +321,7 @@ class TestMaterializeGitHub:
         """Should clone repository with depth=1 for efficiency."""
         from scc_cli.marketplace.materialize import materialize_github
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=True, commit_sha="abc123", plugins=["tool"])
 
             materialize_github(
@@ -338,7 +338,7 @@ class TestMaterializeGitHub:
         """Should create marketplace under .claude/.scc-marketplaces/."""
         from scc_cli.marketplace.materialize import materialize_github
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=True, commit_sha="abc123", plugins=["tool"])
 
             result = materialize_github(
@@ -353,7 +353,7 @@ class TestMaterializeGitHub:
         """Should return MaterializedMarketplace with correct fields."""
         from scc_cli.marketplace.materialize import materialize_github
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(
                 success=True, commit_sha="abc123", plugins=["code-review", "linter"]
             )
@@ -375,7 +375,7 @@ class TestMaterializeGitHub:
 
         github_source["headers"] = {"Authorization": "token ${GITHUB_TOKEN}"}
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=True, commit_sha="abc123", plugins=[])
 
             materialize_github(
@@ -394,7 +394,7 @@ class TestMaterializeGitHub:
             materialize_github,
         )
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=False, error="Repository not found")
 
             with pytest.raises(MaterializationError) as exc_info:
@@ -419,7 +419,7 @@ class TestMaterializeGit:
         """Should clone from generic git URL (GitLab, self-hosted, etc)."""
         from scc_cli.marketplace.materialize import materialize_git
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(
                 success=True, commit_sha="def456", plugins=["api-tool"]
             )
@@ -444,7 +444,7 @@ class TestMaterializeGit:
             "path": "/",
         }
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=True, commit_sha="ssh123", plugins=[])
 
             result = materialize_git(
@@ -543,7 +543,7 @@ class TestMaterializeUrl:
         """Should download and extract marketplace archive."""
         from scc_cli.marketplace.materialize import materialize_url
 
-        with patch("scc_cli.marketplace.materialize.download_and_extract") as mock_dl:
+        with patch("scc_cli.marketplace.materialize_git.download_and_extract") as mock_dl:
             mock_dl.return_value = MagicMock(success=True, etag='"abc123"', plugins=["web-tool"])
 
             result = materialize_url(
@@ -561,7 +561,7 @@ class TestMaterializeUrl:
 
         url_source["materialization_mode"] = "metadata_only"
 
-        with patch("scc_cli.marketplace.materialize.download_and_extract") as mock_dl:
+        with patch("scc_cli.marketplace.materialize_git.download_and_extract") as mock_dl:
             mock_dl.return_value = MagicMock(success=True, etag=None, plugins=["meta-tool"])
 
             result = materialize_url(
@@ -805,7 +805,7 @@ class TestCacheReuse:
         source = MarketplaceSourceGitHub.model_validate(github_source)
 
         with (
-            patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone,
+            patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone,
             patch("scc_cli.marketplace.materialize.is_cache_fresh", return_value=True),
         ):
             result = materialize_marketplace(
@@ -850,7 +850,7 @@ class TestCacheReuse:
         source = MarketplaceSourceGitHub.model_validate(github_source)
 
         with (
-            patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone,
+            patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone,
             patch("scc_cli.marketplace.materialize.is_cache_fresh", return_value=False),
         ):
             mock_clone.return_value = MagicMock(
@@ -898,7 +898,7 @@ class TestCacheReuse:
 
         source = MarketplaceSourceGitHub.model_validate(github_source)
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(
                 success=True, commit_sha="forced789", plugins=["tool"], canonical_name="internal"
             )
@@ -927,7 +927,7 @@ class TestPathValidation:
         """All returned paths should be relative (not absolute)."""
         from scc_cli.marketplace.materialize import materialize_github
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=True, commit_sha="abc123", plugins=[])
 
             result = materialize_github(
@@ -987,7 +987,7 @@ class TestMaterializationErrors:
         )
 
         with patch(
-            "scc_cli.marketplace.materialize.run_git_clone",
+            "scc_cli.marketplace.materialize_git.run_git_clone",
             side_effect=FileNotFoundError("git not found"),
         ):
             with pytest.raises(GitNotAvailableError) as exc_info:
@@ -1006,7 +1006,7 @@ class TestMaterializationErrors:
             materialize_github,
         )
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             mock_clone.return_value = MagicMock(success=False, error="Could not resolve host")
 
             with pytest.raises(MaterializationError) as exc_info:
@@ -1033,7 +1033,7 @@ class TestMaterializationErrors:
             "path": "/",
         }
 
-        with patch("scc_cli.marketplace.materialize.run_git_clone") as mock_clone:
+        with patch("scc_cli.marketplace.materialize_git.run_git_clone") as mock_clone:
             # Clone succeeds but marketplace structure is invalid
             mock_clone.return_value = MagicMock(
                 success=False,  # run_git_clone returns False when structure is invalid

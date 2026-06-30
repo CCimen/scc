@@ -25,21 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import scc_cli.marketplace.materialize_git as materialize_git_ops
 from scc_cli.marketplace.constants import (
     DEFAULT_ORG_CONFIG_TTL_SECONDS,
     MANIFEST_FILE,
     MARKETPLACE_CACHE_DIR,
-)
-
-# Re-export extracted functions and dataclasses for backward compatibility.
-# These were moved to materialize_git.py to keep this module under 800 lines.
-from scc_cli.marketplace.materialize_git import (  # noqa: F401
-    CloneResult,
-    DiscoveryResult,
-    DownloadResult,
-    _discover_plugins,
-    download_and_extract,
-    run_git_clone,
 )
 from scc_cli.marketplace.schema import (
     MarketplaceSource,
@@ -307,7 +297,13 @@ def materialize_github(
 
     try:
         # Pass name as fallback in case marketplace.json doesn't specify one
-        result = run_git_clone(url, target_dir, branch=branch, depth=1, fallback_name=name)
+        result = materialize_git_ops.run_git_clone(
+            url,
+            target_dir,
+            branch=branch,
+            depth=1,
+            fallback_name=name,
+        )
     except FileNotFoundError:
         raise GitNotAvailableError()
 
@@ -364,7 +360,13 @@ def materialize_git(
     target_dir = _get_absolute_path(project_dir, name)
 
     # Pass name as fallback in case marketplace.json doesn't specify one
-    result = run_git_clone(url, target_dir, branch=branch, depth=1, fallback_name=name)
+    result = materialize_git_ops.run_git_clone(
+        url,
+        target_dir,
+        branch=branch,
+        depth=1,
+        fallback_name=name,
+    )
 
     if not result.success:
         if result.error and "marketplace.json" in result.error:
@@ -421,7 +423,7 @@ def materialize_directory(
         source_path = project_dir / source_path
 
     # Validate marketplace structure and discover canonical name
-    discovery = _discover_plugins(source_path, fallback_name=name)
+    discovery = materialize_git_ops._discover_plugins(source_path, fallback_name=name)
     if discovery is None:
         raise InvalidMarketplaceError(
             name,
@@ -500,7 +502,7 @@ def materialize_url(
         headers = {k: os.path.expandvars(v) for k, v in headers.items()}
 
     # Pass name as fallback in case marketplace.json doesn't specify one
-    result = download_and_extract(
+    result = materialize_git_ops.download_and_extract(
         url,
         target_dir,
         headers=headers,
@@ -571,7 +573,10 @@ def materialize_marketplace(
                 # missing or equals the alias name (indicating an old manifest entry)
                 # This ensures alias→canonical translation works with cached marketplaces
                 if existing.canonical_name == existing.name:
-                    discovery = _discover_plugins(target_path, fallback_name=name)
+                    discovery = materialize_git_ops._discover_plugins(
+                        target_path,
+                        fallback_name=name,
+                    )
                     if discovery and discovery.canonical_name != existing.name:
                         # Update the cached entry with the correct canonical name
                         existing = MaterializedMarketplace(

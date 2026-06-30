@@ -176,6 +176,25 @@ class TestDomainDoesNotImportCLI:
         )
         assert result.returncode == 1, f"marketplace/ imports cli_* modules:\n{result.stdout}"
 
+    def test_marketplace_materialize_does_not_reexport_git_helpers(self) -> None:
+        """Low-level marketplace clone/download helpers stay in materialize_git.py."""
+        path = SRC / "marketplace" / "materialize.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.module != "scc_cli.marketplace.materialize_git":
+                continue
+            imported = ", ".join(alias.name for alias in node.names)
+            offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {imported}")
+
+        assert not offenders, (
+            "marketplace/materialize.py should call materialize_git through the module, "
+            "not re-export clone/download helper names.\n" + "\n".join(offenders)
+        )
+
     def test_evaluation_does_not_import_cli_modules(self) -> None:
         """evaluation/ must not depend on cli_*.py modules."""
         result = subprocess.run(
