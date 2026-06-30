@@ -1,7 +1,7 @@
 """Tests for new CLI command options.
 
 These tests verify the new architecture requirements:
-- setup command: --org-url, --auth, --standalone for non-interactive mode
+- setup command: --org, --auth, --standalone for non-interactive mode
 - config command: set <key> <value> functionality
 - start command: --install-deps, --offline, --standalone options
 - worktree command: --install-deps option
@@ -40,15 +40,20 @@ runner = CliRunner()
 class TestSetupCommand:
     """Tests for setup command with new options."""
 
-    def test_setup_with_org_url_and_team_runs_non_interactive(self):
-        """Should run non-interactive setup when --org-url provided."""
-        with patch("scc_cli.commands.config.setup.run_non_interactive_setup") as mock_setup:
+    def test_setup_with_org_and_team_runs_non_interactive(self):
+        """Should run non-interactive setup when --org provided."""
+        resolved = MagicMock()
+        resolved.resolved_url = "https://example.org/config.json"
+        with (
+            patch("scc_cli.commands.config.resolve_source", return_value=resolved),
+            patch("scc_cli.commands.config.setup.run_non_interactive_setup") as mock_setup,
+        ):
             mock_setup.return_value = True
             result = runner.invoke(
                 app,
                 [
                     "setup",
-                    "--org-url",
+                    "--org",
                     "https://example.org/config.json",
                     "--team",
                     "platform",
@@ -71,13 +76,18 @@ class TestSetupCommand:
 
     def test_setup_with_auth_option(self):
         """Should pass auth to non-interactive setup."""
-        with patch("scc_cli.commands.config.setup.run_non_interactive_setup") as mock_setup:
+        resolved = MagicMock()
+        resolved.resolved_url = "https://example.org/config.json"
+        with (
+            patch("scc_cli.commands.config.resolve_source", return_value=resolved),
+            patch("scc_cli.commands.config.setup.run_non_interactive_setup") as mock_setup,
+        ):
             mock_setup.return_value = True
             result = runner.invoke(
                 app,
                 [
                     "setup",
-                    "--org-url",
+                    "--org",
                     "https://example.org/config.json",
                     "--auth",
                     "env:GITLAB_TOKEN",

@@ -194,7 +194,7 @@ def test_org_team_project_effective_config_journey(
         app,
         [
             "setup",
-            "--org-url",
+            "--org",
             "https://example.test/scc/org.json",
             "--team",
             "platform",

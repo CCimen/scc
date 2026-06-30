@@ -686,7 +686,7 @@ def run_non_interactive_setup(
         return True
 
     if not org_url:
-        console.print("[red]Organization URL required (use --org-url)[/red]")
+        console.print("[red]Organization URL required (use --org)[/red]")
         return False
 
     auth_header = "PRIVATE-TOKEN" if auth and looks_like_gitlab_url(org_url) else None

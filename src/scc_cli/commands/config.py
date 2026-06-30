@@ -72,9 +72,6 @@ def setup_cmd(
         "--org",
         help="Organization source (URL or shorthand like github:org/repo)",
     ),
-    org_url: str | None = typer.Option(
-        None, "--org-url", help="Organization config URL (deprecated, use --org)"
-    ),
     profile: str | None = typer.Option(None, "--profile", "-p", help="Profile/team to select"),
     team: str | None = typer.Option(
         None, "--team", "-t", help="Team profile to select (alias for --profile)"
@@ -110,8 +107,6 @@ def setup_cmd(
             )
             raise typer.Exit(1)
         resolved_url = result.resolved_url
-    elif org_url:
-        resolved_url = org_url
 
     if non_interactive and not (resolved_url or standalone):
         console.print(

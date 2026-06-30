@@ -149,8 +149,8 @@ class TestSetupWorkflow:
             len(call_kwargs[0]) >= 2 and call_kwargs[0][1] is True
         )
 
-    def test_setup_with_org_url_fetches_config(self, full_config_environment, sample_org_config):
-        """Setup with org URL should fetch and cache config."""
+    def test_setup_with_org_fetches_config(self, full_config_environment, sample_org_config):
+        """Setup with --org should fetch and cache config."""
         with (
             patch("scc_cli.commands.config.setup.run_non_interactive_setup") as mock_setup,
             patch("scc_cli.remote.fetch_org_config") as mock_fetch,
@@ -162,7 +162,7 @@ class TestSetupWorkflow:
                 app,
                 [
                     "setup",
-                    "--org-url",
+                    "--org",
                     "https://gitlab.test.org/config.json",
                     "--team",
                     "platform",

@@ -215,75 +215,23 @@ class TestSetupProfileFlag:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Tests for --org-url backward compatibility
+# Tests for removed --org-url compatibility
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TestSetupOrgUrlBackwardCompat:
-    """Test that --org-url still works for backward compatibility."""
+class TestSetupOrgUrlRemoved:
+    """The setup command uses --org as the only organization source flag."""
 
-    def test_org_url_flag_still_works(self, cli_runner: CliRunner, sample_org_config: dict) -> None:
-        """--org-url should still work (deprecated but supported)."""
+    def test_org_url_flag_is_not_registered(self, cli_runner: CliRunner) -> None:
+        """--org-url should stay deleted instead of becoming a compatibility alias."""
         from scc_cli.cli import app
 
-        with (
-            patch(
-                "scc_cli.setup.fetch_and_validate_org_config",
-                return_value=sample_org_config,
-            ),
-            patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
-            patch("scc_cli.setup.show_setup_complete"),
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "setup",
-                    "--org-url",
-                    "https://example.com/org-config.json",
-                    "--team",
-                    "dev",
-                ],
-            )
+        help_result = cli_runner.invoke(app, ["setup", "--help"])
+        assert help_result.exit_code == 0
+        assert "--org-url" not in help_result.output
 
-        assert result.exit_code == 0
-
-    def test_org_takes_precedence_over_org_url(
-        self, cli_runner: CliRunner, sample_org_config: dict
-    ) -> None:
-        """When both --org and --org-url specified, --org wins."""
-        from scc_cli.cli import app
-        from scc_cli.source_resolver import ResolvedSource
-
-        mock_resolved = MagicMock(spec=ResolvedSource)
-        mock_resolved.resolved_url = "https://raw.githubusercontent.com/org/repo/main/config.json"
-
-        with (
-            patch(
-                "scc_cli.commands.config.resolve_source", return_value=mock_resolved
-            ) as mock_resolve,
-            patch(
-                "scc_cli.setup.fetch_and_validate_org_config",
-                return_value=sample_org_config,
-            ),
-            patch("scc_cli.setup.save_setup_config"),
-            patch("scc_cli.setup._run_provider_onboarding", return_value=(None, None)),
-            patch("scc_cli.setup.show_setup_complete"),
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "setup",
-                    "--org",
-                    "github:acme/config",
-                    "--org-url",
-                    "https://ignored.com/config.json",
-                ],
-            )
-
-        assert result.exit_code == 0
-        # Verify resolve_source was called with github shorthand, not the URL
-        mock_resolve.assert_called_once_with("github:acme/config")
+        result = cli_runner.invoke(app, ["setup", "--org-url", "https://example.com/org.json"])
+        assert result.exit_code != 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
