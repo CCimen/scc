@@ -184,6 +184,7 @@ class TestMaterializedMarketplace:
 
         data = {
             "name": "internal",
+            "canonical_name": "claude-plugins",
             "relative_path": ".claude/.scc-marketplaces/internal",
             "source_type": "github",
             "source_url": "https://github.com/sundsvall/claude-plugins",
@@ -225,6 +226,7 @@ class TestManifestManagement:
         manifest_data = {
             "internal": {
                 "name": "internal",
+                "canonical_name": "claude-plugins",
                 "relative_path": ".claude/.scc-marketplaces/internal",
                 "source_type": "github",
                 "source_url": "https://github.com/sundsvall/claude-plugins",

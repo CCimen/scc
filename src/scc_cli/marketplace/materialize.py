@@ -146,13 +146,9 @@ class MaterializedMarketplace:
         else:
             materialized_at = datetime.now(timezone.utc)
 
-        # canonical_name defaults to name for backward compatibility with old manifests
-        name = data["name"]
-        canonical_name = data.get("canonical_name", name)
-
         return cls(
-            name=name,
-            canonical_name=canonical_name,
+            name=data["name"],
+            canonical_name=data["canonical_name"],
             relative_path=data["relative_path"],
             source_type=data["source_type"],
             source_url=data["source_url"],
@@ -569,32 +565,6 @@ def materialize_marketplace(
             target_path = _get_absolute_path(project_dir, name)
 
             if target_path.exists() and is_cache_fresh(existing):
-                # CRITICAL FIX: Re-read canonical_name from marketplace.json if it's
-                # missing or equals the alias name (indicating an old manifest entry)
-                # This ensures alias→canonical translation works with cached marketplaces
-                if existing.canonical_name == existing.name:
-                    discovery = materialize_git_ops._discover_plugins(
-                        target_path,
-                        fallback_name=name,
-                    )
-                    if discovery and discovery.canonical_name != existing.name:
-                        # Update the cached entry with the correct canonical name
-                        existing = MaterializedMarketplace(
-                            name=existing.name,
-                            canonical_name=discovery.canonical_name,
-                            relative_path=existing.relative_path,
-                            source_type=existing.source_type,
-                            source_url=existing.source_url,
-                            source_ref=existing.source_ref,
-                            materialization_mode=existing.materialization_mode,
-                            materialized_at=existing.materialized_at,
-                            commit_sha=existing.commit_sha,
-                            etag=existing.etag,
-                            plugins_available=existing.plugins_available,
-                        )
-                        # Persist the updated canonical_name for future runs
-                        manifest[name] = existing
-                        save_manifest(project_dir, manifest)
                 return existing
 
     # Route to appropriate handler using isinstance for proper type narrowing

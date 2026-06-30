@@ -117,8 +117,7 @@ class TestMaterializedMarketplaceSerialization:
         assert restored.plugins_available == mp.plugins_available
         assert restored.commit_sha == mp.commit_sha
 
-    def test_from_dict_backward_compat_no_canonical_name(self) -> None:
-        """Old manifests without canonical_name should use name as fallback."""
+    def test_from_dict_requires_canonical_name(self) -> None:
         d = {
             "name": "old-mp",
             "relative_path": ".claude/.scc-marketplaces/old-mp",
@@ -126,12 +125,13 @@ class TestMaterializedMarketplaceSerialization:
             "source_url": "https://github.com/org/mp",
             "source_ref": "main",
         }
-        mp = MaterializedMarketplace.from_dict(d)
-        assert mp.canonical_name == "old-mp"  # fallback to name
+        with pytest.raises(KeyError, match="canonical_name"):
+            MaterializedMarketplace.from_dict(d)
 
     def test_from_dict_missing_mode_defaults_to_full(self) -> None:
         d = {
             "name": "mp",
+            "canonical_name": "mp",
             "relative_path": ".",
             "source_type": "git",
             "source_url": "https://example.com",
@@ -142,6 +142,7 @@ class TestMaterializedMarketplaceSerialization:
     def test_from_dict_empty_plugins_default(self) -> None:
         d = {
             "name": "mp",
+            "canonical_name": "mp",
             "relative_path": ".",
             "source_type": "git",
             "source_url": "https://example.com",
@@ -195,6 +196,26 @@ class TestManifestIO:
         (manifest_dir / MANIFEST_FILE).write_text("{invalid json")
         loaded = load_manifest(tmp_path)
         assert loaded == {}
+
+    def test_load_manifest_without_canonical_name_returns_empty(self, tmp_path: Path) -> None:
+        from scc_cli.marketplace.constants import MANIFEST_FILE, MARKETPLACE_CACHE_DIR
+
+        manifest_dir = tmp_path / ".claude" / MARKETPLACE_CACHE_DIR
+        manifest_dir.mkdir(parents=True)
+        (manifest_dir / MANIFEST_FILE).write_text(
+            """
+            {
+              "old-mp": {
+                "name": "old-mp",
+                "relative_path": ".claude/.scc-marketplaces/old-mp",
+                "source_type": "github",
+                "source_url": "https://github.com/org/mp"
+              }
+            }
+            """
+        )
+
+        assert load_manifest(tmp_path) == {}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
