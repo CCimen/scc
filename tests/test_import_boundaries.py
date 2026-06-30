@@ -502,6 +502,30 @@ class TestConfigModelOwnershipBoundary:
         )
 
 
+class TestConfigCommandOwnershipBoundary:
+    """Config command helpers stay in their extracted owner modules."""
+
+    def test_config_command_uses_helper_modules_not_function_reexports(self) -> None:
+        """commands/config.py should consume helpers through their owner modules."""
+        path = SRC / "commands" / "config.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        offenders: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.level != 1 or node.module not in {"config_inspect", "config_validate"}:
+                continue
+            imported = ", ".join(alias.name for alias in node.names)
+            offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {imported}")
+
+        assert not offenders, (
+            "commands/config.py should not re-export extracted config helpers. "
+            "Import config_inspect/config_validate modules and call through those owners.\n"
+            + "\n".join(offenders)
+        )
+
+
 class TestSetupSurfaceBoundary:
     """Setup keeps one live wizard path instead of legacy prompt twins."""
 

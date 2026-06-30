@@ -3,8 +3,6 @@
 Validation logic lives in config_validate.py; paths/exceptions in
 config_inspect.py. This module keeps config_cmd, setup_cmd, _config_explain,
 and small helpers.
-
-Re-exports public names for backward compatibility.
 """
 
 from dataclasses import dataclass
@@ -28,14 +26,7 @@ from ..core.network_policy import collect_proxy_env
 from ..panels import create_error_panel, create_info_panel
 from ..services.config_normalizer import normalize_org_config
 from ..source_resolver import ResolveError, resolve_source
-
-# Re-export extracted symbols for backward compatibility
-from .config_inspect import _config_paths, _render_active_exceptions
-from .config_validate import (
-    _config_validate,
-    _render_blocked_items,
-    _render_denied_additions,
-)
+from . import config_inspect, config_validate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config App
@@ -167,7 +158,7 @@ def config_cmd(
 ) -> None:
     """View or edit configuration."""
     if action == "paths":
-        _config_paths(json_output=json_output, show_env=show_env)
+        config_inspect._config_paths(json_output=json_output, show_env=show_env)
         return
 
     if action == "set":
@@ -208,13 +199,13 @@ def config_cmd(
             from ..output_mode import json_command_mode, json_output_mode
 
             with json_output_mode(), json_command_mode():
-                _config_validate(
+                config_validate._config_validate(
                     workspace_path=workspace,
                     team_override=team,
                     json_output=True,
                 )
         else:
-            _config_validate(
+            config_validate._config_validate(
                 workspace_path=workspace,
                 team_override=team,
                 json_output=False,
@@ -357,13 +348,13 @@ def _config_explain(
     _render_personal_profile(ws_path, field_filter)
 
     if effective.blocked_items and (not field_filter or field_filter == "blocked"):
-        _render_blocked_items(effective.blocked_items)
+        config_validate._render_blocked_items(effective.blocked_items)
 
     if effective.denied_additions and (not field_filter or field_filter == "denied"):
-        _render_denied_additions(effective.denied_additions)
+        config_validate._render_denied_additions(effective.denied_additions)
 
     if not field_filter or field_filter == "exceptions":
-        expired_count = _render_active_exceptions()
+        expired_count = config_inspect._render_active_exceptions()
         if expired_count > 0:
             console.print(
                 f"[dim]Note: {expired_count} expired local overrides "
