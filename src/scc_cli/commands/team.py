@@ -294,7 +294,7 @@ def team_switch(
         if config.is_standalone_mode():
             print_human(
                 "[yellow]Teams are not available in standalone mode.[/yellow]\n"
-                "[dim]Run 'scc setup' with an organization URL to enable teams[/dim]"
+                "[dim]Run 'scc setup --org <source>' to enable teams[/dim]"
             )
         else:
             print_human(

@@ -664,7 +664,7 @@ def run_non_interactive_setup(
 
     Args:
         console: Rich console for output
-        org_url: Organization config URL
+        org_url: Resolved organization config URL
         team: Team/profile name
         auth: Auth spec (env:VAR or command:CMD)
         standalone: Enable standalone mode
@@ -686,7 +686,7 @@ def run_non_interactive_setup(
         return True
 
     if not org_url:
-        console.print("[red]Organization URL required (use --org)[/red]")
+        console.print("[red]Organization source required (use --org)[/red]")
         return False
 
     auth_header = "PRIVATE-TOKEN" if auth and looks_like_gitlab_url(org_url) else None

@@ -85,7 +85,7 @@ def team_list(
                     create_warning_panel(
                         "Standalone Mode",
                         "Teams are not available in standalone mode.",
-                        "Run 'scc setup' with an organization URL to enable teams",
+                        "Run 'scc setup --org <source>' to enable teams",
                     )
                 )
             else:

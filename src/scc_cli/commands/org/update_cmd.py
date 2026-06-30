@@ -242,7 +242,7 @@ def org_update_cmd(
             create_error_panel(
                 "Update Failed",
                 "Failed to fetch organization config from remote.",
-                hint="Check network connection and organization URL.",
+                hint="Check network connection and organization source.",
             )
         )
         raise typer.Exit(EXIT_CONFIG)
