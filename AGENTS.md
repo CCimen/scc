@@ -33,9 +33,16 @@ Before planning or changing code, read these files in this order:
 - M012 golden E2E journeys, docs claim lock, and pilot readiness are complete.
   Treat `.gsd/milestones/M012-GOLDEN-JOURNEYS.md` as historical execution
   evidence, not an open task list.
-- M013 is the next planned milestone for runtime/devcontainer interoperability.
-  Do not start M013 implementation without a fresh slice plan and current
-  source/docs validation.
+- M013 runtime/devcontainer interoperability is complete. Treat
+  `.gsd/milestones/M013-RUNTIME-DEVCONTAINER-INTEROPERABILITY.md` as historical
+  execution evidence, not an open task list.
+- M014 enterprise identity work is currently a docs/planning contract only.
+  Do not imply OIDC, SAML, SCIM, credential broker, or admin-console behavior
+  is implemented in source until a later milestone ships it with tests.
+- M015 Dev Environment Bridge MVP is the active milestone. Preserve the M013
+  sibling-container model: SCC may run inside a devcontainer, but agent
+  containers stay SCC-owned, never mount `/var/run/docker.sock`, and
+  never attach to arbitrary devcontainer or Compose networks.
 - Prefer small, typed, contract-preserving refactors over broad rewrites.
 - Add characterization tests before splitting monoliths.
 - Keep provider-core destination validation in launch planning, not as a runtime surprise.
@@ -52,5 +59,7 @@ Before planning or changing code, read these files in this order:
 - Review for long-term regulated-organization use: clear policy ownership, auditable behavior, deterministic tests, and explainable provider/runtime boundaries.
 - Use parallel reviewers for independent concerns: architecture boundaries, oversized modules/functions, dead code/tests, provider/runtime coupling, error handling, docs drift, and performance hotspots.
 - Use Claude review or the Claude peer loop for non-trivial architecture, maintainability, runtime, or readiness conclusions.
+- If the user explicitly asks to avoid Claude, use the Codex peer loop with the
+  same skeptical maintainability and Ponytail lens.
 - Apply Ponytail pressure first: delete or reuse before adding; remove pre-production compatibility paths that do not protect real persisted data.
 - Treat docs drift in `../scc-cli-docs` as source debt when it misstates commands, security guarantees, provider support, or configuration inheritance.

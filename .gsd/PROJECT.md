@@ -58,7 +58,25 @@ S01 established a source-grounded gap map and ownership reconciliation. S02 prov
 Completed architecture convergence and interaction-surface slimming. M011 reduced stale compatibility surfaces, clarified owners, strengthened guardrails, and left the source/docs baseline green.
 
 ### M012 — Golden E2E Journeys, Claim Lock, And Pilot Readiness ✅
-Completed golden journey and docs claim-lock coverage for SCC's real organizational adoption path: standalone setup, org onboarding, team/work context switching, effective config explain, governed materialization, Claude/Codex launch plan parity, network enforcement, safety behavior, audit/support evidence, and docs truth. M012 added provider-separated work-context/session identity, support bundle work-context evidence, E2E governance traces, launch/network/safety guardrails, a docs claim map, expanded Config Inheritance docs, and an executable Enterprise Pilot Blueprint. Runtime/devcontainer interoperability remains M013 per D054.
+Completed golden journey and docs claim-lock coverage for SCC's real organizational adoption path: standalone setup, org onboarding, team/work context switching, effective config explain, governed materialization, Claude/Codex launch plan parity, network enforcement, safety behavior, audit/support evidence, and docs truth. M012 added provider-separated work-context/session identity, support bundle work-context evidence, E2E governance traces, launch/network/safety guardrails, a docs claim map, expanded Config Inheritance docs, and an executable Enterprise Pilot Blueprint. D054 deferred runtime/devcontainer interoperability to M013, which later completed.
+
+### M013 — Runtime/Devcontainer Interoperability ✅
+Completed the sibling-container interoperability model. SCC may run from a
+devcontainer or containerized development environment while still launching its
+own governed OCI agent container. `SCC_WORKSPACE_PATH_MAP` translates the
+workspace bind-mount source at the runtime boundary, doctor reports path-map
+readiness, dry-run JSON exposes `runtime_mount_source`, and optional real-runtime
+smoke tests prove the behavior without making normal CI require Docker.
+D056 keeps arbitrary devcontainer or Compose network attachment out of the
+supported runtime model.
+
+### M014 — Enterprise Identity Planning And Docs Contract ✅
+Recorded enterprise identity direction as a future-state documentation contract,
+not an implemented source feature. The sibling docs site now describes OIDC,
+SAML, SCIM, credential broker, admin visibility, Entra ID, MobilityGuard, and
+RFC 7642/7643/7644 alignment as planned enterprise capabilities. SCC source
+must not claim those identity features are implemented until later milestones add
+source behavior, tests, diagnostics, and docs truth coverage.
 
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
@@ -73,12 +91,12 @@ Completed golden journey and docs claim-lock coverage for SCC's real organizatio
 10. ~~M010 — Enterprise Workflow Readiness: Projects, Explainability, And Docs Truth~~ ✅
 11. ~~M011 — Architecture Convergence And Interaction Surface Slimming~~ ✅
 12. ~~M012 — Golden E2E Journeys, Claim Lock, And Pilot Readiness~~ ✅
-13. M013 — Runtime/devcontainer Interoperability
-14. M014 — Audit, Support, And Compliance Bundle
-15. M015 — Enterprise Identity And Signed Policy
+13. ~~M013 — Runtime/devcontainer Interoperability~~ ✅
+14. ~~M014 — Enterprise Identity Planning And Docs Contract~~ ✅
+15. M015 — Dev Environment Bridge MVP
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through M012.
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through M014.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
@@ -101,7 +119,9 @@ Completed golden journey and docs claim-lock coverage for SCC's real organizatio
 - `scc auth login/status/logout` commands — model supports them via auth_check()
 - Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 - start_claude parameter rename to start_agent in worktree_commands.py (deferred from M008/S01)
-- Runtime/devcontainer interoperability remains M013.
+- Dev Environment Bridge MVP remains M015: host-owned project-service
+  diagnostics and approved actions without raw Docker socket access from agent
+  containers or arbitrary Compose network attachment.
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
