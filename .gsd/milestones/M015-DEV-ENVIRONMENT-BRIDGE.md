@@ -102,10 +102,10 @@ M015 must preserve these guarantees:
 | S01 | Done | Read-only dev environment diagnostics | Extend existing doctor diagnostics first; add a separate `scc dev` surface only if it earns its place | JSON/text output reports detected files, path-map readiness, Docker socket risk, and unsupported actions without mutating runtime state. |
 | S02 | Done | Named bridge action contract | Add the smallest public config/schema only after S01 identifies the command that consumes it | A named action can be represented without `dict[str, Any]`, arbitrary shell strings, or fake abstractions. |
 | S03 | Done | Approved command bridge | Let SCC host process run approved named actions with timeout, cwd bounds, audit, and redaction | Agent can request a named action; SCC denies unknown/free-form actions fail-closed. |
-| S04 | Planned | Logs and health checks | Add bounded read-only service logs/health checks where policy allows | Output is size-limited, redactable, audited, and testable without Docker in normal CI. |
-| S05 | Planned | Agent-facing JSON bridge surface | Expose deterministic machine-readable bridge status/results for Claude and Codex sessions | Provider adapters do not own bridge policy; artifacts remain SCC-owned. |
-| S06 | Planned | Optional real-runtime smoke | Prove one approved bridge action against a real local dev stack behind an explicit marker | Normal CI remains fake-runtime; OrbStack/Docker smoke can run manually. |
-| S07 | Planned | Docs truth update | Update public docs only for implemented bridge behavior | Docs claims map links every dev bridge claim to implementation and tests. |
+| S04 | Done | Logs and health checks | Add bounded policy-approved service log and health-check actions where policy allows | Output is size-limited, audited, and testable without Docker in normal CI. |
+| S05 | Done | Agent-facing JSON bridge surface | Expose deterministic machine-readable bridge status/results for Claude and Codex sessions | Provider adapters do not own bridge policy; artifacts remain SCC-owned. |
+| S06 | Done | Optional real-runtime smoke | Prove one approved bridge action against a real local dev stack behind an explicit marker | Normal CI remains fake-runtime; OrbStack/Docker smoke can run manually. |
+| S07 | Done | Docs truth update | Update public docs only for implemented bridge behavior | Docs claims map links every dev bridge claim to implementation and tests. |
 
 ## Recommended PR Slicing
 
@@ -181,6 +181,33 @@ actions:
 S03 deliberately does not add project-network attachment, Docker socket access
 inside agent containers, log/health APIs, provider adapter behavior, or generic
 host command execution.
+
+## S04-S07 Implementation
+
+S04 adds `dev_environment.logs` and `dev_environment.health_checks` as typed
+fixed-argv action maps alongside `dev_environment.commands`. They inherit
+through the same org/team/project delegation rule and run through the same
+host-owned audited bridge:
+
+- `scc dev logs <name> [workspace]` runs accepted log actions;
+- `scc dev health <name> [workspace]` runs accepted health checks;
+- audit events use `dev_environment.log.*` and
+  `dev_environment.health_check.*`;
+- stdout/stderr are returned as bounded tails and are not written into durable
+  audit metadata.
+
+S05 adds `scc dev status [workspace] --json`, which reports the effective
+commands, logs, and health checks without running a host process. This is the
+agent-facing machine-readable surface; provider adapters do not own bridge
+policy.
+
+S06 adds an opt-in `real_runtime` smoke test that starts a local Docker
+container and verifies one approved log and health action through the real
+bounded subprocess runner. It remains skipped unless `SCC_REAL_RUNTIME_SMOKE=1`
+is set.
+
+S07 updates the public docs, docs claim map, and source docs-truth guard for the
+implemented bridge behavior only.
 
 The first code PR should be S01. It should start with tests around a read-only
 diagnostic surface. A good failing test is:

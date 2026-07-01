@@ -423,7 +423,8 @@ class TestComputeEffectiveConfigBasicMerge:
         from scc_cli.application.compute_effective_config import compute_effective_config
 
         valid_org_config["defaults"]["dev_environment"] = {
-            "commands": {"test": {"argv": ["uv", "run", "pytest", "-q"]}}
+            "commands": {"test": {"argv": ["uv", "run", "pytest", "-q"]}},
+            "logs": {"app": {"argv": ["docker", "compose", "logs", "--tail", "50"]}},
         }
         valid_org_config["delegation"]["teams"]["allow_dev_environment_commands"] = [
             "urban-planning"
@@ -433,11 +434,12 @@ class TestComputeEffectiveConfigBasicMerge:
             True
         )
         valid_org_config["profiles"]["urban-planning"]["dev_environment"] = {
-            "commands": {"logs": {"argv": ["docker", "compose", "logs", "--tail", "50"]}}
+            "commands": {"format": {"argv": ["uv", "run", "ruff", "format", "--check"]}},
+            "health_checks": {"api": {"argv": ["curl", "-fsS", "http://localhost:8000/health"]}},
         }
         project = {
             "dev_environment": {
-                "commands": {"health": {"argv": ["curl", "-fsS", "http://localhost:8000/health"]}}
+                "logs": {"worker": {"argv": ["docker", "compose", "logs", "worker"]}}
             }
         }
 
@@ -449,9 +451,10 @@ class TestComputeEffectiveConfigBasicMerge:
 
         assert [command.name for command in result.dev_environment_commands] == [
             "test",
-            "logs",
-            "health",
+            "format",
         ]
+        assert [log.name for log in result.dev_environment_logs] == ["app", "worker"]
+        assert [check.name for check in result.dev_environment_health_checks] == ["api"]
 
     def test_team_dev_environment_command_denied_without_delegation(self, valid_org_config):
         """Team dev environment commands should be denied without delegation."""
@@ -1250,7 +1253,7 @@ network_policy: isolated
         assert "network_policy" in str(exc_info.value)
 
     def test_read_project_config_accepts_dev_environment_commands(self, tmp_path):
-        """Should read valid project dev environment commands."""
+        """Should read valid project dev environment bridge actions."""
         from scc_cli.config import read_project_config
 
         scc_yaml = tmp_path / ".scc.yaml"
@@ -1262,6 +1265,12 @@ dev_environment:
       working_directory: services/api
       timeout_seconds: 180
       description: Run API tests
+  logs:
+    api:
+      argv: ["docker", "compose", "logs", "--tail", "100", "api"]
+  health_checks:
+    api:
+      argv: ["curl", "-fsS", "http://localhost:8000/health"]
 """)
 
         result = read_project_config(tmp_path)
@@ -1270,6 +1279,10 @@ dev_environment:
         command = result["dev_environment"]["commands"]["test"]
         assert command["argv"] == ["uv", "run", "pytest", "-q"]
         assert command["working_directory"] == "services/api"
+        log = result["dev_environment"]["logs"]["api"]
+        assert log["argv"] == ["docker", "compose", "logs", "--tail", "100", "api"]
+        health_check = result["dev_environment"]["health_checks"]["api"]
+        assert health_check["argv"] == ["curl", "-fsS", "http://localhost:8000/health"]
 
     def test_read_project_config_rejects_shell_string_dev_environment_command(self, tmp_path):
         """Should reject shell-string dev environment commands."""
@@ -1287,6 +1300,40 @@ dev_environment:
             read_project_config(tmp_path)
 
         assert "dev_environment.commands.test.argv" in str(exc_info.value)
+
+    def test_read_project_config_rejects_shell_string_dev_environment_log(self, tmp_path):
+        """Should reject shell-string dev environment log actions."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+dev_environment:
+  logs:
+    api:
+      argv: "docker compose logs api"
+""")
+
+        with pytest.raises(ValueError) as exc_info:
+            read_project_config(tmp_path)
+
+        assert "dev_environment.logs.api.argv" in str(exc_info.value)
+
+    def test_read_project_config_rejects_shell_string_dev_environment_health_check(self, tmp_path):
+        """Should reject shell-string dev environment health checks."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+dev_environment:
+  health_checks:
+    api:
+      argv: "curl -fsS http://localhost:8000/health"
+""")
+
+        with pytest.raises(ValueError) as exc_info:
+            read_project_config(tmp_path)
+
+        assert "dev_environment.health_checks.api.argv" in str(exc_info.value)
 
     def test_read_project_config_allows_unknown_fields(self, tmp_path):
         """Should allow unknown fields for forward compatibility."""

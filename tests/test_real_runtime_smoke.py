@@ -14,9 +14,19 @@ from uuid import uuid4
 import pytest
 
 from scc_cli.adapters.oci_sandbox_runtime import OciSandboxRuntime
+from scc_cli.application.dev_environment_bridge import (
+    DEV_ENVIRONMENT_HEALTH_CHECK_ACTION,
+    DEV_ENVIRONMENT_LOG_ACTION,
+    RunDevEnvironmentCommandDependencies,
+    RunDevEnvironmentCommandRequest,
+    run_dev_environment_command,
+)
+from scc_cli.application.effective_config_models import DevEnvironmentCommand, EffectiveConfig
 from scc_cli.core.enums import NetworkPolicy
 from scc_cli.core.runtime_mounts import WORKSPACE_PATH_MAP_ENV, resolve_runtime_mount_source
 from scc_cli.ports.models import MountSpec, SandboxSpec
+from scc_cli.services.dev_environment_command_runner import run_subprocess_bounded
+from tests.fakes import FakeAuditEventSink
 
 _DEFAULT_IMAGE = "scc-agent-claude:latest"
 _SMOKE_ENV = "SCC_REAL_RUNTIME_SMOKE"
@@ -149,3 +159,88 @@ def test_real_docker_create_accepts_locked_down_network_with_mapped_source(
     inspect_output = inspect_result.stdout.strip()
     assert inspect_output.startswith("none|")
     assert f"{runtime_mount_source}>{logical_workspace}" in inspect_output
+
+
+def test_real_docker_bridge_reads_service_logs_and_health(tmp_path: Path) -> None:
+    image = _require_smoke_image()
+    container_name = f"scc-bridge-smoke-{uuid4().hex[:12]}"
+    try:
+        _docker(
+            [
+                "run",
+                "-d",
+                "--name",
+                container_name,
+                "--entrypoint",
+                "sh",
+                image,
+                "-c",
+                "printf bridge-ready; sleep 30",
+            ],
+            timeout=30,
+        )
+        effective = EffectiveConfig(
+            dev_environment_logs=[
+                DevEnvironmentCommand(
+                    name="service",
+                    argv=("docker", "logs", container_name),
+                    timeout_seconds=10,
+                )
+            ],
+            dev_environment_health_checks=[
+                DevEnvironmentCommand(
+                    name="service",
+                    argv=(
+                        "docker",
+                        "inspect",
+                        "-f",
+                        "{{.State.Running}}",
+                        container_name,
+                    ),
+                    timeout_seconds=10,
+                )
+            ],
+        )
+        sink = FakeAuditEventSink()
+
+        logs = run_dev_environment_command(
+            RunDevEnvironmentCommandRequest(
+                command_name="service",
+                workspace_path=tmp_path,
+                effective_config=effective,
+                team_name="platform",
+                team_source="test",
+                action_type=DEV_ENVIRONMENT_LOG_ACTION,
+            ),
+            dependencies=RunDevEnvironmentCommandDependencies(
+                audit_sink=sink,
+                command_runner=run_subprocess_bounded,
+            ),
+        )
+        health = run_dev_environment_command(
+            RunDevEnvironmentCommandRequest(
+                command_name="service",
+                workspace_path=tmp_path,
+                effective_config=effective,
+                team_name="platform",
+                team_source="test",
+                action_type=DEV_ENVIRONMENT_HEALTH_CHECK_ACTION,
+            ),
+            dependencies=RunDevEnvironmentCommandDependencies(
+                audit_sink=sink,
+                command_runner=run_subprocess_bounded,
+            ),
+        )
+    finally:
+        _docker(["rm", "-f", container_name], timeout=15, check=False)
+
+    assert logs.status == "succeeded"
+    assert "bridge-ready" in logs.stdout.tail
+    assert health.status == "succeeded"
+    assert health.stdout.tail.strip() == "true"
+    assert [event.event_type for event in sink.events] == [
+        "dev_environment.log.started",
+        "dev_environment.log.succeeded",
+        "dev_environment.health_check.started",
+        "dev_environment.health_check.succeeded",
+    ]

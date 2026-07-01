@@ -381,6 +381,23 @@ class TestDefaultsConfig:
             "-q",
         ]
 
+    def test_dev_environment_accepts_logs_and_health_checks(self) -> None:
+        from scc_cli.marketplace.schema import (
+            DefaultsConfig,
+            DevEnvironmentCommandConfig,
+            DevEnvironmentConfig,
+        )
+
+        defaults = DefaultsConfig(
+            dev_environment=DevEnvironmentConfig(
+                logs={"app": DevEnvironmentCommandConfig(argv=["printf", "log"])},
+                health_checks={"api": DevEnvironmentCommandConfig(argv=["printf", "ok"])},
+            )
+        )
+
+        assert defaults.dev_environment.logs["app"].argv == ["printf", "log"]
+        assert defaults.dev_environment.health_checks["api"].argv == ["printf", "ok"]
+
     def test_dev_environment_rejects_shell_string(self) -> None:
         from scc_cli.marketplace.schema import DevEnvironmentCommandConfig
 

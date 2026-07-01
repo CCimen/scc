@@ -9,7 +9,11 @@ from typer.testing import CliRunner
 
 from scc_cli import cli
 from scc_cli.application.dev_environment_bridge import (
+    DEV_ENVIRONMENT_COMMAND_ACTION,
+    DEV_ENVIRONMENT_HEALTH_CHECK_ACTION,
+    DEV_ENVIRONMENT_LOG_ACTION,
     CapturedStream,
+    DevEnvironmentActionKind,
     RunDevEnvironmentCommandResult,
 )
 from scc_cli.core.exit_codes import EXIT_TOOL
@@ -18,7 +22,12 @@ from tests.fakes import FakeAuditEventSink
 runner = CliRunner()
 
 
-def _result(tmp_path: Path, *, status: str = "succeeded") -> RunDevEnvironmentCommandResult:
+def _result(
+    tmp_path: Path,
+    *,
+    status: str = "succeeded",
+    action_type: DevEnvironmentActionKind = DEV_ENVIRONMENT_COMMAND_ACTION,
+) -> RunDevEnvironmentCommandResult:
     exit_code = 0 if status == "succeeded" else 2
     return RunDevEnvironmentCommandResult(
         command_name="test",
@@ -34,6 +43,7 @@ def _result(tmp_path: Path, *, status: str = "succeeded") -> RunDevEnvironmentCo
         team_source="selected_profile",
         provider_id="codex",
         provider_source="workspace",
+        action_type=action_type,
     )
 
 
@@ -55,6 +65,36 @@ def test_dev_run_json_outputs_command_result(tmp_path: Path) -> None:
     assert payload["data"]["stdout"]["tail"] == "ok\n"
     assert payload["data"]["team"] == {"name": "platform", "source": "selected_profile"}
     assert payload["data"]["provider"] == {"id": "codex", "source": "workspace"}
+
+
+def test_dev_logs_json_outputs_log_result(tmp_path: Path) -> None:
+    with patch(
+        "scc_cli.commands.dev._run_dev_command",
+        return_value=_result(tmp_path, action_type=DEV_ENVIRONMENT_LOG_ACTION),
+    ) as run:
+        result = runner.invoke(cli.app, ["dev", "logs", "app", str(tmp_path), "--json"])
+
+    assert result.exit_code == 0
+    run.assert_called_once()
+    assert run.call_args.kwargs["action_type"] == DEV_ENVIRONMENT_LOG_ACTION
+    payload = json.loads(result.output)
+    assert payload["kind"] == "DevEnvironmentLog"
+    assert payload["data"]["action_type"] == DEV_ENVIRONMENT_LOG_ACTION.value
+
+
+def test_dev_health_json_outputs_health_result(tmp_path: Path) -> None:
+    with patch(
+        "scc_cli.commands.dev._run_dev_command",
+        return_value=_result(tmp_path, action_type=DEV_ENVIRONMENT_HEALTH_CHECK_ACTION),
+    ) as run:
+        result = runner.invoke(cli.app, ["dev", "health", "api", str(tmp_path), "--json"])
+
+    assert result.exit_code == 0
+    run.assert_called_once()
+    assert run.call_args.kwargs["action_type"] == DEV_ENVIRONMENT_HEALTH_CHECK_ACTION
+    payload = json.loads(result.output)
+    assert payload["kind"] == "DevEnvironmentHealthCheck"
+    assert payload["data"]["action_type"] == DEV_ENVIRONMENT_HEALTH_CHECK_ACTION.value
 
 
 def test_dev_run_nonzero_result_exits_tool_error(tmp_path: Path) -> None:
@@ -113,3 +153,36 @@ def test_dev_run_json_resolves_config_and_audits_missing_executable(tmp_path: Pa
         "dev_environment.command.started",
         "dev_environment.command.failed",
     ]
+
+
+def test_dev_status_json_lists_effective_bridge_actions(tmp_path: Path) -> None:
+    user_config = {
+        "selected_profile": "platform",
+        "selected_provider": "codex",
+        "workspace_team_map": {},
+    }
+    org_config = {
+        "schema_version": "1.0.0",
+        "organization": {"name": "Test Org", "id": "test"},
+        "defaults": {
+            "dev_environment": {
+                "commands": {"test": {"argv": ["uv", "run", "pytest", "-q"]}},
+                "logs": {"app": {"argv": ["printf", "log"]}},
+                "health_checks": {"api": {"argv": ["printf", "ok"]}},
+            }
+        },
+        "profiles": {"platform": {"description": "Platform"}},
+    }
+
+    with (
+        patch("scc_cli.commands.dev.config.load_user_config", return_value=user_config),
+        patch("scc_cli.commands.dev.config.load_cached_org_config", return_value=org_config),
+    ):
+        result = runner.invoke(cli.app, ["dev", "status", str(tmp_path), "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["kind"] == "DevEnvironmentStatus"
+    assert payload["data"]["commands"][0]["name"] == "test"
+    assert payload["data"]["logs"][0]["name"] == "app"
+    assert payload["data"]["health_checks"][0]["name"] == "api"

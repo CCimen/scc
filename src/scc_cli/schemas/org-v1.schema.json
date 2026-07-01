@@ -286,6 +286,16 @@
                     "type": "object",
                     "description": "Named host-owned bridge commands",
                     "additionalProperties": {"$ref": "#/$defs/DevEnvironmentCommand"}
+                },
+                "logs": {
+                    "type": "object",
+                    "description": "Named policy-approved bounded log actions",
+                    "additionalProperties": {"$ref": "#/$defs/DevEnvironmentCommand"}
+                },
+                "health_checks": {
+                    "type": "object",
+                    "description": "Named policy-approved bounded health check actions",
+                    "additionalProperties": {"$ref": "#/$defs/DevEnvironmentCommand"}
                 }
             },
             "additionalProperties": false

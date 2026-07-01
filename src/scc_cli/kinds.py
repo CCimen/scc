@@ -60,6 +60,9 @@ class Kind(str, Enum):
 
     # Dev environment bridge
     DEV_ENVIRONMENT_COMMAND = "DevEnvironmentCommand"
+    DEV_ENVIRONMENT_LOG = "DevEnvironmentLog"
+    DEV_ENVIRONMENT_HEALTH_CHECK = "DevEnvironmentHealthCheck"
+    DEV_ENVIRONMENT_STATUS = "DevEnvironmentStatus"
 
     # Start
     START_DRY_RUN = "StartDryRun"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from scc_cli.application.effective_config_models import DevEnvironmentCommand, EffectiveConfig
@@ -16,6 +17,19 @@ from scc_cli.core.errors import (
 from scc_cli.ports.audit_event_sink import AuditEventSink
 
 DEFAULT_OUTPUT_LIMIT_BYTES = 8192
+
+
+class DevEnvironmentActionKind(str, Enum):
+    """Closed set of executable dev-environment bridge action kinds."""
+
+    COMMAND = "command"
+    LOG = "log"
+    HEALTH_CHECK = "health_check"
+
+
+DEV_ENVIRONMENT_COMMAND_ACTION = DevEnvironmentActionKind.COMMAND
+DEV_ENVIRONMENT_LOG_ACTION = DevEnvironmentActionKind.LOG
+DEV_ENVIRONMENT_HEALTH_CHECK_ACTION = DevEnvironmentActionKind.HEALTH_CHECK
 
 
 @dataclass(frozen=True)
@@ -67,6 +81,7 @@ class RunDevEnvironmentCommandRequest:
     provider_id: str | None = None
     provider_source: str = ""
     output_limit_bytes: int = DEFAULT_OUTPUT_LIMIT_BYTES
+    action_type: DevEnvironmentActionKind = DEV_ENVIRONMENT_COMMAND_ACTION
 
 
 @dataclass(frozen=True)
@@ -94,6 +109,7 @@ class RunDevEnvironmentCommandResult:
     team_source: str
     provider_id: str | None
     provider_source: str
+    action_type: DevEnvironmentActionKind = DEV_ENVIRONMENT_COMMAND_ACTION
 
 
 class _CommandCwdDeniedError(Exception):
@@ -109,15 +125,31 @@ def run_dev_environment_command(
 ) -> RunDevEnvironmentCommandResult:
     """Run one approved named dev-environment command."""
     workspace = request.workspace_path.expanduser().resolve(strict=False)
-    command = _find_command(request.effective_config, request.command_name)
-    if command is None:
+    action_kind = _coerce_action_kind(request.action_type)
+    if action_kind is None:
         _append_audit_event(
             dependencies.audit_sink,
-            _denied_event(request, workspace=workspace, reason="Command is not configured"),
+            _invalid_action_kind_denied_event(request, workspace=workspace),
         )
         raise DevEnvironmentCommandDeniedError(
             command_name=request.command_name,
-            reason="Command is not configured in effective dev_environment.commands.",
+            reason=f"Unknown dev environment action type: {request.action_type}",
+        )
+
+    command = _find_command(request.effective_config, request.command_name, action_kind)
+    if command is None:
+        _append_audit_event(
+            dependencies.audit_sink,
+            _denied_event(
+                request,
+                workspace=workspace,
+                action_kind=action_kind,
+                reason="Command is not configured",
+            ),
+        )
+        raise DevEnvironmentCommandDeniedError(
+            command_name=request.command_name,
+            reason=f"Command is not configured in effective {_config_field(action_kind)}.",
         )
 
     try:
@@ -125,7 +157,12 @@ def run_dev_environment_command(
     except _CommandCwdDeniedError as error:
         _append_audit_event(
             dependencies.audit_sink,
-            _denied_event(request, workspace=workspace, reason=error.reason),
+            _denied_event(
+                request,
+                workspace=workspace,
+                action_kind=action_kind,
+                reason=error.reason,
+            ),
         )
         raise DevEnvironmentCommandDeniedError(
             command_name=command.name,
@@ -133,7 +170,13 @@ def run_dev_environment_command(
         ) from error
     _append_audit_event(
         dependencies.audit_sink,
-        _started_event(request, workspace=workspace, command=command, cwd=cwd),
+        _started_event(
+            request,
+            workspace=workspace,
+            action_kind=action_kind,
+            command=command,
+            cwd=cwd,
+        ),
     )
 
     execution = dependencies.command_runner(
@@ -150,6 +193,7 @@ def run_dev_environment_command(
         _result_event(
             request,
             workspace=workspace,
+            action_kind=action_kind,
             command=command,
             cwd=cwd,
             execution=execution,
@@ -171,17 +215,61 @@ def run_dev_environment_command(
         team_source=request.team_source,
         provider_id=request.provider_id,
         provider_source=request.provider_source,
+        action_type=action_kind,
     )
 
 
 def _find_command(
     effective_config: EffectiveConfig,
     command_name: str,
+    action_kind: DevEnvironmentActionKind,
 ) -> DevEnvironmentCommand | None:
-    for command in effective_config.dev_environment_commands:
+    for command in _actions_for_type(effective_config, action_kind):
         if command.name == command_name:
             return command
     return None
+
+
+def _coerce_action_kind(
+    action_type: DevEnvironmentActionKind | str,
+) -> DevEnvironmentActionKind | None:
+    try:
+        return DevEnvironmentActionKind(action_type)
+    except ValueError:
+        return None
+
+
+def _actions_for_type(
+    effective_config: EffectiveConfig,
+    action_kind: DevEnvironmentActionKind,
+) -> list[DevEnvironmentCommand]:
+    if action_kind == DevEnvironmentActionKind.LOG:
+        return effective_config.dev_environment_logs
+    if action_kind == DevEnvironmentActionKind.HEALTH_CHECK:
+        return effective_config.dev_environment_health_checks
+    if action_kind == DevEnvironmentActionKind.COMMAND:
+        return effective_config.dev_environment_commands
+    raise AssertionError(f"Unhandled dev environment action kind: {action_kind}")
+
+
+def _config_field(action_kind: DevEnvironmentActionKind) -> str:
+    if action_kind == DevEnvironmentActionKind.LOG:
+        return "dev_environment.logs"
+    if action_kind == DevEnvironmentActionKind.HEALTH_CHECK:
+        return "dev_environment.health_checks"
+    if action_kind == DevEnvironmentActionKind.COMMAND:
+        return "dev_environment.commands"
+    raise AssertionError(f"Unhandled dev environment action kind: {action_kind}")
+
+
+def _audit_prefix(action_kind: DevEnvironmentActionKind) -> str:
+    if action_kind == DevEnvironmentActionKind.LOG:
+        return "dev_environment.log"
+    if action_kind == DevEnvironmentActionKind.HEALTH_CHECK:
+        return "dev_environment.health_check"
+    if action_kind == DevEnvironmentActionKind.COMMAND:
+        return "dev_environment.command"
+    raise AssertionError(f"Unhandled dev environment action kind: {action_kind}")
 
 
 def _resolve_command_cwd(
@@ -227,6 +315,7 @@ def _base_metadata(
 ) -> dict[str, str]:
     return {
         "command_name": request.command_name,
+        "action_type": _action_type_value(request.action_type),
         "workspace_path": str(workspace),
         "team": request.team_name or "",
         "team_source": request.team_source,
@@ -235,17 +324,41 @@ def _base_metadata(
     }
 
 
+def _action_type_value(action_type: DevEnvironmentActionKind | str) -> str:
+    if isinstance(action_type, DevEnvironmentActionKind):
+        return action_type.value
+    return action_type
+
+
 def _denied_event(
     request: RunDevEnvironmentCommandRequest,
     *,
     workspace: Path,
+    action_kind: DevEnvironmentActionKind,
     reason: str,
 ) -> AuditEvent:
     metadata = _base_metadata(request, workspace=workspace)
+    metadata["action_type"] = action_kind.value
     metadata["failure_reason"] = reason
     return AuditEvent(
-        event_type="dev_environment.command.denied",
-        message=f"Dev environment command '{request.command_name}' was denied.",
+        event_type=f"{_audit_prefix(action_kind)}.denied",
+        message=f"Dev environment {action_kind.value} '{request.command_name}' was denied.",
+        severity=SeverityLevel.ERROR,
+        subject=request.command_name,
+        metadata=metadata,
+    )
+
+
+def _invalid_action_kind_denied_event(
+    request: RunDevEnvironmentCommandRequest,
+    *,
+    workspace: Path,
+) -> AuditEvent:
+    metadata = _base_metadata(request, workspace=workspace)
+    metadata["failure_reason"] = f"Unknown dev environment action type: {request.action_type}"
+    return AuditEvent(
+        event_type="dev_environment.action.denied",
+        message=f"Dev environment action '{request.command_name}' was denied.",
         severity=SeverityLevel.ERROR,
         subject=request.command_name,
         metadata=metadata,
@@ -256,10 +369,12 @@ def _started_event(
     request: RunDevEnvironmentCommandRequest,
     *,
     workspace: Path,
+    action_kind: DevEnvironmentActionKind,
     command: DevEnvironmentCommand,
     cwd: Path,
 ) -> AuditEvent:
     metadata = _base_metadata(request, workspace=workspace)
+    metadata["action_type"] = action_kind.value
     metadata.update(
         {
             "cwd": str(cwd),
@@ -267,8 +382,8 @@ def _started_event(
         }
     )
     return AuditEvent(
-        event_type="dev_environment.command.started",
-        message=f"Dev environment command '{command.name}' started.",
+        event_type=f"{_audit_prefix(action_kind)}.started",
+        message=f"Dev environment {action_kind.value} '{command.name}' started.",
         severity=SeverityLevel.INFO,
         subject=command.name,
         metadata=metadata,
@@ -279,12 +394,14 @@ def _result_event(
     request: RunDevEnvironmentCommandRequest,
     *,
     workspace: Path,
+    action_kind: DevEnvironmentActionKind,
     command: DevEnvironmentCommand,
     cwd: Path,
     execution: CommandExecutionResult,
     status: str,
 ) -> AuditEvent:
     metadata = _base_metadata(request, workspace=workspace)
+    metadata["action_type"] = action_kind.value
     metadata.update(
         {
             "cwd": str(cwd),
@@ -300,8 +417,10 @@ def _result_event(
     )
     severity = SeverityLevel.INFO if status == "succeeded" else SeverityLevel.ERROR
     return AuditEvent(
-        event_type=f"dev_environment.command.{status}",
-        message=f"Dev environment command '{command.name}' {status.replace('_', ' ')}.",
+        event_type=f"{_audit_prefix(action_kind)}.{status}",
+        message=(
+            f"Dev environment {action_kind.value} '{command.name}' {status.replace('_', ' ')}."
+        ),
         severity=severity,
         subject=command.name,
         metadata=metadata,

@@ -47,6 +47,14 @@ def build_config_explain_data(
                 _serialize_dev_environment_command(command)
                 for command in effective.dev_environment_commands
             ],
+            "dev_environment_logs": [
+                _serialize_dev_environment_command(command)
+                for command in effective.dev_environment_logs
+            ],
+            "dev_environment_health_checks": [
+                _serialize_dev_environment_command(command)
+                for command in effective.dev_environment_health_checks
+            ],
             "network_policy": effective.network_policy,
             "session": {
                 "timeout_hours": effective.session_config.timeout_hours,

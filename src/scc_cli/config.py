@@ -595,34 +595,35 @@ def _validate_dev_environment_config(raw: Any) -> None:
     if not isinstance(raw, dict):
         raise ValueError("dev_environment must be a dict")
 
-    commands = raw.get("commands", {})
-    if not isinstance(commands, dict):
-        raise ValueError("dev_environment.commands must be a dict")
+    for section in ("commands", "logs", "health_checks"):
+        _validate_dev_environment_action_section(section, raw.get(section, {}))
 
-    for name, command in commands.items():
+
+def _validate_dev_environment_action_section(section: str, raw_actions: Any) -> None:
+    field = f"dev_environment.{section}"
+    if not isinstance(raw_actions, dict):
+        raise ValueError(f"{field} must be a dict")
+
+    for name, command in raw_actions.items():
         if not isinstance(name, str) or not name:
-            raise ValueError("dev_environment command names must be non-empty strings")
+            raise ValueError(f"{field} names must be non-empty strings")
         if not isinstance(command, dict):
-            raise ValueError(f"dev_environment.commands.{name} must be a dict")
+            raise ValueError(f"{field}.{name} must be a dict")
 
         argv = command.get("argv")
         if not isinstance(argv, list) or not argv:
-            raise ValueError(f"dev_environment.commands.{name}.argv must be a non-empty list")
+            raise ValueError(f"{field}.{name}.argv must be a non-empty list")
         if not all(isinstance(arg, str) and arg for arg in argv):
-            raise ValueError(
-                f"dev_environment.commands.{name}.argv entries must be non-empty strings"
-            )
+            raise ValueError(f"{field}.{name}.argv entries must be non-empty strings")
 
         working_directory = command.get("working_directory", ".")
         if not isinstance(working_directory, str) or not working_directory:
-            raise ValueError(f"dev_environment.commands.{name}.working_directory must be a string")
+            raise ValueError(f"{field}.{name}.working_directory must be a string")
 
         timeout_seconds = command.get("timeout_seconds", 120)
         if not isinstance(timeout_seconds, int) or timeout_seconds < 1:
-            raise ValueError(
-                f"dev_environment.commands.{name}.timeout_seconds must be a positive integer"
-            )
+            raise ValueError(f"{field}.{name}.timeout_seconds must be a positive integer")
 
         description = command.get("description", "")
         if not isinstance(description, str):
-            raise ValueError(f"dev_environment.commands.{name}.description must be a string")
+            raise ValueError(f"{field}.{name}.description must be a string")

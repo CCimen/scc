@@ -151,6 +151,36 @@ class TestNormalizeOrgConfig:
         assert command.timeout_seconds == 180
         assert command.description == "Run API tests"
 
+    def test_defaults_dev_environment_logs_and_health_checks_normalized(self) -> None:
+        raw = {
+            "organization": {"name": "TestOrg"},
+            "defaults": {
+                "dev_environment": {
+                    "logs": {"app": {"argv": ["docker", "compose", "logs", "--tail", "50"]}},
+                    "health_checks": {
+                        "api": {"argv": ["curl", "-fsS", "http://localhost:8000/health"]}
+                    },
+                }
+            },
+        }
+
+        result = normalize_org_config(raw)
+
+        assert result.defaults.dev_environment.logs[0].name == "app"
+        assert result.defaults.dev_environment.logs[0].argv == (
+            "docker",
+            "compose",
+            "logs",
+            "--tail",
+            "50",
+        )
+        assert result.defaults.dev_environment.health_checks[0].name == "api"
+        assert result.defaults.dev_environment.health_checks[0].argv == (
+            "curl",
+            "-fsS",
+            "http://localhost:8000/health",
+        )
+
     def test_allowed_plugins_none_vs_empty(self) -> None:
         """None allowed_plugins (no allowlist) differs from empty (deny all)."""
         no_allowlist = normalize_org_config({"organization": {"name": "Test"}})

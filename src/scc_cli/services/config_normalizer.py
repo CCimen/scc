@@ -87,9 +87,19 @@ def _normalize_dev_environment(raw: dict[str, Any] | None) -> DevEnvironmentConf
     if not raw or not isinstance(raw, dict):
         return DevEnvironmentConfig()
 
-    raw_commands = raw.get("commands", {})
+    return DevEnvironmentConfig(
+        commands=_normalize_dev_environment_actions(raw.get("commands", {})),
+        logs=_normalize_dev_environment_actions(raw.get("logs", {})),
+        health_checks=_normalize_dev_environment_actions(raw.get("health_checks", {})),
+    )
+
+
+def _normalize_dev_environment_actions(
+    raw_commands: object,
+) -> tuple[DevEnvironmentCommandConfig, ...]:
+    """Normalize one named fixed-argv dev environment action map."""
     if not isinstance(raw_commands, dict):
-        return DevEnvironmentConfig()
+        return ()
 
     commands: list[DevEnvironmentCommandConfig] = []
     for name, command_raw in raw_commands.items():
@@ -114,7 +124,7 @@ def _normalize_dev_environment(raw: dict[str, Any] | None) -> DevEnvironmentConf
             )
         )
 
-    return DevEnvironmentConfig(commands=tuple(commands))
+    return tuple(commands)
 
 
 def _normalize_mcp_server(raw: dict[str, Any]) -> MCPServerConfig:

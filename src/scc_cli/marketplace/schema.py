@@ -299,6 +299,14 @@ class DevEnvironmentConfig(StrictModel):
         default_factory=dict,
         description="Named host-owned bridge commands",
     )
+    logs: dict[str, DevEnvironmentCommandConfig] = Field(
+        default_factory=dict,
+        description="Named policy-approved bounded log actions",
+    )
+    health_checks: dict[str, DevEnvironmentCommandConfig] = Field(
+        default_factory=dict,
+        description="Named policy-approved bounded health check actions",
+    )
 
 
 class DefaultsConfig(StrictModel):

@@ -15,6 +15,7 @@ from .. import config, setup
 from ..application.compute_effective_config import compute_effective_config
 from ..application.effective_config_models import (
     ConfigDecision,
+    DevEnvironmentCommand,
     EffectiveConfig,
     IgnoredPolicyChange,
 )
@@ -578,29 +579,52 @@ def _render_config_decisions(effective: EffectiveConfig, field_filter: str | Non
         console.print()
 
     if not field_filter or field_filter in {"dev_environment", "dev_environment_commands"}:
-        console.print("[bold cyan]Dev Environment Commands[/bold cyan]")
-        if effective.dev_environment_commands:
-            for command in effective.dev_environment_commands:
-                command_decision = next(
-                    (
-                        d
-                        for d in effective.decisions
-                        if d.field == "dev_environment.commands" and d.value == command.name
-                    ),
-                    None,
-                )
-                source_suffix = (
-                    f" [dim](from {command_decision.source})[/dim]" if command_decision else ""
-                )
-                console.print(f"  [green]✓[/green] {command.name}{source_suffix}")
-                if command.description:
-                    console.print(f"      [dim]{command.description}[/dim]")
-                console.print(f"      argv: {' '.join(command.argv)}")
-                console.print(f"      working_directory: {command.working_directory}")
-                console.print(f"      timeout_seconds: {command.timeout_seconds}")
-        else:
-            console.print("  [dim]None configured[/dim]")
-        console.print()
+        _render_dev_environment_action_section(
+            title="Dev Environment Commands",
+            actions=effective.dev_environment_commands,
+            decisions=effective.decisions,
+            field="dev_environment.commands",
+        )
+        _render_dev_environment_action_section(
+            title="Dev Environment Logs",
+            actions=effective.dev_environment_logs,
+            decisions=effective.decisions,
+            field="dev_environment.logs",
+        )
+        _render_dev_environment_action_section(
+            title="Dev Environment Health Checks",
+            actions=effective.dev_environment_health_checks,
+            decisions=effective.decisions,
+            field="dev_environment.health_checks",
+        )
+
+
+def _render_dev_environment_action_section(
+    *,
+    title: str,
+    actions: list[DevEnvironmentCommand],
+    decisions: list[ConfigDecision],
+    field: str,
+) -> None:
+    console.print(f"[bold cyan]{title}[/bold cyan]")
+    if actions:
+        for action in actions:
+            action_decision = next(
+                (d for d in decisions if d.field == field and d.value == action.name),
+                None,
+            )
+            source_suffix = (
+                f" [dim](from {action_decision.source})[/dim]" if action_decision else ""
+            )
+            console.print(f"  [green]✓[/green] {action.name}{source_suffix}")
+            if action.description:
+                console.print(f"      [dim]{action.description}[/dim]")
+            console.print(f"      argv: {' '.join(action.argv)}")
+            console.print(f"      working_directory: {action.working_directory}")
+            console.print(f"      timeout_seconds: {action.timeout_seconds}")
+    else:
+        console.print("  [dim]None configured[/dim]")
+    console.print()
 
 
 def _render_ignored_policy_changes(

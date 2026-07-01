@@ -6,9 +6,13 @@ from pathlib import Path
 import pytest
 
 from scc_cli.application.dev_environment_bridge import (
+    DEV_ENVIRONMENT_COMMAND_ACTION,
+    DEV_ENVIRONMENT_HEALTH_CHECK_ACTION,
+    DEV_ENVIRONMENT_LOG_ACTION,
     CapturedStream,
     CommandExecutionResult,
     CommandExecutionSpec,
+    DevEnvironmentActionKind,
     RunDevEnvironmentCommandDependencies,
     RunDevEnvironmentCommandRequest,
     run_dev_environment_command,
@@ -19,8 +23,16 @@ from scc_cli.services.dev_environment_command_runner import run_subprocess_bound
 from tests.fakes import FakeAuditEventSink
 
 
-def _effective(*commands: DevEnvironmentCommand) -> EffectiveConfig:
-    return EffectiveConfig(dev_environment_commands=list(commands))
+def _effective(
+    *commands: DevEnvironmentCommand,
+    logs: tuple[DevEnvironmentCommand, ...] = (),
+    health_checks: tuple[DevEnvironmentCommand, ...] = (),
+) -> EffectiveConfig:
+    return EffectiveConfig(
+        dev_environment_commands=list(commands),
+        dev_environment_logs=list(logs),
+        dev_environment_health_checks=list(health_checks),
+    )
 
 
 def _request(
@@ -28,16 +40,22 @@ def _request(
     *,
     command_name: str = "test",
     command: DevEnvironmentCommand | None = None,
+    action_type: DevEnvironmentActionKind | str = DEV_ENVIRONMENT_COMMAND_ACTION,
 ) -> RunDevEnvironmentCommandRequest:
-    commands = [command] if command else []
+    commands = (command,) if command and action_type == DEV_ENVIRONMENT_COMMAND_ACTION else ()
+    logs = (command,) if command and action_type == DEV_ENVIRONMENT_LOG_ACTION else ()
+    health_checks = (
+        (command,) if command and action_type == DEV_ENVIRONMENT_HEALTH_CHECK_ACTION else ()
+    )
     return RunDevEnvironmentCommandRequest(
         command_name=command_name,
         workspace_path=workspace,
-        effective_config=_effective(*commands),
+        effective_config=_effective(*commands, logs=logs, health_checks=health_checks),
         team_name="platform",
         team_source="selected_profile",
         provider_id="codex",
         provider_source="workspace",
+        action_type=action_type,
     )
 
 
@@ -104,6 +122,64 @@ def test_unknown_command_is_denied_and_audited(tmp_path: Path) -> None:
 
     assert [event.event_type for event in sink.events] == ["dev_environment.command.denied"]
     assert sink.events[0].metadata["failure_reason"] == "Command is not configured"
+
+
+def test_invalid_action_kind_is_denied_without_running_command(tmp_path: Path) -> None:
+    sink = FakeAuditEventSink()
+    called = False
+
+    def runner(spec: CommandExecutionSpec) -> CommandExecutionResult:
+        nonlocal called
+        called = True
+        return _success_result()
+
+    command = DevEnvironmentCommand(name="test", argv=("echo", "ok"))
+
+    with pytest.raises(DevEnvironmentCommandDeniedError):
+        run_dev_environment_command(
+            _request(tmp_path, command=command, action_type="typo"),
+            dependencies=RunDevEnvironmentCommandDependencies(
+                audit_sink=sink,
+                command_runner=runner,
+            ),
+        )
+
+    assert called is False
+    assert [event.event_type for event in sink.events] == ["dev_environment.action.denied"]
+    assert sink.events[0].metadata["failure_reason"] == (
+        "Unknown dev environment action type: typo"
+    )
+
+
+def test_log_and_health_actions_use_separate_audit_event_types(tmp_path: Path) -> None:
+    for action_type, expected_events in [
+        (
+            DEV_ENVIRONMENT_LOG_ACTION,
+            ["dev_environment.log.started", "dev_environment.log.succeeded"],
+        ),
+        (
+            DEV_ENVIRONMENT_HEALTH_CHECK_ACTION,
+            [
+                "dev_environment.health_check.started",
+                "dev_environment.health_check.succeeded",
+            ],
+        ),
+    ]:
+        sink = FakeAuditEventSink()
+        action = DevEnvironmentCommand(name="test", argv=("echo", "ok"))
+        result = run_dev_environment_command(
+            _request(tmp_path, command=action, action_type=action_type),
+            dependencies=RunDevEnvironmentCommandDependencies(
+                audit_sink=sink,
+                command_runner=lambda spec: _success_result(),
+            ),
+        )
+
+        assert result.status == "succeeded"
+        assert result.action_type == action_type
+        assert [event.event_type for event in sink.events] == expected_events
+        assert sink.events[1].metadata["action_type"] == action_type.value
+        assert "ok" not in str(sink.events[1].metadata)
 
 
 def test_audit_write_failure_prevents_command_execution(tmp_path: Path) -> None:

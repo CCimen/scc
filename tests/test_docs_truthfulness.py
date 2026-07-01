@@ -1164,17 +1164,24 @@ def test_m015_dev_environment_bridge_docs_match_implemented_scope() -> None:
         "tests/test_doctor_provider_wiring.py",
         "tests/e2e/test_cli_journeys.py",
         "dev_environment.commands",
+        "dev_environment.logs",
+        "dev_environment.health_checks",
         "fixed `argv` list",
         "allow_dev_environment_commands",
         "scc config explain --field dev_environment",
         "tests/test_config_inheritance.py",
         "tests/test_config_explain.py",
         "scc dev run",
+        "scc dev logs",
+        "scc dev health",
+        "scc dev status",
+        "DevEnvironmentStatus",
         "Dev Environment CLI",
         "pre-execution audit event",
         "bounded stdout/stderr tails",
         "tests/test_dev_environment_bridge.py",
         "tests/test_dev_command_cli.py",
+        "tests/test_real_runtime_smoke.py",
         "tests/test_support_bundle.py",
         "does not mount the Docker",
         "socket into agent containers",
@@ -1209,6 +1216,36 @@ def test_m015_dev_environment_bridge_docs_match_implemented_scope() -> None:
     assert not present_forbidden, (
         "M015 docs overstate implemented dev-environment bridge behavior: "
         + ", ".join(present_forbidden)
+    )
+
+
+def test_m015_dev_environment_logs_and_health_do_not_claim_read_only_enforcement() -> None:
+    """Logs/health are policy-approved fixed argv actions, not semantic read-only enforcement."""
+    files = [
+        SRC / "application" / "dev_environment_bridge.py",
+        SRC / "commands" / "dev.py",
+        SRC / "marketplace" / "schema.py",
+        SRC / "schemas" / "org-v1.schema.json",
+        ROOT / ".gsd" / "milestones" / "M015-DEV-ENVIRONMENT-BRIDGE.md",
+        DOCS_CONTENT / "reference" / "cli" / "dev.mdx",
+        DOCS_CONTENT / "reference" / "configuration" / "org-schema.mdx",
+        DOCS_CONTENT / "reference" / "configuration" / "project-schema.mdx",
+        DOCS_CONTENT / "architecture" / "config-inheritance.mdx",
+        DOCS_CONTENT / "comparisons" / "scc-vs-dev-containers.mdx",
+        DOCS_CONTENT / "guides" / "organization" / "enterprise-pilot.mdx",
+        DOCS_CONTENT / "reference" / "docs-claim-map.mdx",
+    ]
+    overclaim = re.compile(r"read-only[^\n]*(?:log|health)|(?:log|health)[^\n]*read-only", re.I)
+    violations: list[str] = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        for match in overclaim.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            violations.append(f"{path.relative_to(ROOT.parent)}:{line}: {match.group(0)!r}")
+
+    assert not violations, (
+        "dev_environment.logs/health_checks must not claim semantic read-only enforcement: "
+        + "; ".join(violations)
     )
 
 

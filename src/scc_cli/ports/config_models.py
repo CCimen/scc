@@ -67,6 +67,8 @@ class DevEnvironmentConfig:
     """Dev environment bridge policy configuration."""
 
     commands: tuple[DevEnvironmentCommandConfig, ...] = ()
+    logs: tuple[DevEnvironmentCommandConfig, ...] = ()
+    health_checks: tuple[DevEnvironmentCommandConfig, ...] = ()
 
 
 @dataclass(frozen=True)

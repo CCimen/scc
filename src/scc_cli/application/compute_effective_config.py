@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from scc_cli import config as config_module
 from scc_cli.application.effective_config_models import (
@@ -37,6 +37,18 @@ from scc_cli.ports.config_models import (
     SessionSettings,
 )
 from scc_cli.services.config_normalizer import normalize_org_config, normalize_project_config
+
+
+class DevEnvironmentActionAdder(Protocol):
+    def __call__(
+        self,
+        result: EffectiveConfig,
+        *,
+        command: DevEnvironmentCommandConfig,
+        source: str,
+        reason: str,
+    ) -> None: ...
+
 
 __all__ = [
     "BlockedItem",
@@ -281,30 +293,33 @@ def is_team_delegated_for_dev_environment_commands(
     return matches_blocked(team_name, list(allowed_patterns)) is not None
 
 
-def _effective_command_names(result: EffectiveConfig) -> set[str]:
-    return {command.name for command in result.dev_environment_commands}
+def _effective_dev_environment_names(actions: list[DevEnvironmentCommand]) -> set[str]:
+    return {action.name for action in actions}
 
 
-def _add_dev_environment_command(
+def _add_dev_environment_action(
     result: EffectiveConfig,
     *,
+    actions: list[DevEnvironmentCommand],
+    field: str,
+    target_type: TargetType,
     command: DevEnvironmentCommandConfig,
     source: str,
     reason: str,
 ) -> None:
-    if command.name in _effective_command_names(result):
+    if command.name in _effective_dev_environment_names(actions):
         result.ignored_policy_changes.append(
             IgnoredPolicyChange(
-                field=f"dev_environment.commands.{command.name}",
+                field=f"{field}.{command.name}",
                 requested_value=command.name,
                 effective_value=command.name,
                 source=source,
-                reason="Dev environment command name already configured",
+                reason=f"{target_type.value.replace('_', ' ').title()} name already configured",
             )
         )
         return
 
-    result.dev_environment_commands.append(
+    actions.append(
         DevEnvironmentCommand(
             name=command.name,
             argv=command.argv,
@@ -315,11 +330,65 @@ def _add_dev_environment_command(
     )
     result.decisions.append(
         ConfigDecision(
-            field="dev_environment.commands",
+            field=field,
             value=command.name,
             reason=reason,
             source=source,
         )
+    )
+
+
+def _add_dev_environment_command(
+    result: EffectiveConfig,
+    *,
+    command: DevEnvironmentCommandConfig,
+    source: str,
+    reason: str,
+) -> None:
+    _add_dev_environment_action(
+        result,
+        actions=result.dev_environment_commands,
+        field="dev_environment.commands",
+        target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+        command=command,
+        source=source,
+        reason=reason,
+    )
+
+
+def _add_dev_environment_log(
+    result: EffectiveConfig,
+    *,
+    command: DevEnvironmentCommandConfig,
+    source: str,
+    reason: str,
+) -> None:
+    _add_dev_environment_action(
+        result,
+        actions=result.dev_environment_logs,
+        field="dev_environment.logs",
+        target_type=TargetType.DEV_ENVIRONMENT_LOG,
+        command=command,
+        source=source,
+        reason=reason,
+    )
+
+
+def _add_dev_environment_health_check(
+    result: EffectiveConfig,
+    *,
+    command: DevEnvironmentCommandConfig,
+    source: str,
+    reason: str,
+) -> None:
+    _add_dev_environment_action(
+        result,
+        actions=result.dev_environment_health_checks,
+        field="dev_environment.health_checks",
+        target_type=TargetType.DEV_ENVIRONMENT_HEALTH_CHECK,
+        command=command,
+        source=source,
+        reason=reason,
     )
 
 
@@ -454,23 +523,99 @@ def _merge_team_dev_environment_commands(
         return
 
     team_delegated = is_team_delegated_for_dev_environment_commands(org_config, team_name)
-    for command in team_config.dev_environment.commands:
+    _merge_team_dev_environment_action_set(
+        result,
+        actions=team_config.dev_environment.commands,
+        team_delegated=team_delegated,
+        team_name=team_name,
+        target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+        add_action=_add_dev_environment_command,
+    )
+    _merge_team_dev_environment_action_set(
+        result,
+        actions=team_config.dev_environment.logs,
+        team_delegated=team_delegated,
+        team_name=team_name,
+        target_type=TargetType.DEV_ENVIRONMENT_LOG,
+        add_action=_add_dev_environment_log,
+    )
+    _merge_team_dev_environment_action_set(
+        result,
+        actions=team_config.dev_environment.health_checks,
+        team_delegated=team_delegated,
+        team_name=team_name,
+        target_type=TargetType.DEV_ENVIRONMENT_HEALTH_CHECK,
+        add_action=_add_dev_environment_health_check,
+    )
+
+
+def _merge_team_dev_environment_action_set(
+    result: EffectiveConfig,
+    *,
+    actions: tuple[DevEnvironmentCommandConfig, ...],
+    team_delegated: bool,
+    team_name: str | None,
+    target_type: TargetType,
+    add_action: DevEnvironmentActionAdder,
+) -> None:
+    for command in actions:
         if not team_delegated:
             result.denied_additions.append(
                 DelegationDenied(
                     item=command.name,
                     requested_by=RequestSource.TEAM,
                     reason=f"Team '{team_name}' not allowed to add dev environment commands",
-                    target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+                    target_type=target_type,
                 )
             )
             continue
 
-        _add_dev_environment_command(
+        add_action(
             result,
             command=command,
             source=f"team.{team_name}",
             reason=f"Added by team profile '{team_name}'",
+        )
+
+
+def _merge_project_dev_environment_action_set(
+    result: EffectiveConfig,
+    *,
+    actions: tuple[DevEnvironmentCommandConfig, ...],
+    project_delegated: bool,
+    delegation_reason: str,
+    team_delegated_dev_commands: bool,
+    team_name: str | None,
+    target_type: TargetType,
+    add_action: DevEnvironmentActionAdder,
+) -> None:
+    for command in actions:
+        if not project_delegated:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=command.name,
+                    requested_by=RequestSource.PROJECT,
+                    reason=delegation_reason,
+                    target_type=target_type,
+                )
+            )
+            continue
+        if not team_delegated_dev_commands:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=command.name,
+                    requested_by=RequestSource.PROJECT,
+                    reason=f"Team '{team_name}' not allowed to add dev environment commands",
+                    target_type=target_type,
+                )
+            )
+            continue
+
+        add_action(
+            result,
+            command=command,
+            source="project",
+            reason="Added by project config",
         )
 
 
@@ -505,34 +650,36 @@ def _merge_project_config(
     team_delegated_dev_commands = is_team_delegated_for_dev_environment_commands(
         org_config, team_name
     )
-    for command in project_config.dev_environment.commands:
-        if not project_delegated:
-            result.denied_additions.append(
-                DelegationDenied(
-                    item=command.name,
-                    requested_by=RequestSource.PROJECT,
-                    reason=delegation_reason,
-                    target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
-                )
-            )
-            continue
-        if not team_delegated_dev_commands:
-            result.denied_additions.append(
-                DelegationDenied(
-                    item=command.name,
-                    requested_by=RequestSource.PROJECT,
-                    reason=f"Team '{team_name}' not allowed to add dev environment commands",
-                    target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
-                )
-            )
-            continue
-
-        _add_dev_environment_command(
-            result,
-            command=command,
-            source="project",
-            reason="Added by project config",
-        )
+    _merge_project_dev_environment_action_set(
+        result,
+        actions=project_config.dev_environment.commands,
+        project_delegated=project_delegated,
+        delegation_reason=delegation_reason,
+        team_delegated_dev_commands=team_delegated_dev_commands,
+        team_name=team_name,
+        target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+        add_action=_add_dev_environment_command,
+    )
+    _merge_project_dev_environment_action_set(
+        result,
+        actions=project_config.dev_environment.logs,
+        project_delegated=project_delegated,
+        delegation_reason=delegation_reason,
+        team_delegated_dev_commands=team_delegated_dev_commands,
+        team_name=team_name,
+        target_type=TargetType.DEV_ENVIRONMENT_LOG,
+        add_action=_add_dev_environment_log,
+    )
+    _merge_project_dev_environment_action_set(
+        result,
+        actions=project_config.dev_environment.health_checks,
+        project_delegated=project_delegated,
+        delegation_reason=delegation_reason,
+        team_delegated_dev_commands=team_delegated_dev_commands,
+        team_name=team_name,
+        target_type=TargetType.DEV_ENVIRONMENT_HEALTH_CHECK,
+        add_action=_add_dev_environment_health_check,
+    )
 
     project_plugins = project_config.additional_plugins
     for plugin in project_plugins:
@@ -741,6 +888,20 @@ def compute_effective_config(
 
     for command in default_dev_environment.commands:
         _add_dev_environment_command(
+            result,
+            command=command,
+            source="org.defaults",
+            reason="Included in organization defaults",
+        )
+    for command in default_dev_environment.logs:
+        _add_dev_environment_log(
+            result,
+            command=command,
+            source="org.defaults",
+            reason="Included in organization defaults",
+        )
+    for command in default_dev_environment.health_checks:
+        _add_dev_environment_health_check(
             result,
             command=command,
             source="org.defaults",

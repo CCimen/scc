@@ -90,6 +90,8 @@ class EffectiveConfig:
     plugins: set[str] = field(default_factory=set)
     mcp_servers: list[MCPServer] = field(default_factory=list)
     dev_environment_commands: list[DevEnvironmentCommand] = field(default_factory=list)
+    dev_environment_logs: list[DevEnvironmentCommand] = field(default_factory=list)
+    dev_environment_health_checks: list[DevEnvironmentCommand] = field(default_factory=list)
     network_policy: str | None = None
     session_config: SessionConfig = field(default_factory=SessionConfig)
     decisions: list[ConfigDecision] = field(default_factory=list)
