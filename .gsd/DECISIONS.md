@@ -234,6 +234,39 @@ Status: accepted
 
 ---
 
+## D057 — M015 Dev Environment Bridge is host-owned and policy-gated
+M015 continues from the M013 sibling-container model. SCC may help developers
+work with an existing devcontainer or Docker Compose project, but the SCC agent
+container remains an SCC-owned runtime boundary. It must not mount
+`/var/run/docker.sock`, must not run inside the existing project
+devcontainer, and must not attach to arbitrary devcontainer or Compose networks.
+
+The bridge is a host-owned operational surface. SCC, not the agent container,
+performs any future project-service inspection, logs, health checks, or approved
+commands. Each supported action must be named, policy-gated, explainable, and
+audited. Free-form `docker`, `docker compose`, shell, or `exec` access is not a
+bridge feature.
+
+M015 starts with source-of-truth reconciliation and read-only diagnostics before
+adding any public config model. Do not add `dev_environment` schema fields,
+normalized config models, or policy descriptors until a real consuming command
+and behavior test exist. When that consumer exists, reuse the existing config
+owners:
+
+- raw schema validation: `src/scc_cli/schemas/org-v1.schema.json` and
+  `src/scc_cli/marketplace/schema.py`;
+- normalized typed contracts: `src/scc_cli/ports/config_models.py`;
+- raw-to-typed normalization: `src/scc_cli/services/config_normalizer.py`;
+- effective org/team/project policy decisions:
+  `src/scc_cli/application/compute_effective_config.py`;
+- operator readiness diagnostics: `src/scc_cli/doctor/checks/environment.py`;
+- runtime topology enforcement: `src/scc_cli/adapters/oci_sandbox_runtime.py`
+  and `src/scc_cli/adapters/egress_topology.py`.
+
+Status: accepted
+
+---
+
 ## Decisions Table
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |
