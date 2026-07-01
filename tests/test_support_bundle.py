@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import zipfile
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
@@ -140,6 +141,81 @@ class TestSupportBundleManifest:
         assert "org_config" in manifest
         assert "doctor" in manifest
         assert "launch_audit" in manifest
+        assert "compliance" not in manifest
+
+    def test_compliance_profile_indexes_redacted_manifest_sections(self, tmp_path: Path) -> None:
+        home = Path.home()
+        filesystem = _FakeFilesystem(
+            {
+                home / ".scc" / "config.json": json.dumps(
+                    {
+                        "workspace": f"{home}/secret-project",
+                        "token": "secret-token",
+                    }
+                )
+            }
+        )
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=True,
+            workspace_path=None,
+            include_compliance=True,
+        )
+
+        manifest = build_support_bundle_manifest(
+            request,
+            dependencies=_make_dependencies(filesystem=filesystem),
+        )
+
+        assert manifest["config"]["workspace"] == "~/secret-project"
+        assert manifest["config"]["token"] == "[REDACTED]"
+        compliance = manifest["compliance"]
+        assert compliance["profile"] == "enterprise_audit_v1"
+        assert compliance["schema_version"] == 1
+        assert compliance["generated_from"] == "support_bundle_manifest"
+        assert "Does not implement SSO, SCIM" in "\n".join(compliance["non_goals"])
+
+        evidence_by_id = {entry["id"]: entry for entry in compliance["evidence_index"]}
+        assert set(evidence_by_id) == {
+            "provider",
+            "runtime_and_egress",
+            "safety",
+            "launch_audit",
+            "work_context",
+            "governed_artifacts",
+            "doctor",
+            "user_config",
+            "org_config",
+        }
+
+        expected_config_hash = sha256(
+            json.dumps(
+                manifest["config"],
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()
+        assert evidence_by_id["user_config"]["sha256"] == expected_config_hash
+        assert evidence_by_id["user_config"]["status"] == "available"
+        assert str(home) not in json.dumps(compliance)
+
+    def test_compliance_profile_marks_missing_provider_not_available(self, tmp_path: Path) -> None:
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=False,
+            workspace_path=None,
+            include_compliance=True,
+        )
+
+        manifest = build_support_bundle_manifest(request, dependencies=_make_dependencies())
+
+        provider_evidence = {
+            entry["id"]: entry for entry in manifest["compliance"]["evidence_index"]
+        }["provider"]
+        assert provider_evidence["manifest_path"] == "provider_id"
+        assert provider_evidence["status"] == "not_available"
 
     def test_doctor_failure_produces_error_in_manifest(self, tmp_path: Path) -> None:
         request = SupportBundleRequest(
@@ -499,6 +575,38 @@ class TestSupportBundleCommand:
         request = create_bundle.call_args.args[0]
         assert request.output_path == expected_path
         assert request.redact_paths is True
+        assert request.include_compliance is False
+
+    def test_command_passes_compliance_profile_flag(self, tmp_path: Path) -> None:
+        expected_path = tmp_path / "expected-bundle.zip"
+
+        with (
+            patch(
+                "scc_cli.commands.support.get_default_support_bundle_path",
+                return_value=expected_path,
+            ),
+            patch(
+                "scc_cli.commands.support.build_default_support_bundle_dependencies",
+                return_value=object(),
+            ),
+            patch("scc_cli.commands.support.create_support_bundle") as create_bundle,
+        ):
+            try:
+                from scc_cli.commands.support import support_bundle_cmd
+
+                support_bundle_cmd(
+                    output=None,
+                    json_output=False,
+                    pretty=False,
+                    no_redact_paths=False,
+                    compliance=True,
+                )
+            except click.exceptions.Exit:
+                pass
+
+        request = create_bundle.call_args.args[0]
+        assert request.output_path == expected_path
+        assert request.include_compliance is True
 
     def test_support_app_registers_bundle_command(self) -> None:
         from scc_cli.commands.support import support_app

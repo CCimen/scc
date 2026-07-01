@@ -267,6 +267,26 @@ Status: accepted
 
 ---
 
+## D058 — M016 starts as a support-bundle compliance profile
+M016 Enterprise Audit And Compliance Bundle MVP starts by reusing the existing
+support-bundle owner instead of creating a second diagnostics/export pipeline.
+
+The first implementation surface is `scc support bundle --compliance`. It adds a
+deterministic `compliance` section to the existing redacted support-bundle
+manifest, including an evidence index, section checksums, and explicit non-goals.
+The emitted JSON kind remains `SupportBundle` because this is a profile of the
+same manifest and archive format.
+
+This profile is audit evidence, not certification. It must not claim SOC 2, ISO
+27001, SSO, SCIM, SBOM automation, enterprise dashboard, project registry, new
+providers, Docker socket access, or devcontainer network attachment. Future
+M016 slices may deepen the evidence model only by reusing existing audit,
+support, config, provider, runtime, and docs-claim owners first.
+
+Status: accepted
+
+---
+
 ## Decisions Table
 
 | # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |

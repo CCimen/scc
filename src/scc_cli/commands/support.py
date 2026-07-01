@@ -128,6 +128,11 @@ def support_bundle_cmd(
         "--no-redact-paths",
         help="Don't redact home directory paths",
     ),
+    compliance: bool = typer.Option(
+        False,
+        "--compliance",
+        help="Include deterministic enterprise audit evidence index and checksums.",
+    ),
 ) -> None:
     """Generate a support bundle for troubleshooting.
 
@@ -144,6 +149,7 @@ def support_bundle_cmd(
         set_pretty_mode(True)
 
     redact_paths_flag = not no_redact_paths
+    include_compliance = compliance is True
     output_path = Path(output) if output else get_default_support_bundle_path()
 
     dependencies = build_default_support_bundle_dependencies()
@@ -152,6 +158,7 @@ def support_bundle_cmd(
         output_path=output_path,
         redact_paths=redact_paths_flag,
         workspace_path=None,
+        include_compliance=include_compliance,
     )
 
     if json_output:

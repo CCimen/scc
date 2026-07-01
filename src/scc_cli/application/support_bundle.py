@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,28 @@ from scc_cli.ports.doctor_runner import DoctorRunner
 from scc_cli.ports.filesystem import Filesystem
 
 SUPPORT_BUNDLE_AUDIT_LIMIT = 5
+COMPLIANCE_PROFILE = "enterprise_audit_v1"
+COMPLIANCE_SCHEMA_VERSION = 1
+
+_COMPLIANCE_NON_GOALS = (
+    "Does not certify SOC 2, ISO 27001, or any external compliance framework.",
+    "Does not implement SSO, SCIM, credential broker, or admin-console behavior.",
+    "Does not generate a full SBOM or vulnerability attestation.",
+    "Does not add an enterprise dashboard, project registry, or new provider.",
+    "Does not grant agents Docker socket access or devcontainer network attachment.",
+)
+
+_COMPLIANCE_EVIDENCE_SECTIONS = (
+    ("provider", "provider_id", "Selected provider identity."),
+    ("runtime_and_egress", "effective_egress", "Runtime backend and egress policy evidence."),
+    ("safety", "safety", "Effective safety policy and recent safety audit evidence."),
+    ("launch_audit", "launch_audit", "Recent launch and bridge audit evidence."),
+    ("work_context", "work_context", "Workspace, team, branch, and session context evidence."),
+    ("governed_artifacts", "governed_artifacts", "Governed artifact diagnostics."),
+    ("doctor", "doctor", "Operator readiness diagnostics."),
+    ("user_config", "config", "Redacted local user configuration evidence."),
+    ("org_config", "org_config", "Redacted organization configuration evidence."),
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Redaction Patterns and Helpers
@@ -158,6 +181,7 @@ class SupportBundleRequest:
     output_path: Path
     redact_paths: bool
     workspace_path: Path | None = None
+    include_compliance: bool = False
 
 
 @dataclass(frozen=True)
@@ -232,6 +256,55 @@ def _build_work_context_manifest_section(workspace_path: Path | None) -> dict[st
         "provider_id": context.provider_id,
         "last_session_id": context.last_session_id,
         "pinned": context.pinned,
+    }
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+
+
+def _section_status(value: Any) -> str:
+    if value is None or value == "":
+        return "not_available"
+    if isinstance(value, dict):
+        state = value.get("state")
+        if isinstance(state, str):
+            return state
+        if len(value) == 0:
+            return "empty"
+        if "error" in value:
+            return "partial"
+    if isinstance(value, (list, tuple)) and len(value) == 0:
+        return "empty"
+    return "available"
+
+
+def _build_compliance_section(bundle_data: dict[str, Any]) -> dict[str, Any]:
+    evidence_index = []
+    for evidence_id, manifest_path, description in _COMPLIANCE_EVIDENCE_SECTIONS:
+        value = bundle_data.get(manifest_path)
+        evidence_index.append(
+            {
+                "id": evidence_id,
+                "manifest_path": manifest_path,
+                "description": description,
+                "status": _section_status(value),
+                "sha256": sha256(_canonical_json_bytes(value)).hexdigest(),
+            }
+        )
+
+    return {
+        "profile": COMPLIANCE_PROFILE,
+        "schema_version": COMPLIANCE_SCHEMA_VERSION,
+        "generated_from": "support_bundle_manifest",
+        "evidence_index": evidence_index,
+        "non_goals": list(_COMPLIANCE_NON_GOALS),
     }
 
 
@@ -378,6 +451,9 @@ def build_support_bundle_manifest(
 
     if request.redact_paths:
         bundle_data = redact_paths(bundle_data)
+
+    if request.include_compliance:
+        bundle_data["compliance"] = _build_compliance_section(bundle_data)
 
     return bundle_data
 

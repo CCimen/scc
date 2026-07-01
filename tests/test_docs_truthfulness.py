@@ -1254,6 +1254,43 @@ def test_m015_dev_environment_logs_and_health_do_not_claim_read_only_enforcement
     )
 
 
+def test_m016_compliance_profile_docs_are_truthful() -> None:
+    """Compliance profile docs must stay tied to implemented support-bundle evidence."""
+    admin_text = _read_docs_page("reference/cli/admin.mdx")
+    help_text = _read_docs_page("troubleshooting/getting-help.mdx")
+    claim_map_text = _read_docs_page("reference/docs-claim-map.mdx")
+    source_text = (SRC / "application" / "support_bundle.py").read_text(encoding="utf-8")
+    command_text = (SRC / "commands" / "support.py").read_text(encoding="utf-8")
+    joined_text = "\n".join((admin_text, help_text, claim_map_text, source_text, command_text))
+
+    required_fragments = [
+        "--compliance",
+        "enterprise_audit_v1",
+        "SHA-256 checksums",
+        "emitted redacted manifest sections",
+        "not a SOC 2/ISO certification",
+        "tests/test_support_bundle.py",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in joined_text]
+    assert not missing, f"M016 compliance profile docs/source are missing claims: {missing}"
+
+    forbidden_patterns = [
+        r"\bSOC 2 compliant\b",
+        r"\bISO 27001 compliant\b",
+        r"\bcertifies\b",
+        r"\bimplements SSO\b",
+        r"\bimplements SCIM\b",
+        r"\bSBOM automation is implemented\b",
+    ]
+    violations = [
+        pattern for pattern in forbidden_patterns if re.search(pattern, joined_text, re.IGNORECASE)
+    ]
+    assert not violations, (
+        "M016 compliance profile overclaims implemented/certified behavior: "
+        + ", ".join(violations)
+    )
+
+
 def test_m012_enterprise_pilot_is_executable_for_core_journeys() -> None:
     """Enterprise pilot docs must include runnable setup, explain, dry-run, and support steps."""
     text = _read_docs_page("guides/organization/enterprise-pilot.mdx")
