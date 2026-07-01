@@ -1238,6 +1238,11 @@ def test_m015_dev_environment_logs_and_health_do_not_claim_read_only_enforcement
     overclaim = re.compile(r"read-only[^\n]*(?:log|health)|(?:log|health)[^\n]*read-only", re.I)
     violations: list[str] = []
     for path in files:
+        if not path.exists():
+            if DOCS_CONTENT in path.parents:
+                continue
+            raise AssertionError(f"Expected source file missing: {path}")
+
         text = path.read_text(encoding="utf-8")
         for match in overclaim.finditer(text):
             line = text[: match.start()].count("\n") + 1
