@@ -39,10 +39,19 @@ Before planning or changing code, read these files in this order:
 - M014 enterprise identity work is currently a docs/planning contract only.
   Do not imply OIDC, SAML, SCIM, credential broker, or admin-console behavior
   is implemented in source until a later milestone ships it with tests.
-- M015 Dev Environment Bridge MVP is the active milestone. Preserve the M013
-  sibling-container model: SCC may run inside a devcontainer, but agent
-  containers stay SCC-owned, never mount `/var/run/docker.sock`, and
-  never attach to arbitrary devcontainer or Compose networks.
+- M015 Dev Environment Bridge MVP is complete. Treat
+  `.gsd/milestones/M015-DEV-ENVIRONMENT-BRIDGE.md` as historical execution
+  evidence, not an open task list.
+- M016 Enterprise Audit And Compliance Bundle MVP is the recommended next
+  milestone. Reuse existing launch audit, safety audit, support bundle, config
+  explain, provider/runtime/work-context evidence, and docs claim map before
+  adding new surfaces.
+- Preserve the M013/M015 sibling-container model: SCC may run inside a
+  devcontainer, but agent containers stay SCC-owned, never mount
+  `/var/run/docker.sock`, and never attach to arbitrary devcontainer or Compose
+  networks.
+- Do not implement SSO, SCIM, enterprise dashboard, project registry, new
+  providers, or generic Docker socket/devcontainer attachment in M016.
 - Prefer small, typed, contract-preserving refactors over broad rewrites.
 - Add characterization tests before splitting monoliths.
 - Keep provider-core destination validation in launch planning, not as a runtime surprise.

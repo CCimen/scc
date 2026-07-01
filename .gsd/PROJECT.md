@@ -78,6 +78,23 @@ RFC 7642/7643/7644 alignment as planned enterprise capabilities. SCC source
 must not claim those identity features are implemented until later milestones add
 source behavior, tests, diagnostics, and docs truth coverage.
 
+### M015 — Dev Environment Bridge MVP ✅
+Completed the host-owned dev environment bridge without weakening the
+sibling-container runtime boundary. SCC now detects devcontainer/Compose
+evidence, exposes typed policy-approved bridge commands, logs, health checks,
+and status JSON, audits every action, bounds output, validates project config
+fail-closed, and keeps optional real-runtime smoke coverage behind an explicit
+marker. The agent container still never mounts the Docker socket, runs inside
+the project devcontainer, or attaches to arbitrary devcontainer/Compose
+networks.
+
+### M016 — Enterprise Audit And Compliance Bundle MVP
+Recommended next milestone. Build a small deterministic compliance/support
+export on top of existing launch audit, safety audit, support bundle, config
+explain, provider/runtime/work-context evidence, and docs claim map. Do not
+implement SSO, SCIM, enterprise dashboard, project registry, new providers, or
+generic Docker socket/devcontainer attachment in M016.
+
 ## Next milestone order
 1. ~~M001 — Provider-Neutral Launch Boundary~~ ✅
 2. ~~M002 — Provider-Neutral Launch Pipeline~~ ✅
@@ -93,16 +110,17 @@ source behavior, tests, diagnostics, and docs truth coverage.
 12. ~~M012 — Golden E2E Journeys, Claim Lock, And Pilot Readiness~~ ✅
 13. ~~M013 — Runtime/devcontainer Interoperability~~ ✅
 14. ~~M014 — Enterprise Identity Planning And Docs Contract~~ ✅
-15. M015 — Dev Environment Bridge MVP
+15. ~~M015 — Dev Environment Bridge MVP~~ ✅
+16. M016 — Enterprise Audit And Compliance Bundle MVP
 
 ## Requirement status
-- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through M014.
+- **R001: maintainability in touched high-churn areas** — ✅ validated. Advanced through M015.
 
 ## Current verification baseline
 - `uv run ruff check` ✅
 - `uv run ruff format --check` ✅
-- `uv run mypy src/scc_cli` ✅ (302 files, 0 issues)
-- `uv run pytest -q --no-cov` ✅ (5250 passed, 14 skipped)
+- `uv run mypy src/scc_cli` ✅ (307 files, 0 issues)
+- `uv run pytest -q --no-cov` ✅ (5317 passed, 17 skipped)
 - `bun run astro check` ✅ in `../scc-cli-docs` (0 errors, 1 existing inline-script hint)
 - Zero files in src/scc_cli/ exceed 1100 lines
 - Current file-size guardrail baseline from `uv run pytest tests/test_file_sizes.py -q -s --no-cov`: 301 source files scanned; 1 warning-zone file; 0 failing files. Warning-zone file is `scc_cli/ui/settings.py` at 820 lines.
@@ -119,9 +137,10 @@ source behavior, tests, diagnostics, and docs truth coverage.
 - `scc auth login/status/logout` commands — model supports them via auth_check()
 - Fine-grained volume splitting (auth-only vs ephemeral) for enterprise data-retention (D036)
 - start_claude parameter rename to start_agent in worktree_commands.py (deferred from M008/S01)
-- Dev Environment Bridge MVP remains M015: host-owned project-service
-  diagnostics and approved actions without raw Docker socket access from agent
-  containers or arbitrary Compose network attachment.
+- SSO, SCIM, credential broker, and admin-console behavior — M014 documents the
+  future contract only; source behavior remains unimplemented.
+- Full SBOM automation and enterprise compliance export — recommended for M016
+  only after reusing existing audit/support/config evidence.
 
 ## Key architecture invariants
 - `bootstrap.py` is the sole composition root for adapter symbols consumed outside `scc_cli.adapters`.
