@@ -30,6 +30,7 @@ from .commands.config import (
     config_cmd,
     setup_cmd,
 )
+from .commands.dev import dev_app
 from .commands.exceptions import exceptions_app, unblock_cmd
 from .commands.init import init_cmd
 
@@ -218,6 +219,7 @@ app.command(name="prune", rich_help_panel=PANEL_SESSION)(prune_cmd)
 app.add_typer(team_app, name="team", rich_help_panel=PANEL_CONFIG)
 app.add_typer(profile_app, name="profile", rich_help_panel=PANEL_CONFIG)
 app.add_typer(provider_app, name="provider", rich_help_panel=PANEL_CONFIG)
+app.add_typer(dev_app, name="dev", rich_help_panel=PANEL_CONFIG)
 app.command(name="setup", rich_help_panel=PANEL_CONFIG)(setup_cmd)
 app.command(name="config", rich_help_panel=PANEL_CONFIG)(config_cmd)
 app.command(name="init", rich_help_panel=PANEL_CONFIG)(init_cmd)

@@ -10,6 +10,7 @@ __all__ = [
     "admin",
     "audit",
     "config",
+    "dev",
     "exceptions",
     "init",
     "launch",

@@ -353,6 +353,50 @@ class PolicyViolationError(ConfigError):
 
 
 @dataclass
+class DevEnvironmentCommandDeniedError(SCCError):
+    """A named dev-environment command was not allowed to run."""
+
+    command_name: str = ""
+    reason: str = ""
+    exit_code: int = field(default=EXIT_GOVERNANCE, init=False)
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Run 'scc config explain --field dev_environment' to inspect approved commands."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            detail = f": {self.reason}" if self.reason else ""
+            self.user_message = (
+                f"Dev environment command '{self.command_name}' is not allowed{detail}."
+            )
+
+
+@dataclass
+class DevEnvironmentAuditWriteError(SCCError):
+    """Dev-environment command audit event could not be persisted."""
+
+    event_type: str = ""
+    audit_destination: str = ""
+    reason: str = ""
+    exit_code: int = field(default=EXIT_PREREQ, init=False)
+    user_message: str = field(default="")
+    suggested_action: str = field(
+        default="Check that SCC's local audit path exists and is writable, then retry."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.user_message:
+            destination = self.audit_destination or "the configured audit sink"
+            event = self.event_type or "dev_environment.command"
+            self.user_message = (
+                f"Failed to write dev environment audit event '{event}' to {destination}."
+            )
+        if self.reason:
+            self.debug_context = self.reason
+
+
+@dataclass
 class ProviderNotAllowedError(PolicyViolationError):
     """Resolved provider is not in the team's allowed_providers list."""
 

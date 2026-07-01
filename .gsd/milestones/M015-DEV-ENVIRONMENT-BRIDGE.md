@@ -101,7 +101,7 @@ M015 must preserve these guarantees:
 | S00 | Done | Source-of-truth reconciliation | Update stale milestone register, AGENTS guidance, D057, and this M015 file | Future agents see M015 as active and do not reopen D056 by accident. |
 | S01 | Done | Read-only dev environment diagnostics | Extend existing doctor diagnostics first; add a separate `scc dev` surface only if it earns its place | JSON/text output reports detected files, path-map readiness, Docker socket risk, and unsupported actions without mutating runtime state. |
 | S02 | Done | Named bridge action contract | Add the smallest public config/schema only after S01 identifies the command that consumes it | A named action can be represented without `dict[str, Any]`, arbitrary shell strings, or fake abstractions. |
-| S03 | Planned | Approved command bridge | Let SCC host process run approved named actions with timeout, cwd bounds, audit, and redaction | Agent can request a named action; SCC denies unknown/free-form actions fail-closed. |
+| S03 | Done | Approved command bridge | Let SCC host process run approved named actions with timeout, cwd bounds, audit, and redaction | Agent can request a named action; SCC denies unknown/free-form actions fail-closed. |
 | S04 | Planned | Logs and health checks | Add bounded read-only service logs/health checks where policy allows | Output is size-limited, redactable, audited, and testable without Docker in normal CI. |
 | S05 | Planned | Agent-facing JSON bridge surface | Expose deterministic machine-readable bridge status/results for Claude and Codex sessions | Provider adapters do not own bridge policy; artifacts remain SCC-owned. |
 | S06 | Planned | Optional real-runtime smoke | Prove one approved bridge action against a real local dev stack behind an explicit marker | Normal CI remains fake-runtime; OrbStack/Docker smoke can run manually. |
@@ -161,6 +161,26 @@ actions:
 
 S02 deliberately does not execute commands, create a new `scc dev` command,
 attach to project networks, or mount the Docker socket into agent containers.
+
+## S03 Implementation
+
+S03 adds `scc dev run <name> [workspace]` for approved host-owned bridge
+actions:
+
+- command lookup reuses the effective `dev_environment.commands` owner;
+- command execution uses only fixed `argv` lists with `shell=false`;
+- `working_directory` must stay inside the workspace after symlink resolution;
+- SCC writes a pre-execution audit event before starting the host process;
+- if audit writing fails, the command does not run;
+- stdout/stderr are returned as bounded tails and are not written into durable
+  audit metadata;
+- unknown command names and unsafe cwd values are denied and audited;
+- support bundles already include bridge audit events through the existing
+  bounded audit reader.
+
+S03 deliberately does not add project-network attachment, Docker socket access
+inside agent containers, log/health APIs, provider adapter behavior, or generic
+host command execution.
 
 The first code PR should be S01. It should start with tests around a read-only
 diagnostic surface. A good failing test is:

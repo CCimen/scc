@@ -58,6 +58,9 @@ class Kind(str, Enum):
     CONFIG_EXPLAIN = "ConfigExplain"
     CONFIG_VALIDATE = "ConfigValidate"
 
+    # Dev environment bridge
+    DEV_ENVIRONMENT_COMMAND = "DevEnvironmentCommand"
+
     # Start
     START_DRY_RUN = "StartDryRun"
 

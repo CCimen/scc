@@ -227,6 +227,43 @@ class TestSupportBundleManifest:
             f"Launch started {SUPPORT_BUNDLE_AUDIT_LIMIT + 1}"
         )
 
+    def test_manifest_includes_dev_environment_command_audit_events(self, tmp_path: Path) -> None:
+        audit_path = tmp_path / "audit" / "launch-events.jsonl"
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_path.write_text(
+            serialize_audit_event(
+                AuditEvent(
+                    event_type="dev_environment.command.succeeded",
+                    message="Dev environment command 'test' succeeded.",
+                    severity=SeverityLevel.INFO,
+                    subject="test",
+                    metadata={
+                        "command_name": "test",
+                        "team": "platform",
+                        "provider_id": "codex",
+                        "stdout_total_bytes": "3",
+                    },
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        request = SupportBundleRequest(
+            output_path=tmp_path / "support-bundle.zip",
+            redact_paths=True,
+            workspace_path=None,
+        )
+
+        manifest = build_support_bundle_manifest(
+            request,
+            dependencies=_make_dependencies(launch_audit_path=audit_path),
+        )
+
+        event = manifest["launch_audit"]["recent_events"][0]
+        assert event["event_type"] == "dev_environment.command.succeeded"
+        assert event["metadata"]["command_name"] == "test"
+        assert "stdout" not in event["metadata"]
+
     def test_manifest_marks_work_context_not_requested(self, tmp_path: Path) -> None:
         request = SupportBundleRequest(
             output_path=tmp_path / "support-bundle.zip",
