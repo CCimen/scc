@@ -1149,6 +1149,9 @@ def test_m013_devcontainer_docs_are_scoped_to_path_mapping() -> None:
 def test_m015_dev_environment_bridge_docs_are_diagnostics_only() -> None:
     """M015 docs must claim diagnostics, not bridge actions."""
     devcontainer_text = _read_docs_page("comparisons/scc-vs-dev-containers.mdx")
+    config_inheritance_text = _read_docs_page("architecture/config-inheritance.mdx")
+    project_schema_text = _read_docs_page("reference/configuration/project-schema.mdx")
+    org_schema_text = _read_docs_page("reference/configuration/org-schema.mdx")
     pilot_text = _read_docs_page("guides/organization/enterprise-pilot.mdx")
     claim_map_text = _read_docs_page("reference/docs-claim-map.mdx")
 
@@ -1159,11 +1162,27 @@ def test_m015_dev_environment_bridge_docs_are_diagnostics_only() -> None:
         "without enabling bridge actions",
         "tests/test_doctor_provider_wiring.py",
         "tests/e2e/test_cli_journeys.py",
+        "dev_environment.commands",
+        "fixed `argv` list",
+        "allow_dev_environment_commands",
+        "scc config explain --field dev_environment",
+        "tests/test_config_inheritance.py",
+        "tests/test_config_explain.py",
+        "not executed by SCC yet",
         "does not mount the Docker",
         "socket into agent containers",
         "arbitrary project networks",
     ]
-    joined_text = "\n".join((devcontainer_text, pilot_text, claim_map_text))
+    joined_text = "\n".join(
+        (
+            devcontainer_text,
+            config_inheritance_text,
+            project_schema_text,
+            org_schema_text,
+            pilot_text,
+            claim_map_text,
+        )
+    )
     missing_fragments = [fragment for fragment in required_fragments if fragment not in joined_text]
     assert not missing_fragments, (
         "M015 dev-environment bridge docs are missing diagnostic-only claims: "
@@ -1175,6 +1194,7 @@ def test_m015_dev_environment_bridge_docs_are_diagnostics_only() -> None:
         "scc dev run",
         "can mount the Docker socket into agent containers",
         "can attach agent containers to Compose networks",
+        "SCC runs dev_environment commands",
     ]
     present_forbidden = [fragment for fragment in forbidden_fragments if fragment in joined_text]
     assert not present_forbidden, (

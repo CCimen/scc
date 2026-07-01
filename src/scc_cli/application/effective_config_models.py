@@ -73,11 +73,23 @@ class SessionConfig:
 
 
 @dataclass
+class DevEnvironmentCommand:
+    """Effective named host-owned dev environment command."""
+
+    name: str
+    argv: tuple[str, ...]
+    working_directory: str = "."
+    timeout_seconds: int = 120
+    description: str = ""
+
+
+@dataclass
 class EffectiveConfig:
     """Computed configuration after org, team, and project merge."""
 
     plugins: set[str] = field(default_factory=set)
     mcp_servers: list[MCPServer] = field(default_factory=list)
+    dev_environment_commands: list[DevEnvironmentCommand] = field(default_factory=list)
     network_policy: str | None = None
     session_config: SessionConfig = field(default_factory=SessionConfig)
     decisions: list[ConfigDecision] = field(default_factory=list)

@@ -245,6 +245,50 @@
                 }
             },
             "additionalProperties": false
+        },
+        "DevEnvironmentCommand": {
+            "type": "object",
+            "description": "Named host-owned dev environment command",
+            "properties": {
+                "argv": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string", "minLength": 1},
+                    "description": "Fixed argv list to run without shell expansion"
+                },
+                "working_directory": {
+                    "type": "string",
+                    "minLength": 1,
+                    "default": ".",
+                    "description": "Workspace-relative directory for the command"
+                },
+                "timeout_seconds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600,
+                    "default": 120,
+                    "description": "Maximum command runtime in seconds"
+                },
+                "description": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Human-readable command purpose"
+                }
+            },
+            "required": ["argv"],
+            "additionalProperties": false
+        },
+        "DevEnvironmentConfig": {
+            "type": "object",
+            "description": "Host-owned dev environment bridge configuration",
+            "properties": {
+                "commands": {
+                    "type": "object",
+                    "description": "Named host-owned bridge commands",
+                    "additionalProperties": {"$ref": "#/$defs/DevEnvironmentCommand"}
+                }
+            },
+            "additionalProperties": false
         }
     },
     "properties": {
@@ -412,6 +456,10 @@
                         }
                     },
                     "additionalProperties": false
+                },
+                "dev_environment": {
+                    "$ref": "#/$defs/DevEnvironmentConfig",
+                    "description": "Default host-owned dev environment bridge commands"
                 }
             },
             "additionalProperties": false
@@ -433,6 +481,11 @@
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Team names or patterns allowed to add MCP servers (use ['*'] for unrestricted)"
+                        },
+                        "allow_dev_environment_commands": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Team names or patterns allowed to add dev environment commands (use ['*'] for unrestricted)"
                         }
                     },
                     "additionalProperties": false
@@ -523,6 +576,10 @@
                             "auto_resume": {"type": "boolean"}
                         },
                         "additionalProperties": false
+                    },
+                    "dev_environment": {
+                        "$ref": "#/$defs/DevEnvironmentConfig",
+                        "description": "Team host-owned dev environment bridge commands"
                     },
                     "delegation": {
                         "type": "object",

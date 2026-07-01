@@ -418,6 +418,83 @@ class TestComputeEffectiveConfigBasicMerge:
         assert "gis-tools" in result.plugins  # from team
         assert "project-specific-tool" in result.plugins  # from project
 
+    def test_dev_environment_commands_merge_with_delegation(self, valid_org_config):
+        """Named dev environment commands should merge only when delegated."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["defaults"]["dev_environment"] = {
+            "commands": {"test": {"argv": ["uv", "run", "pytest", "-q"]}}
+        }
+        valid_org_config["delegation"]["teams"]["allow_dev_environment_commands"] = [
+            "urban-planning"
+        ]
+        valid_org_config["delegation"]["projects"]["inherit_team_delegation"] = True
+        valid_org_config["profiles"]["urban-planning"]["delegation"]["allow_project_overrides"] = (
+            True
+        )
+        valid_org_config["profiles"]["urban-planning"]["dev_environment"] = {
+            "commands": {"logs": {"argv": ["docker", "compose", "logs", "--tail", "50"]}}
+        }
+        project = {
+            "dev_environment": {
+                "commands": {"health": {"argv": ["curl", "-fsS", "http://localhost:8000/health"]}}
+            }
+        }
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+            project_config=project,
+        )
+
+        assert [command.name for command in result.dev_environment_commands] == [
+            "test",
+            "logs",
+            "health",
+        ]
+
+    def test_team_dev_environment_command_denied_without_delegation(self, valid_org_config):
+        """Team dev environment commands should be denied without delegation."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["profiles"]["urban-planning"]["dev_environment"] = {
+            "commands": {"logs": {"argv": ["docker", "compose", "logs"]}}
+        }
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+            project_config=None,
+        )
+
+        assert result.dev_environment_commands == []
+        assert result.denied_additions[0].item == "logs"
+        assert result.denied_additions[0].target_type == "dev_environment_command"
+
+    def test_dev_environment_command_names_do_not_override(self, valid_org_config):
+        """Lower layers must not redefine an inherited command name."""
+        from scc_cli.application.compute_effective_config import compute_effective_config
+
+        valid_org_config["defaults"]["dev_environment"] = {
+            "commands": {"test": {"argv": ["uv", "run", "pytest", "-q"]}}
+        }
+        valid_org_config["delegation"]["teams"]["allow_dev_environment_commands"] = [
+            "urban-planning"
+        ]
+        valid_org_config["profiles"]["urban-planning"]["dev_environment"] = {
+            "commands": {"test": {"argv": ["rm", "-rf", "."]}}
+        }
+
+        result = compute_effective_config(
+            org_config=valid_org_config,
+            team_name="urban-planning",
+            project_config=None,
+        )
+
+        assert len(result.dev_environment_commands) == 1
+        assert result.dev_environment_commands[0].argv == ("uv", "run", "pytest", "-q")
+        assert result.ignored_policy_changes[0].field == "dev_environment.commands.test"
+
     def test_auto_resume_overrides_team_and_project(self, valid_org_config):
         """Project and team session auto_resume should override defaults."""
         from scc_cli.application.compute_effective_config import compute_effective_config
@@ -1171,6 +1248,45 @@ network_policy: isolated
             read_project_config(tmp_path)
 
         assert "network_policy" in str(exc_info.value)
+
+    def test_read_project_config_accepts_dev_environment_commands(self, tmp_path):
+        """Should read valid project dev environment commands."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+dev_environment:
+  commands:
+    test:
+      argv: ["uv", "run", "pytest", "-q"]
+      working_directory: services/api
+      timeout_seconds: 180
+      description: Run API tests
+""")
+
+        result = read_project_config(tmp_path)
+
+        assert result is not None
+        command = result["dev_environment"]["commands"]["test"]
+        assert command["argv"] == ["uv", "run", "pytest", "-q"]
+        assert command["working_directory"] == "services/api"
+
+    def test_read_project_config_rejects_shell_string_dev_environment_command(self, tmp_path):
+        """Should reject shell-string dev environment commands."""
+        from scc_cli.config import read_project_config
+
+        scc_yaml = tmp_path / ".scc.yaml"
+        scc_yaml.write_text("""
+dev_environment:
+  commands:
+    test:
+      argv: "uv run pytest -q"
+""")
+
+        with pytest.raises(ValueError) as exc_info:
+            read_project_config(tmp_path)
+
+        assert "dev_environment.commands.test.argv" in str(exc_info.value)
 
     def test_read_project_config_allows_unknown_fields(self, tmp_path):
         """Should allow unknown fields for forward compatibility."""

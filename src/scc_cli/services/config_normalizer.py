@@ -19,6 +19,8 @@ from scc_cli.core.governed_artifacts import (
 from scc_cli.ports.config_models import (
     DefaultsConfig,
     DelegationConfig,
+    DevEnvironmentCommandConfig,
+    DevEnvironmentConfig,
     GovernedArtifactsCatalog,
     MarketplaceConfig,
     MCPServerConfig,
@@ -80,6 +82,41 @@ def _normalize_session_settings(raw: dict[str, Any] | None) -> SessionSettings:
     )
 
 
+def _normalize_dev_environment(raw: dict[str, Any] | None) -> DevEnvironmentConfig:
+    """Normalize dev environment bridge config."""
+    if not raw or not isinstance(raw, dict):
+        return DevEnvironmentConfig()
+
+    raw_commands = raw.get("commands", {})
+    if not isinstance(raw_commands, dict):
+        return DevEnvironmentConfig()
+
+    commands: list[DevEnvironmentCommandConfig] = []
+    for name, command_raw in raw_commands.items():
+        if not isinstance(command_raw, dict):
+            continue
+        argv = command_raw.get("argv", ())
+        if not isinstance(argv, list):
+            continue
+        argv_tuple = tuple(str(arg) for arg in argv if isinstance(arg, str) and arg)
+        if not argv_tuple:
+            continue
+        timeout_seconds = command_raw.get("timeout_seconds", 120)
+        if not isinstance(timeout_seconds, int):
+            timeout_seconds = 120
+        commands.append(
+            DevEnvironmentCommandConfig(
+                name=str(name),
+                argv=argv_tuple,
+                working_directory=str(command_raw.get("working_directory", ".")),
+                timeout_seconds=timeout_seconds,
+                description=str(command_raw.get("description", "")),
+            )
+        )
+
+    return DevEnvironmentConfig(commands=tuple(commands))
+
+
 def _normalize_mcp_server(raw: dict[str, Any]) -> MCPServerConfig:
     """Normalize a single MCP server config."""
     return MCPServerConfig(
@@ -111,6 +148,7 @@ def _normalize_team_config(name: str, raw: dict[str, Any]) -> NormalizedTeamConf
         additional_mcp_servers=mcp_servers,
         network_policy=raw.get("network_policy"),
         session=_normalize_session_settings(raw.get("session")),
+        dev_environment=_normalize_dev_environment(raw.get("dev_environment")),
         delegation=delegation,
         enabled_bundles=tuple(raw.get("enabled_bundles", [])),
     )
@@ -164,6 +202,7 @@ def _normalize_defaults(raw: dict[str, Any] | None) -> DefaultsConfig:
         allowed_mcp_servers=tuple(allowed_mcp) if allowed_mcp is not None else None,
         network_policy=raw.get("network_policy"),
         session=_normalize_session_settings(raw.get("session")),
+        dev_environment=_normalize_dev_environment(raw.get("dev_environment")),
     )
 
 
@@ -179,6 +218,9 @@ def _normalize_delegation(raw: dict[str, Any] | None) -> DelegationConfig:
         teams=TeamsDelegation(
             allow_additional_plugins=tuple(teams_raw.get("allow_additional_plugins", [])),
             allow_additional_mcp_servers=tuple(teams_raw.get("allow_additional_mcp_servers", [])),
+            allow_dev_environment_commands=tuple(
+                teams_raw.get("allow_dev_environment_commands", [])
+            ),
         ),
         projects=ProjectsDelegation(
             inherit_team_delegation=bool(projects_raw.get("inherit_team_delegation", False)),
@@ -367,4 +409,5 @@ def normalize_project_config(raw: dict[str, Any] | None) -> NormalizedProjectCon
         additional_mcp_servers=mcp_servers,
         network_policy=raw.get("network_policy"),
         session=_normalize_session_settings(raw.get("session")),
+        dev_environment=_normalize_dev_environment(raw.get("dev_environment")),
     )

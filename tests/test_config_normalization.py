@@ -125,6 +125,32 @@ class TestNormalizeOrgConfig:
         assert result.defaults.session.timeout_hours == 8
         assert result.defaults.session.auto_resume is True
 
+    def test_defaults_dev_environment_commands_normalized(self) -> None:
+        raw = {
+            "organization": {"name": "TestOrg"},
+            "defaults": {
+                "dev_environment": {
+                    "commands": {
+                        "test": {
+                            "argv": ["uv", "run", "pytest", "-q"],
+                            "working_directory": "services/api",
+                            "timeout_seconds": 180,
+                            "description": "Run API tests",
+                        }
+                    }
+                }
+            },
+        }
+
+        result = normalize_org_config(raw)
+
+        command = result.defaults.dev_environment.commands[0]
+        assert command.name == "test"
+        assert command.argv == ("uv", "run", "pytest", "-q")
+        assert command.working_directory == "services/api"
+        assert command.timeout_seconds == 180
+        assert command.description == "Run API tests"
+
     def test_allowed_plugins_none_vs_empty(self) -> None:
         """None allowed_plugins (no allowlist) differs from empty (deny all)."""
         no_allowlist = normalize_org_config({"organization": {"name": "Test"}})
@@ -146,6 +172,7 @@ class TestNormalizeOrgConfig:
                 "teams": {
                     "allow_additional_plugins": ["platform-*", "backend-*"],
                     "allow_additional_mcp_servers": ["platform-*"],
+                    "allow_dev_environment_commands": ["platform"],
                 },
                 "projects": {"inherit_team_delegation": True},
             },
@@ -154,6 +181,7 @@ class TestNormalizeOrgConfig:
 
         assert result.delegation.teams.allow_additional_plugins == ("platform-*", "backend-*")
         assert result.delegation.teams.allow_additional_mcp_servers == ("platform-*",)
+        assert result.delegation.teams.allow_dev_environment_commands == ("platform",)
         assert result.delegation.projects.inherit_team_delegation is True
 
     def test_profiles_normalized(self) -> None:
@@ -298,6 +326,25 @@ class TestNormalizeProjectConfig:
 
         assert result is not None
         assert result.network_policy == "locked-down-web"
+
+    def test_dev_environment_commands_normalized(self) -> None:
+        raw = {
+            "dev_environment": {
+                "commands": {
+                    "logs": {
+                        "argv": ["docker", "compose", "logs", "--tail", "100"],
+                        "timeout_seconds": 30,
+                    }
+                }
+            }
+        }
+        result = normalize_project_config(raw)
+
+        assert result is not None
+        command = result.dev_environment.commands[0]
+        assert command.name == "logs"
+        assert command.argv == ("docker", "compose", "logs", "--tail", "100")
+        assert command.timeout_seconds == 30
 
 
 class TestSafetyNetNormalization:

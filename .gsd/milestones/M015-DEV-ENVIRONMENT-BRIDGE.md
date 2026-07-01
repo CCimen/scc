@@ -100,7 +100,7 @@ M015 must preserve these guarantees:
 | --- | --- | --- | --- | --- |
 | S00 | Done | Source-of-truth reconciliation | Update stale milestone register, AGENTS guidance, D057, and this M015 file | Future agents see M015 as active and do not reopen D056 by accident. |
 | S01 | Done | Read-only dev environment diagnostics | Extend existing doctor diagnostics first; add a separate `scc dev` surface only if it earns its place | JSON/text output reports detected files, path-map readiness, Docker socket risk, and unsupported actions without mutating runtime state. |
-| S02 | Planned | Named bridge action contract | Add the smallest public config/schema only after S01 identifies the command that consumes it | A named action can be represented without `dict[str, Any]`, arbitrary shell strings, or fake abstractions. |
+| S02 | Done | Named bridge action contract | Add the smallest public config/schema only after S01 identifies the command that consumes it | A named action can be represented without `dict[str, Any]`, arbitrary shell strings, or fake abstractions. |
 | S03 | Planned | Approved command bridge | Let SCC host process run approved named actions with timeout, cwd bounds, audit, and redaction | Agent can request a named action; SCC denies unknown/free-form actions fail-closed. |
 | S04 | Planned | Logs and health checks | Add bounded read-only service logs/health checks where policy allows | Output is size-limited, redactable, audited, and testable without Docker in normal CI. |
 | S05 | Planned | Agent-facing JSON bridge surface | Expose deterministic machine-readable bridge status/results for Claude and Codex sessions | Provider adapters do not own bridge policy; artifacts remain SCC-owned. |
@@ -143,6 +143,24 @@ or SCC itself appears to be running inside a container, doctor reports:
 
 No schema, config model, new command, runtime bridge action, or audit action was
 added in S01.
+
+## S02 Implementation
+
+S02 adds the smallest consumed public contract for named dev-environment bridge
+actions:
+
+- org defaults, team profiles, and project config can define
+  `dev_environment.commands`;
+- every command uses a fixed `argv` list plus optional `working_directory`,
+  `timeout_seconds`, and `description`;
+- team/project additions require
+  `delegation.teams.allow_dev_environment_commands`;
+- duplicate command names are ignored and shown as ignored policy changes;
+- `scc config explain --field dev_environment` and JSON explain expose the
+  effective contract.
+
+S02 deliberately does not execute commands, create a new `scc dev` command,
+attach to project networks, or mount the Docker socket into agent containers.
 
 The first code PR should be S01. It should start with tests around a read-only
 diagnostic surface. A good failing test is:

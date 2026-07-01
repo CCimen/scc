@@ -10,6 +10,7 @@ from scc_cli.application.effective_config_models import (
     BlockedItem,
     ConfigDecision,
     DelegationDenied,
+    DevEnvironmentCommand,
     EffectiveConfig,
     IgnoredPolicyChange,
     MCPServer,
@@ -28,6 +29,7 @@ from scc_cli.marketplace.normalize import (
     matches_any_pattern,
 )
 from scc_cli.ports.config_models import (
+    DevEnvironmentCommandConfig,
     MCPServerConfig,
     NormalizedOrgConfig,
     NormalizedProjectConfig,
@@ -40,6 +42,7 @@ __all__ = [
     "BlockedItem",
     "ConfigDecision",
     "DelegationDenied",
+    "DevEnvironmentCommand",
     "EffectiveConfig",
     "IgnoredPolicyChange",
     "MCPServer",
@@ -264,6 +267,62 @@ def is_project_delegated(
     return (True, "")
 
 
+def is_team_delegated_for_dev_environment_commands(
+    org_config: dict[str, Any] | NormalizedOrgConfig, team_name: str | None
+) -> bool:
+    """Check whether team is allowed to add dev environment commands."""
+    if not team_name:
+        return False
+
+    if isinstance(org_config, dict):
+        org_config = normalize_org_config(org_config)
+
+    allowed_patterns = org_config.delegation.teams.allow_dev_environment_commands
+    return matches_blocked(team_name, list(allowed_patterns)) is not None
+
+
+def _effective_command_names(result: EffectiveConfig) -> set[str]:
+    return {command.name for command in result.dev_environment_commands}
+
+
+def _add_dev_environment_command(
+    result: EffectiveConfig,
+    *,
+    command: DevEnvironmentCommandConfig,
+    source: str,
+    reason: str,
+) -> None:
+    if command.name in _effective_command_names(result):
+        result.ignored_policy_changes.append(
+            IgnoredPolicyChange(
+                field=f"dev_environment.commands.{command.name}",
+                requested_value=command.name,
+                effective_value=command.name,
+                source=source,
+                reason="Dev environment command name already configured",
+            )
+        )
+        return
+
+    result.dev_environment_commands.append(
+        DevEnvironmentCommand(
+            name=command.name,
+            argv=command.argv,
+            working_directory=command.working_directory,
+            timeout_seconds=command.timeout_seconds,
+            description=command.description,
+        )
+    )
+    result.decisions.append(
+        ConfigDecision(
+            field="dev_environment.commands",
+            value=command.name,
+            reason=reason,
+            source=source,
+        )
+    )
+
+
 def _mcp_config_to_dict(mcp: MCPServerConfig) -> dict[str, Any]:
     server_dict: dict[str, Any] = {"name": mcp.name, "type": mcp.type}
     if mcp.url:
@@ -383,6 +442,38 @@ def _merge_team_mcp_servers(
         )
 
 
+def _merge_team_dev_environment_commands(
+    result: EffectiveConfig,
+    *,
+    team_config: NormalizedTeamConfig | None,
+    team_name: str | None,
+    org_config: NormalizedOrgConfig,
+) -> None:
+    """Merge delegated team dev environment commands."""
+    if team_config is None:
+        return
+
+    team_delegated = is_team_delegated_for_dev_environment_commands(org_config, team_name)
+    for command in team_config.dev_environment.commands:
+        if not team_delegated:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=command.name,
+                    requested_by=RequestSource.TEAM,
+                    reason=f"Team '{team_name}' not allowed to add dev environment commands",
+                    target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+                )
+            )
+            continue
+
+        _add_dev_environment_command(
+            result,
+            command=command,
+            source=f"team.{team_name}",
+            reason=f"Added by team profile '{team_name}'",
+        )
+
+
 def _merge_project_config(
     result: EffectiveConfig,
     *,
@@ -410,6 +501,38 @@ def _merge_project_config(
         ),
         current_source=network_policy_source,
     )
+
+    team_delegated_dev_commands = is_team_delegated_for_dev_environment_commands(
+        org_config, team_name
+    )
+    for command in project_config.dev_environment.commands:
+        if not project_delegated:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=command.name,
+                    requested_by=RequestSource.PROJECT,
+                    reason=delegation_reason,
+                    target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+                )
+            )
+            continue
+        if not team_delegated_dev_commands:
+            result.denied_additions.append(
+                DelegationDenied(
+                    item=command.name,
+                    requested_by=RequestSource.PROJECT,
+                    reason=f"Team '{team_name}' not allowed to add dev environment commands",
+                    target_type=TargetType.DEV_ENVIRONMENT_COMMAND,
+                )
+            )
+            continue
+
+        _add_dev_environment_command(
+            result,
+            command=command,
+            source="project",
+            reason="Added by project config",
+        )
 
     project_plugins = project_config.additional_plugins
     for plugin in project_plugins:
@@ -593,6 +716,7 @@ def compute_effective_config(
     )
     default_network_policy = org_config.defaults.network_policy
     default_session = org_config.defaults.session
+    default_dev_environment = org_config.defaults.dev_environment
 
     for plugin in default_plugins:
         blocked_by = matches_blocked_plugin(plugin, blocked_plugins)
@@ -613,6 +737,14 @@ def compute_effective_config(
                 reason="Included in organization defaults",
                 source="org.defaults",
             )
+        )
+
+    for command in default_dev_environment.commands:
+        _add_dev_environment_command(
+            result,
+            command=command,
+            source="org.defaults",
+            reason="Included in organization defaults",
         )
 
     network_policy_source: str | None = None
@@ -712,6 +844,13 @@ def compute_effective_config(
         blocked_mcp_servers=blocked_mcp_servers,
         allowed_mcp_servers=allowed_mcp_servers,
         network_policy_source=network_policy_source,
+    )
+
+    _merge_team_dev_environment_commands(
+        result,
+        team_config=team_config,
+        team_name=team_name,
+        org_config=org_config,
     )
 
     team_session = team_config.session if team_config else SessionSettings()

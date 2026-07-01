@@ -52,6 +52,24 @@ class SessionSettings:
 
 
 @dataclass(frozen=True)
+class DevEnvironmentCommandConfig:
+    """Named host-owned dev environment command."""
+
+    name: str
+    argv: tuple[str, ...]
+    working_directory: str = "."
+    timeout_seconds: int = 120
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class DevEnvironmentConfig:
+    """Dev environment bridge policy configuration."""
+
+    commands: tuple[DevEnvironmentCommandConfig, ...] = ()
+
+
+@dataclass(frozen=True)
 class MCPServerConfig:
     """MCP server configuration."""
 
@@ -86,6 +104,7 @@ class NormalizedTeamConfig:
     additional_mcp_servers: tuple[MCPServerConfig, ...] = ()
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
+    dev_environment: DevEnvironmentConfig = field(default_factory=DevEnvironmentConfig)
     delegation: TeamDelegation = field(default_factory=TeamDelegation)
     allowed_providers: tuple[str, ...] = ()
     enabled_bundles: tuple[str, ...] = ()
@@ -133,6 +152,7 @@ class DefaultsConfig:
     allowed_mcp_servers: tuple[str, ...] | None = None
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
+    dev_environment: DevEnvironmentConfig = field(default_factory=DevEnvironmentConfig)
 
 
 @dataclass(frozen=True)
@@ -141,6 +161,7 @@ class TeamsDelegation:
 
     allow_additional_plugins: tuple[str, ...] = ()
     allow_additional_mcp_servers: tuple[str, ...] = ()
+    allow_dev_environment_commands: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,3 +250,4 @@ class NormalizedProjectConfig:
     additional_mcp_servers: tuple[MCPServerConfig, ...] = ()
     network_policy: str | None = None
     session: SessionSettings = field(default_factory=SessionSettings)
+    dev_environment: DevEnvironmentConfig = field(default_factory=DevEnvironmentConfig)

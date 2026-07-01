@@ -23,6 +23,7 @@ from scc_cli.application.compute_effective_config import (
     BlockedItem,
     ConfigDecision,
     DelegationDenied,
+    DevEnvironmentCommand,
     EffectiveConfig,
     IgnoredPolicyChange,
     MCPServer,
@@ -267,6 +268,49 @@ class TestConfigExplainBasic:
         assert result.exit_code == 0
         # Should show session timeout
         assert "8" in result.output or "timeout" in result.output.lower()
+
+    def test_explain_shows_dev_environment_commands(self, mock_org_config):
+        """Should show named dev environment commands."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            dev_environment_commands=[
+                DevEnvironmentCommand(
+                    name="test",
+                    argv=("uv", "run", "pytest", "-q"),
+                    working_directory="services/api",
+                    timeout_seconds=180,
+                    description="Run API tests",
+                )
+            ],
+            decisions=[
+                ConfigDecision(
+                    field="dev_environment.commands",
+                    value="test",
+                    reason="Included in organization defaults",
+                    source="org.defaults",
+                )
+            ],
+        )
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain", "--field", "dev_environment"])
+
+        assert result.exit_code == 0
+        assert "Dev Environment Commands" in result.output
+        assert "test" in result.output
+        assert "uv run pytest -q" in result.output
+        assert "services/api" in result.output
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -835,6 +879,47 @@ class TestConfigExplainJsonOutput:
                 "effective_value": "locked-down-web",
                 "source": "project",
                 "reason": "Project network_policy cannot be less restrictive than inherited policy",
+            }
+        ]
+
+    def test_explain_json_includes_dev_environment_commands(self, mock_org_config):
+        """Should serialize effective dev environment commands."""
+        effective = EffectiveConfig(
+            plugins=set(),
+            mcp_servers=[],
+            dev_environment_commands=[
+                DevEnvironmentCommand(
+                    name="logs",
+                    argv=("docker", "compose", "logs", "--tail", "50"),
+                    timeout_seconds=30,
+                )
+            ],
+            decisions=[],
+            blocked_items=[],
+            denied_additions=[],
+        )
+
+        with (
+            patch(
+                "scc_cli.commands.config.config.load_cached_org_config",
+                return_value=mock_org_config,
+            ),
+            patch("scc_cli.commands.config.config.get_selected_profile", return_value="dev"),
+            patch(
+                "scc_cli.commands.config.compute_effective_config",
+                return_value=effective,
+            ),
+        ):
+            result = runner.invoke(cli.app, ["config", "explain", "--json"])
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["data"]["effective"]["dev_environment_commands"] == [
+            {
+                "name": "logs",
+                "argv": ["docker", "compose", "logs", "--tail", "50"],
+                "working_directory": ".",
+                "timeout_seconds": 30,
             }
         ]
 

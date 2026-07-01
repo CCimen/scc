@@ -31,6 +31,7 @@ class TargetType(str, Enum):
 
     PLUGIN = "plugin"
     MCP_SERVER = "mcp_server"
+    DEV_ENVIRONMENT_COMMAND = "dev_environment_command"
 
 
 class RequestSource(str, Enum):

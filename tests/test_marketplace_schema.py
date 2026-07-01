@@ -356,6 +356,37 @@ class TestDefaultsConfig:
         assert defaults.extra_marketplaces == ["official", "internal", "experimental"]
         assert all(isinstance(mp, str) for mp in defaults.extra_marketplaces)
 
+    def test_dev_environment_commands_use_argv_lists(self) -> None:
+        from scc_cli.marketplace.schema import (
+            DefaultsConfig,
+            DevEnvironmentCommandConfig,
+            DevEnvironmentConfig,
+        )
+
+        defaults = DefaultsConfig(
+            dev_environment=DevEnvironmentConfig(
+                commands={
+                    "test": DevEnvironmentCommandConfig(
+                        argv=["uv", "run", "pytest", "-q"],
+                        timeout_seconds=180,
+                    )
+                }
+            )
+        )
+
+        assert defaults.dev_environment.commands["test"].argv == [
+            "uv",
+            "run",
+            "pytest",
+            "-q",
+        ]
+
+    def test_dev_environment_rejects_shell_string(self) -> None:
+        from scc_cli.marketplace.schema import DevEnvironmentCommandConfig
+
+        with pytest.raises(ValidationError):
+            DevEnvironmentCommandConfig.model_validate({"argv": "uv run pytest -q"})
+
 
 class TestTeamProfile:
     """Tests for team profile model."""
@@ -402,6 +433,30 @@ class TestTeamProfile:
         assert profile.session.timeout_hours == 4
         assert profile.delegation is not None
         assert profile.delegation.allow_project_overrides is True
+
+    def test_team_profile_accepts_dev_environment_commands(self) -> None:
+        from scc_cli.marketplace.schema import (
+            DevEnvironmentCommandConfig,
+            DevEnvironmentConfig,
+        )
+
+        profile = make_team_profile(
+            dev_environment=DevEnvironmentConfig(
+                commands={
+                    "logs": DevEnvironmentCommandConfig(
+                        argv=["docker", "compose", "logs", "--tail", "50"]
+                    )
+                }
+            )
+        )
+
+        assert profile.dev_environment.commands["logs"].argv == [
+            "docker",
+            "compose",
+            "logs",
+            "--tail",
+            "50",
+        ]
 
 
 class TestSecurityConfig:

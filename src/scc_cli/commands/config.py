@@ -577,12 +577,42 @@ def _render_config_decisions(effective: EffectiveConfig, field_filter: str | Non
             console.print("  [dim]None configured[/dim]")
         console.print()
 
+    if not field_filter or field_filter in {"dev_environment", "dev_environment_commands"}:
+        console.print("[bold cyan]Dev Environment Commands[/bold cyan]")
+        if effective.dev_environment_commands:
+            for command in effective.dev_environment_commands:
+                command_decision = next(
+                    (
+                        d
+                        for d in effective.decisions
+                        if d.field == "dev_environment.commands" and d.value == command.name
+                    ),
+                    None,
+                )
+                source_suffix = (
+                    f" [dim](from {command_decision.source})[/dim]" if command_decision else ""
+                )
+                console.print(f"  [green]✓[/green] {command.name}{source_suffix}")
+                if command.description:
+                    console.print(f"      [dim]{command.description}[/dim]")
+                console.print(f"      argv: {' '.join(command.argv)}")
+                console.print(f"      working_directory: {command.working_directory}")
+                console.print(f"      timeout_seconds: {command.timeout_seconds}")
+        else:
+            console.print("  [dim]None configured[/dim]")
+        console.print()
+
 
 def _render_ignored_policy_changes(
     changes: list[IgnoredPolicyChange], field_filter: str | None
 ) -> None:
     """Render policy values that were rejected during effective-config merge."""
-    if field_filter and field_filter not in {"network", "network_policy"}:
+    if field_filter and field_filter not in {
+        "network",
+        "network_policy",
+        "dev_environment",
+        "dev_environment_commands",
+    }:
         return
 
     if not changes:

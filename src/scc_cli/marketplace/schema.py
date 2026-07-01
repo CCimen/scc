@@ -264,6 +264,43 @@ class SessionConfig(StrictModel):
     )
 
 
+class DevEnvironmentCommandConfig(StrictModel):
+    """Named host-owned dev environment command."""
+
+    argv: list[str] = Field(
+        min_length=1,
+        description="Fixed argv list to run without shell expansion",
+    )
+    working_directory: str = Field(
+        default=".",
+        min_length=1,
+        description="Workspace-relative directory for the command",
+    )
+    timeout_seconds: int = Field(
+        default=120,
+        ge=1,
+        le=3600,
+        description="Maximum command runtime in seconds",
+    )
+    description: str = Field(default="", description="Human-readable purpose")
+
+    @field_validator("argv")
+    @classmethod
+    def validate_argv(cls, value: list[str]) -> list[str]:
+        if any(not arg for arg in value):
+            raise ValueError("argv entries must be non-empty strings")
+        return value
+
+
+class DevEnvironmentConfig(StrictModel):
+    """Dev environment bridge configuration."""
+
+    commands: dict[str, DevEnvironmentCommandConfig] = Field(
+        default_factory=dict,
+        description="Named host-owned bridge commands",
+    )
+
+
 class DefaultsConfig(StrictModel):
     """Organization-wide default settings."""
 
@@ -300,6 +337,10 @@ class DefaultsConfig(StrictModel):
     session: SessionConfig = Field(
         default_factory=SessionConfig,
         description="Default session settings",
+    )
+    dev_environment: DevEnvironmentConfig = Field(
+        default_factory=DevEnvironmentConfig,
+        description="Default host-owned dev environment bridge commands",
     )
 
 
@@ -350,6 +391,10 @@ class TeamProfile(StrictModel):
         default_factory=SessionConfig,
         description="Team session overrides",
     )
+    dev_environment: DevEnvironmentConfig = Field(
+        default_factory=DevEnvironmentConfig,
+        description="Team host-owned dev environment bridge commands",
+    )
     delegation: TeamDelegationConfig | None = Field(
         default=None,
         description="Team-level delegation to projects",
@@ -374,6 +419,10 @@ class DelegationTeamsConfig(StrictModel):
     allow_additional_mcp_servers: list[str] = Field(
         default_factory=list,
         description="Team names or patterns allowed to add MCP servers",
+    )
+    allow_dev_environment_commands: list[str] = Field(
+        default_factory=list,
+        description="Team names or patterns allowed to add dev environment commands",
     )
 
 

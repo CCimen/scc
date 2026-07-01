@@ -492,6 +492,7 @@ PROJECT_CONFIG_KEYS = frozenset(
     {
         "additional_plugins",
         "additional_mcp_servers",
+        "dev_environment",
         "network_policy",
         "session",
     }
@@ -571,6 +572,10 @@ def _validate_project_config_schema(config: dict[str, Any]) -> None:
             expected = ", ".join(sorted(valid_policies))
             raise ValueError(f"network_policy must be one of: {expected}")
 
+    # dev_environment commands must use fixed argv lists.
+    if "dev_environment" in config:
+        _validate_dev_environment_config(config["dev_environment"])
+
     # session must be a dict
     if "session" in config:
         if not isinstance(config["session"], dict):
@@ -584,3 +589,40 @@ def _validate_project_config_schema(config: dict[str, Any]) -> None:
         if "auto_resume" in session:
             if not isinstance(session["auto_resume"], bool):
                 raise ValueError("session.auto_resume must be a boolean")
+
+
+def _validate_dev_environment_config(raw: Any) -> None:
+    if not isinstance(raw, dict):
+        raise ValueError("dev_environment must be a dict")
+
+    commands = raw.get("commands", {})
+    if not isinstance(commands, dict):
+        raise ValueError("dev_environment.commands must be a dict")
+
+    for name, command in commands.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError("dev_environment command names must be non-empty strings")
+        if not isinstance(command, dict):
+            raise ValueError(f"dev_environment.commands.{name} must be a dict")
+
+        argv = command.get("argv")
+        if not isinstance(argv, list) or not argv:
+            raise ValueError(f"dev_environment.commands.{name}.argv must be a non-empty list")
+        if not all(isinstance(arg, str) and arg for arg in argv):
+            raise ValueError(
+                f"dev_environment.commands.{name}.argv entries must be non-empty strings"
+            )
+
+        working_directory = command.get("working_directory", ".")
+        if not isinstance(working_directory, str) or not working_directory:
+            raise ValueError(f"dev_environment.commands.{name}.working_directory must be a string")
+
+        timeout_seconds = command.get("timeout_seconds", 120)
+        if not isinstance(timeout_seconds, int) or timeout_seconds < 1:
+            raise ValueError(
+                f"dev_environment.commands.{name}.timeout_seconds must be a positive integer"
+            )
+
+        description = command.get("description", "")
+        if not isinstance(description, str):
+            raise ValueError(f"dev_environment.commands.{name}.description must be a string")

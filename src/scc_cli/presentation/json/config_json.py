@@ -9,6 +9,7 @@ from ...application.effective_config_models import (
     BlockedItem,
     ConfigDecision,
     DelegationDenied,
+    DevEnvironmentCommand,
     EffectiveConfig,
     IgnoredPolicyChange,
     MCPServer,
@@ -42,6 +43,10 @@ def build_config_explain_data(
         "effective": {
             "plugins": sorted(effective.plugins),
             "mcp_servers": [_serialize_mcp_server(server) for server in effective.mcp_servers],
+            "dev_environment_commands": [
+                _serialize_dev_environment_command(command)
+                for command in effective.dev_environment_commands
+            ],
             "network_policy": effective.network_policy,
             "session": {
                 "timeout_hours": effective.session_config.timeout_hours,
@@ -79,6 +84,18 @@ def _serialize_mcp_server(server: MCPServer) -> dict[str, Any]:
         payload["env"] = server.env
     if server.headers:
         payload["headers"] = server.headers
+    return payload
+
+
+def _serialize_dev_environment_command(command: DevEnvironmentCommand) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "name": command.name,
+        "argv": list(command.argv),
+        "working_directory": command.working_directory,
+        "timeout_seconds": command.timeout_seconds,
+    }
+    if command.description:
+        payload["description"] = command.description
     return payload
 
 
