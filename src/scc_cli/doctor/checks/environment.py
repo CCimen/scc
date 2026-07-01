@@ -19,6 +19,15 @@ from scc_cli.core.runtime_mounts import (
 
 from ..types import CheckResult
 
+_DEV_ENV_MARKERS: tuple[tuple[str, str], ...] = (
+    (".devcontainer/devcontainer.json", "devcontainer"),
+    (".devcontainer.json", "devcontainer"),
+    ("compose.yaml", "compose"),
+    ("compose.yml", "compose"),
+    ("docker-compose.yaml", "compose"),
+    ("docker-compose.yml", "compose"),
+)
+
 
 def _probe_runtime_info() -> RuntimeInfo | None:
     """Return the current runtime probe result when available.
@@ -282,6 +291,61 @@ def _running_inside_container() -> bool:
             "CODESPACES",
             "container",
         )
+    )
+
+
+def _detect_dev_environment_files(workspace: Path) -> tuple[str, ...]:
+    """Return devcontainer/Compose marker paths present in a workspace."""
+    if not workspace.exists() or not workspace.is_dir():
+        return ()
+
+    detected: list[str] = []
+    for relative_path, _kind in _DEV_ENV_MARKERS:
+        marker = workspace / relative_path
+        if marker.is_file():
+            detected.append(relative_path)
+    return tuple(detected)
+
+
+def check_dev_environment_bridge(workspace: Path | None = None) -> CheckResult | None:
+    """Report read-only devcontainer/Compose bridge evidence for M015."""
+    if workspace is None:
+        return None
+
+    detected_files = _detect_dev_environment_files(workspace)
+    inside_container = _running_inside_container()
+    if not detected_files and not inside_container:
+        return None
+
+    raw_path_map = os.environ.get(WORKSPACE_PATH_MAP_ENV)
+    if raw_path_map:
+        path_map_status = (
+            "path map configured"
+            if parse_workspace_path_map(raw_path_map) is not None
+            else "path map invalid"
+        )
+    else:
+        path_map_status = "path map not set"
+
+    socket_visible = Path("/var/run/docker.sock").exists()
+    docker_socket_status = (
+        "Docker socket visible to SCC process"
+        if socket_visible
+        else "Docker socket not visible at /var/run/docker.sock"
+    )
+    detected_summary = ", ".join(detected_files) if detected_files else "containerized SCC session"
+
+    return CheckResult(
+        name="Dev Environment Bridge",
+        passed=True,
+        message=(
+            f"Detected {detected_summary}; {path_map_status}; {docker_socket_status}. "
+            "SCC keeps agent containers as sibling SCC-owned containers and does not mount "
+            "the Docker socket, run inside the project devcontainer, or attach to arbitrary "
+            "devcontainer/Compose networks."
+        ),
+        severity=SeverityLevel.INFO,
+        category="backend",
     )
 
 

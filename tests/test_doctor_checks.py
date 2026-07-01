@@ -258,6 +258,74 @@ class TestCheckWorkspacePathMap:
         assert "Runtime mount source: /host/app/service" in result.message
 
 
+class TestCheckDevEnvironmentBridge:
+    """Tests for read-only devcontainer/Compose bridge diagnostics."""
+
+    def test_returns_none_without_workspace(self) -> None:
+        from scc_cli.doctor.checks import environment
+
+        assert environment.check_dev_environment_bridge() is None
+
+    def test_returns_none_without_dev_environment_evidence(
+        self, monkeypatch, tmp_path: Path
+    ) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.setattr(environment, "_running_inside_container", lambda: False)
+
+        assert environment.check_dev_environment_bridge(tmp_path) is None
+
+    def test_reports_detected_devcontainer_and_compose_files(
+        self, monkeypatch, tmp_path: Path
+    ) -> None:
+        from scc_cli.doctor.checks import environment
+
+        (tmp_path / ".devcontainer").mkdir()
+        (tmp_path / ".devcontainer" / "devcontainer.json").write_text("{}")
+        (tmp_path / "compose.yaml").write_text("services: {}")
+        monkeypatch.delenv("SCC_WORKSPACE_PATH_MAP", raising=False)
+        monkeypatch.setattr(environment, "_running_inside_container", lambda: False)
+
+        result = environment.check_dev_environment_bridge(tmp_path)
+
+        assert result is not None
+        assert result.passed is True
+        assert result.severity == "info"
+        assert result.category == "backend"
+        assert ".devcontainer/devcontainer.json" in result.message
+        assert "compose.yaml" in result.message
+        assert "path map not set" in result.message
+        assert "does not mount the Docker socket" in result.message
+        assert "arbitrary devcontainer/Compose networks" in result.message
+
+    def test_reports_invalid_path_map_for_dev_environment(
+        self, monkeypatch, tmp_path: Path
+    ) -> None:
+        from scc_cli.doctor.checks import environment
+
+        (tmp_path / "docker-compose.yml").write_text("services: {}")
+        monkeypatch.setenv("SCC_WORKSPACE_PATH_MAP", "workspaces/app:/host/app")
+        monkeypatch.setattr(environment, "_running_inside_container", lambda: False)
+
+        result = environment.check_dev_environment_bridge(tmp_path)
+
+        assert result is not None
+        assert "path map invalid" in result.message
+
+    def test_reports_containerized_session_without_marker_files(
+        self, monkeypatch, tmp_path: Path
+    ) -> None:
+        from scc_cli.doctor.checks import environment
+
+        monkeypatch.delenv("SCC_WORKSPACE_PATH_MAP", raising=False)
+        monkeypatch.setattr(environment, "_running_inside_container", lambda: True)
+
+        result = environment.check_dev_environment_bridge(tmp_path)
+
+        assert result is not None
+        assert "containerized SCC session" in result.message
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tests for check_org_config_reachable
 # ═══════════════════════════════════════════════════════════════════════════════

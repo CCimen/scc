@@ -228,6 +228,9 @@ def test_subprocess_path_map_journey_reports_runtime_mount_source(
     logical_workspace = tmp_path / "container" / "project"
     logical_workspace.mkdir(parents=True)
     (logical_workspace / ".git").mkdir()
+    (logical_workspace / ".devcontainer").mkdir()
+    (logical_workspace / ".devcontainer" / "devcontainer.json").write_text("{}")
+    (logical_workspace / "compose.yaml").write_text("services: {}")
 
     env = _subprocess_env(home)
     env["SCC_WORKSPACE_PATH_MAP"] = f"{logical_workspace}:{host_workspace}"
@@ -285,6 +288,15 @@ def test_subprocess_path_map_journey_reports_runtime_mount_source(
     ]
     assert workspace_map_checks
     assert str(host_workspace.resolve()) in workspace_map_checks[0]["message"]
+    bridge_checks = [
+        check
+        for check in doctor_payload["data"]["checks"]
+        if check["name"] == "Dev Environment Bridge"
+    ]
+    assert bridge_checks
+    assert ".devcontainer/devcontainer.json" in bridge_checks[0]["message"]
+    assert "compose.yaml" in bridge_checks[0]["message"]
+    assert "does not mount the Docker socket" in bridge_checks[0]["message"]
 
 
 def test_org_team_project_effective_config_journey(

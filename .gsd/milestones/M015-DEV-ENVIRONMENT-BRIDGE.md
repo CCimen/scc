@@ -98,8 +98,8 @@ M015 must preserve these guarantees:
 
 | Slice | Status | Name | Scope | Done when |
 | --- | --- | --- | --- | --- |
-| S00 | In progress | Source-of-truth reconciliation | Update stale milestone register, AGENTS guidance, D057, and this M015 file | Future agents see M015 as active and do not reopen D056 by accident. |
-| S01 | Planned | Read-only dev environment diagnostics | Extend existing doctor diagnostics first; add a separate `scc dev` surface only if it earns its place | JSON/text output reports detected files, path-map readiness, Docker socket risk, and unsupported actions without mutating runtime state. |
+| S00 | Done | Source-of-truth reconciliation | Update stale milestone register, AGENTS guidance, D057, and this M015 file | Future agents see M015 as active and do not reopen D056 by accident. |
+| S01 | Done | Read-only dev environment diagnostics | Extend existing doctor diagnostics first; add a separate `scc dev` surface only if it earns its place | JSON/text output reports detected files, path-map readiness, Docker socket risk, and unsupported actions without mutating runtime state. |
 | S02 | Planned | Named bridge action contract | Add the smallest public config/schema only after S01 identifies the command that consumes it | A named action can be represented without `dict[str, Any]`, arbitrary shell strings, or fake abstractions. |
 | S03 | Planned | Approved command bridge | Let SCC host process run approved named actions with timeout, cwd bounds, audit, and redaction | Agent can request a named action; SCC denies unknown/free-form actions fail-closed. |
 | S04 | Planned | Logs and health checks | Add bounded read-only service logs/health checks where policy allows | Output is size-limited, redactable, audited, and testable without Docker in normal CI. |
@@ -109,16 +109,16 @@ M015 must preserve these guarantees:
 
 ## Recommended PR Slicing
 
-1. PR 1: S00 planning/decision reconciliation only.
-2. PR 2: S01 read-only diagnostics with tests and no new config schema.
-3. PR 3: S02 typed named-action contract plus config/explain behavior.
-4. PR 4: S03 approved command execution and audit.
-5. PR 5: S04/S05 logs, health checks, agent-facing JSON, and docs.
-6. PR 6: S06 optional real-runtime smoke if the fake-runtime bridge is stable.
+1. S00 planning/decision reconciliation only.
+2. S01 read-only diagnostics with tests and no new config schema.
+3. S02 typed named-action contract plus config/explain behavior.
+4. S03 approved command execution and audit.
+5. S04/S05 logs, health checks, agent-facing JSON, and docs.
+6. S06 optional real-runtime smoke if the fake-runtime bridge is stable.
 
 ## Exact First Implementation Slice
 
-This PR is S00 only:
+The first slice was S00 only:
 
 - mark M013 and M014 complete in `.gsd/PROJECT.md`;
 - make M015 the active milestone in `.gsd/PROJECT.md` and `AGENTS.md`;
@@ -126,6 +126,23 @@ This PR is S00 only:
 - consolidate M015 roadmap/context/architecture/threat model/PR slicing here;
 - do not add `dev_environment` schema, config models, command modules, or
   runtime code.
+
+## S01 Implementation
+
+S01 extends the existing doctor diagnostics with `Dev Environment Bridge`.
+When a workspace contains `.devcontainer/devcontainer.json`, `.devcontainer.json`,
+`compose.yaml`, `compose.yml`, `docker-compose.yaml`, or `docker-compose.yml`
+or SCC itself appears to be running inside a container, doctor reports:
+
+- detected devcontainer/Compose evidence;
+- whether `SCC_WORKSPACE_PATH_MAP` is configured or invalid;
+- whether `/var/run/docker.sock` is visible to the SCC process;
+- that SCC agent containers remain sibling SCC-owned containers and do not mount
+  the Docker socket, run inside the project devcontainer, or attach to arbitrary
+  devcontainer/Compose networks.
+
+No schema, config model, new command, runtime bridge action, or audit action was
+added in S01.
 
 The first code PR should be S01. It should start with tests around a read-only
 diagnostic surface. A good failing test is:

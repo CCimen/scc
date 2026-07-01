@@ -1146,6 +1146,43 @@ def test_m013_devcontainer_docs_are_scoped_to_path_mapping() -> None:
     )
 
 
+def test_m015_dev_environment_bridge_docs_are_diagnostics_only() -> None:
+    """M015 docs must claim diagnostics, not bridge actions."""
+    devcontainer_text = _read_docs_page("comparisons/scc-vs-dev-containers.mdx")
+    pilot_text = _read_docs_page("guides/organization/enterprise-pilot.mdx")
+    claim_map_text = _read_docs_page("reference/docs-claim-map.mdx")
+
+    required_fragments = [
+        "Dev Environment Bridge",
+        "detected devcontainer/Compose",
+        "Docker socket visibility to the SCC process",
+        "without enabling bridge actions",
+        "tests/test_doctor_provider_wiring.py",
+        "tests/e2e/test_cli_journeys.py",
+        "does not mount the Docker",
+        "socket into agent containers",
+        "arbitrary project networks",
+    ]
+    joined_text = "\n".join((devcontainer_text, pilot_text, claim_map_text))
+    missing_fragments = [fragment for fragment in required_fragments if fragment not in joined_text]
+    assert not missing_fragments, (
+        "M015 dev-environment bridge docs are missing diagnostic-only claims: "
+        + ", ".join(missing_fragments)
+    )
+
+    forbidden_fragments = [
+        "approved bridge actions are implemented",
+        "scc dev run",
+        "can mount the Docker socket into agent containers",
+        "can attach agent containers to Compose networks",
+    ]
+    present_forbidden = [fragment for fragment in forbidden_fragments if fragment in joined_text]
+    assert not present_forbidden, (
+        "M015 docs overstate implemented dev-environment bridge behavior: "
+        + ", ".join(present_forbidden)
+    )
+
+
 def test_m012_enterprise_pilot_is_executable_for_core_journeys() -> None:
     """Enterprise pilot docs must include runnable setup, explain, dry-run, and support steps."""
     text = _read_docs_page("guides/organization/enterprise-pilot.mdx")

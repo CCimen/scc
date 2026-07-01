@@ -6,6 +6,7 @@ from scc_cli.core.enums import SeverityLevel
 
 from .checks import (
     check_config_directory,
+    check_dev_environment_bridge,
     check_docker,
     check_docker_running,
     check_docker_sandbox,
@@ -31,6 +32,7 @@ _CATEGORY_MAP: dict[str, str] = {
     "Docker Desktop": "backend",
     "Sandbox Backend": "backend",
     "Runtime Backend": "backend",
+    "Dev Environment Bridge": "backend",
     "Provider Image": "provider",
     "Provider Auth": "provider",
     "Config Directory": "config",
@@ -95,6 +97,10 @@ def run_doctor(
     path_map_check = check_workspace_path_map(workspace)
     if path_map_check is not None:
         result.checks.append(path_map_check)
+
+    dev_environment_check = check_dev_environment_bridge(workspace)
+    if dev_environment_check is not None:
+        result.checks.append(dev_environment_check)
 
     provider_ids = (provider_id,) if provider_id is not None else _DEFAULT_PROVIDER_IDS
 

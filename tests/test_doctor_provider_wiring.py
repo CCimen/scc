@@ -60,6 +60,11 @@ class TestCategoryAssignment:
         _assign_category(check)
         assert check.category == "config"
 
+    def test_dev_environment_bridge_gets_backend(self) -> None:
+        check = CheckResult(name="Dev Environment Bridge", passed=True, message="ok")
+        _assign_category(check)
+        assert check.category == "backend"
+
     def test_worktree_health_gets_worktree(self) -> None:
         check = CheckResult(name="Worktree Health", passed=True, message="ok")
         _assign_category(check)

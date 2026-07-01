@@ -39,6 +39,7 @@ from .config import (
 
 # Environment checks
 from .environment import (
+    check_dev_environment_bridge,
     check_docker,
     check_docker_desktop,
     check_docker_running,
@@ -183,6 +184,7 @@ __all__ = [
     "check_docker_sandbox",
     "check_docker_running",
     "check_wsl2",
+    "check_dev_environment_bridge",
     "check_provider_auth",
     "check_provider_image",
     "check_runtime_backend",
